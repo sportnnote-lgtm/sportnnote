@@ -1,0 +1,133 @@
+/** Generic post-match (or live) summary for any sport without its own Summary:
+ *  the result, an MVP, and every contributor's 1–5 star rating built from the
+ *  match's recorded stat lines. Cricket ships a richer state-based summary. */
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { theme } from '../core/theme';
+import { Card, textStyles } from './ui';
+import { useMask } from '../core/disputeMask';
+import { matchRatings, awardsFor, ratingStars, STAT_LABELS, type MatchRating } from '../data/ratings';
+import type { Player, SportId, StatLine } from '../core/types';
+import type { ScoreSummary } from '../sports/types';
+
+export function MatchSummary({
+  statLines, sport, homeRoster, awayRoster, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away,
+  summary, complete, onPlayer,
+}: {
+  statLines: StatLine[];
+  sport: SportId;
+  homeRoster: Player[];
+  awayRoster: Player[];
+  homeName: string;
+  awayName: string;
+  homeColor?: string;
+  awayColor?: string;
+  summary: ScoreSummary;
+  complete: boolean;
+  onPlayer?: (id: string) => void;
+}) {
+  const { players, mvp } = matchRatings(statLines, sport, homeRoster, awayRoster);
+  const awards = awardsFor(players, sport);
+  const mask = useMask();
+  const teamColor = (s: 'home' | 'away') => (s === 'home' ? homeColor : awayColor);
+  const teamName = (s: 'home' | 'away') => (s === 'home' ? homeName : awayName);
+
+  return (
+    <View style={{ gap: theme.spacing(3) }}>
+      {/* Result */}
+      <View style={st.result}>
+        <Text style={st.resultLabel}>{complete ? summary.statusLine : `Live · ${summary.statusLine}`}</Text>
+        <View style={st.scoreRow}>
+          <Text style={[st.score, { color: homeColor }]}>{summary.homeScore}</Text>
+          <Text style={st.vs}>{homeName}  ·  {awayName}</Text>
+          <Text style={[st.score, { color: awayColor }]}>{summary.awayScore}</Text>
+        </View>
+      </View>
+
+      {mvp && (
+        <TouchableOpacity activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
+          <Text style={st.mvpIcon}>🏅</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={st.mvpLabel}>Player of the Match</Text>
+            <Text style={st.mvpName} numberOfLines={1}>{mask.byId(mvp.id, mvp.name)}</Text>
+            <Text style={st.mvpDetail} numberOfLines={1}>{mvp.detail} · {teamName(mvp.side)}</Text>
+          </View>
+          <Text style={[st.mvpRating, { color: teamColor(mvp.side) }]}>★{mvp.rating.toFixed(1)}</Text>
+        </TouchableOpacity>
+      )}
+
+      {awards.length > 0 && (
+        <View style={st.awardGrid}>
+          {awards.map((a) => (
+            <TouchableOpacity key={a.label} activeOpacity={0.85} onPress={() => onPlayer?.(a.player.id)} style={st.award}>
+              <Text style={st.awardIcon}>{a.icon}</Text>
+              <Text style={st.awardLabel} numberOfLines={1}>{a.label}</Text>
+              <Text style={st.awardName} numberOfLines={1}>{mask.byId(a.player.id, a.player.name)}</Text>
+              <Text style={st.awardVal} numberOfLines={1}>{a.value} {STAT_LABELS[a.stat] ?? a.stat}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      <Text style={[textStyles.h3, { marginTop: theme.spacing(1) }]}>Player ratings · out of 5</Text>
+      {players.length === 0 ? (
+        <Text style={textStyles.muted}>No individual stats recorded for this match.</Text>
+      ) : (
+        <Card>
+          {players.map((p: MatchRating, i) => (
+            <TouchableOpacity key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, i > 0 && st.divider]}>
+              <Text style={st.rank}>{i + 1}</Text>
+              <View style={[st.dot, { backgroundColor: teamColor(p.side) }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+                <Text style={st.detail} numberOfLines={1}>{p.detail}</Text>
+              </View>
+              <View style={st.ratingCol}>
+                <Text style={st.stars} numberOfLines={1}>{ratingStars(p.rating)}</Text>
+                <Text style={st.ratingNum}>{p.rating.toFixed(1)}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+const st = StyleSheet.create({
+  result: {
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
+    padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
+  },
+  resultLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  score: { fontSize: theme.font.h1, fontWeight: '900' },
+  vs: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  mvp: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
+  },
+  mvpIcon: { fontSize: 24 },
+  mvpLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  mvpName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  mvpDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  mvpRating: { fontSize: theme.font.h3, fontWeight: '900' },
+  awardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  award: {
+    width: '31%', flexGrow: 1, gap: 2,
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
+  },
+  awardIcon: { fontSize: 20 },
+  awardLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+  awardName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  awardVal: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '700' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
+  divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
+  rank: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', width: 18, textAlign: 'center' },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  detail: { color: theme.colors.textMuted, fontSize: theme.font.tiny, marginTop: 1 },
+  ratingCol: { alignItems: 'flex-end', minWidth: 64 },
+  stars: { color: theme.colors.accent, fontSize: theme.font.tiny },
+  ratingNum: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900' },
+});

@@ -1,0 +1,122 @@
+/** The owner-only contact card with per-channel OTP verification. The channel
+ *  used at sign-up is already verified; the other shows a "Verify" action that
+ *  runs a quick OTP check. (Demo: the code is generated client-side and shown
+ *  as a hint; a real build would send it over SMS/email.) */
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { theme } from '../core/theme';
+import { Card, Pill, textStyles } from './ui';
+import { verifyContact } from '../data/repos';
+
+type Channel = 'phone' | 'email';
+
+export function ContactCard({
+  playerId,
+  phone,
+  email,
+  phoneVerified,
+  emailVerified,
+  title = 'Contact · only you can see this',
+  name,
+  verify = verifyContact,
+}: {
+  playerId: string;
+  phone?: string;
+  email?: string;
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
+  /** card heading — e.g. "Parent / Guardian" */
+  title?: string;
+  /** optional name shown above the rows (the guardian's name) */
+  name?: string;
+  /** how a channel is marked verified — defaults to verifying the player's own */
+  verify?: (playerId: string, channel: Channel) => Promise<void>;
+}) {
+  const [verified, setVerified] = useState<Record<Channel, boolean>>({
+    phone: !!phoneVerified,
+    email: !!emailVerified,
+  });
+  const [active, setActive] = useState<Channel | null>(null);
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const start = (channel: Channel) => {
+    setActive(channel);
+    setCode('');
+    setError(null);
+    setSent(String(Math.floor(100000 + Math.random() * 900000)));
+  };
+
+  const confirm = async (channel: Channel) => {
+    if (code.trim() !== sent) {
+      setError('Incorrect code — try again.');
+      return;
+    }
+    await verify(playerId, channel);
+    setVerified((v) => ({ ...v, [channel]: true }));
+    setActive(null);
+  };
+
+  const row = (channel: Channel, icon: string, value: string) => (
+    <View style={st.block}>
+      <View style={st.row}>
+        <Text style={st.icon}>{icon}</Text>
+        <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{value}</Text>
+        {verified[channel] ? (
+          <Pill label="✓ Verified" color={theme.colors.surfaceAlt} textColor={theme.colors.primary} />
+        ) : active === channel ? null : (
+          <Text style={st.verifyLink} onPress={() => start(channel)}>Verify</Text>
+        )}
+      </View>
+      {active === channel && !verified[channel] && (
+        <View style={st.otp}>
+          <Text style={textStyles.muted}>Enter the 6-digit code sent to {value}.</Text>
+          <View style={st.otpRow}>
+            <TextInput
+              style={st.input}
+              value={code}
+              onChangeText={setCode}
+              placeholder="######"
+              placeholderTextColor={theme.colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+            <TouchableOpacity style={st.confirmBtn} activeOpacity={0.85} onPress={() => confirm(channel)}>
+              <Text style={st.confirmText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+          {error ? <Text style={st.error}>{error}</Text> : <Text style={st.hint}>Demo code: {sent}</Text>}
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <Card style={{ gap: theme.spacing(2) }}>
+      <Text style={textStyles.muted}>{title}</Text>
+      {name ? <Text style={[textStyles.body, { fontWeight: '700' }]}>{name}</Text> : null}
+      {phone ? row('phone', '📞', phone) : null}
+      {email ? row('email', '✉️', email) : null}
+      {!phone && !email ? <Text style={textStyles.muted}>No contact added.</Text> : null}
+    </Card>
+  );
+}
+
+const st = StyleSheet.create({
+  block: { gap: theme.spacing(2) },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  icon: { fontSize: 16 },
+  verifyLink: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  otp: { gap: theme.spacing(1), paddingLeft: theme.spacing(6) },
+  otpRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  input: {
+    flex: 1, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3),
+    color: theme.colors.text, fontSize: theme.font.body, letterSpacing: 4,
+  },
+  confirmBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4) },
+  confirmText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '800' },
+  hint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  error: { color: theme.colors.danger, fontSize: theme.font.tiny },
+});

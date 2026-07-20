@@ -1,0 +1,1573 @@
+/**
+ * Cricket plugin — ball-by-ball, two-innings limited-overs match.
+ *
+ * The scorer records each delivery against the selected striker + bowler: runs
+ * off the bat (credited to the striker), wickets (to the bowler), extras
+ * (wide/no-ball). Innings end automatically at the overs limit or 10 wickets;
+ * the chase ends the moment the target is passed.
+ *
+ * From the ball-by-ball log the reducer reconstructs everything: scoreboard,
+ * over count, run rate, the current over's dots, a batting card and a bowling
+ * card — so a viewer replaying the log sees the same scorecard. The reducer is
+ * pure; striker/bowler identity rides in each action's payload.
+ */
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { theme } from '../../core/theme';
+import { useMask } from '../../core/disputeMask';
+import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
+import { LiveTimeline } from '../LiveTimeline';
+import type { LiveEvent } from '../liveEvents';
+import type { Player } from '../../core/types';
+import type { ScoreAction, SportPlugin } from '../types';
+import { cricketVoice } from '../voiceParsers';
+import { resourcePct, revisedTarget } from './dls';
+
+
+interface Innings {
+  runs: number;
+  wickets: number;
+  balls: number;
+  extras: number;
+}
+interface BatCard {
+  name: string;
+  side: 'home' | 'away';
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  out: boolean;
+  /** left the field injured (not out — may resume later) */
+  retired?: boolean;
+  /** how they got out, e.g. "b Varun"; or "retired hurt"; undefined while batting */
+  dismissal?: string;
+}
+interface BowlCard {
+  name: string;
+  side: 'home' | 'away';
+  runs: number;
+  balls: number;
+  wickets: number;
+  dots: number;
+  /** wides + no-balls conceded — a small rating penalty */
+  extras: number;
+}
+
+/** A record of each dismissal, for the post-match performance ratings. */
+interface DismissalRecord {
+  kind: DismissalKind;
+  outId?: string;
+  bowlerId?: string;
+  fielderId?: string;
+  fielderName?: string;
+}
+
+export interface CricketState {
+  oversLimit: number;
+  wicketsLimit: number;
+  innings: 1 | 2;
+  battingSide: 'home' | 'away';
+  target?: number;
+  scores: { home: Innings; away: Innings };
+  batting: Record<string, BatCard>;
+  bowling: Record<string, BowlCard>;
+  thisOver: string[];
+  ballsInOver: number;
+  /** the two batsmen currently at the crease (auto-rotated on odd runs / over end) */
+  strikerId?: string;
+  strikerName?: string;
+  nonStrikerId?: string;
+  nonStrikerName?: string;
+  /** current bowler; cleared at the end of an over so a new one must be named */
+  bowlerId?: string;
+  bowlerName?: string;
+  /** who bowled the previous over (can't bowl two in a row) */
+  lastOverBowlerId?: string;
+  /** the next legal delivery is a free hit (set by a no-ball) */
+  freeHit: boolean;
+  /** captain & wicket-keeper per side, assigned before the game starts */
+  captains: Partial<Record<'home' | 'away', { id: string; name: string }>>;
+  keepers: Partial<Record<'home' | 'away', { id: string; name: string }>>;
+  /** every dismissal in the match — drives the post-match ratings */
+  dismissals: DismissalRecord[];
+  /** IPL-style Impact Player is allowed this match (format toggle) */
+  impactEnabled: boolean;
+  /** the one Impact substitution each side may use; records who came in for whom */
+  impactUsed: Partial<Record<'home' | 'away', { inId: string; inName: string; outId: string; outName: string }>>;
+  /** players who can take no further part (subbed out by an Impact Player) */
+  unavailable: string[];
+  /** powerplay length in overs (0 = none) — fielding restrictions apply within it */
+  powerplayOvers: number;
+  /** how a tied match is settled: a Super Over, or the tie stands / is shared */
+  tieBreak: 'super_over' | 'shared';
+  /** balls per over — 6 standard, 10 for The Hundred */
+  ballsPerOver: number;
+  /** ball used — leather (match) or tennis (box/turf). Informational. */
+  ballType: 'leather' | 'tennis';
+  /** rain revises the target by Duckworth–Lewis–Stern (limited-overs only). */
+  dls: boolean;
+  /** DLS resources lost (%) to interruptions in each innings — drives the revise. */
+  r1Lost: number;
+  r2Lost: number;
+  events: LiveEvent[];
+  seq: number;
+  ended: boolean;
+  potm?: string;
+  /** regulation ended level — awaiting the scorer's call (Super Over or accept the tie). */
+  pendingTie?: boolean;
+  /** marks a nested Super-Over mini-innings, so a level SO ends outright (parent decides). */
+  isSuperOver?: boolean;
+  /** the live Super-Over tie-breaker, if one is under way / decided the match. */
+  superOver?: SuperOverState;
+}
+
+/** A Super Over: a self-contained 1-over, 2-wicket mini-match run through this
+ *  same reducer. The parent match is frozen at its tied totals while `state` (the
+ *  nested innings) is live; repeated until a round is won. */
+export interface SuperOverState {
+  round: number;
+  /** which side batted first THIS round (alternates each round). */
+  battingFirst: 'home' | 'away';
+  /** runs each side made in prior, tied rounds. */
+  history: { round: number; home: number; away: number }[];
+  /** the nested mini-match (oversLimit 1, wicketsLimit 2). */
+  state: CricketState;
+}
+
+export type DismissalKind = 'bowled' | 'caught' | 'lbw' | 'stumped' | 'runout' | 'hitwicket' | 'retired' | 'timedout';
+
+const blankInnings = (): Innings => ({ runs: 0, wickets: 0, balls: 0, extras: 0 });
+
+const init = (config?: Record<string, unknown>): CricketState => ({
+  oversLimit: Number(config?.overs ?? 20),
+  // players/side − 1 wickets (box cricket / 7-a-side etc. fall out of this)
+  wicketsLimit: Math.max(1, Number(config?.playersPerSide ?? 11) - 1),
+  innings: 1,
+  battingSide: 'home',
+  scores: { home: blankInnings(), away: blankInnings() },
+  batting: {},
+  bowling: {},
+  thisOver: [],
+  ballsInOver: 0,
+  freeHit: false,
+  captains: {},
+  keepers: {},
+  dismissals: [],
+  impactEnabled: Boolean(config?.impactPlayer ?? false),
+  impactUsed: {},
+  unavailable: [],
+  powerplayOvers: Number(config?.powerplayOvers ?? 0),
+  tieBreak: (config?.tieBreak as CricketState['tieBreak']) ?? 'super_over',
+  ballsPerOver: Number(config?.ballsPerOver ?? 6),
+  ballType: (config?.ballType as CricketState['ballType']) ?? 'leather',
+  dls: Boolean(config?.dls ?? false),
+  r1Lost: 0,
+  r2Lost: 0,
+  events: [],
+  seq: 0,
+  ended: false,
+});
+
+/** Overs bowled so far in the current innings (for the powerplay window). */
+export const oversBowled = (s: CricketState) => Math.floor(s.scores[s.battingSide].balls / s.ballsPerOver);
+/** True while the innings is inside its powerplay (fielding restrictions). */
+export const inPowerplay = (s: CricketState) =>
+  s.powerplayOvers > 0 && !s.ended && oversBowled(s) < s.powerplayOvers;
+
+/** Auto commentary for a delivery. */
+function commentary(kind: 'runs' | 'wicket' | 'extra', value: number, batter?: string, bowler?: string): string {
+  const b = batter ?? 'the batter';
+  if (kind === 'wicket') return `${bowler ? bowler + ' strikes — ' : ''}${b} departs`;
+  if (kind === 'extra') return 'extra, free run';
+  if (value === 0) return `${b} defends, no run`;
+  if (value === 4) return `FOUR! ${b} finds the boundary`;
+  if (value === 6) return `SIX! ${b} goes downtown`;
+  return `${b} works it for ${value}`;
+}
+
+/** Scorecard dismissal text, e.g. "c Veer b Ishaan", "lbw b Ishaan", "run out (Veer)". */
+function composeDismissal(kind: DismissalKind, bowler?: string, fielder?: string, keeper?: string): string {
+  const b = bowler ?? 'bowler';
+  switch (kind) {
+    case 'bowled': return `b ${b}`;
+    case 'lbw': return `lbw b ${b}`;
+    case 'hitwicket': return `hit wkt b ${b}`;
+    case 'stumped': return `st ${keeper ?? '†wk'} b ${b}`;
+    case 'caught': return fielder && fielder === bowler ? `c & b ${b}` : `c ${fielder ?? 'fielder'} b ${b}`;
+    case 'runout': return `run out${fielder ? ` (${fielder})` : ''}`;
+    case 'retired': return 'retired hurt';
+    case 'timedout': return 'timed out';
+    default: return 'out';
+  }
+}
+const WICKET_LABEL: Record<DismissalKind, string> = {
+  bowled: 'BOWLED', caught: 'CAUGHT', lbw: 'LBW', stumped: 'STUMPED', runout: 'RUN OUT', hitwicket: 'HIT WICKET',
+  retired: 'RETIRED HURT', timedout: 'TIMED OUT',
+};
+/** Dismissals that aren't credited to the bowler. */
+const NO_BOWLER: DismissalKind[] = ['runout', 'retired', 'timedout'];
+/** "Dismissals" that involve no delivery (happen between balls). */
+const NO_DELIVERY: DismissalKind[] = ['retired', 'timedout'];
+
+export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.${balls % bpo}`;
+export const runRate = (runs: number, balls: number, bpo = 6) => (balls === 0 ? '0.00' : ((runs / balls) * bpo).toFixed(2));
+const other = (s: 'home' | 'away') => (s === 'home' ? 'away' : 'home');
+
+/** Make sure a batsman sent to the crease has a (0*) card so they show as
+ *  batting (not "yet to bat"). A retired-hurt batsman resuming keeps their runs
+ *  but is no longer marked retired. */
+const ensureCard = (batting: Record<string, BatCard>, id: string, name: string, side: 'home' | 'away'): Record<string, BatCard> => {
+  const prev = batting[id];
+  if (!prev) return { ...batting, [id]: { name, side, runs: 0, balls: 0, fours: 0, sixes: 0, out: false } };
+  if (prev.retired) return { ...batting, [id]: { ...prev, retired: false, dismissal: undefined } };
+  return batting;
+};
+
+/** Swap which batsman is on strike. */
+const swapStrike = <T extends Pick<CricketState, 'strikerId' | 'strikerName' | 'nonStrikerId' | 'nonStrikerName'>>(s: T): T => ({
+  ...s,
+  strikerId: s.nonStrikerId,
+  strikerName: s.nonStrikerName,
+  nonStrikerId: s.strikerId,
+  nonStrikerName: s.strikerName,
+});
+
+/** Fresh crease + bowler (used when a new innings starts). */
+const clearCrease = {
+  strikerId: undefined, strikerName: undefined, nonStrikerId: undefined, nonStrikerName: undefined,
+  bowlerId: undefined, bowlerName: undefined, lastOverBowlerId: undefined, freeHit: false,
+};
+
+function inningsComplete(s: CricketState, inn: Innings): boolean {
+  return inn.balls >= s.oversLimit * s.ballsPerOver || inn.wickets >= s.wicketsLimit;
+}
+
+interface BallInfo {
+  strikerId?: string;
+  strikerName?: string;
+  bowlerId?: string;
+  bowlerName?: string;
+}
+const ballInfo = (a: ScoreAction): BallInfo => ({
+  strikerId: a.payload?.strikerId as string | undefined,
+  strikerName: a.payload?.strikerName as string | undefined,
+  bowlerId: a.payload?.bowlerId as string | undefined,
+  bowlerName: a.payload?.bowlerName as string | undefined,
+});
+
+const reducer = (s: CricketState, a: ScoreAction): CricketState => {
+  if (s.ended && a.type !== 'END' && a.type !== 'POTM') return s;
+
+  // ── Rain (DLS) ────────────────────────────────────────────────────────────
+  // Cut the overs; in the chase, revise the target by the resources lost.
+  if (a.type === 'RAIN') {
+    const newOvers = Math.floor(Number(a.payload?.overs ?? s.oversLimit));
+    const inn = s.scores[s.battingSide];
+    const oversDone = Math.floor(inn.balls / s.ballsPerOver);
+    if (!s.dls || newOvers <= oversDone || newOvers >= s.oversLimit) return s;
+    const lost = Math.max(0, resourcePct(s.oversLimit - oversDone, inn.wickets) - resourcePct(newOvers - oversDone, inn.wickets));
+    let next: CricketState = { ...s, oversLimit: newOvers };
+    if (s.innings === 1) {
+      next = { ...next, r1Lost: s.r1Lost + lost };
+    } else {
+      const r2Lost = s.r2Lost + lost;
+      const team1Runs = s.scores[other(s.battingSide)].runs;
+      next = { ...next, r2Lost, target: revisedTarget(team1Runs, 100 - s.r1Lost, 100 - r2Lost) };
+    }
+    return {
+      ...next, seq: s.seq + 1,
+      events: [...s.events, { id: s.seq + 1, stamp: '☔', icon: '☔', label: `Rain — overs cut to ${newOvers}${s.innings === 2 ? ` · target ${next.target}` : ''}`, detail: undefined, side: s.battingSide }],
+    };
+  }
+
+  // ── Super Over ────────────────────────────────────────────────────────────
+  // Starting one freezes the parent match and spins up a nested mini-innings.
+  if (a.type === 'START_SUPER_OVER') return startSuperOver(s);
+  // While a Super Over is live, route every scoring action into the nested match
+  // (run through this very reducer) so all the ball-by-ball logic is reused.
+  if (s.superOver && !s.superOver.state.ended) {
+    const inner = reducer(s.superOver.state, a);
+    if (!inner.ended) return { ...s, superOver: { ...s.superOver, state: inner } };
+    return resolveSuperOver(s, inner); // the round just ended — decide or await the next
+  }
+
+  const bat = s.battingSide;
+  const cur = s.scores[bat];
+  let seq = s.seq;
+  const info = ballInfo(a);
+
+  // Start of a fresh over? (a legal ball arrives after 6 were bowled)
+  const newOver = s.ballsInOver >= s.ballsPerOver;
+  const baseOver = newOver ? [] : s.thisOver;
+  const baseBalls = newOver ? 0 : s.ballsInOver;
+
+  const settle = (state: CricketState): CricketState => {
+    const c = state.scores[state.battingSide];
+    if (state.innings === 2 && state.target !== undefined && c.runs >= state.target) return { ...state, ended: true };
+    if (!inningsComplete(state, c)) return state;
+    if (state.innings === 1) {
+      return { ...state, innings: 2, battingSide: other(state.battingSide), target: revisedTarget(c.runs, 100 - state.r1Lost, 100), thisOver: [], ballsInOver: 0, ...clearCrease };
+    }
+    // Second innings done without reaching the target: a loss — or a level score.
+    // A level regulation match pauses for the scorer's call (Super Over or accept
+    // the tie); a level Super Over just ends so the parent can decide the next step.
+    const level = state.scores.home.runs === state.scores.away.runs;
+    if (level && !state.isSuperOver) return { ...state, pendingTie: true };
+    return { ...state, ended: true };
+  };
+
+  // Apply a delta to one batter's card (creating it if needed). Generic over the
+  // batter id so WICKET can update both the striker (ball faced) and a run-out
+  // non-striker (marked out) on the same evolving batting record.
+  const applyBat = (
+    batting: Record<string, BatCard>, id: string | undefined, name: string | undefined,
+    delta: { runs?: number; balls?: number; fours?: number; sixes?: number; out?: boolean; dismissal?: string; retired?: boolean }
+  ): Record<string, BatCard> => {
+    if (!id) return batting;
+    const prev: BatCard = batting[id] ?? { name: name ?? '', side: bat, runs: 0, balls: 0, fours: 0, sixes: 0, out: false };
+    return {
+      ...batting,
+      [id]: {
+        ...prev,
+        name: prev.name || name || '',
+        side: prev.side ?? bat,
+        runs: prev.runs + (delta.runs ?? 0),
+        balls: prev.balls + (delta.balls ?? 0),
+        fours: prev.fours + (delta.fours ?? 0),
+        sixes: prev.sixes + (delta.sixes ?? 0),
+        out: delta.out ?? prev.out,
+        retired: delta.retired ?? prev.retired,
+        dismissal: delta.dismissal ?? prev.dismissal,
+      },
+    };
+  };
+  const bumpBat = (delta: { runs?: number; balls?: number; fours?: number; sixes?: number; out?: boolean; dismissal?: string }) =>
+    applyBat(s.batting, info.strikerId, info.strikerName, delta);
+  const bumpBowl = (delta: { runs?: number; balls?: number; wickets?: number; extras?: number }): Record<string, BowlCard> => {
+    if (!info.bowlerId) return s.bowling;
+    const prev: BowlCard = s.bowling[info.bowlerId] ?? { name: info.bowlerName ?? '', side: other(bat), runs: 0, balls: 0, wickets: 0, dots: 0, extras: 0 };
+    // a dot ball = a legal delivery the bowler conceded no runs off
+    const dot = (delta.balls ?? 0) > 0 && (delta.runs ?? 0) === 0 ? 1 : 0;
+    return { ...s.bowling, [info.bowlerId]: { ...prev, name: prev.name || info.bowlerName || '', side: prev.side ?? other(bat), runs: prev.runs + (delta.runs ?? 0), balls: prev.balls + (delta.balls ?? 0), wickets: prev.wickets + (delta.wickets ?? 0), dots: prev.dots + dot, extras: prev.extras + (delta.extras ?? 0) } };
+  };
+
+  const overEnd = baseBalls + 1 >= s.ballsPerOver;
+  // End-of-(legal)-ball housekeeping: strike rotation, over change (clear the
+  // bowler & remember who bowled it so they can't bowl two in a row), and
+  // consuming the free hit (any legal delivery clears it).
+  const afterLegalBall = (next: CricketState, rotate: boolean): CricketState => {
+    let r = rotate ? swapStrike(next) : next;
+    if (overEnd) r = { ...r, lastOverBowlerId: s.bowlerId, bowlerId: undefined, bowlerName: undefined };
+    return settle({ ...r, freeHit: false });
+  };
+
+  switch (a.type) {
+    case 'RUNS': {
+      const r = Number(a.payload?.runs ?? 0);
+      const balls = cur.balls + 1;
+      seq += 1;
+      const next: CricketState = {
+        ...s,
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, balls } },
+        batting: bumpBat({ runs: r, balls: 1, fours: r === 4 ? 1 : 0, sixes: r === 6 ? 1 : 0 }),
+        bowling: bumpBowl({ runs: r, balls: 1 }),
+        thisOver: [...baseOver, r === 4 ? '4' : r === 6 ? '6' : String(r)],
+        ballsInOver: baseBalls + 1,
+        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat }],
+        seq,
+      };
+      // Strike rotation: odd runs swap ends, and the end of an over swaps ends.
+      // Both happening (a single off the last ball) cancel out — hence XOR.
+      return afterLegalBall(next, (r % 2 === 1) !== overEnd);
+    }
+    case 'BYES':
+    case 'LEGBYES': {
+      const r = Math.max(1, Number(a.payload?.runs ?? 1));
+      const isLeg = a.type === 'LEGBYES';
+      const balls = cur.balls + 1;
+      seq += 1;
+      const next: CricketState = {
+        ...s,
+        // byes/leg-byes are team extras — not the batter's runs, not charged to the bowler
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, extras: cur.extras + r, balls } },
+        batting: applyBat(s.batting, s.strikerId, s.strikerName, { balls: 1 }),
+        bowling: bumpBowl({ balls: 1 }),
+        thisOver: [...baseOver, (isLeg ? 'lb' : 'b') + (r > 1 ? r : '')],
+        ballsInOver: baseBalls + 1,
+        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat }],
+        seq,
+      };
+      return afterLegalBall(next, (r % 2 === 1) !== overEnd);
+    }
+    case 'WICKET': {
+      const kind = (String(a.payload?.kind ?? 'bowled') as DismissalKind);
+      const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
+      const keeper = s.keepers[other(bat)]?.name;
+      const dismissal = composeDismissal(kind, info.bowlerName, a.payload?.fielderName as string | undefined, keeper);
+      const outId = batterOut === 'nonstriker' ? s.nonStrikerId : s.strikerId;
+      const outName = batterOut === 'nonstriker' ? s.nonStrikerName : s.strikerName;
+      const newBatId = a.payload?.newBatId as string | undefined;
+      const newBatName = a.payload?.newBatName as string | undefined;
+      // The new batsman fills whichever end the departing batsman vacated.
+      const creaseFor = (id?: string, name?: string) =>
+        batterOut === 'nonstriker' ? { nonStrikerId: id, nonStrikerName: name } : { strikerId: id, strikerName: name };
+
+      // Retired hurt / timed out — no delivery is bowled, no bowler involved.
+      if (NO_DELIVERY.includes(kind)) {
+        const isWicket = kind !== 'retired'; // retired hurt doesn't count as a wicket
+        seq += 1;
+        let batting = applyBat(s.batting, outId, outName, kind === 'retired' ? { retired: true, dismissal } : { out: true, dismissal });
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        const next: CricketState = {
+          ...s,
+          scores: { ...s.scores, [bat]: { ...cur, wickets: cur.wickets + (isWicket ? 1 : 0) } },
+          batting,
+          dismissals: isWicket ? [...s.dismissals, { kind, outId }] : s.dismissals,
+          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat) }],
+          seq,
+          ...creaseFor(newBatId, newBatName),
+        };
+        return settle(next);
+      }
+
+      // Deliveries (bowled/caught/lbw/stumped/hit wicket/run out).
+      const isRunOut = kind === 'runout';
+      const completed = isRunOut ? Math.max(0, Number(a.payload?.runs ?? 0)) : 0; // runs off the bat before a run-out
+      const balls = cur.balls + 1;
+      seq += 1;
+      // The striker faces the delivery (and is credited any completed runs); the
+      // dismissed batsman (striker, or a run-out non-striker) is marked out.
+      let batting = applyBat(s.batting, s.strikerId, s.strikerName, { balls: 1, runs: completed });
+      batting = applyBat(batting, outId, outName, { out: true, dismissal });
+      if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+
+      // A stumping is credited to the keeper; otherwise to the named fielder.
+      const fielderId = kind === 'stumped' ? s.keepers[other(bat)]?.id : (a.payload?.fielderId as string | undefined);
+      const fielderName = kind === 'stumped' ? keeper : (a.payload?.fielderName as string | undefined);
+
+      const next: CricketState = {
+        ...s,
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + completed, wickets: cur.wickets + 1, balls } },
+        batting,
+        bowling: bumpBowl({ balls: 1, runs: completed, wickets: NO_BOWLER.includes(kind) ? 0 : 1 }),
+        dismissals: [...s.dismissals, { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName }],
+        thisOver: [...baseOver, completed > 0 ? `${completed}+W` : 'W'],
+        ballsInOver: baseBalls + 1,
+        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat) }],
+        seq,
+        ...creaseFor(newBatId, newBatName),
+      };
+      // Completed-run parity and over-end both swap strike (run-out crossing approximated).
+      return afterLegalBall(next, (completed % 2 === 1) !== overEnd);
+    }
+    case 'EXTRA': {
+      const kind = String(a.payload?.kind ?? 'Wide');
+      const isNoBall = kind === 'No ball';
+      // Runs scored off the bat on a no-ball — credited to the striker; the +1
+      // no-ball penalty is the only "extra".
+      const offBat = isNoBall ? Math.max(0, Number(a.payload?.runs ?? 0)) : 0;
+      seq += 1;
+      // Wide/no-ball: NOT a legal ball (no over progress). A no-ball makes the
+      // next delivery a free hit. The striker faces a no-ball (counts as a BF).
+      let batting = s.batting;
+      if (isNoBall) batting = applyBat(s.batting, s.strikerId, s.strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
+      const sym = isNoBall ? (offBat > 0 ? `${offBat}nb` : 'nb') : 'wd';
+      let next: CricketState = {
+        ...s,
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + 1 + offBat, extras: cur.extras + 1 } },
+        batting,
+        bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }),
+        thisOver: [...(s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver), sym],
+        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat }],
+        seq,
+        freeHit: isNoBall ? true : s.freeHit,
+      };
+      // Odd runs off the bat rotate strike (still a no-ball — the over doesn't advance).
+      if (isNoBall && offBat % 2 === 1) next = swapStrike(next);
+      return settle(next);
+    }
+    case 'SET_STRIKER': {
+      const id = String(a.payload?.id ?? '');
+      const name = String(a.payload?.name ?? '');
+      if (!id || s.unavailable.includes(id)) return s;
+      return { ...s, strikerId: id, strikerName: name, batting: ensureCard(s.batting, id, name, bat) };
+    }
+    case 'SET_NONSTRIKER': {
+      const id = String(a.payload?.id ?? '');
+      const name = String(a.payload?.name ?? '');
+      if (!id || s.unavailable.includes(id)) return s;
+      return { ...s, nonStrikerId: id, nonStrikerName: name, batting: ensureCard(s.batting, id, name, bat) };
+    }
+    case 'IMPACT_SUB': {
+      // IPL-style Impact Player: one per side, all match. The named substitute
+      // comes in to bat/bowl; the player they replace takes no further part.
+      const side = a.payload?.side as 'home' | 'away';
+      const inId = String(a.payload?.inId ?? '');
+      const inName = String(a.payload?.inName ?? '');
+      const outId = String(a.payload?.outId ?? '');
+      const outName = String(a.payload?.outName ?? '');
+      if (!s.impactEnabled || (side !== 'home' && side !== 'away') || !inId || !outId) return s;
+      if (s.impactUsed[side]) return s; // already used this side's Impact Player
+      seq += 1;
+      return {
+        ...s,
+        impactUsed: { ...s.impactUsed, [side]: { inId, inName, outId, outName } },
+        unavailable: [...s.unavailable, outId],
+        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '⚡', label: 'IMPACT PLAYER', detail: `${inName} in for ${outName}`, side }],
+        seq,
+      };
+    }
+    case 'SWAP_STRIKE':
+      return swapStrike(s);
+    case 'SET_BOWLER': {
+      const id = String(a.payload?.id ?? '');
+      const name = String(a.payload?.name ?? '');
+      if (!id || id === s.lastOverBowlerId || s.unavailable.includes(id)) return s; // no bowling two in a row, no subbed-out players
+      const card: BowlCard = { name, side: other(bat), runs: 0, balls: 0, wickets: 0, dots: 0, extras: 0 };
+      const bowling = s.bowling[id] ? s.bowling : { ...s.bowling, [id]: card };
+      return { ...s, bowlerId: id, bowlerName: name, bowling };
+    }
+    case 'SET_CAPTAIN': {
+      const side = a.payload?.side as 'home' | 'away';
+      const id = String(a.payload?.id ?? '');
+      if (!side || !id) return s;
+      return { ...s, captains: { ...s.captains, [side]: { id, name: String(a.payload?.name ?? '') } } };
+    }
+    case 'SET_KEEPER': {
+      const side = a.payload?.side as 'home' | 'away';
+      const id = String(a.payload?.id ?? '');
+      if (!side || !id) return s;
+      return { ...s, keepers: { ...s.keepers, [side]: { id, name: String(a.payload?.name ?? '') } } };
+    }
+    case 'POTM':
+      return { ...s, potm: String(a.payload?.name ?? '') };
+    case 'END_INNINGS':
+      if (s.innings === 1) return { ...s, innings: 2, battingSide: other(bat), target: revisedTarget(cur.runs, 100 - s.r1Lost, 100), thisOver: [], ballsInOver: 0, ...clearCrease };
+      return { ...s, ended: true };
+    case 'END':
+      return { ...s, ended: true };
+    default:
+      return s;
+  }
+};
+
+/** Winner of a completed Super-Over round (more runs wins); null = still level. */
+function superOverWinner(inn: CricketState): 'home' | 'away' | null {
+  if (inn.scores.home.runs > inn.scores.away.runs) return 'home';
+  if (inn.scores.away.runs > inn.scores.home.runs) return 'away';
+  return null;
+}
+
+/** Begin a Super Over: freeze the parent, open a fresh 1-over / 2-wicket innings.
+ *  Round 1 — the side that batted second in the match bats first; then it
+ *  alternates each subsequent (tied) round. Captains/keepers carry over so the
+ *  scorer isn't re-prompted for setup. */
+function startSuperOver(s: CricketState): CricketState {
+  const battingFirst = s.superOver ? other(s.superOver.battingFirst) : s.battingSide;
+  const history = s.superOver
+    ? [...s.superOver.history, { round: s.superOver.round, home: s.superOver.state.scores.home.runs, away: s.superOver.state.scores.away.runs }]
+    : [];
+  const round = (s.superOver?.round ?? 0) + 1;
+  const inner: CricketState = {
+    ...init({ overs: 1, playersPerSide: 3 }), // oversLimit 1, wicketsLimit 2
+    isSuperOver: true,
+    battingSide: battingFirst,
+    captains: s.captains,
+    keepers: s.keepers,
+  };
+  return { ...s, ended: false, pendingTie: true, superOver: { round, battingFirst, history, state: inner } };
+}
+
+/** A Super-Over round just ended: a decided round ends the match; a level round
+ *  leaves the tie pending so the scorer can start the next round (or accept it). */
+function resolveSuperOver(s: CricketState, inner: CricketState): CricketState {
+  const decided = superOverWinner(inner) !== null;
+  return { ...s, superOver: { ...s.superOver!, state: inner }, ended: decided };
+}
+
+function resultLine(s: CricketState): string {
+  // Decided by a Super Over.
+  if (s.superOver) {
+    const inn = s.superOver.state;
+    const w = superOverWinner(inn);
+    if (w) {
+      const margin = Math.abs(inn.scores.home.runs - inn.scores.away.runs);
+      const roundTag = s.superOver.round > 1 ? ` (Super Over ${s.superOver.round})` : '';
+      return `Won the Super Over by ${margin} run${margin === 1 ? '' : 's'}${roundTag}`;
+    }
+  }
+  const chase = s.scores[s.battingSide];
+  const defend = s.scores[other(s.battingSide)];
+  if (chase.runs >= (s.target ?? Infinity)) {
+    const w = s.wicketsLimit - chase.wickets;
+    return `Won by ${w} wkt${w === 1 ? '' : 's'}`;
+  }
+  const margin = defend.runs - chase.runs;
+  if (margin === 0) return 'Match tied';
+  return `Won by ${margin} run${margin === 1 ? '' : 's'}`;
+}
+
+/* ------------------------------- Controls ---------------------------------- */
+
+/** Shown when a match ends level (or a Super Over round ties): start the (next)
+ *  Super Over, or accept the tie and end the match. */
+function SuperOverDecision({
+  rootState, dispatch, homeName, awayName,
+}: {
+  rootState: CricketState; dispatch: (a: ScoreAction) => void; homeName: string; awayName: string;
+}) {
+  const so = rootState.superOver;
+  const nm = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
+  const level = `${homeName} ${rootState.scores.home.runs}/${rootState.scores.home.wickets}   ·   ${awayName} ${rootState.scores.away.runs}/${rootState.scores.away.wickets}`;
+  const tiedRound = !!so && superOverWinner(so.state) === null; // a Super Over that itself tied
+  const nextRound = (so?.round ?? 0) + 1;
+  const nextFirst = so ? other(so.battingFirst) : rootState.battingSide;
+  return (
+    <View style={ctrl.wktPanel}>
+      <Text style={ctrl.soTitle}>🔥 {tiedRound ? `Super Over ${so!.round} tied!` : 'Scores level — it’s a tie!'}</Text>
+      <Text style={ctrl.meta}>{level}</Text>
+      {!!so && so.history.map((h) => (
+        <Text key={h.round} style={ctrl.meta}>Super Over {h.round}: {homeName} {h.home} · {awayName} {h.away} — tied</Text>
+      ))}
+      {tiedRound && (
+        <Text style={ctrl.meta}>Super Over {so!.round}: {homeName} {so!.state.scores.home.runs} · {awayName} {so!.state.scores.away.runs} — tied</Text>
+      )}
+      {/* A Super Over is offered unless the tie-break is "shared/tie stands" (and
+          a Super Over that itself tied always continues to another one). */}
+      {(rootState.tieBreak !== 'shared' || tiedRound) && (
+        <>
+          <Text style={ctrl.hint}>{nm(nextFirst)} bat first in Super Over {nextRound} · 1 over · 2 wickets.</Text>
+          <Button label={`🔥 Start Super Over${so ? ` ${nextRound}` : ''}`} variant="primary" onPress={() => dispatch({ type: 'START_SUPER_OVER' })} />
+        </>
+      )}
+      <Button label={rootState.tieBreak === 'shared' && !tiedRound ? 'End the match — tie stands' : 'Accept the tie & end the match'} variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+    </View>
+  );
+}
+
+/** Pre-match setup: each side names a captain (c) and wicket-keeper (†) before
+ *  scoring begins — the keeper drives stumpings & caught-behind. One name list
+ *  per team; tapping a name offers "Captain" or "Keeper" to keep it compact. */
+function SetupPanel({
+  state, dispatch, homeName, awayName, homeRoster, awayRoster, homeKeeperId, awayKeeperId,
+}: {
+  state: CricketState; dispatch: (a: ScoreAction) => void;
+  homeName: string; awayName: string; homeRoster: Player[]; awayRoster: Player[];
+  homeKeeperId?: string; awayKeeperId?: string;
+}) {
+  const [pick, setPick] = useState<{ side: 'home' | 'away'; id: string; name: string } | null>(null);
+
+  // Pre-fill the wicket-keeper the organizer designated in the batting-order
+  // editor, so the scorer only has to pick captains. Guarded on !already-set so
+  // it fires once per side and the scorer can still override with a manual tap.
+  useEffect(() => {
+    ([['home', homeKeeperId, homeRoster], ['away', awayKeeperId, awayRoster]] as const).forEach(
+      ([sd, kid, roster]) => {
+        if (!kid || state.keepers[sd]) return;
+        const p = roster.find((x) => x.id === kid);
+        if (p) dispatch({ type: 'SET_KEEPER', payload: { side: sd, id: p.id, name: p.fullName } });
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeKeeperId, awayKeeperId, homeRoster, awayRoster, state.keepers.home, state.keepers.away]);
+  const roleTag = (key: 'home' | 'away', id: string) =>
+    (state.captains[key]?.id === id ? ' (c)' : '') + (state.keepers[key]?.id === id ? ' †' : '');
+  const assign = (role: 'SET_CAPTAIN' | 'SET_KEEPER') => {
+    if (!pick) return;
+    dispatch({ type: role, payload: { side: pick.side, id: pick.id, name: pick.name } });
+    setPick(null);
+  };
+
+  const side = (key: 'home' | 'away', name: string, roster: Player[]) => (
+    <View style={{ gap: theme.spacing(2) }}>
+      <Text style={ctrl.label}>{name}</Text>
+      <View style={ctrl.chips}>
+        {roster.map((p) => {
+          const tag = roleTag(key, p.id);
+          return (
+            <SelectChip
+              key={p.id}
+              label={`${p.fullName}${tag}`}
+              active={!!tag || (pick?.side === key && pick.id === p.id)}
+              onPress={() => setPick((c) => (c?.side === key && c.id === p.id ? null : { side: key, id: p.id, name: p.fullName }))}
+            />
+          );
+        })}
+      </View>
+      {pick?.side === key && (
+        <View style={ctrl.roleRow}>
+          <Text style={ctrl.meta}>Set {pick.name} as</Text>
+          <Button label="Captain (c)" variant="ghost" style={ctrl.roleBtn} onPress={() => assign('SET_CAPTAIN')} />
+          <Button label="Keeper †" variant="ghost" style={ctrl.roleBtn} onPress={() => assign('SET_KEEPER')} />
+        </View>
+      )}
+    </View>
+  );
+  return (
+    <View style={ctrl.wktPanel}>
+      <Text style={ctrl.label}>🧢 Match setup</Text>
+      <Text style={ctrl.meta}>Tap a player to make them captain (c) or wicket-keeper (†). Both are needed per side to begin.</Text>
+      {roster0(homeRoster) ? side('home', homeName, homeRoster) : <Text style={ctrl.meta}>No {homeName} squad set.</Text>}
+      {roster0(awayRoster) ? side('away', awayName, awayRoster) : <Text style={ctrl.meta}>No {awayName} squad set.</Text>}
+    </View>
+  );
+}
+const roster0 = (r: Player[]) => r.length > 0;
+
+const DISMISSALS: DismissalKind[] = ['bowled', 'caught', 'lbw', 'stumped', 'runout', 'hitwicket', 'retired', 'timedout'];
+const needsFielder = (k: DismissalKind) => k === 'caught' || k === 'runout';
+const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'retired' || k === 'timedout';
+
+const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
+  state: rootState, dispatch, homeName, awayName, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
+}) => {
+  const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number } | null>(null);
+  const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | null>(null);
+  const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player } | null>(null);
+  const [rain, setRain] = useState('');
+
+  // While a Super Over is live, ALL the live-scoring UI below operates on the
+  // nested mini-match; dispatched actions are routed there by the reducer. The
+  // parent (tied) match stays frozen underneath.
+  const soActive = !!rootState.superOver && !rootState.superOver.state.ended;
+  const state = soActive ? rootState.superOver!.state : rootState;
+
+  // Regulation ended level (or a Super Over just tied) — offer the tie-breaker.
+  if (rootState.pendingTie && !soActive) {
+    return <SuperOverDecision rootState={rootState} dispatch={dispatch} homeName={homeName} awayName={awayName} />;
+  }
+
+  const battingName = state.battingSide === 'home' ? homeName : awayName;
+  const bowlingName = state.battingSide === 'home' ? awayName : homeName;
+  const battingRoster = state.battingSide === 'home' ? homeRoster : awayRoster;
+  const bowlingRoster = state.battingSide === 'home' ? awayRoster : homeRoster;
+  const rosterFor = (sd: 'home' | 'away') => (sd === 'home' ? homeRoster : awayRoster);
+  const cur = state.scores[state.battingSide];
+
+  const { strikerId, strikerName, nonStrikerId, nonStrikerName, bowlerId, bowlerName } = state;
+  const isOut = (id: string) => state.batting[id]?.out === true;
+  const isUnavailable = (id: string) => state.unavailable.includes(id);
+  const atCrease = (id: string) => id === strikerId || id === nonStrikerId;
+  const bothSet = !!strikerId && !!nonStrikerId;
+  const canScore = bothSet && !!bowlerId;
+
+  // Gate scoring on the pre-match setup.
+  const configured = !!(state.captains.home && state.captains.away && state.keepers.home && state.keepers.away);
+  if (!configured) {
+    return <SetupPanel state={state} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeKeeperId={homeKeeperId} awayKeeperId={awayKeeperId} />;
+  }
+
+  const pickBat = (p: Player) => {
+    if (isOut(p.id) || atCrease(p.id) || isUnavailable(p.id)) return;
+    if (!strikerId) dispatch({ type: 'SET_STRIKER', payload: { id: p.id, name: p.fullName } });
+    else if (!nonStrikerId) dispatch({ type: 'SET_NONSTRIKER', payload: { id: p.id, name: p.fullName } });
+  };
+
+  // ----- Impact Player flow (one substitution per side, format-gated) -----
+  const finishImpact = (inP: Player) => {
+    if (!impact?.out) return;
+    dispatch({
+      type: 'IMPACT_SUB',
+      side: impact.side,
+      payload: { side: impact.side, outId: impact.out.id, outName: impact.out.fullName, inId: inP.id, inName: inP.fullName },
+    });
+    setImpact(null);
+  };
+
+  const ball = (extra: Partial<ScoreAction> & { type: string }) =>
+    dispatch({
+      ...extra,
+      side: state.battingSide,
+      payload: { ...extra.payload, strikerId, strikerName, bowlerId, bowlerName },
+    } as ScoreAction);
+
+  const runs = (r: number) =>
+    ball({ type: 'RUNS', payload: { runs: r }, attribution: strikerId ? { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName } : undefined });
+
+  // ----- wicket flow ----- (retired hurt isn't a wicket, so it never "all out")
+  const allOut = wf?.kind !== 'retired' && cur.wickets + 1 >= state.wicketsLimit;
+  const newBatOptions = battingRoster.filter((p) => !isOut(p.id) && !atCrease(p.id) && !isUnavailable(p.id));
+  const finishWicket = (newBat?: Player) => {
+    if (!wf?.kind) return;
+    dispatch({
+      type: 'WICKET',
+      side: state.battingSide,
+      payload: {
+        strikerId, strikerName, bowlerId, bowlerName,
+        kind: wf.kind, fielderId: wf.fielder?.id, fielderName: wf.fielder?.fullName,
+        batterOut: wf.batterOut ?? 'striker', runs: wf.runs ?? 0,
+        newBatId: newBat?.id, newBatName: newBat?.fullName,
+      },
+      attribution: bowlerId && wf.kind !== 'runout' ? { playerId: bowlerId, stat: 'wickets', by: 1, playerName: bowlerName } : undefined,
+    });
+    setWf(null);
+  };
+
+  if (wf) {
+    const k = wf.kind;
+    // On a free hit the batter can only be run out.
+    const options = state.freeHit ? (['runout'] as DismissalKind[]) : DISMISSALS;
+    const runsStep = k === 'runout' && wf.runs === undefined;
+    const fielderStep = !!k && needsFielder(k) && !wf.fielder && !runsStep;
+    const batterStep = !!k && needsBatter(k) && !wf.batterOut && !runsStep && (!needsFielder(k) || !!wf.fielder);
+    const newBatStep = !!k && !runsStep && (!needsFielder(k) || !!wf.fielder) && (!needsBatter(k) || !!wf.batterOut);
+    return (
+      <View style={ctrl.wktPanel}>
+        <View style={ctrl.creaseHead}>
+          <Text style={ctrl.label}>🎯 Wicket{bowlerName ? ` — ${bowlerName}` : ''}</Text>
+          <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setWf(null)} />
+        </View>
+        {state.freeHit && <Text style={ctrl.freeHit}>🟢 FREE HIT — only a run out counts</Text>}
+
+        {!k && (
+          <>
+            <Text style={ctrl.meta}>How was {strikerName ?? 'the batter'} out?</Text>
+            <View style={ctrl.chips}>
+              {options.map((d) => (
+                <SelectChip key={d} label={WICKET_LABEL[d]} active={false} onPress={() => setWf({ kind: d })} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {runsStep && (
+          <>
+            <Text style={ctrl.meta}>Runs completed before the run out?</Text>
+            <View style={ctrl.chips}>
+              {[0, 1, 2, 3].map((n) => (
+                <SelectChip key={n} label={String(n)} active={false} onPress={() => setWf({ ...wf, runs: n })} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {fielderStep && (
+          <>
+            <Text style={ctrl.meta}>{k === 'caught' ? 'Caught by?' : 'Run out by? (fielder)'}</Text>
+            <View style={ctrl.chips}>
+              {bowlingRoster.map((p) => (
+                <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setWf({ ...wf, fielder: p })} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {batterStep && (
+          <>
+            <Text style={ctrl.meta}>{k === 'retired' ? 'Which batsman is retiring hurt?' : k === 'timedout' ? 'Which batsman timed out?' : 'Which batsman is out?'}</Text>
+            <View style={ctrl.chips}>
+              <SelectChip label={strikerName ?? 'Striker'} active={false} onPress={() => setWf({ ...wf, batterOut: 'striker' })} />
+              <SelectChip label={`${nonStrikerName ?? 'Non-striker'} (NS)`} active={false} onPress={() => setWf({ ...wf, batterOut: 'nonstriker' })} />
+            </View>
+          </>
+        )}
+
+        {newBatStep && (
+          allOut ? (
+            <Button label="Confirm wicket — all out" variant="danger" onPress={() => finishWicket(undefined)} />
+          ) : (
+            <>
+              <Text style={ctrl.meta}>Next batsman in</Text>
+              {newBatOptions.length > 0 ? (
+                <View style={ctrl.chips}>
+                  {newBatOptions.map((p) => (
+                    <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => finishWicket(p)} />
+                  ))}
+                </View>
+              ) : <Text style={ctrl.hint}>No batsmen left to come in.</Text>}
+            </>
+          )
+        )}
+      </View>
+    );
+  }
+
+  // Impact Player flow: choose who makes way (not currently batting/bowling),
+  // then the substitute coming in. One per side, enforced in the reducer.
+  if (impact) {
+    const sideName = impact.side === 'home' ? homeName : awayName;
+    const pool = rosterFor(impact.side);
+    const outOptions = pool.filter((p) => !isUnavailable(p.id) && !atCrease(p.id) && p.id !== bowlerId && !isOut(p.id));
+    const inOptions = pool.filter((p) => !isUnavailable(p.id) && p.id !== impact.out?.id && !state.batting[p.id] && !state.bowling[p.id]);
+    return (
+      <View style={ctrl.wktPanel}>
+        <View style={ctrl.creaseHead}>
+          <Text style={ctrl.label}>⚡ Impact Player — {sideName}</Text>
+          <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setImpact(null)} />
+        </View>
+        {!impact.out ? (
+          <>
+            <Text style={ctrl.meta}>Who makes way? (takes no further part — can't be batting or bowling now)</Text>
+            {outOptions.length > 0 ? (
+              <View style={ctrl.chips}>
+                {outOptions.map((p) => (
+                  <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setImpact({ ...impact, out: p })} />
+                ))}
+              </View>
+            ) : <Text style={ctrl.hint}>No eligible player to replace right now.</Text>}
+          </>
+        ) : (
+          <>
+            <Text style={ctrl.meta}>Impact Player coming in for {impact.out.fullName}</Text>
+            {inOptions.length > 0 ? (
+              <View style={ctrl.chips}>
+                {inOptions.map((p) => (
+                  <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => finishImpact(p)} />
+                ))}
+              </View>
+            ) : <Text style={ctrl.hint}>No unused substitute available — add one to the matchday squad.</Text>}
+          </>
+        )}
+      </View>
+    );
+  }
+
+  const need = !strikerId ? 'striker' : !nonStrikerId ? 'a non-striker' : null;
+  const wk = state.keepers[other(state.battingSide)]?.name;
+  const pp = inPowerplay(state);
+  // Sides that still have their Impact Player available (format-gated).
+  const impactSides = (['home', 'away'] as const).filter((sd) => state.impactEnabled && !state.impactUsed[sd]);
+
+  return (
+    <View style={{ gap: theme.spacing(4) }}>
+      {soActive && (() => {
+        const so = rootState.superOver!;
+        const bt = state.scores[state.battingSide];
+        const line = [
+          `${state.innings === 1 ? '1st' : '2nd'} innings`,
+          `${battingName} ${bt.runs}/${bt.wickets}`,
+          `${state.scores[state.battingSide].balls}/6 balls`,
+          ...(state.innings === 2 && state.target ? [`need ${Math.max(0, state.target - bt.runs)} off ${Math.max(0, 6 - bt.balls)}`] : []),
+        ].join('  ·  ');
+        return (
+          <View style={ctrl.soBanner}>
+            <Text style={ctrl.soTitle}>🔥 SUPER OVER{so.round > 1 ? ` — Round ${so.round}` : ''}</Text>
+            <Text style={ctrl.soLine}>{line}</Text>
+            <Text style={ctrl.soMeta}>1 over · 2 wickets · {so.battingFirst === 'home' ? homeName : awayName} bat first</Text>
+          </View>
+        );
+      })()}
+      {pp && <Text style={ctrl.powerplay}>🟡 POWERPLAY · overs 1–{state.powerplayOvers} — fielding restrictions in effect</Text>}
+      {/* Batsmen at the crease — auto-rotated; dismissed players are grayed out. */}
+      <View style={{ gap: theme.spacing(2) }}>
+        <View style={ctrl.creaseHead}>
+          <Text style={ctrl.label}>🏏 Batsmen — {battingName}</Text>
+          <Button label="⇄ Swap" variant="ghost" style={ctrl.swapBtn} disabled={!bothSet} onPress={() => dispatch({ type: 'SWAP_STRIKE' })} />
+        </View>
+        <Text style={ctrl.meta}>
+          Striker: <Text style={ctrl.creaseHi}>{strikerName ?? '—'}</Text>{strikerId ? ' 🏏' : ''}   ·   Non-striker: <Text style={ctrl.creaseHi}>{nonStrikerName ?? '—'}</Text>
+        </Text>
+        <View style={ctrl.chips}>
+          {battingRoster.map((p) => (
+            <SelectChip key={p.id} label={isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName} active={atCrease(p.id)} disabled={isOut(p.id) || isUnavailable(p.id)} onPress={() => pickBat(p)} />
+          ))}
+        </View>
+        {need && <Text style={ctrl.hint}>Pick {need} to start scoring.</Text>}
+      </View>
+
+      {state.freeHit && <Text style={ctrl.freeHit}>🟢 FREE HIT</Text>}
+
+      {/* Rain (DLS): cut the overs; in the chase the target auto-revises. */}
+      {state.dls && !state.ended && !soActive && (
+        <View style={ctrl.rainBox}>
+          <Text style={ctrl.label}>☔ Rain — reduce overs</Text>
+          <Text style={ctrl.meta}>
+            Now {state.oversLimit} overs · {oversStr(cur.balls, state.ballsPerOver)} bowled
+            {state.innings === 2 ? ` · target ${state.target}` : ''}
+          </Text>
+          <View style={ctrl.row}>
+            <View style={ctrl.flex}>
+              <TextField label="" value={rain} onChange={(t) => setRain(t.replace(/[^0-9]/g, ''))} placeholder={`New total overs (< ${state.oversLimit})`} autoCapitalize="none" />
+            </View>
+            <Button label="Apply" variant="ghost" onPress={() => { const n = parseInt(rain, 10); if (n) dispatch({ type: 'RAIN', payload: { overs: n } }); setRain(''); }} />
+          </View>
+        </View>
+      )}
+
+      {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
+      <View style={ctrl.row}>
+        {[0, 1, 2, 3, 4, 6].map((r) => (
+          <Button key={r} label={String(r)} variant={r === 4 || r === 6 ? 'primary' : 'home'} style={ctrl.flex} disabled={!canScore} onPress={() => runs(r)} />
+        ))}
+      </View>
+
+      {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
+      <View style={{ gap: theme.spacing(2) }}>
+        <View style={ctrl.row}>
+          <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />
+          <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />
+        </View>
+        {(extraMode === 'b' || extraMode === 'lb') && (
+          <View style={ctrl.row}>
+            {[1, 2, 3, 4].map((n) => (
+              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} variant="home" style={ctrl.flex}
+                onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
+            ))}
+          </View>
+        )}
+        {extraMode === 'nb' && (
+          <>
+            <Text style={ctrl.meta}>No ball — runs off the bat?</Text>
+            <View style={ctrl.row}>
+              {[0, 1, 2, 3, 4, 6].map((n) => (
+                <Button key={n} label={n === 0 ? 'Nb' : `Nb+${n}`} variant={n === 4 || n === 6 ? 'primary' : 'home'} style={ctrl.flex}
+                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n } }); setExtraMode(null); }} />
+              ))}
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Bowler — must be (re)named at the start of each over. */}
+      <View style={{ gap: theme.spacing(2) }}>
+        <Text style={ctrl.label}>
+          🎯 {bowlerId ? `Bowling: ${bowlerName}` : `New over — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
+        </Text>
+        <View style={ctrl.chips}>
+          {bowlingRoster.map((p) => (
+            <SelectChip
+              key={p.id} label={isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName}
+              active={bowlerId === p.id}
+              disabled={p.id === state.lastOverBowlerId || isUnavailable(p.id)}
+              onPress={() => dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName } })}
+            />
+          ))}
+        </View>
+        {!bowlerId && <Text style={ctrl.hint}>Pick the bowler for this over (last over's bowler can't bowl again).</Text>}
+      </View>
+
+      {/* Impact Player (IPL-style) — one substitution per side, format-gated. */}
+      {(state.impactEnabled && (impactSides.length > 0 || state.impactUsed.home || state.impactUsed.away)) && (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.label}>⚡ Impact Player</Text>
+          {(['home', 'away'] as const).map((sd) => {
+            const used = state.impactUsed[sd];
+            const nm = sd === 'home' ? homeName : awayName;
+            return used ? (
+              <Text key={sd} style={ctrl.meta}>{nm}: {used.inName} in for {used.outName}</Text>
+            ) : (
+              <Button key={sd} label={`⚡ Bring in Impact Player — ${nm}`} variant="ghost" onPress={() => setImpact({ side: sd })} />
+            );
+          })}
+        </View>
+      )}
+
+      <View style={ctrl.row}>
+        <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf(state.freeHit ? { kind: 'runout' } : {})} />
+        <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => ball({ type: 'EXTRA', payload: { kind: 'Wide' } })} />
+        <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
+      </View>
+
+      {state.innings === 1 ? (
+        <Button label="End innings →" onPress={() => dispatch({ type: 'END_INNINGS' })} />
+      ) : (
+        <Button label="End match" variant="danger" onPress={() => dispatch({ type: 'END' })} />
+      )}
+    </View>
+  );
+};
+
+/* ------------------------------ Live panel --------------------------------- */
+
+const LiveClock: NonNullable<SportPlugin<CricketState>['LiveClock']> = ({ state }) => {
+  const s = state as CricketState;
+  const inn = s.scores[s.battingSide];
+  return (
+    <View style={ctrl.clockRow}>
+      <View style={[ctrl.liveDot, { backgroundColor: s.ended ? theme.colors.textMuted : theme.colors.danger }]} />
+      <Text style={ctrl.clockTime}>{s.ended ? 'Result' : `${oversStr(inn.balls, s.ballsPerOver)} / ${s.oversLimit} ov`}</Text>
+      {inPowerplay(s) && <Text style={ctrl.ppTag}>🟡 PP</Text>}
+    </View>
+  );
+};
+
+/** Cricket's own scoreboard: innings on top, the batting team's live score +
+ *  overs next, then who's yet to bat (1st inn) or the target (2nd inn). */
+/* ---------------------- Post-match performance ratings --------------------- */
+
+export interface PlayerRating {
+  id: string;
+  name: string;
+  side: 'home' | 'away';
+  bat: number;
+  bowl: number;
+  field: number;
+  total: number;
+  /** contribution mapped to a 1–5 star rating */
+  rating: number;
+}
+
+/** Map raw contribution points to a 1–5 rating (par ≈ 2). */
+const ratingFor = (total: number) => Math.max(1, Math.min(5, Math.round((2 + total / 14) * 2) / 2));
+const stars = (r: number) => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
+
+/**
+ * Rate every player's match contribution (cricket-expert weighting):
+ *  • Batting: runs + boundary bonus (4→+1, 6→+2), milestones (30/50/100),
+ *    strike-rate context, duck penalty.
+ *  • Bowling: wickets (×18) + dot balls + 3/5-fer bonus + economy + a top-order
+ *    bonus (dismissing a top-3 bat is worth more than a tail-ender).
+ *  • Fielding: catch +8, run out +8, stumping +10.
+ * Returns players sorted by total, plus the MVP / best bat / best bowl.
+ */
+export function matchRatings(s: CricketState): {
+  players: PlayerRating[]; mvp?: PlayerRating; bestBat?: PlayerRating; bestBowl?: PlayerRating;
+} {
+  const reg = new Map<string, { name: string; side: 'home' | 'away' }>();
+  for (const [id, b] of Object.entries(s.batting)) reg.set(id, { name: b.name, side: b.side });
+  for (const [id, w] of Object.entries(s.bowling)) if (!reg.has(id)) reg.set(id, { name: w.name, side: w.side });
+  for (const d of s.dismissals) {
+    if (d.fielderId && d.fielderName && !reg.has(d.fielderId)) {
+      const outSide = d.outId ? s.batting[d.outId]?.side : undefined;
+      reg.set(d.fielderId, { name: d.fielderName, side: outSide ? other(outSide) : 'home' });
+    }
+  }
+  (['home', 'away'] as const).forEach((sd) => {
+    const k = s.keepers[sd]; if (k && !reg.has(k.id)) reg.set(k.id, { name: k.name, side: sd });
+    const c = s.captains[sd]; if (c && !reg.has(c.id)) reg.set(c.id, { name: c.name, side: sd });
+  });
+
+  // Batting order = insertion order within a side.
+  const orderOf = (id?: string): number => {
+    if (!id) return 99;
+    const side = s.batting[id]?.side;
+    if (!side) return 99;
+    const ids = Object.keys(s.batting).filter((k) => s.batting[k].side === side);
+    const i = ids.indexOf(id);
+    return i < 0 ? 99 : i + 1;
+  };
+
+  const players: PlayerRating[] = [...reg.entries()].map(([id, info]) => {
+    const b = s.batting[id];
+    const w = s.bowling[id];
+    let bat = 0;
+    if (b) {
+      bat = b.runs + b.fours + b.sixes * 2;
+      if (b.runs >= 100) bat += 16; else if (b.runs >= 50) bat += 8; else if (b.runs >= 30) bat += 4;
+      if (b.balls >= 10) {
+        const sr = (b.runs / b.balls) * 100;
+        if (sr >= 150) bat += 6; else if (sr >= 120) bat += 3; else if (sr < 70) bat -= 3;
+      }
+      if (b.out && b.runs === 0 && b.balls > 0) bat -= 4; // duck
+    }
+    let bowl = 0;
+    if (w) {
+      bowl = w.wickets * 18 + w.dots;
+      bowl -= w.extras * 1.5; // each wide / no-ball shaves a little off the rating
+      if (w.wickets >= 5) bowl += 16; else if (w.wickets >= 3) bowl += 8;
+      if (w.balls >= 12) {
+        const econ = w.runs / (w.balls / s.ballsPerOver);
+        if (econ <= 4) bowl += 10; else if (econ <= 6) bowl += 5; else if (econ >= 11) bowl -= 5;
+      }
+    }
+    let field = 0;
+    for (const d of s.dismissals) {
+      if (d.bowlerId === id && !NO_BOWLER.includes(d.kind)) {
+        const o = orderOf(d.outId);
+        if (o <= 3) bowl += 10; else if (o <= 6) bowl += 5;
+      }
+      if (d.fielderId === id) {
+        if (d.kind === 'caught') field += 8;
+        else if (d.kind === 'stumped') field += 10;
+        else if (d.kind === 'runout') field += 8;
+      }
+    }
+    const total = bat + bowl + field;
+    return { id, name: info.name, side: info.side, bat, bowl, field, total, rating: ratingFor(total) };
+  }).filter((p) => !!s.batting[p.id] || !!s.bowling[p.id] || p.field > 0);
+
+  players.sort((a, b) => b.total - a.total || b.bat + b.bowl - (a.bat + a.bowl));
+  const mvp = players.find((p) => p.total > 0);
+  const bestBat = [...players].sort((a, b) => b.bat - a.bat).find((p) => p.bat > 0);
+  const bestBowl = [...players].sort((a, b) => b.bowl - a.bowl).find((p) => p.bowl > 0);
+  return { players, mvp, bestBat, bestBowl };
+}
+
+const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer }) => {
+  const s = state as CricketState;
+  if (!s.ended) {
+    return (
+      <View style={ctrl.card}>
+        <Text style={ctrl.label}>🏅 Match summary</Text>
+        <Text style={ctrl.meta}>Best performers, the MVP and player ratings appear here once the match ends.</Text>
+      </View>
+    );
+  }
+  const { players, mvp, bestBat, bestBowl } = matchRatings(s);
+  const mask = useMask();
+  const teamName = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
+  const teamColor = (side: 'home' | 'away') => (side === 'home' ? homeColor : awayColor);
+
+  const Award = ({ icon, label, p, detail }: { icon: string; label: string; p?: PlayerRating; detail: string }) =>
+    p ? (
+      <TouchableOpacity activeOpacity={0.85} onPress={() => onPlayer?.(p.id)} style={sum.award}>
+        <Text style={sum.awardIcon}>{icon}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={sum.awardLabel} numberOfLines={1}>{label}</Text>
+          <Text style={sum.awardName} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+          <Text style={sum.awardDetail} numberOfLines={1}>{detail} · {teamName(p.side)}</Text>
+        </View>
+        <Text style={[sum.awardPts, { color: teamColor(p.side) }]} numberOfLines={1}>★{p.rating.toFixed(1)}</Text>
+      </TouchableOpacity>
+    ) : null;
+
+  const batLine = (p: PlayerRating) => { const b = s.batting[p.id]; return b ? `${b.runs} (${b.balls})` : '—'; };
+  const bowlLine = (p: PlayerRating) => { const w = s.bowling[p.id]; return w ? `${w.wickets}-${w.runs} (${oversStr(w.balls, s.ballsPerOver)})` : '—'; };
+
+  return (
+    <View style={{ gap: theme.spacing(3) }}>
+      <Text style={[ctrl.label, { fontSize: theme.font.h3 }]}>🏆 {resultLine(s)}</Text>
+
+      {mvp && <Award icon="🏅" label="Player of the Match" p={mvp} detail={`${batLine(mvp)} · ${bowlLine(mvp)}`} />}
+      <View style={sum.row}>
+        <View style={sum.half}>{bestBat && <Award icon="🏏" label="Best bat" p={bestBat} detail={batLine(bestBat)} />}</View>
+        <View style={sum.half}>{bestBowl && <Award icon="🎯" label="Best bowl" p={bestBowl} detail={bowlLine(bestBowl)} />}</View>
+      </View>
+
+      <Text style={[ctrl.label, { marginTop: theme.spacing(2) }]}>Player ratings · out of 5</Text>
+      <Text style={ctrl.meta}>Rated on runs, wickets, dots, boundaries, catches & run-outs (top-order wickets count more).</Text>
+      <View style={ctrl.card}>
+        {players.map((p, i) => (
+          <TouchableOpacity key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, i > 0 && sum.divider]}>
+            <Text style={sum.rank}>{i + 1}</Text>
+            <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+              <View style={sum.barTrack}><View style={[sum.barFill, { width: `${(p.rating / 5) * 100}%`, backgroundColor: teamColor(p.side) }]} /></View>
+            </View>
+            <View style={sum.ratingCol}>
+              <Text style={sum.stars} numberOfLines={1}>{stars(p.rating)}</Text>
+              <Text style={sum.total}>{p.rating.toFixed(1)}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+/** One team's full, collapsible scorecard: a tappable header (name · score ·
+ *  overs) that expands to the batting card (with dismissals), extras, total,
+ *  who's yet to bat, and the opposition's bowling figures. */
+function InningsCard({
+  s, side, name, color, roster, batting, open, onToggle,
+}: {
+  s: CricketState; side: 'home' | 'away'; name: string; color: string;
+  roster: Player[]; batting: boolean; open: boolean; onToggle: () => void;
+}) {
+  const inn = s.scores[side];
+  const batters = Object.entries(s.batting).filter(([, c]) => c.side === side).map(([id, c]) => ({ id, ...c }));
+  const bowlers = Object.values(s.bowling).filter((b) => b.side === other(side));
+  const battedIds = new Set(batters.map((b) => b.id));
+  const toBat = roster.filter((p) => !battedIds.has(p.id));
+  const sr = (runs: number, balls: number) => (balls ? ((runs / balls) * 100).toFixed(1) : '-');
+  const captainId = s.captains[side]?.id;
+  const keeperId = s.keepers[side]?.id;
+  const role = (id: string) => (id === captainId ? ' (c)' : '') + (id === keeperId ? ' †' : '');
+  const eco = (runs: number, balls: number) => (balls ? (runs / (balls / s.ballsPerOver)).toFixed(2) : '-');
+
+  return (
+    <View style={ctrl.card}>
+      <TouchableOpacity activeOpacity={0.8} onPress={onToggle} style={ctrl.innHead}>
+        <View style={[ctrl.teamDot, { backgroundColor: color }]} />
+        <Text style={[ctrl.innName, batting && !s.ended && { color: theme.colors.primary }]} numberOfLines={1}>
+          {name}{batting && !s.ended ? ' 🏏' : ''}
+        </Text>
+        <Text style={ctrl.innScore}>{inn.runs}/{inn.wickets}</Text>
+        <Text style={ctrl.innOvers}>({oversStr(inn.balls, s.ballsPerOver)})</Text>
+        <Text style={ctrl.caret}>{open ? '⌃' : '⌄'}</Text>
+      </TouchableOpacity>
+
+      {open && (
+        <View style={ctrl.innBody}>
+          {batters.length === 0 ? (
+            <Text style={ctrl.meta}>Yet to bat.</Text>
+          ) : (
+            <>
+              <View style={ctrl.thead}>
+                <Text style={[ctrl.cName, ctrl.th]}>Batter</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>R</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>B</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>4s</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>6s</Text>
+                <Text style={[ctrl.cWide, ctrl.th]}>SR</Text>
+              </View>
+              {batters.map((b) => (
+                <View key={b.id} style={ctrl.trow}>
+                  <View style={ctrl.cName}>
+                    <Text style={ctrl.bName} numberOfLines={1}>{b.name || 'Batter'}{role(b.id)}{!b.out && !b.retired ? ' *' : ''}</Text>
+                    <Text style={ctrl.bDismiss} numberOfLines={1}>{b.out ? (b.dismissal ?? 'out') : b.retired ? (b.dismissal ?? 'retired hurt') : 'not out'}</Text>
+                  </View>
+                  <Text style={ctrl.cNum}>{b.runs}</Text>
+                  <Text style={ctrl.cNum}>{b.balls}</Text>
+                  <Text style={ctrl.cNum}>{b.fours}</Text>
+                  <Text style={ctrl.cNum}>{b.sixes}</Text>
+                  <Text style={ctrl.cWide}>{sr(b.runs, b.balls)}</Text>
+                </View>
+              ))}
+            </>
+          )}
+
+          <View style={ctrl.totalRow}>
+            <Text style={ctrl.meta}>Extras</Text>
+            <Text style={ctrl.totalVal}>{inn.extras}</Text>
+          </View>
+          <View style={ctrl.totalRow}>
+            <Text style={ctrl.totalLabel}>Total</Text>
+            <Text style={ctrl.totalVal}>{inn.runs}/{inn.wickets} ({oversStr(inn.balls, s.ballsPerOver)} ov) · CRR {runRate(inn.runs, inn.balls, s.ballsPerOver)}</Text>
+          </View>
+          {toBat.length > 0 && <Text style={ctrl.toBat}>Yet to bat: {toBat.map((p) => p.fullName).join(', ')}</Text>}
+
+          {bowlers.length > 0 && (
+            <>
+              <View style={[ctrl.thead, { marginTop: theme.spacing(2) }]}>
+                <Text style={[ctrl.cName, ctrl.th]}>Bowler</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>O</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>R</Text>
+                <Text style={[ctrl.cNum, ctrl.th]}>W</Text>
+                <Text style={[ctrl.cWide, ctrl.th]}>Eco</Text>
+              </View>
+              {bowlers.map((b, i) => (
+                <View key={i} style={ctrl.trow}>
+                  <Text style={[ctrl.cName, ctrl.bName]} numberOfLines={1}>{b.name || 'Bowler'}</Text>
+                  <Text style={ctrl.cNum}>{oversStr(b.balls, s.ballsPerOver)}</Text>
+                  <Text style={ctrl.cNum}>{b.runs}</Text>
+                  <Text style={ctrl.cNum}>{b.wickets}</Text>
+                  <Text style={ctrl.cWide}>{eco(b.runs, b.balls)}</Text>
+                </View>
+              ))}
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const overSymbolColor = (sym: string) =>
+  sym === 'W' || sym.endsWith('W') ? theme.colors.danger
+    : sym === '4' || sym === '6' ? theme.colors.primary
+    : sym === 'wd' || sym === 'nb' || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
+    : theme.colors.surfaceAlt;
+
+const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore }) => {
+  const s = state as CricketState;
+  // Default the open innings to whoever is batting (or the chase, post-match).
+  const [open, setOpen] = useState<'home' | 'away' | null>(s.battingSide);
+  const toggle = (side: 'home' | 'away') => setOpen((o) => (o === side ? null : side));
+
+  return (
+    <View style={{ gap: theme.spacing(3) }}>
+      <View style={ctrl.scTitleRow}>
+        <Text style={ctrl.label}>Scorecard</Text>
+        {!s.ended && (
+          <View style={ctrl.overRow}>
+            <Text style={ctrl.meta}>This over</Text>
+            {s.thisOver.length === 0 ? (
+              <Text style={ctrl.meta}>—</Text>
+            ) : (
+              s.thisOver.map((sym, i) => (
+                <View key={i} style={[ctrl.ballDot, { backgroundColor: overSymbolColor(sym) }]}>
+                  <Text style={ctrl.ballSym}>{sym}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </View>
+
+      <InningsCard
+        s={s} side="home" name={homeName} color={homeColor ?? theme.colors.home}
+        roster={homeRoster} batting={s.battingSide === 'home'} open={open === 'home'} onToggle={() => toggle('home')}
+      />
+      <InningsCard
+        s={s} side="away" name={awayName} color={awayColor ?? theme.colors.away}
+        roster={awayRoster} batting={s.battingSide === 'away'} open={open === 'away'} onToggle={() => toggle('away')}
+      />
+
+      {s.potm ? <Text style={ctrl.potm}>🏅 Player of the Match: {s.potm}</Text> : null}
+
+      {s.ended && canScore && dispatch && !s.potm && (homeRoster.length > 0 || awayRoster.length > 0) && (
+        <View style={ctrl.card}>
+          <Text style={ctrl.label}>🏅 Player of the Match</Text>
+          <View style={ctrl.chips}>
+            {[...homeRoster, ...awayRoster].map((p) => (
+              <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => dispatch({ type: 'POTM', payload: { name: p.fullName } })} />
+            ))}
+          </View>
+        </View>
+      )}
+
+      <Text style={ctrl.label}>Ball by ball</Text>
+      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No balls bowled yet." />
+    </View>
+  );
+};
+
+export const cricketPlugin: SportPlugin<CricketState> = {
+  id: 'cricket',
+  name: 'Cricket',
+  icon: '🏏',
+  archetype: 'running-points',
+  createInitialState: init,
+  reducer,
+  isComplete: (s) => s.ended,
+  summary: (s) => {
+    // While a Super Over is live/decided, tag each side's board with its SO runs.
+    const so = s.superOver;
+    const soTag = (side: 'home' | 'away') => (so ? `  ·  SO ${so.state.scores[side].runs}` : '');
+    const status = s.ended
+      ? resultLine(s)
+      : s.pendingTie
+        ? so ? `🔥 Super Over ${so.round}` : '🔥 Scores level — Super Over?'
+        : `Innings ${s.innings}`;
+    return {
+      homeScore: `${s.scores.home.runs}/${s.scores.home.wickets}${soTag('home')}`,
+      awayScore: `${s.scores.away.runs}/${s.scores.away.wickets}${soTag('away')}`,
+      statusLine: status,
+      detailLine:
+        s.innings === 2 && s.target !== undefined && !s.ended && !s.pendingTie
+          ? `Target ${s.target}`
+          : `${s.oversLimit} overs · RR ${runRate(s.scores[s.battingSide].runs, s.scores[s.battingSide].balls, s.ballsPerOver)}`,
+    };
+  },
+  ScoringControls,
+  LiveClock,
+  LiveExtras,
+  Summary: CricketSummary,
+  hideScoreboard: true,
+  voice: { hints: ['four', 'six', 'dot', 'wicket', 'wide', 'two runs'], parse: cricketVoice },
+  formatFields: [
+    {
+      key: 'preset', label: 'Format', type: 'preset', default: 't20',
+      options: [
+        { value: 't20', label: 'T20', set: { overs: 20, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 6, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
+        { value: 'odi', label: 'ODI (50)', set: { overs: 50, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 10, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
+        { value: 't10', label: 'T10', set: { overs: 10, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
+        { value: 'hundred', label: 'The Hundred (100 balls)', set: { overs: 10, ballsPerOver: 10, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
+        { value: 'sixes', label: 'Sixes (6-a-side · 6 ov)', set: { overs: 6, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: false } },
+        { value: 'box', label: 'Box cricket', set: { overs: 5, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'tennis', dls: false } },
+        { value: 'test', label: 'Test / timeless', set: { overs: 999, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 0, impactPlayer: false, tieBreak: 'shared', ballType: 'leather', dls: false } },
+        { value: 'custom', label: 'Custom' },
+      ],
+    },
+    { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 11, min: 1, max: 11, hint: 'wickets = players − 1 · set any number for box' },
+    {
+      key: 'ballType', label: 'Ball', type: 'choice', default: 'leather',
+      options: [
+        { value: 'leather', label: 'Leather (match ball)' },
+        { value: 'tennis', label: 'Tennis ball' },
+      ],
+    },
+    {
+      key: 'tieBreak', label: 'If the match ties', type: 'choice', default: 'super_over',
+      options: [
+        { value: 'super_over', label: 'Super Over' },
+        { value: 'shared', label: 'Tie stands / shared' },
+      ],
+    },
+    { key: 'overs', label: 'Overs per innings', type: 'number', default: 20, min: 1, max: 999, advanced: true },
+    {
+      key: 'ballsPerOver', label: 'Balls per over', type: 'choice', default: 6, advanced: true,
+      options: [
+        { value: 6, label: '6 (standard)' },
+        { value: 10, label: '10 (The Hundred)' },
+      ],
+    },
+    { key: 'powerplayOvers', label: 'Powerplay overs', type: 'number', default: 0, min: 0, max: 10, advanced: true, hint: '0 = none' },
+    { key: 'dls', label: 'DLS (rain-revised targets)', type: 'toggle', default: false, advanced: true, hint: 'reduce overs on a rain break; the chase target auto-revises' },
+    { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 0, min: 0, max: 5, advanced: true, hint: '12th man, etc.' },
+    { key: 'impactPlayer', label: 'Impact Player (IPL-style)', type: 'toggle', default: false, advanced: true, hint: 'one named sub can come in to bat or bowl mid-match' },
+  ],
+};
+
+const ctrl = StyleSheet.create({
+  row: { flexDirection: 'row', gap: theme.spacing(2) },
+  flex: { flex: 1 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  meta: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  creaseHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  swapBtn: { paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3) },
+  creaseHi: { color: theme.colors.text, fontWeight: '800' },
+  hint: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
+  roleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
+  roleBtn: { paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3) },
+  freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
+  soBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
+  soTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },
+  soLine: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  soMeta: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  powerplay: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.3 },
+  ppTag: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '900' },
+  rainBox: {
+    gap: theme.spacing(2),
+    backgroundColor: theme.colors.accent + '14',
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    padding: theme.spacing(3),
+  },
+  wktPanel: {
+    gap: theme.spacing(3),
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: theme.spacing(4),
+  },
+  clockRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  liveDot: { width: 9, height: 9, borderRadius: 5 },
+  clockTime: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900', letterSpacing: 0.5 },
+  card: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
+  potm: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+  overRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), flexWrap: 'wrap' },
+  ballDot: { minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  ballSym: { color: '#06120D', fontSize: theme.font.tiny, fontWeight: '800' },
+  scTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.spacing(2) },
+  // collapsible innings card
+  innHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  teamDot: { width: 12, height: 12, borderRadius: 6 },
+  innName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700', flex: 1 },
+  innScore: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900' },
+  innOvers: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
+  innBody: { gap: theme.spacing(1), marginTop: theme.spacing(3), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(3) },
+  thead: { flexDirection: 'row', alignItems: 'center', paddingBottom: theme.spacing(1) },
+  th: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase' },
+  trow: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(1) },
+  cName: { flex: 1 },
+  cNum: { width: 34, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
+  cWide: { width: 52, textAlign: 'right', color: theme.colors.textMuted, fontSize: theme.font.small },
+  bName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '600' },
+  bDismiss: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: theme.spacing(1) },
+  totalLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  totalVal: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  toBat: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontStyle: 'italic', marginTop: theme.spacing(1) },
+});
+
+const sum = StyleSheet.create({
+  row: { flexDirection: 'row', gap: theme.spacing(3) },
+  half: { flex: 1 },
+  award: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
+  },
+  awardIcon: { fontSize: 24 },
+  awardLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  awardName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  awardDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  awardPts: { fontSize: theme.font.h3, fontWeight: '900' },
+  prow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
+  divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
+  rank: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', width: 18, textAlign: 'center' },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  ratingCol: { alignItems: 'flex-end', minWidth: 64 },
+  stars: { color: theme.colors.accent, fontSize: theme.font.tiny },
+  total: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', textAlign: 'right' },
+  barTrack: { height: 4, borderRadius: 2, backgroundColor: theme.colors.surfaceAlt, marginTop: 4, overflow: 'hidden' },
+  barFill: { height: 4, borderRadius: 2 },
+});

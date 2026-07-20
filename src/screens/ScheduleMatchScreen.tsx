@@ -1,0 +1,324 @@
+/** Schedule a match: choose sport → home & away teams (filtered to that sport)
+ *  → kickoff time. Creates a 'scheduled' match in the demo store or Supabase.
+ *  Sport is a compact picklist; teams lead with the ones you've played for and
+ *  fall back to a search (type 3+ letters) so the list never sprawls. */
+import React, { useState } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { theme } from '../core/theme';
+import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { DateTimeField } from '../components/DateTimeField';
+import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
+import { SPORT_LIST, getSport } from '../sports/registry';
+import { useTeams } from '../data/hooks';
+import { createMatch, createTeam, getMyPlayerId, setMatchScorer } from '../data/repos';
+import { useAuth } from '../core/auth';
+import type { SportId, Team } from '../core/types';
+import type { RootStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+type PickTeam = Pick<Team, 'id' | 'name' | 'colorHex'>;
+
+// For teams created on the fly (a friendly between two ad-hoc sides): auto-derive a
+// short code from the name and cycle a color so each new team looks distinct.
+const TEAM_PALETTE = ['#FF5C5C', '#4DA3FF', '#4CD964', '#FFD60A', '#BF5AF2', '#FF9F0A', '#5AC8FA', '#FF375F'];
+const shortFrom = (name: string) => {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.map((w) => w[0]).join('').toUpperCase();
+  return ((initials.length >= 2 ? initials : name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()) || 'TM').slice(0, 4);
+};
+
+export default function ScheduleMatchScreen() {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<RootStackParamList, 'ScheduleMatch'>>();
+  // No tournament → this is an ad-hoc friendly: kicks off now and jumps straight
+  // into the live scorer once created.
+  const tournamentId = route.params?.tournamentId;
+  const isFriendly = !tournamentId;
+  const { profile } = useAuth();
+
+  // No sport chosen yet → the picker reads "Select a sport" and the rest of the
+  // form (teams, format) stays hidden until one is picked.
+  const [sport, setSport] = useState<SportId | null>(route.params?.sport ?? null);
+  const [teamNonce, setTeamNonce] = useState(0); // bump to refetch after creating a team on the fly
+  const teams = useTeams(sport ?? undefined, teamNonce);
+  const [home, setHome] = useState<string | null>(null);
+  const [away, setAway] = useState<string | null>(null);
+
+  const [when, setWhen] = useState(() => {
+    const d = new Date();
+    if (!route.params?.tournamentId) return d; // friendly → kicks off now
+    d.setDate(d.getDate() + 1);
+    d.setHours(14, 0, 0, 0);
+    return d;
+  });
+  const [venue, setVenue] = useState('');
+  const [venueUrl, setVenueUrl] = useState('');
+  const [stream, setStream] = useState('');
+  // Per-match rules — seeded from the sport's defaults so casual users can ignore it.
+  const [format, setFormat] = useState<Record<string, FormatVal>>(
+    () => (route.params?.sport ? defaultsFor(getSport(route.params.sport).formatFields ?? []) : {})
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // A friendly kicking off ~now jumps straight into the scorer; one set for later
+  // is just filed as scheduled (it shows under Upcoming, like any planned match).
+  const isImmediate = isFriendly && when.getTime() <= Date.now() + 120_000;
+
+  function pickSport(s: SportId) {
+    setSport(s);
+    setHome(null);
+    setAway(null);
+    setFormat(defaultsFor(getSport(s).formatFields ?? []));
+  }
+
+  // Create a brand-new team from a typed name and select it for that side.
+  const makeCreateHandler = (side: 'home' | 'away') => async (name: string): Promise<boolean> => {
+    if (!sport) return false;
+    try {
+      const team = await createTeam({ name, shortName: shortFrom(name), sport, colorHex: TEAM_PALETTE[teams.length % TEAM_PALETTE.length], adhoc: true });
+      setTeamNonce((n) => n + 1); // refetch so it shows in both pickers
+      (side === 'home' ? setHome : setAway)(team.id);
+      return true;
+    } catch {
+      setError('Could not create the team.');
+      return false;
+    }
+  };
+
+  async function submit() {
+    if (!sport) return setError('Pick a sport.');
+    if (!home || !away) return setError('Pick both teams.');
+    if (home === away) return setError('Home and away must differ.');
+    setError(null);
+    setBusy(true);
+    try {
+      const myId = await getMyPlayerId(profile?.id);
+      const created = await createMatch({
+        tournamentId,
+        sport,
+        homeTeamId: home,
+        awayTeamId: away,
+        startsAt: when.toISOString(),
+        venueName: venue.trim() || undefined,
+        venueMapsUrl: venueUrl.trim() || undefined,
+        hostIds: myId ? [myId] : [],
+        format,
+        streamUrl: stream.trim() || undefined,
+      });
+      // A "now" friendly jumps straight into scoring (replace so Back skips the
+      // form); a friendly set for later just files as scheduled → Upcoming.
+      if (isImmediate) {
+        // "Score now" means the creator scores it — assign them so the scoring
+        // controls are available immediately.
+        if (myId) await setMatchScorer(created.id, myId);
+        nav.replace('LiveScoring', {
+          matchId: created.id, sport,
+          homeName: created.homeTeam.shortName, awayName: created.awayTeam.shortName,
+          homeTeamName: created.homeTeam.name, awayTeamName: created.awayTeam.name,
+          homeColor: created.homeTeam.colorHex, awayColor: created.awayTeam.colorHex,
+          canScore: true,
+        });
+      } else {
+        nav.goBack();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not schedule match');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SafeAreaView style={st.safe} edges={['bottom']}>
+      <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
+        <ScreenTitle
+          title={isFriendly ? 'Start a friendly' : 'Schedule a match'}
+          subtitle={isFriendly ? 'A quick game — no tournament needed' : 'Pick sport, teams & time'}
+        />
+
+        <SportPicker sport={sport} onPick={pickSport} />
+
+        {sport && (
+          <>
+            <TeamPicker label="Home team" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} />
+            <TeamPicker label="Away team" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} />
+
+            <DateTimeField label="Kickoff" value={when} onChange={setWhen} />
+
+            {(getSport(sport).formatFields ?? []).length > 0 && (
+              <SportFormatEditor sport={sport} value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} />
+            )}
+          </>
+        )}
+
+        <TextField label="Venue / ground" value={venue} onChange={setVenue} placeholder="Main Ground" />
+        <TextField
+          label="Google Maps link (optional)"
+          value={venueUrl}
+          onChange={setVenueUrl}
+          placeholder="maps.app.goo.gl/…"
+          autoCapitalize="none"
+        />
+        <Text style={textStyles.muted}>
+          Paste a Maps link to pin the exact spot — otherwise we search Maps by the venue name.
+        </Text>
+        <TextField
+          label="Live stream link (optional)"
+          value={stream}
+          onChange={setStream}
+          placeholder="youtu.be/… · youtube.com/live/… · twitch.tv/…"
+          autoCapitalize="none"
+        />
+        <Text style={textStyles.muted}>
+          Add a YouTube or Twitch link and it shows at the top of the live match. You can also set or change it later from the match’s Info tab.
+        </Text>
+
+        {error && <Text style={st.error}>{error}</Text>}
+        <Button
+          label={
+            busy
+              ? isImmediate ? 'Starting…' : 'Scheduling…'
+              : isFriendly
+                ? isImmediate ? '▶ Create & score now' : '📅 Schedule friendly'
+                : 'Schedule match'
+          }
+          onPress={submit}
+        />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/** Compact sport picklist — a field that opens an inline list, instead of a
+ *  10-chip wall. */
+function SportPicker({ sport, onPick }: { sport: SportId | null; onPick: (s: SportId) => void }) {
+  const [open, setOpen] = useState(false);
+  const cur = sport ? getSport(sport) : null;
+  return (
+    <View style={{ gap: theme.spacing(2) }}>
+      <Text style={textStyles.muted}>Sport</Text>
+      <TouchableOpacity activeOpacity={0.8} style={st.field} onPress={() => setOpen((o) => !o)}>
+        <Text style={[st.fieldValue, !cur && st.fieldPlaceholder]}>{cur ? `${cur.icon}  ${cur.name}` : 'Select a sport'}</Text>
+        <Text style={st.caret}>{open ? '▴' : '▾'}</Text>
+      </TouchableOpacity>
+      {open && (
+        <View style={st.dropdown}>
+          {SPORT_LIST.map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              activeOpacity={0.7}
+              style={[st.option, s.id === sport && st.optionActive]}
+              onPress={() => { onPick(s.id); setOpen(false); }}
+            >
+              <Text style={st.optionText}>{s.icon}  {s.name}</Text>
+              {s.id === sport && <Text style={st.check}>✓</Text>}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function TeamPicker({
+  label,
+  teams,
+  selected,
+  onSelect,
+  onClear,
+  onCreate,
+}: {
+  label: string;
+  teams: PickTeam[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+  /** create a brand-new team from a typed name; returns true if it succeeded */
+  onCreate: (name: string) => Promise<boolean>;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedTeam = teams.find((t) => t.id === selected);
+  const q = query.trim().toLowerCase();
+  // Search kicks in at 3+ letters.
+  const results = q.length >= 3 ? teams.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 25) : [];
+
+  const create = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    const ok = await onCreate(name.trim());
+    setBusy(false);
+    if (ok) { setName(''); setCreating(false); setQuery(''); }
+  };
+
+  return (
+    <View style={{ gap: theme.spacing(2) }}>
+      <Text style={textStyles.muted}>{label}</Text>
+
+      {selectedTeam ? (
+        <View style={st.selectedRow}>
+          <SelectChip label={selectedTeam.name} dotColor={selectedTeam.colorHex} active onPress={onClear} />
+          <Text style={st.changeLink} onPress={onClear}>Change</Text>
+        </View>
+      ) : (
+        <>
+          {!creating && (
+            <>
+              <TextField label="" value={query} onChange={setQuery} placeholder="Search all teams (type 3+ letters)…" autoCapitalize="none" />
+              {q.length > 0 && q.length < 3 && <Text style={st.tinyLabel}>Keep typing…</Text>}
+              {results.length > 0 && (
+                <View style={st.chips}>
+                  {results.map((t) => (
+                    <SelectChip key={t.id} label={t.name} dotColor={t.colorHex} active={false} onPress={() => onSelect(t.id)} />
+                  ))}
+                </View>
+              )}
+              {q.length >= 3 && results.length === 0 && (
+                <Text style={textStyles.muted}>No teams match “{query.trim()}”. Create one below.</Text>
+              )}
+            </>
+          )}
+
+          <SelectChip label="＋ New team" active={creating} onPress={() => setCreating((c) => !c)} />
+          {creating && (
+            <View style={{ gap: theme.spacing(2) }}>
+              <TextField label="New team name" value={name} onChange={setName} placeholder="e.g. Sunday FC" />
+              <Button label={busy ? 'Creating…' : '＋ Create & select'} onPress={create} disabled={busy || !name.trim()} />
+            </View>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
+const st = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  content: { padding: theme.spacing(4), gap: theme.spacing(3) },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  error: { color: theme.colors.danger, fontSize: theme.font.small },
+  tinyLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  // compact select field + dropdown (sport picklist)
+  field: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(3),
+  },
+  fieldValue: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
+  caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
+  dropdown: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
+  option: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(3), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  optionActive: { backgroundColor: theme.colors.surfaceAlt },
+  optionText: { color: theme.colors.text, fontSize: theme.font.body },
+  check: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900' },
+  selectedRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  changeLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+});

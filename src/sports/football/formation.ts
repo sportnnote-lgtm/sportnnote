@@ -1,0 +1,182 @@
+/** Football formation templates. x: 0(left)→1(right); y: 0(own goal)→1(attack).
+ *  Slots are listed in a stable order so a saved XI can be re-laid onto another
+ *  formation by index, preserving player assignments. */
+import type { LineupSlot } from '../../core/types';
+
+type Slot = Omit<LineupSlot, 'playerId' | 'playerName'>;
+
+const F_433: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.28 },
+  { position: 'CB', x: 0.38, y: 0.24 },
+  { position: 'CB', x: 0.62, y: 0.24 },
+  { position: 'RB', x: 0.85, y: 0.28 },
+  { position: 'CM', x: 0.27, y: 0.52 },
+  { position: 'CM', x: 0.5, y: 0.48 },
+  { position: 'CM', x: 0.73, y: 0.52 },
+  { position: 'LW', x: 0.2, y: 0.82 },
+  { position: 'ST', x: 0.5, y: 0.86 },
+  { position: 'RW', x: 0.8, y: 0.82 },
+];
+
+const F_4231: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.26 },
+  { position: 'CB', x: 0.38, y: 0.22 },
+  { position: 'CB', x: 0.62, y: 0.22 },
+  { position: 'RB', x: 0.85, y: 0.26 },
+  { position: 'CDM', x: 0.38, y: 0.46 },
+  { position: 'CDM', x: 0.62, y: 0.46 },
+  { position: 'LW', x: 0.2, y: 0.68 },
+  { position: 'CAM', x: 0.5, y: 0.64 },
+  { position: 'RW', x: 0.8, y: 0.68 },
+  { position: 'ST', x: 0.5, y: 0.88 },
+];
+
+const F_442: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.28 },
+  { position: 'CB', x: 0.38, y: 0.24 },
+  { position: 'CB', x: 0.62, y: 0.24 },
+  { position: 'RB', x: 0.85, y: 0.28 },
+  { position: 'LM', x: 0.18, y: 0.56 },
+  { position: 'CM', x: 0.4, y: 0.52 },
+  { position: 'CM', x: 0.6, y: 0.52 },
+  { position: 'RM', x: 0.82, y: 0.56 },
+  { position: 'ST', x: 0.4, y: 0.85 },
+  { position: 'ST', x: 0.6, y: 0.85 },
+];
+
+const F_352: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.3, y: 0.22 },
+  { position: 'CB', x: 0.5, y: 0.2 },
+  { position: 'CB', x: 0.7, y: 0.22 },
+  { position: 'LM', x: 0.12, y: 0.5 },
+  { position: 'CM', x: 0.35, y: 0.54 },
+  { position: 'CM', x: 0.5, y: 0.48 },
+  { position: 'CM', x: 0.65, y: 0.54 },
+  { position: 'RM', x: 0.88, y: 0.5 },
+  { position: 'ST', x: 0.4, y: 0.85 },
+  { position: 'ST', x: 0.6, y: 0.85 },
+];
+
+const F_343: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.3, y: 0.22 },
+  { position: 'CB', x: 0.5, y: 0.2 },
+  { position: 'CB', x: 0.7, y: 0.22 },
+  { position: 'LM', x: 0.14, y: 0.5 },
+  { position: 'CM', x: 0.4, y: 0.5 },
+  { position: 'CM', x: 0.6, y: 0.5 },
+  { position: 'RM', x: 0.86, y: 0.5 },
+  { position: 'LW', x: 0.2, y: 0.82 },
+  { position: 'ST', x: 0.5, y: 0.86 },
+  { position: 'RW', x: 0.8, y: 0.82 },
+];
+
+const F_3421: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.3, y: 0.22 },
+  { position: 'CB', x: 0.5, y: 0.2 },
+  { position: 'CB', x: 0.7, y: 0.22 },
+  { position: 'LM', x: 0.12, y: 0.48 },
+  { position: 'CM', x: 0.4, y: 0.5 },
+  { position: 'CM', x: 0.6, y: 0.5 },
+  { position: 'RM', x: 0.88, y: 0.48 },
+  { position: 'CAM', x: 0.38, y: 0.7 },
+  { position: 'CAM', x: 0.62, y: 0.7 },
+  { position: 'ST', x: 0.5, y: 0.88 },
+];
+
+const F_532: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.1, y: 0.32 },
+  { position: 'CB', x: 0.3, y: 0.24 },
+  { position: 'CB', x: 0.5, y: 0.22 },
+  { position: 'CB', x: 0.7, y: 0.24 },
+  { position: 'RB', x: 0.9, y: 0.32 },
+  { position: 'CM', x: 0.35, y: 0.55 },
+  { position: 'CM', x: 0.5, y: 0.5 },
+  { position: 'CM', x: 0.65, y: 0.55 },
+  { position: 'ST', x: 0.4, y: 0.85 },
+  { position: 'ST', x: 0.6, y: 0.85 },
+];
+
+const F_4141: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.26 },
+  { position: 'CB', x: 0.38, y: 0.22 },
+  { position: 'CB', x: 0.62, y: 0.22 },
+  { position: 'RB', x: 0.85, y: 0.26 },
+  { position: 'CDM', x: 0.5, y: 0.42 },
+  { position: 'LM', x: 0.18, y: 0.62 },
+  { position: 'CM', x: 0.4, y: 0.6 },
+  { position: 'CM', x: 0.6, y: 0.6 },
+  { position: 'RM', x: 0.82, y: 0.62 },
+  { position: 'ST', x: 0.5, y: 0.88 },
+];
+
+const F_4123: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.26 },
+  { position: 'CB', x: 0.38, y: 0.22 },
+  { position: 'CB', x: 0.62, y: 0.22 },
+  { position: 'RB', x: 0.85, y: 0.26 },
+  { position: 'CDM', x: 0.5, y: 0.42 },
+  { position: 'CM', x: 0.35, y: 0.58 },
+  { position: 'CM', x: 0.65, y: 0.58 },
+  { position: 'LW', x: 0.2, y: 0.82 },
+  { position: 'ST', x: 0.5, y: 0.86 },
+  { position: 'RW', x: 0.8, y: 0.82 },
+];
+
+const F_4132: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'LB', x: 0.15, y: 0.28 },
+  { position: 'CB', x: 0.38, y: 0.24 },
+  { position: 'CB', x: 0.62, y: 0.24 },
+  { position: 'RB', x: 0.85, y: 0.28 },
+  { position: 'CDM', x: 0.5, y: 0.44 },
+  { position: 'LM', x: 0.2, y: 0.64 },
+  { position: 'CAM', x: 0.5, y: 0.66 },
+  { position: 'RM', x: 0.8, y: 0.64 },
+  { position: 'ST', x: 0.4, y: 0.88 },
+  { position: 'ST', x: 0.6, y: 0.88 },
+];
+
+/** All selectable formations, keyed by their conventional label. */
+export const FORMATIONS: Record<string, Slot[]> = {
+  '4-3-3': F_433,
+  '4-1-2-3': F_4123,
+  '4-1-3-2': F_4132,
+  '4-2-3-1': F_4231,
+  '4-4-2': F_442,
+  '4-1-4-1': F_4141,
+  '3-5-2': F_352,
+  '3-4-3': F_343,
+  '3-4-2-1': F_3421,
+  '5-3-2': F_532,
+};
+
+export const FORMATION_NAMES = Object.keys(FORMATIONS);
+export const DEFAULT_FORMATION = '4-3-3';
+
+/** Back-compat export (the old single template). */
+export const FORMATION_433 = F_433;
+
+/** Positions that earn a clean sheet when their team concedes zero. */
+export const DEFENSIVE_POSITIONS = new Set(['GK', 'LB', 'CB', 'RB', 'CDM']);
+
+export const ALL_POSITIONS = [
+  'GK', 'LB', 'CB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST',
+];
+
+/** Fresh, unfilled slots for a named formation (defaults to 4-3-3). */
+export function formationSlots(name?: string): LineupSlot[] {
+  return (FORMATIONS[name ?? DEFAULT_FORMATION] ?? FORMATIONS[DEFAULT_FORMATION]).map((s) => ({ ...s }));
+}
+
+export function emptyFormation(): LineupSlot[] {
+  return formationSlots(DEFAULT_FORMATION);
+}

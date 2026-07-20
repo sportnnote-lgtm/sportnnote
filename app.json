@@ -3,11 +3,16 @@
     "name": "sportfolio",
     "slug": "sportfolio",
     "version": "1.0.0",
+    "scheme": "sportfolio",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Sportfolio uses the microphone for hands-free voice scoring and navigation.",
+        "NSSpeechRecognitionUsageDescription": "Sportfolio uses speech recognition to let you score and navigate by voice."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,6 +21,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": ["RECORD_AUDIO"],
       "predictiveBackGestureEnabled": false
     },
     "web": {

@@ -1,0 +1,156 @@
+/** Team (house) profile: record per sport, squad, matches — and a follow toggle. */
+import React, { useState } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { theme } from '../core/theme';
+import { Card, Pill, Button, ScreenTitle, textStyles } from '../components/ui';
+import { MatchCard } from '../components/MatchCard';
+import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
+import { getSport } from '../sports/registry';
+import { useAuth } from '../core/auth';
+import { canScoreByRole } from '../core/roles';
+import { useTeamSummary, useMatches, usePlayers, useFollow } from '../data/hooks';
+import { teamStandings } from '../data/standings';
+import type { RootStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+export default function TeamProfileScreen() {
+  const nav = useNavigation<Nav>();
+  const { params } = useRoute<RouteProp<RootStackParamList, 'Team'>>();
+  const { teamId } = params;
+  const { profile } = useAuth();
+  const team = useTeamSummary(teamId);
+  const { matches } = useMatches();
+  const players = usePlayers();
+  const { isFollowing, toggle } = useFollow(profile?.id);
+  const [showSquad, setShowSquad] = useState(false);
+  const [showMatches, setShowMatches] = useState(false);
+
+  if (!team) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <Text style={[textStyles.muted, { padding: theme.spacing(4) }]}>Loading team…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const following = isFollowing('team', team.id);
+  const squad = players.filter((p) => p.houseName === team.name);
+  const teamMatches = matches.filter((m) => m.homeTeam.id === team.id || m.awayTeam.id === team.id);
+  const records = team.sports
+    .map((sp) => ({ sport: sp, row: teamStandings(matches, sp).find((t) => t.teamId === team.id) }))
+    .filter((r) => r.row);
+
+  return (
+    <SafeAreaView style={st.safe} edges={['bottom']}>
+      <ScrollView contentContainerStyle={st.content}>
+        <View style={st.headerRow}>
+          <View style={[st.crest, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33', borderColor: team.colorHex ?? theme.colors.border }]}>
+            <View style={[st.dot, { backgroundColor: team.colorHex ?? theme.colors.surfaceAlt }]} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={textStyles.h2}>{team.name}</Text>
+            <View style={st.tags}>
+              {team.sports.map((s) => (
+                <Pill key={s} label={`${getSport(s).icon} ${getSport(s).name}`} />
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <Button
+          label={following ? '✓ Following' : '+ Follow team'}
+          variant={following ? 'ghost' : 'primary'}
+          onPress={() => toggle('team', team.id)}
+        />
+        <Button label="👥 Manage squad" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} />
+
+        {records.length > 0 && (
+          <>
+            <Text style={[textStyles.h3, st.section]}>Record</Text>
+            {records.map(({ sport, row }) => (
+              <Card key={sport} style={st.recordRow}>
+                <Text style={st.recordIcon}>{getSport(sport).icon}</Text>
+                <Text style={[textStyles.body, { flex: 1 }]}>{getSport(sport).name}</Text>
+                <Text style={textStyles.muted}>{row!.won}W {row!.lost}L {row!.drawn}D</Text>
+                <Text style={st.recordPts}>{row!.points} pts</Text>
+              </Card>
+            ))}
+          </>
+        )}
+
+        <SectionHeader
+          title={`Squad (${squad.length})`}
+          count={squad.length}
+          onSeeAll={squad.length > SECTION_CAP ? () => setShowSquad((v) => !v) : undefined}
+          expanded={showSquad}
+        />
+        {squad.length === 0 ? (
+          <Text style={textStyles.muted}>No players listed for this team.</Text>
+        ) : (
+          (showSquad ? squad : squad.slice(0, SECTION_CAP)).map((p) => (
+            <TouchableOpacity key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>
+              <Card style={st.playerRow}>
+                <View style={[st.avatar, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33' }]}>
+                  <Text style={[st.avatarText, { color: team.colorHex ?? theme.colors.primary }]}>
+                    {p.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}</Text>
+                  <Text style={textStyles.muted}>{p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
+                </View>
+              </Card>
+            </TouchableOpacity>
+          ))
+        )}
+
+        {teamMatches.length > 0 && (
+          <>
+            <SectionHeader
+              title="Matches"
+              count={teamMatches.length}
+              onSeeAll={teamMatches.length > SECTION_CAP ? () => setShowMatches((v) => !v) : undefined}
+              expanded={showMatches}
+            />
+            {(showMatches ? teamMatches : teamMatches.slice(0, SECTION_CAP)).map((m) => (
+              <MatchCard
+                key={m.id}
+                match={m}
+                onPress={() =>
+                  nav.navigate('LiveScoring', {
+                    matchId: m.id, sport: m.sport,
+                    homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
+                    homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,
+                    homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
+                    canScore: canScoreByRole(profile?.role),
+                  })
+                }
+              />
+            ))}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const st = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  content: { padding: theme.spacing(4), gap: theme.spacing(3) },
+  headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
+  crest: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 24, height: 24, borderRadius: 12 },
+  tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap', marginTop: theme.spacing(2) },
+  section: { marginTop: theme.spacing(2) },
+  recordRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  recordIcon: { fontSize: 22 },
+  recordPts: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },
+  playerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontWeight: '800' },
+});
