@@ -13,8 +13,17 @@
 
 // Per-wickets-lost curve parameters: resource(u,w) = MAX[w] · (1 − e^(−DECAY[w]·u)).
 // MAX/DECAY[0] solve resource(50,0)=100, resource(25,0)≈66, resource(10,0)≈32.
-const MAX = [136.2, 129, 120, 109, 96, 82, 66, 49, 32, 15];
-const DECAY = [0.0265, 0.029, 0.032, 0.036, 0.041, 0.048, 0.058, 0.075, 0.105, 0.20];
+//
+// INVARIANT — losing a wicket must never increase resources at ANY over count.
+// Two curves only stay apart if BOTH the asymptote (MAX) and the initial slope
+// (MAX·DECAY) are non-increasing in w; otherwise a steeper curve overtakes the
+// one above it early on. DECAY is therefore derived from MAX to hold that:
+//   DECAY[w] = (MAX[0]·DECAY[0] · s[w]) / MAX[w],  s[w] = 1 − 0.02w
+// which still steepens decay as wickets fall, without ever crossing.
+// (Regression-tested in tests/cricket-dls.test.mts — a crossing at 30 overs
+// between 0 and 1 wicket is exactly what the earlier constants got wrong.)
+const MAX = [136.2, 126, 115, 103, 90, 76, 61, 45, 29, 14];
+const DECAY = [0.0265, 0.02807, 0.03013, 0.03294, 0.0369, 0.04274, 0.05207, 0.06898, 0.10455, 0.2114];
 const G50 = 245; // average 50-over total — used when the chasing side has MORE resources
 
 /** % of run-scoring resources remaining with `oversLeft` overs and `wicketsLost` down. */

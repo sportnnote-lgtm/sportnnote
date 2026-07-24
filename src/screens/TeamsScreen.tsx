@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
@@ -10,10 +12,14 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import { useTeams } from '../data/hooks';
 import { createTeam } from '../data/repos';
 import type { SportId } from '../core/types';
+import type { RootStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const PALETTE = ['#FF5C5C', '#4DA3FF', '#3DDC97', '#FFB454', '#B98AFF', '#FF8AC4'];
 
 export default function TeamsScreen() {
+  const nav = useNavigation<Nav>();
   const [tick, setTick] = useState(0); // bump to refetch after adding
   const teams = useTeams(undefined, tick);
   const [name, setName] = useState('');
@@ -97,11 +103,20 @@ export default function TeamsScreen() {
               expanded={showTeams}
             />
             {(showTeams ? list : list.slice(0, SECTION_CAP)).map((t) => (
-              <Card key={t.id} style={st.teamRow}>
-                <View style={[st.dot, { backgroundColor: t.colorHex }]} />
-                <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
-                <Text style={textStyles.muted}>{t.shortName}</Text>
-              </Card>
+              <TouchableOpacity
+                key={t.id}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${t.name}`}
+                onPress={() => nav.navigate('Team', { teamId: t.id })}
+              >
+                <Card style={st.teamRow}>
+                  <View style={[st.dot, { backgroundColor: t.colorHex }]} />
+                  <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
+                  <Text style={textStyles.muted}>{t.shortName}</Text>
+                  <Text style={st.chev}>›</Text>
+                </Card>
+              </TouchableOpacity>
             ))}
           </View>
         ))}
@@ -116,11 +131,20 @@ export default function TeamsScreen() {
             />
             <Text style={textStyles.muted}>One-off sides created for friendlies. Kept for match history &amp; stats.</Text>
             {(showCasual ? casual : casual.slice(0, SECTION_CAP)).map((t) => (
-              <Card key={t.id} style={st.teamRow}>
-                <View style={[st.dot, { backgroundColor: t.colorHex }]} />
-                <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
-                <Text style={textStyles.muted}>{getSport(t.sport as SportId).icon} {t.shortName}</Text>
-              </Card>
+              <TouchableOpacity
+                key={t.id}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${t.name}`}
+                onPress={() => nav.navigate('Team', { teamId: t.id })}
+              >
+                <Card style={st.teamRow}>
+                  <View style={[st.dot, { backgroundColor: t.colorHex }]} />
+                  <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
+                  <Text style={textStyles.muted}>{getSport(t.sport as SportId).icon} {t.shortName}</Text>
+                  <Text style={st.chev}>›</Text>
+                </Card>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -140,6 +164,7 @@ const st = StyleSheet.create({
   swatchActive: { borderColor: theme.colors.text },
   casual: { gap: theme.spacing(2), marginTop: theme.spacing(2), opacity: 0.6 },
   teamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  chev: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '800' },
   dot: { width: 14, height: 14, borderRadius: 7 },
   error: { color: theme.colors.danger, fontSize: theme.font.small },
 });

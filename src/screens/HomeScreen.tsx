@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, SelectChip, textStyles } from '../components/ui';
+import { Card, LoadingState, Pill, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { VoiceNav } from '../components/VoiceNav';
@@ -29,7 +29,7 @@ export default function HomeScreen() {
   const nav = useNavigation<Nav>();
   const { profile } = useAuth();
   const tournaments = useMyTournaments(profile?.id);
-  const { matches } = useMatches();
+  const { matches, loading } = useMatches();
   const { unread } = useNotifications();
 
   // Selected tournament (null = "All"). Default to the first once loaded.
@@ -149,7 +149,9 @@ export default function HomeScreen() {
 
         {/* Live now — top 5, "See all" opens the full live list */}
         <SectionHeader title="🔴 Live now" count={live.length} onSeeAll={live.length > SECTION_CAP ? () => seeAll('live') : undefined} />
-        {live.length ? (
+        {loading ? (
+          <LoadingState label="Loading matches…" />
+        ) : live.length ? (
           live.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         ) : (
           <Text style={textStyles.muted}>No live matches right now.</Text>
@@ -157,7 +159,9 @@ export default function HomeScreen() {
 
         {/* Up next — top 5, "See all" opens the full upcoming list */}
         <SectionHeader title="📅 Up next" count={upcoming.length} onSeeAll={upcoming.length > SECTION_CAP ? () => seeAll('upcoming') : undefined} />
-        {upcoming.length ? (
+        {loading ? (
+          <LoadingState label="Loading…" />
+        ) : upcoming.length ? (
           upcoming.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         ) : (
           <Text style={textStyles.muted}>Nothing scheduled.</Text>

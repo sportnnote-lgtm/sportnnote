@@ -266,34 +266,47 @@ export function useTeamSummaries() {
   return teams;
 }
 
+/** Returns `loading` too, so a screen can tell "still fetching" apart from
+ *  "no such team" instead of showing a spinner forever. */
 export function useTeamSummary(id: string) {
-  const [team, setTeam] = useState<TeamSummary | null>(null);
+  const [state, setState] = useState<{ team: TeamSummary | null; loading: boolean }>({ team: null, loading: true });
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      getTeamSummary(id).then((t) => on && setTeam(t));
+      setState((s) => ({ ...s, loading: true }));
+      getTeamSummary(id).then((t) => on && setState({ team: t, loading: false }));
       return () => {
         on = false;
       };
     }, [id])
   );
-  return team;
+  return state;
 }
 
-/** Per-sport standings + individual stat leaders (and the matches, for reuse). */
-export function useStandings(sport: SportId): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[] } {
+/** Per-sport standings + individual stat leaders (and the matches, for reuse).
+ *  Pass `tournamentId` to scope the table AND the leaders to one tournament —
+ *  otherwise it's every match in that sport. */
+export function useStandings(sport: SportId, tournamentId?: string): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[] } {
   const [data, setData] = useState<{ teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[] }>({ teams: [], leaders: [], matches: [] });
   useFocusEffect(
     useCallback(() => {
       let on = true;
       Promise.all([getMatches(), getAllStatLines(), getPlayers()]).then(([matches, lines, players]) => {
         if (!on) return;
-        setData({ teams: teamStandings(matches, sport), leaders: statLeaders(lines, players, sport), matches });
+        const scopedMatches = tournamentId ? matches.filter((m) => m.tournamentId === tournamentId) : matches;
+        // Leaders come from stat lines, so scope those by the same match set.
+        const ids = new Set(scopedMatches.map((m) => m.id));
+        const scopedLines = tournamentId ? lines.filter((l) => ids.has(l.matchId)) : lines;
+        setData({
+          teams: teamStandings(scopedMatches, sport),
+          leaders: statLeaders(scopedLines, players, sport),
+          matches: scopedMatches,
+        });
       });
       return () => {
         on = false;
       };
-    }, [sport])
+    }, [sport, tournamentId])
   );
   return data;
 }

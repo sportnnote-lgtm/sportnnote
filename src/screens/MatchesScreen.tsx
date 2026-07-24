@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { ScreenTitle, textStyles } from '../components/ui';
+import { LoadingState, ScreenTitle, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { useMatches } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -37,7 +37,7 @@ export default function MatchesScreen() {
     if (params?.initialTab) setTab(params.initialTab);
     if (params?.initialSport) setFilter(params.initialSport);
   }, [params?.initialTab, params?.initialSport]);
-  const { matches } = useMatches(filter);
+  const { matches, loading } = useMatches(filter);
   const canScore = canScoreByRole(profile?.role);
 
   // Live = in progress; Upcoming = scheduled (soonest first); Completed = most recent first.
@@ -90,7 +90,9 @@ export default function MatchesScreen() {
           ))}
         </ScrollView>
 
-        {list.length === 0 ? (
+        {loading ? (
+          <LoadingState label="Loading matches…" />
+        ) : list.length === 0 ? (
           <Text style={textStyles.muted}>
             {tab === 'live' ? 'No matches are live right now.' : tab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}
           </Text>

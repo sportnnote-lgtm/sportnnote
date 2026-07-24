@@ -196,6 +196,11 @@ export default function TournamentProfileScreen() {
           variant={following ? 'ghost' : 'primary'}
           onPress={() => toggle('tournament', tournament.id)}
         />
+        <Button
+          label="📊 Standings & leaders"
+          variant="ghost"
+          onPress={() => nav.navigate('Standings', { tournamentId: tournament.id, ...(singleSport ? { sport: sports[0] } : {}) })}
+        />
         {tournament.structure !== 'league' && (
           <Button
             label="🏆 Knockout bracket"

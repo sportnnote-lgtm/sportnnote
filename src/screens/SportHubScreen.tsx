@@ -74,7 +74,13 @@ export default function SportHubScreen() {
           upcoming.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         )}
 
-        <Text style={[textStyles.h3, st.section]}>🏆 Standings</Text>
+        <View style={st.section}>
+          <SectionHeader
+            title="🏆 Standings"
+            count={table.length}
+            onSeeAll={table.length > 0 ? () => nav.navigate('Standings', { sport, tournamentId }) : undefined}
+          />
+        </View>
         <LeagueTable
           teams={table}
           onTeam={(teamId) => nav.navigate('Team', { teamId })}

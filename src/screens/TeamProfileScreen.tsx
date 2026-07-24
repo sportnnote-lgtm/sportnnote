@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, ScreenTitle, textStyles } from '../components/ui';
+import { Card, Pill, Button, LoadingState, ScreenTitle, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
@@ -23,17 +23,30 @@ export default function TeamProfileScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'Team'>>();
   const { teamId } = params;
   const { profile } = useAuth();
-  const team = useTeamSummary(teamId);
+  const { team, loading } = useTeamSummary(teamId);
   const { matches } = useMatches();
   const players = usePlayers();
   const { isFollowing, toggle } = useFollow(profile?.id);
   const [showSquad, setShowSquad] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
 
+  if (loading) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <LoadingState label="Loading team…" />
+      </SafeAreaView>
+    );
+  }
+
+  // Resolved, but there's no such team — say so instead of spinning forever.
   if (!team) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
-        <Text style={[textStyles.muted, { padding: theme.spacing(4) }]}>Loading team…</Text>
+        <View style={{ padding: theme.spacing(4), gap: theme.spacing(3) }}>
+          <Text style={textStyles.h3}>Team not found</Text>
+          <Text style={textStyles.muted}>This team may have been removed, or the link is out of date.</Text>
+          <Button label="← Go back" variant="ghost" onPress={() => nav.goBack()} />
+        </View>
       </SafeAreaView>
     );
   }

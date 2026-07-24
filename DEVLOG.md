@@ -50,6 +50,42 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-10 — Gap-hunt batch 1: tests, loading states, unreachable screens · SHIPPED + VERIFIED
+
+First round of the standing **product + engineering gap hunt** (both hats in parallel). Audit found:
+no test suite, no loading states, 31/53 silent catches, 1 a11y label across 225 touchables, an
+unreachable Standings screen, a dead-end Teams screen, and no help/settings surface. Batch 1 closed
+the top items.
+
+- **E1 — test suite from zero.** Node 22+ runs TypeScript natively, so `node --test` needs **no new
+  dependencies**. Added `npm test` + `tests/` with **39 tests** over the pure engines: kabaddi
+  (touches/out-count, super tackle, do-or-die, all-out, all three revival styles, and *replay/undo
+  integrity*), cricket DLS (curve anchors, monotonicity, revised targets), fixture generation
+  (round-robin pairs-exactly-once incl. odd byes, knockout, no self-pairings) and phone identity.
+  - **🐞 The tests immediately caught a real DLS bug:** the resource curves **crossed** — at 30 overs,
+    losing your 1st wicket *increased* resources (74.7 → 74.9), because decay steepened faster than the
+    asymptote fell. Fixed by deriving `DECAY` from `MAX` so both the asymptote and the initial slope are
+    non-increasing in wickets; verified 0 monotonicity violations across all 50 overs × 10 wickets while
+    keeping the calibrated anchors (100 / 66 / 32). Invariant documented in `dls.ts` + regression-tested.
+- **E2 — loading states.** Hooks exposed `loading` but **no screen consumed it**, so lists flashed their
+  *empty* state ("No matches yet") before data arrived. New shared `LoadingState` component; wired into
+  Home, Matches, Discover and Team profile.
+- **P1 — Standings was unreachable** (fully built, zero entry points). Added **"📊 Standings & leaders"**
+  on the tournament page + a "see all" on the sport hub. Then found it **ignored `tournamentId`** and
+  showed cross-tournament data under a tournament's name → `useStandings(sport, tournamentId?)` now
+  scopes both the table and the leaders (via match-id filtered stat lines).
+- **P2 — Teams screen was a dead end** (rows not tappable). Rows now open the team profile, with a
+  chevron affordance and accessibility labels.
+  - **🐞 Surfaced a pre-existing data bug:** two incompatible team id spaces — `getTeamSummaries()` keys
+    by the raw match id (`red`) while `deriveTeams()` mints `${sport}-${shortName}` (`football-RED`), so
+    the profile could never resolve and hung on "Loading team…" forever. `getTeamSummary` now resolves
+    the alias, and `useTeamSummary` returns `loading` so a missing team shows a **"Team not found"**
+    state instead of spinning forever.
+- **VERIFIED** live: teams open their profile (Red House · 3W 0L 1D · 7 pts); Standings opens and reads
+  "Karnataka State Cup 2026" scoped correctly; `npm test` 39/39 green; no console errors.
+- **Still open (batch 2):** E3 surface errors (31 silent catches), E4 accessibility (1/225), P5 settings
+  home; then P3 support + P4 onboarding as their own workstreams.
+
 ### 2026-07-10 — Light-sports curation: badminton / volleyball / pickleball / squash / padel · SHIPPED + VERIFIED
 
 Closed out the sport-by-sport curation pass (all 10 sports now curated — see `docs/sport-formats.md`).

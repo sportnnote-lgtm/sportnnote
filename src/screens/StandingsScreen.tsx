@@ -11,7 +11,7 @@ import { theme } from '../core/theme';
 import { Card, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
-import { useTournament, useStandings } from '../data/hooks';
+import { useTournament, useTournamentById, useStandings } from '../data/hooks';
 import { leaderStat } from '../data/standings';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -21,10 +21,14 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function StandingsScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Standings'>>();
-  const tournament = useTournament();
+  // Opened from a specific tournament? Scope to it; otherwise use the one
+  // currently selected on Home.
+  const selected = useTournament();
+  const opened = useTournamentById(params?.tournamentId);
+  const tournament = params?.tournamentId ? opened : selected;
   const sports = tournament?.sports ?? [];
   const [sport, setSport] = useState<SportId>(params?.sport ?? 'football');
-  const { teams, leaders } = useStandings(sport);
+  const { teams, leaders } = useStandings(sport, params?.tournamentId);
   const lead = leaderStat(sport);
   const [showTeams, setShowTeams] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);

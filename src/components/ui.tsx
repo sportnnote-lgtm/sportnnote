@@ -1,6 +1,7 @@
 /** Small shared UI primitives so screens and sport plugins stay consistent. */
 import React from 'react';
 import {
+  ActivityIndicator,
   Text,
   TextInput,
   TouchableOpacity,
@@ -11,6 +12,22 @@ import {
   StyleProp,
 } from 'react-native';
 import { theme } from '../core/theme';
+
+/** Shown while data is still being fetched, so a list never flashes its
+ *  "nothing here yet" empty state before the real content arrives. */
+export function LoadingState({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <View style={loadingStyles.wrap} accessibilityRole="progressbar" accessibilityLabel={label}>
+      <ActivityIndicator color={theme.colors.primary} />
+      <Text style={loadingStyles.label}>{label}</Text>
+    </View>
+  );
+}
+
+const loadingStyles = StyleSheet.create({
+  wrap: { alignItems: 'center', justifyContent: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(6) },
+  label: { color: theme.colors.textMuted, fontSize: theme.font.small },
+});
 
 export function Card({
   children,

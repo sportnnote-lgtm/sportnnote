@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { ConnectBoard } from '../components/ConnectBoard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -37,7 +37,7 @@ export default function DiscoverScreen() {
   const [showAllTeams, setShowAllTeams] = useState(false);
 
   const cities = useCities();
-  const { results } = usePlayerSearch({ query, sport, city });
+  const { results, loading: searching } = usePlayerSearch({ query, sport, city });
   const teams = useTeamSummaries().filter((t) => sport === 'all' || t.sports.includes(sport));
   const { isFollowing, toggle } = useFollow(profile?.id);
   const openTournaments = useOpenTournaments().filter((t) => sport === 'all' || t.sports.includes(sport));
@@ -93,7 +93,7 @@ export default function DiscoverScreen() {
           {filtering ? ' found' : ' · ranked by activity'}
         </Text>
 
-        {results.length === 0 && <Text style={textStyles.muted}>No players match. Try a different search.</Text>}
+        {searching ? <LoadingState label="Searching players…" /> : results.length === 0 ? <Text style={textStyles.muted}>No players match. Try a different search.</Text> : null}
 
         {(showAllResults ? results : results.slice(0, SECTION_CAP)).map(({ player, stats }, i) => (
           <TouchableOpacity key={player.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}>

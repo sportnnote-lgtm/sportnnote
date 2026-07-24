@@ -219,7 +219,20 @@ export async function getTeamSummaries(): Promise<TeamSummary[]> {
 }
 
 export async function getTeamSummary(id: string): Promise<TeamSummary | null> {
-  return (await getTeamSummaries()).find((t) => t.id === id) ?? null;
+  const all = await getTeamSummaries();
+  const exact = all.find((t) => t.id === id);
+  if (exact) return exact;
+  // Two id spaces exist: match data keys a team by its raw id, while the team
+  // pickers mint a per-sport id (`${sport}-${shortName}`, see demoStore
+  // deriveTeams). Resolve that alias so a team opened from the Teams screen
+  // finds its profile instead of hanging on "loading".
+  const matches = await getMatches();
+  for (const m of matches) {
+    for (const t of [m.homeTeam, m.awayTeam]) {
+      if (`${m.sport}-${t.shortName}` === id) return all.find((s) => s.id === t.id) ?? null;
+    }
+  }
+  return null;
 }
 
 export async function getTeams(sport?: SportId): Promise<Team[]> {
