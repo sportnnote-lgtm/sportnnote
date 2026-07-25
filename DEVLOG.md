@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 14: SportHub page (workstream C) · SHIPPED + VERIFIED
+
+Polished the per-sport tournament hub (schedule, standings, stats, results).
+
+- **Results read as results.** The completed-match rows were flat (team · score · team, all one
+  colour). Now the **winner's name is bold and their score is green**, the loser stays muted, and a
+  draw gets no emphasis — the same "green = win" language used in Standings, SportProfile history and
+  MatchCard.
+- **Correct nav-bar title.** SportHub said a generic "Sport"; it now titles the header with the
+  **tournament name** (breadcrumb ⟨ Annual Sports Meet 2026 → the in-content title carries the
+  sport), matching the batch 11–12 profile fixes.
+- **Statistics block guarded.** The "📊 Statistics / Swipe for more leaderboards →" header + rail
+  rendered even with zero leaderboards; it's now shown only when there are stat categories
+  (empty-state hygiene, consistent with batch 4).
+- **Files:** `src/screens/SportHubScreen.tsx`.
+- **Verified live (demo, mobile):** Annual Sports Meet 2026 → Football hub shows the nav title
+  "Annual Sports Meet 2026", Results with "**Red House** 3–1 Blue House" (bold + green winner) and a
+  neutral "Red House 1–1 Green House" draw, and the Goals/Assists leaderboards. Console clean.
+  Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-25 — UI design pass, batch 13: Matches & Discover pages (workstream C) · SHIPPED + VERIFIED
 
 Polished the two high-traffic browse tabs.

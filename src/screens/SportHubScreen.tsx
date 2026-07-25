@@ -1,7 +1,7 @@
 /** A single sport within a tournament: its schedule, a shortcut to organize a
  *  game, the league table, and the statistics rail. Reached from the Home sport
  *  chips and from a tournament's sport list. */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -30,6 +30,12 @@ export default function SportHubScreen() {
   const { profile } = useAuth();
   const plugin = getSport(sport);
   const { matches, lines, players } = useLeagueData(tournamentId);
+
+  // Title the nav bar after the tournament (breadcrumb ⟨ Annual Sports Meet 2026);
+  // the in-content title carries the sport.
+  useEffect(() => {
+    if (tournamentName) nav.setOptions({ title: tournamentName });
+  }, [nav, tournamentName]);
 
   const sportMatches = useMemo(() => matches.filter((m) => m.sport === sport), [matches, sport]);
   const live = sportMatches.filter((m) => m.status === 'live');
@@ -87,24 +93,41 @@ export default function SportHubScreen() {
           emptyLabel={`No completed ${plugin.name.toLowerCase()} matches yet.`}
         />
 
-        <Text style={[textStyles.h3, st.section]}>📊 Statistics</Text>
-        <Text style={textStyles.muted}>Swipe for more leaderboards →</Text>
-        <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+        {categories.length > 0 && (
+          <>
+            <Text style={[textStyles.h3, st.section]}>📊 Statistics</Text>
+            <Text style={textStyles.muted}>Swipe for more leaderboards →</Text>
+            <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+          </>
+        )}
 
         {results.length > 0 && (
           <>
             <SectionHeader title="✅ Results" count={results.length} onSeeAll={results.length > SECTION_CAP ? () => seeAll('completed') : undefined} />
-            {results.slice(0, SECTION_CAP).map((m) => (
-              <TouchableOpacity accessibilityRole="button" key={m.id} activeOpacity={0.85} onPress={() => openScorer(m)}>
-                <View style={st.resultRow}>
-                  <View style={[st.dot, { backgroundColor: m.homeTeam.colorHex }]} />
-                  <Text style={[textStyles.body, st.rTeam]} numberOfLines={1}>{m.homeTeam.name}</Text>
-                  <Text style={st.score}>{m.score ? `${m.score.home} – ${m.score.away}` : 'vs'}</Text>
-                  <Text style={[textStyles.body, st.rTeamRight]} numberOfLines={1}>{m.awayTeam.name}</Text>
-                  <View style={[st.dot, { backgroundColor: m.awayTeam.colorHex }]} />
-                </View>
-              </TouchableOpacity>
-            ))}
+            {results.slice(0, SECTION_CAP).map((m) => {
+              // Results-board language: bold the winner and green their score.
+              const homeWon = !!m.score && m.score.home > m.score.away;
+              const awayWon = !!m.score && m.score.away > m.score.home;
+              return (
+                <TouchableOpacity accessibilityRole="button" key={m.id} activeOpacity={0.85} onPress={() => openScorer(m)}>
+                  <View style={st.resultRow}>
+                    <View style={[st.dot, { backgroundColor: m.homeTeam.colorHex }]} />
+                    <Text style={[textStyles.body, st.rTeam, homeWon && st.winnerName]} numberOfLines={1}>{m.homeTeam.name}</Text>
+                    {m.score ? (
+                      <Text style={st.score}>
+                        <Text style={homeWon && st.winScore}>{m.score.home}</Text>
+                        <Text style={st.scoreDash}> – </Text>
+                        <Text style={awayWon && st.winScore}>{m.score.away}</Text>
+                      </Text>
+                    ) : (
+                      <Text style={st.score}>vs</Text>
+                    )}
+                    <Text style={[textStyles.body, st.rTeamRight, awayWon && st.winnerName]} numberOfLines={1}>{m.awayTeam.name}</Text>
+                    <View style={[st.dot, { backgroundColor: m.awayTeam.colorHex }]} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </>
         )}
       </ScrollView>
@@ -124,5 +147,8 @@ const st = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   rTeam: { flex: 1 },
   rTeamRight: { flex: 1, textAlign: 'right' },
-  score: { color: theme.colors.text, fontWeight: '900', fontSize: theme.font.body, paddingHorizontal: theme.spacing(2) },
+  winnerName: { fontWeight: '800' },
+  score: { color: theme.colors.textMuted, fontWeight: '900', fontSize: theme.font.body, paddingHorizontal: theme.spacing(2) },
+  scoreDash: { color: theme.colors.textMuted },
+  winScore: { color: theme.colors.primary },
 });
