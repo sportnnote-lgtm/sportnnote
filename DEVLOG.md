@@ -71,6 +71,27 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 9: Auth screen (workstream C) · SHIPPED (not live-verifiable in demo)
+
+Brought the sign-in / create-account screen — the app's first impression in live mode — onto the
+design system. It was using one-off local components and a plain logo.
+
+- **Branded wordmark.** "🏅 Sportfolio" → two-tone "🏅 Sport" + pitch-green "folio", centred with
+  the tagline, matching the Home header.
+- **Design-system components.** The custom `Tab` pills (sign-in/create toggle AND the role picker)
+  are replaced with the shared `SelectChip` — consistent styling + built-in selected-state
+  accessibility. The `Tab` component and its orphan styles were removed.
+- **Form in a Card.** The floating fields are now grouped in an elevated `Card`, giving the auth
+  form structure and depth instead of sitting loose on the background.
+- Kept the local `Field` input (the shared `TextField` doesn't yet support `secure`/`keyboardType`);
+  a future reusability pass could fold it in.
+- **Files:** `src/screens/AuthScreen.tsx`.
+- **Verification caveat:** `AuthScreen` only mounts when Supabase is configured (live mode); in the
+  demo the user is auto-signed-in, so this screen **cannot be viewed on port 8091**. This batch is
+  therefore typecheck-verified (clean) with 65/65 tests, and built entirely from components already
+  verified live elsewhere (two-tone wordmark, SelectChip, Card, Button) — but it was **not**
+  screenshot-verified like the other batches. Worth a visual check once a Supabase env is wired.
+
 ### 2026-07-25 — UI design pass, batch 8: Organize hub (workstream C) · SHIPPED + VERIFIED
 
 Tidied the organizer's landing screen. Style/structure only.
