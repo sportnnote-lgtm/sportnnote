@@ -50,6 +50,27 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 2: the Live Scoring screen (workstream C) · SHIPPED + VERIFIED
+
+The scorer's cockpit — the most-used surface — but its hand-rolled surfaces predated the batch-1
+depth tokens, so it read flatter than the rest of the app, and a couple of controls were clunky.
+Style-only pass (no scoring logic touched).
+
+- **Depth consistency.** Applied `theme.shadow.card` to the screen's own surfaces (`controls`,
+  `infoCard`, `finalCard`) so the scoreboard, info cards and control panel lift like `Card` does
+  everywhere else. The screen now reads as one system with Home.
+- **Undo redesigned.** Was a tall two-line accent block with the title wrapping awkwardly and
+  competing with primary actions. Now a compact single row — "↶ Undo" (in text colour, calmer) with
+  "rewind step-by-step" muted on the right — and the "tap repeatedly" guidance moved to an
+  `accessibilityHint`. Less shouty, tidier, still obvious.
+- **Header de-jargoned.** The status pill "demo · local" / "live · synced" (developer-speak facing
+  the scorer) is now a clean "Demo" (muted) / "Synced" (green tint).
+- **Files:** `src/screens/LiveScoringScreen.tsx` (styles + undo JSX + header pill only).
+- **Verified live (demo, mobile 375px):** scoreboard, undo, add-player and controls all lift
+  consistently; undo is a clean one-liner; header shows "Demo"; Info tab shows the elevated
+  scoreboard with the active tab clearly green and lifted info/scorer cards; no console errors.
+  Typecheck clean; 65/65 tests.
+
 ### 2026-07-25 — UI design pass, batch 1: depth + scoreboard match cards (workstream C) · SHIPPED + VERIFIED
 
 Standing UI-design mandate — make the whole app easier and more attractive. Started at the

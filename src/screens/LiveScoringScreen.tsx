@@ -361,14 +361,14 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const header = (
     <View style={st.header}>
       <Text style={st.sportName}>{plugin.icon} {plugin.name}</Text>
-      <Pill label={live ? 'live · synced' : 'demo · local'} color={theme.colors.surfaceAlt} textColor={live ? theme.colors.primary : theme.colors.textMuted} />
+      <Pill label={live ? 'Synced' : 'Demo'} color={live ? theme.colors.primary + '22' : theme.colors.surfaceAlt} textColor={live ? theme.colors.primary : theme.colors.textMuted} />
     </View>
   );
 
   const undoBar = canScore && eventCount > 0 ? (
-    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo last ${sport === 'cricket' ? 'ball' : 'update'}`} onPress={undo}>
-      <Text style={st.undoText}>↶ Undo last {sport === 'cricket' ? 'ball' : 'update'}</Text>
-      <Text style={st.undoHint}>tap repeatedly to rewind to any point</Text>
+    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo last ${sport === 'cricket' ? 'ball' : 'update'}`} accessibilityHint="Tap repeatedly to rewind to any earlier point" onPress={undo}>
+      <Text style={st.undoText}>↶  Undo</Text>
+      <Text style={st.undoHint}>rewind step-by-step</Text>
     </TouchableOpacity>
   ) : null;
 
@@ -1132,18 +1132,19 @@ const st = StyleSheet.create({
   tabActive: { backgroundColor: theme.colors.primary },
   tabText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   tabTextActive: { color: '#06120D', fontWeight: '800' },
-  infoCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4), gap: theme.spacing(2) },
+  infoCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4), gap: theme.spacing(2), ...theme.shadow.card },
   matchTitleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3) },
   squadHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
   venueLink: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
   undoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(2),
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2),
     backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md,
-    borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(3),
+    borderWidth: 1, borderColor: theme.colors.border,
+    paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4),
   },
-  undoText: { color: theme.colors.accent, fontSize: theme.font.body, fontWeight: '800' },
+  undoText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   undoHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   sportName: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '800' },
   squadRow: { gap: theme.spacing(2) },
@@ -1175,12 +1176,13 @@ const st = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     padding: theme.spacing(4),
+    ...theme.shadow.card,
   },
   note: { color: theme.colors.textMuted, fontSize: theme.font.tiny, textAlign: 'center' },
   eligNote: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
   finalCard: {
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
-    padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
+    padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2), ...theme.shadow.card,
   },
   finalLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', letterSpacing: 1 },
   finalRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
