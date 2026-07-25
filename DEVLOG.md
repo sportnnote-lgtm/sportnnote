@@ -71,6 +71,25 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 8: Organize hub (workstream C) · SHIPPED + VERIFIED
+
+Tidied the organizer's landing screen. Style/structure only.
+
+- **Action hierarchy.** The primary "🏆 New tournament" (green) sat *below* the "Organizer
+  dashboard" ghost button. Reordered so the main create action leads, then "🤝 Start a friendly",
+  then "📊 Organizer dashboard" — primary-first.
+- **Empty state.** "Tournaments you're hosting" was a bare `Card` of muted text (it slipped through
+  the batch-4 sweep — its wording didn't match the grep). Now uses the shared `EmptyState`
+  (🏆 + "You're not hosting any tournaments" + hint), matching the app-wide pattern.
+- **Files:** `src/screens/OrganizeScreen.tsx`.
+- **Verified live (demo, mobile):** New tournament leads; hosting empty state shows the shared
+  card; console clean; typecheck clean; 65/65 tests.
+
+_Also this session: confirmed the Discover nested-`<button>` fix is genuinely in the branch
+(landed in `b331dae`) and verified it in a fresh browser tab — teams render with sibling Follow
+buttons, 0 nested buttons, console clean. The earlier persistent warning was stale console buffer
+in a long-open tab. The background "Fix nested-button warning on Discover" session was archived._
+
 ### 2026-07-25 — UI design pass, batch 7: Player & SportProfile pages (workstream C) · SHIPPED + VERIFIED
 
 Extended the identity + results-board language to the player pages. Style-only.

@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Button, Pill, ScreenTitle, textStyles } from '../components/ui';
+import { Card, Button, Pill, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
@@ -75,13 +75,14 @@ export default function OrganizeScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Organize" subtitle="Run your sports meet" />
 
-        <Button label="📊 Organizer dashboard" variant="ghost" onPress={() => nav.navigate('OrganizerDashboard')} />
+        {/* Primary create action leads; supporting actions follow. */}
         <Button label="🏆 New tournament" onPress={() => nav.navigate('CreateTournament')} />
         <Button
           label="🤝 Start a friendly"
           variant="ghost"
           onPress={() => nav.navigate('ScheduleMatch', {})}
         />
+        <Button label="📊 Organizer dashboard" variant="ghost" onPress={() => nav.navigate('OrganizerDashboard')} />
         <Text style={textStyles.muted}>
           Open a tournament to schedule its matches or auto-generate fixtures. A friendly is a one-off game — no tournament needed.
         </Text>
@@ -89,9 +90,12 @@ export default function OrganizeScreen() {
         <SectionHeader title="Tournaments you're hosting" count={hosted.length} onSeeAll={hosted.length > SECTION_CAP ? () => setShowHosted((v) => !v) : undefined} expanded={showHosted} />
         {hosted.length === 0 ? (
           <Card>
-            <Text style={textStyles.muted}>
-              You're not hosting any tournaments right now. Tap “New tournament” to start one.
-            </Text>
+            <EmptyState
+              icon="🏆"
+              title="You're not hosting any tournaments"
+              hint="Tap “New tournament” above to start one."
+              compact
+            />
           </Card>
         ) : (
           (showHosted ? hosted : hosted.slice(0, SECTION_CAP)).map((t) => {
