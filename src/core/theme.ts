@@ -27,6 +27,25 @@ export const theme = {
     small: 13,
     tiny: 11,
   },
+  // Soft elevation so surfaces lift off the background instead of reading as flat
+  // outlined boxes. Cross-platform: shadow* applies on iOS/web, elevation on
+  // Android. `live` is a red glow reserved for in-progress matches.
+  shadow: {
+    card: {
+      shadowColor: '#000000',
+      shadowOpacity: 0.22,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    },
+    live: {
+      shadowColor: '#FF5C5C',
+      shadowOpacity: 0.32,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 5,
+    },
+  },
 } as const;
 
 export type Theme = typeof theme;

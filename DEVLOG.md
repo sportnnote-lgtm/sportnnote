@@ -50,6 +50,30 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 1: depth + scoreboard match cards (workstream C) · SHIPPED + VERIFIED
+
+Standing UI-design mandate — make the whole app easier and more attractive. Started at the
+foundations (which propagate everywhere), then the most-repeated, most-important unit.
+
+- **Depth tokens.** The UI was flat — every surface was `surface` + a 1px border on one plane.
+  Added `theme.shadow.card` (soft neutral elevation) and `theme.shadow.live` (red glow), applied
+  to the shared `Card` and solid `Button`, so surfaces lift off the background app-wide from one
+  change. `core/theme.ts`, `components/ui.tsx`.
+- **Typography.** Headings got tighter tracking + line-height; body/muted got comfortable
+  line-height. Reads more composed without touching the size scale. `components/ui.tsx`.
+- **MatchCard → a scoreboard (`components/MatchCard.tsx`).** This is the app's whole point and its
+  most-repeated card (Home, Matches, SportHub…), but a live game looked almost identical to a
+  scheduled one and the score was buried as tiny grey text ("Live · RED 2–1 BLU"). Now:
+  - Teams flank a **bold central score** — the result is legible at a glance; live scores render in
+    pitch-green.
+  - **Live matches are unmistakable:** red-tinted border + red glow + a **pulsing "LIVE" badge**
+    (Animated opacity loop), and a green "tap to score ›" call-to-action.
+  - Scheduled shows the kickoff time as an accent tag + "vs"; completed shows "FINAL" + "Full time".
+  - Fuller accessibility label describing sport, teams, score and status.
+- **Verified live (demo, mobile 375px + desktop):** live cards show the green score, glow and
+  pulsing badge with "tap to score ›"; scheduled cards show the orange kickoff time + "vs";
+  elevation lifts cards across Home; no console errors. Typecheck clean; 65/65 tests.
+
 ### 2026-07-25 — Support system, phase 1: AI-first help centre (workstream A) · SHIPPED + VERIFIED
 
 Users need a way to reach support. Support is solo (one person) at first, so the design is

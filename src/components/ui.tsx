@@ -80,6 +80,8 @@ export function Button({
       style={[
         styles.btn,
         { backgroundColor: bg },
+        // Solid buttons lift; the ghost/transparent variant stays flat.
+        variant !== 'ghost' && theme.shadow.card,
         variant === 'ghost' && styles.btnGhost,
         disabled && styles.btnDisabled,
         style,
@@ -193,11 +195,13 @@ export function SelectChip({
 }
 
 export const textStyles: Record<string, TextStyle> = StyleSheet.create({
-  h1: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: '800' },
-  h2: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '700' },
-  h3: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '700' },
-  body: { color: theme.colors.text, fontSize: theme.font.body },
-  muted: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  // Tighter tracking + generous line-height give headings a more composed,
+  // intentional feel than the platform defaults.
+  h1: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: '800', letterSpacing: -0.5, lineHeight: theme.font.h1 * 1.15 },
+  h2: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '700', letterSpacing: -0.3, lineHeight: theme.font.h2 * 1.2 },
+  h3: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '700', letterSpacing: -0.2 },
+  body: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: theme.font.body * 1.4 },
+  muted: { color: theme.colors.textMuted, fontSize: theme.font.small, lineHeight: theme.font.small * 1.4 },
 });
 
 const styles = StyleSheet.create({
@@ -207,6 +211,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     padding: theme.spacing(4),
+    ...theme.shadow.card,
   },
   btn: {
     paddingVertical: theme.spacing(3),
