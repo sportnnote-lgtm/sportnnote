@@ -13,7 +13,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
 import { matchEligibility } from '../core/eligibility';
 import { splitBattingOrder } from '../sports/cricket/lineup';
@@ -136,7 +136,7 @@ export default function CricketLineupScreen() {
         {/* Pick from the full squad */}
         <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Squad</Text>
         <View style={st.chips}>
-          {roster.length === 0 && <Text style={textStyles.muted}>No squad for this team yet.</Text>}
+          {roster.length === 0 && <EmptyState icon="👥" title="No squad for this team yet" compact />}
           {roster.map((p) => {
             const elig = matchEligibility(p);
             const no = battingNo(p.id);

@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, SelectChip, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, SelectChip, textStyles } from '../components/ui';
 import { useMatches, useOrganizations, useFollow } from '../data/hooks';
 import { getTournaments, getMyPlayerId, getPlayer } from '../data/repos';
 import { orgsForPlayer } from '../core/org';
@@ -240,7 +240,7 @@ export default function CalendarScreen() {
               )}
             </View>
             {selMatches.length === 0 && selTournaments.length === 0 ? (
-              <Text style={textStyles.muted}>Nothing scheduled.</Text>
+              <EmptyState icon="📅" title="Nothing scheduled" hint="Pick another day, or schedule a match." compact />
             ) : (
               <>
                 {selTournaments.map((t) => tournamentRow(t, t.startDate === selected ? 'starts today' : t.endDate === selected ? 'final day' : 'ongoing'))}
@@ -257,7 +257,7 @@ export default function CalendarScreen() {
               </View>
             )}
             {agendaDays.length === 0 ? (
-              <Text style={textStyles.muted}>No upcoming events or matches.</Text>
+              <EmptyState icon="🗓️" title="No upcoming events or matches" compact />
             ) : (
               agendaDays.map(([day, items]) => (
                 <View key={day} style={{ gap: theme.spacing(2) }}>

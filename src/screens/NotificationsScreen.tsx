@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useNotifications, useFollow, usePlayerSummaries } from '../data/hooks';
@@ -69,10 +69,12 @@ export default function NotificationsScreen() {
 
         {items.length === 0 && followed.length === 0 && (
           <Card>
-            <Text style={textStyles.body}>No alerts yet.</Text>
-            <Text style={textStyles.muted}>
-              Follow a player from their profile, then you’ll be notified when they score.
-            </Text>
+            <EmptyState
+              icon="🔔"
+              title="No alerts yet"
+              hint="Follow a player from their profile, then you’ll be notified when they score."
+              compact
+            />
           </Card>
         )}
 

@@ -4,7 +4,7 @@
 import React from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { theme } from '../core/theme';
-import { textStyles } from './ui';
+import { EmptyState, textStyles } from './ui';
 import type { LeaderCategory } from '../data/standings';
 
 const MEDAL = ['🥇', '🥈', '🥉'];
@@ -22,7 +22,7 @@ export function StatLeaderRail({
   const cardW = Math.min(300, Math.max(240, width - theme.spacing(14)));
 
   if (categories.length === 0) {
-    return <Text style={textStyles.muted}>No statistics recorded yet.</Text>;
+    return <EmptyState icon="📊" title="No statistics recorded yet" compact />;
   }
 
   return (

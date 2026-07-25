@@ -12,7 +12,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, ScreenTitle, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getRoster, getMatchSquads, setMatchSquad, getLineup, setLineup, getLastSquadForTeam } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
@@ -197,7 +197,7 @@ export default function MatchSquadScreen() {
 
       <ScrollView contentContainerStyle={st.content}>
         {roster.length === 0 ? (
-          <Text style={textStyles.muted}>No players in this team’s squad yet — add them from the match Info tab (＋ Add players to this team).</Text>
+          <EmptyState icon="👥" title="No players in this team’s squad yet" hint="Add them from the match Info tab (＋ Add players to this team)." compact />
         ) : (
           roster.map((p) => {
             const role = roles[p.id] ?? 'out';

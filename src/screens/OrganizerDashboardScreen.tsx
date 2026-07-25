@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Button, Pill, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useMatches } from '../data/hooks';
@@ -109,7 +109,7 @@ function TournamentRow({ d, onOpen, onGenerate }: { d: TournamentDash; onOpen: (
         </>
       ) : (
         <View style={{ gap: theme.spacing(2) }}>
-          <Text style={textStyles.muted}>⚡ No fixtures yet — nothing scheduled.</Text>
+          <EmptyState icon="⚡" title="No fixtures yet" hint="Nothing scheduled — generate them to get started." compact />
           <Button label="⚡ Auto-generate fixtures" variant="ghost" onPress={onGenerate} />
         </View>
       )}

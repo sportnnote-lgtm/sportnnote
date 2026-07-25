@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Card, SelectChip, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { useTournament, useTournamentById, useStandings } from '../data/hooks';
@@ -23,16 +23,6 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 const MEDALS = ['🥇', '🥈', '🥉'];
 const TIER = ['#FFD54A', '#C0C7D0', '#E8A15D']; // gold · silver · bronze
 const tierColor = (i: number): string | null => (i < 3 ? TIER[i] : null);
-
-/** A friendly placeholder when a section has no data yet. */
-function EmptyState({ icon, text }: { icon: string; text: string }) {
-  return (
-    <View style={st.empty}>
-      <Text style={st.emptyIcon}>{icon}</Text>
-      <Text style={[textStyles.muted, { textAlign: 'center' }]}>{text}</Text>
-    </View>
-  );
-}
 
 export default function StandingsScreen() {
   const nav = useNavigation<Nav>();
@@ -78,7 +68,7 @@ export default function StandingsScreen() {
             <Text style={[st.num, st.headText]}>Pts</Text>
           </View>
           {teams.length === 0 ? (
-            <EmptyState icon="🏁" text={`No completed ${getSport(sport).name.toLowerCase()} matches yet.\nThe table fills in as results come in.`} />
+            <EmptyState icon="🏁" title={`No completed ${getSport(sport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
           ) : (
             (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => {
               const tier = tierColor(i);
@@ -116,7 +106,7 @@ export default function StandingsScreen() {
           expanded={showLeaders}
         />
         {leaders.length === 0 ? (
-          <Card><EmptyState icon="⭐" text={`No ${lead.label} recorded yet.\nLeaders appear here once players are scored.`} /></Card>
+          <Card><EmptyState icon="⭐" title={`No ${lead.label} recorded yet`} hint="Leaders appear here once players are scored." compact /></Card>
         ) : (
           (showLeaders ? leaders : leaders.slice(0, SECTION_CAP)).map((l, i) => {
             const tier = tierColor(i);
@@ -167,6 +157,4 @@ const st = StyleSheet.create({
   pts: { fontWeight: '900', color: theme.colors.primary },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },
-  empty: { alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(4) },
-  emptyIcon: { fontSize: 28 },
 });

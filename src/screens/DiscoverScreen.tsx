@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { ConnectBoard } from '../components/ConnectBoard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -94,7 +94,7 @@ export default function DiscoverScreen() {
           {filtering ? ' found' : ' · ranked by activity'}
         </Text>
 
-        {searching ? <LoadingState label="Searching players…" /> : results.length === 0 ? <Text style={textStyles.muted}>No players match. Try a different search.</Text> : null}
+        {searching ? <LoadingState label="Searching players…" /> : results.length === 0 ? <EmptyState icon="🔍" title="No players match" hint="Try a different name or spelling." /> : null}
 
         {(showAllResults ? results : results.slice(0, SECTION_CAP)).map(({ player, stats }, i) => (
           <TouchableOpacity accessibilityRole="button" key={player.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}>

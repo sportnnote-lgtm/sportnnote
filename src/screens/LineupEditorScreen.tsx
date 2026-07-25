@@ -11,7 +11,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
 import { formationSlots, FORMATION_NAMES } from '../sports/football/formation';
@@ -142,7 +142,7 @@ export default function LineupEditorScreen() {
           <View style={st.pickBox}>
             <Text style={textStyles.muted}>Pick a player for {slots[selected].position}:</Text>
             <View style={st.chips}>
-              {roster.length === 0 && <Text style={textStyles.muted}>No players for this team yet.</Text>}
+              {roster.length === 0 && <EmptyState icon="👥" title="No players for this team yet" compact />}
               {roster.map((p) => (
                 <SelectChip key={p.id} label={p.fullName} active={assignedIds.has(p.id)} onPress={() => assign(p)} />
               ))}

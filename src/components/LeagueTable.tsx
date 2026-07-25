@@ -4,7 +4,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, textStyles } from './ui';
+import { Card, EmptyState, textStyles } from './ui';
 import type { TeamStanding } from '../data/standings';
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -18,7 +18,7 @@ export function LeagueTable({
   onTeam?: (teamId: string) => void;
   emptyLabel?: string;
 }) {
-  if (teams.length === 0) return <Text style={textStyles.muted}>{emptyLabel}</Text>;
+  if (teams.length === 0) return <EmptyState icon="🏁" title={emptyLabel} compact />;
   return (
     <Card style={{ gap: theme.spacing(1) }}>
       {teams.map((t, i) => (

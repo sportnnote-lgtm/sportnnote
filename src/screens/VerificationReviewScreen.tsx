@@ -7,7 +7,7 @@ import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { Button, Card, Pill, TextField, ScreenTitle, textStyles } from '../components/ui';
+import { Button, Card, Pill, TextField, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getPendingVerifications, reviewVerification, SUPPORT_EMAIL } from '../data/repos';
 import { notify } from '../core/notifications';
@@ -68,7 +68,7 @@ export default function VerificationReviewScreen() {
           <SectionHeader title="Pending submissions" count={pending.length} onSeeAll={pending.length > SECTION_CAP ? () => setShowPending((v) => !v) : undefined} expanded={showPending} />
         )}
         {pending.length === 0 ? (
-          <Card><Text style={textStyles.muted}>No pending submissions. 🎉</Text></Card>
+          <Card><EmptyState icon="🎉" title="No pending submissions" hint="You're all caught up." compact /></Card>
         ) : (
           (showPending ? pending : pending.slice(0, SECTION_CAP)).map((p) => {
             const age = ageFromDob(p.dob);

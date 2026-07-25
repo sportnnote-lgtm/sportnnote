@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, LoadingState, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, Button, LoadingState, ScreenTitle, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
@@ -103,7 +103,7 @@ export default function TeamProfileScreen() {
           expanded={showSquad}
         />
         {squad.length === 0 ? (
-          <Text style={textStyles.muted}>No players listed for this team.</Text>
+          <EmptyState icon="👥" title="No players listed for this team" compact />
         ) : (
           (showSquad ? squad : squad.slice(0, SECTION_CAP)).map((p) => (
             <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>

@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, ScreenTitle, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -120,10 +120,12 @@ export default function TryNewSportScreen() {
               ))
             ) : (
               <Card>
-                <Text style={textStyles.muted}>
-                  No upcoming {getSport(chosen).name.toLowerCase()} games from teams or tournaments you follow yet.
-                  Follow some from Discover to see their fixtures here.
-                </Text>
+                <EmptyState
+                  icon={getSport(chosen).icon}
+                  title={`No upcoming ${getSport(chosen).name.toLowerCase()} games yet`}
+                  hint="Follow teams or tournaments from Discover to see their fixtures here."
+                  compact
+                />
               </Card>
             )}
           </>

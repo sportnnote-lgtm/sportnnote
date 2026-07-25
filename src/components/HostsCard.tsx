@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, textStyles } from './ui';
+import { Card, EmptyState, textStyles } from './ui';
 
 export function HostsCard({
   hostIds,
@@ -35,7 +35,7 @@ export function HostsCard({
       <Text style={textStyles.muted}>{subtitle}</Text>
 
       {hostIds.length === 0 ? (
-        <Text style={textStyles.muted}>No hosts yet.</Text>
+        <EmptyState icon="🤝" title="No hosts yet" compact />
       ) : (
         hostIds.map((id) => (
           <View key={id} style={st.row}>

@@ -8,7 +8,7 @@ import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { Card, Button, TextField, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Button, TextField, ScreenTitle, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getTeamSummary, getPlayers, createPlayer, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
 import { useCaptainships } from '../data/hooks';
@@ -112,7 +112,7 @@ export default function SquadScreen() {
 
         <Text style={[textStyles.h3, st.section]}>Squad</Text>
         {squad.length === 0 ? (
-          <Text style={textStyles.muted}>No players yet — add them above or via the invite link.</Text>
+          <EmptyState icon="👥" title="No players yet" hint="Add them above or share the invite link." compact />
         ) : (
           squad.map((p) => {
             const isCap = leaders.captainId === p.id;

@@ -9,7 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById } from '../data/hooks';
@@ -170,7 +170,7 @@ export default function GenerateFixturesScreen() {
 
         {drafts && (
           drafts.length === 0 ? (
-            <Text style={textStyles.muted}>No matches generated — pick more teams.</Text>
+            <EmptyState icon="📋" title="No matches generated" hint="Pick more teams to build the fixtures." compact />
           ) : (
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
               <Text style={textStyles.h3}>{drafts.length} match{drafts.length === 1 ? '' : 'es'} — review &amp; adjust</Text>

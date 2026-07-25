@@ -8,7 +8,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
@@ -105,7 +105,7 @@ export default function SportProfileScreen() {
         )}
 
         {!bySport ? (
-          <Text style={textStyles.muted}>{emptyMsg}</Text>
+          <EmptyState icon={plugin.icon} title={emptyMsg} compact />
         ) : (
           <View style={st.statGrid}>
             <Stat value={String(bySport.matches)} label="Matches" />

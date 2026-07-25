@@ -9,7 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';

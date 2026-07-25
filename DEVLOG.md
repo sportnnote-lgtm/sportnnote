@@ -50,6 +50,28 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 4: empty & loading states app-wide (workstream C) · SHIPPED + VERIFIED
+
+Across the app, "nothing here yet" was a lone grey sentence — which reads as broken, not empty.
+Made one shared component and swept every list.
+
+- **Shared `EmptyState`** (`components/ui.tsx`, sits next to `LoadingState`): an icon, a primary
+  line, and an optional hint about when the section will fill in; a `compact` variant for use inside
+  cards/tables. Standings' local copy was removed in favour of it.
+- **Swept ~25 sites** across ~18 files to the shared component with a contextual icon + hint:
+  Matches (live/upcoming/completed), Home upcoming, Notifications, Calendar (day + agenda),
+  Discover players, Team/Squad/MatchSquad/CricketLineup/LineupEditor squads, Tournament matches,
+  OrganizerDashboard fixtures, SportProfile stats, TryNewSport, GenerateFixtures, the Verification
+  console ("🎉 all caught up"), Organization teams/players/events, and the shared components
+  LeagueTable, StatLeaderRail, HostsCard, ConnectBoard. Small inline instructional hints
+  (mid-builder guidance like "tap players below") were intentionally left as text.
+- **Verified live (demo, mobile 375px):** Discover → People → search "zzzzqqq" shows the shared
+  empty state (🔍 · "No players match" · "Try a different name or spelling."). Typecheck clean;
+  65/65 tests.
+- **Noticed (pre-existing, flagged separately):** RN-web logs a nested-`<button>` hydration warning
+  on Discover — a `TouchableOpacity` inside another `TouchableOpacity` in the tournament/Connect
+  rows. Unrelated to this batch (EmptyState is View+Text); tracked as its own fix.
+
 ### 2026-07-25 — UI design pass, batch 3: Standings as a results board (workstream C) · SHIPPED + VERIFIED
 
 The standings table worked but read flat — ranks 1–4 were identical grey, nothing celebrated the

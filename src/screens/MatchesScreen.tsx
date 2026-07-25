@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { LoadingState, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, LoadingState, ScreenTitle, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { useMatches } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -94,9 +94,11 @@ export default function MatchesScreen() {
         {loading ? (
           <LoadingState label="Loading matches…" />
         ) : list.length === 0 ? (
-          <Text style={textStyles.muted}>
-            {tab === 'live' ? 'No matches are live right now.' : tab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}
-          </Text>
+          <EmptyState
+            icon={tab === 'live' ? '📡' : tab === 'upcoming' ? '📅' : '🏁'}
+            title={tab === 'live' ? 'No matches are live right now' : tab === 'upcoming' ? 'No upcoming matches' : 'No completed matches yet'}
+            hint={tab === 'live' ? 'Live games will show here the moment scoring starts.' : tab === 'upcoming' ? 'Scheduled games will appear here.' : 'Finished games land here once scored.'}
+          />
         ) : (
           list.map((m) => <MatchCard key={m.id} match={m} onPress={() => open(m)} />)
         )}

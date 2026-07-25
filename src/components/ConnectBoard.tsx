@@ -7,7 +7,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, SelectChip, textStyles } from './ui';
+import { Card, Pill, Button, SelectChip, EmptyState, textStyles } from './ui';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useListings } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -70,7 +70,7 @@ export function ConnectBoard() {
       </ScrollView>
 
       {listings.length === 0 && (
-        <Text style={textStyles.muted}>No posts here yet. Be the first — tap “Post a listing”.</Text>
+        <EmptyState icon="📣" title="No posts here yet" hint="Be the first — tap “Post a listing”." compact />
       )}
 
       {listings.map((l) => {

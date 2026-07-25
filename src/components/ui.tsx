@@ -29,6 +29,38 @@ const loadingStyles = StyleSheet.create({
   label: { color: theme.colors.textMuted, fontSize: theme.font.small },
 });
 
+/** A friendly placeholder for a section with no data yet — an icon, a primary
+ *  line, and an optional hint about when it'll fill in. Replaces the bare grey
+ *  "No … yet" sentences so an empty screen still feels intentional, not broken.
+ *  `compact` tightens the padding for use inside a card/table. */
+export function EmptyState({
+  icon,
+  title,
+  hint,
+  compact = false,
+}: {
+  icon?: string;
+  title: string;
+  hint?: string;
+  compact?: boolean;
+}) {
+  return (
+    <View style={[emptyStyles.wrap, compact && emptyStyles.compact]}>
+      {icon ? <Text style={emptyStyles.icon}>{icon}</Text> : null}
+      <Text style={emptyStyles.title}>{title}</Text>
+      {hint ? <Text style={emptyStyles.hint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  wrap: { alignItems: 'center', justifyContent: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(6), paddingHorizontal: theme.spacing(4) },
+  compact: { paddingVertical: theme.spacing(4) },
+  icon: { fontSize: 30 },
+  title: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', textAlign: 'center' },
+  hint: { color: theme.colors.textMuted, fontSize: theme.font.small, textAlign: 'center', lineHeight: theme.font.small * 1.4 },
+});
+
 export function Card({
   children,
   style,

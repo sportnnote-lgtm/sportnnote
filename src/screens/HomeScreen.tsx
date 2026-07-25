@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, LoadingState, Pill, SelectChip, textStyles } from '../components/ui';
+import { EmptyState, Card, LoadingState, Pill, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { VoiceNav } from '../components/VoiceNav';
@@ -187,7 +187,7 @@ export default function HomeScreen() {
         ) : upcoming.length ? (
           upcoming.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         ) : (
-          <Text style={textStyles.muted}>Nothing scheduled.</Text>
+          <EmptyState icon="📅" title="Nothing scheduled" hint="Upcoming matches will show up here." compact />
         )}
 
         {/* Explore a sport — the sports the user has signed up for, plus a path

@@ -12,7 +12,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, Card, Pill, SelectChip, TextField, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, Card, Pill, SelectChip, TextField, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LogoPicker } from '../components/LogoPicker';
 import { DateField } from '../components/DateTimeField';
@@ -384,7 +384,7 @@ export default function OrganizationScreen() {
               expanded={showCurrentEvents}
             />
             {currentEvents.length === 0 ? (
-              <Text style={textStyles.muted}>No ongoing or upcoming events.</Text>
+              <EmptyState icon="📅" title="No ongoing or upcoming events" compact />
             ) : (
               (showCurrentEvents ? currentEvents : currentEvents.slice(0, SECTION_CAP)).map(renderEvent)
             )}
@@ -395,7 +395,7 @@ export default function OrganizationScreen() {
               expanded={showPastEvents}
             />
             {pastEventsByYear.length === 0 ? (
-              <Text style={textStyles.muted}>No past events.</Text>
+              <EmptyState icon="📅" title="No past events" compact />
             ) : (
               pastEventsByYear.map(([year, list]) => (
                 <View key={year} style={{ gap: theme.spacing(2) }}>
@@ -853,7 +853,7 @@ function OrgTeams({
       )}
 
       {teams.length === 0 ? (
-        <Text style={textStyles.muted}>No teams yet.{canEdit ? ' Create one and pick its roster.' : ''}</Text>
+        <EmptyState icon="🛡️" title="No teams yet" hint={canEdit ? 'Create one and pick its roster.' : undefined} compact />
       ) : (
         (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t) => (
           <View key={t.id} style={{ gap: theme.spacing(2) }}>
@@ -963,7 +963,7 @@ function RosterEditor({
     <Card style={{ gap: theme.spacing(1) }}>
       <Text style={textStyles.muted}>Tap to add or remove · {roster.length} in squad</Text>
       {eligible.length === 0 ? (
-        <Text style={textStyles.muted}>No players for {getSport(team.sport).name} yet.</Text>
+        <EmptyState icon="👥" title={`No players for ${getSport(team.sport).name} yet`} compact />
       ) : (
         eligible.map((p) => {
           const inSquad = roster.includes(p.id);

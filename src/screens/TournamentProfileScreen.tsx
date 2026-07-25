@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { HostsCard } from '../components/HostsCard';
@@ -328,7 +328,7 @@ export default function TournamentProfileScreen() {
           </ScrollView>
         )}
         {(matchTab === 'upcoming' ? upcomingMatches : completedMatches).length === 0 ? (
-          <Text style={textStyles.muted}>{matchTab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}</Text>
+          <EmptyState icon={matchTab === 'upcoming' ? '📅' : '🏁'} title={matchTab === 'upcoming' ? 'No upcoming matches' : 'No completed matches yet'} compact />
         ) : (
           (() => {
             const list = matchTab === 'upcoming' ? upcomingMatches : completedMatches;
