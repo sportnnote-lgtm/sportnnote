@@ -168,23 +168,30 @@ export default function DiscoverScreen() {
         {(showAllTeams ? teams : teams.slice(0, SECTION_CAP)).map((t) => {
           const following = isFollowing('team', t.id);
           return (
-            <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>
-              <Card style={st.teamRow}>
+            // Row is a plain Card (View), not a button, so the two pressables
+            // below are siblings — RN-web won't nest one <button> in another.
+            <Card key={t.id} style={st.teamRow}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={st.teamOpen}
+                activeOpacity={0.85}
+                onPress={() => nav.navigate('Team', { teamId: t.id })}
+              >
                 <View style={[st.teamDot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={textStyles.body}>{t.name}</Text>
                   <Text style={textStyles.muted}>{t.sports.map((s) => getSport(s).icon).join(' ')}</Text>
                 </View>
-                <TouchableOpacity accessibilityRole="button"
-                  style={[st.followBtn, following && st.followBtnOn]}
-                  accessibilityState={{ selected: following }}
-                  onPress={() => toggle('team', t.id)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[st.followText, following && st.followTextOn]}>{following ? '★ Following' : '☆ Follow'}</Text>
-                </TouchableOpacity>
-              </Card>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button"
+                style={[st.followBtn, following && st.followBtnOn]}
+                accessibilityState={{ selected: following }}
+                onPress={() => toggle('team', t.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={[st.followText, following && st.followTextOn]}>{following ? '★ Following' : '☆ Follow'}</Text>
+              </TouchableOpacity>
+            </Card>
           );
         })}
           </>
@@ -211,6 +218,7 @@ const st = StyleSheet.create({
   sportDots: { flexDirection: 'row', gap: theme.spacing(1), marginTop: theme.spacing(1) },
   teamsHeader: { marginTop: theme.spacing(3) },
   teamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  teamOpen: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   teamDot: { width: 14, height: 14, borderRadius: 7 },
   followBtn: {
     paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3), borderRadius: theme.radius.pill,

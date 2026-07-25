@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, SelectChip, textStyles } from './ui';
+import { Card, Pill, Button, SelectChip, EmptyState, textStyles } from './ui';
 import { SectionHeader, SECTION_CAP } from './SectionHeader';
 import { ContactCard } from './ContactCard';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
@@ -59,7 +59,7 @@ export function ProfileView({
   if (!player || !allStats || !official || !friendly) {
     return (
       <View style={st.empty}>
-        <Text style={textStyles.muted}>No player profile found.</Text>
+        <EmptyState icon="🙋" title="No player profile found" hint="This account doesn’t have a player profile yet." />
       </View>
     );
   }

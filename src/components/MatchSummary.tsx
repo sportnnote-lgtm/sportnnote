@@ -4,7 +4,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, textStyles } from './ui';
+import { Card, EmptyState, textStyles } from './ui';
 import { useMask } from '../core/disputeMask';
 import { matchRatings, awardsFor, ratingStars, STAT_LABELS, type MatchRating } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
@@ -71,7 +71,7 @@ export function MatchSummary({
 
       <Text style={[textStyles.h3, { marginTop: theme.spacing(1) }]}>Player ratings · out of 5</Text>
       {players.length === 0 ? (
-        <Text style={textStyles.muted}>No individual stats recorded for this match.</Text>
+        <EmptyState icon="📊" title="No individual stats recorded for this match" compact />
       ) : (
         <Card>
           {players.map((p: MatchRating, i) => (

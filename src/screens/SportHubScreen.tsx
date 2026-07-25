@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, ScreenTitle, textStyles } from '../components/ui';
+import { Button, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LeagueTable } from '../components/LeagueTable';
@@ -69,7 +69,7 @@ export default function SportHubScreen() {
 
         <SectionHeader title="📅 Schedule" count={upcoming.length} onSeeAll={upcoming.length > SECTION_CAP ? () => seeAll('upcoming') : undefined} />
         {upcoming.length === 0 ? (
-          <Text style={textStyles.muted}>No upcoming {plugin.name.toLowerCase()} matches.</Text>
+          <EmptyState icon="📅" title={`No upcoming ${plugin.name.toLowerCase()} matches`} compact />
         ) : (
           upcoming.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         )}

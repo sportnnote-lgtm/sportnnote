@@ -177,7 +177,7 @@ export default function HomeScreen() {
         ) : live.length ? (
           live.slice(0, SECTION_CAP).map((m) => <MatchCard key={m.id} match={m} onPress={() => openScorer(m)} />)
         ) : (
-          <Text style={textStyles.muted}>No live matches right now.</Text>
+          <EmptyState icon="📡" title="No live matches right now" hint="Live games appear here the moment scoring starts." compact />
         )}
 
         {/* Up next — top 5, "See all" opens the full upcoming list */}

@@ -58,13 +58,15 @@ Made one shared component and swept every list.
 - **Shared `EmptyState`** (`components/ui.tsx`, sits next to `LoadingState`): an icon, a primary
   line, and an optional hint about when the section will fill in; a `compact` variant for use inside
   cards/tables. Standings' local copy was removed in favour of it.
-- **Swept ~25 sites** across ~18 files to the shared component with a contextual icon + hint:
-  Matches (live/upcoming/completed), Home upcoming, Notifications, Calendar (day + agenda),
-  Discover players, Team/Squad/MatchSquad/CricketLineup/LineupEditor squads, Tournament matches,
-  OrganizerDashboard fixtures, SportProfile stats, TryNewSport, GenerateFixtures, the Verification
-  console ("🎉 all caught up"), Organization teams/players/events, and the shared components
-  LeagueTable, StatLeaderRail, HostsCard, ConnectBoard. Small inline instructional hints
-  (mid-builder guidance like "tap players below") were intentionally left as text.
+- **Swept ~30 sites** across ~20 files to the shared component with a contextual icon + hint:
+  Matches (live/upcoming/completed), Home (both live & upcoming sections), Notifications, Calendar
+  (day + agenda), Discover players, SportHub schedule, Team/Squad/MatchSquad/CricketLineup/
+  LineupEditor squads, Tournament matches, OrganizerDashboard fixtures, SportProfile stats,
+  TryNewSport, GenerateFixtures, MatchSummary player ratings, the whole-profile "not found" state,
+  the Verification console ("🎉 all caught up"), Organization teams/players/events, and the shared
+  components LeagueTable, StatLeaderRail, HostsCard, ConnectBoard. Small inline instructional hints
+  (mid-builder guidance like "tap players below", tiny field values like "No contact added") were
+  intentionally left as text.
 - **Verified live (demo, mobile 375px):** Discover → People → search "zzzzqqq" shows the shared
   empty state (🔍 · "No players match" · "Try a different name or spelling."). Typecheck clean;
   65/65 tests.
