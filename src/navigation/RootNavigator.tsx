@@ -44,6 +44,7 @@ import LineupEditorScreen from '../screens/LineupEditorScreen';
 import CricketLineupScreen from '../screens/CricketLineupScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import MatchSquadScreen from '../screens/MatchSquadScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import type { RootStackParamList, TabParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -162,6 +163,11 @@ export default function RootNavigator() {
               name="NotificationPrefs"
               component={NotificationPrefsScreen}
               options={{ ...stackScreenOpts, title: 'Notifications' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ ...stackScreenOpts, title: 'Settings' }}
             />
             <Stack.Screen
               name="PlayerProfile"

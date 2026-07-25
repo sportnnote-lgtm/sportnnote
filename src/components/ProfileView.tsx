@@ -1,13 +1,11 @@
 /** Data-driven player profile, shared by the Profile tab and PlayerProfile
  *  screen. Stays concise: header, follow, overall stats, and a tappable
  *  per-sport list. Deep per-sport stats/details live on SportProfileScreen. */
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, Pill, Button, SelectChip, textStyles } from './ui';
 import { SectionHeader, SECTION_CAP } from './SectionHeader';
-import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
-import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/time';
 import { ContactCard } from './ContactCard';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
 import { updatePlayer, verifyGuardianContact, submitVerificationDoc, SUPPORT_EMAIL } from '../data/repos';
@@ -23,33 +21,22 @@ import type { Player, SportId } from '../core/types';
 
 export function ProfileView({
   playerId,
-  onSignOut,
   follow,
   onOpenSport,
-  onOpenFollowing,
-  onOpenNotifications,
-  onJoinTeam,
   onEditProfile,
   onOpenOrg,
-  onOpenVerificationReview,
+  onOpenSettings,
 }: {
   playerId: string | null;
-  onSignOut?: () => void;
   follow?: { following: boolean; onToggle: () => void };
   /** open the dedicated per-sport profile page */
   onOpenSport?: (sport: SportId) => void;
-  /** own profile: open the "Following" list */
-  onOpenFollowing?: () => void;
-  /** own profile: open notification preferences (reminder timers) */
-  onOpenNotifications?: () => void;
-  /** own profile: join a team with an invite code */
-  onJoinTeam?: () => void;
   /** own profile: edit your own details */
   onEditProfile?: () => void;
   /** open an organization the player belongs to */
   onOpenOrg?: (orgId: string) => void;
-  /** support: open the verification review console */
-  onOpenVerificationReview?: () => void;
+  /** own profile: open the Settings home (preferences, account, sign out) */
+  onOpenSettings?: () => void;
 }) {
   const { player, stats: allStats, official, friendly } = usePlayerProfile(playerId);
   const orgs = useOrganizations();
@@ -272,58 +259,12 @@ export function ProfileView({
         </>
       )}
 
-      {onEditProfile && <ReminderPrefsCard onOpen={onOpenNotifications} />}
-      {onEditProfile && <TimeZoneCard />}
-
-      {onOpenFollowing && (
-        <Button label="★ Following" variant="ghost" onPress={onOpenFollowing} style={{ marginTop: theme.spacing(2) }} />
-      )}
-      {onJoinTeam && <Button label="🎟️ Join a team with a code" variant="ghost" onPress={onJoinTeam} />}
-      {onOpenVerificationReview && <Button label="🛡️ Support · Review verifications" variant="ghost" onPress={onOpenVerificationReview} />}
-      {onSignOut && (
-        <Button label="Sign out" variant="ghost" onPress={onSignOut} />
+      {/* App/account preferences (reminders, timezone, sign out, support) now
+          live on the dedicated Settings screen instead of trailing the profile. */}
+      {onOpenSettings && (
+        <Button label="⚙  Settings" variant="ghost" onPress={onOpenSettings} style={{ marginTop: theme.spacing(2) }} />
       )}
     </ScrollView>
-  );
-}
-
-/** Pick the timezone all match times display in — default IST, changeable when
- *  you travel. A London game then shows in your zone, and yours in theirs. */
-function TimeZoneCard() {
-  const tz = useUserTimeZone();
-  const [open, setOpen] = useState(false);
-  return (
-    <Card style={{ gap: theme.spacing(2) }}>
-      <View style={st.remHead}>
-        <Text style={textStyles.h3}>🕑 Time zone</Text>
-        <Text style={st.remEdit} onPress={() => setOpen((o) => !o)}>{open ? 'Done' : 'Change ›'}</Text>
-      </View>
-      <Text style={textStyles.muted}>Match times show in your timezone · {zoneLabel(tz)}</Text>
-      {open && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), marginTop: theme.spacing(1) }}>
-          {TIME_ZONES.map((z) => (
-            <SelectChip key={z.id} label={z.label} active={tz === z.id} onPress={() => timeZoneStore.set(z.id)} />
-          ))}
-        </View>
-      )}
-    </Card>
-  );
-}
-
-/** Own-profile summary of reminder timers; tap to open full notification prefs. */
-function ReminderPrefsCard({ onOpen }: { onOpen?: () => void }) {
-  const selected = useSyncExternalStore(reminderPrefsStore.subscribe, reminderPrefsStore.getSnapshot);
-  const summary = selected.length ? selected.map((m) => formatLead(m).replace(' before', '')).join(' · ') : 'Off';
-  return (
-    <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onOpen} disabled={!onOpen}>
-      <Card style={{ gap: theme.spacing(1) }}>
-        <View style={st.remHead}>
-          <Text style={textStyles.h3}>🔔 Match reminders</Text>
-          {onOpen && <Text style={st.remEdit}>Edit ›</Text>}
-        </View>
-        <Text style={textStyles.muted}>Before matches you play or players you follow · {summary}</Text>
-      </Card>
-    </TouchableOpacity>
   );
 }
 
@@ -459,8 +400,6 @@ const st = StyleSheet.create({
   camIcon: { fontSize: 12 },
   tagRow: { flexDirection: 'row', gap: theme.spacing(2), marginTop: theme.spacing(2), flexWrap: 'wrap' },
   remindersOff: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
-  remHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  remEdit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
   statCard: { width: '30%', alignItems: 'center', gap: theme.spacing(1), flexGrow: 1 },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },

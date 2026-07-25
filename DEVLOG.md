@@ -50,6 +50,63 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — Gap-hunt batch 3: Settings home (P5) · SHIPPED + VERIFIED
+
+App/account controls (reminders, timezone, following, join-team, support console, sign out)
+used to trail the **bottom of the Profile scroll**, below every stat/team/community — there was
+no predictable "Settings" destination, and nowhere obvious to anchor Help & support.
+
+- **New `SettingsScreen`** (`src/screens/SettingsScreen.tsx`), reached from a **⚙ Settings**
+  button on the Profile header, registered as its own stack route. Grouped list:
+  - **Preferences** — Match reminders (with live summary → NotificationPrefs), Time zone
+    (inline expander, all 10 zones, current selection shown).
+  - **Account** — Edit profile, Following, Join a team with a code.
+  - **Support tools** — Review verifications (only for the `support` role).
+  - **Help** — Contact support (opens a `mailto:` to `SUPPORT_EMAIL`, pre-filled with app
+    version + handle). This is the anchor the upcoming AI-first support workstream will build on.
+  - Footer shows `Sportfolio v<version>`; **Sign out** hidden in demo mode.
+- **Profile slimmed to the player's record.** Removed the trailing settings block from
+  `ProfileView` (and the now-dead `TimeZoneCard`/`ReminderPrefsCard` + orphan styles); it now
+  ends with a single ⚙ Settings entry. `ProfileScreen` passes only profile-relevant props.
+- **Files:** `src/screens/SettingsScreen.tsx` (new), `src/components/ProfileView.tsx`,
+  `src/screens/ProfileScreen.tsx`, `src/navigation/{types,RootNavigator}.tsx`.
+- **Verified live (demo):** Profile → ⚙ Settings opens the grouped screen; timezone expander
+  shows all zones with IST selected; reminder summary reads "1 day · 1 hour · 15 min"; sign-out
+  correctly hidden in demo; no console errors. Typecheck clean; 45/45 tests.
+
+### 2026-07-25 — Gap-hunt batch 2: accessibility, honest sync errors, type safety · SHIPPED + VERIFIED
+
+Two engineering audits (accessibility, error surfacing) plus the pile of latent **type errors**
+they surfaced once `tsc` was actually run in the loop.
+
+- **E4 — accessibility (was 1 label across 225 touchables).** Fixed at the source: `Button`,
+  `SelectChip`, `TextField`, `ScreenTitle` (the shared primitives behind ~295 touch targets) now
+  carry role/label/state, so most of the app is covered by four edits. Hand-labelled every
+  icon-only control (Home's calendar/bell/handshake, the date-picker arrows & day cells, the
+  live-scoring tabs & scorer picker) and gave toggles/segments an `accessibilityState` so
+  voice-over announces "selected". **Verified live: 37/37 controls on Home expose a name.**
+- **E3 — honest offline vs. stuck sync.** The live-scoring outbox treated *every* sync failure
+  as "offline", so a backend that kept rejecting an event showed "saved — will sync when you
+  reconnect" **forever** while the match silently failed to persist. `matchOutbox` now separates
+  a real outage (device offline) from a stuck queue (failures on a working connection); after
+  repeated failures the banner says **"Can't sync right now"**, shows the error, and offers
+  **Retry**. Covered by `tests/match-outbox.test.mts` (6 tests). Files: `src/data/matchOutbox.ts`,
+  `src/screens/LiveScoringScreen.tsx`.
+- **Type safety — added `npm run typecheck` (+`check`); `tsc` had never run in the loop.** 14
+  pre-existing errors had accumulated, **two of them real bugs**:
+  - **Football added-time never appeared in extra time.** `stoppage` was keyed for halves 1–2
+    only, but ET is halves 3 & 4 → `stoppage[3]` was `undefined`, so the "enter added minutes"
+    prompt never showed in ET. Now keyed 1–4; event `half` widened to `1|2|3|4` end-to-end; the
+    per-half stats filter, voice commands and end-of-half nudge all handle ET; stats screen gains
+    **ET-1 / ET-2** chips once extra time is played.
+  - **Referenced-but-undefined styles.** kabaddi `ctrl.row` and ScheduleMatch `fieldPlaceholder`
+    were used but never defined — those rows lost their layout / the placeholder rendered at full
+    strength. Both added.
+  - Widened `FormatFieldOption.value` to allow `boolean` (tennis no-ad, badminton golden point,
+    volleyball cap); `Button.style` → `StyleProp<ViewStyle>`; fixed a `void includes(undefined)`
+    for friendlies with no tournament. `tests/` excluded from the app tsconfig (run by `node --test`).
+- **Verified:** typecheck clean; 45/45 tests; app renders, no console errors.
+
 ### 2026-07-10 — Gap-hunt batch 1: tests, loading states, unreachable screens · SHIPPED + VERIFIED
 
 First round of the standing **product + engineering gap hunt** (both hats in parallel). Audit found:
