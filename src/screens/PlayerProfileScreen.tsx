@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -7,7 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { ProfileView } from '../components/ProfileView';
 import { useAuth } from '../core/auth';
-import { useFollow } from '../data/hooks';
+import { useFollow, usePlayerProfile } from '../data/hooks';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function PlayerProfileScreen() {
@@ -16,6 +16,12 @@ export default function PlayerProfileScreen() {
   const { playerId } = route.params;
   const { profile } = useAuth();
   const { isFollowing, toggle } = useFollow(profile?.id);
+  const { player } = usePlayerProfile(playerId);
+
+  // Title the nav bar after the player, not a generic "Player".
+  useEffect(() => {
+    if (player) nav.setOptions({ title: player.fullName });
+  }, [nav, player?.fullName]);
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>

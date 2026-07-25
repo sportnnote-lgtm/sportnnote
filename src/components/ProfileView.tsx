@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, SelectChip, EmptyState, textStyles } from './ui';
+import { Card, Pill, Button, SelectChip, EmptyState, textStyles, plural } from './ui';
 import { SectionHeader, SECTION_CAP } from './SectionHeader';
 import { ContactCard } from './ContactCard';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
@@ -188,7 +188,7 @@ export function ProfileView({
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body}>{getSport(b.sport as SportId).name}</Text>
                 <Text style={textStyles.muted}>
-                  {b.matches} matches · {b.wins} wins
+                  {plural(b.matches, 'match', 'matches')} · {plural(b.wins, 'win')}
                 </Text>
                 {summary ? (
                   <Text style={st.summaryLine}>{summary}{partial ? '  ☁' : ''}</Text>

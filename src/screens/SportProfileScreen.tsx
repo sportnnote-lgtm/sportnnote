@@ -1,7 +1,7 @@
 /** Deep per-sport profile for one player: that sport's stats, match history,
  *  and sport-specific details (e.g. football position/foot/teams, editable on
  *  your own profile). Reached by tapping a sport on the main profile. */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -44,6 +44,12 @@ export default function SportProfileScreen() {
 
   const [canEdit, setCanEdit] = useState(false);
   const [openStat, setOpenStat] = useState<string | null>(null);
+
+  // Name the nav bar after whose profile this is, so the header reads as a
+  // breadcrumb (⟨ Aarav Mehta) rather than a generic "Sport".
+  useEffect(() => {
+    if (player) nav.setOptions({ title: player.fullName });
+  }, [nav, player?.fullName]);
   useFocusEffect(
     useCallback(() => {
       let on = true;
@@ -94,7 +100,7 @@ export default function SportProfileScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
-        <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={player.fullName} />
+        <ScreenTitle title={`${plugin.icon} ${plugin.name}`} />
 
         {hasSplit && (
           <View style={st.scopeRow}>
@@ -107,23 +113,35 @@ export default function SportProfileScreen() {
         {!bySport ? (
           <EmptyState icon={plugin.icon} title={emptyMsg} compact />
         ) : (
-          <View style={st.statGrid}>
-            <Stat value={String(bySport.matches)} label="Matches" />
-            <Stat value={String(bySport.wins)} label="Wins" />
-            <Stat value={`${Math.round((bySport.wins / Math.max(1, bySport.matches)) * 100)}%`} label="Win rate" />
-            {Object.entries(bySport.totals).map(([k, v]) => {
-              const cov = statCoverage(stats.recent, sport, k);
-              // only flag when this stat was tracked in fewer games than the player played
-              const partial = cov.tracked < cov.total ? cov : undefined;
-              return (
-                <Stat
-                  key={k} value={String(v)} label={label(k)}
-                  coverage={partial} open={openStat === k}
-                  onToggle={() => setOpenStat(openStat === k ? null : k)}
-                />
-              );
-            })}
-          </View>
+          <>
+            {/* Headline record — accent-coloured so the eye lands here first. */}
+            <View style={st.statGrid}>
+              <Stat value={String(bySport.matches)} label="Matches" />
+              <Stat value={String(bySport.wins)} label="Wins" />
+              <Stat value={`${Math.round((bySport.wins / Math.max(1, bySport.matches)) * 100)}%`} label="Win rate" />
+            </View>
+            {/* Counting stats — a second, quieter tier so they read as detail,
+                not as more headline numbers. */}
+            {Object.keys(bySport.totals).length > 0 && (
+              <>
+                <Text style={st.totalsLabel}>Totals · this sport</Text>
+                <View style={st.statGrid}>
+                  {Object.entries(bySport.totals).map(([k, v]) => {
+                    const cov = statCoverage(stats.recent, sport, k);
+                    // only flag when this stat was tracked in fewer games than the player played
+                    const partial = cov.tracked < cov.total ? cov : undefined;
+                    return (
+                      <Stat
+                        key={k} value={String(v)} label={label(k)} tone="neutral"
+                        coverage={partial} open={openStat === k}
+                        onToggle={() => setOpenStat(openStat === k ? null : k)}
+                      />
+                    );
+                  })}
+                </View>
+              </>
+            )}
+          </>
         )}
 
         <Card style={{ gap: theme.spacing(2) }}>
@@ -204,15 +222,15 @@ export default function SportProfileScreen() {
 }
 
 function Stat({
-  value, label, coverage, open, onToggle,
+  value, label, coverage, open, onToggle, tone = 'accent',
 }: {
-  value: string; label: string;
+  value: string; label: string; tone?: 'accent' | 'neutral';
   coverage?: { tracked: number; total: number }; open?: boolean; onToggle?: () => void;
 }) {
   const inner = (
     <Card style={st.statCardInner}>
       {coverage ? <Text style={st.cloud}>☁</Text> : null}
-      <Text style={st.statValue}>{value}</Text>
+      <Text style={[st.statValue, tone === 'neutral' && st.statValueNeutral]}>{value}</Text>
       <Text style={textStyles.muted}>{label}</Text>
       {coverage && open ? (
         <Text style={st.coverageNote}>tracked in {coverage.tracked} of {coverage.total} games</Text>
@@ -235,6 +253,8 @@ const st = StyleSheet.create({
   statCardInner: { width: '100%', alignItems: 'center', gap: theme.spacing(1) },
   statCardWrap: { width: '30%', flexGrow: 1 },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
+  statValueNeutral: { color: theme.colors.text },
+  totalsLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(1) },
   cloud: { position: 'absolute', top: theme.spacing(2), right: theme.spacing(2), fontSize: 12, color: theme.colors.accent },
   coverageNote: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', textAlign: 'center' },
   fbHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -13,6 +13,12 @@ import {
 } from 'react-native';
 import { theme } from '../core/theme';
 
+/** Count + correctly-pluralized noun, e.g. plural(1,'match','matches') → "1 match".
+ *  Keeps stat lines grammatical ("1 match · 1 win", not "1 matches · 1 wins"). */
+export function plural(n: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
 /** Shown while data is still being fetched, so a list never flashes its
  *  "nothing here yet" empty state before the real content arrives. */
 export function LoadingState({ label = 'Loading…' }: { label?: string }) {

@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 11: Player & SportProfile depth (workstream C) · SHIPPED + VERIFIED
+
+A second, deeper pass on the profile pages (batch 7 did the avatar ring + win/loss history).
+
+- **Stat hierarchy on SportProfile.** The per-sport page rendered the *record* (Matches / Wins /
+  Win rate) and every *counting total* (Goals, Assists, Shots…) as identical loud-green tiles, so
+  the eye couldn't tell "how they did" from "what they tallied". Now the record stays green as the
+  headline, and the counting stats sit under a **"TOTALS · THIS SPORT"** label with neutral-white
+  numbers — a clear second tier. Partial-coverage clouds (☁) preserved.
+- **Correct nav-bar titles.** SportProfile's header said a generic "Sport"; PlayerProfile said
+  "Player". Both now set the header to the **player's name** (breadcrumb: ⟨ Aarav Mehta), and the
+  now-redundant in-content subtitle on SportProfile was dropped (the big "⚽ Football" title stays).
+- **Grammar: pluralization.** Added a tiny `plural(n, singular, plural?)` helper to `ui.tsx` and
+  used it on the profile's by-sport line, so single-match sports read "**1 match · 1 win**" instead
+  of "1 matches · 1 wins".
+- **Files:** `src/components/ui.tsx` (new `plural`), `src/components/ProfileView.tsx`,
+  `src/screens/SportProfileScreen.tsx`, `src/screens/PlayerProfileScreen.tsx`.
+- **Verified live (demo, mobile 375px):** Aarav's profile shows "1 match · 1 win" for Badminton &
+  Tennis; his Football SportProfile shows the green record row, the "TOTALS · THIS SPORT" divider,
+  white counting tiles with coverage clouds, and the nav bar titled "Aarav Mehta". Typecheck clean;
+  69/69 tests; console clean.
+
+---
+
 ### 2026-07-25 — Onboarding content (D): wire the long-form guides into the app · SHIPPED + VERIFIED
 
 The Help centre only served the short KB stubs; the fuller articles lived only in
