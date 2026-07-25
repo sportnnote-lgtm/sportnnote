@@ -85,8 +85,8 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={st.content}>
         {/* Header: wordmark · profile · notifications */}
         <View style={st.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={st.wordmark}>Sportfolio</Text>
+          <View style={st.brand}>
+            <Text style={st.wordmark}>Sport<Text style={st.wordmarkAccent}>folio</Text></Text>
             <Text style={textStyles.muted}>Your sporting world, live.</Text>
           </View>
           <VoiceNav matches={matches} onOpenMatch={openScorer} />
@@ -192,7 +192,7 @@ export default function HomeScreen() {
 
         {/* Explore a sport — the sports the user has signed up for, plus a path
             into the ones they haven't. */}
-        <Text style={[textStyles.h3, st.section]}>🎯 Explore a sport</Text>
+        <SectionHeader title="🎯 Explore a sport" />
         <Text style={textStyles.muted}>
           {mySports.length ? 'Your sports — schedule, standings & stats.' : 'Sports you sign up for will show up here.'}
         </Text>
@@ -234,8 +234,10 @@ export default function HomeScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
-  header: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
+  brand: { flex: 1, gap: theme.spacing(1) },
   wordmark: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: '900', letterSpacing: -0.5 },
+  wordmarkAccent: { color: theme.colors.primary },
   iconBtn: {
     width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
     backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
@@ -253,7 +255,6 @@ const st = StyleSheet.create({
   tourCard: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   statusRow: { flexDirection: 'row', marginTop: theme.spacing(1) },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h2, fontWeight: '700' },
-  section: { marginTop: theme.spacing(3) },
   sportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   sportTile: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),

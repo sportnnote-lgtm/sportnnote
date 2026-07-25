@@ -67,6 +67,23 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 6: Home header & section hierarchy (workstream C) · SHIPPED + VERIFIED
+
+Polished the top of the app and made its section headers consistent.
+
+- **Branded wordmark.** "Sportfolio" is now two-tone — white "Sport" + pitch-green "folio" — giving
+  the header real product identity instead of plain white text.
+- **Header layout.** Aligned the header to the top and let the full tagline show; a brief
+  `numberOfLines={1}` experiment truncated it to "Your sporting world, …" which read as broken, so
+  the established tagline stays intact with the icon row aligned top-right.
+- **Consistent section headers.** "🎯 Explore a sport" was a raw `<Text h3>` with its own spacing;
+  it now uses the shared `SectionHeader` like "🔴 Live now" and "📅 Up next", so all three sections
+  share one title style and top-margin rhythm.
+- **Files:** `src/screens/HomeScreen.tsx` only.
+- **Verified live (demo, mobile 375px):** the two-tone wordmark renders; the tagline shows in full
+  with icons aligned beside it; "Explore a sport" matches the other section headers. Typecheck
+  clean; 65/65 tests.
+
 ### 2026-07-25 — UI design pass, batch 5: Tournament & Team profiles (workstream C) · SHIPPED + VERIFIED
 
 Brought the two high-traffic profile pages into the design language. The big win was consistency:
