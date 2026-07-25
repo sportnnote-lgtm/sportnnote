@@ -9,7 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -178,7 +178,7 @@ export default function ScheduleMatchScreen() {
           Add a YouTube or Twitch link and it shows at the top of the live match. You can also set or change it later from the match’s Info tab.
         </Text>
 
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button
           label={
             busy
@@ -201,7 +201,7 @@ function SportPicker({ sport, onPick }: { sport: SportId | null; onPick: (s: Spo
   const cur = sport ? getSport(sport) : null;
   return (
     <View style={{ gap: theme.spacing(2) }}>
-      <Text style={textStyles.muted}>Sport</Text>
+      <FieldLabel>Sport</FieldLabel>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={cur ? `Sport: ${cur.name}` : 'Select a sport'} accessibilityState={{ expanded: open }} activeOpacity={0.8} style={st.field} onPress={() => setOpen((o) => !o)}>
         <Text style={[st.fieldValue, !cur && st.fieldPlaceholder]}>{cur ? `${cur.icon}  ${cur.name}` : 'Select a sport'}</Text>
         <Text style={st.caret}>{open ? '▴' : '▾'}</Text>
@@ -304,7 +304,6 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
   tinyLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   // compact select field + dropdown (sport picklist)
   field: {

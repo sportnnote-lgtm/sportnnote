@@ -9,7 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById } from '../data/hooks';
@@ -166,7 +166,7 @@ export default function GenerateFixturesScreen() {
         </View>
 
         <Button label="⚡ Generate preview" variant="ghost" onPress={generate} />
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
 
         {drafts && (
           drafts.length === 0 ? (
@@ -200,7 +200,6 @@ const st = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   flex: { flex: 1 },
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
   draftCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
 });

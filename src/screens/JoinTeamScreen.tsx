@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Button, TextField, ScreenTitle, textStyles } from '../components/ui';
+import { Card, Button, TextField, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
 import { getInvite, claimInvite } from '../data/repos';
 import { captainStore } from '../data/captainStore';
@@ -53,7 +53,7 @@ export default function JoinTeamScreen() {
         <ScreenTitle title="Join a team" subtitle="Enter the invite code your organizer shared" />
 
         <TextField label="Invite code" value={code} onChange={setCode} placeholder="JOIN-1001" autoCapitalize="characters" />
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button label={busy ? 'Checking…' : 'Find team'} onPress={find} />
 
         {invite && (
@@ -76,6 +76,5 @@ export default function JoinTeamScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
   note: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic', marginTop: theme.spacing(2) },
 });

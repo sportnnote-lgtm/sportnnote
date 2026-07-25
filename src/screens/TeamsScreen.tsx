@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useTeams } from '../data/hooks';
@@ -90,7 +90,7 @@ export default function TeamsScreen() {
             ))}
           </View>
 
-          {error && <Text style={st.error}>{error}</Text>}
+          <FormError message={error} />
           <Button label={busy ? 'Adding…' : 'Add team'} onPress={add} />
         </Card>
 
@@ -166,5 +166,4 @@ const st = StyleSheet.create({
   teamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   chev: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '800' },
   dot: { width: 14, height: 14, borderRadius: 7 },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
 });

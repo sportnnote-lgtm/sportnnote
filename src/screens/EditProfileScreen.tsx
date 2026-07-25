@@ -7,7 +7,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, Card, textStyles } from '../components/ui';
+import { Button, TextField, SelectChip, ScreenTitle, Card, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { SPORT_SIDE_FIELDS, POSITION_HINT } from '../data/sportProfileFields';
@@ -227,7 +227,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
           );
         })}
 
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button label={busy ? 'Saving…' : 'Save profile'} onPress={save} />
       </ScrollView>
     </SafeAreaView>
@@ -246,6 +246,5 @@ const st = StyleSheet.create({
   removeBtn: { paddingHorizontal: theme.spacing(2), paddingBottom: theme.spacing(2) },
   removeTxt: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800' },
   addLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
   ageHint: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
 });

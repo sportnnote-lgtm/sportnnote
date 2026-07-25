@@ -71,6 +71,28 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 10: create/edit forms (workstream C) · SHIPPED + VERIFIED
+
+The forms already shared the input components, but read as flat field stacks: field-group labels were
+the same muted grey as hints, and validation errors were bare red text. Two shared primitives fix it
+everywhere.
+
+- **`FieldLabel` (new, in `ui.tsx`).** A proper form label — text-colour, bold, small — so labels
+  stand out from italic hints/descriptions. Applied to the field groups in CreateTournament,
+  ScheduleMatch, CreateCommunity and CreateListing.
+- **`FormError` (new, in `ui.tsx`).** A red-tinted, bordered, `alert`-role banner (⚠ + message)
+  replacing the bare `<Text>` error across **all eight forms** — CreateTournament, ScheduleMatch,
+  EditProfile, CreateCommunity, CreateListing, Auth, GenerateFixtures, JoinTeam, Teams. Each screen's
+  local `error` style was removed. (OrganizationScreen already had its own error card — left as-is.)
+- **`TextField` label unified.** Its internal label now uses the same bold `FieldLabel` style (and
+  renders nothing when the label is empty, e.g. bare search boxes), so input labels match the
+  standalone group labels app-wide.
+- **Files:** `src/components/ui.tsx` + the nine form screens above + DEVLOG.
+- **Verified live (demo, mobile):** New Tournament shows bold field labels distinct from italic
+  hints, the bold "Name" TextField label matches, and submitting empty renders the ⚠ FormError
+  banner ("Give the tournament a name.") above the button; console clean. Typecheck clean; 65/65
+  tests. The other forms use the same shared primitives.
+
 ### 2026-07-25 — UI design pass, batch 9: Auth screen (workstream C) · SHIPPED (not live-verifiable in demo)
 
 Brought the sign-in / create-account screen — the app's first impression in live mode — onto the

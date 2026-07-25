@@ -5,7 +5,7 @@ import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, getPlayer, createListing } from '../data/repos';
@@ -98,7 +98,7 @@ export default function CreateListingScreen({ navigation }: Props) {
           ))}
         </View>
 
-        <Text style={textStyles.muted}>Sport</Text>
+        <FieldLabel>Sport</FieldLabel>
         <View style={st.chips}>
           {SPORT_LIST.map((s) => (
             <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={sport === s.id} onPress={() => setSport(s.id)} />
@@ -127,7 +127,7 @@ export default function CreateListingScreen({ navigation }: Props) {
         )}
         {wantsLevel(kind) && (
           <View style={{ gap: theme.spacing(1) }}>
-            <Text style={textStyles.muted}>Level of play</Text>
+            <FieldLabel>Level of play</FieldLabel>
             <View style={st.chips}>
               {LISTING_LEVELS.map((lv) => (
                 <SelectChip key={lv} label={lv} active={level === lv} onPress={() => setLevel(level === lv ? '' : lv)} />
@@ -152,7 +152,7 @@ export default function CreateListingScreen({ navigation }: Props) {
             : ''}
         </Text>
 
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button label={busy ? 'Posting…' : 'Post listing'} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
@@ -163,5 +163,4 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
 });

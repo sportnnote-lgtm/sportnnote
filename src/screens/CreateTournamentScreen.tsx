@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
@@ -139,7 +139,7 @@ export default function CreateTournamentScreen() {
         <ScreenTitle title="New tournament" subtitle="Set up your meet & its format" />
         <TextField label="Name" value={name} onChange={setName} placeholder="Annual Sports Meet 2026" />
 
-        <Text style={textStyles.muted}>Host</Text>
+        <FieldLabel>Host</FieldLabel>
         <View style={st.chips}>
           <SelectChip label={`🙋 Myself (${myName})`} active={hostChoice === 'self'} onPress={() => setHostChoice('self')} />
           {myOrgs.map((o) => (
@@ -156,14 +156,14 @@ export default function CreateTournamentScreen() {
           <View style={st.flex}><DateField label="End date" value={end} onChange={setEnd} /></View>
         </View>
 
-        <Text style={textStyles.muted}>Sports</Text>
+        <FieldLabel>Sports</FieldLabel>
         <View style={st.chips}>
           {SPORT_LIST.map((s) => (
             <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={sports.includes(s.id)} onPress={() => toggleSport(s.id)} />
           ))}
         </View>
 
-        <Text style={textStyles.muted}>Structure</Text>
+        <FieldLabel>Structure</FieldLabel>
         <View style={st.chips}>
           {STRUCTURES.map((x) => (
             <SelectChip key={x.value} label={x.label} active={structure === x.value} onPress={() => setStructure(x.value)} />
@@ -173,7 +173,7 @@ export default function CreateTournamentScreen() {
 
         {hasKnockout && (
           <>
-            <Text style={textStyles.muted}>Format for knockouts</Text>
+            <FieldLabel>Format for knockouts</FieldLabel>
             <View style={st.chips}>
               <SelectChip label="Extra time + Penalties" active={koDecider === 'extra_time'} onPress={() => setKoDecider('extra_time')} />
               <SelectChip label="Direct Penalties" active={koDecider === 'penalties'} onPress={() => setKoDecider('penalties')} />
@@ -181,13 +181,13 @@ export default function CreateTournamentScreen() {
             <Text style={st.hint}>How a knockout tie is settled if scores are level at full time.</Text>
             {koDecider === 'extra_time' && (
               <View style={st.fmtCard}>
-                <Text style={textStyles.muted}>Extra-time half length</Text>
+                <FieldLabel>Extra-time half length</FieldLabel>
                 <View style={st.chips}>
                   {[5, 7, 10, 15].map((m) => (
                     <SelectChip key={m} label={`${m} min`} active={etMinutes === m} onPress={() => setEtMinutes(m)} />
                   ))}
                 </View>
-                <Text style={textStyles.muted}>Extra-time substitutions</Text>
+                <FieldLabel>Extra-time substitutions</FieldLabel>
                 <View style={st.chips}>
                   {[0, 1, 2, 3].map((n) => (
                     <SelectChip key={n} label={String(n)} active={etSubs === n} onPress={() => setEtSubs(n)} />
@@ -208,7 +208,7 @@ export default function CreateTournamentScreen() {
           />
         ))}
 
-        <Text style={textStyles.muted}>Player reminders</Text>
+        <FieldLabel>Player reminders</FieldLabel>
         <View style={st.chips}>
           <SelectChip label="Each player's own settings" active={!customReminders} onPress={() => setCustomReminders(false)} />
           <SelectChip label="Custom for this tournament" active={customReminders} onPress={() => setCustomReminders(true)} />
@@ -231,14 +231,14 @@ export default function CreateTournamentScreen() {
             : 'Each player is reminded using their own settings from Profile.'}
         </Text>
 
-        <Text style={textStyles.muted}>Registration</Text>
+        <FieldLabel>Registration</FieldLabel>
         <View style={st.chips}>
           <SelectChip label="🔓 Open — teams can find & request to join" active={isOpen} onPress={() => setIsOpen(true)} />
           <SelectChip label="🔒 Invite only" active={!isOpen} onPress={() => setIsOpen(false)} />
         </View>
         <Text style={st.hint}>Open tournaments appear in Discover for teams to register.</Text>
 
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create tournament'} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
@@ -253,5 +253,4 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   hint: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   fmtCard: { gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
 });

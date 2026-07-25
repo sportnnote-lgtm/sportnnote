@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
-import { Button, Card, SelectChip, textStyles } from '../components/ui';
+import { Button, Card, SelectChip, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { useAuth } from '../core/auth';
 import { ageFromDob } from '../core/age';
@@ -104,7 +104,7 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {error && <Text style={st.error}>{error}</Text>}
+          <FormError message={error} />
 
           <Button label={busy ? 'Please wait…' : mode === 'in' ? 'Sign in' : 'Create account'} onPress={submit} />
         </Card>
@@ -165,6 +165,5 @@ const st = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.font.body,
   },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
   ageHint: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700' },
 });

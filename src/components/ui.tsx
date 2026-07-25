@@ -157,6 +157,44 @@ export function ScreenTitle({
   );
 }
 
+/** A form field-group label — stronger than muted body text so a form reads as a
+ *  form (labels stand out from hints/descriptions). Use above a control group
+ *  (chips, date fields…). `hint` renders a muted sub-line beneath it. */
+export function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  return (
+    <View style={{ gap: 2 }}>
+      <Text style={fieldLabelStyles.label}>{children}</Text>
+      {hint ? <Text style={fieldLabelStyles.hint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+/** A visible, consistent error banner for forms — replaces bare red text so a
+ *  validation/save failure is hard to miss. Renders nothing when message is empty. */
+export function FormError({ message }: { message?: string | null }) {
+  if (!message) return null;
+  return (
+    <View style={fieldLabelStyles.errorBox} accessibilityRole="alert" accessibilityLabel={`Error: ${message}`}>
+      <Text style={fieldLabelStyles.errorText}>⚠  {message}</Text>
+    </View>
+  );
+}
+
+const fieldLabelStyles = StyleSheet.create({
+  label: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  hint: { color: theme.colors.textMuted, fontSize: theme.font.tiny, lineHeight: theme.font.tiny * 1.4 },
+  errorBox: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.danger + '1A',
+    borderWidth: 1,
+    borderColor: theme.colors.danger + '55',
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing(2.5),
+    paddingHorizontal: theme.spacing(3),
+  },
+  errorText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '600', flex: 1 },
+});
+
 export function TextField({
   label,
   value,
@@ -174,7 +212,8 @@ export function TextField({
 }) {
   return (
     <View style={{ gap: theme.spacing(1) }}>
-      <Text style={textStyles.muted}>{label}</Text>
+      {/* Empty label (e.g. a bare search box) renders nothing, so no empty gap. */}
+      {label ? <Text style={fieldLabelStyles.label}>{label}</Text> : null}
       <TextInput
         style={[styles.input, multiline && styles.inputMultiline]}
         // The <Text> above is visually a label but isn't associated with the

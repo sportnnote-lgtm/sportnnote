@@ -6,7 +6,7 @@ import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, createOrganization } from '../data/repos';
 import { COMMUNITY_TYPES } from '../core/org';
@@ -61,7 +61,7 @@ export default function CreateCommunityScreen({ navigation }: Props) {
 
         <TextField label="Name" value={name} onChange={setName} placeholder="Greenwood High School" />
 
-        <Text style={textStyles.muted}>Type</Text>
+        <FieldLabel>Type</FieldLabel>
         <View style={st.chips}>
           {COMMUNITY_TYPES.map((t) => (
             <SelectChip key={t} label={t} active={typeChoice === t} onPress={() => setTypeChoice(t)} />
@@ -79,7 +79,7 @@ export default function CreateCommunityScreen({ navigation }: Props) {
         </View>
         <Text style={textStyles.muted}>You'll be its first admin. Add members, a logo, and organize events from the community page.</Text>
 
-        {error && <Text style={st.error}>{error}</Text>}
+        <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create community'} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
@@ -92,5 +92,4 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   flex: { flex: 1 },
-  error: { color: theme.colors.danger, fontSize: theme.font.small },
 });
