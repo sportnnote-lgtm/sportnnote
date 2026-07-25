@@ -50,6 +50,26 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 3: Standings as a results board (workstream C) · SHIPPED + VERIFIED
+
+The standings table worked but read flat — ranks 1–4 were identical grey, nothing celebrated the
+leaders, and the empty states were bare one-line text. Turned it into a proper results board.
+Render + styles only; the standings/leaders data is unchanged.
+
+- **Podium for the top three.** Ranks 1–3 now show 🥇🥈🥉 with a gold/silver/bronze tinted row; the
+  leader's name is bold. Ranks 4+ keep a plain number with a thin divider. The top of the table now
+  reads as a podium at a glance.
+- **Top performers get the same treatment** — medals for the top three, an emphasized #1, and a
+  tier-coloured card border.
+- **Warm empty states.** "No matches yet" / "No leaders yet" are now centred cards with an icon
+  (🏁 / ⭐) and a second line explaining when they'll fill in, instead of a bare grey sentence.
+- **Fuller accessibility labels** on each row (rank, team/player, points/value, P-W-L).
+- **Files:** `src/screens/StandingsScreen.tsx` only.
+- **Verified live (demo, mobile 375px):** the Karnataka State Cup football table shows the
+  gold/silver/bronze podium (Falcons FC bold-gold, City Strikers silver, Titan Athletic bronze),
+  Rovers United plain at 4; the goals-leaders empty state shows the ⭐ card; header aligns as
+  "# Team"; no console errors. Typecheck clean; 65/65 tests.
+
 ### 2026-07-25 — UI design pass, batch 2: the Live Scoring screen (workstream C) · SHIPPED + VERIFIED
 
 The scorer's cockpit — the most-used surface — but its hand-rolled surfaces predated the batch-1

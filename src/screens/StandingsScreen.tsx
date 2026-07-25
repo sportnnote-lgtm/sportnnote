@@ -18,6 +18,22 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+// Podium treatment for the top three — a medal + a tier colour, so a results
+// board celebrates its leaders instead of listing four identical grey ranks.
+const MEDALS = ['🥇', '🥈', '🥉'];
+const TIER = ['#FFD54A', '#C0C7D0', '#E8A15D']; // gold · silver · bronze
+const tierColor = (i: number): string | null => (i < 3 ? TIER[i] : null);
+
+/** A friendly placeholder when a section has no data yet. */
+function EmptyState({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View style={st.empty}>
+      <Text style={st.emptyIcon}>{icon}</Text>
+      <Text style={[textStyles.muted, { textAlign: 'center' }]}>{text}</Text>
+    </View>
+  );
+}
+
 export default function StandingsScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Standings'>>();
@@ -54,7 +70,7 @@ export default function StandingsScreen() {
         />
         <Card style={{ gap: theme.spacing(1) }}>
           <View style={[st.row, st.head]}>
-            <Text style={[st.pos, st.headText]}>#</Text>
+            <View style={st.posCell}><Text style={st.headText}>#</Text></View>
             <Text style={[st.teamCol, st.headText]}>Team</Text>
             <Text style={[st.num, st.headText]}>P</Text>
             <Text style={[st.num, st.headText]}>W</Text>
@@ -62,23 +78,34 @@ export default function StandingsScreen() {
             <Text style={[st.num, st.headText]}>Pts</Text>
           </View>
           {teams.length === 0 ? (
-            <Text style={textStyles.muted}>No completed {getSport(sport).name.toLowerCase()} matches yet.</Text>
+            <EmptyState icon="🏁" text={`No completed ${getSport(sport).name.toLowerCase()} matches yet.\nThe table fills in as results come in.`} />
           ) : (
-            (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => (
-              <TouchableOpacity accessibilityRole="button" key={t.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: t.teamId })}>
-                <View style={st.row}>
-                  <Text style={st.pos}>{i + 1}</Text>
-                  <View style={[st.teamCol, st.teamCell]}>
-                    <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
-                    <Text style={textStyles.body} numberOfLines={1}>{t.name}</Text>
+            (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => {
+              const tier = tierColor(i);
+              return (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points, played ${t.played}, won ${t.won}, lost ${t.lost}`}
+                  key={t.teamId}
+                  activeOpacity={0.8}
+                  onPress={() => nav.navigate('Team', { teamId: t.teamId })}
+                >
+                  <View style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.rowDivider]}>
+                    <View style={st.posCell}>
+                      {tier ? <Text style={st.medal}>{MEDALS[i]}</Text> : <Text style={st.pos}>{i + 1}</Text>}
+                    </View>
+                    <View style={[st.teamCol, st.teamCell]}>
+                      <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
+                      <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
+                    </View>
+                    <Text style={st.num}>{t.played}</Text>
+                    <Text style={st.num}>{t.won}</Text>
+                    <Text style={st.num}>{t.lost}</Text>
+                    <Text style={[st.num, st.pts]}>{t.points}</Text>
                   </View>
-                  <Text style={st.num}>{t.played}</Text>
-                  <Text style={st.num}>{t.won}</Text>
-                  <Text style={st.num}>{t.lost}</Text>
-                  <Text style={[st.num, st.pts]}>{t.points}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           )}
         </Card>
 
@@ -89,21 +116,32 @@ export default function StandingsScreen() {
           expanded={showLeaders}
         />
         {leaders.length === 0 ? (
-          <Text style={textStyles.muted}>No {lead.label} recorded yet.</Text>
+          <Card><EmptyState icon="⭐" text={`No ${lead.label} recorded yet.\nLeaders appear here once players are scored.`} /></Card>
         ) : (
-          (showLeaders ? leaders : leaders.slice(0, SECTION_CAP)).map((l, i) => (
-            <TouchableOpacity accessibilityRole="button" key={l.playerId} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}>
-              <Card style={st.leaderRow}>
-                <Text style={st.pos}>{i + 1}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={textStyles.body}>{l.name}</Text>
-                  {l.houseName ? <Text style={textStyles.muted}>{l.houseName}</Text> : null}
-                </View>
-                <Text style={st.leaderVal}>{l.value}</Text>
-                <Text style={textStyles.muted}> {lead.label}</Text>
-              </Card>
-            </TouchableOpacity>
-          ))
+          (showLeaders ? leaders : leaders.slice(0, SECTION_CAP)).map((l, i) => {
+            const tier = tierColor(i);
+            return (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${i + 1}. ${l.name}, ${l.value} ${lead.label}`}
+                key={l.playerId}
+                activeOpacity={0.85}
+                onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}
+              >
+                <Card style={[st.leaderRow, tier ? { borderColor: tier + '66' } : null]}>
+                  <View style={st.posCell}>
+                    {tier ? <Text style={st.medal}>{MEDALS[i]}</Text> : <Text style={st.pos}>{i + 1}</Text>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]}>{l.name}</Text>
+                    {l.houseName ? <Text style={textStyles.muted}>{l.houseName}</Text> : null}
+                  </View>
+                  <Text style={st.leaderVal}>{l.value}</Text>
+                  <Text style={textStyles.muted}> {lead.label}</Text>
+                </Card>
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
@@ -115,10 +153,13 @@ const st = StyleSheet.create({
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   section: { marginTop: theme.spacing(2) },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(1.5) },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(1) },
+  rowDivider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   head: { borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing(2) },
   headText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
-  pos: { width: 24, color: theme.colors.textMuted, fontWeight: '800', fontSize: theme.font.small },
+  posCell: { width: 28, alignItems: 'center', justifyContent: 'center' },
+  pos: { color: theme.colors.textMuted, fontWeight: '800', fontSize: theme.font.small, textAlign: 'center' },
+  medal: { fontSize: 18, textAlign: 'center' },
   teamCol: { flex: 1 },
   teamCell: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dot: { width: 12, height: 12, borderRadius: 6 },
@@ -126,4 +167,6 @@ const st = StyleSheet.create({
   pts: { fontWeight: '900', color: theme.colors.primary },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },
+  empty: { alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(4) },
+  emptyIcon: { fontSize: 28 },
 });
