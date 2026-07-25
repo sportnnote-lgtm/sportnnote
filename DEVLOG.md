@@ -30,6 +30,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — Onboarding content (workstream D): 9 video scripts + full article set · SHIPPED
+
+New-user content for the in-app Help section and a future YouTube channel, built from
+one source of truth (`src/data/supportKB.ts`) so app, articles and videos stay
+consistent. Lives under `docs/onboarding/` (`README.md` = content plan + status +
+house style).
+
+- **Video scripts (9/9):** `docs/onboarding/scripts/01…09`. Shot-by-shot (visual +
+  voiceover table) so each can be recorded from a screen capture with a VO, plus a
+  YouTube title/description/thumbnail per episode. Ordered by the new-user journey:
+  what-is → score → undo/offline → **run a tournament (3-min flagship)** → squad →
+  format → follow/reminders → Discover → profile/stats/verification. Every step
+  checked against the real app; features not built are flagged, not scripted.
+- **Long-form articles (all 18 KB topics):** `docs/onboarding/articles/` — six
+  category guides (`getting-started`, `live-scoring`, `running-a-tournament`,
+  `teams-and-players`, `following-and-alerts`, `account-and-profile`). Each KB id in
+  `supportKB.ts` maps to a full section; README carries the article→KB coverage map.
+  Fuller than the built-in KB stubs (intro + numbered steps + tips/edge cases +
+  related links), same vocabulary (organizer/scorer, match, tournament, fixtures,
+  squad).
+- **Files:** `docs/onboarding/**` only — no app code touched; typecheck/tests
+  unaffected (65/65). Content verified for accuracy against the demo app's screens
+  and flows.
+- **Next (publishing):** record + publish videos to YouTube; once an in-app video
+  layer ships, embed each URL in the matching KB article.
+
+---
+
 ### 2026-07-25 — Discover: fix nested-`<button>` DOM warning
 
 - **What:** RN-web logged "`<button>` cannot contain a nested button" on the Discover
