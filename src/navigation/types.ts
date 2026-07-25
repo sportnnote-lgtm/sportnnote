@@ -33,6 +33,7 @@ export type RootStackParamList = {
   OrganizerDashboard: undefined;
   NotificationPrefs: undefined;
   Settings: undefined;
+  Support: undefined;
   TryNewSport: { sports?: SportId[] } | undefined;
   PlayerProfile: { playerId: string };
   SportProfile: { playerId: string; sport: SportId };

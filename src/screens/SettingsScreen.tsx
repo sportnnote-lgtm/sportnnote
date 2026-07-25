@@ -8,7 +8,7 @@
  * and a natural anchor for Help & support.
  */
 import React, { useState, useSyncExternalStore } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,7 +19,7 @@ import { useAuth } from '../core/auth';
 import { isSupport } from '../core/roles';
 import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/time';
 import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
-import { getMyPlayerId, SUPPORT_EMAIL } from '../data/repos';
+import { getMyPlayerId } from '../data/repos';
 import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -87,12 +87,6 @@ export default function SettingsScreen() {
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
-  const contactSupport = () => {
-    const subject = encodeURIComponent('Sportfolio support request');
-    const body = encodeURIComponent(`\n\n—\nApp version ${version}${profile?.handle ? `\nAccount: @${profile.handle}` : ''}`);
-    void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`);
-  };
-
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
@@ -128,7 +122,7 @@ export default function SettingsScreen() {
         )}
 
         <Group title="Help">
-          <Row icon="✉️" label="Contact support" value={SUPPORT_EMAIL} onPress={contactSupport} />
+          <Row icon="💬" label="Help & support" value="Guides · contact us" onPress={() => nav.navigate('Support')} />
         </Group>
 
         <Text style={st.version}>Sportfolio v{version}{demo ? ' · demo mode' : ''}</Text>

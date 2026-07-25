@@ -50,6 +50,46 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — Support system, phase 1: AI-first help centre (workstream A) · SHIPPED + VERIFIED
+
+Users need a way to reach support. Support is solo (one person) at first, so the design is
+**AI/self-serve answers first, a human by email only when that fails**. Built the whole UX so it
+works **today in demo with no backend or API key**, with the live AI + server email dropping in
+behind the same seam later (phase 2). Follows the codebase's existing proxy pattern (`voiceLLM.ts`):
+the Anthropic key never lives in the client.
+
+Three layers, one screen:
+- **Layer 1 — knowledge base (offline, no key).** `src/data/supportKB.ts`: 18 task-shaped help
+  articles across 6 categories (Getting started, Live scoring, Tournaments, Teams & players,
+  Following & alerts, Account) + a pure `searchArticles()` retrieval. Ranking weighs field
+  position (title > keywords > summary > body) **and term rarity (IDF)**, so "my score won't sync"
+  leads with the sync article, not every article that says "score". Doubles as the seed content
+  for workstream D (articles/videos).
+- **Layer 2 — AI answer (live, dormant until phase 2).** `src/core/supportAI.ts` mirrors
+  `voiceLLM.ts`: `ENDPOINT` empty ⇒ `enabled()` false ⇒ KB only. When set, it POSTs the question +
+  matched KB text to a Supabase edge function that forwards to Claude and returns
+  `{ answer, resolved }`. Grounded in our own docs so it can't invent product behaviour.
+- **Layer 3 — escalate to a human.** Pure `buildSupportMailto()` opens a pre-filled email to
+  `SUPPORT_EMAIL` (kept as `hrudhaypvtemp@gmail.com` for now) carrying the question, what was
+  already tried, the handle and app version — so a solo replier needs no back-and-forth. Phase 2
+  upgrades this to a server-recorded case + auto-email.
+
+UX: new `SupportScreen` — search box → instant guides (first auto-expanded, tap to expand others);
+with no query it's a browsable help centre grouped by category; an "Email support" escalation card
+is always reachable. Settings → **Help & support** now opens this screen (replaced the bare mailto).
+
+- **Files:** `src/data/supportKB.ts`, `src/core/supportAI.ts`, `src/screens/SupportScreen.tsx`
+  (all new), `src/screens/SettingsScreen.tsx`, `src/navigation/{types,RootNavigator}.tsx`,
+  `tests/support-kb.test.mts` (new, 20 tests — search relevance on real phrasings, ranking hygiene,
+  data integrity, mailto encoding).
+- **Verified live (demo):** Settings → Help & support opens; browse shows all categories; searching
+  "my score wont sync" returns 5 ranked guides with the sync article first; "Still stuck? → Email
+  support" escalation card renders; no console errors. Typecheck clean; 65/65 tests.
+- **Phase 2 (next, needs your inputs):** deploy `supabase/functions/support-assistant` (+ set the
+  endpoint) to turn on the AI layer, and `support-escalate` for server-recorded cases + auto-email
+  — plus a step-by-step guide to get the Claude API key and an email sender. Until then Layers 1 & 3
+  are fully live.
+
 ### 2026-07-25 — Gap-hunt batch 3: Settings home (P5) · SHIPPED + VERIFIED
 
 App/account controls (reminders, timezone, following, join-team, support console, sign out)
