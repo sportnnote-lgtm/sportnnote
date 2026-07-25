@@ -63,7 +63,9 @@ export default function TeamProfileScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <View style={st.headerRow}>
           <View style={[st.crest, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33', borderColor: team.colorHex ?? theme.colors.border }]}>
-            <View style={[st.dot, { backgroundColor: team.colorHex ?? theme.colors.surfaceAlt }]} />
+            <Text style={[st.crestText, { color: team.colorHex ?? theme.colors.text }]}>
+              {team.name.split(' ').map((w) => w[0]).join('').slice(0, 3).toUpperCase()}
+            </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={textStyles.h2}>{team.name}</Text>
@@ -156,8 +158,8 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
-  crest: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 24, height: 24, borderRadius: 12 },
+  crest: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', ...theme.shadow.card },
+  crestText: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
   tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap', marginTop: theme.spacing(2) },
   section: { marginTop: theme.spacing(2) },
   recordRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },

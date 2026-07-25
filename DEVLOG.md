@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — Discover: fix nested-`<button>` DOM warning
+
+- **What:** RN-web logged "`<button>` cannot contain a nested button" on the Discover
+  **People** sub-tab. Cause: each Teams row was a `TouchableOpacity` (open-team) wrapping
+  an inner `TouchableOpacity` (Follow) — RN-web renders both as `<button>`, so one nested
+  in the other. Pre-existing; correctness/cleanliness only.
+- **Fix** (`src/screens/DiscoverScreen.tsx`): the row is now a plain `Card` (View) with two
+  **sibling** pressables — a `teamOpen` `TouchableOpacity` (dot + name/sports → navigates to
+  Team) and the Follow `TouchableOpacity`. Added `st.teamOpen` (flex:1 row) to keep the
+  layout identical. Player cards, Open-tournament rows, and all ConnectBoard rows were
+  already fine (`Card`/`Pill` are plain Views).
+- **Verified** (web demo, port 8097): DOM query → `0` nested `<button>`; console clean of the
+  warning on both Connect and People sub-tabs; Follow toggles to ★ Following and the row-open
+  navigates to the Team profile (which shows the persisted Following state).
+
+---
+
 ## Real-game demo matches (for live-scoring test drives)
 
 Seeded under the **FIFA World Cup 2026** tournament (`t-wc`), all live, with the demo
@@ -49,6 +66,28 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 ---
 
 ## Changelog
+
+### 2026-07-25 — UI design pass, batch 5: Tournament & Team profiles (workstream C) · SHIPPED + VERIFIED
+
+Brought the two high-traffic profile pages into the design language. The big win was consistency:
+three different standings tables across the app now render identically.
+
+- **Shared podium (`components/Rank.tsx`).** Extracted the medal/tier logic batch 3 put inline in
+  Standings into a shared `RankBadge` + `podiumColor`, so every standings table has one source of
+  truth. Standings was refactored onto it (removing its local copy).
+- **`LeagueTable` gets the podium** — medals 🥇🥈🥉, gold/silver/bronze tinted rows, bold leader.
+  Because it's the shared table, this propagates to the tournament per-sport standings AND SportHub
+  in one change.
+- **Tournament "Overall standings"** (a hand-rolled table) now uses the same `RankBadge` + podium
+  tint, so the cross-sport table matches the per-sport one right below it.
+- **Team profile crest** now shows the team's initials in its colour (e.g. "GH" for Green House)
+  with elevation, instead of a bare dot — real identity at the top of the page.
+- **Files:** `components/Rank.tsx` (new), `components/LeagueTable.tsx`, `screens/StandingsScreen.tsx`
+  (dedup), `screens/TournamentProfileScreen.tsx`, `screens/TeamProfileScreen.tsx`.
+- **Verified live (demo, mobile 375px):** Annual Sports Meet 2026 → Overall standings shows Green
+  House 🥇/Red 🥈/Blue 🥉/Gold #4; By-sport Football LeagueTable shows the same podium; Green House
+  team page shows the "GH" crest, elevated Record cards and squad. Typecheck clean; 65/65 tests.
+  (The nested-`<button>` console warning is the pre-existing Discover one, tracked separately.)
 
 ### 2026-07-25 — UI design pass, batch 4: empty & loading states app-wide (workstream C) · SHIPPED + VERIFIED
 

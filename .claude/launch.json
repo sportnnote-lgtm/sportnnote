@@ -6,13 +6,6 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8090"],
       "port": 8090
-    },
-    {
-      "name": "sportfolio-web-verify",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web"],
-      "port": 8095,
-      "autoPort": true
     }
   ]
 }

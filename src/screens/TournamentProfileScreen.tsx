@@ -10,6 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
+import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
@@ -349,17 +350,20 @@ export default function TournamentProfileScreen() {
             />
             <Text style={textStyles.muted}>Points across every sport.</Text>
             <Card style={{ gap: theme.spacing(1) }}>
-              {(showOverall ? overall : overall.slice(0, SECTION_CAP)).map((o, i) => (
-                <TouchableOpacity accessibilityRole="button" key={o.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: o.teamId })}>
-                  <View style={[st.oRow, i > 0 && st.divider]}>
-                    <Text style={st.rank}>{i + 1}</Text>
-                    <View style={[st.dot, { backgroundColor: o.colorHex ?? theme.colors.surfaceAlt }]} />
-                    <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{o.name}</Text>
-                    <Text style={textStyles.muted}>{o.played} pld</Text>
-                    <Text style={st.oPts}>{o.points}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {(showOverall ? overall : overall.slice(0, SECTION_CAP)).map((o, i) => {
+                const tier = podiumColor(i);
+                return (
+                  <TouchableOpacity accessibilityRole="button" key={o.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: o.teamId })}>
+                    <View style={[st.oRow, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.divider]}>
+                      <RankBadge index={i} width={22} />
+                      <View style={[st.dot, { backgroundColor: o.colorHex ?? theme.colors.surfaceAlt }]} />
+                      <Text style={[textStyles.body, { flex: 1 }, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{o.name}</Text>
+                      <Text style={textStyles.muted}>{o.played} pld</Text>
+                      <Text style={st.oPts}>{o.points}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </Card>
           </>
         )}
@@ -426,9 +430,8 @@ const st = StyleSheet.create({
   tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap' },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   section: { marginTop: theme.spacing(2) },
-  oRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
+  oRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(1) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
-  rank: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
   dot: { width: 14, height: 14, borderRadius: 7 },
   oPts: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900', minWidth: 30, textAlign: 'right' },
   teamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },

@@ -9,6 +9,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, SelectChip, ScreenTitle, EmptyState, textStyles } from '../components/ui';
+import { RankBadge, podiumColor } from '../components/Rank';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { useTournament, useTournamentById, useStandings } from '../data/hooks';
@@ -17,12 +18,6 @@ import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-// Podium treatment for the top three — a medal + a tier colour, so a results
-// board celebrates its leaders instead of listing four identical grey ranks.
-const MEDALS = ['🥇', '🥈', '🥉'];
-const TIER = ['#FFD54A', '#C0C7D0', '#E8A15D']; // gold · silver · bronze
-const tierColor = (i: number): string | null => (i < 3 ? TIER[i] : null);
 
 export default function StandingsScreen() {
   const nav = useNavigation<Nav>();
@@ -71,7 +66,7 @@ export default function StandingsScreen() {
             <EmptyState icon="🏁" title={`No completed ${getSport(sport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
           ) : (
             (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => {
-              const tier = tierColor(i);
+              const tier = podiumColor(i);
               return (
                 <TouchableOpacity
                   accessibilityRole="button"
@@ -81,9 +76,7 @@ export default function StandingsScreen() {
                   onPress={() => nav.navigate('Team', { teamId: t.teamId })}
                 >
                   <View style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.rowDivider]}>
-                    <View style={st.posCell}>
-                      {tier ? <Text style={st.medal}>{MEDALS[i]}</Text> : <Text style={st.pos}>{i + 1}</Text>}
-                    </View>
+                    <RankBadge index={i} />
                     <View style={[st.teamCol, st.teamCell]}>
                       <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
                       <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
@@ -109,7 +102,7 @@ export default function StandingsScreen() {
           <Card><EmptyState icon="⭐" title={`No ${lead.label} recorded yet`} hint="Leaders appear here once players are scored." compact /></Card>
         ) : (
           (showLeaders ? leaders : leaders.slice(0, SECTION_CAP)).map((l, i) => {
-            const tier = tierColor(i);
+            const tier = podiumColor(i);
             return (
               <TouchableOpacity
                 accessibilityRole="button"
@@ -119,9 +112,7 @@ export default function StandingsScreen() {
                 onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}
               >
                 <Card style={[st.leaderRow, tier ? { borderColor: tier + '66' } : null]}>
-                  <View style={st.posCell}>
-                    {tier ? <Text style={st.medal}>{MEDALS[i]}</Text> : <Text style={st.pos}>{i + 1}</Text>}
-                  </View>
+                  <RankBadge index={i} />
                   <View style={{ flex: 1 }}>
                     <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]}>{l.name}</Text>
                     {l.houseName ? <Text style={textStyles.muted}>{l.houseName}</Text> : null}
@@ -148,8 +139,6 @@ const st = StyleSheet.create({
   head: { borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing(2) },
   headText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
   posCell: { width: 28, alignItems: 'center', justifyContent: 'center' },
-  pos: { color: theme.colors.textMuted, fontWeight: '800', fontSize: theme.font.small, textAlign: 'center' },
-  medal: { fontSize: 18, textAlign: 'center' },
   teamCol: { flex: 1 },
   teamCell: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dot: { width: 12, height: 12, borderRadius: 6 },
