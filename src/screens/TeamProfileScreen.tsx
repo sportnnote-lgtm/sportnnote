@@ -1,5 +1,5 @@
 /** Team (house) profile: record per sport, squad, matches — and a follow toggle. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -30,6 +30,11 @@ export default function TeamProfileScreen() {
   const [showSquad, setShowSquad] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
 
+  // Title the nav bar after the team, not a generic "Team" (breadcrumb).
+  useEffect(() => {
+    if (team) nav.setOptions({ title: team.name });
+  }, [nav, team?.name]);
+
   if (loading) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -57,6 +62,11 @@ export default function TeamProfileScreen() {
   const records = team.sports
     .map((sp) => ({ sport: sp, row: teamStandings(matches, sp).find((t) => t.teamId === team.id) }))
     .filter((r) => r.row);
+  // Aggregate record across every sport, for the at-a-glance headline (mirrors
+  // the player profile's Matches / Wins / Win-rate tiles).
+  const totalPlayed = records.reduce((n, r) => n + r.row!.played, 0);
+  const totalWon = records.reduce((n, r) => n + r.row!.won, 0);
+  const teamWinRate = totalPlayed ? Math.round((totalWon / totalPlayed) * 100) : 0;
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -84,9 +94,17 @@ export default function TeamProfileScreen() {
         />
         <Button label="👥 Manage squad" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} />
 
+        {totalPlayed > 0 && (
+          <View style={st.statGrid}>
+            <Stat value={String(totalPlayed)} label="Played" />
+            <Stat value={String(totalWon)} label="Won" />
+            <Stat value={`${teamWinRate}%`} label="Win rate" />
+          </View>
+        )}
+
         {records.length > 0 && (
           <>
-            <Text style={[textStyles.h3, st.section]}>Record</Text>
+            <Text style={[textStyles.h3, st.section]}>Record by sport</Text>
             {records.map(({ sport, row }) => (
               <Card key={sport} style={st.recordRow}>
                 <Text style={st.recordIcon}>{getSport(sport).icon}</Text>
@@ -154,10 +172,24 @@ export default function TeamProfileScreen() {
   );
 }
 
+/** One headline record tile (Played / Won / Win rate) — same treatment as the
+ *  player profile, so a team's record reads at a glance and the two pages match. */
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <Card style={st.statCard}>
+      <Text style={st.statValue}>{value}</Text>
+      <Text style={textStyles.muted}>{label}</Text>
+    </Card>
+  );
+}
+
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
+  statCard: { width: '30%', alignItems: 'center', gap: theme.spacing(1), flexGrow: 1 },
+  statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
   crest: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', ...theme.shadow.card },
   crestText: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
   tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap', marginTop: theme.spacing(2) },

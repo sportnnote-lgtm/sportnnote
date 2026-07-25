@@ -51,6 +51,10 @@ export default function TournamentProfileScreen() {
     getMyPlayerId(profile?.id).then((id) => on && setMyId(id));
     return () => { on = false; };
   }, [profile?.id]);
+  // Title the nav bar after the tournament, not a generic "Tournament".
+  useEffect(() => {
+    if (tournament) nav.setOptions({ title: tournament.name });
+  }, [nav, tournament?.name]);
   const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName;
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.

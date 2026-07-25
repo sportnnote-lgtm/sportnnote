@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 12: Team & Tournament profiles depth (workstream C) · SHIPPED + VERIFIED
+
+A second, deeper pass on the two profile pages (batch 5 did the shared podium + team crest).
+
+- **Team profile gets a headline record.** The team page listed per-sport records but had no
+  at-a-glance summary. Added a **Played / Won / Win-rate** tile row (aggregated across every sport),
+  the same treatment players have — so the two profile types now read alike. The per-sport list is
+  retitled **"Record by sport"** beneath it.
+- **Correct nav-bar titles.** TeamProfile said a generic "Team", TournamentProfile said
+  "Tournament". Both now set the header to the entity's name (breadcrumb), matching batch 11's
+  Player/Sport fix (same `nav.setOptions({ title })` mechanism).
+- **Files:** `src/screens/TeamProfileScreen.tsx`, `src/screens/TournamentProfileScreen.tsx`.
+- **Verified live (demo, mobile 375px):** Green House team page shows the nav title "Green House",
+  the headline **9 Played / 4 Won / 44% Win rate** (= its four sports' records summed), and the
+  "Record by sport" breakdown; console clean. Typecheck clean; 69/69 tests.
+  _Caveat:_ the Tournament page couldn't be re-opened this session — the browser pane's tab bar and
+  tournament chips stopped responding to synthetic clicks and deep-links reset to Home, so every
+  path to it was blocked. Its nav-title change is the identical, just-verified mechanism.
+
+---
+
 ### 2026-07-25 — UI design pass, batch 11: Player & SportProfile depth (workstream C) · SHIPPED + VERIFIED
 
 A second, deeper pass on the profile pages (batch 7 did the avatar ring + win/loss history).
