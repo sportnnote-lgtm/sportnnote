@@ -174,7 +174,7 @@ export default function SportProfileScreen() {
             {history.map((l) => {
               const openable = matchById.has(l.matchId);
               const row = (
-                <Card style={st.histRow}>
+                <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>vs {l.opponent ?? 'TBD'}</Text>
                     <Text style={textStyles.muted}>
@@ -183,7 +183,7 @@ export default function SportProfileScreen() {
                   </View>
                   <Pill
                     label={l.won ? 'WON' : 'LOST'}
-                    color={theme.colors.surfaceAlt}
+                    color={l.won ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
                     textColor={l.won ? theme.colors.primary : theme.colors.textMuted}
                   />
                   {openable && <Text style={st.chevron}>›</Text>}

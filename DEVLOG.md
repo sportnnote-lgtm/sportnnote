@@ -71,6 +71,21 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — UI design pass, batch 7: Player & SportProfile pages (workstream C) · SHIPPED + VERIFIED
+
+Extended the identity + results-board language to the player pages. Style-only.
+
+- **Player avatar ring.** The avatar (in the shared `ProfileView`, used by the Profile tab and the
+  PlayerProfile screen) is now ringed in the player's house colour — matching the team-crest
+  identity treatment from batch 5, instead of a borderless circle.
+- **SportProfile match history reads as results.** Every row looked identical; now a win shows a
+  green left-edge accent + a green-tinted "WON" pill, a loss stays muted — so a player's form is
+  scannable at a glance (green edges = wins), consistent with the standings/scoreboard language.
+- **Files:** `src/components/ProfileView.tsx`, `src/screens/SportProfileScreen.tsx`.
+- **Verified live (demo, mobile 375px):** Aarav Mehta's profile shows the red house-colour ring on
+  the "AM" avatar; his Football SportProfile shows green-edged WON rows and a muted LOST row (vs
+  Green House). Typecheck clean; 65/65 tests.
+
 ### 2026-07-25 — UI design pass, batch 6: Home header & section hierarchy (workstream C) · SHIPPED + VERIFIED
 
 Polished the top of the app and made its section headers consistent.

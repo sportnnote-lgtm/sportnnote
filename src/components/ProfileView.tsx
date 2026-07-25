@@ -79,7 +79,7 @@ export function ProfileView({
     <ScrollView contentContainerStyle={st.content}>
       <View style={st.headerRow}>
         <TouchableOpacity accessibilityRole="button" activeOpacity={onEditProfile ? 0.8 : 1} disabled={!onEditProfile} onPress={changePhoto}>
-          <View style={[st.avatar, { backgroundColor: (player.houseColor ?? theme.colors.surfaceAlt) + '33' }]}>
+          <View style={[st.avatar, { backgroundColor: (player.houseColor ?? theme.colors.surfaceAlt) + '33', borderColor: player.houseColor ?? theme.colors.border }]}>
             {photo ? (
               <Image source={{ uri: photo }} style={st.avatarImg} />
             ) : (
@@ -389,7 +389,7 @@ const st = StyleSheet.create({
   historyLine: { color: theme.colors.text, fontSize: theme.font.small },
   historyNote: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   historyAt: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
-  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: 64, height: 64 },
   avatarText: { fontSize: theme.font.h2, fontWeight: '800' },
   camBadge: {
