@@ -44,6 +44,10 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verified** (web demo, port 8097): DOM query → `0` nested `<button>`; console clean of the
   warning on both Connect and People sub-tabs; Follow toggles to ★ Following and the row-open
   navigates to the Team profile (which shows the persisted Following state).
+- **Connect sub-tab re-verified** (the fix's sibling concern): renders fully — mode toggle,
+  "Post a listing", kind + sport filter chips, and listing cards (WhatsApp action, phone,
+  verified/unverified contact, timestamp); `0` nested `<button>` (55 buttons, 4 WhatsApp),
+  no console errors, and the kind filter (e.g. "Opponent wanted") narrows the list correctly.
 
 ---
 
