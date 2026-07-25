@@ -340,7 +340,22 @@ create table if not exists listings (
   created_at       timestamptz not null default now()
 );
 
+-- Support cases: escalations from the in-app help centre when the knowledge base
+-- (and, when configured, the AI assistant) couldn't resolve a question. Written
+-- by the `support-escalate` edge function; `support-escalate` also emails a copy
+-- to SUPPORT_EMAIL so a solo support person can reply from their inbox.
+create table if not exists support_cases (
+  id           uuid primary key default uuid_generate_v4(),
+  question     text not null,
+  tried        text,                 -- what the user already saw (KB titles / AI answer)
+  handle       text,                 -- reporter's @handle, if signed in
+  app_version  text,
+  status       text not null default 'open' check (status in ('open','answered','closed')),
+  created_at   timestamptz not null default now()
+);
+
 create index if not exists idx_matches_tournament on matches(tournament_id);
+create index if not exists idx_support_cases_status on support_cases(status, created_at desc);
 create index if not exists idx_listings_sport on listings(sport, created_at desc);
 create index if not exists idx_matches_status on matches(status);
 create index if not exists idx_events_match on match_events(match_id, seq);
@@ -428,3 +443,10 @@ create policy "manage own reminder prefs" on user_reminder_prefs
 --    using (auth.uid() = scorer_id)   /   with check (auth.uid() = created_by)
 create policy "authed writes match"  on matches      for update using (auth.role() = 'authenticated');
 create policy "authed writes events" on match_events for insert with check (auth.role() = 'authenticated');
+
+-- Support cases: a signed-in user may file one (insert). Reads/updates are the
+-- support team's job and go through the service-role key (edge function / console),
+-- so no select/update policy is granted to regular users.
+alter table support_cases enable row level security;
+create policy "authed file support case" on support_cases
+  for insert with check (auth.role() = 'authenticated');

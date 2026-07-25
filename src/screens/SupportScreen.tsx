@@ -14,9 +14,9 @@ import { ScrollView, View, Text, TouchableOpacity, Linking, StyleSheet } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { theme } from '../core/theme';
-import { Card, TextField, Button, LoadingState, textStyles } from '../components/ui';
+import { Card, TextField, Button, LoadingState, EmptyState, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
-import { SUPPORT_EMAIL } from '../data/repos';
+import { SUPPORT_EMAIL, submitSupportCase } from '../data/repos';
 import {
   searchArticles,
   articlesByCategory,
@@ -89,15 +89,18 @@ export default function SupportScreen() {
   const results = useMemo(() => (trimmed ? searchArticles(trimmed) : []), [trimmed]);
   const groups = useMemo(() => articlesByCategory(), []);
 
-  const escalate = () => {
-    const tried = results.length ? results.map((r) => r.article.title).slice(0, 3).join('; ') : undefined;
-    const url = buildSupportMailto(SUPPORT_EMAIL, {
-      question: trimmed || 'I need help with Sportfolio',
-      triedSummary: aiAnswer ? 'AI assistant (unresolved)' : tried,
-      handle: profile?.handle,
-      appVersion: version,
-    });
-    void Linking.openURL(url);
+  const [sent, setSent] = useState(false);
+  const escalate = async () => {
+    const question = trimmed || 'I need help with Sportfolio';
+    const triedSummary = aiAnswer ? 'AI assistant (unresolved)' : results.length ? results.map((r) => r.article.title).slice(0, 3).join('; ') : undefined;
+    // Live mode records the case + emails support server-side; if that isn't
+    // wired (demo, or email not configured yet) fall back to a pre-filled email.
+    const { delivered } = await submitSupportCase({ question, tried: triedSummary, handle: profile?.handle, appVersion: version });
+    if (delivered) {
+      setSent(true);
+      return;
+    }
+    void Linking.openURL(buildSupportMailto(SUPPORT_EMAIL, { question, triedSummary, handle: profile?.handle, appVersion: version }));
   };
 
   const askAI = async () => {
@@ -165,11 +168,17 @@ export default function SupportScreen() {
 
             {/* Layer 3: escalation — always available once they've asked. */}
             <Card style={{ gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt }}>
-              <Text style={[textStyles.body, { fontWeight: '700' }]}>Still stuck?</Text>
-              <Text style={textStyles.muted}>
-                Email our support team. We'll include your question and app details so we can help faster.
-              </Text>
-              <Button label="✉️  Email support" onPress={escalate} />
+              {sent ? (
+                <EmptyState icon="✅" title="Sent to support" hint="We've got your question and will reply by email." compact />
+              ) : (
+                <>
+                  <Text style={[textStyles.body, { fontWeight: '700' }]}>Still stuck?</Text>
+                  <Text style={textStyles.muted}>
+                    Contact our support team. We'll include your question and app details so we can help faster.
+                  </Text>
+                  <Button label="✉️  Contact support" onPress={() => void escalate()} />
+                </>
+              )}
             </Card>
           </View>
         ) : (
@@ -184,9 +193,15 @@ export default function SupportScreen() {
             ))}
 
             <Card style={{ gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt }}>
-              <Text style={[textStyles.body, { fontWeight: '700' }]}>Can't find an answer?</Text>
-              <Text style={textStyles.muted}>Email us at {SUPPORT_EMAIL} and we'll help.</Text>
-              <Button label="✉️  Email support" variant="ghost" onPress={escalate} />
+              {sent ? (
+                <EmptyState icon="✅" title="Sent to support" hint="We've got your question and will reply by email." compact />
+              ) : (
+                <>
+                  <Text style={[textStyles.body, { fontWeight: '700' }]}>Can't find an answer?</Text>
+                  <Text style={textStyles.muted}>Contact us and we'll help.</Text>
+                  <Button label="✉️  Contact support" variant="ghost" onPress={() => void escalate()} />
+                </>
+              )}
             </Card>
           </View>
         )}

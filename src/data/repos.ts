@@ -1156,8 +1156,37 @@ export type PlayerPatch = Partial<
   Pick<Player, 'fullName' | 'city' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification'>
 >;
 
-/** Where verification documents are routed for the internal support team to review. */
+/** Where verification documents and support cases are routed for the support team.
+ *  Kept in sync with SUPPORT_EMAIL in supabase/functions/support-escalate. */
 export const SUPPORT_EMAIL = 'hrudhaypvtemp@gmail.com';
+
+/** Details of an escalated support case (see data/supportKB.ts SupportCaseContext). */
+export interface SupportCaseInput {
+  question: string;
+  tried?: string;
+  handle?: string;
+  appVersion?: string;
+}
+
+/**
+ * Escalate a support case to the human support team.
+ * - Live mode: records the case + emails SUPPORT_EMAIL via the `support-escalate`
+ *   edge function; returns { delivered } (delivered=false if email isn't wired yet).
+ * - Demo mode (or on any failure): returns { delivered: false } so the caller
+ *   falls back to opening a pre-filled email (buildSupportMailto).
+ */
+export async function submitSupportCase(input: SupportCaseInput): Promise<{ delivered: boolean }> {
+  if (!isSupabaseConfigured || !supabase) return { delivered: false };
+  try {
+    const { data, error } = await supabase.functions.invoke('support-escalate', {
+      body: { question: input.question, tried: input.tried, handle: input.handle, appVersion: input.appVersion },
+    });
+    if (error) return { delivered: false };
+    return { delivered: data?.delivered === true };
+  } catch {
+    return { delivered: false };
+  }
+}
 
 /** Update a player's own profile details. */
 export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void> {

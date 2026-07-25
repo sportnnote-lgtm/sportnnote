@@ -71,6 +71,38 @@ To score: open the match card → **Scoring** tab → **Start the match** → **
 
 ## Changelog
 
+### 2026-07-25 — Support system, phase 2: live AI + server email (workstream A) · CODE-COMPLETE (deploy-gated)
+
+Wrote all the phase-2 server + client code so the AI-answer and server-email layers turn on the
+moment the backend is stood up and the keys are added — no app rebuild, no endpoint URLs to paste.
+The Anthropic key never ships in the app (same server-proxy principle as `voiceLLM`).
+
+- **`supabase/functions/support-assistant` (new, Deno).** Forwards a question + the matched KB
+  article text to Claude (`claude-opus-4-8`, per the API skill's default; haiku noted as a cheaper
+  swap) and returns `{ answer, resolved }` via **structured output** (json_schema) so the client
+  always gets a valid shape. System prompt grounds it strictly in the provided context — if the
+  docs don't cover it, `resolved:false` and "a human will follow up". CORS + graceful 502 so the
+  client falls back to the KB on any failure.
+- **`supabase/functions/support-escalate` (new, Deno).** Records the case in a new `support_cases`
+  table (service role) **and** emails a copy to `SUPPORT_EMAIL` via Resend. If `RESEND_API_KEY`
+  isn't set it still records the case and returns `delivered:false` (client then opens the mailto).
+- **`support_cases` table + RLS** in `supabase/schema.sql` (signed-in users can file; reads/updates
+  are support-only via service role).
+- **Client wiring, all degrading to demo:** `core/supportAI.ts` now calls
+  `supabase.functions.invoke('support-assistant')` (enabled ⇔ Supabase configured); `data/repos.ts`
+  gains `submitSupportCase()` → `support-escalate`; `SupportScreen` escalation tries the server
+  first and shows "✅ Sent to support", falling back to the pre-filled email when not delivered.
+- **`docs/support-setup.md` (new)** — the step-by-step you asked to be guided through: get a Claude
+  API key (Anthropic Console + billing), get an email sender (Resend), `supabase secrets set …`,
+  and `supabase functions deploy …`. Notes the Supabase-live prerequisite and how to swap the
+  email provider or model.
+- **Files:** `supabase/functions/support-assistant/index.ts`, `supabase/functions/support-escalate/index.ts`
+  (new), `supabase/schema.sql`, `src/core/supportAI.ts`, `src/data/repos.ts`,
+  `src/screens/SupportScreen.tsx`, `docs/support-setup.md` (new).
+- **Status:** typecheck clean; 65/65 tests; app bundles with no console errors; demo behaviour
+  unchanged (KB + mailto). The edge functions can't run in demo (no Supabase) and aren't unit-tested
+  here — they're deploy-time code like the existing `notify-*` functions. Turns live via the guide.
+
 ### 2026-07-25 — UI design pass, batch 10: create/edit forms (workstream C) · SHIPPED + VERIFIED
 
 The forms already shared the input components, but read as flat field stacks: field-group labels were
