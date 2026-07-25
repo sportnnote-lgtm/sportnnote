@@ -7,13 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useNotifications, useFollow, usePlayerSummaries } from '../data/hooks';
 import { notifyStore } from '../data/notifyStore';
 import { getMatch } from '../data/repos';
 import { getSport } from '../sports/registry';
+import { statLabelShort } from '../data/stats';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -23,6 +24,28 @@ function timeAgo(at: number): string {
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   return `${Math.round(s / 3600)}h ago`;
+}
+
+/** Notification titles carry their own leading emoji (📄, 📝, 🔴…). Pull it out
+ *  so it can sit in a proper icon badge instead of colliding with a hardcoded 🔔
+ *  in the text ("🔔 📄 …"). Falls back to 🔔 when the title has no emoji. */
+function splitLeadingEmoji(title: string): { icon: string; rest: string } {
+  const chars = Array.from(title.trimStart());
+  // Emoji & pictographic symbols live well above the Latin/punctuation range.
+  if (chars[0] && (chars[0].codePointAt(0) ?? 0) > 0x2190) {
+    const take = chars[1] === '️' ? 2 : 1; // keep a trailing variation selector
+    return { icon: chars.slice(0, take).join(''), rest: chars.slice(take).join('').trimStart() };
+  }
+  return { icon: '🔔', rest: title };
+}
+
+/** A round icon chip leading each row, so the inbox reads as a consistent list. */
+function IconBadge({ icon }: { icon: string }) {
+  return (
+    <View style={st.badge}>
+      <Text style={st.badgeIcon}>{icon}</Text>
+    </View>
+  );
 }
 
 export default function NotificationsScreen() {
@@ -88,6 +111,7 @@ export default function NotificationsScreen() {
             />
             {(showAllAlerts ? items : items.slice(0, SECTION_CAP)).map((n) => {
               const actionable = !!(n.matchId || n.playerId);
+              const { icon, rest } = splitLeadingEmoji(n.title);
               return (
                 <TouchableOpacity accessibilityRole="button"
                   key={n.id}
@@ -96,11 +120,12 @@ export default function NotificationsScreen() {
                   onPress={() => openAlert(n)}
                 >
                   <Card style={st.row}>
+                    <IconBadge icon={icon} />
                     <View style={{ flex: 1 }}>
-                      <Text style={textStyles.body}>🔔 {n.title}</Text>
+                      <Text style={textStyles.body}>{rest}</Text>
                       <Text style={textStyles.muted}>{n.body}</Text>
                     </View>
-                    <Text style={textStyles.muted}>{timeAgo(n.at)}</Text>
+                    <Text style={st.time}>{timeAgo(n.at)}</Text>
                     {actionable && <Text style={st.chevron}>›</Text>}
                   </Card>
                 </TouchableOpacity>
@@ -123,15 +148,21 @@ export default function NotificationsScreen() {
                 activeOpacity={0.85}
                 onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}
               >
-                <Card style={st.row}>
+                {/* Same results-board language as the SportProfile match history:
+                    green left-edge + WON/LOST pill so form is scannable. */}
+                <Card style={[st.row, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
+                  <IconBadge icon={getSport(l.sport).icon} />
                   <View style={{ flex: 1 }}>
-                    <Text style={textStyles.body}>
-                      {getSport(l.sport).icon} {player.fullName} vs {l.opponent ?? 'TBD'}
-                    </Text>
-                    <Text style={textStyles.muted}>
-                      {Object.entries(l.stats).map(([k, v]) => `${v} ${k}`).join(' · ')} · {l.won ? 'won' : 'lost'}
+                    <Text style={textStyles.body} numberOfLines={1}>{player.fullName} vs {l.opponent ?? 'TBD'}</Text>
+                    <Text style={textStyles.muted} numberOfLines={1}>
+                      {Object.entries(l.stats).map(([k, v]) => `${v} ${statLabelShort(k)}`).join(' · ')}
                     </Text>
                   </View>
+                  <Pill
+                    label={l.won ? 'WON' : 'LOST'}
+                    color={l.won ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
+                    textColor={l.won ? theme.colors.primary : theme.colors.textMuted}
+                  />
                   <Text style={st.chevron}>›</Text>
                 </Card>
               </TouchableOpacity>
@@ -147,5 +178,11 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  badge: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.surfaceAlt,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badgeIcon: { fontSize: 20 },
+  time: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '700' },
 });

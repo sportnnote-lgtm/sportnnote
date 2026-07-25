@@ -80,6 +80,10 @@ const STAT_LABEL: Record<string, string> = {
   attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
   runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
 };
+/** Readable short label for a stat key, e.g. "raidPoints" → "raid pts". Falls
+ *  back to the raw key so a new stat still renders (just un-prettified). */
+export const statLabelShort = (key: string): string => STAT_LABEL[key] ?? key;
+
 /** Per-sport priority of which stats to surface first in a compact summary. */
 const HEADLINE_ORDER: Partial<Record<SportId, string[]>> = {
   football: ['goals', 'assists', 'shotsOnTarget', 'tackles', 'saves', 'passes'],

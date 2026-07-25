@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 15: Notifications inbox (workstream C) · SHIPPED + VERIFIED
+
+Polished the in-app notification inbox (live alerts + a roll-up of recent activity from players you
+follow).
+
+- **Fixed a doubled emoji.** Alert rows hardcoded a "🔔" prefix, but notification titles already
+  carry their own emoji — so they rendered "🔔 🎂 You're 18 …". Now each row leads with a round
+  **icon badge** showing the title's own emoji (extracted via `splitLeadingEmoji`, 🔔 fallback), and
+  the title text is clean. Timestamps moved to a small muted style.
+- **"Recent from players you follow" reads as results.** These rows are match-history lines but were
+  rendered flat with raw stat keys ("raidPoints") and a lowercase "· won". Now they use the same
+  **results-board language** as the SportProfile history — a green left-edge + a green **WON** pill
+  (muted **LOST**), a leading sport-icon badge, and **readable stat labels** via a new shared
+  `statLabelShort()` helper (exported from `data/stats.ts`, reusing its existing `STAT_LABEL` map).
+- **Files:** `src/screens/NotificationsScreen.tsx`, `src/data/stats.ts` (export `statLabelShort`).
+- **Verified live (demo, mobile):** Live alerts show the 🎂 badge with clean titles + "3m ago";
+  after following a player, "Recent from players you follow" shows their matches across football /
+  cricket / basketball with green-edged WON rows (green pill) and muted LOST rows, readable stats
+  (54 runs · 0 wkts, 18 pts · 5 reb). Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-25 — UI design pass, batch 14: SportHub page (workstream C) · SHIPPED + VERIFIED
 
 Polished the per-sport tournament hub (schedule, standings, stats, results).
