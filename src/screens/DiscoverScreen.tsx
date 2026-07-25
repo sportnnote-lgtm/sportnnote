@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles, plural } from '../components/ui';
 import { ConnectBoard } from '../components/ConnectBoard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -90,7 +90,7 @@ export default function DiscoverScreen() {
         />
 
         <Text style={textStyles.muted}>
-          {results.length} player{results.length === 1 ? '' : 's'}
+          {plural(results.length, 'player')}
           {filtering ? ' found' : ' · ranked by activity'}
         </Text>
 

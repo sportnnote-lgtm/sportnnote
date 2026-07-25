@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, LoadingState, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { useMatches } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -51,6 +51,7 @@ export default function MatchesScreen() {
     .filter((m) => m.status === 'completed')
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
   const list = tab === 'live' ? live : tab === 'upcoming' ? upcoming : completed;
+  const countFor = (key: Tab) => (key === 'live' ? live : key === 'upcoming' ? upcoming : completed).length;
 
   const open = (m: Match) =>
     nav.navigate('LiveScoring', {
@@ -71,23 +72,30 @@ export default function MatchesScreen() {
         <ScreenTitle title="Matches" subtitle="Every game across every sport" />
 
         <View style={st.segment}>
-          {TABS.map((t) => (
-            <TouchableOpacity accessibilityRole="button"
-              key={t.key}
-              style={[st.segBtn, tab === t.key && st.segBtnActive]}
-              activeOpacity={0.8}
-              accessibilityState={{ selected: tab === t.key }}
-              onPress={() => setTab(t.key)}
-            >
-              <Text style={[st.segText, tab === t.key && st.segTextActive]}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {TABS.map((t) => {
+            const n = countFor(t.key);
+            const on = tab === t.key;
+            return (
+              <TouchableOpacity accessibilityRole="button"
+                key={t.key}
+                style={[st.segBtn, on && st.segBtnActive]}
+                activeOpacity={0.8}
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${t.label}, ${n} ${n === 1 ? 'match' : 'matches'}`}
+                onPress={() => setTab(t.key)}
+              >
+                <Text style={[st.segText, on && st.segTextActive]} numberOfLines={1}>
+                  {t.label}{n > 0 ? ` ${n}` : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filters}>
-          <Chip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <SelectChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
           {SPORT_LIST.map((s) => (
-            <Chip key={s.id} label={`${s.icon} ${s.name}`} active={filter === s.id} onPress={() => setFilter(s.id)} />
+            <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={filter === s.id} onPress={() => setFilter(s.id)} />
           ))}
         </ScrollView>
 
@@ -107,14 +115,6 @@ export default function MatchesScreen() {
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity accessibilityRole="button" onPress={onPress} style={[st.chip, active && st.chipActive]} activeOpacity={0.8}>
-      <Text style={[st.chipText, active && st.chipTextActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
@@ -124,15 +124,4 @@ const st = StyleSheet.create({
   segText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   segTextActive: { color: '#06120D', fontWeight: '800' },
   filters: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
-  chip: {
-    paddingVertical: theme.spacing(2),
-    paddingHorizontal: theme.spacing(3.5),
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  chipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  chipText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
-  chipTextActive: { color: '#06120D' },
 });

@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 13: Matches & Discover pages (workstream C) · SHIPPED + VERIFIED
+
+Polished the two high-traffic browse tabs.
+
+- **Matches tab counts.** The Live / Upcoming / Completed segmented control showed no numbers, so
+  the organizer couldn't see the load at a glance. Each tab now shows its count (e.g. "🔴 Live 8 ·
+  Upcoming 12 · Completed 31"), matching the tournament page's match tabs. Counts respect the sport
+  filter (Football → "Live 6 · Upcoming 3 · Completed 17") and each has a full accessibility label
+  ("🔴 Live, 8 matches").
+- **Unified the filter chips.** Matches used a bespoke local `Chip`; it now uses the shared
+  `SelectChip` like every other filter row (Discover, tournament, SportHub), so the sport filter
+  looks identical app-wide. Removed the one-off component + its styles.
+- **Discover pluralization.** The "N players" line used an inline plural; switched to the shared
+  `plural()` helper (batch 11), so a single result reads "1 player".
+- **Files:** `src/screens/MatchesScreen.tsx`, `src/screens/DiscoverScreen.tsx`.
+- **Verified live (demo, mobile 375px):** Matches shows the three counts and they update when the
+  Football filter is applied; the sport chips render in the shared style; Discover → People shows
+  "318 players · ranked by activity". Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-25 — UI design pass, batch 12: Team & Tournament profiles depth (workstream C) · SHIPPED + VERIFIED
 
 A second, deeper pass on the two profile pages (batch 5 did the shared podium + team crest).
