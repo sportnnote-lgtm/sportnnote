@@ -43,11 +43,14 @@ Ordered by the new-user journey. Status: ✅ drafted · ⬜ planned.
 | 2 | Score your first match | 90s | `score-first-match` | ✅ `scripts/02-score-your-first-match.md` | ⬜ |
 | 3 | Fix a mistake & score offline | 75s | `undo-fix-mistake`, `offline-scoring` | ✅ `scripts/03-undo-and-offline.md` | ⬜ |
 | 4 | Run a tournament, start to finish | 3 min | `create-tournament`, `generate-fixtures`, `standings` | ✅ `scripts/04-run-a-tournament.md` | ✅ `articles/running-a-tournament.md` |
-| 5 | Set the playing XI / squad | 60s | `set-lineup-squad`, `add-players` | ⬜ | ⬜ |
-| 6 | Choose a format (T20, 5-a-side, 3×3…) | 75s | `choose-format` | ⬜ | ⬜ |
-| 7 | Follow players & get match reminders | 60s | `follow-players`, `match-reminders` | ⬜ | ⬜ |
-| 8 | Find teams & players on Discover | 60s | `join-team-code` + Connect board | ⬜ | ⬜ |
-| 9 | Your profile, stats & verification | 75s | `edit-profile`, `verification` | ⬜ | ⬜ |
+| 5 | Set the playing XI / squad | 60s | `set-lineup-squad`, `add-players` | ✅ `scripts/05-set-the-squad.md` | ⬜ |
+| 6 | Choose a format (T20, 5-a-side, 3×3…) | 75s | `choose-format` | ✅ `scripts/06-choose-a-format.md` | ⬜ |
+| 7 | Follow players & get match reminders | 60s | `follow-players`, `match-reminders` | ✅ `scripts/07-follow-and-reminders.md` | ⬜ |
+| 8 | Find teams & players on Discover | 60s | `join-team-code` + Connect board | ✅ `scripts/08-discover.md` | ⬜ |
+| 9 | Your profile, stats & verification | 75s | `edit-profile`, `verification` | ✅ `scripts/09-profile-stats-verification.md` | ⬜ |
+
+_Video scripts: **9/9 drafted.** Next: expand the 18 knowledge-base stubs into
+full Help-centre articles (see `articles/`)._
 
 ## Production checklist (per video)
 
