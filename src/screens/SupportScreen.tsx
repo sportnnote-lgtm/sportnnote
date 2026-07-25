@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { theme } from '../core/theme';
 import { Card, TextField, Button, LoadingState, EmptyState, textStyles } from '../components/ui';
+import { Markdown } from '../components/Markdown';
 import { useAuth } from '../core/auth';
 import { SUPPORT_EMAIL, submitSupportCase } from '../data/repos';
 import {
@@ -24,36 +25,14 @@ import {
   CATEGORY_ICON,
   type Article,
 } from '../data/supportKB';
+import { getGuide } from '../data/supportGuides';
 import { askSupport, enabled as aiEnabled, type SupportAnswer } from '../core/supportAI';
-
-/** Render an article body: blank-line-separated paragraphs; "- " lines as bullets. */
-function ArticleBody({ body }: { body: string }) {
-  return (
-    <View style={{ gap: theme.spacing(2) }}>
-      {body.split('\n\n').map((block, i) => {
-        const lines = block.split('\n');
-        const isList = lines.every((l) => l.trim().startsWith('- '));
-        if (isList) {
-          return (
-            <View key={i} style={{ gap: theme.spacing(1) }}>
-              {lines.map((l, j) => (
-                <View key={j} style={st.bulletRow}>
-                  <Text style={st.bulletDot}>•</Text>
-                  <Text style={[textStyles.body, { flex: 1, color: theme.colors.textMuted }]}>{l.replace(/^\s*-\s/, '')}</Text>
-                </View>
-              ))}
-            </View>
-          );
-        }
-        return <Text key={i} style={[textStyles.body, { color: theme.colors.textMuted }]}>{block}</Text>;
-      })}
-    </View>
-  );
-}
 
 /** A tappable article row that expands to show the full body inline. */
 function ArticleCard({ article, defaultOpen }: { article: Article; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen);
+  const [showGuide, setShowGuide] = useState(false);
+  const guide = getGuide(article.id);
   return (
     <Card style={{ gap: theme.spacing(2) }}>
       <TouchableOpacity
@@ -70,7 +49,24 @@ function ArticleCard({ article, defaultOpen }: { article: Article; defaultOpen?:
         </View>
         <Text style={st.caret}>{open ? '▴' : '▾'}</Text>
       </TouchableOpacity>
-      {open && <ArticleBody body={article.body} />}
+      {open && (
+        <>
+          {/* Short answer, then an optional expander for the long-form guide. */}
+          {showGuide && guide ? <Markdown content={guide} /> : <Markdown content={article.body} />}
+          {guide && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={showGuide ? 'Hide the full guide' : 'Read the full guide'}
+              accessibilityState={{ expanded: showGuide }}
+              activeOpacity={0.75}
+              onPress={() => setShowGuide((g) => !g)}
+              style={st.guideToggle}
+            >
+              <Text style={st.guideToggleText}>{showGuide ? '▴  Show less' : '📖  Read the full guide'}</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
     </Card>
   );
 }
@@ -145,7 +141,7 @@ export default function SupportScreen() {
               ) : aiAnswer ? (
                 <Card style={{ gap: theme.spacing(2) }}>
                   <Text style={st.aiTag}>🤖 Assistant</Text>
-                  <ArticleBody body={aiAnswer.answer} />
+                  <Markdown content={aiAnswer.answer} />
                 </Card>
               ) : !aiAsked ? (
                 <Button label="🤖 Ask the assistant" onPress={askAI} />
@@ -216,7 +212,7 @@ const st = StyleSheet.create({
   sectionLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   artHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   caret: { color: theme.colors.textMuted, fontSize: 18 },
-  bulletRow: { flexDirection: 'row', gap: theme.spacing(2), alignItems: 'flex-start' },
-  bulletDot: { color: theme.colors.primary, fontSize: theme.font.body, lineHeight: 20 },
   aiTag: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  guideToggle: { alignSelf: 'flex-start', paddingVertical: theme.spacing(1) },
+  guideToggleText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
 });

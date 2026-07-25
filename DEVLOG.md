@@ -30,6 +30,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — Onboarding content (D): wire the long-form guides into the app · SHIPPED + VERIFIED
+
+The Help centre only served the short KB stubs; the fuller articles lived only in
+`docs/`. Brought them in-app so a reader can go deeper without leaving the app (there's
+no web host to link out to).
+
+- **`src/data/supportGuides.ts` (new):** the canonical **in-app** long-form copy, keyed
+  by the same article id as `supportKB.ts`. Covers all 18 KB topics. The `docs/onboarding/
+  articles/*.md` set remains the publishing copy (blog / YouTube descriptions); this is
+  what the app renders. `getGuide(id)` / `hasGuide(id)` accessors.
+- **`src/components/Markdown.tsx` (new):** a tiny, dependency-free renderer for the small
+  markdown subset the help copy uses — `##`/`###` headings, `-` bullets, `1.` numbered
+  steps, `**bold**` inline. No lib added. Grouping is robust: a stray intro line above a
+  list renders as its own paragraph (fixes the old stub renderer leaking literal "- ").
+- **`src/screens/SupportScreen.tsx`:** every article now renders through `Markdown`; any
+  article with a guide shows a **"📖 Read the full guide"** reveal under the short answer
+  (toggles to "▴ Show less"). AI-answer rendering also moved to `Markdown`. Removed the
+  bespoke `ArticleBody` renderer.
+- **Tests:** +4 in `support-kb.test.mts` — guides map only to real articles (no orphans),
+  `getGuide`/`hasGuide` agree and return substantial content, each guide is ≥ its stub,
+  every category has at least one full guide. **69/69 pass, typecheck clean.**
+- **Verified live (demo, mobile 375px):** Settings → Help & support → search "run a
+  tournament" → "Create a tournament" shows the short answer + "📖 Read the full guide";
+  tapping it reveals the long-form (bold, "Steps" heading, green numbered 1–4, closing
+  paragraph) and flips to "Show less". Console clean.
+
+---
+
 ### 2026-07-25 — Onboarding content (workstream D): 9 video scripts + full article set · SHIPPED
 
 New-user content for the in-app Help section and a future YouTube channel, built from

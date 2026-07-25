@@ -6,8 +6,14 @@ New-user content in two formats, from one source of truth:
   onboarding series. Each is shot-by-shot (visual + voiceover) so it can be
   recorded from a screen capture of the app with a voiceover, or handed to an
   editor.
-- **Articles** (`articles/`) — long-form written guides for the in-app Help
-  centre and a docs/blog page. Fuller than the built-in knowledge-base stubs.
+- **Articles** (`articles/`) — long-form written guides for a docs/blog page and
+  YouTube descriptions. Fuller than the built-in knowledge-base stubs.
+
+> **In-app note:** the app itself renders the long-form guides from
+> `src/data/supportGuides.ts` (the canonical *in-app* copy, keyed by KB id and
+> shown via the Help centre's "📖 Read the full guide" reveal). The `articles/`
+> markdown here is the *publishing* copy of the same content. When you change one,
+> update the other.
 
 Everything maps back to the knowledge base (`src/data/supportKB.ts`) so the app,
 the articles, and the videos stay consistent — same vocabulary (organizer/scorer,

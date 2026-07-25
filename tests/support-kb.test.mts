@@ -7,6 +7,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { searchArticles, articlesByCategory, getArticle, buildSupportMailto, ARTICLES } from '../src/data/supportKB.ts';
+import { GUIDES, getGuide, hasGuide } from '../src/data/supportGuides.ts';
 
 const top = (q: string) => searchArticles(q)[0]?.article.id;
 
@@ -72,6 +73,42 @@ describe('support KB: data integrity', () => {
     for (const a of ARTICLES) assert.equal(getArticle(a.id)?.id, a.id);
     const grouped = articlesByCategory().flatMap((g) => g.articles);
     assert.equal(grouped.length, ARTICLES.length, 'a category is missing from articlesByCategory order');
+  });
+});
+
+describe('support guides: long-form in-app content', () => {
+  const ids = new Set(ARTICLES.map((a) => a.id));
+
+  test('every guide maps to a real article (no orphans)', () => {
+    for (const id of Object.keys(GUIDES)) {
+      assert.ok(ids.has(id), `guide "${id}" has no matching KB article`);
+    }
+  });
+
+  test('getGuide / hasGuide agree and return substantial content', () => {
+    for (const id of Object.keys(GUIDES)) {
+      assert.equal(hasGuide(id), true);
+      const g = getGuide(id);
+      assert.ok(g && g.length > 120, `guide "${id}" is too short to be worth revealing`);
+    }
+    assert.equal(hasGuide('does-not-exist'), false);
+    assert.equal(getGuide('does-not-exist'), undefined);
+  });
+
+  test('guides are fuller than the stub they expand', () => {
+    for (const id of Object.keys(GUIDES)) {
+      const article = getArticle(id)!;
+      assert.ok(
+        getGuide(id)!.length >= article.body.length,
+        `guide "${id}" should add to, not shrink, the KB body`,
+      );
+    }
+  });
+
+  test('every category has at least one full guide (coverage)', () => {
+    for (const { category, articles } of articlesByCategory()) {
+      assert.ok(articles.some((a) => hasGuide(a.id)), `category "${category}" has no full guide`);
+    }
   });
 });
 
