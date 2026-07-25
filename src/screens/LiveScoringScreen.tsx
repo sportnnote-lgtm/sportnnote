@@ -366,7 +366,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   );
 
   const undoBar = canScore && eventCount > 0 ? (
-    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} onPress={undo}>
+    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo last ${sport === 'cricket' ? 'ball' : 'update'}`} onPress={undo}>
       <Text style={st.undoText}>↶ Undo last {sport === 'cricket' ? 'ball' : 'update'}</Text>
       <Text style={st.undoHint}>tap repeatedly to rewind to any point</Text>
     </TouchableOpacity>
@@ -391,7 +391,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       ) : !started ? (
         <View style={{ gap: theme.spacing(3), alignItems: 'center' }}>
           <Text style={[textStyles.muted, { textAlign: 'center' }]}>You're the scorer for this match.</Text>
-          <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} onPress={() => setLocalStarted(true)}>
+          <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Start the match" onPress={() => setLocalStarted(true)}>
             <Text style={st.assignBtnText}>▶ Start the match</Text>
           </TouchableOpacity>
         </View>
@@ -529,7 +529,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const hasCaptain = !!(L.captainId || L.viceCaptainId);
       return (
         <View style={st.infoCard}>
-          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} onPress={() => setInfoOpen(open ? null : sd)}>
+          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'XI set' : 'XI not set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? null : sd)}>
             <View style={[st.legendDot, { backgroundColor: color }]} />
             <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]}>{sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name}</Text>
             <Text style={[textStyles.muted, { color: set ? theme.colors.primary : theme.colors.textMuted }]}>
@@ -547,7 +547,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           )}
           {!set && canManage && matchId && (
             hasCaptain ? (
-              <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} onPress={() => remindCaptain(sd)}>
+              <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the XI" onPress={() => remindCaptain(sd)}>
                 <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the XI</Text>
               </TouchableOpacity>
             ) : (
@@ -628,12 +628,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         {canManage && pickScorer && (
           <View style={st.scorerPicker}>
             {myPlayerId && !iAmScorer && (
-              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} onPress={() => assignScorer(myPlayerId)}>
+              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Score from this device as ${myName}`} onPress={() => assignScorer(myPlayerId)}>
                 <Text style={st.scorerOptText}>📱 This device — {myName}</Text>
               </TouchableOpacity>
             )}
             {scorerCandidates.map((p) => (
-              <TouchableOpacity key={p.id} style={st.scorerOpt} activeOpacity={0.8} onPress={() => assignScorer(p.id)}>
+              <TouchableOpacity key={p.id} style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Make ${p.fullName} the scorer`} accessibilityState={{ selected: p.id === scorerId }} onPress={() => assignScorer(p.id)}>
                 <Text style={[st.scorerOptText, p.id === scorerId && { color: theme.colors.primary, fontWeight: '800' }]}>
                   {p.id === scorerId ? '✓ ' : ''}{p.fullName}
                 </Text>
@@ -643,7 +643,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               <Text style={textStyles.muted}>Set the matchday squads first to pick a scorer from the players.</Text>
             )}
             {scorerId && (
-              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} onPress={() => assignScorer(null)}>
+              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Clear scorer" onPress={() => assignScorer(null)}>
                 <Text style={[st.scorerOptText, { color: theme.colors.danger }]}>✕ Clear scorer</Text>
               </TouchableOpacity>
             )}
@@ -769,7 +769,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     };
     const flaggedCount = openDisputes.length + reportedDisputes.length;
     const disputeBanner = flaggedCount > 0 ? (
-      <TouchableOpacity style={st.disputeBanner} activeOpacity={0.85} onPress={() => setTab('info')}>
+      <TouchableOpacity style={st.disputeBanner} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Open match info to review disputes" onPress={() => setTab('info')}>
         <Text style={st.disputeBannerText}>
           {openDisputes.length > 0
             ? `🚩 ${openDisputes.length} participation ${openDisputes.length === 1 ? 'dispute' : 'disputes'} under review — affected names are held as “X”. `
@@ -878,7 +878,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {scrollTabs ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabScroll}>
               {TABS.map((t) => (
-                <TouchableOpacity key={t.key} style={[st.tabChip, activeTab === t.key && st.tabActive]} activeOpacity={0.8} onPress={() => setTab(t.key)}>
+                <TouchableOpacity key={t.key} style={[st.tabChip, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} onPress={() => setTab(t.key)}>
                   <Text style={[st.tabText, activeTab === t.key && st.tabTextActive]}>{t.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -886,7 +886,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           ) : (
             <View style={st.tabBar}>
               {TABS.map((t) => (
-                <TouchableOpacity key={t.key} style={[st.tab, activeTab === t.key && st.tabActive]} activeOpacity={0.8} onPress={() => setTab(t.key)}>
+                <TouchableOpacity key={t.key} style={[st.tab, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} onPress={() => setTab(t.key)}>
                   <Text style={[st.tabText, activeTab === t.key && st.tabTextActive]}>{t.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -1045,24 +1045,34 @@ function OfflineSyncBanner({ matchId }: { matchId: string }) {
   useSyncExternalStore(matchOutbox.subscribe, matchOutbox.getSnapshot);
   const pending = matchOutbox.pendingCount(matchId);
   const online = matchOutbox.isOnline();
-  if (online && pending === 0) return null;
+  // Sync failing on a working connection is a different problem from being
+  // offline: it won't fix itself, so promising "it'll sync when you reconnect"
+  // would be false reassurance.
+  const stuck = matchOutbox.isStuck(matchId);
+  if (online && pending === 0 && !stuck) return null;
   const offline = !online;
   const n = `${pending} change${pending === 1 ? '' : 's'}`;
+  const title = stuck ? "⚠️ Can't sync right now" : offline ? '⚠️ Offline — scoring saved on this device' : `↻ Syncing ${n}…`;
   return (
-    <View style={[st.syncBanner, offline ? st.syncOffline : st.syncPending]}>
+    <View style={[st.syncBanner, offline || stuck ? st.syncOffline : st.syncPending]}>
       <View style={{ flex: 1 }}>
-        <Text style={st.syncTitle}>{offline ? '⚠️ Offline — scoring saved on this device' : `↻ Syncing ${n}…`}</Text>
+        <Text style={st.syncTitle}>{title}</Text>
         <Text style={st.syncSub}>
-          {pending > 0
+          {stuck
+            ? `${n} saved safely on this device. Keep scoring — then tap Retry. If it keeps failing, contact support and quote this match.`
+            : pending > 0
             ? offline
               ? `${n} saved here — they'll sync automatically when you're back online.`
               : `${n} saved — syncing to the cloud now.`
             : "You're offline. Every tap is saved here and will sync when you reconnect."}
         </Text>
+        {stuck && matchOutbox.syncError(matchId) ? (
+          <Text style={st.syncErr} numberOfLines={2}>{matchOutbox.syncError(matchId)}</Text>
+        ) : null}
       </View>
       {pending > 0 && (
-        <TouchableOpacity style={st.syncBtn} activeOpacity={0.8} onPress={() => void matchOutbox.flush(matchId, true)}>
-          <Text style={st.syncBtnText}>Sync now</Text>
+        <TouchableOpacity style={st.syncBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={stuck ? 'Retry sync' : 'Sync now'} onPress={() => void matchOutbox.flush(matchId, true)}>
+          <Text style={st.syncBtnText}>{stuck ? 'Retry' : 'Sync now'}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -1105,6 +1115,7 @@ const st = StyleSheet.create({
   syncOffline: { backgroundColor: theme.colors.accent + '22', borderColor: theme.colors.accent },
   syncPending: { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border },
   syncTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  syncErr: { color: theme.colors.danger, fontSize: theme.font.small, marginTop: theme.spacing(1) },
   syncSub: { color: theme.colors.textMuted, fontSize: theme.font.small, marginTop: 2 },
   syncBtn: {
     backgroundColor: theme.colors.primary, borderRadius: theme.radius.pill,

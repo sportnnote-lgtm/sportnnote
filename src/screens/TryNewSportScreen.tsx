@@ -41,7 +41,7 @@ export default function TryNewSportScreen() {
       (m) =>
         m.sport === chosen &&
         m.status !== 'completed' &&
-        (followedTours.includes(m.tournamentId) ||
+        ((m.tournamentId != null && followedTours.includes(m.tournamentId)) ||
           followedTeams.includes(m.homeTeam.id) ||
           followedTeams.includes(m.awayTeam.id))
     );
@@ -76,10 +76,11 @@ export default function TryNewSportScreen() {
           {options.map((s) => {
             const active = chosen === s;
             return (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 key={s}
                 activeOpacity={0.85}
                 style={[st.tile, active && st.tileActive]}
+                accessibilityState={{ selected: active }}
                 onPress={() => setChosen(active ? null : s)}
               >
                 <Text style={st.tileIcon}>{getSport(s).icon}</Text>
@@ -134,7 +135,7 @@ export default function TryNewSportScreen() {
 
 function ActionRow({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) {
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+    <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onPress}>
       <Card style={st.actionRow}>
         <Text style={st.actionIcon}>{icon}</Text>
         <View style={{ flex: 1 }}>

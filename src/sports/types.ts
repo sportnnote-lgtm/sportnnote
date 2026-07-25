@@ -150,7 +150,10 @@ export interface SummaryProps {
  * renders these generically; the chosen values flow into createInitialState.
  */
 export interface FormatFieldOption {
-  value: number | string;
+  /** Boolean is allowed because some rules read best as a labelled either/or
+   *  rather than an on/off switch — tennis "Advantage / No-ad", badminton's
+   *  golden point, volleyball's cap. Matches `default`'s type. */
+  value: number | string | boolean;
   label: string;
   /** For a `preset` field: the sibling field values this option snaps to (e.g.
    *  T20 → { overs: 20, ballsPerOver: 6, powerplayOvers: 6 }). Applied on pick. */

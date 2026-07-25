@@ -92,7 +92,16 @@ export function DateTimeField({
   return (
     <View style={{ gap: theme.spacing(1) }}>
       <Text style={textStyles.muted}>{label}</Text>
-      <TouchableOpacity style={st.field} activeOpacity={0.8} onPress={show}>
+      <TouchableOpacity
+        style={st.field}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={
+          value ? `${label}: ${mode === 'date' ? formatDate(value) : formatStamp(value)}` : `${label}: not set`
+        }
+        accessibilityHint="Opens a picker"
+        onPress={show}
+      >
         <Text style={[st.fieldText, !value && st.fieldPlaceholder]}>
           {value ? `📅 ${mode === 'date' ? formatDate(value) : formatStamp(value)}` : placeholder}
         </Text>
@@ -102,11 +111,23 @@ export function DateTimeField({
         <View style={st.backdrop}>
           <View style={st.sheet}>
             <View style={st.calHead}>
-              <TouchableOpacity onPress={() => step(-1)} style={st.navBtn} hitSlop={8}>
+              <TouchableOpacity
+                onPress={() => step(-1)}
+                style={st.navBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+              >
                 <Text style={st.navTxt}>‹</Text>
               </TouchableOpacity>
-              <Text style={st.monthTitle}>{MONTHS[viewM]} {viewY}</Text>
-              <TouchableOpacity onPress={() => step(1)} style={st.navBtn} hitSlop={8}>
+              <Text style={st.monthTitle} accessibilityRole="header">{MONTHS[viewM]} {viewY}</Text>
+              <TouchableOpacity
+                onPress={() => step(1)}
+                style={st.navBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+              >
                 <Text style={st.navTxt}>›</Text>
               </TouchableOpacity>
             </View>
@@ -126,6 +147,9 @@ export function DateTimeField({
                         style={[st.day, isSelectedDay(day) && st.daySel]}
                         onPress={() => pickDay(day)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${day} ${MONTHS[viewM]} ${viewY}`}
+                        accessibilityState={{ selected: isSelectedDay(day) }}
                       >
                         <Text style={[st.dayTxt, isSelectedDay(day) && st.dayTxtSel]}>{day}</Text>
                       </TouchableOpacity>
@@ -137,7 +161,7 @@ export function DateTimeField({
 
             {mode === 'datetime' && <TimeEditor value={base} onChange={onChange} />}
 
-            <TouchableOpacity style={st.done} onPress={() => setOpen(false)} activeOpacity={0.85}>
+            <TouchableOpacity style={st.done} onPress={() => setOpen(false)} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Done">
               <Text style={st.doneTxt}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -161,6 +185,7 @@ function TimeEditor({ value, onChange }: { value: Date; onChange: (d: Date) => v
       <Text style={[textStyles.muted, st.timeLabel]}>Time</Text>
       <View style={st.timeControls}>
         <Stepper
+          label="Hour"
           text={pad(h12)}
           onUp={() => onChange(at(h24 + 1, minute))}
           onDown={() => onChange(at(h24 - 1, minute))}
@@ -168,6 +193,7 @@ function TimeEditor({ value, onChange }: { value: Date; onChange: (d: Date) => v
         />
         <Text style={st.colon}>:</Text>
         <Stepper
+          label="Minute"
           text={pad(minute)}
           onUp={() => onChange(at(h24, minute + 1))}
           onDown={() => onChange(at(h24, minute - 1))}
@@ -175,7 +201,7 @@ function TimeEditor({ value, onChange }: { value: Date; onChange: (d: Date) => v
         />
         <View style={st.ampm}>
           {(['AM', 'PM'] as const).map((a) => (
-            <TouchableOpacity key={a} style={[st.ampmChip, ap === a && st.ampmSel]} onPress={() => setH12(h12, a)} activeOpacity={0.8}>
+            <TouchableOpacity key={a} style={[st.ampmChip, ap === a && st.ampmSel]} onPress={() => setH12(h12, a)} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ selected: ap === a }}>
               <Text style={[st.ampmTxt, ap === a && st.ampmTxtSel]}>{a}</Text>
             </TouchableOpacity>
           ))}
@@ -185,19 +211,20 @@ function TimeEditor({ value, onChange }: { value: Date; onChange: (d: Date) => v
   );
 }
 
-function Stepper({ text, onUp, onDown, onText }: { text: string; onUp: () => void; onDown: () => void; onText: (n: number) => void }) {
+function Stepper({ label, text, onUp, onDown, onText }: { label: string; text: string; onUp: () => void; onDown: () => void; onText: (n: number) => void }) {
   return (
     <View style={st.stepper}>
-      <TouchableOpacity style={st.stepBtn} onPress={onUp} hitSlop={6} activeOpacity={0.7}><Text style={st.stepTxt}>▲</Text></TouchableOpacity>
+      <TouchableOpacity style={st.stepBtn} onPress={onUp} hitSlop={6} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${label} up`}><Text style={st.stepTxt}>▲</Text></TouchableOpacity>
       <TextInput
         style={st.stepInput}
+        accessibilityLabel={label}
         value={text}
         onChangeText={(t) => { const n = parseInt(t.replace(/\D/g, ''), 10); if (!Number.isNaN(n)) onText(n); }}
         keyboardType="number-pad"
         maxLength={2}
         selectTextOnFocus
       />
-      <TouchableOpacity style={st.stepBtn} onPress={onDown} hitSlop={6} activeOpacity={0.7}><Text style={st.stepTxt}>▼</Text></TouchableOpacity>
+      <TouchableOpacity style={st.stepBtn} onPress={onDown} hitSlop={6} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${label} down`}><Text style={st.stepTxt}>▼</Text></TouchableOpacity>
     </View>
   );
 }

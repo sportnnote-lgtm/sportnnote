@@ -52,7 +52,7 @@ export function VoiceNav({ matches, onOpenMatch }: { matches: Match[]; onOpenMat
 
   return (
     <View style={open ? sv.wrap : undefined}>
-      <TouchableOpacity style={sv.iconBtn} activeOpacity={0.8} onPress={toggle} accessibilityLabel="Voice navigation">
+      <TouchableOpacity accessibilityRole="button" style={sv.iconBtn} activeOpacity={0.8} onPress={toggle} accessibilityLabel="Voice navigation">
         <Text style={sv.icon}>{open ? '🎙️' : '🎙'}</Text>
       </TouchableOpacity>
       {open && (

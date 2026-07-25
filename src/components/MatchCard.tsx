@@ -16,7 +16,7 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
   const tz = useUserTimeZone(); // show kickoff in the viewer's own timezone
   const time = formatShort(match.startsAt, tz);
   return (
-    <TouchableOpacity style={s.card} activeOpacity={0.85} onPress={onPress}>
+    <TouchableOpacity accessibilityRole="button" style={s.card} activeOpacity={0.85} onPress={onPress}>
       <View style={s.top}>
         <Text style={s.sport}>
           {plugin.icon} {plugin.name}

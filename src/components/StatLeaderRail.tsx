@@ -37,7 +37,7 @@ export function StatLeaderRail({
         <View key={cat.key} style={[st.card, { width: cardW }]}>
           <Text style={st.cardTitle}>{cat.label}</Text>
           {cat.leaders.slice(0, topN).map((l, i) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={l.playerId}
               activeOpacity={onPlayer ? 0.8 : 1}
               onPress={() => onPlayer?.(l.playerId)}

@@ -83,7 +83,7 @@ export default function FollowingScreen() {
           <>
             <SectionHeader title="Players" count={followedPlayers.length} onSeeAll={followedPlayers.length > SECTION_CAP ? () => setShowAllPlayers((v) => !v) : undefined} expanded={showAllPlayers} />
             {(showAllPlayers ? followedPlayers : followedPlayers.slice(0, SECTION_CAP)).map((p) => (
-              <TouchableOpacity key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>
+              <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>
                 <Card style={st.row}>
                   <View style={[st.avatar, { backgroundColor: (p.houseColor ?? theme.colors.surfaceAlt) + '33' }]}>
                     <Text style={[st.avatarText, { color: p.houseColor ?? theme.colors.primary }]}>
@@ -106,7 +106,7 @@ export default function FollowingScreen() {
 }
 
 const Unfollow = ({ onPress }: { onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+  <TouchableOpacity accessibilityRole="button" onPress={onPress} activeOpacity={0.8}>
     <Pill label="★ Following" color={theme.colors.primary} textColor="#06120D" />
   </TouchableOpacity>
 );

@@ -82,7 +82,7 @@ export function ContactCard({
               keyboardType="number-pad"
               maxLength={6}
             />
-            <TouchableOpacity style={st.confirmBtn} activeOpacity={0.85} onPress={() => confirm(channel)}>
+            <TouchableOpacity accessibilityRole="button" style={st.confirmBtn} activeOpacity={0.85} onPress={() => confirm(channel)}>
               <Text style={st.confirmText}>Confirm</Text>
             </TouchableOpacity>
           </View>

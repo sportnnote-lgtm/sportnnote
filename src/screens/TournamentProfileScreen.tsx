@@ -185,7 +185,7 @@ export default function TournamentProfileScreen() {
 
         <View style={st.tags}>
           {sports.map((s) => (
-            <TouchableOpacity key={s} activeOpacity={0.8} onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: s, tournamentName: tournament.name })}>
+            <TouchableOpacity accessibilityRole="button" key={s} activeOpacity={0.8} onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: s, tournamentName: tournament.name })}>
               <Pill label={`${getSport(s).icon} ${getSport(s).name} ›`} />
             </TouchableOpacity>
           ))}
@@ -219,7 +219,7 @@ export default function TournamentProfileScreen() {
         )}
 
         {hostOrg ? (
-          <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: hostOrg.id })}>
+          <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: hostOrg.id })}>
             <Card style={st.hostOrgRow}>
               <Text style={st.hostOrgIcon}>🏛️</Text>
               <View style={{ flex: 1 }}>
@@ -307,7 +307,7 @@ export default function TournamentProfileScreen() {
         />
         <View style={st.segment}>
           {(['upcoming', 'completed'] as const).map((k) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={k}
               style={[st.segBtn, matchTab === k && st.segBtnActive]}
               activeOpacity={0.8}
@@ -350,7 +350,7 @@ export default function TournamentProfileScreen() {
             <Text style={textStyles.muted}>Points across every sport.</Text>
             <Card style={{ gap: theme.spacing(1) }}>
               {(showOverall ? overall : overall.slice(0, SECTION_CAP)).map((o, i) => (
-                <TouchableOpacity key={o.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: o.teamId })}>
+                <TouchableOpacity accessibilityRole="button" key={o.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: o.teamId })}>
                   <View style={[st.oRow, i > 0 && st.divider]}>
                     <Text style={st.rank}>{i + 1}</Text>
                     <View style={[st.dot, { backgroundColor: o.colorHex ?? theme.colors.surfaceAlt }]} />
@@ -396,7 +396,7 @@ export default function TournamentProfileScreen() {
           expanded={showTeams}
         />
         {(showTeams ? tourneyTeams : tourneyTeams.slice(0, SECTION_CAP)).map((t) => (
-          <TouchableOpacity key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>
+          <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>
             <Card style={st.teamRow}>
               <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
               <View style={{ flex: 1 }}>

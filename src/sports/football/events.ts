@@ -23,8 +23,8 @@ export interface FootballEvent {
   secondName?: string;
   /** how a goal was scored (open play / penalty / free kick / header) */
   goalType?: GoalType;
-  /** which half it occurred in (1 or 2) — for the per-half stats split */
-  half?: 1 | 2;
+  /** which half it occurred in — 1/2 in regulation, 3/4 in extra time */
+  half?: 1 | 2 | 3 | 4;
   /** a red that resulted from a second yellow (shown as a red badge with a "2") */
   secondYellow?: boolean;
   /** goals: which body part struck it (left/right foot, head, chest) */
@@ -85,8 +85,8 @@ export interface StatEvent {
   onTarget?: boolean;
   /** passes: was it completed? */
   complete?: boolean;
-  /** which half it occurred in (1 or 2) — for the per-half stats split */
-  half?: 1 | 2;
+  /** which half it occurred in — 1/2 in regulation, 3/4 in extra time */
+  half?: 1 | 2 | 3 | 4;
 }
 
 export const STAT_META: Record<StatKind, { icon: string; label: string }> = {

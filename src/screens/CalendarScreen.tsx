@@ -122,7 +122,7 @@ export default function CalendarScreen() {
     const live = m.status === 'live';
     const done = m.status === 'completed';
     return (
-      <TouchableOpacity key={m.id} activeOpacity={0.85} onPress={() => openMatch(m)}>
+      <TouchableOpacity accessibilityRole="button" key={m.id} activeOpacity={0.85} onPress={() => openMatch(m)}>
         <Card style={st.itemRow}>
           <Text style={st.itemIcon}>{getSport(m.sport).icon}</Text>
           <View style={{ flex: 1 }}>
@@ -140,7 +140,7 @@ export default function CalendarScreen() {
   };
 
   const tournamentRow = (t: Tournament, note?: string) => (
-    <TouchableOpacity key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
+    <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
       <Card style={st.itemRow}>
         <Text style={st.itemIcon}>🏆</Text>
         <View style={{ flex: 1 }}>
@@ -223,7 +223,7 @@ export default function CalendarScreen() {
                 const isToday = day === todayStr;
                 const isSel = day === selected;
                 return (
-                  <TouchableOpacity key={day} style={st.cell} activeOpacity={0.7} onPress={() => setSelected(day)}>
+                  <TouchableOpacity accessibilityRole="button" key={day} style={st.cell} activeOpacity={0.7} onPress={() => setSelected(day)}>
                     <View style={[st.cellInner, isSel && st.cellSel, isToday && !isSel && st.cellToday]}>
                       <Text style={[st.cellNum, isSel && st.cellNumSel]}>{d}</Text>
                       {dayHasItems(day) ? <View style={[st.dot, isSel && st.dotSel]} /> : <View style={st.dotPlaceholder} />}

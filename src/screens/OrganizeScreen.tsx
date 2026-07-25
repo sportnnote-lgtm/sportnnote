@@ -97,7 +97,7 @@ export default function OrganizeScreen() {
           (showHosted ? hosted : hosted.slice(0, SECTION_CAP)).map((t) => {
             const meta = STATUS_META[statusOf(t)];
             return (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 key={t.id}
                 activeOpacity={0.85}
                 onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}
@@ -132,7 +132,7 @@ export default function OrganizeScreen() {
         <Text style={textStyles.muted}>A school, club, company… that runs recurring events.</Text>
         <Button label="🏛️ New community" variant="ghost" onPress={() => nav.navigate('CreateCommunity')} />
         {(showCommunities ? myCommunities : myCommunities.slice(0, SECTION_CAP)).map((o) => (
-          <TouchableOpacity key={o.id} activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: o.id })}>
+          <TouchableOpacity accessibilityRole="button" key={o.id} activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: o.id })}>
             <Card style={st.cardHead}>
               <Text style={st.communityIcon}>🏛️</Text>
               <View style={{ flex: 1 }}>

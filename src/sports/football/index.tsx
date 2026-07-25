@@ -64,7 +64,10 @@ export interface FootballState {
   /** extra substitutions unlocked when extra time begins (per team) */
   etExtraSubs: number;
   /** added (injury) time the fourth official signalled, per half */
-  stoppage: { 1: number; 2: number };
+  /** Added (injury) minutes announced per half. Extra time is halves 3 & 4, so
+   *  all four are keyed — a 2-key record silently returned `undefined` in ET and
+   *  the added-time prompt never appeared. */
+  stoppage: { 1: number; 2: number; 3: number; 4: number };
   /** granular, player-attributed match stats (shots, fouls, corners…) */
   stats: StatEvent[];
   /** time-based possession: who has the ball, when they got it, accrued ms each */
@@ -129,7 +132,7 @@ const init = (config?: Record<string, unknown>): FootballState => ({
   halfMinutes: Number(config?.halfMinutes ?? 45),
   etMinutes: Number(config?.extraTimeMinutes ?? 15),
   etExtraSubs: Number(config?.extraTimeSubs ?? 1),
-  stoppage: { 1: 0, 2: 0 },
+  stoppage: { 1: 0, 2: 0, 3: 0, 4: 0 },
   stats: [],
   possession: { side: null, acc: { home: 0, away: 0 } },
   track: readTrack(config),
@@ -154,6 +157,9 @@ export const penScore = (s: FootballState) => ({
   home: s.shootout?.home.filter(Boolean).length ?? 0,
   away: s.shootout?.away.filter(Boolean).length ?? 0,
 });
+
+/** How each half is spoken about in the UI. */
+const HALF_NAME: Record<1 | 2 | 3 | 4, string> = { 1: 'first half', 2: 'second half', 3: 'first period of extra time', 4: 'second period of extra time' };
 
 /** Elapsed-minute offset at the START of each half: 0, 45, 90, 105 (halves 1-4). */
 const startOffset = (s: FootballState): number => {
@@ -220,7 +226,7 @@ const reducer = (s: FootballState, a: ScoreAction): FootballState => {
   const minute = Number(a.payload?.minute ?? currentMinute(s));
   // The half an event belongs to: carried in the payload when the controls stamp
   // it (handles stoppage time + backfill correctly); else the current half.
-  const evHalf: 1 | 2 = (a.payload?.half as 1 | 2 | undefined) ?? s.half;
+  const evHalf: 1 | 2 | 3 | 4 = (a.payload?.half as 1 | 2 | 3 | 4 | undefined) ?? s.half;
   const name = a.attribution?.playerName;
   switch (a.type) {
     case 'KICKOFF': {
@@ -429,7 +435,7 @@ const PlayerTable = ({
       <Text style={ctrl.meta}>No players on the field.</Text>
     ) : (
       players.map((p) => (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           key={p.id}
           style={[ctrl.prow, p.id === selectedId && ctrl.prowSel]}
           activeOpacity={0.7}
@@ -657,7 +663,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   };
   const removeStat = (st: StatEvent) => {
     const key = STAT_KEY[st.kind];
-    const extra = st.kind === 'shot' && st.onTarget ? { shotsOnTarget: -1 } : st.kind === 'pass' && st.complete ? { passesComplete: -1 } : undefined;
+    const extra: Record<string, number> | undefined =
+      st.kind === 'shot' && st.onTarget ? { shotsOnTarget: -1 } : st.kind === 'pass' && st.complete ? { passesComplete: -1 } : undefined;
     const attribution = st.playerId && key ? { playerId: st.playerId, stat: key, by: -1, playerName: st.playerName, extra } : undefined;
     dispatch({ type: 'REMOVE_EVENT', payload: { id: st.id, target: 'stat' }, attribution });
   };
@@ -789,7 +796,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     const startStat = (kind: StatKind | 'card') => setFlow({ mode: 'stat', kind, step: 'team' });
     switch (intent.kind) {
       case 'kickoff': if (!state.startedAt) { dispatch({ type: 'KICKOFF', payload: { at: Date.now() } }); say('Kicked off ▶'); } else say('Already underway.'); return;
-      case 'endHalf': if (state.half === 1) { dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } }); say('First half ended.'); } else say('Say "full time" to end the match.'); return;
+      case 'endHalf': if (state.half === 1 || state.half === 3) { const ended = HALF_NAME[state.half]; dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } }); say(`Ended the ${ended}.`); } else say('Say "full time" to end the match.'); return;
       case 'fullTime': endMatch(); say('Full time — match ended.'); return;
       case 'goal': { const side = teamIn ?? state.possession.side ?? 'home'; setFlow({ mode: 'goal', side, step: 'scorer' }); say(`Goal for ${teamName(side)} — who scored?`); return; }
       case 'ownGoal': { const side = teamIn ?? 'home'; setFlow({ mode: 'goal', side, step: 'og' }); say(`Own goal for ${teamName(side)} — which opponent?`); return; }
@@ -1237,12 +1244,13 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       {(() => {
         const base = halfBase(state);
         const min = currentMinute(state);
-        const stop = state.stoppage[state.half];
+        // `?? 0` covers matches saved before ET halves were keyed here.
+        const stop = state.stoppage[state.half] ?? 0;
         if (stop === 0 && min >= base - 2) {
           return (
             <View style={ctrl.addedBox}>
               <Text style={ctrl.label}>⏱ Added time</Text>
-              <Text style={ctrl.meta}>The {state.half === 1 ? 'first' : 'second'} half is nearly up — enter the minutes of added (injury) time.</Text>
+              <Text style={ctrl.meta}>The {HALF_NAME[state.half]} is nearly up — enter the minutes of added (injury) time.</Text>
               <View style={ctrl.chips}>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((m) => (
                   <Button key={m} label={`+${m}`} variant="ghost" style={ctrl.actionBtn} onPress={() => dispatch({ type: 'SET_STOPPAGE', payload: { minutes: m } })} />
@@ -1252,7 +1260,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           );
         }
         if (stop > 0 && min >= base + stop) {
-          return <Text style={ctrl.endNudge}>⏱ {stop}′ added time is up — {state.half === 1 ? 'end the first half' : 'end the match'}.</Text>;
+          return <Text style={ctrl.endNudge}>⏱ {stop}′ added time is up — {state.half === 1 || state.half === 3 ? `end the ${HALF_NAME[state.half]}` : 'end the match'}.</Text>;
         }
         if (stop > 0) return <Text style={ctrl.meta}>⏱ +{stop}′ added time signalled</Text>;
         return null;
@@ -1401,8 +1409,11 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
   }, [s.startedAt]);
   // Split the table into Overall / 1st half / 2nd half. Events carry their half,
   // so per-half totals are just the same aggregation over a filtered event set.
-  const [scope, setScope] = useState<'all' | 1 | 2>('all');
-  const inScope = (h?: 1 | 2) => scope === 'all' || h === scope;
+  const [scope, setScope] = useState<'all' | 1 | 2 | 3 | 4>('all');
+  const inScope = (h?: 1 | 2 | 3 | 4) => scope === 'all' || h === scope;
+  // Extra-time periods only get their own chips once they've actually been played,
+  // otherwise every 90-minute match shows two dead filters.
+  const etPlayed = s.half >= 3;
   const scoped = scope === 'all'
     ? s
     : { ...s, stats: s.stats.filter((e) => inScope(e.half)), events: s.events.filter((e) => inScope(e.half)) };
@@ -1434,7 +1445,7 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <View style={sv.scopeRow}>
-        {([['all', 'Overall'], [1, '1st half'], [2, '2nd half']] as const).map(([key, label]) => (
+        {([['all', 'Overall'], [1, '1st half'], [2, '2nd half'], ...(etPlayed ? ([[3, 'ET 1'], [4, 'ET 2']] as const) : [])] as const).map(([key, label]) => (
           <SelectChip key={label} label={label} active={scope === key} onPress={() => setScope(key)} />
         ))}
       </View>

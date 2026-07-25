@@ -1201,7 +1201,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
 
   const Award = ({ icon, label, p, detail }: { icon: string; label: string; p?: PlayerRating; detail: string }) =>
     p ? (
-      <TouchableOpacity activeOpacity={0.85} onPress={() => onPlayer?.(p.id)} style={sum.award}>
+      <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(p.id)} style={sum.award}>
         <Text style={sum.awardIcon}>{icon}</Text>
         <View style={{ flex: 1 }}>
           <Text style={sum.awardLabel} numberOfLines={1}>{label}</Text>
@@ -1229,7 +1229,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
       <Text style={ctrl.meta}>Rated on runs, wickets, dots, boundaries, catches & run-outs (top-order wickets count more).</Text>
       <View style={ctrl.card}>
         {players.map((p, i) => (
-          <TouchableOpacity key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, i > 0 && sum.divider]}>
+          <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, i > 0 && sum.divider]}>
             <Text style={sum.rank}>{i + 1}</Text>
             <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
             <View style={{ flex: 1 }}>
@@ -1269,7 +1269,7 @@ function InningsCard({
 
   return (
     <View style={ctrl.card}>
-      <TouchableOpacity activeOpacity={0.8} onPress={onToggle} style={ctrl.innHead}>
+      <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={onToggle} style={ctrl.innHead}>
         <View style={[ctrl.teamDot, { backgroundColor: color }]} />
         <Text style={[ctrl.innName, batting && !s.ended && { color: theme.colors.primary }]} numberOfLines={1}>
           {name}{batting && !s.ended ? ' 🏏' : ''}

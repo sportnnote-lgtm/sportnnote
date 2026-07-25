@@ -82,7 +82,7 @@ export default function TeamsScreen() {
           <Text style={textStyles.muted}>Colour</Text>
           <View style={st.chips}>
             {PALETTE.map((c) => (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 key={c}
                 onPress={() => setColor(c)}
                 style={[st.swatch, { backgroundColor: c }, color === c && st.swatchActive]}

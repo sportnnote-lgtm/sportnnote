@@ -91,14 +91,32 @@ export default function HomeScreen() {
           </View>
           <VoiceNav matches={matches} onOpenMatch={openScorer} />
           {canScore && (
-            <TouchableOpacity style={st.iconBtn} activeOpacity={0.8} onPress={() => nav.navigate('ScheduleMatch', {})}>
+            <TouchableOpacity
+              style={st.iconBtn}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Schedule a friendly match"
+              onPress={() => nav.navigate('ScheduleMatch', {})}
+            >
               <Text style={st.icon}>🤝</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={st.iconBtn} activeOpacity={0.8} onPress={() => nav.navigate('Calendar')}>
+          <TouchableOpacity
+            style={st.iconBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Calendar"
+            onPress={() => nav.navigate('Calendar')}
+          >
             <Text style={st.icon}>📅</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={st.iconBtn} activeOpacity={0.8} onPress={() => nav.navigate('Notifications')}>
+          <TouchableOpacity
+            style={st.iconBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            onPress={() => nav.navigate('Notifications')}
+          >
             <Text style={st.icon}>🔔</Text>
             {unread > 0 && (
               <View style={st.badge}>
@@ -130,7 +148,12 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
             {selected && (
-              <TouchableOpacity activeOpacity={0.8} onPress={() => nav.navigate('Tournament', { tournamentId: selected.id })}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${selected.name}`}
+                onPress={() => nav.navigate('Tournament', { tournamentId: selected.id })}
+              >
                 <Card style={st.tourCard}>
                   <View style={{ flex: 1, gap: theme.spacing(1) }}>
                     <Text style={textStyles.body}>{selected.name}</Text>
@@ -175,7 +198,14 @@ export default function HomeScreen() {
         </Text>
         <View style={st.sportGrid}>
           {mySports.map((s) => (
-            <TouchableOpacity key={s} activeOpacity={0.85} style={st.sportTile} onPress={() => openSport(s)}>
+            <TouchableOpacity
+              key={s}
+              activeOpacity={0.85}
+              style={st.sportTile}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${getSport(s).name}`}
+              onPress={() => openSport(s)}
+            >
               <Text style={st.sportIcon}>{getSport(s).icon}</Text>
               <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{getSport(s).name}</Text>
               <Text style={st.chevron}>›</Text>
@@ -183,7 +213,7 @@ export default function HomeScreen() {
           ))}
         </View>
         {newSports.length > 0 && (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             activeOpacity={0.85}
             style={st.tryTile}
             onPress={() => nav.navigate('TryNewSport', { sports: newSports })}

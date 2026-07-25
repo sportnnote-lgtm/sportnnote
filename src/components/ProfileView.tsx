@@ -91,7 +91,7 @@ export function ProfileView({
   return (
     <ScrollView contentContainerStyle={st.content}>
       <View style={st.headerRow}>
-        <TouchableOpacity activeOpacity={onEditProfile ? 0.8 : 1} disabled={!onEditProfile} onPress={changePhoto}>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={onEditProfile ? 0.8 : 1} disabled={!onEditProfile} onPress={changePhoto}>
           <View style={[st.avatar, { backgroundColor: (player.houseColor ?? theme.colors.surfaceAlt) + '33' }]}>
             {photo ? (
               <Image source={{ uri: photo }} style={st.avatarImg} />
@@ -195,7 +195,7 @@ export function ProfileView({
         // any surfaced stat tracked in fewer games than played → flag with a cloud
         const partial = hasPartialCoverage(stats.recent, b);
         return (
-          <TouchableOpacity key={b.sport} activeOpacity={0.85} onPress={() => onOpenSport?.(b.sport as SportId)}>
+          <TouchableOpacity accessibilityRole="button" key={b.sport} activeOpacity={0.85} onPress={() => onOpenSport?.(b.sport as SportId)}>
             <Card style={st.sportRow}>
               <Text style={st.sportIcon}>{getSport(b.sport as SportId).icon}</Text>
               <View style={{ flex: 1 }}>
@@ -231,7 +231,7 @@ export function ProfileView({
             const period = membershipPeriod(m);
             const std = isAcademicCommunity(o.type) ? currentStandard(m) : undefined;
             return (
-              <TouchableOpacity key={o.id} activeOpacity={0.85} onPress={() => onOpenOrg?.(o.id)}>
+              <TouchableOpacity accessibilityRole="button" key={o.id} activeOpacity={0.85} onPress={() => onOpenOrg?.(o.id)}>
                 <Card style={st.sportRow}>
                   <Text style={st.sportIcon}>🏛️</Text>
                   <View style={{ flex: 1 }}>
@@ -255,7 +255,7 @@ export function ProfileView({
             const m = memberEntry(o, player.id);
             const period = membershipPeriod(m);
             return (
-              <TouchableOpacity key={o.id} activeOpacity={0.85} onPress={() => onOpenOrg?.(o.id)}>
+              <TouchableOpacity accessibilityRole="button" key={o.id} activeOpacity={0.85} onPress={() => onOpenOrg?.(o.id)}>
                 <Card style={[st.sportRow, { opacity: 0.65 }]}>
                   <Text style={st.sportIcon}>🏛️</Text>
                   <View style={{ flex: 1 }}>
@@ -315,7 +315,7 @@ function ReminderPrefsCard({ onOpen }: { onOpen?: () => void }) {
   const selected = useSyncExternalStore(reminderPrefsStore.subscribe, reminderPrefsStore.getSnapshot);
   const summary = selected.length ? selected.map((m) => formatLead(m).replace(' before', '')).join(' · ') : 'Off';
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onOpen} disabled={!onOpen}>
+    <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onOpen} disabled={!onOpen}>
       <Card style={{ gap: theme.spacing(1) }}>
         <View style={st.remHead}>
           <Text style={textStyles.h3}>🔔 Match reminders</Text>

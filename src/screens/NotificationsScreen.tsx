@@ -87,7 +87,7 @@ export default function NotificationsScreen() {
             {(showAllAlerts ? items : items.slice(0, SECTION_CAP)).map((n) => {
               const actionable = !!(n.matchId || n.playerId);
               return (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   key={n.id}
                   activeOpacity={actionable ? 0.85 : 1}
                   disabled={!actionable}
@@ -116,7 +116,7 @@ export default function NotificationsScreen() {
               expanded={showAllRecent}
             />
             {(showAllRecent ? followedRecent : followedRecent.slice(0, SECTION_CAP)).map(({ player, l }) => (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 key={`${player.id}-${l.id}`}
                 activeOpacity={0.85}
                 onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}

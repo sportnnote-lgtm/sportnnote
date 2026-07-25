@@ -59,7 +59,7 @@ export function LiveStream({ url, live }: { url?: string; live?: boolean }) {
 
   // Native, or a link we can't embed → a card that opens the stream externally.
   return (
-    <TouchableOpacity style={s.card} activeOpacity={0.85} onPress={() => Linking.openURL(url)}>
+    <TouchableOpacity accessibilityRole="button" style={s.card} activeOpacity={0.85} onPress={() => Linking.openURL(url)}>
       <Text style={s.cardIcon}>{live ? '🔴' : '▶'}</Text>
       <View style={{ flex: 1 }}>
         <Text style={s.cardTitle}>{live ? 'Watch live stream' : 'Open stream'}</Text>

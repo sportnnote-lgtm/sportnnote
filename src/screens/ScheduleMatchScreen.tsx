@@ -202,14 +202,14 @@ function SportPicker({ sport, onPick }: { sport: SportId | null; onPick: (s: Spo
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={textStyles.muted}>Sport</Text>
-      <TouchableOpacity activeOpacity={0.8} style={st.field} onPress={() => setOpen((o) => !o)}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={cur ? `Sport: ${cur.name}` : 'Select a sport'} accessibilityState={{ expanded: open }} activeOpacity={0.8} style={st.field} onPress={() => setOpen((o) => !o)}>
         <Text style={[st.fieldValue, !cur && st.fieldPlaceholder]}>{cur ? `${cur.icon}  ${cur.name}` : 'Select a sport'}</Text>
         <Text style={st.caret}>{open ? '▴' : '▾'}</Text>
       </TouchableOpacity>
       {open && (
         <View style={st.dropdown}>
           {SPORT_LIST.map((s) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={s.id}
               activeOpacity={0.7}
               style={[st.option, s.id === sport && st.optionActive]}
@@ -313,6 +313,7 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(3),
   },
   fieldValue: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
+  fieldPlaceholder: { color: theme.colors.textMuted, fontWeight: '400' },
   caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   dropdown: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
   option: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(3), borderBottomWidth: 1, borderBottomColor: theme.colors.border },

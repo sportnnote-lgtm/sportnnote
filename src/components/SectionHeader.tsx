@@ -28,7 +28,7 @@ export function SectionHeader({
     <View style={st.row}>
       <Text style={[textStyles.h3, st.title]} numberOfLines={1}>{title}</Text>
       {onSeeAll && (
-        <TouchableOpacity onPress={onSeeAll} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity accessibilityRole="button" onPress={onSeeAll} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={st.seeAll}>{expanded ? 'Show less' : `See all${count != null ? ` (${count})` : ''} ›`}</Text>
         </TouchableOpacity>
       )}

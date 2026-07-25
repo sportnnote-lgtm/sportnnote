@@ -50,10 +50,11 @@ export default function DiscoverScreen() {
 
         <View style={st.segment}>
           {MODES.map((m) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={m.key}
               style={[st.segBtn, mode === m.key && st.segBtnActive]}
               activeOpacity={0.8}
+              accessibilityState={{ selected: mode === m.key }}
               onPress={() => setMode(m.key)}
             >
               <Text style={[st.segText, mode === m.key && st.segTextActive]}>{m.label}</Text>
@@ -96,7 +97,7 @@ export default function DiscoverScreen() {
         {searching ? <LoadingState label="Searching players…" /> : results.length === 0 ? <Text style={textStyles.muted}>No players match. Try a different search.</Text> : null}
 
         {(showAllResults ? results : results.slice(0, SECTION_CAP)).map(({ player, stats }, i) => (
-          <TouchableOpacity key={player.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}>
+          <TouchableOpacity accessibilityRole="button" key={player.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}>
             <Card style={st.playerCard}>
               {filtering ? null : <Text style={st.rank}>{i + 1}</Text>}
               <View style={[st.avatar, { backgroundColor: (player.houseColor ?? theme.colors.surfaceAlt) + '33' }]}>
@@ -141,7 +142,7 @@ export default function DiscoverScreen() {
             />
             <Text style={textStyles.muted}>Accepting team registrations — tap to view & request to join.</Text>
             {(showAllOpenTours ? openTournaments : openTournaments.slice(0, SECTION_CAP)).map((t) => (
-              <TouchableOpacity key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
+              <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
                 <Card style={st.teamRow}>
                   <Text style={st.sportIcon}>🏆</Text>
                   <View style={{ flex: 1 }}>
@@ -167,15 +168,16 @@ export default function DiscoverScreen() {
         {(showAllTeams ? teams : teams.slice(0, SECTION_CAP)).map((t) => {
           const following = isFollowing('team', t.id);
           return (
-            <TouchableOpacity key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>
+            <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>
               <Card style={st.teamRow}>
                 <View style={[st.teamDot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={textStyles.body}>{t.name}</Text>
                   <Text style={textStyles.muted}>{t.sports.map((s) => getSport(s).icon).join(' ')}</Text>
                 </View>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[st.followBtn, following && st.followBtnOn]}
+                  accessibilityState={{ selected: following }}
                   onPress={() => toggle('team', t.id)}
                   activeOpacity={0.8}
                 >

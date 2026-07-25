@@ -22,7 +22,7 @@ export function LeagueTable({
   return (
     <Card style={{ gap: theme.spacing(1) }}>
       {teams.map((t, i) => (
-        <TouchableOpacity key={t.teamId} activeOpacity={onTeam ? 0.8 : 1} onPress={() => onTeam?.(t.teamId)}>
+        <TouchableOpacity accessibilityRole="button" key={t.teamId} activeOpacity={onTeam ? 0.8 : 1} onPress={() => onTeam?.(t.teamId)}>
           <View style={[st.row, i > 0 && st.divider]}>
             <Text style={st.rank}>{i + 1}</Text>
             <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />

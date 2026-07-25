@@ -190,7 +190,7 @@ export default function SportProfileScreen() {
                 </Card>
               );
               return openable ? (
-                <TouchableOpacity key={l.id} activeOpacity={0.85} onPress={() => openMatch(l.matchId)}>{row}</TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" key={l.id} activeOpacity={0.85} onPress={() => openMatch(l.matchId)}>{row}</TouchableOpacity>
               ) : (
                 <View key={l.id}>{row}</View>
               );
@@ -222,7 +222,7 @@ function Stat({
   // A partial-coverage stat is tappable: the cloud opens the games it spans.
   return (
     <View style={st.statCardWrap}>
-      {coverage ? <TouchableOpacity activeOpacity={0.85} onPress={onToggle}>{inner}</TouchableOpacity> : inner}
+      {coverage ? <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onToggle}>{inner}</TouchableOpacity> : inner}
     </View>
   );
 }

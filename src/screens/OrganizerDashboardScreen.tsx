@@ -89,7 +89,7 @@ function TournamentRow({ d, onOpen, onGenerate }: { d: TournamentDash; onOpen: (
   const status = tournamentStatus(d.tournament, { total: d.total, live: d.live, completed: d.completed });
   return (
     <Card style={{ gap: theme.spacing(3) }}>
-      <TouchableOpacity activeOpacity={0.85} onPress={onOpen}>
+      <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onOpen}>
         <View style={st.headRow}>
           <Text style={[textStyles.h3, { flex: 1 }]} numberOfLines={1}>{d.tournament.name}</Text>
           <Pill label={status.label} color={status.color + '22'} textColor={status.color} />

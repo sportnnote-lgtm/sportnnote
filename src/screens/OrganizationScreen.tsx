@@ -217,7 +217,7 @@ export default function OrganizationScreen() {
   }
 
   const renderEvent = (t: Tournament) => (
-    <TouchableOpacity key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
+    <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Tournament', { tournamentId: t.id })}>
       <Card style={st.eventRow}>
         <View style={{ flex: 1 }}>
           <Text style={textStyles.body} numberOfLines={1}>{t.name}</Text>
@@ -232,7 +232,7 @@ export default function OrganizationScreen() {
     <View key={m.playerId} style={{ gap: theme.spacing(2) }}>
       <Card style={[st.memberRow, m.until && st.pastMember]}>
         <Text style={st.memberIcon}>🧑‍💼</Text>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: m.playerId })}>
+        <TouchableOpacity accessibilityRole="button" style={{ flex: 1 }} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: m.playerId })}>
           <Text style={textStyles.body} numberOfLines={1}>{nameOf(m.playerId)}</Text>
           {(m.until || m.since) ? (
             <Text style={textStyles.muted}>{m.until ? '⏳ Past member' : 'Member'} · {membershipPeriod(m)}</Text>
@@ -245,7 +245,7 @@ export default function OrganizationScreen() {
           ) : null}
         </TouchableOpacity>
         {canManage ? (
-          <TouchableOpacity activeOpacity={0.8} onPress={() => setEditingRole((v) => (v === m.playerId ? null : m.playerId))}>
+          <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => setEditingRole((v) => (v === m.playerId ? null : m.playerId))}>
             <Pill label={`${m.role} ▾`} color={theme.colors.surfaceAlt} textColor={m.role === 'Admin' ? theme.colors.accent : theme.colors.text} />
           </TouchableOpacity>
         ) : (
@@ -490,7 +490,7 @@ export default function OrganizationScreen() {
                 ) : null}
                 <Text style={textStyles.muted}>Tap a player to add</Text>
                 {addable.map((p) => (
-                  <TouchableOpacity key={p.id} style={st.addRow} activeOpacity={0.8} onPress={() => void addMember(p.id)}>
+                  <TouchableOpacity accessibilityRole="button" key={p.id} style={st.addRow} activeOpacity={0.8} onPress={() => void addMember(p.id)}>
                     <Text style={st.addText}>+ {p.fullName}</Text>
                   </TouchableOpacity>
                 ))}
@@ -928,7 +928,7 @@ function NewTeamForm({ orgId, onCreated }: { orgId: string; onCreated: () => voi
       <Text style={textStyles.muted}>Colour</Text>
       <View style={st.chips}>
         {TEAM_COLORS.map((c) => (
-          <TouchableOpacity key={c} onPress={() => setColor(c)} activeOpacity={0.8}>
+          <TouchableOpacity accessibilityRole="button" key={c} accessibilityLabel={`Team colour ${c}`} accessibilityState={{ selected: color === c }} onPress={() => setColor(c)} activeOpacity={0.8}>
             <View style={[st.colorDot, { backgroundColor: c }, color === c && st.colorDotActive]} />
           </TouchableOpacity>
         ))}
@@ -968,7 +968,7 @@ function RosterEditor({
         eligible.map((p) => {
           const inSquad = roster.includes(p.id);
           return (
-            <TouchableOpacity key={p.id} style={st.rosterRow} activeOpacity={0.8} onPress={() => toggle(p.id)}>
+            <TouchableOpacity accessibilityRole="button" key={p.id} accessibilityLabel={p.fullName} accessibilityState={{ selected: inSquad }} style={st.rosterRow} activeOpacity={0.8} onPress={() => toggle(p.id)}>
               <Text style={[st.rosterCheck, inSquad && { color: theme.colors.primary }]}>{inSquad ? '☑' : '☐'}</Text>
               <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{p.fullName}</Text>
               <Text style={textStyles.muted}>{p.city ?? ''}</Text>

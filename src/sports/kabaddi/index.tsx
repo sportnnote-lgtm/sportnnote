@@ -556,6 +556,7 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
 
 const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  row: { flexDirection: 'row', gap: theme.spacing(2) },
   flex: { flex: 1 },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: theme.font.small },

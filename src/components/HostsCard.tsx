@@ -51,7 +51,7 @@ export function HostsCard({
       {canManage && adding && (
         <View style={st.picker}>
           {addable.map((c) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={c.id}
               style={st.opt}
               activeOpacity={0.8}

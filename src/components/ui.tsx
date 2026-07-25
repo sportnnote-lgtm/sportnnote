@@ -45,12 +45,17 @@ export function Button({
   variant = 'primary',
   style,
   disabled = false,
+  accessibilityLabel,
+  accessibilityHint,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'ghost' | 'home' | 'away' | 'danger';
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  /** Override when the visible label is too terse to stand alone (e.g. "+1", "↻"). */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }) {
   const bg =
     variant === 'primary'
@@ -68,6 +73,10 @@ export function Button({
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled }}
       style={[
         styles.btn,
         { backgroundColor: bg },
@@ -106,7 +115,9 @@ export function ScreenTitle({
 }) {
   return (
     <View style={{ marginBottom: theme.spacing(4) }}>
-      <Text style={textStyles.h1}>{title}</Text>
+      <Text style={textStyles.h1} accessibilityRole="header">
+        {title}
+      </Text>
       {subtitle ? <Text style={textStyles.muted}>{subtitle}</Text> : null}
     </View>
   );
@@ -132,6 +143,9 @@ export function TextField({
       <Text style={textStyles.muted}>{label}</Text>
       <TextInput
         style={[styles.input, multiline && styles.inputMultiline]}
+        // The <Text> above is visually a label but isn't associated with the
+        // input, so a screen reader would otherwise read this field as unnamed.
+        accessibilityLabel={label}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
@@ -165,6 +179,11 @@ export function SelectChip({
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      // `selected` is what a screen reader announces as "selected"/"not selected" —
+      // without it a chip is indistinguishable from its neighbours by voice.
+      accessibilityState={{ selected: active, disabled }}
       style={[styles.selChip, active && styles.selChipActive, disabled && styles.selChipDisabled]}
     >
       {dotColor ? <View style={[styles.selDot, { backgroundColor: dotColor }]} /> : null}

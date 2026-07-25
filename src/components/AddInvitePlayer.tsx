@@ -73,7 +73,7 @@ export function AddInvitePlayer({
 
   return (
     <View style={st.inviteCard}>
-      <TouchableOpacity activeOpacity={0.8} style={st.inviteHead} onPress={() => setOpen((o) => !o)}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={title ?? 'Add or invite a player'} accessibilityState={{ expanded: open }} activeOpacity={0.8} style={st.inviteHead} onPress={() => setOpen((o) => !o)}>
         <Text style={st.inviteTitle}>{title ?? '＋ Add / invite a player'}</Text>
         <Text style={st.caretMuted}>{open ? '▴' : '▾'}</Text>
       </TouchableOpacity>

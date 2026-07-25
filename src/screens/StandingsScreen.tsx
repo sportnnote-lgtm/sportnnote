@@ -65,7 +65,7 @@ export default function StandingsScreen() {
             <Text style={textStyles.muted}>No completed {getSport(sport).name.toLowerCase()} matches yet.</Text>
           ) : (
             (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => (
-              <TouchableOpacity key={t.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: t.teamId })}>
+              <TouchableOpacity accessibilityRole="button" key={t.teamId} activeOpacity={0.8} onPress={() => nav.navigate('Team', { teamId: t.teamId })}>
                 <View style={st.row}>
                   <Text style={st.pos}>{i + 1}</Text>
                   <View style={[st.teamCol, st.teamCell]}>
@@ -92,7 +92,7 @@ export default function StandingsScreen() {
           <Text style={textStyles.muted}>No {lead.label} recorded yet.</Text>
         ) : (
           (showLeaders ? leaders : leaders.slice(0, SECTION_CAP)).map((l, i) => (
-            <TouchableOpacity key={l.playerId} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}>
+            <TouchableOpacity accessibilityRole="button" key={l.playerId} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}>
               <Card style={st.leaderRow}>
                 <Text style={st.pos}>{i + 1}</Text>
                 <View style={{ flex: 1 }}>

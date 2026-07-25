@@ -104,7 +104,7 @@ export function ConnectBoard() {
 
             <View style={st.actions}>
               {l.contactPhone ? (
-                <TouchableOpacity style={st.waBtn} activeOpacity={0.85} onPress={() => reachOut(l)}>
+                <TouchableOpacity accessibilityRole="button" style={st.waBtn} activeOpacity={0.85} onPress={() => reachOut(l)}>
                   <Text style={st.waText}>💬 WhatsApp</Text>
                 </TouchableOpacity>
               ) : (

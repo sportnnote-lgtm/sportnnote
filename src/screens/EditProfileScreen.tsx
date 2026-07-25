@@ -217,7 +217,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
                       autoCapitalize="none"
                     />
                   </View>
-                  <TouchableOpacity onPress={() => removeTeam(s, i)} style={st.removeBtn} activeOpacity={0.7}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove team" onPress={() => removeTeam(s, i)} style={st.removeBtn} activeOpacity={0.7}>
                     <Text style={st.removeTxt}>✕</Text>
                   </TouchableOpacity>
                 </View>

@@ -106,7 +106,7 @@ export default function TeamProfileScreen() {
           <Text style={textStyles.muted}>No players listed for this team.</Text>
         ) : (
           (showSquad ? squad : squad.slice(0, SECTION_CAP)).map((p) => (
-            <TouchableOpacity key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>
+            <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: p.id })}>
               <Card style={st.playerRow}>
                 <View style={[st.avatar, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33' }]}>
                   <Text style={[st.avatarText, { color: team.colorHex ?? theme.colors.primary }]}>

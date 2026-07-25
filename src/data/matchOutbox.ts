@@ -22,6 +22,15 @@ const queues = new Map<string, MatchEventRecord[]>();
 const hydrated = new Set<string>();
 const flushing = new Set<string>();
 
+// Consecutive failed sync attempts per match, and the last error seen. A dropped
+// connection and a backend that keeps REJECTING an event look identical at the
+// call site, but they need opposite messages: the first resolves itself, the
+// second never will. After this many failures while the device still reports a
+// working network, we stop calling it "offline" and say sync is stuck.
+const failures = new Map<string, number>();
+const lastError = new Map<string, string>();
+const STUCK_AFTER = 3;
+
 // On the web we get real online/offline events; on native we probe instead.
 const hasOnlineEvents =
   typeof window !== 'undefined' && typeof window.addEventListener === 'function' && 'ononline' in window;
@@ -44,8 +53,16 @@ async function persist(matchId: string) {
   }
 }
 
+/** What the platform itself reports, independent of our own sync outcomes. */
+const deviceOnline = () => (hasOnlineEvents && typeof navigator !== 'undefined' ? navigator.onLine : true);
+
 export const matchOutbox = {
   isOnline: () => online,
+  /** True when syncing keeps failing even though the device has a network — the
+   *  queue is safe on this device but will NOT drain on its own. */
+  isStuck: (matchId: string) => (failures.get(matchId) ?? 0) >= STUCK_AFTER && deviceOnline(),
+  /** The last sync error for a match, for display/support. */
+  syncError: (matchId: string) => lastError.get(matchId) ?? null,
   pendingCount: (matchId: string) => queues.get(matchId)?.length ?? 0,
   getPending: (matchId: string) => queues.get(matchId) ?? [],
 
@@ -87,6 +104,7 @@ export const matchOutbox = {
   /** Try to sync a match's queue to the backend, oldest first. */
   async flush(matchId: string, force = false): Promise<void> {
     if (flushing.has(matchId)) return;
+    if (force) failures.delete(matchId); // a manual retry gets a clean slate
     if (!online && !force) return; // known offline — wait for reconnect
     const q = queues.get(matchId);
     if (!q?.length) return;
@@ -97,13 +115,21 @@ export const matchOutbox = {
         const rec = q[0];
         try {
           await appendMatchEvent(matchId, rec);
-        } catch {
-          online = false; // connection lost — keep everything queued, stop for now
+        } catch (e) {
+          const n = (failures.get(matchId) ?? 0) + 1;
+          failures.set(matchId, n);
+          lastError.set(matchId, e instanceof Error ? e.message : 'Sync failed');
+          // Only claim we're offline while the device agrees. If the network is
+          // up and the backend keeps refusing, keep everything queued but let
+          // the UI say so instead of promising an automatic recovery.
+          if (!deviceOnline()) online = false;
           emit();
           return;
         }
         if (q[0] === rec) q.shift(); // still the head (not undone mid-flush) → confirmed
         online = true;
+        failures.delete(matchId);
+        lastError.delete(matchId);
         await persist(matchId);
         emit();
       }

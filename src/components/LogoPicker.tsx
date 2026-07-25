@@ -33,7 +33,7 @@ export function LogoPicker({
   if (!logo && !canManage) return null; // viewers see nothing when there's no logo
 
   return (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button"
       disabled={!canManage}
       activeOpacity={canManage ? 0.8 : 1}
       onPress={change}

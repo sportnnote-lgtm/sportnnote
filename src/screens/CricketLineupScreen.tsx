@@ -120,7 +120,7 @@ export default function CricketLineupScreen() {
               <View key={id} style={[st.orderRow, !isXI && st.benchRow]}>
                 <Text style={[st.pos, !isXI && st.benchPos]}>{isXI ? i + 1 : 'SUB'}</Text>
                 <Text style={[textStyles.body, { flex: 1 }]}>{nameById(id)}{isKeeper ? ' †' : ''}</Text>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   activeOpacity={0.8}
                   onPress={() => setKeeper((k) => ({ ...k, [side]: k[side] === id ? undefined : id }))}
                   style={[st.wkBtn, isKeeper && st.wkBtnActive]}

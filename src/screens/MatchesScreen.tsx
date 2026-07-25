@@ -72,10 +72,11 @@ export default function MatchesScreen() {
 
         <View style={st.segment}>
           {TABS.map((t) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={t.key}
               style={[st.segBtn, tab === t.key && st.segBtnActive]}
               activeOpacity={0.8}
+              accessibilityState={{ selected: tab === t.key }}
               onPress={() => setTab(t.key)}
             >
               <Text style={[st.segText, tab === t.key && st.segTextActive]}>{t.label}</Text>
@@ -106,7 +107,7 @@ export default function MatchesScreen() {
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} style={[st.chip, active && st.chipActive]} activeOpacity={0.8}>
+    <TouchableOpacity accessibilityRole="button" onPress={onPress} style={[st.chip, active && st.chipActive]} activeOpacity={0.8}>
       <Text style={[st.chipText, active && st.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );

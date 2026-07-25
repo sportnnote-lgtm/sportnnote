@@ -152,7 +152,7 @@ export default function LineupEditorScreen() {
 
         <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Positions</Text>
         {slots.map((s, i) => (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             key={i}
             activeOpacity={0.85}
             onPress={() => setSelected(selected === i ? null : i)}

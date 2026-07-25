@@ -45,7 +45,7 @@ export function MatchSummary({
       </View>
 
       {mvp && (
-        <TouchableOpacity activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
           <Text style={st.mvpIcon}>🏅</Text>
           <View style={{ flex: 1 }}>
             <Text style={st.mvpLabel}>Player of the Match</Text>
@@ -59,7 +59,7 @@ export function MatchSummary({
       {awards.length > 0 && (
         <View style={st.awardGrid}>
           {awards.map((a) => (
-            <TouchableOpacity key={a.label} activeOpacity={0.85} onPress={() => onPlayer?.(a.player.id)} style={st.award}>
+            <TouchableOpacity accessibilityRole="button" key={a.label} activeOpacity={0.85} onPress={() => onPlayer?.(a.player.id)} style={st.award}>
               <Text style={st.awardIcon}>{a.icon}</Text>
               <Text style={st.awardLabel} numberOfLines={1}>{a.label}</Text>
               <Text style={st.awardName} numberOfLines={1}>{mask.byId(a.player.id, a.player.name)}</Text>
@@ -75,7 +75,7 @@ export function MatchSummary({
       ) : (
         <Card>
           {players.map((p: MatchRating, i) => (
-            <TouchableOpacity key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, i > 0 && st.divider]}>
+            <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, i > 0 && st.divider]}>
               <Text style={st.rank}>{i + 1}</Text>
               <View style={[st.dot, { backgroundColor: teamColor(p.side) }]} />
               <View style={{ flex: 1 }}>

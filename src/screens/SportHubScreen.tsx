@@ -95,7 +95,7 @@ export default function SportHubScreen() {
           <>
             <SectionHeader title="✅ Results" count={results.length} onSeeAll={results.length > SECTION_CAP ? () => seeAll('completed') : undefined} />
             {results.slice(0, SECTION_CAP).map((m) => (
-              <TouchableOpacity key={m.id} activeOpacity={0.85} onPress={() => openScorer(m)}>
+              <TouchableOpacity accessibilityRole="button" key={m.id} activeOpacity={0.85} onPress={() => openScorer(m)}>
                 <View style={st.resultRow}>
                   <View style={[st.dot, { backgroundColor: m.homeTeam.colorHex }]} />
                   <Text style={[textStyles.body, st.rTeam]} numberOfLines={1}>{m.homeTeam.name}</Text>

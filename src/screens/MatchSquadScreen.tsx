@@ -189,7 +189,7 @@ export default function MatchSquadScreen() {
           {startCount + subCount > 0 ? <Text style={st.quick} onPress={clearAll}>Clear</Text> : null}
         </View>
         {lastEligibleCount > 0 && (
-          <TouchableOpacity style={st.copyBtn} activeOpacity={0.85} onPress={copyLastXI}>
+          <TouchableOpacity accessibilityRole="button" style={st.copyBtn} activeOpacity={0.85} onPress={copyLastXI}>
             <Text style={st.copyText}>↻ Copy last match’s XI ({lastEligibleCount})</Text>
           </TouchableOpacity>
         )}
@@ -238,7 +238,7 @@ export default function MatchSquadScreen() {
         )}
 
         {hasPitch && roster.length > 0 && (
-          <TouchableOpacity style={st.pitchBtn} activeOpacity={0.85} onPress={arrangeOnPitch} disabled={busy}>
+          <TouchableOpacity accessibilityRole="button" style={st.pitchBtn} activeOpacity={0.85} onPress={arrangeOnPitch} disabled={busy}>
             <Text style={st.pitchText}>⚽ Arrange on pitch (optional) ›</Text>
             <Text style={st.pitchHint}>Set exact positions & formation. Skip it — starters auto-fill the pitch.</Text>
           </TouchableOpacity>
@@ -254,7 +254,7 @@ export default function MatchSquadScreen() {
 
 function Toggle({ label, active, color, disabled, onPress }: { label: string; active: boolean; color: string; disabled?: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} disabled={disabled && !active} style={[st.toggle, active && { backgroundColor: color, borderColor: color }, disabled && !active && st.toggleDisabled]}>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active, disabled: disabled && !active }} onPress={onPress} activeOpacity={0.8} disabled={disabled && !active} style={[st.toggle, active && { backgroundColor: color, borderColor: color }, disabled && !active && st.toggleDisabled]}>
       <Text style={[st.toggleText, active && st.toggleTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
