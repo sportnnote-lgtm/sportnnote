@@ -568,10 +568,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                       {reported ? '  ⚐ reported' : ''}
                     </Text>
                     {mine && !disputed && !reported && matchId && (
-                      <Text style={st.objectLink} onPress={() => objectToMatch(sd, p)}>🚩 Not me — object</Text>
+                      <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel="Object: I'm not in this match" onPress={() => objectToMatch(sd, p)}>🚩 Not me — object</Text>
                     )}
                     {!mine && iAmInMatch && !disputed && !reported && matchId && (
-                      <Text style={st.objectLink} onPress={() => reportPlayer(sd, p)}>⚐ Report</Text>
+                      <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel={`Report ${p.fullName}`} onPress={() => reportPlayer(sd, p)}>⚐ Report</Text>
                     )}
                   </View>
                 );
@@ -584,7 +584,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               ) : meta.managers?.[sd] ? (
                 <Text style={textStyles.muted}>🧑‍💼 Manager: {meta.managers[sd]}</Text>
               ) : null}
-              {canEditSquad && matchId && <Text style={st.editLink} onPress={() => editSquad(sd)}>✎ Edit matchday squad</Text>}
+              {canEditSquad && matchId && <Text style={st.editLink} accessibilityRole="button" onPress={() => editSquad(sd)}>✎ Edit matchday squad</Text>}
               {/* Populate this team right here — the natural place to look. Locked to
                   this side, so there's no Home/Away toggle to get wrong. */}
               {canEditSquad && matchId && meta.homeTeamId && meta.awayTeamId && (
@@ -617,7 +617,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             {scorerId ? `${scorerName ?? 'Assigned scorer'}${iAmScorer ? ' · this device' : ''}` : 'Not assigned yet'}
           </Text>
           {canManage && (
-            <Text style={st.editLink} onPress={() => setPickScorer((v) => !v)}>
+            <Text
+              style={st.editLink}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: pickScorer }}
+              onPress={() => setPickScorer((v) => !v)}
+            >
               {pickScorer ? 'Close' : scorerId ? 'Change' : 'Assign'}
             </Text>
           )}
@@ -952,13 +957,23 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 <View style={st.infoRow}>
                   <Text style={textStyles.muted}>Venue</Text>
                   {meta.venueName ? (
-                    <Text style={st.venueLink} onPress={() => openVenue(meta.venueName, meta.venueMapsUrl)}>📍 {meta.venueName}</Text>
+                    <Text
+                      style={st.venueLink}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${meta.venueName} in maps`}
+                      onPress={() => openVenue(meta.venueName, meta.venueMapsUrl)}
+                    >📍 {meta.venueName}</Text>
                   ) : <Text style={textStyles.body}>—</Text>}
                 </View>
                 {meta.tournamentName && meta.tournamentId && (
                   <View style={st.infoRow}>
                     <Text style={textStyles.muted}>Tournament</Text>
-                    <Text style={st.venueLink} onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}>{meta.tournamentName} ›</Text>
+                    <Text
+                      style={st.venueLink}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${meta.tournamentName}`}
+                      onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}
+                    >{meta.tournamentName} ›</Text>
                   </View>
                 )}
                 {meta.startsAt && (

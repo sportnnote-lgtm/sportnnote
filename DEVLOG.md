@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 27: LiveScoring Info tab — a11y (workstream C) · SHIPPED + VERIFIED
+
+The Info tab (match details, scorer, hosts, matchday squads) was already well-structured — the gap was
+accessibility: several interactive elements were bare `Text` with `onPress`, so screen readers didn't
+announce them as buttons.
+
+- Added `accessibilityRole="button"` (+ descriptive labels) to the **venue** link ("Open {venue} in
+  maps"), the **tournament** link ("Open {tournament}"), the per-player **"🚩 Not me — object"** and
+  **"⚐ Report"** links, the **"✎ Edit matchday squad"** link, and the **scorer Assign/Change/Close**
+  toggle (with `accessibilityState.expanded`). The dispute count strings already verb-agreed
+  ("1 dispute" / "N disputes"), so no plural fix needed.
+- **Files:** `src/screens/LiveScoringScreen.tsx`.
+- **Verified live (demo, mobile):** the RED vs BLU Info tab renders with the anchored date
+  "Sun 26 Jul, 09:00 GMT+5:30" (recent + timezone-aware); the accessibility tree now shows the venue
+  and tournament links as **buttons** ("Open Kanteerava Stadium in maps", "Open Annual Sports Meet
+  2026"). Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 26: Home tournament card (workstream C) · SHIPPED + VERIFIED
 
 A small Home polish (batch 1 did the scoreboard match cards; batch 6 the header/section hierarchy).
