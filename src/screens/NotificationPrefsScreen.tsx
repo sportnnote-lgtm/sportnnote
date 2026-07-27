@@ -5,7 +5,7 @@ import React, { useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
-import { Card, Button, TextField, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { Card, Button, TextField, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { reminderPrefsStore, LEAD_PRESETS, formatLead } from '../data/reminderPrefs';
 
 type Unit = 'min' | 'hour' | 'day';
@@ -27,7 +27,7 @@ export default function NotificationPrefsScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title="Notifications" subtitle="When to remind you before your matches" />
+        <ScreenTitle title="Match reminders" subtitle="When to remind you before your matches" />
 
         <Card style={{ gap: theme.spacing(3) }}>
           <Text style={textStyles.h3}>🔔 Reminder timers</Text>
@@ -45,7 +45,7 @@ export default function NotificationPrefsScreen() {
             </View>
           )}
 
-          <Text style={textStyles.muted}>Quick add</Text>
+          <FieldLabel>Quick add</FieldLabel>
           {presets.length === 0 ? (
             <Text style={textStyles.muted}>All presets added — use a custom timer below for others.</Text>
           ) : (
@@ -56,10 +56,10 @@ export default function NotificationPrefsScreen() {
             </View>
           )}
 
-          <Text style={textStyles.muted}>Custom timer</Text>
+          <FieldLabel>Custom timer</FieldLabel>
           <View style={st.row}>
             <View style={st.numField}>
-              <TextField label="" value={num} onChange={setNum} autoCapitalize="none" placeholder="45" />
+              <TextField label="" value={num} onChange={(t) => setNum(t.replace(/[^0-9]/g, ''))} autoCapitalize="none" placeholder="45" />
             </View>
             <View style={st.chips}>
               {(['min', 'hour', 'day'] as Unit[]).map((u) => (

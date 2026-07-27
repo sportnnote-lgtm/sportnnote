@@ -163,7 +163,7 @@ export default function RootNavigator() {
             <Stack.Screen
               name="NotificationPrefs"
               component={NotificationPrefsScreen}
-              options={{ ...stackScreenOpts, title: 'Notifications' }}
+              options={{ ...stackScreenOpts, title: 'Match reminders' }}
             />
             <Stack.Screen
               name="Settings"

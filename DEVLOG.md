@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 19: Match-reminders (NotificationPrefs) (workstream C) · SHIPPED + VERIFIED
+
+Polished the reminder-timers preference screen.
+
+- **Disambiguated the title.** The screen was titled "Notifications" — colliding with the separate
+  notification **inbox** (also "Notifications"). Its only entry point is Settings → **Match
+  reminders**, so both the nav-bar title and the in-content title now read **"Match reminders"**.
+- **Consistent form-group labels.** "Quick add" and "Custom timer" were muted body text; they now
+  use the shared **`FieldLabel`** (bold), matching the batch 10/18 form conventions so they stand out
+  from the descriptive copy.
+- **Digit-only custom input.** The custom-timer number field now strips non-digits on input (like
+  the jersey fields), so a stray letter can't slip into the value.
+- **Files:** `src/screens/NotificationPrefsScreen.tsx`, `src/navigation/RootNavigator.tsx`.
+- **Verified live (demo, mobile):** Settings → Match reminders shows the nav + page title "Match
+  reminders", green removable timer chips (1 day / 1 hour / 15 min before), and bold "Quick add" /
+  "Custom timer" labels. Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 18: Edit-profile form (workstream C) · SHIPPED + VERIFIED
 
 Tightened the edit-profile form and fixed a small correctness bug.
