@@ -97,6 +97,10 @@ export interface GuardianContact {
   email?: string;
   phoneVerified?: boolean;
   emailVerified?: boolean;
+  /** ISO timestamp when the guardian affirmed consent for the under-18 account.
+   *  The compliance artifact for minors — captured at sign-up, carried in the
+   *  guardian jsonb on profiles/players. */
+  consentedAt?: string;
 }
 
 /** Document-backed verification of age (and that the guardian is genuine),

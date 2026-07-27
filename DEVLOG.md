@@ -30,6 +30,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo→live lift: guardian-consent capture for under-18 sign-up · SHIPPED (live-only)
+
+Closed the clearest unbuilt auth gap from the readiness audit (§2.7). Re-auditing `core/auth.tsx` +
+`AuthScreen` showed the flow is further along than the doc said — email/password sign-in/up, session
+hydration + `onAuthStateChange`, profile load, and mandatory mobile/DOB + guardian-contact at sign-up
+were all already wired. The one genuinely missing compliance piece was an explicit **guardian consent**.
+
+- **`GuardianContact.consentedAt`** (new optional ISO field) — the compliance artifact for minors. It
+  rides in the existing `guardian` jsonb on `profiles`/`players`, so **no schema migration**.
+- **AuthScreen (under-18 path):** a required **consent checkbox** — "I am {name}'s parent/guardian and I
+  consent to them creating and using a Sportfolio account" — blocks sign-up until ticked
+  (`accessibilityRole="checkbox"`), and stamps `guardian.consentedAt = now` on submit. Non-minors
+  unaffected.
+- **Files:** `src/core/types.ts`, `src/screens/AuthScreen.tsx`. `signUp` already inserts the guardian
+  jsonb, so consent persists with no `core/auth.tsx` change.
+- **Doc:** `backend-readiness.md` §2.7/§3 corrected — auth is now "partially built" (email/password +
+  sessions + guardian-consent done); **remaining auth = email/phone OTP + password reset**, to be built
+  and verified against a staging project.
+- **Typecheck clean; 69/69 tests.** *Live-only, not preview-verifiable:* `AuthScreen` only mounts when
+  Supabase is configured (same as batch 9), so this can't render in the demo; verify on staging.
+
+---
+
 ### 2026-07-27 — Demo→live lift: live-path coverage audit + close a demo-only gap · SHIPPED
 
 Advancing the demo→live cutover (launch Track B). The lift is **~90% built** (schema hardened by

@@ -1,6 +1,6 @@
 /** Email/password sign in & sign up. Only shown when Supabase is configured. */
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
 import { Button, Card, SelectChip, FormError, textStyles } from '../components/ui';
@@ -25,6 +25,7 @@ export default function AuthScreen() {
   const [gPhone, setGPhone] = useState('');
   const [gEmail, setGEmail] = useState('');
   const [role, setRole] = useState<Role>('parent');
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,12 +41,13 @@ export default function AuthScreen() {
       if (minor) {
         if (!gName.trim()) return setError('A parent/guardian name is required to create an under-18 account.');
         if (!gPhone.trim() && !gEmail.trim()) return setError("Add the guardian's mobile or email — under-18 accounts need a guardian contact.");
+        if (!consent) return setError('Parent/guardian consent is required for an under-18 account.');
       }
     }
     setBusy(true);
     setError(null);
     const guardian = minor && gName.trim()
-      ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined }
+      ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
       : undefined;
     const res =
       mode === 'in'
@@ -90,6 +92,18 @@ export default function AuthScreen() {
               <Field label="Guardian name" value={gName} onChange={setGName} placeholder="Priya Mehta" />
               <Field label="Guardian mobile" value={gPhone} onChange={setGPhone} placeholder="+91…" />
               <Field label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" keyboardType="email-address" />
+              <TouchableOpacity
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consent }}
+                activeOpacity={0.8}
+                onPress={() => setConsent((c) => !c)}
+                style={st.consentRow}
+              >
+                <Text style={[st.checkbox, consent && st.checkboxOn]}>{consent ? '☑' : '☐'}</Text>
+                <Text style={st.consentText}>
+                  I am {gName.trim() ? `${gName.trim()}’s ` : 'the '}parent/guardian and I consent to them creating and using a Sportfolio account.
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -166,4 +180,8 @@ const st = StyleSheet.create({
     fontSize: theme.font.body,
   },
   ageHint: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700' },
+  consentRow: { flexDirection: 'row', gap: theme.spacing(2), alignItems: 'flex-start' },
+  checkbox: { fontSize: 20, color: theme.colors.textMuted, lineHeight: 22 },
+  checkboxOn: { color: theme.colors.primary },
+  consentText: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, lineHeight: 18 },
 });

@@ -76,9 +76,14 @@ Ranked. 🔴 must-fix before production · 🟠 fix during hardening · 🟡 wat
    to `players.verification` (jsonb) via a live Supabase path, not demo-only. Guardian consent is
    compliance-critical (minors) — this path must be real and audited.
 
-7. **🟠 Auth flow is a stand-in.** Real sign-up/sign-in with **email/phone OTP**, password reset,
-   sessions, and **guardian-consent capture for under-18s** must be built on Supabase Auth. The schema is
-   ready (`profiles` ↔ `auth.users`, `dob`, `guardian`); the flow isn't.
+7. **🟠 Auth flow — partially built.** *(Re-audited 2026-07-27; the earlier "stand-in" note understated
+   it.)* On Supabase Auth already: **email/password sign-in & sign-up**, **session hydration +
+   `onAuthStateChange`**, **profile load** (`core/auth.tsx`), and at sign-up (`AuthScreen`) mandatory
+   **mobile + DOB**, minor detection, **guardian contact**, and now an explicit **guardian-consent
+   affirmation** (`GuardianContact.consentedAt`, stamped at sign-up → `profiles`/`players` guardian jsonb).
+   **Remaining:** **email/phone OTP** (passwordless) and **password reset** (`resetPasswordForEmail` +
+   deep-link redirect). Both are bounded but need a live project to exercise, so build + verify them
+   against staging.
 
 8. **🟡 Backups depend on tier.** Supabase free tier has limited/no point-in-time recovery. For real
    schools' data, budget the Pro tier (~$25/mo) for daily backups + PITR **at the point you take real
@@ -106,7 +111,8 @@ Everything that must be true before real users' data lands. Maps to the launch p
 - [x] **Fix `profiles.role` CHECK** to include `support` (+ `admin`). — *migration 0001*
 - [x] **`set_updated_at` triggers** on mutable tables. — *migration 0001*
 - [x] **Versioned migrations** adopted (`supabase/migrations/`) — this is the first one. Still to do: staging + prod projects.
-- [ ] **Real auth**: email/phone OTP, reset, sessions, guardian-consent capture for minors. *(one genuinely from-scratch piece)*
+- [~] **Real auth** — email/password sign-in/up, sessions, minor **guardian-consent capture** all built
+  (`core/auth.tsx`, `AuthScreen`); **remaining: email/phone OTP + password reset** (build against staging).
 - [x] **Verification write path** confirmed live + audited (compliance) — all four mutations
   (`verifyContact`, `verifyGuardianContact`, `submitVerificationDoc`, `reviewVerification`) route through
   `updatePlayer`'s live Supabase write (`players.verification`/`guardian` jsonb + `phone_verified`/
