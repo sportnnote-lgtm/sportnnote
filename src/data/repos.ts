@@ -972,19 +972,21 @@ export async function setMatchSquad(matchId: string, side: 'home' | 'away', squa
 export async function getLastSquadForTeam(
   teamName: string, sport: SportId, excludeMatchId: string,
 ): Promise<{ starters: string[]; subs: string[] } | null> {
-  if (!isSupabaseConfigured || !supabase) {
-    const past = demo.matches
-      .filter((m) => m.id !== excludeMatchId && m.sport === sport && (m.homeTeam.name === teamName || m.awayTeam.name === teamName))
-      .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
-    for (const m of past) {
-      const sq = demo.matchSquads[m.id];
-      if (!sq) continue;
-      const s = sq[m.homeTeam.name === teamName ? 'home' : 'away'];
-      if (s && (s.starters.length || s.subs.length)) return { starters: s.starters, subs: s.subs };
-    }
-    return null;
+  // Works in both demo and live: getMatches() and getMatchSquads() each own the
+  // demo↔live split, so we just compose them — the team's most recent prior match
+  // in this sport that has a saved squad wins. (Previously demo-only; the live
+  // branch returned null, so "Copy last match's XI" never offered anything once
+  // pointed at Supabase.)
+  const all = await getMatches();
+  const past = all
+    .filter((m) => m.id !== excludeMatchId && m.sport === sport && (m.homeTeam.name === teamName || m.awayTeam.name === teamName))
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+  for (const m of past) {
+    const sq = await getMatchSquads(m.id);
+    const s = sq[m.homeTeam.name === teamName ? 'home' : 'away'];
+    if (s && (s.starters.length || s.subs.length)) return { starters: s.starters, subs: s.subs };
   }
-  return null; // live: query the team's prior matches — post-pilot follow-up.
+  return null;
 }
 
 /* ------------------------ Sport-specific player profile -------------------- */

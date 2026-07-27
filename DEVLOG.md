@@ -30,6 +30,33 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo→live lift: live-path coverage audit + close a demo-only gap · SHIPPED
+
+Advancing the demo→live cutover (launch Track B). The lift is **~90% built** (schema hardened by
+migration 0001; `repos.ts` is a complete demo↔live seam) — this pass is *hardening + de-risking*, the
+in-repo half. (The operational half — create the Supabase project, Pro-tier backups/PITR, deploy edge
+functions + cron, set per-env secrets — needs cloud access + a card and is the user's to run.)
+
+- **Live-path coverage audit (all 82 repo functions).** Verified every mutation actually writes to
+  Supabase on the live path (or delegates to one that does) — i.e. nothing silently no-ops or loses data
+  once `isSupabaseConfigured` flips true. **Result: no demo-only mutation that loses data against live.**
+- **Confirmed §2.6 (compliance-critical):** the four verification mutations are live-wired via
+  `updatePlayer` (writes `players.verification`/`guardian` jsonb + verified flags); `getPendingVerifications`
+  queries live. Noted one residual: the append-only `verification.history` is read-modify-write on jsonb —
+  harden with a server-side atomic append (RPC) before scale.
+- **Fixed a demo-only gap: `getLastSquadForTeam`.** Its live branch returned `null`, so "Copy last
+  match's XI" would offer nothing once pointed at Supabase. Unified it to compose `getMatches()` +
+  `getMatchSquads()` (each already owns the demo↔live split) — works in both modes, no new SQL, demo
+  behaviour unchanged. `src/data/repos.ts`.
+- **Doc:** `docs/backend-readiness.md` §2.6/§3 ticked; §8 rewritten with the coverage-audit result, the
+  two intentional live no-ops (`getLastSquadForTeam` fixed; `markPlayerRegistered` correct-by-design),
+  and the still-open items (org-membership + verification-history server enforcement, realtime scope,
+  index review, **Real Auth** — the largest remaining in-repo build).
+- **Typecheck clean; 69/69 tests.** Demo path unchanged (the refactor composes the same demo data), so
+  nothing new to eyeball in the preview; the live path needs a live project to exercise.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 20: Cricket batting-order & Lineup editors (workstream C) · SHIPPED (mechanism-verified)
 
 Polished the two lineup editors reached from a live match (cricket batting order; the positional

@@ -1,7 +1,7 @@
 # Backend & Data-Model Readiness
 
 *Design-pass audit for the demo → live cutover. Living doc — update as the model changes.*
-*Last updated: 2026-07-09. Owner: (you). Companion to `supabase/schema.sql`, `src/data/repos.ts`, `DEVLOG.md`.*
+*Last updated: 2026-07-27 (live-path coverage audit, §8). Owner: (you). Companion to `supabase/schema.sql`, `src/data/repos.ts`, `DEVLOG.md`.*
 
 ---
 
@@ -107,7 +107,13 @@ Everything that must be true before real users' data lands. Maps to the launch p
 - [x] **`set_updated_at` triggers** on mutable tables. — *migration 0001*
 - [x] **Versioned migrations** adopted (`supabase/migrations/`) — this is the first one. Still to do: staging + prod projects.
 - [ ] **Real auth**: email/phone OTP, reset, sessions, guardian-consent capture for minors. *(one genuinely from-scratch piece)*
-- [ ] **Verification write path** confirmed live + audited (compliance).
+- [x] **Verification write path** confirmed live + audited (compliance) — all four mutations
+  (`verifyContact`, `verifyGuardianContact`, `submitVerificationDoc`, `reviewVerification`) route through
+  `updatePlayer`'s live Supabase write (`players.verification`/`guardian` jsonb + `phone_verified`/
+  `email_verified`); `getPendingVerifications` queries `players` live. — *audit 2026-07-27.* Residual
+  (🟠): the append-only `verification.history` is updated read-modify-write on the jsonb column, so
+  concurrent support actions can drop history entries — harden with a server-side atomic append (RPC)
+  before scale.
 - [ ] **Edge functions deployed** + reminder cron scheduled; push credentials (APNs/FCM) set.
 - [ ] **Backups**: Pro tier + PITR enabled before real data.
 - [~] **Index review** — migration 0001 added GIN indexes on `host_ids` (the scoping policies use them); finish against real hot queries before the beta load test.
@@ -204,10 +210,33 @@ The architecture is already the cheap-to-scale one; protect it with discipline, 
 
 ---
 
-## 8. Open audit items (next reading pass)
+## 8. Open audit items
 
-- Confirm live paths for the four verification mutations (§2.6).
-- Confirm `joinOrg` / `leaveOrg` enforce the one-active-membership + sole-admin rules server-side (today
-  they're enforced in app code — fine for pilot, revisit for production integrity).
-- Decide realtime scope for `stat_lines` (live ratings) and `match_disputes`.
-- Enumerate the hot queries per screen to finalize composite indexes before the beta load test.
+### Live-path coverage audit — done 2026-07-27
+
+Went through **all 82 repo functions** in `src/data/repos.ts` (a coverage pass: does each mutation
+actually write to Supabase on the live path, or silently no-op / lose data?). **Result: no demo-only
+mutation would lose data against a live backend.** Every write either has a real `supabase.…(insert|
+update|upsert|delete)` (or `.rpc`), or delegates to one that does (`joinOrg`/`leaveOrg` → `setOrgMembers`;
+the verification fns → `updatePlayer`; `getTeamSummaries`/`getTeamSummary` are derived reads over
+`getMatches()`). Two functions are intentional live no-ops/degradations, both now handled:
+
+- **`getLastSquadForTeam`** — *fixed.* Was demo-only (live returned `null`, so "Copy last match's XI"
+  offered nothing once pointed at Supabase). Now composed from `getMatches()` + `getMatchSquads()`,
+  which each own the demo↔live split, so it works in both modes with no new SQL.
+- **`markPlayerRegistered`** — live is a deliberate no-op (real Auth claims the player record via
+  `profile_id`; there's nothing to simulate). Correct by design; ties to the Auth work below.
+
+### Still open
+
+- **Server-side integrity for org membership (🟠).** `joinOrg`/`leaveOrg` *do* write live (via
+  `setOrgMembers`), but the one-active-membership + sole-admin rules are enforced in **app code** — two
+  concurrent joins, or a direct `setOrgMembers` call, could bypass them and orphan a community. Enforce
+  via a DB trigger / `join_org` RPC for production integrity (pilot-safe as-is).
+- **Verification history atomicity (🟠).** See §3 — move the append-only `verification.history` write to a
+  server-side atomic append (RPC) so concurrent support decisions can't drop trail entries.
+- **Realtime scope** for `stat_lines` (live ratings) and `match_disputes` — decide before enabling.
+- **Hot-query/index review** per screen to finalize composite indexes before the beta load test.
+- **Real Auth (the one from-scratch code piece, §3).** email/phone OTP + sessions + guardian-consent
+  capture on Supabase Auth; `markPlayerRegistered`'s live no-op assumes it. This is the largest remaining
+  in-repo build.
