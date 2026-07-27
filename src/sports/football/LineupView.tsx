@@ -33,7 +33,7 @@ function formationLabel(lineup: LineupSlot[]): string {
 const initials = (name?: string, position?: string) =>
   name ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : position ?? '';
 
-interface Marks { card?: 'yellow' | 'red' | 'two-yellow'; subOff?: number; }
+interface Marks { card?: 'yellow' | 'red' | 'two-yellow'; subOff?: number; goals?: number; }
 /** Map each player (by name) to their card + sub-off markers from the timeline. */
 function deriveMarks(events: FootballEvent[]): Record<string, Marks> {
   const out: Record<string, Marks> = {};
@@ -45,6 +45,7 @@ function deriveMarks(events: FootballEvent[]): Record<string, Marks> {
     if (e.type === 'yellow') { const x = m(e.playerName); if (x) x.card = x.card === 'yellow' ? 'two-yellow' : x.card ?? 'yellow'; }
     else if (e.type === 'red') { const x = m(e.playerName); if (x) x.card = e.secondYellow ? 'two-yellow' : 'red'; }
     else if (e.type === 'sub') { const x = m(e.playerName); if (x) x.subOff = e.minute; } // playerName = off
+    else if (e.type === 'goal') { const x = m(e.playerName); if (x) x.goals = (x.goals ?? 0) + 1; } // own goals aren't credited to the scorer's badge
   }
   return out;
 }
@@ -91,6 +92,9 @@ function PlayerDot({
         {marks?.subOff != null && (
           <View style={s.subMark}><Text style={s.subMarkText}>↓</Text></View>
         )}
+        {marks?.goals ? (
+          <View style={s.goalMark}><Text style={s.goalMarkText}>⚽{marks.goals > 1 ? marks.goals : ''}</Text></View>
+        ) : null}
       </View>
       <Text style={s.name} numberOfLines={1}>
         {jersey != null ? `${jersey} ` : ''}{name ? name.split(' ').slice(-1)[0] : slot.position}
@@ -149,6 +153,7 @@ export function LineupView({
                 <Text style={[s.benchName, side === 'away' && { textAlign: 'right' }]} numberOfLines={1}>{p.jerseyNo ? `${p.jerseyNo} ` : ''}{mask.byId(p.id, p.fullName)}</Text>
                 {onMin != null && <Text style={[s.benchSub, side === 'away' && { textAlign: 'right' }]}>↑ {onMin}&apos;</Text>}
               </View>
+              {m?.goals ? <Text style={s.benchGoal}>⚽{m.goals > 1 ? m.goals : ''}</Text> : null}
               {m?.card ? <CardDot card={m.card} /> : null}
             </View>
           );
@@ -184,7 +189,7 @@ export function LineupView({
       </View>
 
       <View style={s.legend}>
-        {[['🟨', 'Yellow'], ['🟥', 'Red'], ['2️⃣', '2 yellows'], ['↑', 'Sub in'], ['↓', 'Sub out']].map(([i, l]) => (
+        {[['⚽', 'Goal'], ['🟨', 'Yellow'], ['🟥', 'Red'], ['2️⃣', '2 yellows'], ['↑', 'Sub in'], ['↓', 'Sub out']].map(([i, l]) => (
           <View key={l} style={s.legendItem}><Text style={s.legendIcon}>{i}</Text><Text style={s.muted}>{l}</Text></View>
         ))}
       </View>
@@ -213,6 +218,8 @@ const s = StyleSheet.create({
   cardMarkText: { color: '#06120D', fontSize: 8, fontWeight: '900' },
   subMark: { position: 'absolute', bottom: -2, left: -4, width: 14, height: 14, borderRadius: 7, backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center' },
   subMarkText: { color: '#fff', fontSize: 9, fontWeight: '900' },
+  goalMark: { position: 'absolute', bottom: -3, right: -6, minWidth: 16, height: 16, paddingHorizontal: 2, borderRadius: 8, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  goalMarkText: { color: '#06120D', fontSize: 9, fontWeight: '900' },
   captMark: { position: 'absolute', top: -4, left: -4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#fff', borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   captMarkText: { color: '#06120D', fontSize: 8, fontWeight: '900' },
   benchTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', textAlign: 'center' },
@@ -221,6 +228,7 @@ const s = StyleSheet.create({
   benchRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   benchName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '600' },
   benchSub: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '700' },
+  benchGoal: { fontSize: 12 },
   muted: { color: theme.colors.textMuted, fontSize: theme.font.small },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3), justifyContent: 'center', paddingTop: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1) },

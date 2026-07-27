@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 30: LiveScoring Lineups — goal markers (workstream C) · SHIPPED + VERIFIED
+
+The FIFA-style Lineups pitch marked cards, subs and captains on each player — but not **goal scorers**,
+a notable gap for a lineup view.
+
+- **Goal markers.** `deriveMarks` now counts each player's goals from the timeline; a **⚽ badge**
+  renders on the scorer's avatar (bottom-right corner, so it never collides with the card/captain/sub
+  markers in the other three corners), showing the count for a brace/hat-trick (⚽2). Own goals aren't
+  credited to the scorer's badge. Applied on the pitch **and** the bench (a sub who came on and scored),
+  and **⚽ Goal** added to the legend.
+- **Files:** `src/sports/football/LineupView.tsx`.
+- **Verified live (demo, mobile):** RED vs BLU → Lineups shows ⚽ on AM (Mehta, 12'), IV (Verma, 23' —
+  alongside his yellow card), and RN (Nair, 33' — with his yellow), with the legend leading "⚽ Goal".
+  Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 29: LiveScoring Stats — comparison bars (workstream C) · SHIPPED + VERIFIED
 
 The football Stats tab was a home-vs-away table of plain numbers; comparing two values row-by-row is
