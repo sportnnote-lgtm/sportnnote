@@ -97,8 +97,13 @@ With the env present, the app boots to the **AuthScreen** (only rendered when Su
    staging you can toggle **"Confirm email" off** temporarily.
 3. **Sign in** → you should land in the app with your profile loaded (`profiles` row → `useAuth`).
 4. Check **Table editor → profiles** for your row (role, dob, guardian jsonb incl. `consentedAt`).
+5. **Passwordless & reset (code flow).** On the Sign-in tab: **"Email me a code"** → enter the 6-digit
+   code from the email → signed in; and **"Forgot password?"** → enter the reset code + a new password
+   → signed in. Both need email delivery working and the email templates to expose `{{ .Token }}`
+   (**Auth → Email Templates**; Supabase defaults include it). For fast staging, Supabase's built-in
+   email sender is fine; wire real SMTP before prod volume.
 
-If sign-in works, RLS + auth are wired correctly.
+If password sign-in, the code flows, and RLS all behave, auth is wired correctly.
 
 ---
 
@@ -201,9 +206,10 @@ When the slice is proven on staging:
 - [ ] Redeploy the 4 functions + set their secrets against prod; schedule the cron.
 - [ ] **Pro tier + PITR** enabled (step 8).
 - [ ] Keep the **service_role** key out of the app and out of git; rotate if ever exposed.
-- [ ] Turn **email confirmation back on** (and configure real SMTP/OTP) for prod.
-- [ ] Remaining app-side auth to finish against staging first: **email/phone OTP + password reset**
-      (backend-readiness §2.7).
+- [ ] Turn **email confirmation back on** and configure **real SMTP** + email templates (with
+      `{{ .Token }}`) so the OTP/reset **code flow** delivers reliably at prod volume.
+- [ ] *(Optional)* phone-SMS OTP — configure an SMS provider, then the same code flow works with
+      `phone`/`type: 'sms'` (backend-readiness §2.7).
 
 ---
 

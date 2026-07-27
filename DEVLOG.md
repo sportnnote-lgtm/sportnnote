@@ -30,6 +30,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo→live lift: passwordless OTP sign-in + password reset · SHIPPED (live-only)
+
+Built the last two app-side auth pieces (readiness §2.7), both via the 6-digit **code** flow — so **no
+deep-link redirect handling**, which was the risky part.
+
+- **`core/auth.tsx`** — four new context methods: `sendSignInOtp` (`signInWithOtp`,
+  `shouldCreateUser:false` so it only signs in existing accounts), `verifySignInOtp` (`verifyOtp` type
+  `email`), `sendPasswordReset` (`resetPasswordForEmail`), `confirmPasswordReset` (`verifyOtp` type
+  `recovery` → `updateUser`). On success each fires the existing `onAuthStateChange` → `loadProfile`, so
+  the user is signed straight in. Demo mode: all no-op (`return {}`), like `signIn`/`signUp`.
+- **`AuthScreen`** — the Sign-in tab gains two sub-flows behind links: **"Email me a code"** (request →
+  enter 6-digit code → verify) and **"Forgot password?"** (request → enter code + new password →
+  reset). A small `flow`/`sent` state machine + a shared `run()` helper handle busy/error/"code sent"
+  notes; "Resend code" / "Use password instead" escape hatches. Sign-up (identity + guardian consent)
+  unchanged. `Field` keyboardType widened to allow `number-pad` for the code.
+- **Docs:** `backend-readiness.md` §2.7/§3 updated (OTP + reset now built; phone-SMS OTP is the only
+  optional remainder); `staging-setup.md` step 4 gains a code-flow smoke test + the `{{ .Token }}`
+  email-template requirement.
+- **Files:** `src/core/auth.tsx`, `src/screens/AuthScreen.tsx`, `docs/backend-readiness.md`,
+  `docs/staging-setup.md`.
+- **Typecheck clean** (also validates the Supabase auth call shapes against the SDK types); **69/69
+  tests.** *Live-only, not preview-verifiable:* `AuthScreen` mounts only when Supabase is configured —
+  verify the round-trips on staging (needs email delivery + `{{ .Token }}` in the templates).
+
+---
+
 ### 2026-07-27 — Demo→live lift: staging stand-up runbook · DOC
 
 Wrote the operational runbook for the cutover — the half that needs cloud access + a card (so it's the

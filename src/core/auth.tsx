@@ -27,6 +27,14 @@ interface AuthState {
     phone?: string
   ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  /** Passwordless sign-in: email a 6-digit code to an EXISTING user. */
+  sendSignInOtp: (email: string) => Promise<{ error?: string }>;
+  /** Verify the 6-digit sign-in code; success establishes a session. */
+  verifySignInOtp: (email: string, token: string) => Promise<{ error?: string }>;
+  /** Email a password-reset code (recovery OTP) to the account. */
+  sendPasswordReset: (email: string) => Promise<{ error?: string }>;
+  /** Verify the reset code, then set the new password; success signs you in. */
+  confirmPasswordReset: (email: string, token: string, newPassword: string) => Promise<{ error?: string }>;
 }
 
 const DEMO_PROFILE: Profile = {
@@ -116,6 +124,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       if (supabase) await supabase.auth.signOut();
+    },
+    // Passwordless sign-in via a 6-digit email code (no deep-link redirect needed).
+    // shouldCreateUser:false so this only signs in existing accounts — sign-up
+    // stays the explicit password flow that also captures identity/guardian data.
+    sendSignInOtp: async (email) => {
+      if (!supabase) return {};
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      return error ? { error: error.message } : {};
+    },
+    verifySignInOtp: async (email, token) => {
+      if (!supabase) return {};
+      // On success the session fires onAuthStateChange → loadProfile → signed in.
+      const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+      return error ? { error: error.message } : {};
+    },
+    // Password reset via the recovery-OTP code flow: email a code, verify it to
+    // get a recovery session, then set the new password on that session.
+    sendPasswordReset: async (email) => {
+      if (!supabase) return {};
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      return error ? { error: error.message } : {};
+    },
+    confirmPasswordReset: async (email, token, newPassword) => {
+      if (!supabase) return {};
+      const { error: vErr } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
+      if (vErr) return { error: vErr.message };
+      const { error: uErr } = await supabase.auth.updateUser({ password: newPassword });
+      return uErr ? { error: uErr.message } : {};
     },
   };
 

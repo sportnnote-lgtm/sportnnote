@@ -1,4 +1,12 @@
-/** Email/password sign in & sign up. Only shown when Supabase is configured. */
+/** Auth: email/password sign-in & sign-up, passwordless email-code (OTP) sign-in,
+ *  and password reset. Only shown when Supabase is configured (live mode).
+ *
+ *  OTP + reset use the 6-digit CODE flow (`verifyOtp`), not magic links — so no
+ *  deep-link redirect handling is needed. The Supabase email templates must
+ *  expose `{{ .Token }}` (the defaults do) for the code to arrive.
+ *
+ *  NOTE: live-only — this screen never mounts in demo mode, so it can't be
+ *  previewed against the demo build. Verify on a staging Supabase project. */
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,11 +21,19 @@ import type { Role } from '../core/types';
 const ROLES: Role[] = ['player', 'parent', 'scorer', 'organizer', 'fan'];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+type Mode = 'in' | 'up';
+type Flow = 'password' | 'otp' | 'reset';
+
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const { signIn, signUp, sendSignInOtp, verifySignInOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
+  const [mode, setMode] = useState<Mode>('in');
+  const [flow, setFlow] = useState<Flow>('password'); // sign-in sub-flow
+  const [sent, setSent] = useState(false);             // OTP/reset: has the code been requested?
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [dob, setDob] = useState('');
@@ -26,17 +42,31 @@ export default function AuthScreen() {
   const [gEmail, setGEmail] = useState('');
   const [role, setRole] = useState<Role>('parent');
   const [consent, setConsent] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const age = ageFromDob(dob.trim());
   const minor = age !== undefined && age < 18;
 
-  async function submit() {
+  const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); };
+  const switchMode = (m: Mode) => { setMode(m); setFlow('password'); clearFlow(); };
+  const switchFlow = (f: Flow) => { setFlow(f); clearFlow(); };
+
+  /** Run an auth call with busy/error/note handling; onOk fires only on success. */
+  async function run(fn: () => Promise<{ error?: string }>, okNote?: string, onOk?: () => void) {
+    setBusy(true); setError(null); setNote(null);
+    const res = await fn();
+    setBusy(false);
+    if (res.error) { setError(res.error); return; }
+    if (okNote) setNote(okNote);
+    onOk?.();
+  }
+
+  // Password sign-up / sign-in — captures identity + guardian consent on sign-up.
+  function submitPassword() {
     if (mode === 'up') {
-      // Your mobile number is your Sportfolio identity — mandatory, and unique to you.
       if (!isValidPhone(mobile)) return setError('Enter your mobile number — it’s your Sportfolio identity.');
-      // DOB is mandatory at sign-up; under-18 accounts need a parent/guardian.
       if (!dob.trim() || age === undefined) return setError('Enter a valid date of birth (YYYY-MM-DD).');
       if (minor) {
         if (!gName.trim()) return setError('A parent/guardian name is required to create an under-18 account.');
@@ -44,18 +74,39 @@ export default function AuthScreen() {
         if (!consent) return setError('Parent/guardian consent is required for an under-18 account.');
       }
     }
-    setBusy(true);
-    setError(null);
     const guardian = minor && gName.trim()
       ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
       : undefined;
-    const res =
+    void run(() =>
       mode === 'in'
-        ? await signIn(email.trim(), password)
-        : await signUp(email.trim(), password, fullName.trim() || 'Player', role, dob.trim(), guardian, mobile.trim());
-    if (res.error) setError(res.error);
-    setBusy(false);
+        ? signIn(email.trim(), password)
+        : signUp(email.trim(), password, fullName.trim() || 'Player', role, dob.trim(), guardian, mobile.trim())
+    );
   }
+
+  // Passwordless OTP sign-in.
+  const otpRequest = () => {
+    if (!email.trim()) return setError('Enter your email to get a code.');
+    void run(() => sendSignInOtp(email.trim()), `We emailed a 6-digit code to ${email.trim()}.`, () => setSent(true));
+  };
+  const otpVerify = () => {
+    if (!code.trim()) return setError('Enter the code from your email.');
+    void run(() => verifySignInOtp(email.trim(), code.trim())); // success → onAuthStateChange signs you in
+  };
+
+  // Password reset (recovery code flow).
+  const resetRequest = () => {
+    if (!email.trim()) return setError('Enter your account email.');
+    void run(() => sendPasswordReset(email.trim()), `We emailed a reset code to ${email.trim()}.`, () => setSent(true));
+  };
+  const resetConfirm = () => {
+    if (!code.trim()) return setError('Enter the reset code from your email.');
+    if (newPassword.length < 6) return setError('Choose a new password (at least 6 characters).');
+    void run(() => confirmPasswordReset(email.trim(), code.trim(), newPassword)); // success → signed in
+  };
+
+  const showPassword = mode === 'up' || (mode === 'in' && flow === 'password');
+  const codeFlow = mode === 'in' && (flow === 'otp' || flow === 'reset');
 
   return (
     <SafeAreaView style={st.safe}>
@@ -67,24 +118,25 @@ export default function AuthScreen() {
 
         <Card style={st.formCard}>
           <View style={st.tabs}>
-            <SelectChip label="Sign in" active={mode === 'in'} onPress={() => setMode('in')} />
-            <SelectChip label="Create account" active={mode === 'up'} onPress={() => setMode('up')} />
+            <SelectChip label="Sign in" active={mode === 'in'} onPress={() => switchMode('in')} />
+            <SelectChip label="Create account" active={mode === 'up'} onPress={() => switchMode('up')} />
           </View>
 
-          {mode === 'up' && (
-            <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Aarav Mehta" />
-          )}
-          {mode === 'up' && (
-            <Field label="Mobile number" value={mobile} onChange={setMobile} placeholder="+91 98765 43210" />
-          )}
+          {mode === 'up' && <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Aarav Mehta" />}
+          {mode === 'up' && <Field label="Mobile number" value={mobile} onChange={setMobile} placeholder="+91 98765 43210" />}
           {mode === 'up' && (
             <>
               <DateField label="Date of birth" value={dob} onChange={setDob} />
               {age !== undefined && <Text style={st.ageHint}>Age: {age} yrs{minor ? ' — a parent/guardian is required' : ''}</Text>}
             </>
           )}
+
           <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" />
-          <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure />
+          {showPassword && <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure />}
+
+          {/* OTP / reset: the 6-digit code, plus a new password for reset. */}
+          {codeFlow && sent && <Field label="6-digit code" value={code} onChange={setCode} placeholder="123456" keyboardType="number-pad" />}
+          {mode === 'in' && flow === 'reset' && sent && <Field label="New password" value={newPassword} onChange={setNewPassword} placeholder="••••••••" secure />}
 
           {mode === 'up' && minor && (
             <View style={{ gap: theme.spacing(2) }}>
@@ -118,9 +170,41 @@ export default function AuthScreen() {
             </View>
           )}
 
+          {note ? <Text style={st.note}>{note}</Text> : null}
           <FormError message={error} />
 
-          <Button label={busy ? 'Please wait…' : mode === 'in' ? 'Sign in' : 'Create account'} onPress={submit} />
+          {/* Primary action + flow switches */}
+          {mode === 'up' && <Button label={busy ? 'Please wait…' : 'Create account'} onPress={submitPassword} />}
+
+          {mode === 'in' && flow === 'password' && (
+            <>
+              <Button label={busy ? 'Please wait…' : 'Sign in'} onPress={submitPassword} />
+              <View style={st.linkRow}>
+                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('otp')}>Email me a code</Text>
+                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('reset')}>Forgot password?</Text>
+              </View>
+            </>
+          )}
+
+          {mode === 'in' && flow === 'otp' && (
+            <>
+              <Button label={busy ? 'Please wait…' : sent ? 'Verify & sign in' : 'Email me a code'} onPress={sent ? otpVerify : otpRequest} />
+              <View style={st.linkRow}>
+                {sent && <Text style={st.link} accessibilityRole="button" onPress={otpRequest}>Resend code</Text>}
+                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('password')}>Use password instead</Text>
+              </View>
+            </>
+          )}
+
+          {mode === 'in' && flow === 'reset' && (
+            <>
+              <Button label={busy ? 'Please wait…' : sent ? 'Reset password & sign in' : 'Send reset code'} onPress={sent ? resetConfirm : resetRequest} />
+              <View style={st.linkRow}>
+                {sent && <Text style={st.link} accessibilityRole="button" onPress={resetRequest}>Resend code</Text>}
+                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('password')}>Back to sign in</Text>
+              </View>
+            </>
+          )}
         </Card>
       </ScrollView>
     </SafeAreaView>
@@ -140,7 +224,7 @@ function Field({
   onChange: (v: string) => void;
   placeholder?: string;
   secure?: boolean;
-  keyboardType?: 'email-address';
+  keyboardType?: 'email-address' | 'number-pad';
 }) {
   return (
     <View style={{ gap: theme.spacing(1) }}>
@@ -184,4 +268,7 @@ const st = StyleSheet.create({
   checkbox: { fontSize: 20, color: theme.colors.textMuted, lineHeight: 22 },
   checkboxOn: { color: theme.colors.primary },
   consentText: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, lineHeight: 18 },
+  note: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.spacing(2) },
+  link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
 });
