@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 24: SportProfile match history — dates (workstream C) · SHIPPED + VERIFIED
+
+Finished the per-sport match history (batch 7 added the win/loss result treatment; batch 11 the stat
+hierarchy).
+
+- **Each history row now shows when the match was played.** Rows read "vs {opponent}" + stats +
+  WON/LOST but never *when*. Now the match date renders as a subtle muted suffix on the opponent line
+  ("vs Green House **· Fri, 24 Jul**"), using the shared `formatDay` (core/dates). The list was already
+  sorted most-recent-first (`stats.recent` by date desc), so it now reads as a proper dated timeline —
+  and the dates are recent/meaningful thanks to the demo-date anchoring.
+- **Files:** `src/screens/SportProfileScreen.tsx`.
+- **Verified live (demo, mobile):** Aarav's Basketball history shows "vs Green House · Fri, 24 Jul"
+  (LOST) and "vs Gold House · Thu, 23 Jul" (WON, green edge), newest first, dates muted. Console clean.
+  Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — Demo data: anchor all seed dates to "today" · SHIPPED + VERIFIED
 
 Fixed the demo-date staleness flagged in batch 23. The sample data was authored around a fixed

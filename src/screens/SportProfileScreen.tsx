@@ -10,6 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Card, Pill, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
+import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
 import { statCoverage } from '../data/stats';
@@ -194,7 +195,10 @@ export default function SportProfileScreen() {
               const row = (
                 <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={textStyles.body}>vs {l.opponent ?? 'TBD'}</Text>
+                    <Text style={textStyles.body}>
+                      vs {l.opponent ?? 'TBD'}
+                      {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
+                    </Text>
                     <Text style={textStyles.muted}>
                       {Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
                     </Text>
@@ -261,5 +265,6 @@ const st = StyleSheet.create({
   fbMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  histDate: { color: theme.colors.textMuted, fontWeight: '400' },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '700' },
 });
