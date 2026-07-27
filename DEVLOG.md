@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 26: Home tournament card (workstream C) · SHIPPED + VERIFIED
+
+A small Home polish (batch 1 did the scoreboard match cards; batch 6 the header/section hierarchy).
+
+- **Tournament dates on the selected-tournament card.** The card showed name · host · N sports · status
+  but never *when* the tournament runs. It now adds the friendly range via `formatDayShort`
+  ("Greenwood High School · 7 sports · **23 Jul → 31 Jul**"), consistent with the Organize hub and
+  Calendar — and meaningful now that the demo dates are anchored to today.
+- **Pluralization.** The sports count used an inline `> 1 ? 's' : ''`; switched to the shared
+  `plural()` ("7 sports", and correctly "1 sport").
+- **Files:** `src/screens/HomeScreen.tsx`.
+- **Verified live (demo, mobile):** selecting the Annual Sports Meet chip shows the card reading
+  "Greenwood High School · 7 sports · 23 Jul → 31 Jul" + the "Live now" pill. Console clean. Typecheck
+  clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 25: Standings page (workstream C) · SHIPPED + VERIFIED
 
 Deepened the standings table (batch 3 made it a results board; batch 5 gave it the shared podium).

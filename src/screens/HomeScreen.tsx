@@ -9,7 +9,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, LoadingState, Pill, SelectChip, textStyles } from '../components/ui';
+import { EmptyState, Card, LoadingState, Pill, SelectChip, textStyles, plural } from '../components/ui';
+import { formatDayShort } from '../core/dates';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { VoiceNav } from '../components/VoiceNav';
@@ -157,7 +158,9 @@ export default function HomeScreen() {
                 <Card style={st.tourCard}>
                   <View style={{ flex: 1, gap: theme.spacing(1) }}>
                     <Text style={textStyles.body}>{selected.name}</Text>
-                    <Text style={textStyles.muted}>{selected.hostName} · {selected.sports.length} sport{selected.sports.length > 1 ? 's' : ''}</Text>
+                    <Text style={textStyles.muted}>
+                      {selected.hostName} · {plural(selected.sports.length, 'sport')} · {formatDayShort(selected.startDate)} → {formatDayShort(selected.endDate)}
+                    </Text>
                     {(() => {
                       const s = tournamentStatus(selected, matchProgress(matches.filter((m) => m.tournamentId === selected.id)));
                       return <View style={st.statusRow}><Pill label={s.label} color={s.color + '22'} textColor={s.color} /></View>;
