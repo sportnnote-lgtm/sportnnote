@@ -46,24 +46,38 @@ const GOLD: P[] = [
   { id: 'p-yh-7', name: 'Deepa Shetty' }, { id: 'p-yh-8', name: 'Kiran Joshi' },
 ];
 
-/** Scoring outcomes (per legal ball) that sum EXACTLY to `target` over
- *  `scoringBalls` deliveries. Starts every ball at a single, then upgrades to
- *  boundaries until the target is met — deterministic and exact. */
-function makeScores(scoringBalls: number, target: number): number[] {
-  const scores = new Array(scoringBalls).fill(1);
-  let rem = target - scoringBalls; // singles baseline
-  // Scatter the upgrades across the innings (stride by an odd step) so runs
-  // don't all land on the openers — keeps the batting card believable.
-  const step = 7;
-  let k = 0;
-  while (rem > 0) {
-    const i = (k * step) % scoringBalls;
-    const add = rem >= 5 ? 5 : rem >= 3 ? 3 : rem; // 1→6, 1→4, or a small bump
-    scores[i] += add;
-    rem -= add;
-    k += 1;
-  }
-  return scores;
+/** Scoring outcomes (per legal ball) for one innings that sum EXACTLY to
+ *  `target` over `n` deliveries, shaped like a real innings: mostly dots and
+ *  singles with a scatter of twos and boundaries. The dot fraction eases off as
+ *  the required rate climbs (a 15-an-over innings can't leave many dots), and a
+ *  coprime-stride shuffle spreads the boundaries through the innings instead of
+ *  front-loading them onto the openers. Deterministic and exact. */
+function makeScores(n: number, target: number): number[] {
+  const rate = target / n;
+  // Put a realistic share of the runs through the rope, the rest in 1s/2s.
+  let sixes = Math.max(0, Math.min(Math.round((target * 0.22) / 6), Math.floor(n * 0.15)));
+  let fours = Math.max(0, Math.min(Math.round((target * 0.3) / 4), Math.floor(n * 0.25)));
+  let rem = target - 6 * sixes - 4 * fours; // runs still to find, from 1s/2s
+  let rb = n - sixes - fours;               // balls left for 1s/2s/dots
+  // Keep the 1s/2s remainder feasible (each such ball is 0..2 runs).
+  while (rem < 0) { if (fours > 0) { fours--; rem += 4; rb++; } else if (sixes > 0) { sixes--; rem += 6; rb++; } else break; }
+  while (rem > 2 * rb && rb > 0) { fours++; rem -= 4; rb--; }
+  // Split the remainder into twos / singles / dots, targeting a natural dot rate.
+  const dotFrac = Math.max(0.12, 0.45 - rate * 0.12);
+  const dotsWanted = Math.round(rb * dotFrac);
+  const tMin = Math.max(0, rem - rb), tMax = Math.floor(rem / 2);
+  const twos = Math.max(tMin, Math.min(dotsWanted - rb + rem, tMax));
+  const singles = rem - 2 * twos;
+  const dots = rb - twos - singles;
+  const pool = [
+    ...new Array(sixes).fill(6), ...new Array(fours).fill(4),
+    ...new Array(twos).fill(2), ...new Array(singles).fill(1), ...new Array(dots).fill(0),
+  ];
+  // Scatter the (sorted) pool across the innings with a coprime stride.
+  const stride = [7, 11, 13, 17, 19, 23, 29].find((p) => n % p !== 0) ?? 1;
+  const out = new Array<number>(n);
+  for (let k = 0; k < n; k++) out[(k * stride) % n] = pool[k];
+  return out;
 }
 
 interface InningsPlan {
