@@ -108,7 +108,7 @@ export default function CricketLineupScreen() {
 
         {/* The ordered XI so far */}
         <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>
-          {teamName} XI — {starters.length}/{playersPerSide}
+          {teamName} XI — <Text style={starters.length >= playersPerSide ? st.countFull : undefined}>{starters.length}/{playersPerSide}</Text>
         </Text>
         {picked.length === 0 ? (
           <Text style={textStyles.muted}>No one picked yet — tap players below to build the order.</Text>
@@ -127,7 +127,7 @@ export default function CricketLineupScreen() {
                 >
                   <Text style={[st.wkText, isKeeper && st.wkTextActive]}>† WK</Text>
                 </TouchableOpacity>
-                <Text style={st.remove} onPress={() => toggle(id)}>Remove</Text>
+                <Text style={st.remove} accessibilityRole="button" accessibilityLabel={`Remove ${nameById(id)}`} onPress={() => toggle(id)}>Remove</Text>
               </View>
             );
           })
@@ -185,4 +185,5 @@ const st = StyleSheet.create({
   wkText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
   wkTextActive: { color: '#06120D' },
   remove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
+  countFull: { color: theme.colors.primary },
 });

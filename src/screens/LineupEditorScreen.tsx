@@ -11,7 +11,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
 import { formationSlots, FORMATION_NAMES } from '../sports/football/formation';
@@ -61,6 +61,7 @@ export default function LineupEditorScreen() {
   const slots = lineup[side];
   const roster = side === 'home' ? homeRoster : awayRoster;
   const assignedIds = new Set(slots.map((s) => s.playerId).filter(Boolean));
+  const placedCount = slots.filter((s) => s.playerId).length;
 
   const updateSlots = (next: LineupSlot[]) => setLocal({ ...lineup, [side]: next });
 
@@ -120,7 +121,7 @@ export default function LineupEditorScreen() {
 
         {isFootball && (
           <>
-            <Text style={textStyles.muted}>Formation</Text>
+            <FieldLabel>Formation</FieldLabel>
             <View style={st.chips}>
               {FORMATION_NAMES.map((f) => (
                 <SelectChip key={f} label={f} active={formationName === f} onPress={() => changeFormation(f)} />
@@ -150,7 +151,9 @@ export default function LineupEditorScreen() {
           </View>
         )}
 
-        <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Positions</Text>
+        <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>
+          Positions — <Text style={placedCount >= slots.length ? st.countFull : undefined}>{placedCount}/{slots.length}</Text>
+        </Text>
         {slots.map((s, i) => (
           <TouchableOpacity accessibilityRole="button"
             key={i}
@@ -161,7 +164,7 @@ export default function LineupEditorScreen() {
             <Text style={st.posTag}>{s.position}</Text>
             <Text style={[textStyles.body, { flex: 1 }]}>{s.playerName ?? 'Tap to assign'}</Text>
             {s.playerId ? (
-              <Text style={st.clear} onPress={() => clearSlot(i)}>Clear</Text>
+              <Text style={st.clear} accessibilityRole="button" accessibilityLabel={`Clear ${s.position}`} onPress={() => clearSlot(i)}>Clear</Text>
             ) : null}
           </TouchableOpacity>
         ))}
@@ -200,4 +203,5 @@ const st = StyleSheet.create({
   slotActive: { borderColor: theme.colors.primary },
   posTag: { color: theme.colors.accent, fontWeight: '800', width: 52, fontSize: theme.font.small },
   clear: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
+  countFull: { color: theme.colors.primary },
 });

@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 20: Cricket batting-order & Lineup editors (workstream C) · SHIPPED (mechanism-verified)
+
+Polished the two lineup editors reached from a live match (cricket batting order; the positional
+pitch/court editor for football + court sports).
+
+- **Completion feedback (consistent with MatchSquad's counter).** Both editors now colour their
+  count **green when complete**: CricketLineup's "{team} XI — n/N" greens once the XI is full;
+  LineupEditor's "Positions" heading gains a "**n/N**" placed-count that greens when every position
+  is filled. Same "you're done" cue as the Matchday-squad picker.
+- **Form label + a11y.** LineupEditor's "Formation" label now uses the shared **`FieldLabel`** (bold,
+  batch 10/18 convention). The bare text links — CricketLineup "Remove", LineupEditor "Clear" — gained
+  `accessibilityRole="button"` + descriptive `accessibilityLabel`s so screen readers announce them.
+- **Files:** `src/screens/CricketLineupScreen.tsx`, `src/screens/LineupEditorScreen.tsx`.
+- **Typecheck clean; 69/69 tests.** _Not pixel-verified this session:_ both editors are behind the
+  organizer/scorer **edit** flow (`editSquad` on the live match's squad section), and the demo opened
+  the match in **viewer** mode (it showed "Remind … to set the XI" / "Report", not an edit CTA), so
+  the editor screens weren't reachable. Changes are minimal, typecheck-clean, and reuse
+  already-verified patterns (the green-count mirrors MatchSquad's verified counter; `FieldLabel` per
+  batches 10/18). En route the batch-13 Matches plural was re-confirmed ("🔴 Live, 1 match").
+
+---
+
 ### 2026-07-27 — UI design pass, batch 19: Match-reminders (NotificationPrefs) (workstream C) · SHIPPED + VERIFIED
 
 Polished the reminder-timers preference screen.
