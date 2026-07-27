@@ -7,7 +7,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, SelectChip, ScreenTitle, Card, FormError, textStyles } from '../components/ui';
+import { Button, TextField, SelectChip, ScreenTitle, Card, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { SPORT_SIDE_FIELDS, POSITION_HINT } from '../data/sportProfileFields';
@@ -139,6 +139,9 @@ export default function EditProfileScreen({ route, navigation }: Props) {
     }
   }
 
+  const age = ageFromDob(dob);
+  const guardianRequired = age !== undefined && age < 18;
+
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
@@ -149,7 +152,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
           <View style={st.flex}><TextField label="Base city" value={city} onChange={setCity} placeholder="Bengaluru" /></View>
           <View style={st.flex}>
             <DateField label="Date of birth" value={dob} onChange={setDob} />
-            {ageFromDob(dob) !== undefined ? <Text style={st.ageHint}>Age: {ageFromDob(dob)} yrs</Text> : null}
+            {age !== undefined ? <Text style={st.ageHint}>Age: {age} yrs</Text> : null}
           </View>
         </View>
         <View style={st.row}>
@@ -159,7 +162,10 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         <Text style={textStyles.muted}>Your contact details are visible only to you.</Text>
 
         <Card style={{ gap: theme.spacing(2) }}>
-          <Text style={textStyles.h3}>👪 Parent / Guardian (optional)</Text>
+          <Text style={textStyles.h3}>👪 Parent / Guardian {guardianRequired ? '· required' : '(optional)'}</Text>
+          {guardianRequired && (
+            <Text style={st.requiredNote}>Required — this player is under 18. Add a name and a phone or email.</Text>
+          )}
           <Text style={textStyles.muted}>
             For young players who don&apos;t have their own phone or email, a parent/guardian can be the point of contact. Their phone &amp; email are verified, and you can upload a document on your profile to confirm age &amp; guardianship.
           </Text>
@@ -193,7 +199,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
 
               {fields.map((f) => (
                 <View key={f.key} style={{ gap: theme.spacing(1) }}>
-                  <Text style={textStyles.muted}>{f.label}</Text>
+                  <FieldLabel>{f.label}</FieldLabel>
                   <View style={st.chips}>
                     {f.options.map((opt) => (
                       <SelectChip key={opt} label={opt} active={d.sides?.[f.key] === opt} onPress={() => setSide(s, f.key, opt)} />
@@ -202,7 +208,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
                 </View>
               ))}
 
-              <Text style={[textStyles.muted, { marginTop: theme.spacing(1) }]}>Teams represented</Text>
+              <View style={{ marginTop: theme.spacing(1) }}><FieldLabel>Teams represented</FieldLabel></View>
               {teams.map((t, i) => (
                 <View key={i} style={st.teamRow}>
                   <View style={{ flex: 1 }}>
@@ -222,7 +228,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
                   </TouchableOpacity>
                 </View>
               ))}
-              <Text style={st.addLink} onPress={() => addTeam(s)}>+ Add team</Text>
+              <Text style={st.addLink} accessibilityRole="button" onPress={() => addTeam(s)}>+ Add team</Text>
             </Card>
           );
         })}
@@ -247,4 +253,5 @@ const st = StyleSheet.create({
   removeTxt: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800' },
   addLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   ageHint: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
+  requiredNote: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
 });

@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 18: Edit-profile form (workstream C) · SHIPPED + VERIFIED
+
+Tightened the edit-profile form and fixed a small correctness bug.
+
+- **Fixed a misleading label.** The Parent/Guardian card always read "(optional)", but `save()`
+  *requires* a guardian for under-18 players — so a minor saw "(optional)" yet couldn't save. It now
+  reads **"· required"** with an accent note ("Required — this player is under 18…") whenever the
+  entered DOB is under 18, and stays "(optional)" otherwise.
+- **Consistent form-group labels.** The per-sport side-field labels ("Batting", "Bowling arm", etc.)
+  and "Teams represented" were muted body text; they now use the shared **`FieldLabel`** (bold), so
+  every group label reads as a form label — matching batch 10's form conventions.
+- **a11y:** the "+ Add team" text link gained `accessibilityRole="button"`.
+- **Files:** `src/screens/EditProfileScreen.tsx`.
+- **Verified live (demo, mobile):** Aarav Mehta (16 yrs) → Edit profile shows "👪 Parent / Guardian
+  · required" + the accent required note; the Football/Cricket cards show bold "Batting" /
+  "Bowling arm" / "Teams represented" labels. Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 17: Squad & Matchday-squad pages (workstream C) · SHIPPED + VERIFIED
 
 Polished the two squad screens (team roster management + matchday XI picker).
