@@ -30,6 +30,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 22: Organizer dashboard (workstream C) · SHIPPED + VERIFIED
+
+Polished the organizer command-center screen.
+
+- **Grammar: "needs a scorer".** The count pill read "⏳ 1 need a scorer"; now verb-agrees —
+  "1 **needs** a scorer" (singular) vs "N need a scorer" — on both the totals rollup and the per-
+  tournament rows.
+- **Empty-state consistency.** The top-level "no tournaments" case used a bare `Card` + muted text
+  while the in-screen "No fixtures yet" already used the shared **`EmptyState`**; unified it
+  (📋 "No tournaments to run yet").
+- **No loading flash.** Before data loaded, `hosted` was empty so the rollup briefly rendered zeros;
+  added a **`LoadingState`** for the pre-load frame (batch-4 consistency).
+- **Files:** `src/screens/OrganizerDashboardScreen.tsx`.
+- **Verified live (demo, mobile):** dashboard shows 6 Tournaments / 35 Matches / 54% Scored with the
+  "🔴 7 live now" + "⏳ 3 need a scorer" (plural correct) pills and per-tournament progress; console
+  clean. Typecheck clean; 69/69 tests. *(The singular "1 needs" and the loading/empty states use the
+  same ternary / shared components verified elsewhere — this demo user hosts 6 tournaments, so those
+  states weren't reachable here.)*
+
+This completes the workstream-C screen sweep — every user-facing screen has now had a design pass.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 21: Calendar page (workstream C) · SHIPPED + VERIFIED
 
 Polished the in-app calendar (month grid + agenda).

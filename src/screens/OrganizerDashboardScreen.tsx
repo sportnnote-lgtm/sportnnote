@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Button, Pill, LoadingState, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useMatches } from '../data/hooks';
@@ -48,10 +48,14 @@ export default function OrganizerDashboardScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Organizer dashboard" subtitle="What's left to run, across your tournaments" />
 
-        {loaded && hosted.length === 0 ? (
-          <Card>
-            <Text style={textStyles.muted}>You're not running any tournaments yet. Create one from the Organize tab and it'll show up here.</Text>
-          </Card>
+        {!loaded ? (
+          <LoadingState label="Loading your tournaments…" />
+        ) : hosted.length === 0 ? (
+          <EmptyState
+            icon="📋"
+            title="No tournaments to run yet"
+            hint="Create one from the Organize tab and it'll show up here."
+          />
         ) : (
           <>
             {/* Top rollup */}
@@ -64,7 +68,7 @@ export default function OrganizerDashboardScreen() {
               <ProgressBar pct={totals.scoredPct} />
               <View style={st.chipRow}>
                 {totals.live > 0 && <Pill label={`🔴 ${totals.live} live now`} color={theme.colors.danger + '22'} textColor={theme.colors.danger} />}
-                {totals.noScorer > 0 && <Pill label={`⏳ ${totals.noScorer} need a scorer`} color={theme.colors.accent + '22'} textColor={theme.colors.accent} />}
+                {totals.noScorer > 0 && <Pill label={`⏳ ${totals.noScorer} ${totals.noScorer === 1 ? 'needs' : 'need'} a scorer`} color={theme.colors.accent + '22'} textColor={theme.colors.accent} />}
               </View>
             </Card>
 
@@ -102,7 +106,7 @@ function TournamentRow({ d, onOpen, onGenerate }: { d: TournamentDash; onOpen: (
           <ProgressBar pct={d.scoredPct} />
           <View style={st.chipRow}>
             {d.live > 0 && <Pill label={`🔴 ${d.live} live`} color={theme.colors.danger + '22'} textColor={theme.colors.danger} />}
-            {d.noScorer > 0 && <Pill label={`⏳ ${d.noScorer} need a scorer`} color={theme.colors.accent + '22'} textColor={theme.colors.accent} />}
+            {d.noScorer > 0 && <Pill label={`⏳ ${d.noScorer} ${d.noScorer === 1 ? 'needs' : 'need'} a scorer`} color={theme.colors.accent + '22'} textColor={theme.colors.accent} />}
             {d.readyToClose && <Pill label="✅ Ready to close" color={theme.colors.primary + '22'} textColor={theme.colors.primary} />}
             {d.scheduled > 0 && d.noScorer === 0 && <Pill label={`📅 ${d.scheduled} upcoming`} color={theme.colors.surfaceAlt} textColor={theme.colors.textMuted} />}
           </View>
