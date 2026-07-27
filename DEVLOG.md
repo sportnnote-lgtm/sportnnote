@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 17: Squad & Matchday-squad pages (workstream C) · SHIPPED + VERIFIED
+
+Polished the two squad screens (team roster management + matchday XI picker).
+
+- **Captain / vice indicator → a Pill.** On the manage-squad roster, a player's leadership was a
+  cramped inline "  (C)" / "(VC)" in the name text. It's now a proper trailing **Pill** — green
+  "★ C" for the captain, an accent "VC" for the vice — matching the app's pill language.
+- **Leader-assign buttons are now real buttons for a11y.** "Make captain" / "Make vice-captain" were
+  bare `Text` with an `onPress` (screen readers didn't announce them as buttons); added
+  `accessibilityRole="button"` + `accessibilityState={{ selected }}`.
+- **Correct nav-bar title.** Manage-squad said a generic "Squad"; it now shows the **team name**
+  (breadcrumb), matching batches 11–16. (Matchday-squad keeps its descriptive "Matchday Squad".)
+- **Pluralization.** Switched the count strings to the shared `plural()` helper — "1 player" not
+  "1 players" (manage-squad subtitle; matchday-squad's saved-squad note and the subs counter).
+- **Files:** `src/screens/SquadScreen.tsx`, `src/screens/MatchSquadScreen.tsx`.
+- **Verified live (demo, mobile):** Red House → Manage squad shows the nav title "Red House",
+  subtitle "19 players", and Aarav Mehta's row with the green "★ C" pill + active "★ Captain" button.
+  Console clean. Typecheck clean; 69/69 tests. (MatchSquad's two `plural()` swaps are trivial and
+  typecheck-clean; not separately pixel-verified this session.)
+
+---
+
 ### 2026-07-27 — Fix: knockout bracket wasn't scoped to its tournament · SHIPPED + VERIFIED
 
 **Bug:** the "🏆 Knockout bracket" button on any tournament opened a bracket built from the app's

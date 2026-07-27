@@ -1,14 +1,15 @@
 /** Squad management for a team — a captain/coach adds players to the roster.
  *  The invite link (to hand squad-building to a captain) is a demo stub for now;
  *  full link auth + matchday XI/subs selection for every sport come next. */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Button, TextField, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Button, Pill, TextField, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getTeamSummary, getPlayers, createPlayer, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
 import { useCaptainships } from '../data/hooks';
@@ -16,6 +17,7 @@ import type { Player, TeamLeadership, TeamSummary } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function SquadScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Squad'>>();
   const { teamId } = params;
   const [team, setTeam] = useState<TeamSummary | null>(null);
@@ -39,6 +41,11 @@ export default function SquadScreen() {
     return () => { on = false; };
   }, [teamId]);
   useFocusEffect(load);
+
+  // Breadcrumb: name the nav bar after the team, not a generic "Squad".
+  useEffect(() => {
+    if (team) nav.setOptions({ title: team.name });
+  }, [nav, team?.name]);
 
   const assignLeader = (role: 'captainId' | 'viceCaptainId', playerId: string) => {
     // setting a player as captain clears them from vice (and vice versa)
@@ -77,7 +84,7 @@ export default function SquadScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title={`${team.name} squad`} subtitle={`${squad.length} players · ${team.sports.map((s) => getSport(s).icon).join(' ')}`} />
+        <ScreenTitle title={`${team.name} squad`} subtitle={`${plural(squad.length, 'player')} · ${team.sports.map((s) => getSport(s).icon).join(' ')}`} />
 
         {captain && <Text style={st.captain}>✓ You’re the captain of {team.name}</Text>}
 
@@ -126,18 +133,30 @@ export default function SquadScreen() {
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={textStyles.body}>
-                      {p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}
-                      {isCap ? '  (C)' : isVice ? '  (VC)' : ''}
-                    </Text>
+                    <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}</Text>
                     <Text style={textStyles.muted}>{p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
                   </View>
+                  {isCap ? (
+                    <Pill label="★ C" color={theme.colors.primary + '22'} textColor={theme.colors.primary} />
+                  ) : isVice ? (
+                    <Pill label="VC" color={theme.colors.surfaceAlt} textColor={theme.colors.accent} />
+                  ) : null}
                 </View>
                 <View style={st.leaderBtns}>
-                  <Text style={[st.leaderBtn, isCap && st.leaderBtnOn]} onPress={() => assignLeader('captainId', p.id)}>
+                  <Text
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isCap }}
+                    style={[st.leaderBtn, isCap && st.leaderBtnOn]}
+                    onPress={() => assignLeader('captainId', p.id)}
+                  >
                     {isCap ? '★ Captain' : 'Make captain'}
                   </Text>
-                  <Text style={[st.leaderBtn, isVice && st.leaderBtnOn]} onPress={() => assignLeader('viceCaptainId', p.id)}>
+                  <Text
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isVice }}
+                    style={[st.leaderBtn, isVice && st.leaderBtnOn]}
+                    onPress={() => assignLeader('viceCaptainId', p.id)}
+                  >
                     {isVice ? '★ Vice-captain' : 'Make vice-captain'}
                   </Text>
                 </View>

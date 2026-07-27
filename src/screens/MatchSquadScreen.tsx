@@ -12,7 +12,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Button, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Button, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getRoster, getMatchSquads, setMatchSquad, getLineup, setLineup, getLastSquadForTeam } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
@@ -173,14 +173,14 @@ export default function MatchSquadScreen() {
       <View style={st.header}>
         <ScreenTitle title={`${teamName} — pick who plays`} subtitle="Choose your starters and subs from the saved squad" />
         {roster.length > 0 && (
-          <Text style={st.savedNote}>💾 {roster.length} player{roster.length === 1 ? '' : 's'} in {teamName}’s saved squad — kept for every match.</Text>
+          <Text style={st.savedNote}>💾 {plural(roster.length, 'player')} in {teamName}’s saved squad — kept for every match.</Text>
         )}
         <View style={st.counterRow}>
           <View style={[st.counterPill, xiFull && st.counterPillFull]}>
             <Text style={[st.counterText, xiFull && st.counterTextFull]}>Starting {startCount}/{playersPerSide}</Text>
           </View>
           <View style={st.counterPill}>
-            <Text style={st.counterText}>{subCount} sub{subCount === 1 ? '' : 's'}</Text>
+            <Text style={st.counterText}>{plural(subCount, 'sub')}</Text>
           </View>
           <View style={{ flex: 1 }} />
           {startCount < playersPerSide && eligible.length > startCount + subCount ? (
