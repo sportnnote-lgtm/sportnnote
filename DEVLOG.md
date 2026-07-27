@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 28: LiveScoring Timeline — the spine (workstream C) · SHIPPED + VERIFIED
+
+The Timeline tab rendered as a flat list of rows with a redundant right-side dot — it didn't actually
+*read* as a timeline.
+
+- **Timeline spine.** Each event row now leads with a **continuous left rail + a team-coloured node**,
+  so events thread down a vertical spine (red for home, blue for away). The rail line starts/ends at the
+  first/last node (no dangling ends). Removed the now-redundant right side-dot. Applied to **both**
+  timeline components — the shared `LiveTimeline` (net/raid sports) and football's richer `Timeline`
+  (goals, cards, subs, fouls, corners…).
+- **Files:** `src/sports/LiveTimeline.tsx`, `src/sports/football/Timeline.tsx`.
+- **Verified live (demo, mobile):** RED vs BLU → Timeline shows the coloured spine threading 33' Goal /
+  30' Substitution / 26' Yellow card / 23' Goal / 20' Yellow card / 12' Goal / 0' Offside, red/blue
+  nodes matching each side, continuous rail. Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 27: LiveScoring Info tab — a11y (workstream C) · SHIPPED + VERIFIED
 
 The Info tab (match details, scorer, hosts, matchday squads) was already well-structured — the gap was
