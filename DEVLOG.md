@@ -30,6 +30,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-25 — UI design pass, batch 16: Knockout bracket (workstream C) · SHIPPED (mostly verified)
+
+Polished the knockout bracket view.
+
+- **Winner emphasis (results-board language).** A decided real pairing now shows the winner **bold
+  with a green ✓** and dims the loser — the same "green = win" language as SportHub Results and the
+  SportProfile history. Byes and still-pending pairings stay neutral (a bye is a walkover, not a
+  contest, so it gets no emphasis).
+- **Fixed the match-card layout.** The "vs" was awkwardly indented with a hard-coded left margin;
+  it's now a centred **"VS"** divider between the two slot rows, and slot names flex so a trailing ✓
+  aligns right.
+- **Gold champion banner.** The 🏆 Champion banner now uses the shared podium **gold** (`PODIUM[0]`)
+  tint + border + text, tying it to the medal language used in Standings/leaderboards (was plain
+  green on surfaceAlt).
+- **Correct nav-bar title** → the tournament name (breadcrumb), matching batches 11–15.
+- **Files:** `src/screens/BracketScreen.tsx` (imports shared `PODIUM` from `components/Rank`).
+- **Verified live (demo, mobile):** Annual Sports Meet 2026 → Football bracket shows the nav title
+  "Annual Sports Meet 2026", "Knockout bracket · 20 teams", the centred "VS" layout, bold real teams
+  and muted BYEs, colour dots. Console clean. Typecheck clean; 69/69 tests.
+  _Not pixel-verified:_ the winner-✓/dimmed-loser emphasis and the gold champion banner — **no demo
+  bracket pairing currently coincides with a completed match** (all are byes or unplayed seeded
+  pairings; the live World Cup matches aren't `completed`), so `decide()` returns no winner in demo.
+  Both reuse the already-verified green=win + `PODIUM` gold patterns and typecheck clean.
+  _Pre-existing quirk noted:_ the bracket reads the app's selected tournament (`useTournament()`), so
+  the "Knockout bracket" button on a different tournament's page still shows the selected one — out
+  of scope for this style pass.
+
+---
+
 ### 2026-07-25 — UI design pass, batch 15: Notifications inbox (workstream C) · SHIPPED + VERIFIED
 
 Polished the in-app notification inbox (live alerts + a roll-up of recent activity from players you
