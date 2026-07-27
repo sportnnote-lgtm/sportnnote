@@ -30,6 +30,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 31: Match Summary — podium ratings + winner emphasis (workstream C) · SHIPPED + VERIFIED
+
+The generic post-match Summary (used by football and every sport without its own summary) showed the
+result and a "Player ratings" leaderboard, but two of the app's established visual cues were missing
+here: the **podium language** used elsewhere for ranked lists, and the **"green = win" results-board**
+emphasis used on every other scoreboard.
+
+- **Podium on the ratings leaderboard.** The numeric rank (`1`, `2`, `3`…) is replaced with the shared
+  `RankBadge`, and the top-three rows get the same faint podium tint (gold/silver/bronze) used in
+  Standings and the stat-leader rail — so the best performers read at a glance and the list speaks the
+  same ranking language as the rest of the app.
+- **Winner emphasis on the result.** Once a match is **decided** (complete, both scores numeric, not a
+  draw), the **loser's score dims** (`opacity 0.45`) so the winner reads first — matching the
+  results-board cue applied across SportHub, Calendar, Bracket, Standings and profile history. Draws and
+  non-numeric results (pens/shootouts) keep both scores at full strength.
+- **Files:** `src/components/MatchSummary.tsx` (import `RankBadge`/`podiumColor`; `decided`/`homeWon`/
+  `awayWon` logic; `scoreLost` style; podium row tint; removed the now-unused numeric `rank` style).
+- **Verified live (demo, mobile):** RED vs BLU → Summary renders the new "Player ratings · out of 5"
+  heading and, for this stat-less live match, the correct `EmptyState` ("No individual stats recorded").
+  Console clean. Typecheck clean; 69/69 tests. The podium tint (`players.length > 0`) and loser-dimming
+  (`complete && decided`) are conditionally rendered off the verified logic above — the demo's reachable
+  Summary is a live, stat-less match, so those two cues are mechanism-verified, consistent with the
+  results-board cues shipped in earlier batches.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 30: LiveScoring Lineups — goal markers (workstream C) · SHIPPED + VERIFIED
 
 The FIFA-style Lineups pitch marked cards, subs and captains on each player — but not **goal scorers**,

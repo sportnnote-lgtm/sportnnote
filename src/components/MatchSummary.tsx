@@ -5,6 +5,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, EmptyState, textStyles } from './ui';
+import { RankBadge, podiumColor } from './Rank';
 import { useMask } from '../core/disputeMask';
 import { matchRatings, awardsFor, ratingStars, STAT_LABELS, type MatchRating } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
@@ -32,15 +33,23 @@ export function MatchSummary({
   const teamColor = (s: 'home' | 'away') => (s === 'home' ? homeColor : awayColor);
   const teamName = (s: 'home' | 'away') => (s === 'home' ? homeName : awayName);
 
+  // Once a match is decided, dim the loser's score so the winner reads at a
+  // glance (the app's "results board" cue). Draws / non-numeric scores (pens,
+  // shootouts) keep both at full strength.
+  const hs = parseFloat(summary.homeScore), as = parseFloat(summary.awayScore);
+  const decided = complete && !isNaN(hs) && !isNaN(as) && hs !== as;
+  const homeWon = decided && hs > as;
+  const awayWon = decided && as > hs;
+
   return (
     <View style={{ gap: theme.spacing(3) }}>
       {/* Result */}
       <View style={st.result}>
         <Text style={st.resultLabel}>{complete ? summary.statusLine : `Live · ${summary.statusLine}`}</Text>
         <View style={st.scoreRow}>
-          <Text style={[st.score, { color: homeColor }]}>{summary.homeScore}</Text>
+          <Text style={[st.score, { color: homeColor }, decided && !homeWon && st.scoreLost]}>{summary.homeScore}</Text>
           <Text style={st.vs}>{homeName}  ·  {awayName}</Text>
-          <Text style={[st.score, { color: awayColor }]}>{summary.awayScore}</Text>
+          <Text style={[st.score, { color: awayColor }, decided && !awayWon && st.scoreLost]}>{summary.awayScore}</Text>
         </View>
       </View>
 
@@ -74,9 +83,11 @@ export function MatchSummary({
         <EmptyState icon="📊" title="No individual stats recorded for this match" compact />
       ) : (
         <Card>
-          {players.map((p: MatchRating, i) => (
-            <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, i > 0 && st.divider]}>
-              <Text style={st.rank}>{i + 1}</Text>
+          {players.map((p: MatchRating, i) => {
+            const tier = podiumColor(i);
+            return (
+            <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && st.divider]}>
+              <RankBadge index={i} width={22} />
               <View style={[st.dot, { backgroundColor: teamColor(p.side) }]} />
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
@@ -87,7 +98,8 @@ export function MatchSummary({
                 <Text style={st.ratingNum}>{p.rating.toFixed(1)}</Text>
               </View>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </Card>
       )}
     </View>
@@ -102,6 +114,7 @@ const st = StyleSheet.create({
   resultLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   score: { fontSize: theme.font.h1, fontWeight: '900' },
+  scoreLost: { opacity: 0.45 },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.small },
   mvp: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
@@ -124,7 +137,6 @@ const st = StyleSheet.create({
   awardVal: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
-  rank: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', width: 18, textAlign: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
   detail: { color: theme.colors.textMuted, fontSize: theme.font.tiny, marginTop: 1 },
   ratingCol: { alignItems: 'flex-end', minWidth: 64 },
