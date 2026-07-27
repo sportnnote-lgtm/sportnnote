@@ -1,7 +1,7 @@
 /** Per-sport standings: a league table (P/W/L/Pts) plus the individual stat
  *  leaders. A sport selector appears for multi-sport meets; a single-sport
  *  tournament just shows that sport. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -29,26 +29,37 @@ export default function StandingsScreen() {
   const tournament = params?.tournamentId ? opened : selected;
   const sports = tournament?.sports ?? [];
   const [sport, setSport] = useState<SportId>(params?.sport ?? 'football');
-  const { teams, leaders } = useStandings(sport, params?.tournamentId);
-  const lead = leaderStat(sport);
+  // Clamp the shown sport to one this tournament actually has (a generic open
+  // defaults to football, which the meet may not include).
+  const activeSport = sports.includes(sport) ? sport : sports[0] ?? sport;
+  const { teams, leaders } = useStandings(activeSport, params?.tournamentId);
+  const lead = leaderStat(activeSport);
   const [showTeams, setShowTeams] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);
+  // Draws only matter for sports that can draw (football, cricket) — hide the
+  // column for basketball/tennis/etc. where every result has a winner.
+  const hasDraws = teams.some((t) => t.drawn > 0);
+
+  // Breadcrumb: name the nav bar after the tournament; the in-content title is "Standings".
+  useEffect(() => {
+    if (tournament) nav.setOptions({ title: tournament.name });
+  }, [nav, tournament?.name]);
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
-        <ScreenTitle title="Standings" subtitle={tournament?.name ?? ''} />
+        <ScreenTitle title="Standings" />
 
         {sports.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
             {sports.map((s) => (
-              <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}`} active={sport === s} onPress={() => setSport(s)} />
+              <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}`} active={activeSport === s} onPress={() => setSport(s)} />
             ))}
           </ScrollView>
         )}
 
         <SectionHeader
-          title={`${getSport(sport).icon} Team standings`}
+          title={`${getSport(activeSport).icon} Team standings`}
           count={teams.length}
           onSeeAll={teams.length > SECTION_CAP ? () => setShowTeams((v) => !v) : undefined}
           expanded={showTeams}
@@ -59,18 +70,19 @@ export default function StandingsScreen() {
             <Text style={[st.teamCol, st.headText]}>Team</Text>
             <Text style={[st.num, st.headText]}>P</Text>
             <Text style={[st.num, st.headText]}>W</Text>
+            {hasDraws && <Text style={[st.num, st.headText]}>D</Text>}
             <Text style={[st.num, st.headText]}>L</Text>
             <Text style={[st.num, st.headText]}>Pts</Text>
           </View>
           {teams.length === 0 ? (
-            <EmptyState icon="🏁" title={`No completed ${getSport(sport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
+            <EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
           ) : (
             (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => {
               const tier = podiumColor(i);
               return (
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points, played ${t.played}, won ${t.won}, lost ${t.lost}`}
+                  accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points, played ${t.played}, won ${t.won}${hasDraws ? `, drawn ${t.drawn}` : ''}, lost ${t.lost}`}
                   key={t.teamId}
                   activeOpacity={0.8}
                   onPress={() => nav.navigate('Team', { teamId: t.teamId })}
@@ -83,6 +95,7 @@ export default function StandingsScreen() {
                     </View>
                     <Text style={st.num}>{t.played}</Text>
                     <Text style={st.num}>{t.won}</Text>
+                    {hasDraws && <Text style={st.num}>{t.drawn}</Text>}
                     <Text style={st.num}>{t.lost}</Text>
                     <Text style={[st.num, st.pts]}>{t.points}</Text>
                   </View>

@@ -30,6 +30,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 25: Standings page (workstream C) · SHIPPED + VERIFIED
+
+Deepened the standings table (batch 3 made it a results board; batch 5 gave it the shared podium).
+
+- **Draws (D) column.** The table showed **P / W / L / Pts** but no draws — so a football team with a
+  draw had P ≠ W+L, reading as broken. Now a **D** column appears (between W and L) **only when any team
+  has drawn** (`hasDraws`), so P = W+D+L for football/cricket while basketball/tennis/etc. stay
+  uncluttered. The accessibility label includes "drawn N" when shown.
+- **Sport clamp.** `sport` defaulted to `'football'`; a generic open (from the Home-selected tournament)
+  could land on a sport the meet doesn't have. Now clamped to `activeSport = sports.includes(sport) ?
+  sport : sports[0]` — the same fix as SportHub (batch 14) / Bracket. Used for the table, leaders, chips
+  and empty-state copy.
+- **Breadcrumb nav title** → the tournament name (was a generic "Standings"); dropped the now-redundant
+  in-content subtitle, matching the SportHub pattern.
+- **Files:** `src/screens/StandingsScreen.tsx`.
+- **Verified live (demo, mobile):** Annual Sports Meet 2026 → Standings shows the nav title, football
+  table with the **D column** (Red House P2 W1 D1 L0 Pts3, etc. — P=W+D+L), podium medals/tint, and the
+  goals leaders. Console clean. Typecheck clean; 69/69 tests. *(The D-column hides for a no-draw sport —
+  same boolean inverted — but the Basketball chip resisted the synthetic tap, so that case is
+  mechanism-verified, not eyeballed.)*
+
+---
+
 ### 2026-07-27 — UI design pass, batch 24: SportProfile match history — dates (workstream C) · SHIPPED + VERIFIED
 
 Finished the per-sport match history (batch 7 added the win/loss result treatment; batch 11 the stat
