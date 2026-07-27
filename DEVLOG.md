@@ -30,6 +30,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 23: Organize hub + shared date util (workstream C) · SHIPPED + VERIFIED
+
+Polished the Organize hub and deduped the friendly-date helpers.
+
+- **New `src/core/dates.ts`** — extracted `formatDay` ("Mon, 27 Jul") + `formatDayShort` ("27 Jul")
+  from batch 21's local Calendar copies into one shared, pure module. `CalendarScreen` now imports them
+  (removed its two local copies) — re-verified, no regression.
+- **Organize hub — friendly dates.** Hosted-tournament cards showed raw ISO (`… · 2026-07-14 →
+  2026-07-22`); now `formatDayShort` → "14 Jul → 22 Jul".
+- **Organize hub — sport pills.** Cards labelled sports with a capitalised id (`cap('football')` →
+  "Football"); now the app-standard `getSport(s).icon + name` ("⚽ Football"), matching Discover /
+  Calendar / Tournament. Removed the now-unused `cap`.
+- **Files:** `src/core/dates.ts` (new), `src/screens/CalendarScreen.tsx` (refactor),
+  `src/screens/OrganizeScreen.tsx`.
+- **Verified live (demo, mobile):** Calendar day cells still render "Tue, 14 Jul, has events" via the
+  shared util (regression check clean); Organize renders its `EmptyState` cleanly, console clean.
+  Typecheck clean; 69/69 tests. *(The hosted-tournament card changes couldn't be eyeballed: the demo
+  seed's tournaments all end ~2026-07-22, now past the advanced demo "today" of 2026-07-27, so
+  Organize's `statusOf !== 'completed'` filter hides them — see the demo-date-staleness note below.
+  Both changes reuse patterns verified elsewhere — shared `formatDayShort` in Calendar; `getSport`
+  pills app-wide.)*
+
+> **Follow-up flagged:** the demo tournament seed uses fixed dates (~mid-July 2026) that the advancing
+> demo "today" (now 2026-07-27) has moved past, so date-gated views (Organize hub, Calendar "upcoming")
+> look emptier than intended. Worth anchoring the demo seed dates relative to today so the demo always
+> looks populated. Out of scope for this style pass.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 22: Organizer dashboard (workstream C) · SHIPPED + VERIFIED
 
 Polished the organizer command-center screen.

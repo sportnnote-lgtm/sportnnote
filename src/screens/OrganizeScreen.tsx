@@ -12,6 +12,8 @@ import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
 import { getMyPlayerId, getTournament, getTournaments, getOrganizations } from '../data/repos';
 import { canManageTournament, orgsForPlayer } from '../core/org';
+import { getSport } from '../sports/registry';
+import { formatDayShort } from '../core/dates';
 import type { RootStackParamList } from '../navigation/types';
 import type { Tournament } from '../core/types';
 
@@ -30,7 +32,6 @@ const STATUS_META: Record<Status, { label: string; color: string; text: string }
   upcoming: { label: '📅 Upcoming', color: theme.colors.accent, text: '#06120D' },
   completed: { label: 'Completed', color: theme.colors.surfaceAlt, text: theme.colors.textMuted },
 };
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function OrganizeScreen() {
   const nav = useNavigation<Nav>();
@@ -112,11 +113,11 @@ export default function OrganizeScreen() {
                     <Pill label={meta.label} color={meta.color} textColor={meta.text} />
                   </View>
                   <Text style={textStyles.muted}>
-                    {t.hostName} · {t.startDate} → {t.endDate}
+                    {t.hostName} · {formatDayShort(t.startDate)} → {formatDayShort(t.endDate)}
                   </Text>
                   <View style={st.tags}>
                     {t.sports.map((s) => (
-                      <Pill key={s} label={cap(s)} />
+                      <Pill key={s} label={`${getSport(s).icon} ${getSport(s).name}`} />
                     ))}
                   </View>
                 </Card>

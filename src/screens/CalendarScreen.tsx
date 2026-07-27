@@ -15,6 +15,7 @@ import { orgsForPlayer } from '../core/org';
 import { useAuth } from '../core/auth';
 import { getSport } from '../sports/registry';
 import { exportToCalendar, type CalEvent } from '../core/ics';
+import { formatDay, formatDayShort } from '../core/dates';
 import type { Match, Tournament, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -28,17 +29,6 @@ const ymd = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 const timeOf = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-/** "2026-07-27" → "Mon, 27 Jul" — friendlier than the raw ISO date in headers. */
-const formatDay = (iso: string) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]}, ${d} ${MONTHS[m - 1].slice(0, 3)}`;
-};
-/** "2026-07-27" → "27 Jul" — the weekday-less form for date ranges. */
-const formatDayShort = (iso: string) => {
-  const [, m, d] = iso.split('-').map(Number);
-  return !m || !d ? iso : `${d} ${MONTHS[m - 1].slice(0, 3)}`;
 };
 
 export default function CalendarScreen() {
