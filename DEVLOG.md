@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v1']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v3']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,40 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Demo fix: completed cricket fixtures now replay to an ENDED scorecard · SHIPPED + VERIFIED
+
+Follow-up to batch 32. A cricket match's state (scorecard, ratings, result) is rebuilt by replaying its
+append-only event log through the pure reducer — but the demo's *completed* cricket fixtures shipped **no**
+log, so they replayed to the empty initial state (`ended: false`). Every completed cricket match therefore
+showed the pre-match Summary placeholder despite reading FINAL — and the batch-32 podium was unreachable in
+the demo. (The World Cup football matches show full state precisely because they ship seeded event logs.)
+
+- **Generated ball-by-ball logs** for all four completed cricket fixtures (`ck1`, `ck2`, `s6`, `s7`). New
+  `src/data/cricketSeed.ts` deterministically builds a coherent innings log (openers, strike rotation,
+  wickets with real dismissals, bowler rotation) that replays — through the *actual* cricket reducer — to
+  the exact final total with `ended: true`, a populated batting/bowling card, an MVP and player ratings.
+  Only reducer-legal actions are emitted (`SET_STRIKER`/`SET_NONSTRIKER`/`RUNS`/`WICKET`); the reducer
+  itself handles the innings switch, target and match end.
+- **Engine extraction.** Split the pure core of the cricket plugin (state, `init`, the reducer and its
+  helpers) out of the JSX `index.tsx` into `src/sports/cricket/engine.ts` — mirroring kabaddi's `rules.ts`
+  and `dls.ts` — so it can be replay-tested under `node --test` (which can't type-strip a `.tsx`).
+  `index.tsx` re-imports what it needs; no behaviour change (74/74 tests, typecheck clean).
+- **Test guard.** `tests/cricket-seed.test.mts` replays every seed through the real engine and asserts the
+  exact totals, wickets, `ended`, balls-per-innings and card size — so a reducer drift or bad script fails
+  CI, never the demo. (`allowImportingTsExtensions` enabled + a `.ts` extension on engine's `dls` import so
+  Node's test runner resolves it; tsc/bundler + Metro both accept it — verified in the running web build.)
+- **Wiring.** `demoStore.matchEvents` seeds `CRICKET_MATCH_EVENTS`; `DEMO_KEY` bumped **v2 → v3** to
+  re-seed existing saves.
+- **Files:** `src/data/cricketSeed.ts` (new), `src/sports/cricket/engine.ts` (new), `tests/cricket-seed.test.mts`
+  (new), `src/sports/cricket/index.tsx`, `src/data/demoStore.ts`, `tsconfig.json`.
+- **Verified live (demo, mobile):** Matches → Completed → Cricket → Red House 148–132 Gold House →
+  **Summary** now reads "🏆 Won by 16 runs", Player of the Match Imran Pasha 64 (26), Best Bat / Best Bowl
+  (Manoj Kumar 2-20), and the **podium ratings** list with 🥇🥈🥉 on the top three. **Scorecard** shows the
+  full card — RED 148/5 (10.0), GLD 132/6 (10.0), real dismissals ("c Vikram Rao b Farhan Khan"), SR, two
+  not-out batters, CRR 13.20. Totals match the seed exactly across all four fixtures. Console clean.
 
 ---
 
