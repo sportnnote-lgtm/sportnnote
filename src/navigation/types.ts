@@ -43,7 +43,7 @@ export type RootStackParamList = {
   Following: undefined;
   Standings: { sport?: SportId; tournamentId?: string } | undefined;
   SportHub: { tournamentId: string; sport: SportId; tournamentName?: string };
-  Bracket: { sport?: SportId } | undefined;
+  Bracket: { tournamentId?: string; sport?: SportId } | undefined;
   Team: { teamId: string };
   Squad: { teamId: string };
   JoinTeam: { token?: string } | undefined;

@@ -30,6 +30,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Fix: knockout bracket wasn't scoped to its tournament · SHIPPED + VERIFIED
+
+**Bug:** the "🏆 Knockout bracket" button on any tournament opened a bracket built from the app's
+*default* tournament (`useTournament()` → `demo.tournaments[0]`) — and worse, its teams came from
+`useTeamSummaries()` (every team in the app) and its matches from `useMatches()` (every match), so
+the bracket **mixed teams from all tournaments**. Opening the World Cup's bracket showed a 20-team
+draw with Red/Blue/Gold House, Rovers United and Titan Athletic in it.
+
+**Fix:**
+- `Bracket` route now carries `tournamentId`; `TournamentProfile` passes `tournament.id` when opening
+  it. (`navigation/types.ts`, `TournamentProfileScreen.tsx`.)
+- `BracketScreen` resolves that tournament via `useTournamentById(params.tournamentId)` (falling back
+  to `useTournament()` only when no id is supplied, e.g. an old deep link), and now scopes its data
+  through `useLeagueData(tournamentId)` — the same tournament-scoped hook SportHub/TournamentProfile
+  use. **Participants are the distinct teams in this tournament's matches**; `decide()` only counts
+  completed matches within this tournament. The shown sport is clamped to one the tournament has.
+- **Files:** `src/navigation/types.ts`, `src/screens/TournamentProfileScreen.tsx`,
+  `src/screens/BracketScreen.tsx`.
+- **Verified live (demo, mobile):** FIFA World Cup 2026 → Knockout bracket now shows the nav title
+  "FIFA World Cup 2026" and **"8 teams"** — Quarter-finals of exactly England/Egypt, Norway/Portugal,
+  Croatia/Argentina, Brazil/Spain (no other tournament's teams), Semi-finals TBD. Console clean.
+  Typecheck clean; 69/69 tests. (Winner-✓ emphasis still needs a *completed* pairing, which the demo
+  seed's live-only WC matches don't yet provide — see batch 16.)
+
+---
+
 ### 2026-07-25 — UI design pass, batch 16: Knockout bracket (workstream C) · SHIPPED (mostly verified)
 
 Polished the knockout bracket view.

@@ -10,7 +10,7 @@ import { theme } from '../core/theme';
 import { SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { PODIUM } from '../components/Rank';
 import { getSport } from '../sports/registry';
-import { useTournament, useTeamSummaries, useMatches } from '../data/hooks';
+import { useTournament, useTournamentById, useLeagueData } from '../data/hooks';
 import { knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn } from '../data/bracket';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -31,11 +31,21 @@ function Slot({ slot, state = 'neutral' }: { slot: BracketSlot; state?: SlotStat
 export default function BracketScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Bracket'>>();
-  const tournament = useTournament();
+  // Scope to the tournament we were opened from. Fall back to the app's selected
+  // tournament only when no id was passed (e.g. an old deep link).
+  const byId = useTournamentById(params?.tournamentId);
+  const fallback = useTournament();
+  const tournament = byId ?? fallback;
+  const tournamentId = params?.tournamentId ?? fallback?.id;
   const sports = tournament?.sports ?? [];
   const [sport, setSport] = useState<SportId>(params?.sport ?? 'football');
-  const teams = useTeamSummaries().filter((t) => t.sports.includes(sport));
-  const { matches } = useMatches();
+  // Clamp the shown sport to one this tournament actually has.
+  const activeSport = sports.includes(sport) ? sport : sports[0] ?? sport;
+
+  // Only THIS tournament's matches, in the active sport — so the bracket is built
+  // from the tournament's own participants, not every team in the app.
+  const { matches } = useLeagueData(tournamentId);
+  const sportMatches = useMemo(() => matches.filter((m) => m.sport === activeSport), [matches, activeSport]);
 
   // Breadcrumb: name the nav bar after the tournament; the in-content title
   // stays "Knockout bracket".
@@ -43,23 +53,30 @@ export default function BracketScreen() {
     if (tournament) nav.setOptions({ title: tournament.name });
   }, [nav, tournament?.name]);
 
-  // A pairing is decided if those two teams played a completed match in this sport.
+  // Participants = the distinct teams appearing in this tournament's matches.
+  const teams = useMemo(() => {
+    const map = new Map<string, { name: string; color?: string }>();
+    for (const m of sportMatches) {
+      map.set(m.homeTeam.id, { name: m.homeTeam.name, color: m.homeTeam.colorHex });
+      map.set(m.awayTeam.id, { name: m.awayTeam.name, color: m.awayTeam.colorHex });
+    }
+    return [...map.values()];
+  }, [sportMatches]);
+
+  // A pairing is decided if those two teams played a completed match in this tournament.
   const decide = useMemo<DecideFn>(() => {
     return (a, b) => {
-      const m = matches.find(
+      const m = sportMatches.find(
         (x) =>
-          x.sport === sport && x.status === 'completed' && x.winner && x.winner !== 'draw' &&
+          x.status === 'completed' && x.winner && x.winner !== 'draw' &&
           ((x.homeTeam.name === a && x.awayTeam.name === b) || (x.homeTeam.name === b && x.awayTeam.name === a))
       );
       if (!m) return undefined;
       return m.winner === 'home' ? m.homeTeam.name : m.awayTeam.name;
     };
-  }, [matches, sport]);
+  }, [sportMatches]);
 
-  const rounds = useMemo(
-    () => knockoutBracket(teams.map((t) => ({ name: t.name, color: t.colorHex })), decide),
-    [teams, decide]
-  );
+  const rounds = useMemo(() => knockoutBracket(teams, decide), [teams, decide]);
   const champion = useMemo(() => bracketChampion(rounds, decide), [rounds, decide]);
 
   // The winner of a real, decided contest (not a bye or a still-pending pairing),
@@ -80,7 +97,7 @@ export default function BracketScreen() {
         {sports.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
             {sports.map((s) => (
-              <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}`} active={sport === s} onPress={() => setSport(s)} />
+              <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}`} active={activeSport === s} onPress={() => setSport(s)} />
             ))}
           </ScrollView>
         )}

@@ -210,7 +210,7 @@ export default function TournamentProfileScreen() {
           <Button
             label="🏆 Knockout bracket"
             variant="ghost"
-            onPress={() => nav.navigate('Bracket', singleSport ? { sport: sports[0] } : {})}
+            onPress={() => nav.navigate('Bracket', { tournamentId: tournament.id, ...(singleSport ? { sport: sports[0] } : {}) })}
           />
         )}
         {tournament.structure && (
