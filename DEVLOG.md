@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 21: Calendar page (workstream C) · SHIPPED + VERIFIED
+
+Polished the in-app calendar (month grid + agenda).
+
+- **Friendly dates everywhere.** Headers and rows showed raw ISO (`2026-07-27`). New `formatDay`
+  ("Mon, 27 Jul") for the selected-day + agenda-day headers, and `formatDayShort` ("14 Jul") for the
+  tournament date ranges → "14 Jul → 22 Jul" instead of "2026-07-14 → 2026-07-22".
+- **Results-board language on completed matches.** A finished match row now greens the **winning
+  score** (nested Text, same "green = win" cue as SportHub Results / SportProfile history) instead of a
+  flat "2–1".
+- **a11y.** Day cells gained a descriptive `accessibilityLabel` ("Tue, 14 Jul, has events") +
+  `accessibilityState.selected`; the bare-text buttons — month arrows ‹ ›, "Today", "Add to calendar",
+  "Add all to calendar" — gained `accessibilityRole="button"` (+ "Previous/Next month" labels).
+- **Files:** `src/screens/CalendarScreen.tsx`.
+- **Verified live (demo, mobile):** month grid; selecting Sat 18 Jul shows the "Sat, 18 Jul" header and
+  tournament rows reading "14 Jul → 22 Jul" / "17 Jun → 19 Jul"; day cells announce friendly labels in
+  the a11y tree. Console clean. Typecheck clean; 69/69 tests. *(The completed-match green winner score
+  reuses the verified SportHub nested-Text pattern; the past days sampled this session held tournaments
+  + an upcoming match, so it wasn't caught on a completed row — mechanism-verified.)*
+
+---
+
 ### 2026-07-27 — Demo→live lift: phone-SMS OTP sign-in · SHIPPED (live-only)
 
 The last optional auth variant — SMS codes, the most natural passwordless path since mobile is the

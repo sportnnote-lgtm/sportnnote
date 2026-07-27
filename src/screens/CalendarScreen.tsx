@@ -29,6 +29,17 @@ const timeOf = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
+/** "2026-07-27" → "Mon, 27 Jul" — friendlier than the raw ISO date in headers. */
+const formatDay = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]}, ${d} ${MONTHS[m - 1].slice(0, 3)}`;
+};
+/** "2026-07-27" → "27 Jul" — the weekday-less form for date ranges. */
+const formatDayShort = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number);
+  return !m || !d ? iso : `${d} ${MONTHS[m - 1].slice(0, 3)}`;
+};
 
 export default function CalendarScreen() {
   const nav = useNavigation<Nav>();
@@ -129,7 +140,14 @@ export default function CalendarScreen() {
             <Text style={textStyles.body} numberOfLines={1}>{m.homeTeam.name} vs {m.awayTeam.name}</Text>
             <Text style={textStyles.muted}>
               {timeOf(m.startsAt)}{m.venueName ? ` · ${m.venueName}` : ''}
-              {done && m.score ? ` · ${m.score.home}–${m.score.away}` : ''}
+              {done && m.score ? (
+                <Text>
+                  {' · '}
+                  <Text style={m.score.home > m.score.away ? st.win : undefined}>{m.score.home}</Text>
+                  –
+                  <Text style={m.score.away > m.score.home ? st.win : undefined}>{m.score.away}</Text>
+                </Text>
+              ) : null}
             </Text>
           </View>
           {live ? <Pill label="LIVE" color={theme.colors.danger + '22'} textColor={theme.colors.danger} />
@@ -145,7 +163,7 @@ export default function CalendarScreen() {
         <Text style={st.itemIcon}>🏆</Text>
         <View style={{ flex: 1 }}>
           <Text style={textStyles.body} numberOfLines={1}>{t.name}</Text>
-          <Text style={textStyles.muted}>{t.sports.map((s) => getSport(s).icon).join(' ')} · {t.startDate} → {t.endDate}{note ? ` · ${note}` : ''}</Text>
+          <Text style={textStyles.muted}>{t.sports.map((s) => getSport(s).icon).join(' ')} · {formatDayShort(t.startDate)} → {formatDayShort(t.endDate)}{note ? ` · ${note}` : ''}</Text>
         </View>
         <Text style={st.chevron}>›</Text>
       </Card>
@@ -196,7 +214,7 @@ export default function CalendarScreen() {
         <SelectChip label="📅 Month" active={view === 'month'} onPress={() => setView('month')} />
         <SelectChip label="📋 Agenda" active={view === 'agenda'} onPress={() => setView('agenda')} />
         <View style={{ flex: 1 }} />
-        <Text style={st.todayLink} onPress={goToday}>Today</Text>
+        <Text style={st.todayLink} accessibilityRole="button" onPress={goToday}>Today</Text>
       </View>
       <View style={st.tabs}>
         <SelectChip label="👤 Mine" active={scope === 'mine'} onPress={() => setScope('mine')} />
@@ -207,9 +225,9 @@ export default function CalendarScreen() {
         {view === 'month' ? (
           <>
             <View style={st.monthHead}>
-              <Text style={st.navArrow} onPress={() => shiftMonth(-1)}>‹</Text>
+              <Text style={st.navArrow} accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => shiftMonth(-1)}>‹</Text>
               <Text style={textStyles.h3}>{MONTHS[cursor.m]} {cursor.y}</Text>
-              <Text style={st.navArrow} onPress={() => shiftMonth(1)}>›</Text>
+              <Text style={st.navArrow} accessibilityRole="button" accessibilityLabel="Next month" onPress={() => shiftMonth(1)}>›</Text>
             </View>
 
             <View style={st.weekRow}>
@@ -223,7 +241,15 @@ export default function CalendarScreen() {
                 const isToday = day === todayStr;
                 const isSel = day === selected;
                 return (
-                  <TouchableOpacity accessibilityRole="button" key={day} style={st.cell} activeOpacity={0.7} onPress={() => setSelected(day)}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`${formatDay(day)}${dayHasItems(day) ? ', has events' : ''}`}
+                    accessibilityState={{ selected: isSel }}
+                    key={day}
+                    style={st.cell}
+                    activeOpacity={0.7}
+                    onPress={() => setSelected(day)}
+                  >
                     <View style={[st.cellInner, isSel && st.cellSel, isToday && !isSel && st.cellToday]}>
                       <Text style={[st.cellNum, isSel && st.cellNumSel]}>{d}</Text>
                       {dayHasItems(day) ? <View style={[st.dot, isSel && st.dotSel]} /> : <View style={st.dotPlaceholder} />}
@@ -234,9 +260,9 @@ export default function CalendarScreen() {
             </View>
 
             <View style={st.sectionHead}>
-              <Text style={textStyles.h3}>{selected === todayStr ? 'Today' : selected}</Text>
+              <Text style={textStyles.h3}>{selected === todayStr ? 'Today' : formatDay(selected)}</Text>
               {selMatches.length + selTournaments.length > 0 && (
-                <Text style={st.todayLink} onPress={exportDay}>＋ Add to calendar</Text>
+                <Text style={st.todayLink} accessibilityRole="button" onPress={exportDay}>＋ Add to calendar</Text>
               )}
             </View>
             {selMatches.length === 0 && selTournaments.length === 0 ? (
@@ -253,7 +279,7 @@ export default function CalendarScreen() {
             {agendaDays.length > 0 && (
               <View style={st.sectionHead}>
                 <Text style={textStyles.muted}>Upcoming {scope === 'mine' ? '· yours' : ''}</Text>
-                <Text style={st.todayLink} onPress={exportAgenda}>＋ Add all to calendar</Text>
+                <Text style={st.todayLink} accessibilityRole="button" onPress={exportAgenda}>＋ Add all to calendar</Text>
               </View>
             )}
             {agendaDays.length === 0 ? (
@@ -261,7 +287,7 @@ export default function CalendarScreen() {
             ) : (
               agendaDays.map(([day, items]) => (
                 <View key={day} style={{ gap: theme.spacing(2) }}>
-                  <Text style={st.agendaDay}>{day === todayStr ? `Today · ${day}` : day}</Text>
+                  <Text style={st.agendaDay}>{day === todayStr ? `Today · ${formatDay(day)}` : formatDay(day)}</Text>
                   {items.starts.map((t) => tournamentRow(t, 'starts'))}
                   {items.matches.slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt)).map(matchRow)}
                 </View>
@@ -299,4 +325,5 @@ const st = StyleSheet.create({
   itemIcon: { fontSize: 22 },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h2, fontWeight: '700' },
   agendaDay: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5, marginTop: theme.spacing(2) },
+  win: { color: theme.colors.primary, fontWeight: '800' },
 });
