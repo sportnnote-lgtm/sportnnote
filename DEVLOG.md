@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 29: LiveScoring Stats — comparison bars (workstream C) · SHIPPED + VERIFIED
+
+The football Stats tab was a home-vs-away table of plain numbers; comparing two values row-by-row is
+slow to read.
+
+- **Proportional comparison bar per stat** (the FotMob/ESPN pattern). Under each stat's numbers, a thin
+  bar splits by each side's share in team colours — 5 shots vs 2 reads as a 5:2 split, 86% vs 14%
+  possession as 86:14 — so the balance of play is scannable at a glance. A 0–0 stat shows a neutral
+  muted bar (no misleading fill); an untracked stat shows no bar. The existing leading-cell highlight
+  is preserved.
+- **Files:** `src/sports/football/index.tsx` (`StatRow` + `statBlock`/`bar` styles; row padding moved to
+  the block).
+- **Verified live (demo, mobile):** RED vs BLU → Stats shows bars matching Shots 5–2, Shots on target
+  3–2, Possession 86%–14%, Fouls/Corners 1–0 (full red), Offsides 0–1 (full blue), Yellow 1–1 (50/50),
+  and neutral bars for the 0–0 rows; Passes/Pass-accuracy stay "not tracked" with no bar. Console clean.
+  Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 28: LiveScoring Timeline — the spine (workstream C) · SHIPPED + VERIFIED
 
 The Timeline tab rendered as a flat list of rows with a redundant right-side dot — it didn't actually

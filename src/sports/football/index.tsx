@@ -1386,16 +1386,33 @@ function StatRow({ label, home, away, homeColor, awayColor, tracked }: { label: 
   }
   const hn = parseFloat(home), an = parseFloat(away);
   const lead = isNaN(hn) || isNaN(an) || hn === an ? null : hn > an ? 'home' : 'away';
+  // Proportional comparison bar: each side's share of the two values, so the
+  // balance of play reads at a glance (5 shots vs 3 → a 5:3 split, 60% vs 40%
+  // possession → 60:40). Neutral when there's nothing yet (0–0).
+  const h = isNaN(hn) ? 0 : hn, a = isNaN(an) ? 0 : an;
+  const total = h + a;
   const Cell = ({ v, side }: { v: string; side: 'home' | 'away' }) => (
     <View style={[sv.cell, lead === side && { backgroundColor: side === 'home' ? homeColor : awayColor }]}>
       <Text style={[sv.cellText, lead === side && sv.cellTextLead]}>{v}</Text>
     </View>
   );
   return (
-    <View style={sv.statRow}>
-      <Cell v={home} side="home" />
-      <Text style={sv.statLabel}>{label}</Text>
-      <Cell v={away} side="away" />
+    <View style={sv.statBlock}>
+      <View style={sv.statRow}>
+        <Cell v={home} side="home" />
+        <Text style={sv.statLabel}>{label}</Text>
+        <Cell v={away} side="away" />
+      </View>
+      <View style={sv.bar}>
+        {total > 0 ? (
+          <>
+            <View style={{ flex: h, backgroundColor: homeColor }} />
+            <View style={{ flex: a, backgroundColor: awayColor }} />
+          </>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: theme.colors.surfaceAlt }} />
+        )}
+      </View>
     </View>
   );
 }
@@ -1510,7 +1527,9 @@ const sv = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
   headTeam: { flex: 1, fontSize: theme.font.small, fontWeight: '800' },
   headTitle: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
-  statRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: theme.spacing(1.5) },
+  statBlock: { gap: theme.spacing(1), paddingVertical: theme.spacing(1.5) },
+  statRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bar: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt },
   statLabel: { flex: 1, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
   cell: { minWidth: 48, paddingVertical: 4, paddingHorizontal: 10, borderRadius: theme.radius.pill, alignItems: 'center' },
   cellText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
