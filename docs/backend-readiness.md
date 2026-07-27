@@ -85,8 +85,10 @@ Ranked. 🔴 must-fix before production · 🟠 fix during hardening · 🟡 wat
    **code** flow (`signInWithOtp`/`verifyOtp` type `email`; `resetPasswordForEmail` → `verifyOtp` type
    `recovery` → `updateUser`) — **no deep-link redirect handling needed**. **Verify on staging** (live-
    only): needs the email templates to expose `{{ .Token }}` (Supabase defaults do) and email delivery
-   configured. *Remaining/optional:* phone-SMS OTP (same `verifyOtp` shape with `phone`/`type: 'sms'`)
-   once an SMS provider is set up.
+   configured. **Phone-SMS OTP is also built** (a channel toggle on the code flow — `signInWithOtp
+   ({phone})` → `verifyOtp({phone, type: 'sms'})`, phone normalized); it just needs an **SMS provider**
+   configured in Supabase (Auth → Providers → Phone) to exercise. **Auth is now feature-complete for
+   launch** — everything left is verify-on-staging + provider config, not new code.
 
 8. **🟡 Backups depend on tier.** Supabase free tier has limited/no point-in-time recovery. For real
    schools' data, budget the Pro tier (~$25/mo) for daily backups + PITR **at the point you take real
@@ -114,10 +116,10 @@ Everything that must be true before real users' data lands. Maps to the launch p
 - [x] **Fix `profiles.role` CHECK** to include `support` (+ `admin`). — *migration 0001*
 - [x] **`set_updated_at` triggers** on mutable tables. — *migration 0001*
 - [x] **Versioned migrations** adopted (`supabase/migrations/`) — this is the first one. Still to do: staging + prod projects.
-- [~] **Real auth** — email/password sign-in/up, sessions, minor **guardian-consent capture**, **email
-  OTP (passwordless) sign-in**, and **password reset** (both code-flow) all built (`core/auth.tsx`,
-  `AuthScreen`). **Verify on staging** (live-only). *Remaining/optional:* phone-SMS OTP once an SMS
-  provider is configured.
+- [~] **Real auth — feature-complete** — email/password sign-in/up, sessions, minor **guardian-consent
+  capture**, **email + SMS OTP (passwordless) sign-in**, and **password reset** (all code-flow) built
+  (`core/auth.tsx`, `AuthScreen`). Nothing left to build; **verify on staging** (live-only) — email OTP
+  needs email delivery + `{{ .Token }}` templates, SMS OTP needs an SMS provider configured.
 - [x] **Verification write path** confirmed live + audited (compliance) — all four mutations
   (`verifyContact`, `verifyGuardianContact`, `submitVerificationDoc`, `reviewVerification`) route through
   `updatePlayer`'s live Supabase write (`players.verification`/`guardian` jsonb + `phone_verified`/

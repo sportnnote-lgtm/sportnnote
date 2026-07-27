@@ -31,6 +31,10 @@ interface AuthState {
   sendSignInOtp: (email: string) => Promise<{ error?: string }>;
   /** Verify the 6-digit sign-in code; success establishes a session. */
   verifySignInOtp: (email: string, token: string) => Promise<{ error?: string }>;
+  /** Passwordless sign-in: SMS a 6-digit code to an EXISTING user's mobile. */
+  sendPhoneOtp: (phone: string) => Promise<{ error?: string }>;
+  /** Verify the 6-digit SMS code; success establishes a session. */
+  verifyPhoneOtp: (phone: string, token: string) => Promise<{ error?: string }>;
   /** Email a password-reset code (recovery OTP) to the account. */
   sendPasswordReset: (email: string) => Promise<{ error?: string }>;
   /** Verify the reset code, then set the new password; success signs you in. */
@@ -137,6 +141,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!supabase) return {};
       // On success the session fires onAuthStateChange → loadProfile → signed in.
       const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+      return error ? { error: error.message } : {};
+    },
+    // Phone/SMS variant — mobile is the app's primary identity key, so a texted
+    // code is the most natural passwordless path. Normalize so it matches the
+    // stored number regardless of how the user typed it.
+    sendPhoneOtp: async (phone) => {
+      if (!supabase) return {};
+      const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone), options: { shouldCreateUser: false } });
+      return error ? { error: error.message } : {};
+    },
+    verifyPhoneOtp: async (phone, token) => {
+      if (!supabase) return {};
+      const { error } = await supabase.auth.verifyOtp({ phone: normalizePhone(phone), token, type: 'sms' });
       return error ? { error: error.message } : {};
     },
     // Password reset via the recovery-OTP code flow: email a code, verify it to

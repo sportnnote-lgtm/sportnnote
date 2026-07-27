@@ -97,11 +97,13 @@ With the env present, the app boots to the **AuthScreen** (only rendered when Su
    staging you can toggle **"Confirm email" off** temporarily.
 3. **Sign in** → you should land in the app with your profile loaded (`profiles` row → `useAuth`).
 4. Check **Table editor → profiles** for your row (role, dob, guardian jsonb incl. `consentedAt`).
-5. **Passwordless & reset (code flow).** On the Sign-in tab: **"Email me a code"** → enter the 6-digit
-   code from the email → signed in; and **"Forgot password?"** → enter the reset code + a new password
-   → signed in. Both need email delivery working and the email templates to expose `{{ .Token }}`
-   (**Auth → Email Templates**; Supabase defaults include it). For fast staging, Supabase's built-in
-   email sender is fine; wire real SMTP before prod volume.
+5. **Passwordless & reset (code flow).** On the Sign-in tab: **"Sign in with a code"** → choose
+   **Email** or **SMS**, get the 6-digit code, enter it → signed in; and **"Forgot password?"** → enter
+   the reset code + a new password → signed in. **Email** codes need email delivery + the templates to
+   expose `{{ .Token }}` (**Auth → Email Templates**; Supabase defaults include it — the built-in sender
+   is fine for staging, wire real SMTP before prod). **SMS** codes need an **SMS provider** configured
+   (**Auth → Providers → Phone** — Twilio/MessageBird/etc.); skip SMS on staging if you're not testing
+   it yet (email OTP is enough to prove the flow).
 
 If password sign-in, the code flows, and RLS all behave, auth is wired correctly.
 
@@ -208,8 +210,8 @@ When the slice is proven on staging:
 - [ ] Keep the **service_role** key out of the app and out of git; rotate if ever exposed.
 - [ ] Turn **email confirmation back on** and configure **real SMTP** + email templates (with
       `{{ .Token }}`) so the OTP/reset **code flow** delivers reliably at prod volume.
-- [ ] *(Optional)* phone-SMS OTP — configure an SMS provider, then the same code flow works with
-      `phone`/`type: 'sms'` (backend-readiness §2.7).
+- [ ] *(Optional)* enable **SMS OTP** — the code is already built; just configure an **SMS provider**
+      (Auth → Providers → Phone) and it lights up (backend-readiness §2.7).
 
 ---
 

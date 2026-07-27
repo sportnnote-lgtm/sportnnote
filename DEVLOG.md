@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo→live lift: phone-SMS OTP sign-in · SHIPPED (live-only)
+
+The last optional auth variant — SMS codes, the most natural passwordless path since mobile is the
+app's primary identity key. **Auth is now feature-complete for launch.**
+
+- **`core/auth.tsx`** — `sendPhoneOtp` (`signInWithOtp({ phone })`, `shouldCreateUser:false`, phone
+  `normalizePhone`d) + `verifyPhoneOtp` (`verifyOtp({ phone, type: 'sms' })`). Same session→profile
+  success path as the email variant; demo no-ops.
+- **`AuthScreen`** — the "Sign in with a code" flow gains an **Email / SMS channel toggle**; picking SMS
+  swaps the email field for a mobile field and the button to "Text me a code". Verify branches on the
+  chosen channel. `otpChannel` resets to email when the flow/mode changes.
+- **Docs:** `backend-readiness.md` §2.7/§3 now read **"auth feature-complete"** (email/password + email
+  & SMS OTP + password reset + guardian consent; nothing left to build, only verify-on-staging +
+  provider config); `staging-setup.md` step 4 notes SMS needs an SMS provider (Auth → Providers → Phone).
+- **Files:** `src/core/auth.tsx`, `src/screens/AuthScreen.tsx`, `docs/backend-readiness.md`,
+  `docs/staging-setup.md`.
+- **Typecheck clean** (validates the `{phone, type:'sms'}` shapes); **69/69 tests.** *Live-only:* verify
+  on staging with an SMS provider configured.
+
+---
+
 ### 2026-07-27 — Demo→live lift: passwordless OTP sign-in + password reset · SHIPPED (live-only)
 
 Built the last two app-side auth pieces (readiness §2.7), both via the 6-digit **code** flow — so **no

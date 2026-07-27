@@ -25,10 +25,11 @@ type Mode = 'in' | 'up';
 type Flow = 'password' | 'otp' | 'reset';
 
 export default function AuthScreen() {
-  const { signIn, signUp, sendSignInOtp, verifySignInOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
+  const { signIn, signUp, sendSignInOtp, verifySignInOtp, sendPhoneOtp, verifyPhoneOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
   const [mode, setMode] = useState<Mode>('in');
   const [flow, setFlow] = useState<Flow>('password'); // sign-in sub-flow
   const [sent, setSent] = useState(false);             // OTP/reset: has the code been requested?
+  const [otpChannel, setOtpChannel] = useState<'email' | 'phone'>('email');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,7 +50,7 @@ export default function AuthScreen() {
   const age = ageFromDob(dob.trim());
   const minor = age !== undefined && age < 18;
 
-  const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); };
+  const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); setOtpChannel('email'); };
   const switchMode = (m: Mode) => { setMode(m); setFlow('password'); clearFlow(); };
   const switchFlow = (f: Flow) => { setFlow(f); clearFlow(); };
 
@@ -84,14 +85,22 @@ export default function AuthScreen() {
     );
   }
 
-  // Passwordless OTP sign-in.
+  // Passwordless OTP sign-in — email or SMS code.
   const otpRequest = () => {
+    if (otpChannel === 'phone') {
+      if (!isValidPhone(mobile)) return setError('Enter your mobile number to get an SMS code.');
+      return void run(() => sendPhoneOtp(mobile.trim()), `We texted a 6-digit code to ${mobile.trim()}.`, () => setSent(true));
+    }
     if (!email.trim()) return setError('Enter your email to get a code.');
     void run(() => sendSignInOtp(email.trim()), `We emailed a 6-digit code to ${email.trim()}.`, () => setSent(true));
   };
   const otpVerify = () => {
-    if (!code.trim()) return setError('Enter the code from your email.');
-    void run(() => verifySignInOtp(email.trim(), code.trim())); // success → onAuthStateChange signs you in
+    if (!code.trim()) return setError('Enter the code we sent you.');
+    void run(() =>
+      otpChannel === 'phone'
+        ? verifyPhoneOtp(mobile.trim(), code.trim())
+        : verifySignInOtp(email.trim(), code.trim())
+    ); // success → onAuthStateChange signs you in
   };
 
   // Password reset (recovery code flow).
@@ -107,6 +116,7 @@ export default function AuthScreen() {
 
   const showPassword = mode === 'up' || (mode === 'in' && flow === 'password');
   const codeFlow = mode === 'in' && (flow === 'otp' || flow === 'reset');
+  const otpPhone = mode === 'in' && flow === 'otp' && otpChannel === 'phone';
 
   return (
     <SafeAreaView style={st.safe}>
@@ -131,7 +141,17 @@ export default function AuthScreen() {
             </>
           )}
 
-          <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" />
+          {mode === 'in' && flow === 'otp' && !sent && (
+            <View style={{ gap: theme.spacing(1) }}>
+              <Text style={textStyles.muted}>Send my code by…</Text>
+              <View style={st.roles}>
+                <SelectChip label="✉️ Email" active={otpChannel === 'email'} onPress={() => setOtpChannel('email')} />
+                <SelectChip label="💬 SMS" active={otpChannel === 'phone'} onPress={() => setOtpChannel('phone')} />
+              </View>
+            </View>
+          )}
+          {!otpPhone && <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" />}
+          {otpPhone && <Field label="Mobile number" value={mobile} onChange={setMobile} placeholder="+91 98765 43210" />}
           {showPassword && <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure />}
 
           {/* OTP / reset: the 6-digit code, plus a new password for reset. */}
@@ -180,7 +200,7 @@ export default function AuthScreen() {
             <>
               <Button label={busy ? 'Please wait…' : 'Sign in'} onPress={submitPassword} />
               <View style={st.linkRow}>
-                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('otp')}>Email me a code</Text>
+                <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('otp')}>Sign in with a code</Text>
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('reset')}>Forgot password?</Text>
               </View>
             </>
@@ -188,7 +208,7 @@ export default function AuthScreen() {
 
           {mode === 'in' && flow === 'otp' && (
             <>
-              <Button label={busy ? 'Please wait…' : sent ? 'Verify & sign in' : 'Email me a code'} onPress={sent ? otpVerify : otpRequest} />
+              <Button label={busy ? 'Please wait…' : sent ? 'Verify & sign in' : otpChannel === 'phone' ? 'Text me a code' : 'Email me a code'} onPress={sent ? otpVerify : otpRequest} />
               <View style={st.linkRow}>
                 {sent && <Text style={st.link} accessibilityRole="button" onPress={otpRequest}>Resend code</Text>}
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('password')}>Use password instead</Text>
