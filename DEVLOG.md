@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo data: anchor all seed dates to "today" · SHIPPED + VERIFIED
+
+Fixed the demo-date staleness flagged in batch 23. The sample data was authored around a fixed
+mid-June 2026 "now", but the demo `today` has since advanced past it — so date-gated views (the
+Organize hub, Calendar agenda) drifted empty even though there's plenty of live data.
+
+- **One whole-day shift, applied once at seed build** (`src/data/demoStore.ts`, the single point where
+  mockData + the four World-Cup seeds are combined). `anchorDate()` shifts every `'YYYY-MM-DD'` /
+  `'…THH:MM:SS'` string by `DEMO_DAY_SHIFT = round((now − 2026-06-17) / 1 day)` — tournaments'
+  `startDate`/`endDate`, matches' `startsAt`, and stat-line `date`s. A whole-day shift **preserves
+  every relative relationship** (which tournaments overlap, match orderings, how recent the history is);
+  it just slides the whole window onto the current day.
+- **`DEMO_KEY` bumped `v1` → `v2`** so an existing persisted save is discarded and re-anchored (no
+  manual localStorage clear needed).
+- Only touches the in-app demo store — `supabase/seed.sql` (the live seed) is unaffected.
+- **Files:** `src/data/demoStore.ts`.
+- **Verified live (demo, mobile):** Organize hub now lists **live** hosted tournaments (Annual Sports
+  Meet "23 Jul → 31 Jul", Karnataka State Cup "25 Jul → 8 Aug") instead of the empty state; the
+  Calendar clusters event dots around **today (27 Jul)** and "Today" shows the ongoing meet; the
+  reminder badge climbs (matches are now near-term). This also retro-verifies batch 23's Organize-card
+  changes (friendly ranges + icon sport pills). Console clean. Typecheck clean; 69/69 tests.
+
+---
+
 ### 2026-07-27 — UI design pass, batch 23: Organize hub + shared date util (workstream C) · SHIPPED + VERIFIED
 
 Polished the Organize hub and deduped the friendly-date helpers.

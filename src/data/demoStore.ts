@@ -536,13 +536,36 @@ const SEED_ORGS: Organization[] = [
 
 const ALL_MATCHES = [...MATCHES, WC_MATCH, BN_MATCH, PE_MATCH, AE_MATCH];
 
+// ---- Anchor the seed to "now" --------------------------------------------
+// The sample data is authored around a mid-June 2026 "today" (the tournament
+// comments call the meet "ongoing right now"). Shift every date by the whole-day
+// gap to the real today so a few tournaments always read as live/upcoming (the
+// Organize hub, Calendar) and the agenda populates around the current day —
+// instead of the demo drifting empty as real time passes the fixed seed dates. A
+// whole-day shift preserves every relative relationship (which tournaments
+// overlap, match orderings, how recent the history is). Computed once at seed
+// build; DEMO_KEY is versioned, so bumping it re-anchors an existing save.
+const SEED_ANCHOR_MS = Date.parse('2026-06-17T00:00:00');
+const DEMO_DAY_SHIFT = Math.round((Date.now() - SEED_ANCHOR_MS) / 86_400_000);
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** Shift a 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM:SS' string by DEMO_DAY_SHIFT days. */
+function anchorDate(iso: string): string {
+  if (!iso) return iso;
+  const [datePart, timePart] = iso.split('T');
+  const d = new Date(`${datePart}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + DEMO_DAY_SHIFT);
+  const shifted = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return timePart ? `${shifted}T${timePart}` : shifted;
+}
+
 export const demo = {
-  tournaments: [...TOURNAMENTS, WC_TOURNAMENT].map((t) => ({ ...t })) as Tournament[],
+  tournaments: [...TOURNAMENTS, WC_TOURNAMENT].map((t) => ({ ...t, startDate: anchorDate(t.startDate), endDate: anchorDate(t.endDate) })) as Tournament[],
   organizations: SEED_ORGS,
-  matches: ALL_MATCHES.map((m) => ({ ...m })) as Match[],
+  matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],
-  statLines,
+  statLines: statLines.map((s) => ({ ...s, date: s.date ? anchorDate(s.date) : s.date })),
   lineups: { m1: seedLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table */
   matchEvents: {} as Record<string, MatchEventRecord[]>,
@@ -577,7 +600,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v1';
+const DEMO_KEY = 'sportfolio.demo.v2'; // v2: dates anchored relative to today
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
