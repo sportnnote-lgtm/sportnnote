@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Demo→live lift: staging stand-up runbook · DOC
+
+Wrote the operational runbook for the cutover — the half that needs cloud access + a card (so it's the
+user's to run), made concrete so it's a checklist, not a research task.
+
+- **`docs/staging-setup.md` (new):** 10 steps + quick-reference — create the staging project; run
+  `schema.sql` → migration 0001 → (staging-only) `seed.sql`; wire `.env.local`
+  (`EXPO_PUBLIC_SUPABASE_URL`/`ANON_KEY`); flip to live + smoke-test the auth we just built; deploy the
+  4 edge functions with the right secrets (service-role auto-injected; Anthropic/Resend for support;
+  Expo Push for reminders); schedule the `notify-upcoming` cron (`*/5`); the **thin vertical slice**
+  go/no-go (score on A → live on B → non-scorer rejected under RLS); Pro-tier backups+PITR before real
+  data; instant **rollback to demo**; and a staging→prod checklist.
+- Grounded in the actual repo (env names, the migration filename, the four functions + their exact
+  `Deno.env` secrets, the function's own documented cron snippet, the `exp.host` push transport, the
+  RLS-on sequencing warning). `backend-readiness.md` §7 now points at it.
+- **Files:** `docs/staging-setup.md`, `docs/backend-readiness.md`.
+
+---
+
 ### 2026-07-27 — Demo→live lift: guardian-consent capture for under-18 sign-up · SHIPPED (live-only)
 
 Closed the clearest unbuilt auth gap from the readiness audit (§2.7). Re-auditing `core/auth.tsx` +

@@ -203,6 +203,10 @@ The architecture is already the cheap-to-scale one; protect it with discipline, 
 
 ## 7. Cutover plan (demo → live)
 
+> **Step-by-step operational runbook: [`docs/staging-setup.md`](staging-setup.md)** — the concrete
+> commands for everything below (create project, run schema+migration, wire env, deploy functions,
+> schedule cron, the vertical-slice test, backups, rollback). This section is the summary.
+
 1. Create a Supabase project (free tier); run `schema.sql`.
 2. Apply the **drift migration** (§2.1–2.5): RLS on all tables, scorer/host-scoped policies, `role` CHECK
    fix, `updated_at` triggers — as the **first entries** in `supabase/migrations/`.
