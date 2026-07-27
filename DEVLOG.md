@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — UI design pass, batch 32: Cricket Summary — podium ratings (workstream C) · SHIPPED + MECHANISM-VERIFIED
+
+Cricket ships its own richer, state-based Summary (result line, Player-of-the-Match / best-bat /
+best-bowl awards, and a runs+wickets player-ratings leaderboard). Batch 31 gave the *generic* Summary
+the shared podium language; this brings cricket's own ratings list in line.
+
+- **Podium on the cricket ratings leaderboard.** The numeric rank is replaced with the shared
+  `RankBadge` (gold/silver/bronze medals for the top three), and those rows get the same faint podium
+  tint used in Standings, the stat-leader rail and the generic Summary — one ranking language across the
+  whole app. The per-player rating bar, stars and score are unchanged. The result line (🏆 "… won by N
+  wickets") is already winner-first prose, so no score-dimming is needed here.
+- **Files:** `src/sports/cricket/index.tsx` (import `RankBadge`/`podiumColor`; podium row tint;
+  `RankBadge` in place of the numeric `sum.rank`; removed the now-unused `rank` style).
+- **Verification:** typecheck clean; 69/69 tests. The cricket Summary's ratings list lives behind the
+  `s.ended` branch, which needs a fully-scored `CricketState` (per-ball batting/bowling). The demo has
+  **no** such match — the world-cup seeds are football, and the completed cricket fixtures are
+  score-only (`ended: false`), so their Summary correctly shows the "appears once the match ends"
+  placeholder (verified live on Red House 148–132 Gold House). The podium treatment is therefore
+  mechanism-verified: it reuses the exact `RankBadge`/`podiumColor` pattern shipped and verified live in
+  batch 31. (Noted gap: a FINAL cricket fixture whose stored state isn't `ended` shows the pre-match
+  placeholder — a demo-seed completeness issue, not a code defect.)
+
+---
+
 ### 2026-07-27 — UI design pass, batch 31: Match Summary — podium ratings + winner emphasis (workstream C) · SHIPPED + VERIFIED
 
 The generic post-match Summary (used by football and every sport without its own summary) showed the

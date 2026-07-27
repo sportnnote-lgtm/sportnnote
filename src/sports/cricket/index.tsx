@@ -16,6 +16,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
+import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
@@ -1228,9 +1229,11 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
       <Text style={[ctrl.label, { marginTop: theme.spacing(2) }]}>Player ratings · out of 5</Text>
       <Text style={ctrl.meta}>Rated on runs, wickets, dots, boundaries, catches & run-outs (top-order wickets count more).</Text>
       <View style={ctrl.card}>
-        {players.map((p, i) => (
-          <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, i > 0 && sum.divider]}>
-            <Text style={sum.rank}>{i + 1}</Text>
+        {players.map((p, i) => {
+          const tier = podiumColor(i);
+          return (
+          <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && sum.divider]}>
+            <RankBadge index={i} width={22} />
             <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
             <View style={{ flex: 1 }}>
               <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
@@ -1241,7 +1244,8 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
               <Text style={sum.total}>{p.rating.toFixed(1)}</Text>
             </View>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
@@ -1563,7 +1567,6 @@ const sum = StyleSheet.create({
   awardPts: { fontSize: theme.font.h3, fontWeight: '900' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
-  rank: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', width: 18, textAlign: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
   ratingCol: { alignItems: 'flex-end', minWidth: 64 },
   stars: { color: theme.colors.accent, fontSize: theme.font.tiny },
