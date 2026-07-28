@@ -66,7 +66,7 @@ function makeScores(n: number, target: number): number[] {
   const pDot = clamp(0.34 - rate * 0.09, 0.06, 0.34);
   const p4 = clamp(0.04 + rate * 0.075, 0.04, 0.26);
   const p6 = clamp(0.005 + rate * 0.035, 0.005, 0.13);
-  const p2 = 0.16, p3 = 0.06;
+  const p2 = 0.18, p3 = 0.035; // twos comfortably out-weigh threes (as in real cricket)
   const p1 = Math.max(0.05, 1 - pDot - p2 - p3 - p4 - p6);
   const menu: [number, number][] = [[0, pDot], [1, p1], [2, p2], [3, p3], [4, p4], [6, p6]];
   const sample = (): number => {
@@ -85,6 +85,15 @@ function makeScores(n: number, target: number): number[] {
     const j = Math.floor(rnd() * n);
     if (diff > 0) { const nv = UP[scores[j]], d = nv - scores[j]; if (d > 0 && d <= diff) { scores[j] = nv; diff -= d; } }
     else { const nv = DN[scores[j]], d = scores[j] - nv; if (d > 0 && d <= -diff) { scores[j] = nv; diff += d; } }
+  }
+  // The correction pass can push 2s up to 3s; real cricket has more 2s than 3s.
+  // Trade a three+single for two twos (sum-preserving) until 2s ≥ 3s.
+  const tally = (v: number) => scores.reduce((c, x) => c + (x === v ? 1 : 0), 0);
+  for (let guard = 0; tally(3) > tally(2) && guard < n; guard++) {
+    const i3 = scores.indexOf(3), i1 = scores.indexOf(1);
+    if (i3 < 0 || i1 < 0) break;
+    scores[i3] = 2;
+    scores[i1] = 2;
   }
   return scores;
 }

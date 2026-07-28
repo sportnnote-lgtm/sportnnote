@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v6']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v7']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Cricket seed: smooth the twos-vs-threes balance · SHIPPED + VERIFIED
+
+Reviewing s6's ball-by-ball showed threes slightly out-numbering twos (14 twos / 18 threes across the
+match) — the reverse of real cricket, an artifact of the exact-total correction pass nudging some 2s up
+to 3s. Fixed two ways: nudged the sampler weights (`p2` 0.16 → 0.18, `p3` 0.06 → 0.035), and added a
+sum-preserving rebalance in `makeScores` that trades a three+single for two twos until 2s ≥ 3s. A test
+assertion locks it in (`twos ≥ threes` per fixture). After: s6 reads 20 twos / 11 threes; all four
+fixtures now have 2s ≥ 3s with singles still the plurality. `DEMO_KEY` v6 → v7. 75/75 tests.
 
 ---
 

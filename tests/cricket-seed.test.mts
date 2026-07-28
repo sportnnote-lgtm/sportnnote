@@ -43,6 +43,8 @@ describe('completed cricket seeds replay to the right final state', () => {
       // The old seed put 0 singles and a wall of twos; guard against that.
       assert.ok(ones >= 12, `${e.id}: too few singles (${ones})`);
       assert.ok(ones > twos && ones > threes, `${e.id}: singles (${ones}) should out-number 2s (${twos}) and 3s (${threes})`);
+      // …and twos out-number threes, as in real cricket (not the reverse).
+      assert.ok(twos >= threes, `${e.id}: twos (${twos}) should be ≥ threes (${threes})`);
       // Several distinct scoring outcomes appear (not a single degenerate value).
       const distinct = [0, 1, 2, 3, 4, 6].filter((r) => count(r) > 0).length;
       assert.ok(distinct >= 5, `${e.id}: only ${distinct} distinct outcomes`);
