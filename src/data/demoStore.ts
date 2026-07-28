@@ -317,6 +317,17 @@ const statLines: StatLine[] = [
   line('p-neil', 'football', { shots: 1, fouls: 1 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES),
   line('p-ishaan', 'football', { goals: 1, shots: 2, shotsOnTarget: 2, yellowCards: 1 }, false, 'Red House', '2026-06-17', 'm1', FB_NO_PASSES), // 23'; booked 26'
 
+  // Indiranagar vs Koramangala (live, cg7) — per-player lines matching the
+  // seeded box score so the live basketball match's Summary shows ratings.
+  line('p-ind-1', 'basketball', { points: 5, rebounds: 1, assists: 1 }, true, 'Koramangala Kings', '2026-06-17', 'cg7'),
+  line('p-ind-5', 'basketball', { points: 5, rebounds: 1 }, true, 'Koramangala Kings', '2026-06-17', 'cg7'),
+  line('p-ind-3', 'basketball', { points: 4, fouls: 1 }, true, 'Koramangala Kings', '2026-06-17', 'cg7'),
+  line('p-ind-4', 'basketball', { rebounds: 2, assists: 1 }, true, 'Koramangala Kings', '2026-06-17', 'cg7'),
+  line('p-kor-1', 'basketball', { points: 5, assists: 1 }, false, 'Indiranagar United', '2026-06-17', 'cg7'),
+  line('p-kor-5', 'basketball', { points: 4, rebounds: 1, fouls: 1 }, false, 'Indiranagar United', '2026-06-17', 'cg7'),
+  line('p-kor-3', 'basketball', { points: 2, fouls: 1 }, false, 'Indiranagar United', '2026-06-17', 'cg7'),
+  line('p-kor-4', 'basketball', { rebounds: 2, assists: 1 }, false, 'Indiranagar United', '2026-06-17', 'cg7'),
+
   // ---- Spring Carnival (t3) — tied to its completed matches (s1–s8) so the
   // tournament's own leaders are scoped to it; the unmapped lines below (tennis,
   // badminton, kabaddi) stay as general career history. ----
@@ -613,7 +624,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v9'; // v9: live football (m1) — stat events stamped w/ minutes + per-player ratings lines
+const DEMO_KEY = 'sportfolio.demo.v10'; // v10: live basketball (cg7) — box-score rebounds/assists/fouls + ratings lines
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -689,6 +700,9 @@ export function startDemoAutosave(): void {
 const nowMs = Date.now();
 const bbScore = (seq: number, side: 'home' | 'away', points: number, minute: number, pid: string, name: string): MatchEventRecord =>
   ({ seq, type: 'SCORE', side, payload: { points, minute, quarter: 1 }, attribution: { playerId: pid, stat: 'points', by: points, playerName: name } });
+const BB_STAT_KEY: Record<'REBOUND' | 'ASSIST' | 'FOUL', string> = { REBOUND: 'rebounds', ASSIST: 'assists', FOUL: 'fouls' };
+const bbStat = (seq: number, side: 'home' | 'away', type: 'REBOUND' | 'ASSIST' | 'FOUL', minute: number, pid: string, name: string): MatchEventRecord =>
+  ({ seq, type, side, payload: { minute, quarter: 1 }, attribution: { playerId: pid, stat: BB_STAT_KEY[type], by: 1, playerName: name } });
 const fbStat = (seq: number, side: 'home' | 'away', kind: string, o: { onTarget?: boolean; pid?: string; name?: string; statKey?: string; at?: number; possSide?: 'home' | 'away'; minute?: number } = {}): MatchEventRecord =>
   ({ seq, type: 'STAT', side, payload: { kind, onTarget: o.onTarget, at: o.at, possSide: o.possSide, minute: o.minute ?? 0 }, attribution: o.pid ? { playerId: o.pid, stat: o.statKey ?? `${kind}s`, by: 1, playerName: o.name } : null });
 demo.matchEvents['m1'] = [
@@ -722,6 +736,22 @@ demo.matchEvents['cg7'] = [
   bbScore(10, 'home', 2, 6, 'p-ind-5', 'Akash Pillai'),
   bbScore(11, 'away', 2, 7, 'p-kor-5', 'Rohit Gowda'),
   bbScore(12, 'home', 2, 7, 'p-ind-3', 'Sahil Verma'),
+  // Rebounds, assists & fouls so the box score isn't points-only — and the two
+  // bench players (Nidhi Rao, Priya Shet) get on the board.
+  bbStat(13, 'home', 'ASSIST', 1, 'p-ind-4', 'Nidhi Rao'),
+  bbStat(14, 'away', 'ASSIST', 1, 'p-kor-1', 'Vinay Kumar'),
+  bbStat(15, 'home', 'REBOUND', 2, 'p-ind-4', 'Nidhi Rao'),
+  bbStat(16, 'away', 'REBOUND', 2, 'p-kor-4', 'Priya Shet'),
+  bbStat(17, 'home', 'ASSIST', 2, 'p-ind-1', 'Tej Anand'),
+  bbStat(18, 'away', 'FOUL', 3, 'p-kor-3', 'Manoj Pai'),
+  bbStat(19, 'home', 'REBOUND', 3, 'p-ind-5', 'Akash Pillai'),
+  bbStat(20, 'away', 'ASSIST', 3, 'p-kor-4', 'Priya Shet'),
+  bbStat(21, 'home', 'REBOUND', 4, 'p-ind-4', 'Nidhi Rao'),
+  bbStat(22, 'home', 'FOUL', 4, 'p-ind-3', 'Sahil Verma'),
+  bbStat(23, 'away', 'REBOUND', 5, 'p-kor-4', 'Priya Shet'),
+  bbStat(24, 'home', 'REBOUND', 5, 'p-ind-1', 'Tej Anand'),
+  bbStat(25, 'away', 'REBOUND', 6, 'p-kor-5', 'Rohit Gowda'),
+  bbStat(26, 'away', 'FOUL', 6, 'p-kor-5', 'Rohit Gowda'),
 ];
 // Cup final (t7): a knockout tie level 1–1 in the 2nd half — ending it goes to
 // a penalty shootout.

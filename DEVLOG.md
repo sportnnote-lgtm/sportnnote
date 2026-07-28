@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v9']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v10']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Live basketball (cg7) — box score + Summary ratings · SHIPPED + VERIFIED
+
+Same pair of gaps as the live football match, on the live basketball fixture (cg7, Indiranagar 14–11
+Koramangala). Its seed had only SCORE events, so:
+
+- **Box score was points-only** — the PTS column was right (Tej 5, Akash 5, Sahil 4, Vinay 5, Rohit 4,
+  Manoj 2) but REB/AST/PF were all zero, and the two bench players sat on 0/0/0/0. Added a `bbStat` helper
+  and seeded rebounds/assists/fouls (with real Q1 minutes) so every player contributes and the play-by-play
+  interleaves baskets 🏀, rebounds 🔁, assists 🅰️ and fouls 🟨. Nidhi Rao & Priya Shet now book 2 reb + 1 ast each.
+- **Summary ratings were empty** — added per-player stat lines for cg7 (same pattern as m1 / England–Croatia),
+  reconciling exactly with the box score and the basketball rating weights (`points 1 · rebounds 1.5 ·
+  assists 2 · fouls −1`).
+- **Files:** `src/data/demoStore.ts` (`bbStat` + cg7 rebound/assist/foul events + cg7 stat lines; `DEMO_KEY`
+  v9 → v10).
+- **Verified live (demo):** Score tab box score now reads Tej 5/1/1, Akash 5/1, Sahil 4/–/–/1, Nidhi 0/2/1;
+  Vinay 5/–/1, Rohit 4/1/–/1, Manoj 2/–/–/1, Priya 0/2/1. Summary shows Player of the Match Tej Anand, the
+  Top-scorer/Rebounds/Playmaker awards, and podium ratings for all 8 (🥇 Tej 5.0 … Manoj 2.0). 77 tests, console clean.
 
 ---
 
