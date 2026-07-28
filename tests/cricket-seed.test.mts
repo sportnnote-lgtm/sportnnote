@@ -35,6 +35,20 @@ describe('completed cricket seeds replay to the right final state', () => {
     });
   }
 
+  test('run distribution is natural — the single is the most common scoring shot', () => {
+    for (const e of CRICKET_SEED_EXPECT) {
+      const runs = CRICKET_MATCH_EVENTS[e.id].filter((v) => v.type === 'RUNS').map((v) => (v.payload as { runs: number }).runs);
+      const count = (r: number) => runs.filter((x) => x === r).length;
+      const ones = count(1), twos = count(2), threes = count(3);
+      // The old seed put 0 singles and a wall of twos; guard against that.
+      assert.ok(ones >= 12, `${e.id}: too few singles (${ones})`);
+      assert.ok(ones > twos && ones > threes, `${e.id}: singles (${ones}) should out-number 2s (${twos}) and 3s (${threes})`);
+      // Several distinct scoring outcomes appear (not a single degenerate value).
+      const distinct = [0, 1, 2, 3, 4, 6].filter((r) => count(r) > 0).length;
+      assert.ok(distinct >= 5, `${e.id}: only ${distinct} distinct outcomes`);
+    }
+  });
+
   test('each innings fills its overs (no early collapse) and books real batters', () => {
     for (const e of CRICKET_SEED_EXPECT) {
       const s = replay(CRICKET_MATCH_EVENTS[e.id], { overs: e.overs, playersPerSide: e.players });

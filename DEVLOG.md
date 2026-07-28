@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v4']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v5']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -52,16 +52,19 @@ the demo. (The World Cup football matches show full state precisely because they
   exact totals, wickets, `ended`, balls-per-innings and card size — so a reducer drift or bad script fails
   CI, never the demo. (`allowImportingTsExtensions` enabled + a `.ts` extension on engine's `dls` import so
   Node's test runner resolves it; tsc/bundler + Metro both accept it — verified in the running web build.)
-- **Wiring.** `demoStore.matchEvents` seeds `CRICKET_MATCH_EVENTS`; `DEMO_KEY` bumped **v2 → v4** to
-  re-seed existing saves (v3 shipped the logs; v4 tuned their run distribution — see below).
-- **Natural run distribution (v4).** The first cut hit the target totals by upgrading singles to sixes,
-  which read as an all-boundary innings with no dots. `makeScores` now shapes each innings like a real
-  one — mostly dots and singles with a scatter of twos and boundaries, the dot fraction easing off as the
-  required rate climbs, and a coprime-stride shuffle spreading boundaries through the innings instead of
-  onto the openers. Still deterministic and exact (the test asserts the totals). Result: believable cards
-  — e.g. RED 148/5 now reads Aarav Mehta 62 (23, 5×4 2×6), Suresh Pillai 46* (17), and smaller
-  middle-order scores, ~11 fours / 5 sixes across the innings, CRR 14.80 — rather than seven sixes on one
-  bat.
+- **Wiring.** `demoStore.matchEvents` seeds `CRICKET_MATCH_EVENTS`; `DEMO_KEY` bumped **v2 → v5** to
+  re-seed existing saves (v3 shipped the logs; v4/v5 tuned their run distribution — see below).
+- **Natural run distribution (v5).** Getting the shape right took two passes. The first cut hit the
+  totals by upgrading singles to sixes (all-boundary innings, no dots); a second, algebraic split then
+  over-corrected into a *wall of twos* with zero singles on the high-rate chases. The final `makeScores`
+  samples each ball from a weighted menu (0/1/2/3/4/6) whose weights shift toward the boundary as the
+  required run rate climbs — but the **single always stays the most common scoring shot** — using a
+  seeded LCG for varied-but-reproducible innings, then nudges a few balls up/down the allowed ladder
+  (never a 5) to land the exact total. A test guards it: singles out-number 2s and 3s, ≥5 distinct
+  outcomes appear. Result: the ball-by-ball and cards read like real cricket — the 15-over games (s6/s7)
+  are dot-and-single heavy with SRs ~100–165; the 10-over games (ck1/ck2) are aggressive but properly
+  varied (dots, 1s, 2s, 3s, 4s, 6s interspersed). Totals unchanged, so match cards/standings are
+  untouched.
 - **Files:** `src/data/cricketSeed.ts` (new), `src/sports/cricket/engine.ts` (new), `tests/cricket-seed.test.mts`
   (new), `src/sports/cricket/index.tsx`, `src/data/demoStore.ts`, `tsconfig.json`.
 - **Verified live (demo, mobile):** Matches → Completed → Cricket → Red House 148–132 Gold House →

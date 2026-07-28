@@ -46,38 +46,47 @@ const GOLD: P[] = [
   { id: 'p-yh-7', name: 'Deepa Shetty' }, { id: 'p-yh-8', name: 'Kiran Joshi' },
 ];
 
-/** Scoring outcomes (per legal ball) for one innings that sum EXACTLY to
- *  `target` over `n` deliveries, shaped like a real innings: mostly dots and
- *  singles with a scatter of twos and boundaries. The dot fraction eases off as
- *  the required rate climbs (a 15-an-over innings can't leave many dots), and a
- *  coprime-stride shuffle spreads the boundaries through the innings instead of
- *  front-loading them onto the openers. Deterministic and exact. */
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+/** Per-ball scoring outcomes for one innings that sum EXACTLY to `target` over
+ *  `n` deliveries, shaped like a real innings. Each ball is sampled from a
+ *  weighted menu (0/1/2/3/4/6) whose weights shift toward the boundary as the
+ *  required run rate climbs — but a **single stays the most common scoring
+ *  shot** at every rate, so the ball-by-ball reads naturally (not a wall of
+ *  twos or sixes). A seeded PRNG keeps it varied yet reproducible; a final pass
+ *  nudges a few balls up/down the allowed ladder to land the exact total. */
 function makeScores(n: number, target: number): number[] {
   const rate = target / n;
-  // Put a realistic share of the runs through the rope, the rest in 1s/2s.
-  let sixes = Math.max(0, Math.min(Math.round((target * 0.22) / 6), Math.floor(n * 0.15)));
-  let fours = Math.max(0, Math.min(Math.round((target * 0.3) / 4), Math.floor(n * 0.25)));
-  let rem = target - 6 * sixes - 4 * fours; // runs still to find, from 1s/2s
-  let rb = n - sixes - fours;               // balls left for 1s/2s/dots
-  // Keep the 1s/2s remainder feasible (each such ball is 0..2 runs).
-  while (rem < 0) { if (fours > 0) { fours--; rem += 4; rb++; } else if (sixes > 0) { sixes--; rem += 6; rb++; } else break; }
-  while (rem > 2 * rb && rb > 0) { fours++; rem -= 4; rb--; }
-  // Split the remainder into twos / singles / dots, targeting a natural dot rate.
-  const dotFrac = Math.max(0.12, 0.45 - rate * 0.12);
-  const dotsWanted = Math.round(rb * dotFrac);
-  const tMin = Math.max(0, rem - rb), tMax = Math.floor(rem / 2);
-  const twos = Math.max(tMin, Math.min(dotsWanted - rb + rem, tMax));
-  const singles = rem - 2 * twos;
-  const dots = rb - twos - singles;
-  const pool = [
-    ...new Array(sixes).fill(6), ...new Array(fours).fill(4),
-    ...new Array(twos).fill(2), ...new Array(singles).fill(1), ...new Array(dots).fill(0),
-  ];
-  // Scatter the (sorted) pool across the innings with a coprime stride.
-  const stride = [7, 11, 13, 17, 19, 23, 29].find((p) => n % p !== 0) ?? 1;
-  const out = new Array<number>(n);
-  for (let k = 0; k < n; k++) out[(k * stride) % n] = pool[k];
-  return out;
+  // Deterministic PRNG (LCG) — varied per innings via target/n, no Math.random.
+  let s = (target * 131 + n * 17 + 1013904223) >>> 0;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+
+  // Outcome weights: dots thin out and boundaries thicken as the rate rises,
+  // but singles (p1, the remainder) stay dominant among scoring shots.
+  const pDot = clamp(0.34 - rate * 0.09, 0.06, 0.34);
+  const p4 = clamp(0.04 + rate * 0.075, 0.04, 0.26);
+  const p6 = clamp(0.005 + rate * 0.035, 0.005, 0.13);
+  const p2 = 0.16, p3 = 0.06;
+  const p1 = Math.max(0.05, 1 - pDot - p2 - p3 - p4 - p6);
+  const menu: [number, number][] = [[0, pDot], [1, p1], [2, p2], [3, p3], [4, p4], [6, p6]];
+  const sample = (): number => {
+    let r = rnd();
+    for (const [v, p] of menu) if ((r -= p) <= 0) return v;
+    return 1;
+  };
+
+  const scores = Array.from({ length: n }, sample);
+  // Land the exact target by nudging scattered balls one step along the allowed
+  // outcome ladder (0→1→2→3→4→6) — never creating an impossible 5.
+  const UP: Record<number, number> = { 0: 1, 1: 2, 2: 3, 3: 4, 4: 6, 6: 6 };
+  const DN: Record<number, number> = { 6: 4, 4: 3, 3: 2, 2: 1, 1: 0, 0: 0 };
+  let diff = target - scores.reduce((a, b) => a + b, 0);
+  for (let guard = 0; diff !== 0 && guard < n * 80; guard++) {
+    const j = Math.floor(rnd() * n);
+    if (diff > 0) { const nv = UP[scores[j]], d = nv - scores[j]; if (d > 0 && d <= diff) { scores[j] = nv; diff -= d; } }
+    else { const nv = DN[scores[j]], d = scores[j] - nv; if (d > 0 && d <= -diff) { scores[j] = nv; diff += d; } }
+  }
+  return scores;
 }
 
 interface InningsPlan {

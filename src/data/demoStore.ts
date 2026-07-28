@@ -603,7 +603,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v4'; // v4: completed cricket fixtures ship ball-by-ball logs w/ natural run distribution
+const DEMO_KEY = 'sportfolio.demo.v5'; // v5: completed cricket fixtures ship ball-by-ball logs w/ natural run distribution
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
