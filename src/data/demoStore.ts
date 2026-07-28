@@ -656,7 +656,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v15'; // v15: WC live goal/shot attributions now all point to starting XI players (not subs)
+const DEMO_KEY = 'sportfolio.demo.v16'; // v16: WC live matches (BN/PE/AE) start on the anchor day so they read as today, not a future date
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {

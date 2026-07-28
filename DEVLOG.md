@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v15']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v16']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — WC live matches (BN/PE/AE) start on the anchor day, not a future date · SHIPPED + VERIFIED
+
+The Argentina–Egypt **Info** tab showed **Date "Tue 18 Aug"** — a future date on a match that's live *now*.
+Cause: the demo shifts every seed date by `DEMO_DAY_SHIFT` (today − 2026-06-17 = +42d today). England–Croatia
+was authored at the anchor `2026-06-17`, so it lands on today; Brazil–Norway/Portugal–Spain/Argentina–Egypt
+kept their real WC fixture dates (Jul 5–7), which shift into mid-August. Moved all three to `2026-06-17`
+(keeping kick-off times) so a LIVE match reads as today, matching m-eng-cro.
+
+- **Files:** `worldCupBraNorSeed.ts`, `worldCupPorEspSeed.ts`, `worldCupArgEgySeed.ts` (startsAt → anchor day);
+  `demoStore.ts` (`DEMO_KEY` v15 → v16).
+- **Verified live (demo):** Argentina–Egypt Info Date now reads **"Wed 29 Jul, 21:30"** (today). Rest of the
+  Info tab is clean — format 11-a-side, venue Atlanta Stadium, FIFA World Cup 2026, scorer/stream/settings,
+  half length, hosts, both matchday squads (XI set, captains Messi & Salah). (Live list also re-sorts these
+  matches up, since they now sort by a recent date.) 77 tests, console clean.
 
 ---
 
