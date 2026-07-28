@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v12']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v13']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Brazil–Norway & Portugal–Spain open on a real early game · SHIPPED + VERIFIED
+
+The two pre-kickoff WC 0–0s were bare (lineups, no play). Seeded a lively ~12–13' opening for each so
+tapping in shows a real early game instead of an empty 0–0:
+
+- **Brazil 1–0 Norway** (m-bra-nor): Vinícius early goal (assist Raphinha), Haaland/Sørloth/Cunha shots, a
+  corner, a foul, possession swings → **63–37**, Shots 3–2.
+- **Portugal 1–0 Spain** (m-por-esp): Ronaldo goal (assist Bruno Fernandes), Yamal/Oyarzabal shots, corner,
+  foul → **60–40**, Shots 2–2.
+- Bumped each match's static `score` to `1–0` (in the WC seed files) to match the replay, and seeded
+  per-player stat lines so the Summary shows ratings.
+- **Files:** `src/data/demoStore.ts` (two event logs + stat lines; `DEMO_KEY` v12 → v13),
+  `src/data/worldCupBraNorSeed.ts`, `src/data/worldCupPorEspSeed.ts` (score 0–0 → 1–0).
+- **Verified live (demo):** both cards read 1–0; Stats show the possession split + a few shots each;
+  Summaries show Player of the Match (Vinícius / Ronaldo) with awards + ratings. 77 tests, console clean.
+- **Noted:** the WC group actually has **four** live ties, not three — **Argentina 0–0 Egypt** (m-arg-egy)
+  is still a bare pre-kickoff 0–0 (not in this change's scope; same one-liner fix applies if wanted).
 
 ---
 

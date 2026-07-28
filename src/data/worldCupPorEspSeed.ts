@@ -111,7 +111,7 @@ export const PE_MATCH: Match = {
   tournamentId: 't-wc',
   sport: 'football',
   status: 'live', // ready to score from kick-off (0–0, no events seeded)
-  score: { home: 0, away: 0 },
+  score: { home: 1, away: 0 }, // ~12' in — replayed from seeded events
   startsAt: '2026-07-06T20:00:00',
   venueName: 'Dallas Stadium, Arlington (Dallas), Texas',
   hostIds: ['p-aarav'],

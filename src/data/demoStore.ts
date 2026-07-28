@@ -322,6 +322,19 @@ const statLines: StatLine[] = [
   line('p-neil', 'football', { shots: 1, fouls: 1 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES),
   line('p-ishaan', 'football', { goals: 1, shots: 2, shotsOnTarget: 2, yellowCards: 1 }, false, 'Red House', '2026-06-17', 'm1', FB_NO_PASSES), // 23'; booked 26'
 
+  // Brazil vs Norway (live, m-bra-nor) — early goal + chances; Brazil 1–0.
+  line('p-bra-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Vinícius 7'
+  line('p-bra-22', 'football', { assists: 1 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Raphinha assist
+  line('p-bra-10', 'football', { shots: 1 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Cunha
+  line('p-nor-10', 'football', { shots: 1 }, false, 'Brazil', '2026-06-17', 'm-bra-nor', WC_TRACK), // Haaland
+  line('p-nor-11', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Brazil', '2026-06-17', 'm-bra-nor', WC_TRACK), // Sørloth
+
+  // Portugal vs Spain (live, m-por-esp) — early goal + chances; Portugal 1–0.
+  line('p-por-11', 'football', { goals: 1, openPlayGoals: 1, shots: 1, shotsOnTarget: 1 }, true, 'Spain', '2026-06-17', 'm-por-esp', WC_TRACK), // Ronaldo 9'
+  line('p-por-9', 'football', { assists: 1, shots: 1, shotsOnTarget: 1 }, true, 'Spain', '2026-06-17', 'm-por-esp', WC_TRACK), // Bruno assist + shot
+  line('p-esp-11', 'football', { shots: 1 }, false, 'Portugal', '2026-06-17', 'm-por-esp', WC_TRACK), // Yamal
+  line('p-esp-10', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Portugal', '2026-06-17', 'm-por-esp', WC_TRACK), // Oyarzabal
+
   // Falcons vs City Strikers (live cup tie, kc3) — per-player lines matching the
   // seeded events so the Summary shows ratings. Level 1–1, so won:false for both.
   line('p-bpl-rahul', 'football', { goals: 1, shots: 3, shotsOnTarget: 3 }, false, 'City Strikers', '2026-06-17', 'kc3', FB_NO_PASSES), // 18'
@@ -637,7 +650,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v12'; // v12: England–Croatia (m-eng-cro) — full stat sheet + possession fix
+const DEMO_KEY = 'sportfolio.demo.v13'; // v13: Brazil–Norway & Portugal–Spain open on a real early game (1–0 each)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -858,6 +871,37 @@ demo.matchEvents['m-eng-cro'] = [
   fbStat(38, 'away', 'foul', { minute: 71 }),
   fbStat(39, 'away', 'shot', { onTarget: true, pid: 'p-cro-9', name: 'Martin Baturina', statKey: 'shots', minute: 74 }),
   { seq: 40, type: 'YELLOW', side: 'away', payload: { minute: 76 }, attribution: { playerId: 'p-cro-2', stat: 'yellowCards', by: 1, playerName: 'Joško Gvardiol' } },
+];
+
+// Brazil vs Norway (live, m-bra-nor) — ~12' in, Brazil 1–0 up (Vinícius, assist
+// Raphinha) with a few chances each, so the match opens on a real early game.
+demo.matchEvents['m-bra-nor'] = [
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 12 * 60000, possSide: 'home' } },
+  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-bra-9', name: 'Vinícius Júnior', statKey: 'shots', minute: 4 }),
+  fbStat(3, 'home', 'corner', { minute: 5 }),
+  wcGoal(4, 'home', 7, 'open', 'p-bra-9', 'Vinícius Júnior'),
+  { seq: 5, type: 'ASSIST', side: 'home', payload: { minute: 7 }, attribution: { playerId: 'p-bra-22', stat: 'assists', by: 1, playerName: 'Raphinha' } },
+  { seq: 6, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 8 * 60000 } },
+  fbStat(7, 'away', 'shot', { onTarget: false, pid: 'p-nor-10', name: 'Erling Haaland', statKey: 'shots', minute: 9 }),
+  fbStat(8, 'away', 'foul', { minute: 10 }),
+  { seq: 9, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 3 * 60000 } },
+  fbStat(10, 'away', 'shot', { onTarget: true, pid: 'p-nor-11', name: 'Alexander Sørloth', statKey: 'shots', minute: 11 }),
+  fbStat(11, 'home', 'shot', { onTarget: false, pid: 'p-bra-10', name: 'Matheus Cunha', statKey: 'shots', minute: 12 }),
+];
+
+// Portugal vs Spain (live, m-por-esp) — ~13' in, Portugal 1–0 (Ronaldo, assist
+// Bruno Fernandes), end-to-end.
+demo.matchEvents['m-por-esp'] = [
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 13 * 60000, possSide: 'home' } },
+  fbStat(2, 'away', 'shot', { onTarget: false, pid: 'p-esp-11', name: 'Lamine Yamal', statKey: 'shots', minute: 3 }),
+  { seq: 3, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 10 * 60000 } },
+  fbStat(4, 'home', 'shot', { onTarget: true, pid: 'p-por-9', name: 'Bruno Fernandes', statKey: 'shots', minute: 6 }),
+  fbStat(5, 'home', 'corner', { minute: 7 }),
+  wcGoal(6, 'home', 9, 'open', 'p-por-11', 'Cristiano Ronaldo'),
+  { seq: 7, type: 'ASSIST', side: 'home', payload: { minute: 9 }, attribution: { playerId: 'p-por-9', stat: 'assists', by: 1, playerName: 'Bruno Fernandes' } },
+  { seq: 8, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 4 * 60000 } },
+  fbStat(9, 'away', 'shot', { onTarget: true, pid: 'p-esp-10', name: 'Mikel Oyarzabal', statKey: 'shots', minute: 11 }),
+  fbStat(10, 'home', 'foul', { minute: 12 }),
 ];
 
 export function setTeamLeaders(teamId: string, leaders: TeamLeadership) {
