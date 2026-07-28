@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v14']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v15']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — WC live seeds: goal/shot credits now all point to starting XI players · SHIPPED + VERIFIED
+
+Reviewing the Argentina–Egypt **Lineups** exposed a data inconsistency in the WC live seeds: Salah's
+assist was credited to **Omar Marmoush, who's on Egypt's bench** — a sub can't assist without coming on.
+Audited every WC live seed's attributions against its starting XI and fixed all the bench credits:
+
+- **m-arg-egy:** Salah's assist Marmoush (sub) → **Emam Ashour** (p-egy-9, starting CAM).
+- **m-bra-nor:** Vinícius's assist Raphinha (sub) → **Bruno Guimarães** (p-bra-7, starting CM).
+- **m-eng-cro:** the two shots I'd added for subs — Saka (p-eng-12) → **Madueke** (p-eng-10) and Kramarić
+  (p-cro-12) → **Mario Pašalić** (p-cro-10) — both now starters.
+- Portugal–Spain was already clean (Ronaldo + Bruno Fernandes both starters); scorers everywhere were fine
+  — only these assist/shot credits pointed at subs.
+- Each fix updates both the event log **and** the matching stat line. **Files:** `src/data/demoStore.ts`
+  (`DEMO_KEY` v14 → v15).
+- **Verified live (demo):** Argentina–Egypt Timeline now reads "Goal Salah (assist: Emam Ashour)" and the
+  Lineups show **EA Ashour in Egypt's XI** (Marmoush stays benched, uncredited). Lineups otherwise render
+  well — both formations, coaches, captains, ⚽ goal-markers on Messi & Salah, benches, legend. 77 tests, console clean.
 
 ---
 

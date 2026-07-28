@@ -305,13 +305,13 @@ const statLines: StatLine[] = [
   line('p-eng-11', 'football', { goals: 2, openPlayGoals: 1, penaltyGoals: 1, shots: 3, shotsOnTarget: 2 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Kane: pen 12', header 42'
   line('p-eng-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Bellingham 47'
   line('p-eng-6', 'football', { assists: 1, yellowCards: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Rice assist on Kane; booked 70'
-  line('p-eng-12', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Saka
+  line('p-eng-10', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Madueke (starter)
   line('p-eng-8', 'football', { shots: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Gordon
   line('p-cro-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Baturina 36'
   line('p-cro-11', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Musa 45'
   line('p-cro-5', 'football', { assists: 1, shots: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Perišić assist on Musa
   line('p-cro-6', 'football', { shots: 1, shotsOnTarget: 1, yellowCards: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Modrić; booked 55'
-  line('p-cro-12', 'football', { shots: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Kramarić
+  line('p-cro-10', 'football', { shots: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Mario Pašalić (starter)
   line('p-cro-2', 'football', { yellowCards: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Gvardiol booked 76'
 
   // Red vs Blue (live, m1) — 1st-half events as per-player lines so the live
@@ -324,7 +324,7 @@ const statLines: StatLine[] = [
 
   // Brazil vs Norway (live, m-bra-nor) — early goal + chances; Brazil 1–0.
   line('p-bra-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Vinícius 7'
-  line('p-bra-22', 'football', { assists: 1 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Raphinha assist
+  line('p-bra-7', 'football', { assists: 1 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Bruno Guimarães assist (starter)
   line('p-bra-10', 'football', { shots: 1 }, true, 'Norway', '2026-06-17', 'm-bra-nor', WC_TRACK), // Cunha
   line('p-nor-10', 'football', { shots: 1 }, false, 'Brazil', '2026-06-17', 'm-bra-nor', WC_TRACK), // Haaland
   line('p-nor-11', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Brazil', '2026-06-17', 'm-bra-nor', WC_TRACK), // Sørloth
@@ -339,7 +339,7 @@ const statLines: StatLine[] = [
   line('p-arg-11', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Egypt', '2026-06-17', 'm-arg-egy', WC_TRACK), // Messi 8'
   line('p-arg-10', 'football', { assists: 1, shots: 1 }, false, 'Egypt', '2026-06-17', 'm-arg-egy', WC_TRACK), // Álvarez assist + shot
   line('p-egy-10', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Argentina', '2026-06-17', 'm-arg-egy', WC_TRACK), // Salah 12'
-  line('p-egy-23', 'football', { assists: 1 }, false, 'Argentina', '2026-06-17', 'm-arg-egy', WC_TRACK), // Marmoush assist
+  line('p-egy-9', 'football', { assists: 1 }, false, 'Argentina', '2026-06-17', 'm-arg-egy', WC_TRACK), // Ashour assist (starter)
 
   // Falcons vs City Strikers (live cup tie, kc3) — per-player lines matching the
   // seeded events so the Summary shows ratings. Level 1–1, so won:false for both.
@@ -656,7 +656,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v14'; // v14: Argentina–Egypt opens 1–1 (Messi & Salah)
+const DEMO_KEY = 'sportfolio.demo.v15'; // v15: WC live goal/shot attributions now all point to starting XI players (not subs)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -837,8 +837,8 @@ const wcGoal = (
 // splits ≈ 54–46 via the POSSESSION events (fouls omit possSide — see kc3 note).
 demo.matchEvents['m-eng-cro'] = [
   { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 90 * 60000, possSide: 'home' } },
-  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-eng-12', name: 'Bukayo Saka', statKey: 'shots', minute: 5 }),
-  fbStat(3, 'away', 'shot', { onTarget: false, pid: 'p-cro-12', name: 'Andrej Kramarić', statKey: 'shots', minute: 8 }),
+  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-eng-10', name: 'Noni Madueke', statKey: 'shots', minute: 5 }),
+  fbStat(3, 'away', 'shot', { onTarget: false, pid: 'p-cro-10', name: 'Mario Pašalić', statKey: 'shots', minute: 8 }),
   { seq: 4, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 82 * 60000 } },
   fbStat(5, 'away', 'corner', { minute: 10 }),
   wcGoal(6, 'home', 12, 'penalty', 'p-eng-11', 'Harry Kane'),
@@ -886,7 +886,7 @@ demo.matchEvents['m-bra-nor'] = [
   fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-bra-9', name: 'Vinícius Júnior', statKey: 'shots', minute: 4 }),
   fbStat(3, 'home', 'corner', { minute: 5 }),
   wcGoal(4, 'home', 7, 'open', 'p-bra-9', 'Vinícius Júnior'),
-  { seq: 5, type: 'ASSIST', side: 'home', payload: { minute: 7 }, attribution: { playerId: 'p-bra-22', stat: 'assists', by: 1, playerName: 'Raphinha' } },
+  { seq: 5, type: 'ASSIST', side: 'home', payload: { minute: 7 }, attribution: { playerId: 'p-bra-7', stat: 'assists', by: 1, playerName: 'Bruno Guimarães' } },
   { seq: 6, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 8 * 60000 } },
   fbStat(7, 'away', 'shot', { onTarget: false, pid: 'p-nor-10', name: 'Erling Haaland', statKey: 'shots', minute: 9 }),
   fbStat(8, 'away', 'foul', { minute: 10 }),
@@ -922,7 +922,7 @@ demo.matchEvents['m-arg-egy'] = [
   fbStat(7, 'away', 'shot', { onTarget: true, pid: 'p-egy-10', name: 'Mohamed Salah', statKey: 'shots', minute: 10 }),
   fbStat(8, 'home', 'foul', { minute: 11 }),
   wcGoal(9, 'away', 12, 'open', 'p-egy-10', 'Mohamed Salah'),
-  { seq: 10, type: 'ASSIST', side: 'away', payload: { minute: 12 }, attribution: { playerId: 'p-egy-23', stat: 'assists', by: 1, playerName: 'Omar Marmoush' } },
+  { seq: 10, type: 'ASSIST', side: 'away', payload: { minute: 12 }, attribution: { playerId: 'p-egy-9', stat: 'assists', by: 1, playerName: 'Emam Ashour' } },
   { seq: 11, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 6 * 60000 } },
   { seq: 12, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 2 * 60000 } },
   fbStat(13, 'home', 'shot', { onTarget: false, pid: 'p-arg-10', name: 'Julián Álvarez', statKey: 'shots', minute: 13 }),
