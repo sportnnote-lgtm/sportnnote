@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v11']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v12']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — WC live spot-check → England–Croatia full stat sheet + possession fix · SHIPPED + VERIFIED
+
+Spot-checked the three World Cup live ties. **Brazil–Norway** and **Portugal–Spain** ship rich lineups but no
+event log — they're 0–0 "just kicked off" (empty Stats/Timeline, neutral 50–50 possession) by design.
+**England–Croatia** (m-eng-cro, 3–2) had the same two gaps just fixed on kc3: **Possession 100%–0%** (no
+POSSESSION events) and a goals-only Stats sheet — though its Summary already worked (seeded stat lines).
+
+- Fleshed the tie out end-to-end (shots, corners, fouls, cards, offsides + possession swings), attributed to
+  the real England/Croatia squads (Saka, Gordon, Modrić, Kramarić…). Possession now ≈ **54–46**.
+- Updated the six existing m-eng-cro stat lines and added five more so the Summary reconciles with the fuller
+  team totals: **Shots 7–7, on target 5–5, corners 3–2, fouls 3–3, yellows 1–2, offsides 1–1**.
+- **Files:** `src/data/demoStore.ts` (m-eng-cro event log + stat lines; `DEMO_KEY` v11 → v12).
+- **Verified live (demo):** Stats now Possession 54–46 with a full sheet; Summary lists **11 rated players**
+  (Kane 5.0 MVP w/ 3 shots, Bellingham/Baturina/Musa 3.5 … booked Modrić/Gvardiol 1.0) + Top-scorer/Playmaker
+  awards. 77 tests, console clean. (Brazil–Norway / Portugal–Spain left as-is — pre-kickoff 0–0s.)
 
 ---
 

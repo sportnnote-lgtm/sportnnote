@@ -302,12 +302,17 @@ const statLines: StatLine[] = [
   // England vs Croatia (live, m-eng-cro) — first-half goals as per-player lines so
   // profiles/leaderboards/Summary show them and live 2nd-half taps build on them.
   // Kane: penalty + headed goal; Rice assist; Baturina & Musa one each.
-  line('p-eng-11', 'football', { goals: 2, openPlayGoals: 1, penaltyGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK),
-  line('p-eng-9', 'football', { goals: 1, openPlayGoals: 1, shots: 1, shotsOnTarget: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Bellingham 47'
-  line('p-eng-6', 'football', { assists: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK),
-  line('p-cro-9', 'football', { goals: 1, openPlayGoals: 1, shots: 1, shotsOnTarget: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK),
-  line('p-cro-11', 'football', { goals: 1, openPlayGoals: 1, shots: 1, shotsOnTarget: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK),
-  line('p-cro-5', 'football', { assists: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Perišić assist on Musa
+  line('p-eng-11', 'football', { goals: 2, openPlayGoals: 1, penaltyGoals: 1, shots: 3, shotsOnTarget: 2 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Kane: pen 12', header 42'
+  line('p-eng-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Bellingham 47'
+  line('p-eng-6', 'football', { assists: 1, yellowCards: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Rice assist on Kane; booked 70'
+  line('p-eng-12', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Saka
+  line('p-eng-8', 'football', { shots: 1 }, false, 'Croatia', '2026-06-17', 'm-eng-cro', WC_TRACK), // Gordon
+  line('p-cro-9', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Baturina 36'
+  line('p-cro-11', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Musa 45'
+  line('p-cro-5', 'football', { assists: 1, shots: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Perišić assist on Musa
+  line('p-cro-6', 'football', { shots: 1, shotsOnTarget: 1, yellowCards: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Modrić; booked 55'
+  line('p-cro-12', 'football', { shots: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Kramarić
+  line('p-cro-2', 'football', { yellowCards: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Gvardiol booked 76'
 
   // Red vs Blue (live, m1) — 1st-half events as per-player lines so the live
   // match's Summary shows player ratings (mirrors the seeded event log above).
@@ -632,7 +637,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v11'; // v11: live cup tie (kc3) — full stat sheet, possession + ratings lines
+const DEMO_KEY = 'sportfolio.demo.v12'; // v12: England–Croatia (m-eng-cro) — full stat sheet + possession fix
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -808,18 +813,51 @@ const wcGoal = (
   seq, type: 'GOAL', side, payload: { minute, goalType },
   attribution: { playerId: pid, stat: 'goals', by: 1, playerName: name, extra: { shots: 1, shotsOnTarget: 1, [goalType === 'penalty' ? 'penaltyGoals' : goalType === 'freekick' ? 'freekickGoals' : 'openPlayGoals']: 1 } },
 });
+// Seeded end-to-end (shots, corners, fouls, cards, offsides + possession swings)
+// so the flagship WC tie's Stats/Timeline are full, not just the goals. Possession
+// splits ≈ 54–46 via the POSSESSION events (fouls omit possSide — see kc3 note).
 demo.matchEvents['m-eng-cro'] = [
   { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 90 * 60000, possSide: 'home' } },
-  wcGoal(2, 'home', 12, 'penalty', 'p-eng-11', 'Harry Kane'),
-  wcGoal(3, 'away', 36, 'open', 'p-cro-9', 'Martin Baturina'),
-  wcGoal(4, 'home', 42, 'header', 'p-eng-11', 'Harry Kane'),
-  { seq: 5, type: 'ASSIST', side: 'home', payload: { minute: 42 }, attribution: { playerId: 'p-eng-6', stat: 'assists', by: 1, playerName: 'Declan Rice' } },
-  wcGoal(6, 'away', 45, 'open', 'p-cro-11', 'Petar Musa'),
-  { seq: 7, type: 'ASSIST', side: 'away', payload: { minute: 45 }, attribution: { playerId: 'p-cro-5', stat: 'assists', by: 1, playerName: 'Ivan Perišić' } },
-  { seq: 8, type: 'NEXT_HALF' },
+  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-eng-12', name: 'Bukayo Saka', statKey: 'shots', minute: 5 }),
+  fbStat(3, 'away', 'shot', { onTarget: false, pid: 'p-cro-12', name: 'Andrej Kramarić', statKey: 'shots', minute: 8 }),
+  { seq: 4, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 82 * 60000 } },
+  fbStat(5, 'away', 'corner', { minute: 10 }),
+  wcGoal(6, 'home', 12, 'penalty', 'p-eng-11', 'Harry Kane'),
+  fbStat(7, 'home', 'shot', { onTarget: false, pid: 'p-eng-8', name: 'Anthony Gordon', statKey: 'shots', minute: 16 }),
+  fbStat(8, 'home', 'foul', { minute: 18 }),
+  { seq: 9, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 68 * 60000 } },
+  fbStat(10, 'away', 'shot', { onTarget: true, pid: 'p-cro-6', name: 'Luka Modrić', statKey: 'shots', minute: 22 }),
+  fbStat(11, 'away', 'foul', { minute: 25 }),
+  fbStat(12, 'home', 'corner', { minute: 28 }),
+  fbStat(13, 'away', 'shot', { onTarget: false, pid: 'p-cro-5', name: 'Ivan Perišić', statKey: 'shots', minute: 32 }),
+  { seq: 14, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 55 * 60000 } },
+  wcGoal(15, 'away', 36, 'open', 'p-cro-9', 'Martin Baturina'),
+  fbStat(16, 'home', 'offside', { minute: 38 }),
+  fbStat(17, 'home', 'shot', { onTarget: true, pid: 'p-eng-9', name: 'Jude Bellingham', statKey: 'shots', minute: 40 }),
+  wcGoal(18, 'home', 42, 'header', 'p-eng-11', 'Harry Kane'),
+  { seq: 19, type: 'ASSIST', side: 'home', payload: { minute: 42 }, attribution: { playerId: 'p-eng-6', stat: 'assists', by: 1, playerName: 'Declan Rice' } },
+  fbStat(20, 'home', 'corner', { minute: 44 }),
+  wcGoal(21, 'away', 45, 'open', 'p-cro-11', 'Petar Musa'),
+  { seq: 22, type: 'ASSIST', side: 'away', payload: { minute: 45 }, attribution: { playerId: 'p-cro-5', stat: 'assists', by: 1, playerName: 'Ivan Perišić' } },
+  { seq: 23, type: 'NEXT_HALF', side: null, payload: { at: nowMs - 45 * 60000 } },
   // 2nd half kicked off ~33 min ago → clock reads ~78'. Bellingham put England 3–2 up.
-  { seq: 9, type: 'KICKOFF', side: null, payload: { at: nowMs - 33 * 60000, possSide: 'home' } },
-  wcGoal(10, 'home', 47, 'open', 'p-eng-9', 'Jude Bellingham'),
+  { seq: 24, type: 'KICKOFF', side: null, payload: { at: nowMs - 33 * 60000, possSide: 'home' } },
+  wcGoal(25, 'home', 47, 'open', 'p-eng-9', 'Jude Bellingham'),
+  fbStat(26, 'home', 'shot', { onTarget: false, pid: 'p-eng-11', name: 'Harry Kane', statKey: 'shots', minute: 50 }),
+  fbStat(27, 'away', 'corner', { minute: 53 }),
+  fbStat(28, 'away', 'foul', { pid: 'p-cro-6', name: 'Luka Modrić', statKey: 'fouls', minute: 54 }),
+  { seq: 29, type: 'YELLOW', side: 'away', payload: { minute: 55 }, attribution: { playerId: 'p-cro-6', stat: 'yellowCards', by: 1, playerName: 'Luka Modrić' } },
+  { seq: 30, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 20 * 60000 } },
+  fbStat(31, 'away', 'shot', { onTarget: true, pid: 'p-cro-11', name: 'Petar Musa', statKey: 'shots', minute: 58 }),
+  fbStat(32, 'home', 'foul', { minute: 60 }),
+  fbStat(33, 'away', 'offside', { minute: 62 }),
+  fbStat(34, 'home', 'corner', { minute: 67 }),
+  fbStat(35, 'home', 'foul', { pid: 'p-eng-6', name: 'Declan Rice', statKey: 'fouls', minute: 69 }),
+  { seq: 36, type: 'YELLOW', side: 'home', payload: { minute: 70 }, attribution: { playerId: 'p-eng-6', stat: 'yellowCards', by: 1, playerName: 'Declan Rice' } },
+  { seq: 37, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 8 * 60000 } },
+  fbStat(38, 'away', 'foul', { minute: 71 }),
+  fbStat(39, 'away', 'shot', { onTarget: true, pid: 'p-cro-9', name: 'Martin Baturina', statKey: 'shots', minute: 74 }),
+  { seq: 40, type: 'YELLOW', side: 'away', payload: { minute: 76 }, attribution: { playerId: 'p-cro-2', stat: 'yellowCards', by: 1, playerName: 'Joško Gvardiol' } },
 ];
 
 export function setTeamLeaders(teamId: string, leaders: TeamLeadership) {
