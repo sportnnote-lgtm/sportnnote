@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v13']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v14']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Argentina–Egypt opens 1–1 (Messi & Salah) · SHIPPED + VERIFIED
+
+The fourth WC live tie (m-arg-egy), flagged in the previous entry as still a bare 0–0, now opens on a real
+early game too — made it **1–1** for variety (the others are 1–0): Messi opens (assist Álvarez), Salah
+equalises (assist Marmoush), plus a shot apiece, a corner, a foul and possession swings.
+
+- Static `score` 0–0 → 1–1 (`worldCupArgEgySeed.ts`); event log + per-player stat lines added.
+- **Files:** `src/data/demoStore.ts` (event log + stat lines; `DEMO_KEY` v13 → v14), `src/data/worldCupArgEgySeed.ts`.
+- **Verified live (demo):** card reads 1–1; Stats show **Possession 53–47**, Shots 3–2; Summary rates both
+  stars **★5.0** (Messi PotM, Salah level) with Álvarez/Marmoush 3.0 for the assists. 77 tests, console clean.
+  All **four** WC live ties now present a real in-progress game.
 
 ---
 

@@ -335,6 +335,12 @@ const statLines: StatLine[] = [
   line('p-esp-11', 'football', { shots: 1 }, false, 'Portugal', '2026-06-17', 'm-por-esp', WC_TRACK), // Yamal
   line('p-esp-10', 'football', { shots: 1, shotsOnTarget: 1 }, false, 'Portugal', '2026-06-17', 'm-por-esp', WC_TRACK), // Oyarzabal
 
+  // Argentina vs Egypt (live, m-arg-egy) — 1–1: Messi & Salah trade early goals.
+  line('p-arg-11', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Egypt', '2026-06-17', 'm-arg-egy', WC_TRACK), // Messi 8'
+  line('p-arg-10', 'football', { assists: 1, shots: 1 }, false, 'Egypt', '2026-06-17', 'm-arg-egy', WC_TRACK), // Álvarez assist + shot
+  line('p-egy-10', 'football', { goals: 1, openPlayGoals: 1, shots: 2, shotsOnTarget: 2 }, false, 'Argentina', '2026-06-17', 'm-arg-egy', WC_TRACK), // Salah 12'
+  line('p-egy-23', 'football', { assists: 1 }, false, 'Argentina', '2026-06-17', 'm-arg-egy', WC_TRACK), // Marmoush assist
+
   // Falcons vs City Strikers (live cup tie, kc3) — per-player lines matching the
   // seeded events so the Summary shows ratings. Level 1–1, so won:false for both.
   line('p-bpl-rahul', 'football', { goals: 1, shots: 3, shotsOnTarget: 3 }, false, 'City Strikers', '2026-06-17', 'kc3', FB_NO_PASSES), // 18'
@@ -650,7 +656,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v13'; // v13: Brazil–Norway & Portugal–Spain open on a real early game (1–0 each)
+const DEMO_KEY = 'sportfolio.demo.v14'; // v14: Argentina–Egypt opens 1–1 (Messi & Salah)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -902,6 +908,24 @@ demo.matchEvents['m-por-esp'] = [
   { seq: 8, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 4 * 60000 } },
   fbStat(9, 'away', 'shot', { onTarget: true, pid: 'p-esp-10', name: 'Mikel Oyarzabal', statKey: 'shots', minute: 11 }),
   fbStat(10, 'home', 'foul', { minute: 12 }),
+];
+
+// Argentina vs Egypt (live, m-arg-egy) — ~14' in, 1–1: Messi opens (assist
+// Álvarez), Salah equalises (assist Marmoush). End-to-end opening.
+demo.matchEvents['m-arg-egy'] = [
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 14 * 60000, possSide: 'home' } },
+  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-arg-11', name: 'Lionel Messi', statKey: 'shots', minute: 4 }),
+  fbStat(3, 'home', 'corner', { minute: 6 }),
+  wcGoal(4, 'home', 8, 'open', 'p-arg-11', 'Lionel Messi'),
+  { seq: 5, type: 'ASSIST', side: 'home', payload: { minute: 8 }, attribution: { playerId: 'p-arg-10', stat: 'assists', by: 1, playerName: 'Julián Álvarez' } },
+  { seq: 6, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 10 * 60000 } },
+  fbStat(7, 'away', 'shot', { onTarget: true, pid: 'p-egy-10', name: 'Mohamed Salah', statKey: 'shots', minute: 10 }),
+  fbStat(8, 'home', 'foul', { minute: 11 }),
+  wcGoal(9, 'away', 12, 'open', 'p-egy-10', 'Mohamed Salah'),
+  { seq: 10, type: 'ASSIST', side: 'away', payload: { minute: 12 }, attribution: { playerId: 'p-egy-23', stat: 'assists', by: 1, playerName: 'Omar Marmoush' } },
+  { seq: 11, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 6 * 60000 } },
+  { seq: 12, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 2 * 60000 } },
+  fbStat(13, 'home', 'shot', { onTarget: false, pid: 'p-arg-10', name: 'Julián Álvarez', statKey: 'shots', minute: 13 }),
 ];
 
 export function setTeamLeaders(teamId: string, leaders: TeamLeadership) {

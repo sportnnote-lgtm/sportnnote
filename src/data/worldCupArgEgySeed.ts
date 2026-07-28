@@ -109,7 +109,7 @@ export const AE_MATCH: Match = {
   tournamentId: 't-wc',
   sport: 'football',
   status: 'live', // ready to score from kick-off (0–0, no events seeded)
-  score: { home: 0, away: 0 },
+  score: { home: 1, away: 1 }, // ~14' in — replayed from seeded events
   startsAt: '2026-07-07T21:30:00', // Round of 16 · Match 95
   venueName: 'Atlanta Stadium, Atlanta',
   hostIds: ['p-aarav'],
