@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v10']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v11']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Live cup tie (kc3, Falcons vs City Strikers) — full stat sheet + possession fix · SHIPPED + VERIFIED
+
+The live cup tie kc3 (Falcons 1–1 City Strikers, 2nd half, seeded to demo the shootout) had only its two
+goals logged, so:
+
+- **Possession read 100%–0%.** Football possession is time-based (accrued ms per side from POSSESSION
+  events); with none, home held the ball the whole match. Seeded KICKOFF `possSide` + POSSESSION swings in
+  both halves (and gave NEXT_HALF an `at` so the 1st-half segment accrues) for a realistic **54%–46%** split.
+  NB: stat events carrying `possSide` mutate possession *without* accruing (no `at`), so the seeded fouls
+  deliberately omit `possSide` — the dedicated POSSESSION events own the split.
+- **Stats/Timeline were near-empty; Summary had no ratings.** Fleshed the tie out end-to-end — shots (attributed
+  to the 3 Falcons + 2 Strikers named players), corners, fouls, two-apiece yellows, offsides across ~80' — and
+  seeded matching per-player stat lines. Team totals reconcile: FAL 5 shots/4 on target, STR 5/2, fouls 2–2,
+  corners 2–2, yellows 1–2.
+- **Files:** `src/data/demoStore.ts` (kc3 event log + kc3 stat lines; `DEMO_KEY` v10 → v11). Used existing
+  cup-club players (Rahul Menon, Aditya Shetty, Dinesh Kamath / Sameer Khan, Bharat Singh) — no new records.
+- **Verified live (demo):** Stats now Possession 54–46 with a full sheet; Timeline reads 23 events 78'→6';
+  Summary shows Player of the Match Rahul Menon and podium ratings (Rahul 5.0, Sameer 3.5, others 1.0 — fouls/
+  yellows flooring them, as the −1/−2 weights intend). 77 tests, console clean.
 
 ---
 

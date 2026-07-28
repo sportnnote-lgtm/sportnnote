@@ -317,6 +317,14 @@ const statLines: StatLine[] = [
   line('p-neil', 'football', { shots: 1, fouls: 1 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES),
   line('p-ishaan', 'football', { goals: 1, shots: 2, shotsOnTarget: 2, yellowCards: 1 }, false, 'Red House', '2026-06-17', 'm1', FB_NO_PASSES), // 23'; booked 26'
 
+  // Falcons vs City Strikers (live cup tie, kc3) — per-player lines matching the
+  // seeded events so the Summary shows ratings. Level 1–1, so won:false for both.
+  line('p-bpl-rahul', 'football', { goals: 1, shots: 3, shotsOnTarget: 3 }, false, 'City Strikers', '2026-06-17', 'kc3', FB_NO_PASSES), // 18'
+  line('p-bpl-aditya', 'football', { shots: 1, shotsOnTarget: 1, fouls: 1, yellowCards: 1 }, false, 'City Strikers', '2026-06-17', 'kc3', FB_NO_PASSES),
+  line('p-fal-3', 'football', { shots: 1, fouls: 1 }, false, 'City Strikers', '2026-06-17', 'kc3', FB_NO_PASSES),
+  line('p-bpl-sameer', 'football', { goals: 1, shots: 3, shotsOnTarget: 1, fouls: 1, yellowCards: 1 }, false, 'Falcons FC', '2026-06-17', 'kc3', FB_NO_PASSES), // 37'
+  line('p-str-2', 'football', { shots: 2, shotsOnTarget: 1, fouls: 1, yellowCards: 1 }, false, 'Falcons FC', '2026-06-17', 'kc3', FB_NO_PASSES),
+
   // Indiranagar vs Koramangala (live, cg7) — per-player lines matching the
   // seeded box score so the live basketball match's Summary shows ratings.
   line('p-ind-1', 'basketball', { points: 5, rebounds: 1, assists: 1 }, true, 'Koramangala Kings', '2026-06-17', 'cg7'),
@@ -624,7 +632,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v10'; // v10: live basketball (cg7) — box-score rebounds/assists/fouls + ratings lines
+const DEMO_KEY = 'sportfolio.demo.v11'; // v11: live cup tie (kc3) — full stat sheet, possession + ratings lines
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -754,13 +762,41 @@ demo.matchEvents['cg7'] = [
   bbStat(26, 'away', 'FOUL', 6, 'p-kor-5', 'Rohit Gowda'),
 ];
 // Cup final (t7): a knockout tie level 1–1 in the 2nd half — ending it goes to
-// a penalty shootout.
+// a penalty shootout. Seeded end-to-end (shots, corners, fouls, cards, offsides
+// and possession swings) so the live match's Stats/Timeline/Summary are full,
+// not a lone goal apiece. Possession splits ≈ 54–46 via the POSSESSION events.
 demo.matchEvents['kc3'] = [
-  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 80 * 60000 } },
-  { seq: 2, type: 'GOAL', side: 'home', payload: { minute: 18 }, attribution: { playerId: 'p-bpl-rahul', stat: 'goals', by: 1, playerName: 'Rahul Menon' } },
-  { seq: 3, type: 'GOAL', side: 'away', payload: { minute: 37 }, attribution: { playerId: 'p-bpl-sameer', stat: 'goals', by: 1, playerName: 'Sameer Khan' } },
-  { seq: 4, type: 'NEXT_HALF' },
-  { seq: 5, type: 'KICKOFF', side: null, payload: { at: nowMs - 35 * 60000 } },
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 80 * 60000, possSide: 'home' } },
+  fbStat(2, 'away', 'shot', { onTarget: false, pid: 'p-bpl-sameer', name: 'Sameer Khan', statKey: 'shots', minute: 6 }),
+  fbStat(3, 'home', 'shot', { onTarget: true, pid: 'p-bpl-aditya', name: 'Aditya Shetty', statKey: 'shots', minute: 9 }),
+  { seq: 4, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 72 * 60000 } },
+  fbStat(5, 'home', 'corner', { minute: 14 }),
+  fbStat(6, 'away', 'foul', { pid: 'p-bpl-sameer', name: 'Sameer Khan', statKey: 'fouls', minute: 16 }),
+  { seq: 7, type: 'GOAL', side: 'home', payload: { minute: 18 }, attribution: { playerId: 'p-bpl-rahul', stat: 'goals', by: 1, playerName: 'Rahul Menon' } },
+  fbStat(8, 'home', 'shot', { onTarget: false, pid: 'p-fal-3', name: 'Dinesh Kamath', statKey: 'shots', minute: 22 }),
+  { seq: 9, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 60 * 60000 } },
+  fbStat(10, 'away', 'corner', { minute: 26 }),
+  fbStat(11, 'home', 'foul', { pid: 'p-bpl-aditya', name: 'Aditya Shetty', statKey: 'fouls', minute: 29 }),
+  fbStat(12, 'away', 'shot', { onTarget: true, pid: 'p-str-2', name: 'Bharat Singh', statKey: 'shots', minute: 33 }),
+  { seq: 13, type: 'GOAL', side: 'away', payload: { minute: 37 }, attribution: { playerId: 'p-bpl-sameer', stat: 'goals', by: 1, playerName: 'Sameer Khan' } },
+  { seq: 14, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 48 * 60000 } },
+  { seq: 15, type: 'YELLOW', side: 'away', payload: { minute: 40 }, attribution: { playerId: 'p-str-2', stat: 'yellowCards', by: 1, playerName: 'Bharat Singh' } },
+  fbStat(16, 'home', 'offside', { minute: 43 }),
+  { seq: 17, type: 'NEXT_HALF', side: null, payload: { at: nowMs - 35 * 60000 } },
+  { seq: 18, type: 'KICKOFF', side: null, payload: { at: nowMs - 35 * 60000, possSide: 'home' } },
+  fbStat(19, 'home', 'shot', { onTarget: true, pid: 'p-bpl-rahul', name: 'Rahul Menon', statKey: 'shots', minute: 52 }),
+  fbStat(20, 'away', 'foul', { pid: 'p-str-2', name: 'Bharat Singh', statKey: 'fouls', minute: 55 }),
+  fbStat(21, 'home', 'corner', { minute: 57 }),
+  { seq: 22, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 22 * 60000 } },
+  fbStat(23, 'away', 'shot', { onTarget: false, pid: 'p-bpl-sameer', name: 'Sameer Khan', statKey: 'shots', minute: 61 }),
+  { seq: 24, type: 'YELLOW', side: 'home', payload: { minute: 63 }, attribution: { playerId: 'p-bpl-aditya', stat: 'yellowCards', by: 1, playerName: 'Aditya Shetty' } },
+  fbStat(25, 'away', 'corner', { minute: 66 }),
+  fbStat(26, 'home', 'foul', { pid: 'p-fal-3', name: 'Dinesh Kamath', statKey: 'fouls', minute: 68 }),
+  { seq: 27, type: 'YELLOW', side: 'away', payload: { minute: 70 }, attribution: { playerId: 'p-bpl-sameer', stat: 'yellowCards', by: 1, playerName: 'Sameer Khan' } },
+  { seq: 28, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 10 * 60000 } },
+  fbStat(29, 'home', 'shot', { onTarget: true, pid: 'p-bpl-rahul', name: 'Rahul Menon', statKey: 'shots', minute: 74 }),
+  fbStat(30, 'away', 'offside', { minute: 76 }),
+  fbStat(31, 'away', 'shot', { onTarget: false, pid: 'p-str-2', name: 'Bharat Singh', statKey: 'shots', minute: 78 }),
 ];
 
 // England vs Croatia — the real World Cup first half (2–2 at HT), seeded so the
