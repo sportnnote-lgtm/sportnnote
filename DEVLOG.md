@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v5']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v6']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Cricket demo: dial the two 10-over totals down to T10-realistic · SHIPPED + VERIFIED
+
+With the natural run distribution in place, the remaining unreality was the *totals themselves*: 148–132
+and 165–150 in 10 overs are ~15–16 RPO, which forces boundary-heavy innings and the odd 300+ strike rate
+no matter how the runs are shaped. Dialled the two Annual-Sports-Meet cricket fixtures down to believable
+strong-T10 scores (≈11–12 RPO): **ck1 148/132 → 118/104**, **ck2 165/150 → 124/110**. (The 15-over s6/s7
+were already fine.)
+
+- Changed in lockstep: the match `score` in `mockData.ts` (shown on cards/results/standings) **and** the
+  seed target `runs` in `cricketSeed.ts` (what the ball-by-ball replays to) — they must stay equal or the
+  card and the replayed scoreboard diverge. The replay test asserts the seed totals, so a mismatch there
+  fails CI.
+- **Files:** `src/core/mockData.ts`, `src/data/cricketSeed.ts`, `src/data/demoStore.ts` (`DEMO_KEY` v5 → v6).
+- **Verified (engine replay + web reload):** ck1 now 118/5–104/6 (CRR 11.8), ck2 124/5–110/6 (CRR 12.4);
+  the marquee knock is now Imran Pasha 37 (20) rather than 64 (26) w/ seven sixes. 75/75 tests; app
+  rebundles and loads clean.
 
 ---
 

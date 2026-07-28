@@ -194,8 +194,8 @@ function buildMatch(m: MatchPlan): MatchEventRecord[] {
 //  ck1/ck2: Annual Sports Meet (t1) — 10 overs, 8-a-side.
 //  s6/s7:   Karnataka State Cup (t3) — 15 overs, 11-a-side (8 named batters).
 const PLANS: MatchPlan[] = [
-  { id: 'ck1', overs: 10, players: 8, first: { side: 'home', batters: RED, bowlers: attack(GOLD), runs: 148, wickets: 5 }, second: { side: 'away', batters: GOLD, bowlers: attack(RED), runs: 132, wickets: 6 } },
-  { id: 'ck2', overs: 10, players: 8, first: { side: 'home', batters: BLUE, bowlers: attack(GREEN), runs: 165, wickets: 5 }, second: { side: 'away', batters: GREEN, bowlers: attack(BLUE), runs: 150, wickets: 6 } },
+  { id: 'ck1', overs: 10, players: 8, first: { side: 'home', batters: RED, bowlers: attack(GOLD), runs: 118, wickets: 5 }, second: { side: 'away', batters: GOLD, bowlers: attack(RED), runs: 104, wickets: 6 } },
+  { id: 'ck2', overs: 10, players: 8, first: { side: 'home', batters: BLUE, bowlers: attack(GREEN), runs: 124, wickets: 5 }, second: { side: 'away', batters: GREEN, bowlers: attack(BLUE), runs: 110, wickets: 6 } },
   { id: 's6', overs: 15, players: 11, first: { side: 'home', batters: RED, bowlers: attack(BLUE), runs: 156, wickets: 6 }, second: { side: 'away', batters: BLUE, bowlers: attack(RED), runs: 142, wickets: 6 } },
   { id: 's7', overs: 15, players: 11, first: { side: 'home', batters: GOLD, bowlers: attack(GREEN), runs: 133, wickets: 5 }, second: { side: 'away', batters: GREEN, bowlers: attack(GOLD), runs: 121, wickets: 6 } },
 ];

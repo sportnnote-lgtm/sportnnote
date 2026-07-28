@@ -272,8 +272,8 @@ MATCHES.push(
   done('f2', 'football', 'green', 'gold', 'home', [2, 0]),
   done('f3', 'football', 'red', 'green', 'draw', [1, 1]),
   done('f4', 'football', 'gold', 'blue', 'home', [2, 1]),
-  done('ck1', 'cricket', 'red', 'gold', 'home', [148, 132]),
-  done('ck2', 'cricket', 'blue', 'green', 'home', [165, 150]),
+  done('ck1', 'cricket', 'red', 'gold', 'home', [118, 104]),
+  done('ck2', 'cricket', 'blue', 'green', 'home', [124, 110]),
   done('bk1', 'basketball', 'green', 'red', 'home', [72, 65]),
   done('bk2', 'basketball', 'gold', 'blue', 'away', [80, 88]),
 );
