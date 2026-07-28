@@ -54,7 +54,9 @@ function statItem(st: StatEvent, homeName: string, awayName: string): Item {
   const who = st.playerName ?? team;
   let detail = who;
   if (st.kind === 'foul') {
-    detail = st.secondName ? `${who} on ${st.secondName}` : `${who} (${team})`;
+    // "Player on Victim", else "Player (Team)" when attributed, else just the team
+    // (a team-level foul reads "Argentina", not "Argentina (Argentina)").
+    detail = st.secondName ? `${who} on ${st.secondName}` : st.playerName ? `${who} (${team})` : team;
   } else if (st.kind === 'corner') {
     detail = `${team}${st.playerName ? ` · ${st.playerName}` : ''}`;
   } else if (st.kind === 'shot') {

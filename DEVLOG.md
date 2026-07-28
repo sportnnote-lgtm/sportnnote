@@ -30,6 +30,22 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Football Timeline: team-level fouls no longer read "TEAM (TEAM)" · SHIPPED + VERIFIED
+
+Checking the Argentina–Egypt Timeline surfaced a small rendering bug: a foul with no player attribution
+(a team-level tap) rendered as **"Foul ARG (ARG)"** — the team name doubled. `football/Timeline.tsx`'s
+`statItem` built the foul detail as `` `${who} (${team})` `` where `who` falls back to the team when
+there's no player. Fixed to show just the team when unattributed (`Player on Victim` → `Player (Team)` →
+`Team`). Rendering-only (no re-seed / no DEMO_KEY bump); also tidies the team-level fouls in m1, kc3,
+m-eng-cro, Brazil–Norway and Portugal–Spain.
+
+- **Files:** `src/sports/football/Timeline.tsx`.
+- **Verified live (demo):** Argentina–Egypt Timeline reads 13' Shot Álvarez → 12' Goal Salah (assist
+  Marmoush) → **11' Foul ARG** → 10' Shot Salah → 8' Goal Messi (assist Álvarez) → 6' Corner ARG → 4'
+  Shot Messi. 77 tests, console clean.
+
+---
+
 ### 2026-07-27 — Argentina–Egypt opens 1–1 (Messi & Salah) · SHIPPED + VERIFIED
 
 The fourth WC live tie (m-arg-egy), flagged in the previous entry as still a bare 0–0, now opens on a real
