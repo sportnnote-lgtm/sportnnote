@@ -221,3 +221,65 @@ export const CRICKET_SEED_EXPECT = PLANS.map((p) => ({
   homeWkts: p.first.side === 'home' ? p.first.wickets : p.second.wickets,
   awayWkts: p.first.side === 'home' ? p.second.wickets : p.first.wickets,
 }));
+
+// The live demo fixture (m8, Red vs Blue, 10-over t1): Red batting first, part-way
+// through the innings, so the cricket live view opens onto a real in-progress card
+// instead of 0/0.
+export const LIVE = { id: 'm8', runs: 78, wickets: 3, balls: 45, overs: 10, players: 8 };
+
+/** Mirrors buildInnings but sets a bowler per over (so the live view shows the
+ *  current bowler), stops mid-over, and pins the current striker/non-striker so
+ *  the card shows who's at the crease. */
+function buildLiveInnings(): MatchEventRecord[] {
+  const out: MatchEventRecord[] = [];
+  const bpo = 6;
+  const batters = RED, bowlers = attack(BLUE);
+  const scoringBalls = LIVE.balls - LIVE.wickets;
+  const scores = makeScores(scoringBalls, LIVE.runs);
+  const wicketAt = new Set([12, 24, 33]); // spread, none on an over boundary or the tail
+  let seq = 0;
+  const push = (type: string, payload: Record<string, unknown>) =>
+    out.push({ seq: ++seq, type, side: 'home', payload, attribution: null });
+
+  let strikerPos = 0;
+  const crease: P[] = [batters[0], batters[1]];
+  let nextBat = 2;
+  push('SET_STRIKER', { id: crease[0].id, name: crease[0].name });
+  push('SET_NONSTRIKER', { id: crease[1].id, name: crease[1].name });
+
+  let scoreIdx = 0, ballsInOver = 0, bowlerIdx = -1;
+  const nextBowler = () => { bowlerIdx = (bowlerIdx + 1) % bowlers.length; return bowlers[bowlerIdx]; };
+  let bowler = nextBowler();
+  push('SET_BOWLER', { id: bowler.id, name: bowler.name });
+
+  for (let ball = 0; ball < LIVE.balls; ball++) {
+    if (ballsInOver === bpo) { ballsInOver = 0; bowler = nextBowler(); push('SET_BOWLER', { id: bowler.id, name: bowler.name }); }
+    const striker = crease[strikerPos];
+    const overEnd = ballsInOver + 1 === bpo;
+    if (wicketAt.has(ball)) {
+      push('SET_STRIKER', { id: striker.id, name: striker.name });
+      const nb = batters[nextBat++];
+      const caught = ball % 2 === 0;
+      push('WICKET', {
+        kind: caught ? 'caught' : 'bowled', bowlerId: bowler.id, bowlerName: bowler.name,
+        fielderName: caught ? bowlers[(bowlerIdx + 1) % bowlers.length].name : undefined,
+        newBatId: nb.id, newBatName: nb.name,
+      });
+      crease[strikerPos] = nb;
+      if (overEnd) strikerPos ^= 1;
+      ballsInOver += 1;
+      continue;
+    }
+    const r = scores[scoreIdx++];
+    push('RUNS', { runs: r, strikerId: striker.id, strikerName: striker.name, bowlerId: bowler.id, bowlerName: bowler.name });
+    if ((r % 2 === 1) !== overEnd) strikerPos ^= 1;
+    ballsInOver += 1;
+  }
+  // Pin the current crease so the live card shows who's batting now.
+  push('SET_STRIKER', { id: crease[strikerPos].id, name: crease[strikerPos].name });
+  push('SET_NONSTRIKER', { id: crease[1 - strikerPos].id, name: crease[1 - strikerPos].name });
+  return out;
+}
+
+/** matchId → replayable event log for the in-progress live cricket fixture. */
+export const CRICKET_LIVE_EVENTS: Record<string, MatchEventRecord[]> = { [LIVE.id]: buildLiveInnings() };

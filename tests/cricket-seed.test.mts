@@ -9,7 +9,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { init, reducer, type CricketState } from '../src/sports/cricket/engine.ts';
-import { CRICKET_MATCH_EVENTS, CRICKET_SEED_EXPECT } from '../src/data/cricketSeed.ts';
+import { CRICKET_MATCH_EVENTS, CRICKET_SEED_EXPECT, CRICKET_LIVE_EVENTS, LIVE } from '../src/data/cricketSeed.ts';
 
 const replay = (events: { type: string; side?: unknown; payload?: unknown }[], config: Record<string, unknown>): CricketState =>
   events.reduce<CricketState>(
@@ -60,6 +60,30 @@ describe('completed cricket seeds replay to the right final state', () => {
       // A populated card is what makes the Summary's ratings + podium render.
       assert.ok(Object.keys(s.batting).length >= 4, `${e.id} batting card too thin`);
       assert.ok(Object.keys(s.bowling).length >= 4, `${e.id} bowling card too thin`);
+    }
+  });
+});
+
+describe('live cricket seed replays to a real in-progress state', () => {
+  const s = replay(CRICKET_LIVE_EVENTS[LIVE.id], { overs: LIVE.overs, playersPerSide: LIVE.players });
+
+  test(`${LIVE.id}: ${LIVE.runs}/${LIVE.wickets}, mid-innings (not ended)`, () => {
+    assert.equal(s.ended, false, 'live match must not be ended');
+    assert.equal(s.innings, 1, 'still the first innings');
+    assert.equal(s.battingSide, 'home', 'Red batting first');
+    assert.equal(s.scores.home.runs, LIVE.runs, 'home runs');
+    assert.equal(s.scores.home.wickets, LIVE.wickets, 'home wickets');
+    assert.equal(s.scores.home.balls, LIVE.balls, 'balls bowled so far');
+    assert.equal(s.scores.away.balls, 0, 'Blue has not batted');
+  });
+
+  test('the current crease and bowler are set for the live view', () => {
+    assert.ok(s.strikerId && s.nonStrikerId, 'both batters at the crease are set');
+    assert.notEqual(s.strikerId, s.nonStrikerId, 'striker and non-striker differ');
+    assert.ok(s.bowlerId, 'a bowler is mid-over');
+    // The two batters at the crease are not out.
+    for (const id of [s.strikerId!, s.nonStrikerId!]) {
+      assert.equal(s.batting[id]?.out ?? false, false, `crease batter ${id} should be not out`);
     }
   });
 });

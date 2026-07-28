@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v7']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v8']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Live cricket fixture (m8) ships a mid-innings scorecard · SHIPPED + VERIFIED
+
+The demo's live cricket match (m8, Red vs Blue) had no event log, so it opened on 0/0 — the live version
+of the completed-match gap. Seeded a **mid-innings** ball-by-ball log so it opens on a real in-progress
+card, the way the live football m1 shows a mid-game 2–1.
+
+- New `buildLiveInnings` in `cricketSeed.ts` plays Red House ~7.3 overs of a 10-over innings to **78/3**,
+  then **stops mid-over** and **pins the current striker/non-striker**. Unlike the completed builder it
+  emits a `SET_BOWLER` per over so the live view has a current bowler mid-over. Exported as
+  `CRICKET_LIVE_EVENTS` and merged into `demoStore.matchEvents`; `m8.score` set to `{ home: 78, away: 0 }`
+  in `mockData.ts` (Blue yet to bat) so the match card shows a score — mirroring m1's static live score,
+  and equal to what the seed replays to.
+- **Test:** the replay asserts m8 is innings 1, **not ended**, 78/3 off 45 balls, Blue on 0, with a
+  distinct not-out striker & non-striker and a bowler set.
+- **Files:** `src/data/cricketSeed.ts`, `src/data/demoStore.ts` (`DEMO_KEY` v7 → v8), `src/core/mockData.ts`,
+  `tests/cricket-seed.test.mts`. 8/8 seed tests, 77 total.
+- **Verified live (demo):** Home card reads "🏏 Red House 78 – 0 Blue House · LIVE"; the match's
+  **Scorecard** shows RED 🏏 78/3 (7.3), "This over 6 · 4 · 0", Vikram Rao 27* & Suresh Pillai 4* at the
+  crease, three dismissed batters with real credits, "Yet to bat: Manoj Kumar, Deepak Shetty, Nikhil
+  Shetty", five bowlers (Gaurav Joshi 1.3 mid-over), and BLU 0/0. Ball-by-ball reads naturally. Console clean.
 
 ---
 
