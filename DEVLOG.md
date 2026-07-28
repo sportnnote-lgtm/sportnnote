@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v8']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v9']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -27,6 +27,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Verification note:** some RN-web `Button` touchables resist the test harness's synthetic
   clicks; where that blocked UI verification, actions were driven via the reliable
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
+
+---
+
+### 2026-07-27 — Live football (m1) — Timeline minutes + Summary ratings · SHIPPED + VERIFIED
+
+Reviewing the live football match (m1, Red 2–1 Blue) surfaced two gaps against the richer World-Cup live
+matches. Its Stats tab (the football "scorecard") was already solid (Shots 5–2, on-target 3–2, Possession
+70–30, cards/fouls/corners), but:
+
+- **Timeline: stat events all showed "0'".** The `fbStat` seed helper hard-coded `payload.minute: 0`, and
+  the reducer stamps a stat with `payload.minute ?? currentMinute`, so every shot/corner/foul/offside sorted
+  to 0' at the bottom while only goals/cards/subs had real minutes. Gave `fbStat` a `minute` and stamped
+  each m1 stat event with a realistic minute (11', 15', 16', 22', 25', 28', 31') so they interleave with the
+  goals (12/23/33'), cards (20/26') and sub (30'). Team stat totals are unchanged.
+- **Summary: player ratings were empty.** Football's Summary reads per-match **stat lines** (a seeded replay
+  doesn't create them), so it showed "No individual stats recorded" — whereas the live England–Croatia match
+  seeds per-player lines for exactly this. Added the same for m1 (Aarav 1g/2sh, Rohan 1g/2sh/1yc, Neil
+  1sh/1foul, Ishaan 1g/2sh/1yc), whose per-player shot totals reconcile to the 5–2 / 3–2 team stats.
+- **Files:** `src/data/demoStore.ts` (`fbStat` + m1 events + m1 stat lines; `DEMO_KEY` v8 → v9).
+- **Verified live (demo):** m1 Timeline now reads 33' Goal → 31' Shot → 30' Sub → 28' Offside → 26' Yellow →
+  25' Foul → 23' Goal → 22' Shot → 20' Yellow → 16' Corner → 15' Shot → 12' Goal → 11' Shot. Summary shows
+  Player of the Match & top scorer Aarav Mehta and the **podium ratings** (🥇 Aarav 5.0, 🥈 Ishaan 4.5,
+  🥉 Rohan 4.0, Neil 1.0). 77 tests, console clean.
 
 ---
 

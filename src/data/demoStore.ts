@@ -309,6 +309,14 @@ const statLines: StatLine[] = [
   line('p-cro-11', 'football', { goals: 1, openPlayGoals: 1, shots: 1, shotsOnTarget: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK),
   line('p-cro-5', 'football', { assists: 1 }, false, 'England', '2026-06-17', 'm-eng-cro', WC_TRACK), // Perišić assist on Musa
 
+  // Red vs Blue (live, m1) — 1st-half events as per-player lines so the live
+  // match's Summary shows player ratings (mirrors the seeded event log above).
+  // Passes aren't tracked for this match (FB_NO_PASSES), matching its Stats tab.
+  line('p-aarav', 'football', { goals: 1, shots: 2, shotsOnTarget: 2 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES), // 12'
+  line('p-rohan', 'football', { goals: 1, shots: 2, shotsOnTarget: 1, yellowCards: 1 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES), // 33'; booked 20'
+  line('p-neil', 'football', { shots: 1, fouls: 1 }, true, 'Blue House', '2026-06-17', 'm1', FB_NO_PASSES),
+  line('p-ishaan', 'football', { goals: 1, shots: 2, shotsOnTarget: 2, yellowCards: 1 }, false, 'Red House', '2026-06-17', 'm1', FB_NO_PASSES), // 23'; booked 26'
+
   // ---- Spring Carnival (t3) — tied to its completed matches (s1–s8) so the
   // tournament's own leaders are scoped to it; the unmapped lines below (tennis,
   // badminton, kabaddi) stay as general career history. ----
@@ -605,7 +613,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v8'; // v8: live cricket fixture (m8) ships a mid-innings ball-by-ball log
+const DEMO_KEY = 'sportfolio.demo.v9'; // v9: live football (m1) — stat events stamped w/ minutes + per-player ratings lines
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -681,22 +689,22 @@ export function startDemoAutosave(): void {
 const nowMs = Date.now();
 const bbScore = (seq: number, side: 'home' | 'away', points: number, minute: number, pid: string, name: string): MatchEventRecord =>
   ({ seq, type: 'SCORE', side, payload: { points, minute, quarter: 1 }, attribution: { playerId: pid, stat: 'points', by: points, playerName: name } });
-const fbStat = (seq: number, side: 'home' | 'away', kind: string, o: { onTarget?: boolean; pid?: string; name?: string; statKey?: string; at?: number; possSide?: 'home' | 'away' } = {}): MatchEventRecord =>
-  ({ seq, type: 'STAT', side, payload: { kind, onTarget: o.onTarget, at: o.at, possSide: o.possSide, minute: 0 }, attribution: o.pid ? { playerId: o.pid, stat: o.statKey ?? `${kind}s`, by: 1, playerName: o.name } : null });
+const fbStat = (seq: number, side: 'home' | 'away', kind: string, o: { onTarget?: boolean; pid?: string; name?: string; statKey?: string; at?: number; possSide?: 'home' | 'away'; minute?: number } = {}): MatchEventRecord =>
+  ({ seq, type: 'STAT', side, payload: { kind, onTarget: o.onTarget, at: o.at, possSide: o.possSide, minute: o.minute ?? 0 }, attribution: o.pid ? { playerId: o.pid, stat: o.statKey ?? `${kind}s`, by: 1, playerName: o.name } : null });
 demo.matchEvents['m1'] = [
   { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 32 * 60000, possSide: 'home' } },
-  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-aarav', name: 'Aarav Mehta', statKey: 'shots' }),
+  fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-aarav', name: 'Aarav Mehta', statKey: 'shots', minute: 11 }),
   { seq: 3, type: 'GOAL', side: 'home', payload: { minute: 12 }, attribution: { playerId: 'p-aarav', stat: 'goals', by: 1, playerName: 'Aarav Mehta' } },
-  fbStat(4, 'home', 'shot', { onTarget: false, pid: 'p-rohan', name: 'Rohan Nair', statKey: 'shots' }),
-  fbStat(5, 'home', 'corner'),
+  fbStat(4, 'home', 'shot', { onTarget: false, pid: 'p-rohan', name: 'Rohan Nair', statKey: 'shots', minute: 15 }),
+  fbStat(5, 'home', 'corner', { minute: 16 }),
   { seq: 6, type: 'POSSESSION', side: null, payload: { side: 'away', at: nowMs - 22 * 60000 } },
-  fbStat(7, 'away', 'shot', { onTarget: true, pid: 'p-ishaan', name: 'Ishaan Verma', statKey: 'shots' }),
+  fbStat(7, 'away', 'shot', { onTarget: true, pid: 'p-ishaan', name: 'Ishaan Verma', statKey: 'shots', minute: 22 }),
   { seq: 8, type: 'GOAL', side: 'away', payload: { minute: 23 }, attribution: { playerId: 'p-ishaan', stat: 'goals', by: 1, playerName: 'Ishaan Verma' } },
-  fbStat(9, 'home', 'foul', { pid: 'p-neil', name: 'Neil Kapoor', statKey: 'fouls', possSide: 'away' }),
+  fbStat(9, 'home', 'foul', { pid: 'p-neil', name: 'Neil Kapoor', statKey: 'fouls', possSide: 'away', minute: 25 }),
   { seq: 10, type: 'POSSESSION', side: null, payload: { side: 'home', at: nowMs - 12 * 60000 } },
-  fbStat(11, 'home', 'shot', { onTarget: false, pid: 'p-neil', name: 'Neil Kapoor', statKey: 'shots' }),
+  fbStat(11, 'home', 'shot', { onTarget: false, pid: 'p-neil', name: 'Neil Kapoor', statKey: 'shots', minute: 31 }),
   { seq: 12, type: 'GOAL', side: 'home', payload: { minute: 33 }, attribution: { playerId: 'p-rohan', stat: 'goals', by: 1, playerName: 'Rohan Nair' } },
-  fbStat(13, 'away', 'offside'),
+  fbStat(13, 'away', 'offside', { minute: 28 }),
   { seq: 14, type: 'YELLOW', side: 'home', payload: { minute: 20 }, attribution: { playerId: 'p-rohan', stat: 'yellowCards', by: 1, playerName: 'Rohan Nair' } },
   { seq: 15, type: 'YELLOW', side: 'away', payload: { minute: 26 }, attribution: { playerId: 'p-ishaan', stat: 'yellowCards', by: 1, playerName: 'Ishaan Verma' } },
   { seq: 16, type: 'SUB', side: 'home', payload: { minute: 30, offName: 'Varun Kamath', onName: 'Harsha Bhat' }, attribution: null },
