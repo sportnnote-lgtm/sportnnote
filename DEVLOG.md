@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Live house football (m1) reads "✓ XI set" · SHIPPED + VERIFIED
+
+m1 (Red vs Blue House football) was the last live match still showing **"XI not set"** on Info — it had a
+seeded *lineup* but no *matchSquads* (the same lineup-vs-squad seam fixed for cg7/kc3). Seeded it.
+
+- **What changed:** added `M1_SQUADS` to `demo.matchSquads['m1']`, mirroring `seedLineup`'s fielded XI plus the
+  benched player each side already has — Red starters (Neil/Nikhil/Kiran/Varun/Rohan/Aarav) + sub Harsha Bhat;
+  Blue starters (Maya/Ishaan/Karan/Faisal/Sameer) + sub Aman Joshi. This matches the seeded 30' substitution
+  (Varun → Harsha) and doesn't change the scoring roster (the squad already = every house football player).
+  `DEMO_KEY` v22 → v23.
+- **Files:** `src/data/demoStore.ts`.
+- **Verified live (demo):** m1 Info → both squads **✓ XI set** (captains/vices shown). 84 tests, typecheck,
+  console clean. All live matches now read "✓ XI set".
+- **Known, left for a follow-up (bigger change):** m1 is a **7-a-side** tie (tournament t1 format) but its
+  seeded lineup fields **6/5** on the 11-slot 4-3-3 formation, so the **Lineups pitch shows ~5–6 bare empty
+  position dots** per side. Making it a clean 7-v-7 needs added players (Blue has only 6 football players),
+  a right-sized 7-slot formation, and reworking the seeded Varun→Harsha sub — out of scope for the squads
+  fix. Flagged for the user.
+
 ### 2026-07-30 — Live clock: hold at the period end instead of drifting · SHIPPED + VERIFIED
 
 The backlog item flagged repeatedly during the live-match reviews: the header clock counts from

@@ -563,6 +563,14 @@ function seedCupLineup(): MatchLineup {
   return { home, away };
 }
 
+// Matchday squads for the live house football match (m1) — mirrors seedLineup's
+// fielded XI + the benched player each side has (Harsha/Aman), matching the seeded
+// 30' substitution (Varun → Harsha). Makes Info read "✓ XI set".
+const M1_SQUADS: MatchSquads = {
+  home: { starters: ['p-neil', 'p-rh-3', 'p-rh-1', 'p-rh-6', 'p-rohan', 'p-aarav'], subs: ['p-rh-9'] },
+  away: { starters: ['p-maya', 'p-ishaan', 'p-bh-6', 'p-bh-1', 'p-bh-3'], subs: ['p-bh-9'] },
+};
+
 // Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ XI set".
 const KC3_SQUADS: MatchSquads = {
   home: { starters: ['p-fal-4', 'p-fal-6', 'p-fal-3', 'p-fal-7', 'p-fal-5', 'p-fal-8', 'p-fal-9', 'p-fal-10', 'p-bpl-aditya', 'p-bpl-rahul', 'p-fal-11'], subs: ['p-fal-12', 'p-fal-13', 'p-fal-14'] },
@@ -735,7 +743,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { m1: M1_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -765,7 +773,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v22'; // v22: named subs on the cup final (kc3) bench
+const DEMO_KEY = 'sportfolio.demo.v23'; // v23: seed the live house football match (m1) matchday squads (✓ XI set)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
