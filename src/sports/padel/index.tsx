@@ -196,7 +196,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
   LiveExtras,
   formation: () => courtFormation('padel'),
   Court: makeCourt('padel'),
-  voice: { hints: ['point home', 'point away', 'Kiran scores'], parse: pointVoice },
+  voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'premier',

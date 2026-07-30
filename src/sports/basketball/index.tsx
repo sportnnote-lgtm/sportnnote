@@ -440,7 +440,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   LiveExtras,
   formation: () => courtFormation('basketball'),
   Court: makeCourt('basketball'),
-  voice: { hints: ['two Kiran', 'three Kiran', 'rebound Kiran', 'foul Kiran'], parse: basketballVoice },
+  voice: { hints: ['two {name}', 'three {name}', 'rebound {name}', 'foul {name}'], parse: basketballVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'fiba',

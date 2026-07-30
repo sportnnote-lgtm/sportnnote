@@ -195,7 +195,7 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   LiveExtras,
   formation: () => courtFormation('tennis'),
   Court: makeCourt('tennis'),
-  voice: { hints: ['point home', 'point away', 'Kiran scores'], parse: pointVoice },
+  voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'bo3',

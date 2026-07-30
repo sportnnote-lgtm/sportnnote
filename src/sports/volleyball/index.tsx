@@ -140,7 +140,7 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   LiveExtras,
   formation: () => courtFormation('volleyball'),
   Court: makeCourt('volleyball'),
-  voice: { hints: ['point home', 'point away', 'ace Kiran'], parse: pointVoice },
+  voice: { hints: ['point home', 'point away', 'ace {name}'], parse: pointVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'indoor',

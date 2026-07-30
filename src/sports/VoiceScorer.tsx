@@ -24,12 +24,17 @@ export function VoiceScorer({
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // Hints use a `{name}` token so the example reads with a real player from this
+  // match ("two Nidhi") rather than a stock placeholder no one recognises.
+  const sampleName = (homeRoster[0] ?? awayRoster[0])?.fullName?.split(' ')[0] ?? 'a player';
+  const hints = voice.hints.map((h) => h.replace(/\{name\}/g, sampleName));
+
   const process = (raw: string) => {
     const t = raw.trim();
     if (!t) return;
     const actions = voice.parse(t, { state, homeName, awayName, homeRoster, awayRoster });
     if (!actions || actions.length === 0) {
-      setFeedback(`🤔 Didn't catch “${t}”. Try e.g. “${voice.hints[0]}”.`);
+      setFeedback(`🤔 Didn't catch “${t}”. Try e.g. “${hints[0]}”.`);
       return;
     }
     actions.forEach(dispatch);
@@ -53,7 +58,7 @@ export function VoiceScorer({
         }
       />
       {speech.interim ? <Text style={st.heard}>🎙 {speech.interim}</Text> : null}
-      <Text style={textStyles.muted}>Say e.g. {voice.hints.slice(0, 3).map((h) => `“${h}”`).join(', ')}. Then answer any follow-ups.</Text>
+      <Text style={textStyles.muted}>Say e.g. {hints.slice(0, 3).map((h) => `“${h}”`).join(', ')}. Then answer any follow-ups.</Text>
       <View style={st.row}>
         <View style={st.flex}>
           <TextField label="" value={text} onChange={setText} placeholder="…or type a command" autoCapitalize="none" />

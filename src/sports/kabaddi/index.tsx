@@ -519,7 +519,7 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
   LiveExtras,
   formation: () => courtFormation('kabaddi'),
   Court: makeCourt('kabaddi'),
-  voice: { hints: ['raid Kiran', 'tackle Kiran', 'raid away'], parse: kabaddiVoice },
+  voice: { hints: ['raid {name}', 'tackle {name}', 'raid away'], parse: kabaddiVoice },
   formatFields: [
     {
       key: 'preset', label: 'Rule set', type: 'preset', default: 'pro',

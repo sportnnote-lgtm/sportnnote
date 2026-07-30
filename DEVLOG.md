@@ -30,6 +30,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Voice-scoring hints name a real player from the match · SHIPPED + VERIFIED
+
+Reviewing the basketball Scoring tab: the shared voice panel read *"Say e.g. 'two Kiran', 'three Kiran',
+'rebound Kiran'"* — but "Kiran" isn't in the match (a stock placeholder). Every sport using the shared
+`VoiceScorer` hardcoded a placeholder name ("Kiran"; football's own bar uses "Kane"), so the example never
+matched anyone on the teamsheet.
+
+- **What changed:** introduced a `{name}` token in `voice.hints`; `VoiceScorer` substitutes it with a real
+  player from the current match (first home starter, falling back to away, then "a player"). Converted the six
+  sports that use the shared panel — basketball, volleyball, tennis, badminton, padel, kabaddi. Display-only:
+  the parser already matches names against the actual roster, untouched.
+- **Files:** `src/sports/VoiceScorer.tsx` (+ `{name}` substitution) and the six sport plugins' `voice.hints`.
+- **Verified live (demo):** cg7 Scoring → *"Say e.g. 'two Tej', 'three Tej', 'rebound Tej'"* (Tej Anand, the
+  first IND starter). Also functionally exercised the tab: tapping **Tej Anand → +2** took IND 14 → 16, and
+  **Undo** restored 14 — score/roster/undo all correct. 84 tests, typecheck, console all clean.
+- **Noted (logged, not fixed):** the header live clock still drifts past the quarter length on a long-open tab
+  (perpetual-live demo) — the same backlog item flagged on the Score tab.
+
 ### 2026-07-30 — Live basketball (cg7) Info: "✓ XI set" + host/scorer names resolve · SHIPPED + VERIFIED
 
 Reviewing the basketball Info tab surfaced two issues: (1) both matchday squads read **"XI not set"** even

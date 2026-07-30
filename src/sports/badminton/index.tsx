@@ -140,7 +140,7 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   LiveExtras,
   formation: () => courtFormation('badminton'),
   Court: makeCourt('badminton'),
-  voice: { hints: ['point home', 'point away', 'Kiran scores'], parse: pointVoice },
+  voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'bwf21',
