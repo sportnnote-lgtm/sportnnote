@@ -142,17 +142,17 @@ const players: Player[] = [
   { id: 'p-rh-4', fullName: 'Pooja Hegde', jerseyNo: 24, sports: ['volleyball', 'basketball', 'badminton'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
   { id: 'p-rh-5', fullName: 'Sneha Rao', jerseyNo: 25, sports: ['badminton', 'tennis', 'volleyball'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
   { id: 'p-rh-6', fullName: 'Varun Kamath', jerseyNo: 26, sports: ['kabaddi', 'football', 'tennis'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
-  { id: 'p-rh-7', fullName: 'Rakesh Gowda', jerseyNo: 27, sports: ['kabaddi', 'volleyball', 'basketball'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
+  { id: 'p-rh-7', fullName: 'Rakesh Gowda', jerseyNo: 27, sports: ['kabaddi', 'volleyball', 'basketball', 'football'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
   { id: 'p-rh-8', fullName: 'Divya Menon', jerseyNo: 28, sports: ['tennis', 'badminton', 'basketball'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
   { id: 'p-rh-9', fullName: 'Harsha Bhat', jerseyNo: 29, sports: ['football', 'volleyball', 'kabaddi'], houseName: 'Red House', houseColor: RED, city: 'Bengaluru' },
   // Blue House depth
   { id: 'p-bh-1', fullName: 'Faisal Khan', jerseyNo: 20, sports: ['kabaddi', 'football', 'volleyball'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
-  { id: 'p-bh-2', fullName: 'Rohit Pillai', jerseyNo: 21, sports: ['kabaddi', 'basketball', 'volleyball'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  { id: 'p-bh-2', fullName: 'Rohit Pillai', jerseyNo: 21, sports: ['kabaddi', 'basketball', 'volleyball', 'football'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-3', fullName: 'Sameer Das', jerseyNo: 22, sports: ['kabaddi', 'football', 'tennis'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-4', fullName: 'Nisha Rao', jerseyNo: 24, sports: ['volleyball', 'basketball', 'badminton'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-5', fullName: 'Aisha Begum', jerseyNo: 25, sports: ['badminton', 'tennis', 'volleyball'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-6', fullName: 'Karan Mehta', jerseyNo: 26, sports: ['kabaddi', 'basketball', 'football'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
-  { id: 'p-bh-7', fullName: 'Vivek Shenoy', jerseyNo: 27, sports: ['kabaddi', 'volleyball', 'tennis'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  { id: 'p-bh-7', fullName: 'Vivek Shenoy', jerseyNo: 27, sports: ['kabaddi', 'volleyball', 'tennis', 'football'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-8', fullName: 'Tina Dsa', jerseyNo: 28, sports: ['tennis', 'badminton', 'basketball'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-9', fullName: 'Aman Joshi', jerseyNo: 29, sports: ['football', 'volleyball', 'badminton'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   // Green House depth (incl. a full cricket squad — the house had none)
@@ -466,31 +466,44 @@ const statLines: StatLine[] = [
   line('p-bpl-joel', 'football', { goals: 1, assists: 2 }, false, 'Falcons FC', '2026-05-20', 'b6'),
 ];
 
-// Seed a lineup for the live football match (m1): Red home, Blue away.
+// Seed the lineup for the live house football match (m1): Red home, Blue away.
+// m1 is a 7-a-side tie, so it fields a full 7 each in a 2-3-1 (GK · 2 def · 3 mid
+// · 1 fwd) — not the 11-slot template — with one benched sub per side.
+function sevenASide(): LineupSlot[] {
+  return [
+    { position: 'GK', x: 0.5, y: 0.06 },
+    { position: 'CB', x: 0.3, y: 0.26 },
+    { position: 'CB', x: 0.7, y: 0.26 },
+    { position: 'LM', x: 0.2, y: 0.52 },
+    { position: 'CM', x: 0.5, y: 0.5 },
+    { position: 'RM', x: 0.8, y: 0.52 },
+    { position: 'ST', x: 0.5, y: 0.84 },
+  ];
+}
 function seedLineup(): MatchLineup {
-  const home = emptyFormation();
-  const away = emptyFormation();
-  const put = (slots: typeof home, position: string, id: string, name: string) => {
+  const home = sevenASide();
+  const away = sevenASide();
+  const put = (slots: LineupSlot[], position: string, id: string, name: string) => {
     const slot = slots.find((s) => s.position === position && !s.playerId);
-    if (slot) {
-      slot.playerId = id;
-      slot.playerName = name;
-    }
+    if (slot) { slot.playerId = id; slot.playerName = name; }
   };
-  // Red XI (one player, Harsha, kept on the bench so a sub can come on).
+  // Red XI (Harsha benched, comes on for Varun at 30' — see the m1 SUB event).
   put(home, 'GK', 'p-neil', 'Neil Kapoor');
   put(home, 'CB', 'p-rh-3', 'Nikhil Shetty');
   put(home, 'CB', 'p-rh-1', 'Kiran Rao');
-  put(home, 'LB', 'p-rh-6', 'Varun Kamath');
+  put(home, 'LM', 'p-rh-6', 'Varun Kamath');
   put(home, 'CM', 'p-rohan', 'Rohan Nair');
+  put(home, 'RM', 'p-rh-7', 'Rakesh Gowda');
   put(home, 'ST', 'p-aarav', 'Aarav Mehta');
-  // Blue XI (Aman kept on the bench).
+  // Blue XI (Aman benched).
   put(away, 'GK', 'p-maya', 'Maya Pillai');
-  put(away, 'CB', 'p-ishaan', 'Ishaan Verma');
   put(away, 'CB', 'p-bh-6', 'Karan Mehta');
-  put(away, 'LB', 'p-bh-1', 'Faisal Khan');
+  put(away, 'CB', 'p-bh-2', 'Rohit Pillai');
+  put(away, 'LM', 'p-bh-1', 'Faisal Khan');
   put(away, 'CM', 'p-bh-3', 'Sameer Das');
-  return { home, away };
+  put(away, 'RM', 'p-ishaan', 'Ishaan Verma');
+  put(away, 'ST', 'p-bh-7', 'Vivek Shenoy');
+  return { home, away, homeFormation: '2-3-1', awayFormation: '2-3-1' };
 }
 
 // Seed the live basketball match (cg7): Indiranagar United home, Koramangala away.
@@ -567,8 +580,8 @@ function seedCupLineup(): MatchLineup {
 // fielded XI + the benched player each side has (Harsha/Aman), matching the seeded
 // 30' substitution (Varun → Harsha). Makes Info read "✓ XI set".
 const M1_SQUADS: MatchSquads = {
-  home: { starters: ['p-neil', 'p-rh-3', 'p-rh-1', 'p-rh-6', 'p-rohan', 'p-aarav'], subs: ['p-rh-9'] },
-  away: { starters: ['p-maya', 'p-ishaan', 'p-bh-6', 'p-bh-1', 'p-bh-3'], subs: ['p-bh-9'] },
+  home: { starters: ['p-neil', 'p-rh-3', 'p-rh-1', 'p-rh-6', 'p-rohan', 'p-rh-7', 'p-aarav'], subs: ['p-rh-9'] },
+  away: { starters: ['p-maya', 'p-bh-6', 'p-bh-2', 'p-bh-1', 'p-bh-3', 'p-ishaan', 'p-bh-7'], subs: ['p-bh-9'] },
 };
 
 // Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ XI set".
@@ -773,7 +786,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v23'; // v23: seed the live house football match (m1) matchday squads (✓ XI set)
+const DEMO_KEY = 'sportfolio.demo.v24'; // v24: m1 is a clean 7-v-7 (2-3-1 lineup, full XIs, 3 players gain football)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {

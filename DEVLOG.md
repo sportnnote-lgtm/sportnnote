@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — m1 rebuilt as a clean 7-v-7 · SHIPPED + VERIFIED
+
+Follow-up to the m1 squads fix: m1 is a **7-a-side** tie but fielded 6/5 on the 11-slot 4-3-3 template, so its
+Lineups pitch showed ~5–6 bare empty position dots per side. Made it a real, full 7-v-7.
+
+- **What changed:**
+  - Extended three existing multi-sport Red/Blue House players to also play football (no invented people):
+    **Rakesh Gowda** (Red), **Rohit Pillai** & **Vivek Shenoy** (Blue) — giving Red 8 and Blue 8 football
+    players (7 starters + 1 sub each).
+  - Rewrote `seedLineup` to a purpose-built **2-3-1** (`sevenASide()`: GK · 2 CB · LM/CM/RM · ST — 7 slots,
+    no 11-slot template), placing a full XI each and tagging `homeFormation`/`awayFormation` = "2-3-1". The
+    seeded 30' sub (Varun → Harsha) still holds (Varun starts LM, Harsha benched).
+  - Updated `M1_SQUADS` to the full 7 starters each + the benched sub. `DEMO_KEY` v23 → v24.
+- **Files:** `src/data/demoStore.ts`.
+- **Verified live (demo):** m1 Lineups → clean **2-3-1** for both sides, **7 players each, zero empty slots**,
+  "2-3-1" formation label, bench = Harsha / Aman. Info → both **✓ XI set**. Goal pickers: Blue shows all 7
+  (incl. new Rohit Pillai & Vivek Shenoy); Red shows 6 — correctly excluding subbed-off Varun and
+  pending-verification **Aarav** (a minor whose birth-certificate is "pending" — a *pre-existing*, by-design
+  eligibility showcase, unchanged by this work). Clock reads a capped "33:19". 84 tests, typecheck, console
+  clean.
+
 ### 2026-07-30 — Live house football (m1) reads "✓ XI set" · SHIPPED + VERIFIED
 
 m1 (Red vs Blue House football) was the last live match still showing **"XI not set"** on Info — it had a
@@ -43,11 +64,8 @@ seeded *lineup* but no *matchSquads* (the same lineup-vs-squad seam fixed for cg
 - **Files:** `src/data/demoStore.ts`.
 - **Verified live (demo):** m1 Info → both squads **✓ XI set** (captains/vices shown). 84 tests, typecheck,
   console clean. All live matches now read "✓ XI set".
-- **Known, left for a follow-up (bigger change):** m1 is a **7-a-side** tie (tournament t1 format) but its
-  seeded lineup fields **6/5** on the 11-slot 4-3-3 formation, so the **Lineups pitch shows ~5–6 bare empty
-  position dots** per side. Making it a clean 7-v-7 needs added players (Blue has only 6 football players),
-  a right-sized 7-slot formation, and reworking the seeded Varun→Harsha sub — out of scope for the squads
-  fix. Flagged for the user.
+- **Follow-up (now done — see the entry above):** at the time, m1's lineup still fielded 6/5 on the 11-slot
+  template (empty pitch slots). That was rebuilt into a clean 7-v-7 (2-3-1) in the next change.
 
 ### 2026-07-30 — Live clock: hold at the period end instead of drifting · SHIPPED + VERIFIED
 
