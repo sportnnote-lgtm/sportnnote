@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Cricket Summary shows "standouts so far" while live · SHIPPED + VERIFIED
+
+The cricket Summary tab was a dead end mid-match: a live match showed only a "come back once the match
+ends" placeholder, while every other sport's generic `MatchSummary` already renders a live "so far" view
+(result line + MVP + ratings). Brought cricket in line.
+
+- **What changed:** `CricketSummary` now branches — before the first ball it keeps the gentle placeholder;
+  once play is underway it shows a **LIVE** situation header (`Innings N · RED 78/3 (7.3) · RR 10.40`),
+  **Standouts so far** (top performer / top bat / top bowl), and the full **Player ratings · so far** list
+  (same podium/stars UI as the final card, labelled "updates every ball — final ratings lock when the match
+  ends"). The ratings math (`matchRatings`) already ran off current state, so no engine change was needed.
+  Also lifted `useMask()` and the ratings list above the early return to fix a latent hooks-order issue (the
+  hook was previously skipped on the not-ended path).
+- **Files:** `src/sports/cricket/index.tsx` (live branch + shared `ratingsBlock()` + `sum.liveResult`/`liveTag`
+  styles).
+- **Verified live (demo):** m8 Summary → LIVE · Innings 1 · RED 78/3 (7.3) · RR 10.40; Top performer Aarav
+  Mehta 30 (17), Top bowl Karan Bose 1-16 (1.3); podium ratings list with team-coloured bars. Post-match view
+  unchanged. 77 tests, typecheck, console all clean.
+
 ### 2026-07-30 — Cricket seeds use only match-eligible players · SHIPPED + VERIFIED
 
 Follow-up to the m8 XI seed: the cricket seeds referenced three deliberately-unverified players

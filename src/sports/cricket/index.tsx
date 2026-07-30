@@ -605,16 +605,8 @@ export function matchRatings(s: CricketState): {
 
 const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer }) => {
   const s = state as CricketState;
-  if (!s.ended) {
-    return (
-      <View style={ctrl.card}>
-        <Text style={ctrl.label}>🏅 Match summary</Text>
-        <Text style={ctrl.meta}>Best performers, the MVP and player ratings appear here once the match ends.</Text>
-      </View>
-    );
-  }
-  const { players, mvp, bestBat, bestBowl } = matchRatings(s);
   const mask = useMask();
+  const { players, mvp, bestBat, bestBowl } = matchRatings(s);
   const teamName = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
   const teamColor = (side: 'home' | 'away') => (side === 'home' ? homeColor : awayColor);
 
@@ -634,6 +626,67 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
   const batLine = (p: PlayerRating) => { const b = s.batting[p.id]; return b ? `${b.runs} (${b.balls})` : '—'; };
   const bowlLine = (p: PlayerRating) => { const w = s.bowling[p.id]; return w ? `${w.wickets}-${w.runs} (${oversStr(w.balls, s.ballsPerOver)})` : '—'; };
 
+  // Player-ratings list — shared by the live ("so far") and post-match views.
+  const ratingsBlock = () => (
+    <View style={ctrl.card}>
+      {players.map((p, i) => {
+        const tier = podiumColor(i);
+        return (
+        <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && sum.divider]}>
+          <RankBadge index={i} width={22} />
+          <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+            <View style={sum.barTrack}><View style={[sum.barFill, { width: `${(p.rating / 5) * 100}%`, backgroundColor: teamColor(p.side) }]} /></View>
+          </View>
+          <View style={sum.ratingCol}>
+            <Text style={sum.stars} numberOfLines={1}>{stars(p.rating)}</Text>
+            <Text style={sum.total}>{p.rating.toFixed(1)}</Text>
+          </View>
+        </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  // Live, in progress: show the standouts so far rather than a bare "come back
+  // later" card (matches the generic MatchSummary's live treatment). Before a
+  // ball is bowled there's nothing to rank, so keep the gentle placeholder.
+  if (!s.ended) {
+    if (players.length === 0) {
+      return (
+        <View style={ctrl.card}>
+          <Text style={ctrl.label}>🏅 Match summary</Text>
+          <Text style={ctrl.meta}>Best performers, the MVP and player ratings appear here once play begins.</Text>
+        </View>
+      );
+    }
+    const bat = s.battingSide;
+    const inn = s.scores[bat];
+    const liveLine = s.pendingTie
+      ? '🔥 Scores level'
+      : `Innings ${s.innings} · ${teamName(bat)} ${inn.runs}/${inn.wickets} (${oversStr(inn.balls, s.ballsPerOver)}) · RR ${runRate(inn.runs, inn.balls, s.ballsPerOver)}`;
+    return (
+      <View style={{ gap: theme.spacing(3) }}>
+        <View style={sum.liveResult}>
+          <View style={sum.liveTag}><View style={sum.liveDot} /><Text style={sum.liveTagText}>LIVE</Text></View>
+          <Text style={sum.liveLine} numberOfLines={2}>{liveLine}</Text>
+        </View>
+
+        <Text style={ctrl.label}>Standouts so far</Text>
+        {mvp && <Award icon="🔥" label="Top performer" p={mvp} detail={`${batLine(mvp)} · ${bowlLine(mvp)}`} />}
+        <View style={sum.row}>
+          <View style={sum.half}>{bestBat && <Award icon="🏏" label="Top bat" p={bestBat} detail={batLine(bestBat)} />}</View>
+          <View style={sum.half}>{bestBowl && <Award icon="🎯" label="Top bowl" p={bestBowl} detail={bowlLine(bestBowl)} />}</View>
+        </View>
+
+        <Text style={[ctrl.label, { marginTop: theme.spacing(2) }]}>Player ratings · so far</Text>
+        <Text style={ctrl.meta}>Updates every ball — final ratings lock when the match ends.</Text>
+        {ratingsBlock()}
+      </View>
+    );
+  }
+
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={[ctrl.label, { fontSize: theme.font.h3 }]}>🏆 {resultLine(s)}</Text>
@@ -646,25 +699,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
 
       <Text style={[ctrl.label, { marginTop: theme.spacing(2) }]}>Player ratings · out of 5</Text>
       <Text style={ctrl.meta}>Rated on runs, wickets, dots, boundaries, catches & run-outs (top-order wickets count more).</Text>
-      <View style={ctrl.card}>
-        {players.map((p, i) => {
-          const tier = podiumColor(i);
-          return (
-          <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && sum.divider]}>
-            <RankBadge index={i} width={22} />
-            <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
-              <View style={sum.barTrack}><View style={[sum.barFill, { width: `${(p.rating / 5) * 100}%`, backgroundColor: teamColor(p.side) }]} /></View>
-            </View>
-            <View style={sum.ratingCol}>
-              <Text style={sum.stars} numberOfLines={1}>{stars(p.rating)}</Text>
-              <Text style={sum.total}>{p.rating.toFixed(1)}</Text>
-            </View>
-          </TouchableOpacity>
-          );
-        })}
-      </View>
+      {ratingsBlock()}
     </View>
   );
 };
@@ -973,6 +1008,14 @@ const ctrl = StyleSheet.create({
 const sum = StyleSheet.create({
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   half: { flex: 1 },
+  liveResult: {
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
+    padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
+  },
+  liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger },
+  liveTagText: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  liveLine: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', textAlign: 'center' },
   award: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
