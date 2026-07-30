@@ -481,11 +481,16 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   dispatch,
   homeName,
   awayName,
+  homeColor,
+  awayColor,
   homeRoster = [],
   awayRoster = [],
   homeLineup = [],
   awayLineup = [],
 }) => {
+  // Team kit colours for the home/away controls (fall back to the app's accents).
+  const hc = homeColor ?? theme.colors.home;
+  const ac = awayColor ?? theme.colors.away;
   const [sub, setSub] = useState<{ side: 'home' | 'away'; off?: Player } | null>(null);
   // Multi-step capture: tap an action → pick the player(s) from a jersey+name
   // table → any follow-up (goal type, assist, on/off target). One tap per step.
@@ -965,8 +970,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   );
   const teamButtons = (onSide: (side: 'home' | 'away') => void) => (
     <View style={ctrl.row}>
-      <Button label={homeName} variant="home" style={ctrl.flex} onPress={() => onSide('home')} />
-      <Button label={awayName} variant="away" style={ctrl.flex} onPress={() => onSide('away')} />
+      <Button label={homeName} variant="home" color={hc} style={ctrl.flex} onPress={() => onSide('home')} />
+      <Button label={awayName} variant="away" color={ac} style={ctrl.flex} onPress={() => onSide('away')} />
     </View>
   );
 
@@ -1148,15 +1153,15 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {voiceBar}
-      {t.possession && <PossessionBar state={state} homeName={homeName} awayName={awayName} onSwitch={setPossession} />}
+      {t.possession && <PossessionBar state={state} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onSwitch={setPossession} />}
 
       {/* Goal — one flow: scorer (or own goal) → goal type → assist. */}
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>⚽ Goal</Text>
         <Text style={ctrl.meta}>Pick the scorer (or own goal), the goal type, then the assist.</Text>
         <View style={ctrl.row}>
-          <Button label={`Goal — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => setFlow({ mode: 'goal', side: 'home', step: 'scorer' })} />
-          <Button label={`Goal — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => setFlow({ mode: 'goal', side: 'away', step: 'scorer' })} />
+          <Button label={`Goal — ${homeName}`} variant="home" color={hc} style={ctrl.flex} onPress={() => setFlow({ mode: 'goal', side: 'home', step: 'scorer' })} />
+          <Button label={`Goal — ${awayName}`} variant="away" color={ac} style={ctrl.flex} onPress={() => setFlow({ mode: 'goal', side: 'away', step: 'scorer' })} />
         </View>
       </View>
 
@@ -1283,10 +1288,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
 /** Live possession bar — time-based split, ticking each second, with a one-tap
  *  switch for when the ball changes hands. */
 function PossessionBar({
-  state, homeName, awayName, onSwitch,
+  state, homeName, awayName, homeColor, awayColor, onSwitch,
 }: {
-  state: FootballState; homeName: string; awayName: string; onSwitch: (side: 'home' | 'away') => void;
+  state: FootballState; homeName: string; awayName: string; homeColor?: string; awayColor?: string; onSwitch: (side: 'home' | 'away') => void;
 }) {
+  const hc = homeColor ?? theme.colors.home;
+  const ac = awayColor ?? theme.colors.away;
   const [, tick] = useState(0);
   useEffect(() => {
     if (!state.startedAt) return;
@@ -1298,12 +1305,12 @@ function PossessionBar({
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={ctrl.label}>⚽ Possession — {homeName} {pct.home}% : {pct.away}% {awayName}</Text>
-      <View style={ctrl.possTrack}>
-        <View style={[ctrl.possFill, { width: `${pct.home}%`, backgroundColor: theme.colors.home }]} />
+      <View style={[ctrl.possTrack, { backgroundColor: ac }]}>
+        <View style={[ctrl.possFill, { width: `${pct.home}%`, backgroundColor: hc }]} />
       </View>
       <View style={ctrl.row}>
-        <Button label={`${side === 'home' ? '● ' : ''}Ball: ${homeName}`} variant={side === 'home' ? 'home' : 'ghost'} style={ctrl.flex} onPress={() => onSwitch('home')} />
-        <Button label={`${side === 'away' ? '● ' : ''}Ball: ${awayName}`} variant={side === 'away' ? 'away' : 'ghost'} style={ctrl.flex} onPress={() => onSwitch('away')} />
+        <Button label={`${side === 'home' ? '● ' : ''}Ball: ${homeName}`} variant={side === 'home' ? 'home' : 'ghost'} color={hc} style={ctrl.flex} onPress={() => onSwitch('home')} />
+        <Button label={`${side === 'away' ? '● ' : ''}Ball: ${awayName}`} variant={side === 'away' ? 'away' : 'ghost'} color={ac} style={ctrl.flex} onPress={() => onSwitch('away')} />
       </View>
       <Text style={ctrl.meta}>Tap to set who has the ball (after a throw-in, corner, foul…); time on the ball drives the %.</Text>
     </View>

@@ -81,6 +81,7 @@ export function Button({
   label,
   onPress,
   variant = 'primary',
+  color,
   style,
   disabled = false,
   accessibilityLabel,
@@ -89,13 +90,16 @@ export function Button({
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'ghost' | 'home' | 'away' | 'danger';
+  /** Override the solid background (e.g. a team's kit colour on a home/away
+   *  button). Ignored for the transparent `ghost` variant. */
+  color?: string;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
   /** Override when the visible label is too terse to stand alone (e.g. "+1", "↻"). */
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }) {
-  const bg =
+  const variantBg =
     variant === 'primary'
       ? theme.colors.primary
       : variant === 'home'
@@ -105,6 +109,7 @@ export function Button({
       : variant === 'danger'
       ? theme.colors.danger
       : 'transparent';
+  const bg = variant === 'ghost' ? 'transparent' : color ?? variantBg;
   const fg = variant === 'ghost' ? theme.colors.text : '#06120D';
   return (
     <TouchableOpacity

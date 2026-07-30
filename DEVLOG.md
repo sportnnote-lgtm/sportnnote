@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Football scorer controls use team kit colours · SHIPPED + VERIFIED
+
+Reviewing the Argentina–Egypt **Scoring** tab: Egypt read **red** in the scoreboard (team colour) but the
+scorer controls — Goal/Ball buttons and the possession bar — were **orange** (`theme.colors.away`), because
+they used `<Button variant="home"/"away">`, which maps to the app's fixed home/away accents rather than the
+team kit. Switched the team-representative controls to the actual team colours.
+
+- Added an optional `color` prop to the shared `Button` (overrides the solid background; `ghost` stays
+  transparent). Added `homeColor`/`awayColor` to `ScoringControlsProps`; `LiveScoringScreen` now passes them.
+- Football `ScoringControls`: side-picker, Goal, and Ball buttons take `color={hc}`/`color={ac}`; the
+  possession bar's fill/track use the team colours too. Generic flow actions (Scored, On target, Back to
+  live…) and the ghost Sub buttons are unchanged — they're not home-vs-away team choices.
+- Applies to **all** football matches (e.g. Red House's home button is now red, not theme-blue) — a strict
+  improvement; no data change, so no `DEMO_KEY` bump.
+- **Files:** `src/components/ui.tsx`, `src/sports/types.ts`, `src/screens/LiveScoringScreen.tsx`,
+  `src/sports/football/index.tsx`.
+- **Verified live (demo):** AE Scoring controls now render Goal/Ball — ARG celeste `#75AADB`, EGY red
+  `#CE1126` (measured), and the possession bar is celeste + red — matching the scoreboard. 77 tests, console clean.
+
+---
+
 ### 2026-07-27 — WC live matches (BN/PE/AE) start on the anchor day, not a future date · SHIPPED + VERIFIED
 
 The Argentina–Egypt **Info** tab showed **Date "Tue 18 Aug"** — a future date on a match that's live *now*.

@@ -404,6 +404,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           )}
           <plugin.ScoringControls
             state={state} dispatch={dispatch} homeName={homeName} awayName={awayName}
+            homeColor={homeColor} awayColor={awayColor}
             homeRoster={homeScoreRoster} awayRoster={awayScoreRoster} homeLineup={homeLineup} awayLineup={awayLineup}
             homeKeeperId={squads?.home.keeperId} awayKeeperId={squads?.away.keeperId}
           />

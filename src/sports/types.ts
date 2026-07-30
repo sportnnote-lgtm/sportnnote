@@ -78,6 +78,9 @@ export interface ScoringControlsProps<S> {
   dispatch: (action: ScoreAction) => void;
   homeName: string;
   awayName: string;
+  /** Team kit colours, so the scorer's home/away controls match the teams. */
+  homeColor?: string;
+  awayColor?: string;
   /** Team rosters for player attribution (may be empty if unknown). */
   homeRoster?: Player[];
   awayRoster?: Player[];
