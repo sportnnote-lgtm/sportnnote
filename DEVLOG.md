@@ -30,6 +30,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Notifications feed + profile/discover stat labels pluralize ("1 goal") · SHIPPED + VERIFIED
+
+Follow-up to the generic-Summary fix: the notifications "Recent from players you follow" rows and the
+profile/Discover stat summaries share a *second* label map (`stats.ts`, separate from `ratings.ts`) that was
+also hard-plural — a single-event line read "1 goals · 1 shots · 1 fouls".
+
+- **What changed:**
+  - `stats.ts` — `statLabelShort(key, count?)` is now count-aware (added a `STAT_LABEL_ONE` singular map;
+    mass nouns/abbreviations like "pts", "wkts", "open-play" stay invariant; unknown keys still fall back to
+    the raw key; calling with no count keeps the old plural for back-compat). `sportSummary` and `headline`
+    now pass the count through.
+  - `NotificationsScreen.tsx` — the per-match stat line uses `statLabelShort(k, v)` and now also filters
+    `v !== 0`, so a "0 assists" counter no longer shows.
+  - Added `tests/stat-labels.test.mts` (7 cases) covering both label helpers (`stats.ts` + `ratings.ts`):
+    singular/plural, invariants, unknown-key fallback, back-compat, and a `sportSummary` render.
+- **Files:** `src/data/stats.ts`, `src/screens/NotificationsScreen.tsx`, `tests/stat-labels.test.mts`.
+- **Verified:** Discover → People list renders the shared helper live — e.g. Veer Chauhan's headline pill now
+  reads **"1 goal"** (was "1 goals"), while multi-count summaries stay plural ("9 goals", "56 pts", "6 reb").
+  Node check mirrors the exact notifications expression (incl. the zero-filter). 84 tests (77 + 7 new),
+  typecheck, console all clean.
+- **Harness note:** the notifications "Recent from players you follow" section is gated on follow state; the
+  player **Follow** control is an RN `Pressable` (not an `<a>`), so the automated DOM-click that drives nav
+  links doesn't fire its press handler — I couldn't populate that exact row in the web harness. It works on
+  device; coverage is instead pinned by the unit test + the live Discover render of the same helper.
+
 ### 2026-07-30 — Generic (football/basketball/…) live Summary reads as provisional + fixes "1 goals" · SHIPPED + VERIFIED
 
 Reviewing the live football Summary surfaced two issues in the shared `MatchSummary` (every non-cricket

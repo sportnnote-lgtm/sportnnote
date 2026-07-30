@@ -72,7 +72,7 @@ export function statCoverage(lines: StatLine[], sport: SportId, statKey: string)
   return { tracked, total: sportLines.length };
 }
 
-/** Short labels for compact per-sport stat summaries (profile rows, Discover). */
+/** Short (plural) labels for compact per-sport stat summaries (profile rows, Discover). */
 const STAT_LABEL: Record<string, string> = {
   goals: 'goals', openPlayGoals: 'open-play', penaltyGoals: 'penalties', freekickGoals: 'free-kick goals',
   assists: 'assists', cleanSheets: 'clean sheets', shots: 'shots', shotsOnTarget: 'shots on target',
@@ -80,9 +80,22 @@ const STAT_LABEL: Record<string, string> = {
   attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
   runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
 };
-/** Readable short label for a stat key, e.g. "raidPoints" → "raid pts". Falls
- *  back to the raw key so a new stat still renders (just un-prettified). */
-export const statLabelShort = (key: string): string => STAT_LABEL[key] ?? key;
+/** Singular form for count === 1, only where it differs from the plural label.
+ *  Keys absent here (mass nouns / abbreviations like "pts", "wkts", "open-play")
+ *  read the same for one or many, so they fall back to the plural label. */
+const STAT_LABEL_ONE: Record<string, string> = {
+  goals: 'goal', penaltyGoals: 'penalty', freekickGoals: 'free-kick goal', assists: 'assist',
+  cleanSheets: 'clean sheet', shots: 'shot', shotsOnTarget: 'shot on target', tackles: 'tackle',
+  interceptions: 'interception', saves: 'save', passes: 'pass', attackingContributions: 'attacking play',
+  defensiveContributions: 'defensive play', runs: 'run', aces: 'ace', games: 'game',
+};
+/** Readable short label for a stat key, e.g. "raidPoints" → "raid pts". Pass the
+ *  count to get the singular for exactly one ("1 goal" vs "2 goals"). Falls back
+ *  to the raw key so a new stat still renders (just un-prettified). */
+export const statLabelShort = (key: string, count?: number): string => {
+  const plural = STAT_LABEL[key] ?? key;
+  return count === 1 ? (STAT_LABEL_ONE[key] ?? plural) : plural;
+};
 
 /** Per-sport priority of which stats to surface first in a compact summary. */
 const HEADLINE_ORDER: Partial<Record<SportId, string[]>> = {
@@ -101,7 +114,7 @@ const HEADLINE_ORDER: Partial<Record<SportId, string[]>> = {
 export function sportSummary(b: SportBreakdown): string {
   const order = HEADLINE_ORDER[b.sport] ?? Object.keys(b.totals);
   const keys = order.filter((k) => (b.totals[k] ?? 0) > 0).slice(0, 3);
-  return keys.map((k) => `${b.totals[k]} ${STAT_LABEL[k] ?? k}`).join(' · ');
+  return keys.map((k) => `${b.totals[k]} ${statLabelShort(k, b.totals[k])}`).join(' · ');
 }
 
 /** Whether any of a player's stats in a sport were tracked in fewer games than played. */
@@ -115,11 +128,11 @@ export function hasPartialCoverage(lines: StatLine[], b: SportBreakdown): boolea
 /** A short headline stat for list rows, e.g. "12 goals" or "18.0 ppg". */
 export function headline(stats: PlayerStats): string {
   const t = stats.totals;
-  if (t.goals) return `${t.goals} goals`;
+  if (t.goals) return `${t.goals} ${statLabelShort('goals', t.goals)}`;
   if (t.points && stats.bySport.some((s) => s.sport === 'basketball'))
     return `${(t.points / Math.max(1, stats.matches)).toFixed(1)} ppg`;
   if (t.raidPoints) return `${t.raidPoints} raid pts`;
   if (t.golds) return `${t.golds}🥇`;
   if (t.points) return `${t.points} pts`;
-  return `${stats.matches} matches`;
+  return `${stats.matches} ${stats.matches === 1 ? 'match' : 'matches'}`;
 }

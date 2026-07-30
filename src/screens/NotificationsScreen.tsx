@@ -155,7 +155,7 @@ export default function NotificationsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body} numberOfLines={1}>{player.fullName} vs {l.opponent ?? 'TBD'}</Text>
                     <Text style={textStyles.muted} numberOfLines={1}>
-                      {Object.entries(l.stats).map(([k, v]) => `${v} ${statLabelShort(k)}`).join(' · ')}
+                      {Object.entries(l.stats).filter(([, v]) => v !== 0).map(([k, v]) => `${v} ${statLabelShort(k, v)}`).join(' · ')}
                     </Text>
                   </View>
                   <Pill
