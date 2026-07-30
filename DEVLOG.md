@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Cup final (kc3) Lineups: named bench · SHIPPED + VERIFIED
+
+Reviewing the Falcons vs City Strikers Lineups tab (after the full-XI expansion): both 4-3-3 pitches rendered
+correctly with the right goalscorer/card badges — but the **Bench** section read "No bench listed" for both
+teams, odd for a knockout final with rolling subs.
+
+- **What changed:** added 3 named substitutes per club (`p-fal-12..14`, `p-str-12..14`, jerseys 12–14) and
+  listed them in `KC3_SQUADS.subs`. The pitch still shows only the XI; the bench now names the subs.
+  `DEMO_KEY` v21 → v22.
+- **Files:** `src/data/demoStore.ts`.
+- **Verified live (demo):** kc3 Lineups → both 4-3-3 XIs on the pitch (Sameer/SK shows goal + yellow, Bharat/BS
+  a yellow), and a populated **Bench** — Falcons (pink) Deepak Shenoy / Manoj Verma / Sridhar Hegde, Strikers
+  (blue) Nikhil Reddy / Arjun Bhat / Rohan Pai. Legend (Goal/Yellow/Red/2-yellows/Sub in/out) intact. 84
+  tests, typecheck, console all clean.
+- **Note:** the winger/full-back left–right placement is the football pitch renderer's standard convention
+  (same for every football match), not specific to this seed.
+
 ### 2026-07-30 — Live cup final (kc3) fielded with full XIs · SHIPPED + VERIFIED
 
 Reviewing the Falcons vs City Strikers Scoring tab: the tab itself was correct (team colours, working Goal

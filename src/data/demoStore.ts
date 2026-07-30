@@ -207,6 +207,13 @@ const players: Player[] = [
   { id: 'p-str-9', fullName: 'Prasad Gowda', jerseyNo: 10, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
   { id: 'p-str-10', fullName: 'Sachin Bhat', jerseyNo: 9, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
   { id: 'p-str-11', fullName: 'Faisal Rahman', jerseyNo: 11, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  // A few named substitutes each so the cup final's bench isn't empty.
+  { id: 'p-fal-12', fullName: 'Deepak Shenoy', jerseyNo: 12, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-13', fullName: 'Manoj Verma', jerseyNo: 13, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-14', fullName: 'Sridhar Hegde', jerseyNo: 14, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-str-12', fullName: 'Nikhil Reddy', jerseyNo: 12, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-13', fullName: 'Arjun Bhat', jerseyNo: 13, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-14', fullName: 'Rohan Pai', jerseyNo: 14, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
   { id: 'p-tit-2', fullName: 'Arjun Pillai', jerseyNo: 4, sports: ['football'], houseName: 'Titan Athletic', houseColor: '#8E6FE0', city: 'Bengaluru' },
   { id: 'p-rov-2', fullName: 'Kunal Das', jerseyNo: 4, sports: ['football'], houseName: 'Rovers United', houseColor: '#27AE60', city: 'Bengaluru' },
 
@@ -558,8 +565,8 @@ function seedCupLineup(): MatchLineup {
 
 // Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ XI set".
 const KC3_SQUADS: MatchSquads = {
-  home: { starters: ['p-fal-4', 'p-fal-6', 'p-fal-3', 'p-fal-7', 'p-fal-5', 'p-fal-8', 'p-fal-9', 'p-fal-10', 'p-bpl-aditya', 'p-bpl-rahul', 'p-fal-11'], subs: [] },
-  away: { starters: ['p-str-3', 'p-str-5', 'p-str-2', 'p-str-6', 'p-str-4', 'p-str-7', 'p-str-8', 'p-str-9', 'p-str-10', 'p-bpl-sameer', 'p-str-11'], subs: [] },
+  home: { starters: ['p-fal-4', 'p-fal-6', 'p-fal-3', 'p-fal-7', 'p-fal-5', 'p-fal-8', 'p-fal-9', 'p-fal-10', 'p-bpl-aditya', 'p-bpl-rahul', 'p-fal-11'], subs: ['p-fal-12', 'p-fal-13', 'p-fal-14'] },
+  away: { starters: ['p-str-3', 'p-str-5', 'p-str-2', 'p-str-6', 'p-str-4', 'p-str-7', 'p-str-8', 'p-str-9', 'p-str-10', 'p-bpl-sameer', 'p-str-11'], subs: ['p-str-12', 'p-str-13', 'p-str-14'] },
 };
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -758,7 +765,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v21'; // v21: full XIs for the live cup final (kc3) — squads, lineup, matchday XI
+const DEMO_KEY = 'sportfolio.demo.v22'; // v22: named subs on the cup final (kc3) bench
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
