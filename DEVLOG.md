@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Live basketball (cg7) Info: "✓ XI set" + host/scorer names resolve · SHIPPED + VERIFIED
+
+Reviewing the basketball Info tab surfaced two issues: (1) both matchday squads read **"XI not set"** even
+though the match now has a seeded lineup (the court positions and the matchday squad are separate stores —
+I'd seeded the lineup last change but not the squad); (2) the **Hosts** row showed a nameless **"🧑 Host"**
+and the scorer read a generic **"Assigned scorer · this device"**.
+
+- **What changed:**
+  - `demoStore.ts` — added `CG7_SQUADS` (the same starting five as the lineup) to `demo.matchSquads['cg7']`,
+    so both teams read "✓ XI set" like the other live matches. `DEMO_KEY` v19 → v20.
+  - `LiveScoringScreen.tsx` — `nameOf` only searched the two team rosters, so a host/scorer/manager who
+    isn't a squad member (here cg7's host & scorer is p-aarav, the current "you", a Red House player) couldn't
+    be named. Broadened `nameOf` to also resolve from all players (one `getPlayers()` fetch). Hosts,
+    referees and organizers now show their real name instead of a bare "Host".
+- **Files:** `src/data/demoStore.ts`, `src/screens/LiveScoringScreen.tsx`.
+- **Verified live (demo):** cg7 Info → Match scorer "🎯 Aarav Mehta · this device" (name now resolves), Hosts
+  "🧑 Aarav Mehta" (was "Host"), Matchday squads both "✓ XI set"; the Scoring roster lists the five in squad
+  order. 84 tests, typecheck, console all clean.
+
 ### 2026-07-30 — Live basketball (cg7) ships a proper lineup on the Score tab · SHIPPED + VERIFIED
 
 Reviewing the live basketball Score tab: play-by-play and box score were correct, but the **Lineups court**

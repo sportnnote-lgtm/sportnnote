@@ -493,6 +493,13 @@ function seedBasketballLineup(): MatchLineup {
   return { home, away };
 }
 
+// Matchday squads for the live basketball match (cg7) — the same starting five as
+// the seeded lineup, so the Info tab reads "✓ XI set" like the other live matches.
+const CG7_SQUADS: MatchSquads = {
+  home: { starters: ['p-ind-1', 'p-ind-3', 'p-ind-5', 'p-ind-2', 'p-ind-4'], subs: [] },
+  away: { starters: ['p-kor-1', 'p-kor-3', 'p-kor-5', 'p-kor-2', 'p-kor-4'], subs: [] },
+};
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -659,7 +666,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -689,7 +696,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v19'; // v19: seed the live basketball match (cg7) lineup + its 5th starters
+const DEMO_KEY = 'sportfolio.demo.v20'; // v20: seed the live basketball match (cg7) matchday squads (✓ XI set)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {

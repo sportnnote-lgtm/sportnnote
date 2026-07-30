@@ -22,7 +22,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -140,6 +140,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const viewerTz = useUserTimeZone(); // show every time on this screen in the viewer's own zone
   const [homeFull, setHomeFull] = useState<Player[]>([]);
   const [awayFull, setAwayFull] = useState<Player[]>([]);
+  // All players, only for resolving names of people outside the two rosters —
+  // hosts, the scorer or a manager can be an organizer/referee who isn't a
+  // squad member (otherwise their card would read a bare "Host").
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  useEffect(() => {
+    let on = true;
+    getPlayers().then((p) => on && setAllPlayers(p));
+    return () => { on = false; };
+  }, []);
   // Bumped after adding/inviting a player so the roster refetches.
   const [rosterNonce, setRosterNonce] = useState(0);
   useEffect(() => {
@@ -271,7 +280,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     return [...homeRoster, ...awayRoster].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
   }, [homeRoster, awayRoster]);
   const nameOf = (id?: string) =>
-    id ? [...homeFull, ...awayFull, ...scorerCandidates].find((p) => p.id === id)?.fullName : undefined;
+    id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers].find((p) => p.id === id)?.fullName : undefined;
   const scorerName = nameOf(scorerId);
   const iAmScorer = !!myPlayerId && scorerId === myPlayerId;
 
