@@ -188,6 +188,25 @@ const players: Player[] = [
   // Extra depth for the knockout-cup clubs (t7) so each fields a fuller squad.
   { id: 'p-fal-3', fullName: 'Dinesh Kamath', jerseyNo: 4, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
   { id: 'p-str-2', fullName: 'Bharat Singh', jerseyNo: 4, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  // Full starting XIs for the live cup final (kc3) so the live scorer's pickers,
+  // box score and lineup read like a real 11-a-side match.
+  { id: 'p-fal-4', fullName: 'Ravi Kulkarni', jerseyNo: 1, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-5', fullName: 'Sunil Prabhu', jerseyNo: 2, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-6', fullName: 'Anand Bhat', jerseyNo: 3, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-7', fullName: 'Girish Naik', jerseyNo: 5, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-8', fullName: 'Prakash Rao', jerseyNo: 6, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-9', fullName: 'Vinod Shetty', jerseyNo: 8, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-10', fullName: 'Harish Gowda', jerseyNo: 10, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-fal-11', fullName: 'Sudhir Rai', jerseyNo: 7, sports: ['football'], houseName: 'Falcons FC', houseColor: '#E0457B', city: 'Bengaluru' },
+  { id: 'p-str-3', fullName: 'Mahesh Iyer', jerseyNo: 1, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-4', fullName: 'Ganesh Rao', jerseyNo: 2, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-5', fullName: 'Ashok Menon', jerseyNo: 3, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-6', fullName: 'Ramesh Shetty', jerseyNo: 5, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-7', fullName: 'Vijay Kamath', jerseyNo: 6, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-8', fullName: 'Karthik Nair', jerseyNo: 8, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-9', fullName: 'Prasad Gowda', jerseyNo: 10, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-10', fullName: 'Sachin Bhat', jerseyNo: 9, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
+  { id: 'p-str-11', fullName: 'Faisal Rahman', jerseyNo: 11, sports: ['football'], houseName: 'City Strikers', houseColor: '#2D9CDB', city: 'Bengaluru' },
   { id: 'p-tit-2', fullName: 'Arjun Pillai', jerseyNo: 4, sports: ['football'], houseName: 'Titan Athletic', houseColor: '#8E6FE0', city: 'Bengaluru' },
   { id: 'p-rov-2', fullName: 'Kunal Das', jerseyNo: 4, sports: ['football'], houseName: 'Rovers United', houseColor: '#27AE60', city: 'Bengaluru' },
 
@@ -500,6 +519,49 @@ const CG7_SQUADS: MatchSquads = {
   away: { starters: ['p-kor-1', 'p-kor-3', 'p-kor-5', 'p-kor-2', 'p-kor-4'], subs: [] },
 };
 
+// Seed the live cup final (kc3): Falcons FC home, City Strikers away — a full
+// 4-3-3 XI each so the lineup, box score and scorer pickers read like a real
+// 11-a-side match (the two goalscorers stay up top).
+function seedCupLineup(): MatchLineup {
+  const home = emptyFormation();
+  const away = emptyFormation();
+  const put = (slots: typeof home, position: string, id: string, name: string) => {
+    const slot = slots.find((s) => s.position === position && !s.playerId);
+    if (slot) { slot.playerId = id; slot.playerName = name; }
+  };
+  // Falcons XI
+  put(home, 'GK', 'p-fal-4', 'Ravi Kulkarni');
+  put(home, 'LB', 'p-fal-6', 'Anand Bhat');
+  put(home, 'CB', 'p-fal-3', 'Dinesh Kamath');
+  put(home, 'CB', 'p-fal-7', 'Girish Naik');
+  put(home, 'RB', 'p-fal-5', 'Sunil Prabhu');
+  put(home, 'CM', 'p-fal-8', 'Prakash Rao');
+  put(home, 'CM', 'p-fal-9', 'Vinod Shetty');
+  put(home, 'CM', 'p-fal-10', 'Harish Gowda');
+  put(home, 'LW', 'p-bpl-aditya', 'Aditya Shetty');
+  put(home, 'ST', 'p-bpl-rahul', 'Rahul Menon');
+  put(home, 'RW', 'p-fal-11', 'Sudhir Rai');
+  // City Strikers XI
+  put(away, 'GK', 'p-str-3', 'Mahesh Iyer');
+  put(away, 'LB', 'p-str-5', 'Ashok Menon');
+  put(away, 'CB', 'p-str-2', 'Bharat Singh');
+  put(away, 'CB', 'p-str-6', 'Ramesh Shetty');
+  put(away, 'RB', 'p-str-4', 'Ganesh Rao');
+  put(away, 'CM', 'p-str-7', 'Vijay Kamath');
+  put(away, 'CM', 'p-str-8', 'Karthik Nair');
+  put(away, 'CM', 'p-str-9', 'Prasad Gowda');
+  put(away, 'LW', 'p-str-10', 'Sachin Bhat');
+  put(away, 'ST', 'p-bpl-sameer', 'Sameer Khan');
+  put(away, 'RW', 'p-str-11', 'Faisal Rahman');
+  return { home, away };
+}
+
+// Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ XI set".
+const KC3_SQUADS: MatchSquads = {
+  home: { starters: ['p-fal-4', 'p-fal-6', 'p-fal-3', 'p-fal-7', 'p-fal-5', 'p-fal-8', 'p-fal-9', 'p-fal-10', 'p-bpl-aditya', 'p-bpl-rahul', 'p-fal-11'], subs: [] },
+  away: { starters: ['p-str-3', 'p-str-5', 'p-str-2', 'p-str-6', 'p-str-4', 'p-str-7', 'p-str-8', 'p-str-9', 'p-str-10', 'p-bpl-sameer', 'p-str-11'], subs: [] },
+};
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -658,7 +720,7 @@ export const demo = {
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],
   statLines: statLines.map((s) => ({ ...s, date: s.date ? anchorDate(s.date) : s.date })),
-  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
+  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table.
    *  The completed cricket fixtures ship a full ball-by-ball log so they replay to
    *  a real, ENDED scorecard, and the live cricket fixture (m8) ships a mid-innings
@@ -666,7 +728,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -696,7 +758,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v20'; // v20: seed the live basketball match (cg7) matchday squads (✓ XI set)
+const DEMO_KEY = 'sportfolio.demo.v21'; // v21: full XIs for the live cup final (kc3) — squads, lineup, matchday XI
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {

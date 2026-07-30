@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Live cup final (kc3) fielded with full XIs · SHIPPED + VERIFIED
+
+Reviewing the Falcons vs City Strikers Scoring tab: the tab itself was correct (team colours, working Goal
+flow, the voice-placeholder fix applied), but the scorer/action pickers only listed **3 Falcons / 2 Strikers**
+— the cup final's squads were near-empty next to the full house-match teams. Per the user's call, fleshed
+both out to a real 11-a-side.
+
+- **What changed:** added 8 Falcons and 9 City Strikers players (plausible names, jerseys 1–11, no jersey
+  clashes), keeping the two existing goalscorers (Rahul Menon, Sameer Khan) up top. Seeded a **4-3-3** lineup
+  (`seedCupLineup` via `emptyFormation` + the football `put()` pattern) and matchday squads (`KC3_SQUADS`) for
+  `kc3`. New players are auto-verified by the existing eligibility loop, so they're match-eligible. `DEMO_KEY`
+  v20 → v21.
+- **Files:** `src/data/demoStore.ts` (17 roster rows, `seedCupLineup`, `KC3_SQUADS`, `kc3` in
+  `demo.lineups`/`demo.matchSquads`).
+- **Verified live (demo):** kc3 Scoring → "Who scored?" now lists all 11 Falcons in XI order; Lineups renders
+  a full **4-3-3** for both sides (22 players, initials/number/last name, formation label, Aditya's yellow-card
+  badge and Rahul's possession marker intact); Info → both squads **✓ XI set**; voice placeholder reads a real
+  player ("Ravi"). Score stayed 1–1 (test goal cancelled). 84 tests, typecheck, console all clean.
+
 ### 2026-07-30 — Football voice bar: type-a-command example names a real player · SHIPPED + VERIFIED
 
 Follow-up to the shared-VoiceScorer fix. Football has its own voice bar (not the shared panel), and its
