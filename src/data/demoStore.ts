@@ -12,6 +12,7 @@ import { PE_MATCH, PE_PLAYERS, PE_LINEUP, PE_SQUADS } from './worldCupPorEspSeed
 import { AE_MATCH, AE_PLAYERS, AE_LINEUP, AE_SQUADS } from './worldCupArgEgySeed';
 import { CRICKET_MATCH_EVENTS, CRICKET_LIVE_EVENTS, CRICKET_LIVE_SQUADS } from './cricketSeed';
 import { emptyFormation } from '../sports/football/formation';
+import { courtFormation } from '../sports/courts';
 import type {
   FootballProfile,
   Listing,
@@ -20,6 +21,7 @@ import type {
   MatchEventRecord,
   Organization,
   MatchLineup,
+  LineupSlot,
   MatchSquad,
   MatchSquads,
   Player,
@@ -192,12 +194,12 @@ const players: Player[] = [
   // ---- Bengaluru City Games (t6) — four multi-sport city clubs (football,
   // basketball, volleyball) so a non-house, cross-club league has real squads. ----
   { id: 'p-ind-1', fullName: 'Tej Anand', jerseyNo: 7, sports: ['football', 'basketball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
-  { id: 'p-ind-2', fullName: 'Rohan Bhatt', jerseyNo: 8, sports: ['football', 'volleyball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
+  { id: 'p-ind-2', fullName: 'Rohan Bhatt', jerseyNo: 8, sports: ['football', 'basketball', 'volleyball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
   { id: 'p-ind-3', fullName: 'Sahil Verma', jerseyNo: 9, sports: ['basketball', 'volleyball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
   { id: 'p-ind-4', fullName: 'Nidhi Rao', jerseyNo: 10, sports: ['volleyball', 'basketball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
   { id: 'p-ind-5', fullName: 'Akash Pillai', jerseyNo: 11, sports: ['football', 'basketball', 'volleyball'], houseName: 'Indiranagar United', houseColor: '#F2994A', city: 'Bengaluru' },
   { id: 'p-kor-1', fullName: 'Vinay Kumar', jerseyNo: 7, sports: ['football', 'basketball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
-  { id: 'p-kor-2', fullName: 'Deepak Nair', jerseyNo: 8, sports: ['football', 'volleyball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
+  { id: 'p-kor-2', fullName: 'Deepak Nair', jerseyNo: 8, sports: ['football', 'basketball', 'volleyball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
   { id: 'p-kor-3', fullName: 'Manoj Pai', jerseyNo: 9, sports: ['basketball', 'volleyball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
   { id: 'p-kor-4', fullName: 'Priya Shet', jerseyNo: 10, sports: ['volleyball', 'basketball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
   { id: 'p-kor-5', fullName: 'Rohit Gowda', jerseyNo: 11, sports: ['football', 'basketball', 'volleyball'], houseName: 'Koramangala Kings', houseColor: '#2F80ED', city: 'Bengaluru' },
@@ -465,6 +467,32 @@ function seedLineup(): MatchLineup {
   return { home, away };
 }
 
+// Seed the live basketball match (cg7): Indiranagar United home, Koramangala away.
+// Places the starting five on the court so the Lineups tab reads like the seeded
+// football live matches (PG = playmaker, C = the rebounder), instead of a blank
+// court of position labels.
+function seedBasketballLineup(): MatchLineup {
+  const home = courtFormation('basketball');
+  const away = courtFormation('basketball');
+  const put = (slots: LineupSlot[], position: string, id: string, name: string) => {
+    const slot = slots.find((s) => s.position === position && !s.playerId);
+    if (slot) { slot.playerId = id; slot.playerName = name; }
+  };
+  // IND starting five
+  put(home, 'PG', 'p-ind-1', 'Tej Anand');
+  put(home, 'SG', 'p-ind-3', 'Sahil Verma');
+  put(home, 'SF', 'p-ind-5', 'Akash Pillai');
+  put(home, 'PF', 'p-ind-2', 'Rohan Bhatt');
+  put(home, 'C', 'p-ind-4', 'Nidhi Rao');
+  // KOR starting five
+  put(away, 'PG', 'p-kor-1', 'Vinay Kumar');
+  put(away, 'SG', 'p-kor-3', 'Manoj Pai');
+  put(away, 'SF', 'p-kor-5', 'Rohit Gowda');
+  put(away, 'PF', 'p-kor-2', 'Deepak Nair');
+  put(away, 'C', 'p-kor-4', 'Priya Shet');
+  return { home, away };
+}
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -623,7 +651,7 @@ export const demo = {
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],
   statLines: statLines.map((s) => ({ ...s, date: s.date ? anchorDate(s.date) : s.date })),
-  lineups: { m1: seedLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
+  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table.
    *  The completed cricket fixtures ship a full ball-by-ball log so they replay to
    *  a real, ENDED scorecard, and the live cricket fixture (m8) ships a mid-innings
@@ -661,7 +689,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v18'; // v18: cricket seeds use only match-eligible players (no verify-blocked/pending)
+const DEMO_KEY = 'sportfolio.demo.v19'; // v19: seed the live basketball match (cg7) lineup + its 5th starters
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {

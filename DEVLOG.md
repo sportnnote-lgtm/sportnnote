@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Live basketball (cg7) ships a proper lineup on the Score tab · SHIPPED + VERIFIED
+
+Reviewing the live basketball Score tab: play-by-play and box score were correct, but the **Lineups court**
+rendered five bare position labels ("PG/SG/SF/PF/C") with no players — the match had no seeded lineup, so
+`getLineup` fell back to the sport's blank formation. Every seeded football live match already shows a
+populated court, so basketball was the odd one out.
+
+- **Root cause:** `demo.lineups` had no `cg7` entry, and each basketball team only had **4** basketball-eligible
+  players in the roster (p-ind-2 Rohan Bhatt / p-kor-2 Deepak Nair were football/volleyball only) while the
+  court expects a starting five.
+- **Fix:** added `basketball` to Rohan Bhatt & Deepak Nair (the 5th starters), then seeded
+  `demo.lineups['cg7']` via a new `seedBasketballLineup()` (uses `courtFormation('basketball')` + the same
+  `put()` pattern as football's `seedLineup`): PG = the playmaker (Tej / Vinay), C = the rebounder (Nidhi /
+  Priya), etc.
+- **Files:** `src/data/demoStore.ts` (2 roster edits, `seedBasketballLineup()`, `cg7` in `demo.lineups`,
+  `courtFormation`/`LineupSlot` imports; `DEMO_KEY` v18 → v19).
+- **Verified live (demo):** Score → Lineups court shows all 10 players as initials + first names with white
+  borders (TA Tej … NR Nidhi / VK Vinay … PS Priya); box score now lists five per team (the two new starters
+  0/0/0/0, realistic mid-Q1) with team totals still IND 14 / KOR 11; play-by-play unchanged. 84 tests,
+  typecheck, console all clean.
+- **Noted (logged, not fixed):** the header live clock read "Q1 · 65'" after the tab sat open a while — the
+  known perpetual-live drift (the demo match never advances quarters/ends); it resets to ~Q1 · 10' on reload.
+  Left as a backlog item, not a Score-tab defect.
+
 ### 2026-07-30 — Scoreboard: 2-digit scores no longer clip to "1…" · SHIPPED + VERIFIED
 
 Reviewing the live basketball Summary surfaced a real layout bug in the shared `Scoreboard`: the header
