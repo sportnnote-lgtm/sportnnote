@@ -30,6 +30,22 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — "Set the XI" reminder no longer nags on live/completed matches · SHIPPED + VERIFIED
+
+The live cricket match (m8) Info tab prompted "🔔 Remind Aarav Mehta to set the XI" while the match was
+already live at 78/3 — setting the XI is a *pre-match* task, so nagging mid-innings is incongruous. The
+remind button showed on `!set && canManage && matchId` regardless of status. Gated it to pre-kickoff only
+(`meta.status !== 'live' && !== 'completed'`); the "XI not set" indicator still shows (informational), just
+without the pointless reminder. General fix — applies to any live/completed match without a seeded squad
+(m1, m8, cg7, kc3, …).
+
+- **Files:** `src/screens/LiveScoringScreen.tsx`. UI-only, no `DEMO_KEY` bump.
+- **Verified live (demo):** m8 Info Matchday squads now read "XI not set · Captain … · Vice …" with **no
+  remind button**. (Date "Fri 31 Jul" is today — the anchor day maps to today; not a future date.) Rest of
+  the Info tab is correct (format 10 overs · 8-a-side, venue, tournament, scorer Ishaan Verma, hosts). 77 tests, console clean.
+
+---
+
 ### 2026-07-27 — Football scorer controls use team kit colours · SHIPPED + VERIFIED
 
 Reviewing the Argentina–Egypt **Scoring** tab: Egypt read **red** in the scoreboard (team colour) but the

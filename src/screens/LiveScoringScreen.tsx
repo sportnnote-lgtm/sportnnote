@@ -546,7 +546,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               {L.viceCaptainId ? `${L.captainId ? ' · ' : ''}Vice: ${nameOf(L.viceCaptainId) ?? '—'}` : ''}
             </Text>
           )}
-          {!set && canManage && matchId && (
+          {/* Setting the XI is a pre-match task — don't nag once the match is live or done. */}
+          {!set && canManage && matchId && meta.status !== 'live' && meta.status !== 'completed' && (
             hasCaptain ? (
               <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the XI" onPress={() => remindCaptain(sd)}>
                 <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the XI</Text>
