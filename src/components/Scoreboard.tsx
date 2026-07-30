@@ -79,7 +79,11 @@ const s = StyleSheet.create({
   center: { marginBottom: theme.spacing(2), alignItems: 'center' },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger },
   status: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  // alignSelf stretch is required: the `wrap` centers its children, which would
+  // otherwise shrink this row to its content width and squeeze each flex:1 side
+  // so narrow that a wide 2-digit score ("14") clips to "1…". Stretching lets the
+  // sides split the full card width.
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   side: { flex: 1, alignItems: 'center' },
   score: { fontSize: 52, fontWeight: '900' },
   team: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', marginTop: theme.spacing(1) },

@@ -30,6 +30,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Scoreboard: 2-digit scores no longer clip to "1…" · SHIPPED + VERIFIED
+
+Reviewing the live basketball Summary surfaced a real layout bug in the shared `Scoreboard`: the header
+rendered IND's score as **"1…"** (an orange ellipsis, reading as "1••") instead of **14**, while KOR's "11"
+was fine.
+
+- **Root cause:** the `wrap` card uses `alignItems: 'center'`, so its child score `row` shrank to content
+  width (~140px) instead of stretching. That squeezed each flex:1 `side` down to ~58px; the home score
+  "14" needs 65px (scrollWidth) but its box was 58px (clientWidth), so `overflow:hidden` + `textOverflow:
+  ellipsis` clipped it to "1…" (ellipsis inherits the orange score colour). Single digits and the narrower
+  "11" happened to fit, which is why only "14" broke.
+- **Fix:** `row` gets `alignSelf: 'stretch'` so it spans the full card width; each side now gets ~339px and
+  scores render in full. Affects every sport that uses the generic scoreboard (basketball, volleyball,
+  kabaddi, tennis, big football/handball totals, …).
+- **Files:** `src/components/Scoreboard.tsx`.
+- **Verified live (demo):** IND vs KOR header now shows **14 : 11** cleanly; DOM confirms clientWidth ==
+  scrollWidth (no clip) and side width 58px → 339px. 84 tests, typecheck, console all clean.
+
 ### 2026-07-30 — Notifications feed + profile/discover stat labels pluralize ("1 goal") · SHIPPED + VERIFIED
 
 Follow-up to the generic-Summary fix: the notifications "Recent from players you follow" rows and the
