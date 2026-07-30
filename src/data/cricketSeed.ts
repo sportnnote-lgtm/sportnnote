@@ -16,7 +16,7 @@
  * companion test replays every log through the real plugin and asserts the exact
  * totals — so a drift in the reducer or a bad script fails CI, never the demo.
  */
-import type { MatchEventRecord } from '../core/types';
+import type { MatchEventRecord, MatchSquads } from '../core/types';
 
 interface P { id: string; name: string }
 
@@ -283,3 +283,12 @@ function buildLiveInnings(): MatchEventRecord[] {
 
 /** matchId → replayable event log for the in-progress live cricket fixture. */
 export const CRICKET_LIVE_EVENTS: Record<string, MatchEventRecord[]> = { [LIVE.id]: buildLiveInnings() };
+
+/** Matchday XIs for the live fixture (m8) so its Info reads "✓ XI set" — the 8
+ *  Red/Blue players already in the seeded scorecard, in batting order. */
+export const CRICKET_LIVE_SQUADS: Record<string, MatchSquads> = {
+  [LIVE.id]: {
+    home: { starters: RED.map((p) => p.id), subs: [] },
+    away: { starters: BLUE.map((p) => p.id), subs: [] },
+  },
+};

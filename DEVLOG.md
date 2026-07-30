@@ -30,6 +30,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-27 — Live cricket (m8) ships a matchday XI ("✓ XI set") · SHIPPED + VERIFIED
+
+Follow-up to the m8 Info review: seeded m8's matchday XI so it reads "✓ XI set" (like the WC football
+matches), instead of "XI not set". The XI is the 8 Red / 8 Blue players already in the seeded scorecard,
+in batting order (`CRICKET_LIVE_SQUADS` reuses cricketSeed's `RED`/`BLUE` arrays).
+
+- **Files:** `src/data/cricketSeed.ts` (export `CRICKET_LIVE_SQUADS`), `src/data/demoStore.ts` (merge into
+  `matchSquads`; `DEMO_KEY` v16 → v17).
+- **Verified live (demo):** m8 Info Matchday squads → **Red House ✓ XI set**, **Blue House ✓ XI set** (captains
+  shown). Scorecard "Yet to bat" now correctly lists only XI players (Manoj, Deepak) — no more stray
+  non-XI "Nikhil Shetty". 77 tests, console clean.
+- **Noted (pre-existing, not this task):** the demo intentionally keeps three cricket players **unverified**
+  (`VERIFY_BLOCKED = p-farhan, p-tarun, p-gaurav`) to showcase match-eligibility gating. Those players sit in
+  the cricket seeds (Farhan in Red's XI; Gaurav/Tarun bowling for Blue in the m8 events), so the eligibility
+  filter drops Farhan from "yet to bat" (shows 2, not 3), and two blocked players appear as bowlers. A clean
+  reconciliation (use only eligible players in the cricket seeds, or exempt these three) is a broader change
+  than the XI seed — flagged for a follow-up.
+
+---
+
 ### 2026-07-27 — "Set the XI" reminder no longer nags on live/completed matches · SHIPPED + VERIFIED
 
 The live cricket match (m8) Info tab prompted "🔔 Remind Aarav Mehta to set the XI" while the match was

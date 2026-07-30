@@ -10,7 +10,7 @@ import { WC_TOURNAMENT, WC_MATCH, WC_PLAYERS, WC_LINEUP, WC_SQUADS } from './wor
 import { BN_MATCH, BN_PLAYERS, BN_LINEUP, BN_SQUADS } from './worldCupBraNorSeed';
 import { PE_MATCH, PE_PLAYERS, PE_LINEUP, PE_SQUADS } from './worldCupPorEspSeed';
 import { AE_MATCH, AE_PLAYERS, AE_LINEUP, AE_SQUADS } from './worldCupArgEgySeed';
-import { CRICKET_MATCH_EVENTS, CRICKET_LIVE_EVENTS } from './cricketSeed';
+import { CRICKET_MATCH_EVENTS, CRICKET_LIVE_EVENTS, CRICKET_LIVE_SQUADS } from './cricketSeed';
 import { emptyFormation } from '../sports/football/formation';
 import type {
   FootballProfile,
@@ -626,7 +626,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -656,7 +656,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v16'; // v16: WC live matches (BN/PE/AE) start on the anchor day so they read as today, not a future date
+const DEMO_KEY = 'sportfolio.demo.v17'; // v17: live cricket fixture (m8) ships a matchday XI ("✓ XI set")
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
