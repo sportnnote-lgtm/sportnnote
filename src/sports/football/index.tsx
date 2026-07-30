@@ -844,6 +844,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
 
   const speech = useSpeech(processCommand);
   const sendTyped = () => { if (voiceText.trim()) { processCommand(voiceText); setVoiceText(''); } };
+  // Use a real player from this match in the example, not a stock "Kane" no one
+  // on the teamsheet recognises. Falls back to a name-free example if empty.
+  const samplePlayer = (homeRoster[0] ?? awayRoster[0])?.fullName?.split(' ')[0];
+  const cmdPlaceholder = samplePlayer
+    ? `…or type a command (e.g. "goal", "${samplePlayer}", "penalty")`
+    : '…or type a command (e.g. "goal", "penalty")';
   const voiceBar = (
     <View style={ctrl.voiceBar}>
       <View style={ctrl.row}>
@@ -862,7 +868,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         <Text style={ctrl.meta}>Say e.g. “goal”, “yellow card”, “corner”, “substitution”, “kick off”. Then answer its follow-ups by voice.</Text>
       )}
       <View style={ctrl.row}>
-        <View style={ctrl.flex}><TextField label="" value={voiceText} onChange={setVoiceText} placeholder='…or type a command (e.g. "goal", "Kane", "penalty")' /></View>
+        <View style={ctrl.flex}><TextField label="" value={voiceText} onChange={setVoiceText} placeholder={cmdPlaceholder} /></View>
         <Button label="Send" variant="ghost" onPress={sendTyped} disabled={!voiceText.trim()} />
       </View>
     </View>

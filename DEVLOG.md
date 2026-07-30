@@ -30,6 +30,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Football voice bar: type-a-command example names a real player · SHIPPED + VERIFIED
+
+Follow-up to the shared-VoiceScorer fix. Football has its own voice bar (not the shared panel), and its
+type-a-command box hinted *(e.g. "goal", "Kane", "penalty")* — "Kane" being a stock name no one on the
+teamsheet recognises.
+
+- **What changed:** `ScoringControls` now builds the placeholder from a real match player (first home
+  starter, else away) — e.g. *(e.g. "goal", "Rohan", "penalty")* — falling back to a name-free example
+  *(e.g. "goal", "penalty")* if the roster is somehow empty (never reintroduces "Kane"). The spoken-hint line
+  (goal / yellow card / corner / substitution / kick off) is player-agnostic and left as-is; the parser is
+  untouched.
+- **Files:** `src/sports/football/index.tsx`.
+- **Verified live (demo):** Red House vs Blue House Scoring → placeholder reads *(e.g. "goal", "Rohan",
+  "penalty")* (Rohan Nair, a Red House player). 84 tests, typecheck, console all clean.
+
 ### 2026-07-30 — Voice-scoring hints name a real player from the match · SHIPPED + VERIFIED
 
 Reviewing the basketball Scoring tab: the shared voice panel read *"Say e.g. 'two Kiran', 'three Kiran',
