@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Generic (football/basketball/…) live Summary reads as provisional + fixes "1 goals" · SHIPPED + VERIFIED
+
+Reviewing the live football Summary surfaced two issues in the shared `MatchSummary` (every non-cricket
+sport): (1) a live, in-progress match already crowned a "🏅 Player of the Match" and headed the list
+"Player ratings · out of 5" — presenting provisional numbers as final, and inconsistent with cricket's new
+live "so far" treatment; (2) every stat detail was hard-plural, so a single event read "1 goals · 1 shots ·
+1 fouls".
+
+- **What changed:**
+  - `ratings.ts` — added a count-aware `statLabel(stat, count)` (singular for 1, plural otherwise, with an
+    invariant set for mass nouns/abbreviations like "on target", "yellow", "pts"). The per-player detail
+    builder now uses it, so lines read "1 goal · 2 on target · 2 shots".
+  - `MatchSummary.tsx` — while live (`!complete`): the MVP card shows "🔥 Top performer" instead of
+    "🏅 Player of the Match", the section reads "Player ratings · so far" with a "final ratings lock when the
+    match ends" note; awards use `statLabel` too. Completed matches are unchanged ("Player of the Match",
+    "out of 5").
+- **Files:** `src/data/ratings.ts`, `src/components/MatchSummary.tsx`.
+- **Verified live (demo):** Red House 2–1 Blue House football Summary → "🔥 TOP PERFORMER Aarav Mehta 1 goal ·
+  2 on target · 2 shots", "TOP SCORER … 1 goal", "Player ratings · so far" + note; ratings list correctly
+  singular/plural ("1 goal", "1 foul", "1 shot" vs "2 shots"). 77 tests, typecheck, console all clean.
+- **Noted (related, not touched):** the notifications feed builds its own detail via `statLabelShort` in
+  `src/data/stats.ts` with the same hard-plural pattern — a candidate for the same count-aware treatment
+  later.
+
 ### 2026-07-30 — Cricket Summary shows "standouts so far" while live · SHIPPED + VERIFIED
 
 The cricket Summary tab was a dead end mid-match: a live match showed only a "come back once the match

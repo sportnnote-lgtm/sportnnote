@@ -28,7 +28,7 @@ export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
   squash: { points: 1 },
 };
 
-/** Short labels for the per-player stat detail line. */
+/** Short (plural) labels for the per-player stat detail line. */
 export const STAT_LABELS: Record<string, string> = {
   goals: 'goals', assists: 'assists', cleanSheets: 'clean sheets', yellowCards: 'yellow', redCards: 'red',
   shots: 'shots', shotsOnTarget: 'on target', saves: 'saves', tackles: 'tackles', interceptions: 'interceptions',
@@ -37,6 +37,27 @@ export const STAT_LABELS: Record<string, string> = {
   penaltiesWon: 'pen won', penaltiesMissed: 'pen missed',
   points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks',
   raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', games: 'games',
+};
+
+/** Labels that read the same for one or many (mass nouns, abbreviations, adjectives). */
+const INVARIANT_LABELS = new Set([
+  'yellowCards', 'redCards', 'shotsOnTarget', 'offsides', 'handballs',
+  'penaltiesWon', 'penaltiesMissed', 'points', 'rebounds', 'raidPoints', 'tacklePoints', 'wickets',
+]);
+
+/** Singular form for count === 1, only where it differs from the plural label. */
+const SINGULAR_LABELS: Record<string, string> = {
+  goals: 'goal', assists: 'assist', cleanSheets: 'clean sheet', shots: 'shot', saves: 'save',
+  tackles: 'tackle', interceptions: 'interception', attackingContributions: 'att. play',
+  defensiveContributions: 'def. play', passesComplete: 'pass', crosses: 'cross', dribbles: 'dribble',
+  fouls: 'foul', aces: 'ace', blocks: 'block', runs: 'run', games: 'game',
+};
+
+/** Count-aware stat label — "1 goal" / "2 goals", invariant labels unchanged. */
+export const statLabel = (stat: string, count: number): string => {
+  const plural = STAT_LABELS[stat] ?? stat;
+  if (count === 1 && !INVARIANT_LABELS.has(stat)) return SINGULAR_LABELS[stat] ?? plural;
+  return plural;
 };
 
 /** Sport-specific "best in role" awards — the top player by a single stat. */
@@ -104,7 +125,7 @@ export function matchRatings(
         .filter(([k, v]) => v !== 0 && STAT_LABELS[k])
         .sort((a, b) => Math.abs(b[1] * (weights[b[0]] ?? 0)) - Math.abs(a[1] * (weights[a[0]] ?? 0)))
         .slice(0, 6) // keep the line readable for busy players
-        .map(([k, v]) => `${v} ${STAT_LABELS[k]}`)
+        .map(([k, v]) => `${v} ${statLabel(k, v)}`)
         .join(' · ');
       return { id: l.playerId, name: nameOf(l.playerId), side: sideOf(l.playerId) ?? 'home', points, detail, stats };
     })

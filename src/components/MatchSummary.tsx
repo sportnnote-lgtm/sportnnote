@@ -7,7 +7,7 @@ import { theme } from '../core/theme';
 import { Card, EmptyState, textStyles } from './ui';
 import { RankBadge, podiumColor } from './Rank';
 import { useMask } from '../core/disputeMask';
-import { matchRatings, awardsFor, ratingStars, STAT_LABELS, type MatchRating } from '../data/ratings';
+import { matchRatings, awardsFor, ratingStars, statLabel, type MatchRating } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
 import type { ScoreSummary } from '../sports/types';
 
@@ -55,9 +55,9 @@ export function MatchSummary({
 
       {mvp && (
         <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
-          <Text style={st.mvpIcon}>🏅</Text>
+          <Text style={st.mvpIcon}>{complete ? '🏅' : '🔥'}</Text>
           <View style={{ flex: 1 }}>
-            <Text style={st.mvpLabel}>Player of the Match</Text>
+            <Text style={st.mvpLabel}>{complete ? 'Player of the Match' : 'Top performer'}</Text>
             <Text style={st.mvpName} numberOfLines={1}>{mask.byId(mvp.id, mvp.name)}</Text>
             <Text style={st.mvpDetail} numberOfLines={1}>{mvp.detail} · {teamName(mvp.side)}</Text>
           </View>
@@ -72,13 +72,16 @@ export function MatchSummary({
               <Text style={st.awardIcon}>{a.icon}</Text>
               <Text style={st.awardLabel} numberOfLines={1}>{a.label}</Text>
               <Text style={st.awardName} numberOfLines={1}>{mask.byId(a.player.id, a.player.name)}</Text>
-              <Text style={st.awardVal} numberOfLines={1}>{a.value} {STAT_LABELS[a.stat] ?? a.stat}</Text>
+              <Text style={st.awardVal} numberOfLines={1}>{a.value} {statLabel(a.stat, a.value)}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
 
-      <Text style={[textStyles.h3, { marginTop: theme.spacing(1) }]}>Player ratings · out of 5</Text>
+      <Text style={[textStyles.h3, { marginTop: theme.spacing(1) }]}>{complete ? 'Player ratings · out of 5' : 'Player ratings · so far'}</Text>
+      {!complete && players.length > 0 && (
+        <Text style={st.note}>Updates live — final ratings lock when the match ends.</Text>
+      )}
       {players.length === 0 ? (
         <EmptyState icon="📊" title="No individual stats recorded for this match" compact />
       ) : (
@@ -112,6 +115,7 @@ const st = StyleSheet.create({
     padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
   },
   resultLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  note: { color: theme.colors.textMuted, fontSize: theme.font.small, marginTop: -theme.spacing(1) },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   score: { fontSize: theme.font.h1, fontWeight: '900' },
   scoreLost: { opacity: 0.45 },
