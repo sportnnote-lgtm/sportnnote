@@ -20,18 +20,21 @@ import type { MatchEventRecord, MatchSquads } from '../core/types';
 
 interface P { id: string; name: string }
 
-// House cricket squads (8-a-side, matching the demo rosters in demoStore).
+// House cricket squads (8-a-side, matching the demo rosters in demoStore). Only
+// match-eligible players — the demo's intentionally-unverified cricketers
+// (p-farhan / p-gaurav / p-tarun) and its pending-review minor (p-naveen) are
+// deliberately excluded so a fielded XI never contains a blocked player.
 const RED: P[] = [
   { id: 'p-aarav', name: 'Aarav Mehta' }, { id: 'p-rohan', name: 'Rohan Nair' },
   { id: 'p-neil', name: 'Neil Kapoor' }, { id: 'p-vikram', name: 'Vikram Rao' },
   { id: 'p-suresh', name: 'Suresh Pillai' }, { id: 'p-manoj', name: 'Manoj Kumar' },
-  { id: 'p-deepak', name: 'Deepak Shetty' }, { id: 'p-farhan', name: 'Farhan Khan' },
+  { id: 'p-deepak', name: 'Deepak Shetty' }, { id: 'p-rh-3', name: 'Nikhil Shetty' },
 ];
 const BLUE: P[] = [
   { id: 'p-ishaan', name: 'Ishaan Verma' }, { id: 'p-veer', name: 'Veer Chauhan' },
   { id: 'p-sanjay', name: 'Sanjay Menon' }, { id: 'p-rahul', name: 'Rahul Dev' },
-  { id: 'p-imran', name: 'Imran Sheikh' }, { id: 'p-gaurav', name: 'Gaurav Joshi' },
-  { id: 'p-naveen', name: 'Naveen Reddy' }, { id: 'p-tarun', name: 'Tarun Bhat' },
+  { id: 'p-imran', name: 'Imran Sheikh' }, { id: 'p-bh-c1', name: 'Karan Bose' },
+  { id: 'p-bh-c2', name: 'Ajay Kamath' }, { id: 'p-bh-c3', name: 'Vivek Anand' },
 ];
 const GREEN: P[] = [
   { id: 'p-gh-1', name: 'Rahul Gupta' }, { id: 'p-gh-2', name: 'Vikas Shetty' },

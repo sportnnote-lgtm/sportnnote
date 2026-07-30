@@ -14,7 +14,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 ## Quick reference
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
-- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v16']` and reload.
+- **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v18']` and reload.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
@@ -29,6 +29,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   voice-typed command box or `__sportfolio*` test hooks. Buttons work normally on device/Chrome.
 
 ---
+
+### 2026-07-30 — Cricket seeds use only match-eligible players · SHIPPED + VERIFIED
+
+Follow-up to the m8 XI seed: the cricket seeds referenced three deliberately-unverified players
+(`VERIFY_BLOCKED = p-farhan, p-tarun, p-gaurav`, kept unverified to showcase eligibility gating), so the
+eligibility filter dropped Farhan from Red's "yet to bat" (showed 2 instead of 3) and surfaced blocked
+players as Blue bowlers. Reconciled the seeds to use only eligible players.
+
+- **What changed:** added three eligible Blue House cricket players (`p-bh-c1` Karan Bose, `p-bh-c2` Ajay
+  Kamath, `p-bh-c3` Vivek Anand) to the roster; swapped Red's `p-farhan` → `p-rh-3` (Nikhil Shetty) and
+  Blue's `p-gaurav`/`p-naveen`/`p-tarun` → the three new players in the seed batting/bowling arrays. The
+  blocked/pending players stay in the roster (still showcase gating) but no longer appear in any seeded match.
+- **Files:** `src/data/cricketSeed.ts` (RED/BLUE arrays + comment), `src/data/demoStore.ts` (new players;
+  `DEMO_KEY` v17 → v18).
+- **Verified live (demo):** m8 Scorecard "Yet to bat: Manoj Kumar, Deepak Shetty, Nikhil Shetty" (all 3);
+  Blue bowlers Karan Bose / Ajay Kamath / Vivek Anand with matching dismissals (c Ajay Kamath b Karan Bose,
+  c Rahul Dev b Vivek Anand); Info still shows both squads **✓ XI set**. Engine replay confirms 0 blocked-player
+  attributions and 0 blocked squad members across all cricket seeds. 77 tests, typecheck clean, console clean.
 
 ### 2026-07-27 — Live cricket (m8) ships a matchday XI ("✓ XI set") · SHIPPED + VERIFIED
 

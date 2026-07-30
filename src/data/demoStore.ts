@@ -124,6 +124,11 @@ const players: Player[] = [
   { id: 'p-gaurav', fullName: 'Gaurav Joshi', jerseyNo: 18, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-naveen', fullName: 'Naveen Reddy', jerseyNo: 7, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-tarun', fullName: 'Tarun Bhat', jerseyNo: 8, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  // Three more Blue House cricketers so the cricket seeds field a full 8 of eligible
+  // players (Gaurav/Tarun are intentionally unverified, Naveen is pending review).
+  { id: 'p-bh-c1', fullName: 'Karan Bose', jerseyNo: 3, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  { id: 'p-bh-c2', fullName: 'Ajay Kamath', jerseyNo: 5, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  { id: 'p-bh-c3', fullName: 'Vivek Anand', jerseyNo: 9, sports: ['cricket'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
 
   // ---- Squad depth: full multi-sport squads for every Greenwood house, so each
   // house fields a real team in every sport — enough for substitutions, impact
@@ -656,7 +661,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v17'; // v17: live cricket fixture (m8) ships a matchday XI ("✓ XI set")
+const DEMO_KEY = 'sportfolio.demo.v18'; // v18: cricket seeds use only match-eligible players (no verify-blocked/pending)
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
