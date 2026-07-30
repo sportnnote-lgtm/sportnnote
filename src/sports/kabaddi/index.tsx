@@ -78,7 +78,10 @@ export function currentMinute(s: KabaddiState): number {
   const hm = s.halfMinutes, et = s.extraTimeMinutes;
   const base = s.half === 1 ? 0 : s.half === 2 ? hm : s.half === 3 ? 2 * hm : 2 * hm + et;
   if (!s.startedAt) return base;
-  return base + Math.floor((Date.now() - s.startedAt) / 60000);
+  // Hold at the half's end instead of drifting past it (the manual clock never
+  // auto-ends a half).
+  const cap = base + (s.half <= 2 ? hm : et);
+  return Math.min(base + Math.floor((Date.now() - s.startedAt) / 60000), cap);
 }
 
 const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {

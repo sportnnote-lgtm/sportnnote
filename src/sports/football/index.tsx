@@ -167,11 +167,15 @@ const startOffset = (s: FootballState): number => {
   return s.half === 1 ? 0 : s.half === 2 ? hm : s.half === 3 ? 2 * hm : 2 * hm + et;
 };
 
-/** Live match minute, derived from the running clock. Safe to call in UI. */
+/** Live match minute, derived from the running clock. Safe to call in UI.
+ *  Holds at the half's regulation end + any signalled added time rather than
+ *  drifting past it — the manual clock never auto-ends a half, so otherwise a
+ *  long-open tab reads "90+59'". Signalling added time (SET_STOPPAGE) extends it. */
 export function currentMinute(s: FootballState): number {
   const base = startOffset(s);
   if (!s.startedAt) return base;
-  return base + Math.floor((Date.now() - s.startedAt) / 60000);
+  const raw = base + Math.floor((Date.now() - s.startedAt) / 60000);
+  return Math.min(raw, halfBase(s) + s.stoppage[s.half]);
 }
 
 /** The regulation end-of-half minute (45 / 90 / 105 / 120). Base for "+x" display. */
@@ -193,9 +197,11 @@ export function clockLabel(s: FootballState): string {
 export function clockTime(s: FootballState): string {
   const base = startOffset(s);
   const elapsedSec = s.startedAt ? Math.max(0, Math.floor((Date.now() - s.startedAt) / 1000)) : 0;
-  const totalMin = base + Math.floor(elapsedSec / 60);
-  const ss = String(elapsedSec % 60).padStart(2, '0');
   const bMin = halfBase(s);
+  // Cap at the half's regulation end + signalled added time (see currentMinute).
+  const totalSec = Math.min(base * 60 + elapsedSec, (bMin + s.stoppage[s.half]) * 60);
+  const totalMin = Math.floor(totalSec / 60);
+  const ss = String(totalSec % 60).padStart(2, '0');
   return totalMin > bMin ? `${bMin}+${totalMin - bMin}:${ss}` : `${totalMin}:${ss}`;
 }
 

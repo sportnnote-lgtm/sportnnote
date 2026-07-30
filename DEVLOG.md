@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Live clock: hold at the period end instead of drifting · SHIPPED + VERIFIED
+
+The backlog item flagged repeatedly during the live-match reviews: the header clock counts from
+`Date.now() − startedAt` with no cap, and the manual clock never auto-ends a period — so a long-open tab read
+absurd values ("Q1 · 65'", "90+7:15" and climbing). Fixed by capping the derived minute at the period's end.
+
+- **What changed:** the pure `currentMinute` in **basketball** (cap at `periodMinutes`, or `overtimeMinutes`
+  in OT), **kabaddi** (cap at the half's end), and **football** (cap at `halfBase + stoppage[half]`), plus
+  football's seconds display `clockTime` (same cap). The clock now ticks normally through the period, then
+  **holds** at regulation-end; in football, signalling added time (the existing `SET_STOPPAGE` "+N" buttons)
+  extends the cap to `90+N`, so it stays coherent with real injury time. Cricket is unaffected (its clock is
+  overs, replayed from the log). Also caps the minute stamped on any new event, so a basket/goal logged after
+  time can't land at "65'".
+- **Files:** `src/sports/basketball/index.tsx`, `src/sports/kabaddi/index.tsx`, `src/sports/football/index.tsx`.
+- **Verified:** a node check of the exact capped expressions (basketball 65'→10', OT→5'; kabaddi 40'→40';
+  football 90'/90+3'; `clockTime` "90:00"/"90+3:00"/"33:20"). **Live:** the kc3 football clock, which had
+  drifted past 90+7 earlier, now holds at **90:00** (HMR, no reload); basketball cg7 renders a clean "Q1 · 8'"
+  on load and holds at the cap once elapsed passes 10'. 84 tests, typecheck, console all clean. No `DEMO_KEY`
+  bump (code-only).
+- **Note:** this is the pragmatic display fix (bounded, honest — the scorer still ends/advances the period);
+  a full auto-advancing match engine remains a larger, separate follow-up.
+
 ### 2026-07-30 — Cup final (kc3) Lineups: named bench · SHIPPED + VERIFIED
 
 Reviewing the Falcons vs City Strikers Lineups tab (after the full-XI expansion): both 4-3-3 pitches rendered

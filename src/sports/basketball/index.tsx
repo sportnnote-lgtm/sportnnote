@@ -75,7 +75,10 @@ export const inBonus = (s: BasketballState, side: 'home' | 'away'): boolean =>
 
 export function currentMinute(s: BasketballState): number {
   if (!s.startedAt) return 0;
-  return Math.floor((Date.now() - s.startedAt) / 60000);
+  // Hold at the period length rather than drift past it: the manual clock never
+  // auto-ends a quarter, so without the cap a long-open tab reads "Q1 · 65'".
+  const cap = s.quarter <= s.regPeriods ? s.periodMinutes : s.overtimeMinutes;
+  return Math.min(Math.floor((Date.now() - s.startedAt) / 60000), cap);
 }
 
 const push = (s: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, quarter: number): BasketballState => ({
