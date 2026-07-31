@@ -17,6 +17,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { basketballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
+import { LineScoreboard } from '../../components/LineScoreboard';
 
 export interface BasketballState {
   home: number;
@@ -427,6 +428,26 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
   );
 };
 
+/** Broadcast-style board: the TOTAL score + a column of points per quarter, the
+ *  live quarter highlighted — the line score TV graphics show. */
+const BasketballScoreboard: NonNullable<SportPlugin<BasketballState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+  const s = state as BasketballState;
+  const nQ = Math.max(1, s.quarter);
+  const columns = Array.from({ length: nQ }, (_, i) => ({ label: periodLabel(i + 1, s.regPeriods), highlight: !s.ended && i + 1 === s.quarter }));
+  const pts = (side: 'home' | 'away', q: number) =>
+    s.events.filter((e) => e.type === 'score' && e.side === side && e.quarter === q).reduce((a, e) => a + (e.points ?? 0), 0);
+  return (
+    <LineScoreboard
+      live={live}
+      clock={<LiveClock state={s} />}
+      leadLabel="TOTAL"
+      columns={columns}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.home), cells: columns.map((_, i) => String(pts('home', i + 1))) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.away), cells: columns.map((_, i) => String(pts('away', i + 1))) }}
+    />
+  );
+};
+
 export const basketballPlugin: SportPlugin<BasketballState> = {
   id: 'basketball',
   name: 'Basketball',
@@ -435,6 +456,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  Scoreboard: BasketballScoreboard,
   summary: (s) => ({
     homeScore: String(s.home),
     awayScore: String(s.away),

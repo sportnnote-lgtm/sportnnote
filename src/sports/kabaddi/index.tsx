@@ -13,6 +13,7 @@ import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { kabaddiVoice } from '../voiceParsers';
+import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
 import { replayRaids, type RaidOutcome, type KabaddiStyle } from './rules';
 
@@ -507,10 +508,32 @@ const LiveExtras: NonNullable<SportPlugin<KabaddiState>['LiveExtras']> = ({ stat
   );
 };
 
+/** Broadcast-style board: the TOTAL score + a column of points per half, the live
+ *  half highlighted. */
+const KabaddiScoreboard: NonNullable<SportPlugin<KabaddiState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+  const s = state as KabaddiState;
+  const nH = Math.max(1, s.half);
+  const shortHalf = (h: number) => (h <= 2 ? `H${h}` : `ET${h - 2}`);
+  const columns = Array.from({ length: nH }, (_, i) => ({ label: shortHalf(i + 1), highlight: !s.ended && i + 1 === s.half }));
+  const pts = (side: 'home' | 'away', h: number) =>
+    s.events.filter((e) => e.side === side && e.half === h && (e.kind === 'raid' || e.kind === 'tackle')).reduce((a, e) => a + (e.points ?? 0), 0);
+  return (
+    <LineScoreboard
+      live={live}
+      clock={<LiveClock state={s} />}
+      leadLabel="TOTAL"
+      columns={columns}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.home), cells: columns.map((_, i) => String(pts('home', i + 1))) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.away), cells: columns.map((_, i) => String(pts('away', i + 1))) }}
+    />
+  );
+};
+
 export const kabaddiPlugin: SportPlugin<KabaddiState> = {
   id: 'kabaddi',
   name: 'Kabaddi',
   icon: '🤼',
+  Scoreboard: KabaddiScoreboard,
   archetype: 'raid',
   createInitialState: init,
   reducer,

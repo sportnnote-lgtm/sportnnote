@@ -18,8 +18,10 @@ export interface LineRow { name: string; color: string; lead: string; cells: str
 export function LineScoreboard({
   status, live, clock, leadLabel, columns, home, away,
 }: {
-  status: string;
+  /** top line (e.g. "Set 2 · best of 3"); omit when passing a `clock` node instead */
+  status?: string;
   live?: boolean;
+  /** a ticking clock node (e.g. a sport's LiveClock) — replaces the status text */
   clock?: React.ReactNode;
   /** header over the emphasized leading column (POINTS/SETS/GAMES/TOTAL) */
   leadLabel: string;
@@ -32,9 +34,12 @@ export function LineScoreboard({
   return (
     <View style={st.wrap}>
       <View style={st.statusRow}>
-        {live ? <View style={st.liveDot} /> : null}
-        <Text style={st.status}>{status}</Text>
-        {clock ? <View style={st.clock}>{clock}</View> : null}
+        {clock ? clock : (
+          <>
+            {live ? <View style={st.liveDot} /> : null}
+            <Text style={st.status}>{status}</Text>
+          </>
+        )}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.grid}>

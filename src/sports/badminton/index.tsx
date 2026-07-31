@@ -14,6 +14,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { courtFormation, makeCourt } from '../courts';
 import { pointVoice } from '../voiceParsers';
 import { BadmintonBoxScore } from './BoxScore';
+import { LineScoreboard } from '../../components/LineScoreboard';
 
 const TARGET = 21;
 const CAP = 30;
@@ -130,6 +131,27 @@ const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ st
   );
 };
 
+/** Broadcast-style board: GAMES won + a column of points per game, the live game
+ *  highlighted — the layout badminton TV graphics use. */
+const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+  const s = state as BadmintonState;
+  const gameNo = s.games.length + 1;
+  const nGames = Math.max(1, s.ended ? s.games.length : gameNo);
+  const columns = Array.from({ length: nGames }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === gameNo }));
+  const cell = (side: 'home' | 'away', i: number) =>
+    i < s.games.length ? String(s.games[i][side === 'home' ? 0 : 1]) : String(s.current[side]);
+  return (
+    <LineScoreboard
+      status={`${s.ended ? 'Match Over' : `Game ${gameNo}`} · best of ${s.gamesToWin * 2 - 1}`}
+      live={live}
+      leadLabel="GAMES"
+      columns={columns}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.gamesWon.home), cells: columns.map((_, i) => cell('home', i)) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.gamesWon.away), cells: columns.map((_, i) => cell('away', i)) }}
+    />
+  );
+};
+
 export const badmintonPlugin: SportPlugin<BadmintonState> = {
   id: 'badminton',
   name: 'Badminton',
@@ -138,6 +160,7 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  Scoreboard: BadmintonScoreboard,
   summary: (s) => ({
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),

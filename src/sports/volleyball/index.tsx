@@ -14,6 +14,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
+import { LineScoreboard } from '../../components/LineScoreboard';
 
 const TARGET = 25;
 const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
@@ -130,6 +131,27 @@ const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ s
   );
 };
 
+/** Broadcast-style board: SETS won + a column of points per set, the live set
+ *  highlighted — the layout volleyball TV graphics use. */
+const VolleyballScoreboard: NonNullable<SportPlugin<VolleyballState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+  const s = state as VolleyballState;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  const nSets = Math.max(1, s.ended ? s.sets.length : setNo);
+  const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
+  const cell = (side: 'home' | 'away', i: number) =>
+    i < s.sets.length ? String(s.sets[i][side === 'home' ? 0 : 1]) : String(s.current[side]);
+  return (
+    <LineScoreboard
+      status={`${s.ended ? 'Match Over' : `Set ${setNo}${isDecider(s) ? ' · Decider' : ''}`} · best of ${s.setsToWin * 2 - 1}`}
+      live={live}
+      leadLabel="SETS"
+      columns={columns}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.setsWon.home), cells: columns.map((_, i) => cell('home', i)) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.setsWon.away), cells: columns.map((_, i) => cell('away', i)) }}
+    />
+  );
+};
+
 export const volleyballPlugin: SportPlugin<VolleyballState> = {
   id: 'volleyball',
   name: 'Volleyball',
@@ -138,6 +160,7 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  Scoreboard: VolleyballScoreboard,
   summary: (s) => ({
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),
