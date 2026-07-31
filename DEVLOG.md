@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Summary tab match header (shared `MatchHeader` component) · SHIPPED + VERIFIED
+
+Give the Summary tab the same match-identity header the Info tab got, so both read consistently. Extracted the
+header into a reusable `MatchHeader` component (sport + LIVE/FINAL/UPCOMING chip, then both full team names in
+their colours over colour bars either side of a VS) and used it on both tabs.
+
+- **Files:** new `src/components/MatchHeader.tsx`; `src/screens/LiveScoringScreen.tsx` — Info tab now renders
+  `<MatchHeader/>` (its inline markup + `mh*` styles removed), and the Summary tab renders it in a card above the
+  standouts/ratings. Pure view layer.
+- **Verified live (demo):** cg7 Summary → "🏀 BASKETBALL · ● LIVE", Indiranagar United (orange) VS Koramangala
+  Kings (blue), above the standouts; Info tab still renders the identical header. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab match header: teams-in-colours identity + status chip · SHIPPED + VERIFIED
 
 The Info tab opened with a plain "IND vs BLU" text line beside a small logo. Since the broadcast board already

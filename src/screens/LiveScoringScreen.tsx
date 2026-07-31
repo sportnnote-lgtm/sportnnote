@@ -37,6 +37,7 @@ import { notify } from '../core/notifications';
 import { MatchSummary } from '../components/MatchSummary';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
+import { MatchHeader } from '../components/MatchHeader';
 import type { DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -960,37 +961,14 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {activeTab === 'info' && (
             <View style={{ gap: theme.spacing(3) }}>
               <View style={st.infoCard}>
-                {/* Match-identity header: sport + status, then both teams in their
-                    colours either side of a VS (the score itself lives on the board
-                    above the tabs, so this reads as who's playing, not the score). */}
-                <View style={st.mhTopRow}>
-                  {hasMatch && (
-                    <LogoPicker
-                      logoUrl={meta.logoUrl}
-                      canManage={canManage}
-                      onPick={(uri) => matchId && setMatchLogo(matchId, uri)}
-                      size={36}
-                      placeholder={plugin.icon}
-                      label="Add"
-                    />
-                  )}
-                  <Text style={st.mhSport} numberOfLines={1}>{plugin.icon} {plugin.name}</Text>
-                  <View style={[st.mhStatus, complete ? st.mhStatusFinal : matchLive ? st.mhStatusLive : st.mhStatusSoon]}>
-                    {matchLive ? <View style={st.mhLiveDot} /> : null}
-                    <Text style={[st.mhStatusText, matchLive && { color: '#fff' }]}>{statusLabel}</Text>
-                  </View>
-                </View>
-                <View style={st.mhTeams}>
-                  <View style={st.mhTeam}>
-                    <View style={[st.mhBar, { backgroundColor: homeColor ?? theme.colors.home }]} />
-                    <Text style={[st.mhTeamName, { color: homeColor ?? theme.colors.home }]} numberOfLines={2}>{homeTeamName ?? homeName}</Text>
-                  </View>
-                  <Text style={st.mhVs}>VS</Text>
-                  <View style={st.mhTeam}>
-                    <View style={[st.mhBar, { backgroundColor: awayColor ?? theme.colors.away }]} />
-                    <Text style={[st.mhTeamName, { color: awayColor ?? theme.colors.away }]} numberOfLines={2}>{awayTeamName ?? awayName}</Text>
-                  </View>
-                </View>
+                <MatchHeader
+                  sportIcon={plugin.icon} sportName={plugin.name}
+                  statusLabel={statusLabel} matchLive={matchLive} complete={complete}
+                  homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
+                  homeColor={homeColor} awayColor={awayColor}
+                  hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
+                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                />
                 <InfoRow label="Format" value={formatLine(sport, fmt)} />
                 <InfoRow label="Date" value={dateStr} />
                 <View style={st.infoRow}>
@@ -1040,7 +1018,18 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           )}
 
           {activeTab === 'summary' && (
-            plugin.Summary ? (
+            <View style={{ gap: theme.spacing(3) }}>
+              <View style={st.infoCard}>
+                <MatchHeader
+                  sportIcon={plugin.icon} sportName={plugin.name}
+                  statusLabel={statusLabel} matchLive={matchLive} complete={complete}
+                  homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
+                  homeColor={homeColor} awayColor={awayColor}
+                  hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
+                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                />
+              </View>
+              {plugin.Summary ? (
               <plugin.Summary
                 state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
@@ -1052,7 +1041,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 summary={summary} complete={complete}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
               />
-            )
+              )}
+            </View>
           )}
 
           {noteNode}
@@ -1187,19 +1177,6 @@ const st = StyleSheet.create({
   tabText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   tabTextActive: { color: '#06120D', fontWeight: '800' },
   infoCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4), gap: theme.spacing(2), ...theme.shadow.card },
-  mhTopRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
-  mhSport: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  mhStatus: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill },
-  mhStatusLive: { backgroundColor: theme.colors.danger },
-  mhStatusFinal: { backgroundColor: theme.colors.surfaceAlt },
-  mhStatusSoon: { backgroundColor: theme.colors.surfaceAlt },
-  mhLiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
-  mhStatusText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
-  mhTeams: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(3) },
-  mhTeam: { flex: 1, alignItems: 'center', gap: theme.spacing(2) },
-  mhBar: { width: 40, height: 4, borderRadius: 2 },
-  mhTeamName: { fontSize: theme.font.h3, fontWeight: '900', textAlign: 'center' },
-  mhVs: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', marginHorizontal: theme.spacing(2) },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3) },
   squadHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
