@@ -15,6 +15,7 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 - **Run (web demo):** `npx expo start --web --port 8091` (demo mode = in-memory sample data).
 - **Reset demo to a clean seed:** clear `localStorage['sportfolio.demo.v18']` and reload.
+- **Repo / push:** git lives in `sportfolio/` (the parent `rudy/` dir is NOT a repo). `origin` = **private** GitHub `hrudhaypv-byte/sportfolio` (added 2026-08-01). **Verify the gh account before pushing** — `gh auth status` should show active `hrudhaypv-byte` (not `likhithareddy3399`). Main branch `feat/sport-formats-and-scoring` is **shared with the concurrent "Sportfolio demo screen" session** (it commits cricket work) — check `git log`/`git status` and stage only your own files before committing. Commit/push only when asked.
 - **Primary user we optimize for:** the **organizer / scorer**.
 - **Working rhythm:** propose-then-approve — bring a plan, get the green light, then build + verify in the running app.
 - **Key paths:**
