@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Cricket ball-by-ball uses standard delivery notation · SHIPPED + VERIFIED
+
+Reviewing the live cricket (m8) Scorecard: the card math was all correct (batting 78 = bowling 78, 45 balls =
+7.3 overs, 3 wkts, extras 0, 3 yet-to-bat for 8-a-side), but the **Ball-by-ball** labelled the 6th ball of
+each over "N.0" (e.g. "1.0", "7.0") — because it stamped each delivery with `oversStr(balls)` (overs *bowled*
+after the ball). A cricket fan expects delivery notation `0.1–0.6, 1.1–1.6, …`.
+
+- **What changed:** added `ballStamp(balls, bpo)` to the cricket engine — `⌊(balls-1)/bpo⌋.((balls-1)%bpo)+1`
+  — so the Nth delivery reads over.ball with ball 1–6 (the last ball of an over is "0.6", not "1.0"). Used it
+  for the legal-ball events (runs, byes/leg-byes, wicket-off-delivery) and for wides/no-balls (the ball being
+  re-bowled, `cur.balls+1`). Left `oversStr` for genuine over *counts* (totals, RR, bowling figures) and for
+  the two non-delivery timeline markers (retired hurt, impact player). Events are regenerated on replay, so no
+  seed/`DEMO_KEY` change.
+- **Files:** `src/sports/cricket/engine.ts`, `tests/cricket-seed.test.mts` (+2 tests pinning ballStamp vs the
+  unchanged oversStr).
+- **Verified live (demo):** m8 Ball-by-ball now reads 7.3, 7.2, 7.1, **6.6**, 6.5 … (was …7.1, **7.0**, 6.5);
+  6th balls across the innings read 0.6–6.6. "This over" pills (6·4·0) and all card figures unchanged. 86
+  tests, typecheck, console clean.
+
 ### 2026-07-30 — Matchday-squad status: "Squad set" not "XI set" (size-agnostic) · SHIPPED + VERIFIED
 
 The Info tab's per-team status read **"✓ XI set"** for *every* sport — but "XI" means eleven, so it was wrong

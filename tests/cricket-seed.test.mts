@@ -8,7 +8,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { init, reducer, type CricketState } from '../src/sports/cricket/engine.ts';
+import { init, reducer, ballStamp, oversStr, type CricketState } from '../src/sports/cricket/engine.ts';
 import { CRICKET_MATCH_EVENTS, CRICKET_SEED_EXPECT, CRICKET_LIVE_EVENTS, LIVE } from '../src/data/cricketSeed.ts';
 
 const replay = (events: { type: string; side?: unknown; payload?: unknown }[], config: Record<string, unknown>): CricketState =>
@@ -16,6 +16,22 @@ const replay = (events: { type: string; side?: unknown; payload?: unknown }[], c
     (s, e) => reducer(s, { type: e.type, side: e.side as never, payload: e.payload as never }),
     init(config),
   );
+
+describe('ballStamp uses standard delivery notation (ball 1–6, not N.0)', () => {
+  test('the 6th ball of an over is (over).6, not (over+1).0', () => {
+    assert.equal(ballStamp(1), '0.1');
+    assert.equal(ballStamp(5), '0.5');
+    assert.equal(ballStamp(6), '0.6'); // was "1.0" before the fix
+    assert.equal(ballStamp(7), '1.1');
+    assert.equal(ballStamp(12), '1.6'); // was "2.0"
+    assert.equal(ballStamp(13), '2.1');
+    assert.equal(ballStamp(45), '7.3');
+  });
+  test('oversStr (over counts) is unchanged — 6 balls = 1.0 over', () => {
+    assert.equal(oversStr(6), '1.0');
+    assert.equal(oversStr(45), '7.3');
+  });
+});
 
 describe('completed cricket seeds replay to the right final state', () => {
   for (const e of CRICKET_SEED_EXPECT) {

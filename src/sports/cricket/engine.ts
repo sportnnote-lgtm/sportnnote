@@ -199,7 +199,12 @@ const NO_BOWLER: DismissalKind[] = ['runout', 'retired', 'timedout'];
 /** "Dismissals" that involve no delivery (happen between balls). */
 const NO_DELIVERY: DismissalKind[] = ['retired', 'timedout'];
 
+// Overs bowled, e.g. 6 balls → "1.0" (used for over counts: totals, RR, figures).
 export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.${balls % bpo}`;
+// Delivery notation for ball-by-ball: the Nth ball reads over.ball with ball 1–bpo,
+// so the last ball of an over is "0.6" (not "1.0"). `balls` includes this delivery.
+export const ballStamp = (balls: number, bpo = 6) =>
+  `${Math.floor((balls - 1) / bpo)}.${((balls - 1) % bpo) + 1}`;
 export const runRate = (runs: number, balls: number, bpo = 6) => (balls === 0 ? '0.00' : ((runs / balls) * bpo).toFixed(2));
 const other = (s: 'home' | 'away') => (s === 'home' ? 'away' : 'home');
 
@@ -363,7 +368,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         bowling: bumpBowl({ runs: r, balls: 1 }),
         thisOver: [...baseOver, r === 4 ? '4' : r === 6 ? '6' : String(r)],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat }],
         seq,
       };
       // Strike rotation: odd runs swap ends, and the end of an over swaps ends.
@@ -384,7 +389,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         bowling: bumpBowl({ balls: 1 }),
         thisOver: [...baseOver, (isLeg ? 'lb' : 'b') + (r > 1 ? r : '')],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat }],
         seq,
       };
       return afterLegalBall(next, (r % 2 === 1) !== overEnd);
@@ -443,7 +448,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         dismissals: [...s.dismissals, { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName }],
         thisOver: [...baseOver, completed > 0 ? `${completed}+W` : 'W'],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: oversStr(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat) }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat) }],
         seq,
         ...creaseFor(newBatId, newBatName),
       };
@@ -468,7 +473,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         batting,
         bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }),
         thisOver: [...(s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver), sym],
-        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat }],
         seq,
         freeHit: isNoBall ? true : s.freeHit,
       };
