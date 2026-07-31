@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab format/date/venue rows: icon-led detail list · SHIPPED + VERIFIED
+
+Turned the plain label/value rows into a consistent icon-led detail list, and unified all four through one
+`InfoRow` (the venue/tournament rows were bespoke `View`s before).
+
+- **`InfoRow`** gains an optional leading `icon` and an optional `onPress` (renders the value as a tappable
+  link). Rows: **📋 Format**, **📅 Date**, **📍 Venue** (map link), **🏆 Tournament** (opens the tournament).
+  Values right-aligned and single-line; the venue's 📍 moved from the value into the label icon.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`InfoRow` + the four call sites + styles). Pure view layer.
+- **Verified live (demo):** cg7 Info → 📋 Format · 5-a-side · 5 subs · 5 fouls out, 📅 Date, 📍 Venue (Bengaluru
+  Sports Hub, green link), 🏆 Tournament (Bengaluru City Games 2026 ›). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab live-stream card: connected state vs paste editor · SHIPPED + VERIFIED
 
 The stream card showed a bare text field even when a stream was already set. Gave it two states:

@@ -1044,29 +1044,21 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
                   onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
                 />
-                <InfoRow label="Format" value={formatLine(sport, fmt)} />
-                <InfoRow label="Date" value={dateStr} />
-                <View style={st.infoRow}>
-                  <Text style={textStyles.muted}>Venue</Text>
-                  {meta.venueName ? (
-                    <Text
-                      style={st.venueLink}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${meta.venueName} in maps`}
-                      onPress={() => openVenue(meta.venueName, meta.venueMapsUrl)}
-                    >📍 {meta.venueName}</Text>
-                  ) : <Text style={textStyles.body}>—</Text>}
-                </View>
+                <InfoRow icon="📋" label="Format" value={formatLine(sport, fmt)} />
+                <InfoRow icon="📅" label="Date" value={dateStr} />
+                <InfoRow
+                  icon="📍" label="Venue"
+                  value={meta.venueName ?? '—'}
+                  onPress={meta.venueName ? () => openVenue(meta.venueName, meta.venueMapsUrl) : undefined}
+                  accessibilityLabel={meta.venueName ? `Open ${meta.venueName} in maps` : undefined}
+                />
                 {meta.tournamentName && meta.tournamentId && (
-                  <View style={st.infoRow}>
-                    <Text style={textStyles.muted}>Tournament</Text>
-                    <Text
-                      style={st.venueLink}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${meta.tournamentName}`}
-                      onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}
-                    >{meta.tournamentName} ›</Text>
-                  </View>
+                  <InfoRow
+                    icon="🏆" label="Tournament"
+                    value={`${meta.tournamentName} ›`}
+                    onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}
+                    accessibilityLabel={`Open ${meta.tournamentName}`}
+                  />
                 )}
                 {meta.startsAt && (
                   <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} style={{ marginTop: theme.spacing(2) }} />
@@ -1155,11 +1147,25 @@ function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   return parts.length ? parts.join(' · ') : '—';
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ icon, label, value, onPress, accessibilityLabel }: {
+  icon?: string;
+  label: string;
+  value: string;
+  /** when set, the value renders as a tappable link (venue, tournament) */
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}) {
   return (
     <View style={st.infoRow}>
-      <Text style={textStyles.muted}>{label}</Text>
-      <Text style={textStyles.body}>{value}</Text>
+      <View style={st.infoLabelWrap}>
+        {icon ? <Text style={st.infoIcon}>{icon}</Text> : null}
+        <Text style={textStyles.muted}>{label}</Text>
+      </View>
+      {onPress ? (
+        <Text style={st.venueLink} accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} numberOfLines={1}>{value}</Text>
+      ) : (
+        <Text style={[textStyles.body, st.infoValue]} numberOfLines={1}>{value}</Text>
+      )}
     </View>
   );
 }
@@ -1259,7 +1265,10 @@ const st = StyleSheet.create({
   tabText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   tabTextActive: { color: '#06120D', fontWeight: '800' },
   infoCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4), gap: theme.spacing(2), ...theme.shadow.card },
-  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3) },
+  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3), paddingVertical: theme.spacing(1) },
+  infoLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  infoIcon: { fontSize: 15, width: 18, textAlign: 'center' },
+  infoValue: { flexShrink: 1, textAlign: 'right' },
   squadHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
   venueLink: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
