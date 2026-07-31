@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab live-stream card: connected state vs paste editor · SHIPPED + VERIFIED
+
+The stream card showed a bare text field even when a stream was already set. Gave it two states:
+
+- **Set:** a green **ON** pill in the header, the detected platform (▶️ YouTube / 🟣 Twitch / 🔗 Link) + the
+  link (protocol stripped), "Pinned to the top of this match for everyone watching", and **Change** / **Remove**.
+- **Empty / editing:** the paste editor (link field + Save), with a **Cancel** when editing an existing link.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`streamSettingsCard` + `editingStream` state + styles). View layer.
+- **Verified live (demo):** cg7 Info → empty shows the paste editor; after saving `youtube.com/live/abc123` it
+  shows "● ON · ▶️ YouTube · youtube.com/live/abc123 · Change/Remove"; Remove restores the editor (storage
+  cleared to reset the demo). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab hosts card: avatar rows + count + "you" · SHIPPED + VERIFIED
 
 Brought the shared `HostsCard` in line with the scorer/squad polish: each host row now shows an initials avatar

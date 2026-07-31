@@ -122,6 +122,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [localStarted, setLocalStarted] = useState(false);
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
+  const [editingStream, setEditingStream] = useState(false);
   useEffect(() => { setStreamInput(meta.streamUrl ?? ''); }, [meta.streamUrl]);
   // Per-dispute "add a new name" inputs (reassign to someone not in the system).
   const [newName, setNewName] = useState<Record<string, string>>({});
@@ -758,21 +759,44 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       void setMatchStream(matchId, url);
       setMeta((m) => ({ ...m, streamUrl: url ?? undefined }));
     };
+    const streamUrl = meta.streamUrl;
+    const streamPlatform = streamUrl
+      ? (/(youtube\.com|youtu\.be)/i.test(streamUrl) ? '▶️ YouTube' : /twitch\.tv/i.test(streamUrl) ? '🟣 Twitch' : '🔗 Link')
+      : null;
     const streamSettingsCard = hasMatch && (canScore || canManage) && !complete ? (
       <View style={st.infoCard}>
-        <Text style={textStyles.h3}>📺 Live stream</Text>
-        <Text style={textStyles.muted}>Optional — paste a YouTube or Twitch link and it shows at the top of this match for everyone watching. Leave blank for none.</Text>
-        <TextField
-          label="Stream link"
-          value={streamInput}
-          onChange={setStreamInput}
-          placeholder="youtu.be/… · youtube.com/live/… · twitch.tv/…"
-          autoCapitalize="none"
-        />
-        <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
-          <Button label="Save stream" style={{ flex: 1 }} onPress={() => saveStream(streamInput.trim() || null)} />
-          {!!meta.streamUrl && <Button label="Remove" variant="ghost" onPress={() => { saveStream(null); setStreamInput(''); }} />}
+        <View style={st.streamHead}>
+          <Text style={textStyles.h3}>📺 Live stream</Text>
+          {streamUrl && !editingStream ? <View style={st.streamPill}><View style={st.streamDot} /><Text style={st.streamPillText}>ON</Text></View> : null}
         </View>
+        {streamUrl && !editingStream ? (
+          <>
+            <View style={st.streamRow}>
+              <Text style={st.streamPlatform}>{streamPlatform}</Text>
+              <Text style={[textStyles.muted, { flex: 1 }]} numberOfLines={1}>{streamUrl.replace(/^https?:\/\//, '')}</Text>
+            </View>
+            <Text style={textStyles.muted}>Pinned to the top of this match for everyone watching.</Text>
+            <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
+              <Button label="Change" variant="ghost" style={{ flex: 1 }} onPress={() => setEditingStream(true)} />
+              <Button label="Remove" variant="ghost" onPress={() => { saveStream(null); setStreamInput(''); }} />
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={textStyles.muted}>Optional — paste a YouTube or Twitch link and it shows at the top of this match for everyone watching. Leave blank for none.</Text>
+            <TextField
+              label="Stream link"
+              value={streamInput}
+              onChange={setStreamInput}
+              placeholder="youtu.be/… · youtube.com/live/… · twitch.tv/…"
+              autoCapitalize="none"
+            />
+            <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
+              <Button label="Save stream" style={{ flex: 1 }} onPress={() => { saveStream(streamInput.trim() || null); setEditingStream(false); }} />
+              {streamUrl && editingStream && <Button label="Cancel" variant="ghost" onPress={() => { setStreamInput(streamUrl); setEditingStream(false); }} />}
+            </View>
+          </>
+        )}
       </View>
     ) : null;
 
@@ -1257,6 +1281,12 @@ const st = StyleSheet.create({
   scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
   scorerLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
   scorerLiveText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
+  streamHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  streamPill: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.primary },
+  streamDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#0B0F14' },
+  streamPillText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
+  streamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  streamPlatform: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   scorerPicker: { marginTop: theme.spacing(2), gap: theme.spacing(1) },
   scorerOpt: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   scorerOptText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
