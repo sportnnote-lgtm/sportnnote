@@ -613,18 +613,24 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
   const teamName = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
   const teamColor = (side: 'home' | 'away') => (side === 'home' ? homeColor : awayColor);
 
-  const Award = ({ icon, label, p, detail }: { icon: string; label: string; p?: PlayerRating; detail: string }) =>
-    p ? (
+  const Award = ({ icon, label, p, detail }: { icon: string; label: string; p?: PlayerRating; detail: string }) => {
+    if (!p) return null;
+    const nm = mask.byId(p.id, p.name);
+    return (
       <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(p.id)} style={sum.award}>
-        <Text style={sum.awardIcon}>{icon}</Text>
+        <View style={[sum.awardAvatar, { backgroundColor: teamColor(p.side) }]}>
+          <Text style={sum.awardAvatarText}>{nameInitials(nm)}</Text>
+          <Text style={sum.awardBadge}>{icon}</Text>
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={sum.awardLabel} numberOfLines={1}>{label}</Text>
-          <Text style={sum.awardName} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+          <Text style={sum.awardName} numberOfLines={1}>{nm}</Text>
           <Text style={sum.awardDetail} numberOfLines={1}>{detail} · {teamName(p.side)}</Text>
         </View>
         <Text style={[sum.awardPts, { color: teamColor(p.side) }]} numberOfLines={1}>★{p.rating.toFixed(1)}</Text>
       </TouchableOpacity>
-    ) : null;
+    );
+  };
 
   const batLine = (p: PlayerRating) => { const b = s.batting[p.id]; return b ? `${b.runs} (${b.balls})` : '—'; };
   const bowlLine = (p: PlayerRating) => { const w = s.bowling[p.id]; return w ? `${w.wickets}-${w.runs} (${oversStr(w.balls, s.ballsPerOver)})` : '—'; };
@@ -1077,7 +1083,9 @@ const sum = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
     borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
   },
-  awardIcon: { fontSize: 24 },
+  awardAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  awardAvatarText: { color: '#06120D', fontSize: theme.font.body, fontWeight: '900' },
+  awardBadge: { position: 'absolute', bottom: -5, right: -5, fontSize: 15 },
   awardLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   awardName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   awardDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },

@@ -47,6 +47,20 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket top performers: player avatar + award badge · SHIPPED + VERIFIED
+
+The cricket "Standouts so far" / post-match award cards (`CricketSummary`'s `Award` — Top performer, Top bat,
+Top bowl) still led with a bare 24px emoji, the last award surface on the old language. Matched them to the
+generic `MatchSummary` award pattern (avatar-first with the icon as a corner badge).
+
+- **Change:** each award now leads with a **team-colour initials avatar** (`#06120D` text) and carries its icon
+  (🔥/🏏/🎯 live, 🏅/🏏/🎯 post-match) as a small **corner badge**, instead of a standalone emoji. Label, name,
+  detail line and the ★rating column are unchanged.
+- **Files:** `src/sports/cricket/index.tsx` (`Award` component; `awardAvatar` / `awardAvatarText` / `awardBadge`
+  styles replacing `awardIcon`).
+- **Verified live (demo):** cricket chase Summary → Top performer & Top bat show NK (red) avatars, Top bowl shows
+  KB (blue), each with its corner badge; consistent with the ratings avatars below. View-only. 86 tests, clean.
+
 ### 2026-08-01 — Cricket player ratings: initials avatars + stat detail line · SHIPPED + VERIFIED
 
 The cricket-specific ratings list (`CricketSummary.ratingsBlock`, shared by the live "so far" and post-match
