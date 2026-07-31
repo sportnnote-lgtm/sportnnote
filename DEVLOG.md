@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary ratings note: context-aware, always shown · SHIPPED + VERIFIED
+
+The note under the ratings header only appeared for **live** matches ("Updates live — final ratings lock…"); a
+completed match had no note explaining how the 1–5 ratings are derived. Made it context-aware and shown whenever
+there are ratings.
+
+- **Change:** live → "⏱ Updates live — final ratings lock when the match ends."; completed → "★ Rated 1–5 from
+  each player's recorded stats." (a completed match now gets a "how it's computed" line it lacked).
+- **Files:** `src/components/MatchSummary.tsx` (ratings note branch).
+- **Verified live (demo):** m1 football Summary → "⏱ Updates live — final ratings lock when the match ends."
+  above the ratings list. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary result label: no live dot on upcoming matches · FIX + VERIFIED
 
 Follow-up to the result-label live dot: it keyed off `!complete`, so an *upcoming* match's summary showed a red

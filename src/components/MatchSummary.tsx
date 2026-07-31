@@ -108,8 +108,12 @@ export function MatchSummary({
       )}
 
       <Text style={[textStyles.h3, { marginTop: theme.spacing(1) }]}>{complete ? 'Player ratings · out of 5' : 'Player ratings · so far'}</Text>
-      {!complete && players.length > 0 && (
-        <Text style={st.note}>Updates live — final ratings lock when the match ends.</Text>
+      {players.length > 0 && (
+        <Text style={st.note}>
+          {complete
+            ? '★ Rated 1–5 from each player’s recorded stats.'
+            : '⏱ Updates live — final ratings lock when the match ends.'}
+        </Text>
       )}
       {players.length === 0 ? (
         <EmptyState
