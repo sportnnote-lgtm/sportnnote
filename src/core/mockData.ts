@@ -233,11 +233,12 @@ export const MATCHES: Match[] = [
     state: null,
   },
   {
-    id: 'm10', tournamentId: 't1', sport: 'volleyball', status: 'scheduled',
+    id: 'm10', tournamentId: 't1', sport: 'volleyball', status: 'live',
     startsAt: '2026-06-19T15:00:00',
     venueName: 'Indoor Sports Complex',
     hostIds: ['p-aarav'],
-    scorerId: 'p-aarav', // demo user scores — shows the deciding set drop to 15
+    scorerId: 'p-aarav', // demo user scores — best of 3, Red 1–0 up, set 2 live (replayed from seeded points)
+    score: { home: 19, away: 21 }, // current set (set 2); Red lead 1–0 on sets
     format: { playersPerSide: 6, substitutes: 6, setsToWin: 2, pointsPerSet: 25 },
     homeTeam: team('rh', 'Red House', 'RED', 'volleyball', houses.red),
     awayTeam: team('bh', 'Blue House', 'BLU', 'volleyball', houses.blue),

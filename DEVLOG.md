@@ -30,6 +30,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Volleyball per-set player stats (new box score) + seeded live 2-set match · SHIPPED + VERIFIED
+
+Volleyball was the biggest gap of the per-period sweep: its live view had **no per-player stats at all** — just
+set-score chips and a point log — and there was no live volleyball match to demo. Built the box score from
+scratch (the volleyball analogue of the kabaddi build) and seeded a live match to show it.
+
+- **Data model:** added `set?: number` to the shared `LiveEvent`, and the volleyball reducer now stamps
+  `kind` ('point'|'ace'), `playerName`, `set` and `points` on each scored point (the timeline ignores them; the
+  box score aggregates them). Previously the scorer was only ever kept in the `detail` string.
+- **New `VolleyballBoxScore`** (`src/sports/volleyball/BoxScore.tsx`): **PTS + ACE** per player, one table per
+  side, with an **Overall / Set 1 / Set 2 …** toggle that re-tallies over one set (an ace counts in both columns).
+  Shows once ≥2 sets exist — same rule as basketball/kabaddi. Wired into `LiveExtras` between Sets and the point log.
+- **Seed:** m10 promoted `scheduled` → **live** (still scored by the demo user). New `demo.matchEvents['m10']`
+  from a deterministic generator (`vbEvents`) that replays to exact per-set scores — **Red 25–21 (set 1), Red
+  19–21 (set 2 live)**, Red 1–0 on sets. Points rotate across each six; aces land ~every 5th point *per side*
+  (a first cut put every ace on one team because strict home/away alternation aligned the global counter — fixed
+  to a per-side counter). `M10_SQUADS` + empty lineup registered; `mockData` m10 live + score; `DEMO_KEY` v27→v29.
+- **Files:** `src/sports/liveEvents.ts`, `src/sports/volleyball/index.tsx`, `src/sports/volleyball/BoxScore.tsx`,
+  `src/data/demoStore.ts`, `src/core/mockData.ts`.
+- **Verified live (demo):** m10 (via Live → See all) shows the new stats — Overall Red 44 / Blue 42 (8 aces each,
+  spread unevenly across players), Set 1 = 25/21, Set 2 = 19/21 (sums check on both points and aces). 86 tests,
+  typecheck clean.
+
 ### 2026-07-31 — Cricket per-innings: live 2nd-innings chase seed + viewer-facing chase equation · SHIPPED + VERIFIED
 
 Cricket's per-innings breakdown is structural (two collapsible innings cards, not a toggle) and was already
