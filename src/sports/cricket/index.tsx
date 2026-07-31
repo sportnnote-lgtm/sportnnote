@@ -98,9 +98,18 @@ function SetupPanel({
     setPick(null);
   };
 
-  const side = (key: 'home' | 'away', name: string, roster: Player[]) => (
+  const side = (key: 'home' | 'away', name: string, roster: Player[]) => {
+    const capSet = !!state.captains[key];
+    const kprSet = !!state.keepers[key];
+    const missing = [!capSet && 'captain', !kprSet && 'keeper'].filter(Boolean).join(' & ');
+    return (
     <View style={{ gap: theme.spacing(2) }}>
-      <Text style={ctrl.label}>{name}</Text>
+      <View style={ctrl.setupHead}>
+        <Text style={ctrl.label}>{name}</Text>
+        {capSet && kprSet
+          ? <View style={ctrl.readyTag}><Text style={ctrl.readyTagText}>✓ Ready</Text></View>
+          : <View style={ctrl.needTag}><Text style={ctrl.needTagText}>Need {missing}</Text></View>}
+      </View>
       <View style={ctrl.chips}>
         {roster.map((p) => {
           const tag = roleTag(key, p.id);
@@ -122,7 +131,8 @@ function SetupPanel({
         </View>
       )}
     </View>
-  );
+    );
+  };
   return (
     <View style={ctrl.wktPanel}>
       <Text style={ctrl.label}>🧢 Match setup</Text>
@@ -1052,6 +1062,11 @@ const ctrl = StyleSheet.create({
   hint: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
   roleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
   roleBtn: { paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3) },
+  setupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2) },
+  readyTag: { backgroundColor: theme.colors.primary + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
+  readyTagText: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  needTag: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
+  needTagText: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800' },
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
   soBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
   soTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },

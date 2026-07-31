@@ -47,6 +47,21 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket setup panel: per-side readiness tags · SHIPPED + VERIFIED
+
+The pre-match `SetupPanel` (tap players to assign captain/keeper) told the scorer "both are needed per side to
+begin" but gave **no per-side progress cue** — nothing showed whether a side was done or what it still needed, so
+the scorer had to eyeball the (c)/† chips. Added a status tag per team, in the app's status-tag language.
+
+- **Change:** each side's header now carries a tag — amber **"Need captain & keeper"** → **"Need keeper"** (or
+  "Need captain") as roles fill in, flipping to a green **"✓ Ready"** once both are set. Reactive: it recomputes
+  from `state.captains`/`state.keepers` on every assignment.
+- **Files:** `src/sports/cricket/index.tsx` (`SetupPanel` `side()` — header row + readiness tag; new `setupHead`
+  / `readyTag` / `readyTagText` / `needTag` / `needTagText` styles).
+- **Verified live (demo):** started m9 → both sides "Need captain & keeper"; set RED captain → "Need keeper"; set
+  RED keeper → "✓ READY" (green) while BLU stayed amber. Demo mutated to reach setup, then localStorage cleared to
+  restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket scoring controls: run pad in the batting side's colour · FIX + VERIFIED
 
 The cricket scorer's run buttons (0/1/2/3) were hardcoded `variant="home"`, which is a **fixed blue**
