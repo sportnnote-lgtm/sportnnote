@@ -30,6 +30,41 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Surgical timeline editor ported to the rally sports (volleyball · tennis · badminton) · SHIPPED + VERIFIED
+
+The last open item from the cross-sport backlog: football/basketball/kabaddi had the full **🗓 Correct the
+timeline** editor (remove / edit-in-place / backfill a missed moment), but the rally / running-point sports were
+on step-by-step **Undo** only. Once the per-period sweep gave volleyball/tennis/badminton **player-attributed box
+scores**, a mis-scored or mis-attributed rally 15 points ago could only be fixed by undoing 15 points — so those
+three got the full editor.
+
+- **Why rally sports needed a different mechanism:** football/basketball/kabaddi score is an order-independent
+  sum, so a correction can be one compensating `REMOVE_EVENT`. A rally sport's score is **path-dependent** —
+  removing/inserting one mid-match point shifts every downstream game/set boundary. So corrections here **replay**
+  the corrected point list through the sport's own (tested) pure reducer, which recomputes running score, games/
+  sets and box-score fields from scratch and can't drift. This is the same fold `useLiveMatch.rebuildFromLog`
+  already uses to derive state from the event log — so an edit is just that fold from a cleared state.
+- **How:** new shared `src/sports/rallyEdit.ts` — `pointInputs(events)` reconstructs the exact scoring sequence
+  from the point log (valid because each point event's `side` IS who won the rally in these sports), `replayPoints()`
+  folds it through the reducer, `reconcileStatActions()` emits +/- `STAT_ADJUST` deltas so **player-profile**
+  tallies add up. New shared UI `src/sports/RallyPointEditor.tsx` (remove / edit / insert-at-position). Each plugin
+  reducer got two cases: `EDIT_LOG` (replay a corrected list onto a `clearMatch(s)` that keeps the format) and a
+  no-op `STAT_ADJUST` (the live layer records its stat line; the reducer ignores it, so replay never double-counts).
+- **Event-sourced & durable:** `EDIT_LOG`/`STAT_ADJUST` are appended to the match log like any event, so corrections
+  broadcast to viewers and survive reload — verified below.
+- **Files:** `src/sports/rallyEdit.ts` (new), `src/sports/RallyPointEditor.tsx` (new), `src/sports/volleyball/index.tsx`,
+  `src/sports/tennis/index.tsx`, `src/sports/badminton/index.tsx`, `tests/rally-edit.test.mts` (new, 10 tests).
+- **Verified:** `npm run typecheck` clean; `node --test tests/*.test.mts` → **96/96** (+10 new covering replay
+  re-derivation of score/sets on remove/insert/edit, match completion via replay, and profile reconciliation deltas).
+  Live (demo, no console errors): **volleyball** m10 — removed a Set-2 point (BLU 21→20), edited a point's winner
+  (BLU→RED, 19-20→20-19, re-attributed to Kiran Rao), inserted a missed point (BLU→20); **reloaded** and the match
+  replayed the edits exactly (Set 2 RED 20–20), proving `EDIT_LOG` persists through `rebuildFromLog`. **Tennis** —
+  scored 3 points (RED 40-0) then removed one → 30-0 (0/15/30/40 game-point replay correct). **Badminton** — scored
+  2 (RED 2) then removed one → 1 (no Ace controls, as configured). Cricket keeps ball-by-ball undo; the other net/
+  serve sports (squash/pickleball/padel) stay on undo. **Cross-sport backlog now complete.**
+
+---
+
 ### 2026-08-01 — Top scoreboard: stop showing the "LIVE" dot on matches that haven't started · SHIPPED + VERIFIED
 
 The top scoreboard node in `LiveScoringScreen` was passed `live={!complete}`. For an **upcoming / scheduled**

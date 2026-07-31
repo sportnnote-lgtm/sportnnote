@@ -15,6 +15,8 @@ import { courtFormation, makeCourt } from '../courts';
 import { pointVoice } from '../voiceParsers';
 import { BadmintonBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
+import { RallyPointEditor } from '../RallyPointEditor';
+import { replayPoints, type PointInput } from '../rallyEdit';
 
 const TARGET = 21;
 const CAP = 30;
@@ -62,7 +64,17 @@ function gameWinner(h: number, a: number, target: number, cap: number, goldenPoi
   return null;
 }
 
+/** Reset the match to 0-0 keeping its format (target/cap/golden-point/games) —
+ *  the clean slate an EDIT_LOG replay rebuilds the corrected point list onto. */
+const clearMatch = (s: BadmintonState): BadmintonState => ({
+  ...s, current: { home: 0, away: 0 }, games: [], gamesWon: { home: 0, away: 0 }, events: [], seq: 0, ended: false,
+});
+
 const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
+  // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
+  // effect); EDIT_LOG replays a corrected point list so the games re-derive.
+  if (a.type === 'STAT_ADJUST') return s;
+  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   if (a.type !== 'POINT' || !a.side || s.ended) return s;
   const who = a.attribution?.playerName;
   const current = { ...s.current, [a.side]: s.current[a.side] + 1 };
@@ -97,13 +109,19 @@ const PointRow = ({ label, roster, side, name, onPoint }: { label: string; roste
   </View>
 );
 
-const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+  const s = state as BadmintonState;
   const point = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
   return (
     <View style={{ gap: theme.spacing(4) }}>
       <PointRow label={`🏸 Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} onPoint={point} />
       <PointRow label={`🏸 Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} onPoint={point} />
+      <RallyPointEditor
+        events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🏸"
+        periodLabel={(e) => `Game ${e.game ?? 1}`}
+      />
     </View>
   );
 };

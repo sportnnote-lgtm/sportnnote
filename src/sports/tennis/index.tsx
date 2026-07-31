@@ -15,6 +15,8 @@ import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { TennisBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
+import { RallyPointEditor } from '../RallyPointEditor';
+import { replayPoints, type PointInput } from '../rallyEdit';
 
 const SETS_TO_WIN = 2;
 
@@ -130,7 +132,17 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   return winSet(s, side, games, events, seq);
 }
 
+/** Reset the match to love-all keeping its format (sets/games/tiebreak rules) —
+ *  the clean slate an EDIT_LOG replay rebuilds the corrected point list onto. */
+const clearMatch = (s: TennisState): TennisState => ({
+  ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, events: [], seq: 0, ended: false,
+});
+
 const reducer = (s: TennisState, a: ScoreAction): TennisState => {
+  // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
+  // effect); EDIT_LOG replays a corrected point list so games/sets re-derive.
+  if (a.type === 'STAT_ADJUST') return s;
+  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   if (s.ended || !a.side) return s;
   if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false);
   if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true);
@@ -148,7 +160,8 @@ const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Playe
   </View>
 );
 
-const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+  const s = state as TennisState;
   const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
     dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
   return (
@@ -157,6 +170,11 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ dispatch
       <Row label={`🎾 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
       <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
       <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
+      <RallyPointEditor
+        events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾"
+        periodLabel={(e) => `Set ${e.set ?? 1}`}
+      />
     </View>
   );
 };
