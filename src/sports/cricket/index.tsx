@@ -625,6 +625,14 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
 
   const batLine = (p: PlayerRating) => { const b = s.batting[p.id]; return b ? `${b.runs} (${b.balls})` : '—'; };
   const bowlLine = (p: PlayerRating) => { const w = s.bowling[p.id]; return w ? `${w.wickets}-${w.runs} (${oversStr(w.balls, s.ballsPerOver)})` : '—'; };
+  // MVP line — only the disciplines the player actually featured in, so a pure
+  // batter reads "30 (17)" not "30 (17) · —" (and an all-rounder shows both).
+  const mvpDetail = (p: PlayerRating) => {
+    const parts: string[] = [];
+    if (s.batting[p.id]) parts.push(batLine(p));
+    if (s.bowling[p.id]) parts.push(bowlLine(p));
+    return parts.join(' · ') || '—';
+  };
 
   // Player-ratings list — shared by the live ("so far") and post-match views.
   const ratingsBlock = () => (
@@ -674,7 +682,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
         </View>
 
         <Text style={ctrl.label}>Standouts so far</Text>
-        {mvp && <Award icon="🔥" label="Top performer" p={mvp} detail={`${batLine(mvp)} · ${bowlLine(mvp)}`} />}
+        {mvp && <Award icon="🔥" label="Top performer" p={mvp} detail={mvpDetail(mvp)} />}
         <View style={sum.row}>
           <View style={sum.half}>{bestBat && <Award icon="🏏" label="Top bat" p={bestBat} detail={batLine(bestBat)} />}</View>
           <View style={sum.half}>{bestBowl && <Award icon="🎯" label="Top bowl" p={bestBowl} detail={bowlLine(bestBowl)} />}</View>
@@ -691,7 +699,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={[ctrl.label, { fontSize: theme.font.h3 }]}>🏆 {resultLine(s)}</Text>
 
-      {mvp && <Award icon="🏅" label="Player of the Match" p={mvp} detail={`${batLine(mvp)} · ${bowlLine(mvp)}`} />}
+      {mvp && <Award icon="🏅" label="Player of the Match" p={mvp} detail={mvpDetail(mvp)} />}
       <View style={sum.row}>
         <View style={sum.half}>{bestBat && <Award icon="🏏" label="Best bat" p={bestBat} detail={batLine(bestBat)} />}</View>
         <View style={sum.half}>{bestBowl && <Award icon="🎯" label="Best bowl" p={bestBowl} detail={bowlLine(bestBowl)} />}</View>

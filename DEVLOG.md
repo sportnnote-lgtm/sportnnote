@@ -30,6 +30,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Cricket Summary MVP line drops the "· —" filler · SHIPPED + VERIFIED
+
+Reviewing the live cricket (m8) Summary (the "standouts so far" view): it was otherwise correct — LIVE header,
+top performer/bat/bowl, and the 10 contributing players rated "so far" (yet-to-bat correctly excluded). One
+cosmetic nit: the **Top performer** line read "30 (17) · —" — the "· —" was a placeholder for Aarav's absent
+bowling (the MVP detail hard-joined `batLine · bowlLine`).
+
+- **What changed:** added a `mvpDetail(p)` helper in `CricketSummary` that joins only the disciplines the
+  player actually featured in — a pure batter reads "30 (17)", a bowler "3-20 (4.0)", an all-rounder both.
+  Used for the MVP award in both the live and post-match branches (the per-award Top bat / Top bowl lines were
+  already discipline-specific).
+- **Files:** `src/sports/cricket/index.tsx`.
+- **Verified live (demo):** m8 Summary → "🔥 TOP PERFORMER Aarav Mehta 30 (17) · RED ★5.0" (was "30 (17) · —").
+  Ratings list, headers, everything else unchanged. 86 tests, typecheck, console clean.
+
 ### 2026-07-30 — Cricket ball-by-ball uses standard delivery notation · SHIPPED + VERIFIED
 
 Reviewing the live cricket (m8) Scorecard: the card math was all correct (batting 78 = bowling 78, 45 balls =
