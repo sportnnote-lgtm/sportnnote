@@ -47,6 +47,22 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket player ratings: initials avatars + stat detail line · SHIPPED + VERIFIED
+
+The cricket-specific ratings list (`CricketSummary.ratingsBlock`, shared by the live "so far" and post-match
+views) was the last ratings surface still on the **old** visual language — a plain 10px team-colour `dot` and a
+thin rating **bar** under each name. Brought it in line with the generic `MatchSummary` rows.
+
+- **Change:** each row now leads with a **team-colour initials avatar** (`#06120D` text, matching the app's
+  avatar convention) instead of the dot, and the redundant rating bar (it duplicated the stars + number) is
+  replaced with a **stat detail line** — the player's batting and/or bowling figures via the existing `mvpDetail`
+  (e.g. all-rounder Deepak Shetty reads "13 (7) · 1-6 (1.0)", a pure bowler "2-27 (2.0)"). Rank medals, podium
+  tints and the stars/number column are unchanged.
+- **Files:** `src/sports/cricket/index.tsx` (`ratingsBlock` row; new `nameInitials` helper; `rateAvatar` /
+  `rateAvatarText` / `rateDetail` styles; removed now-unused `dot` / `barTrack` / `barFill`).
+- **Verified live (demo):** cricket chase Summary → ratings rows show NK/KB/DS/SM/IS/SP avatars in team colours
+  with stat lines; Deepak Shetty (all-rounder) shows both disciplines. View-only. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket "This over" dots: contrast fix + dot-ball glyph + over-runs total · FIX + VERIFIED
 
 The over strip's ball dots had a **dark-on-dark contrast bug**: neutral run balls (0–3) used a dark `surfaceAlt`

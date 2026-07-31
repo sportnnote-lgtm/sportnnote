@@ -520,6 +520,9 @@ export interface PlayerRating {
 /** Map raw contribution points to a 1–5 rating (par ≈ 2). */
 const ratingFor = (total: number) => Math.max(1, Math.min(5, Math.round((2 + total / 14) * 2) / 2));
 const stars = (r: number) => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
+/** Up to two initials from a (possibly masked) name, for a rating-row avatar. */
+const nameInitials = (name?: string): string =>
+  (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 /**
  * Rate every player's match contribution (cricket-expert weighting):
@@ -639,13 +642,16 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
     <View style={ctrl.card}>
       {players.map((p, i) => {
         const tier = podiumColor(i);
+        const dispName = mask.byId(p.id, p.name);
         return (
         <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[sum.prow, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && sum.divider]}>
           <RankBadge index={i} width={22} />
-          <View style={[sum.dot, { backgroundColor: teamColor(p.side) }]} />
+          <View style={[sum.rateAvatar, { backgroundColor: teamColor(p.side) }]}>
+            <Text style={sum.rateAvatarText}>{nameInitials(dispName)}</Text>
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
-            <View style={sum.barTrack}><View style={[sum.barFill, { width: `${(p.rating / 5) * 100}%`, backgroundColor: teamColor(p.side) }]} /></View>
+            <Text style={textStyles.body} numberOfLines={1}>{dispName}</Text>
+            <Text style={sum.rateDetail} numberOfLines={1}>{mvpDetail(p)}</Text>
           </View>
           <View style={sum.ratingCol}>
             <Text style={sum.stars} numberOfLines={1}>{stars(p.rating)}</Text>
@@ -1078,10 +1084,10 @@ const sum = StyleSheet.create({
   awardPts: { fontSize: theme.font.h3, fontWeight: '900' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  rateAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rateAvatarText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '900' },
+  rateDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny, marginTop: 1 },
   ratingCol: { alignItems: 'flex-end', minWidth: 64 },
   stars: { color: theme.colors.accent, fontSize: theme.font.tiny },
   total: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', textAlign: 'right' },
-  barTrack: { height: 4, borderRadius: 2, backgroundColor: theme.colors.surfaceAlt, marginTop: 4, overflow: 'hidden' },
-  barFill: { height: 4, borderRadius: 2 },
 });
