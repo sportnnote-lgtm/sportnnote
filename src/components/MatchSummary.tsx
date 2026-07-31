@@ -64,7 +64,10 @@ export function MatchSummary({
 
       {mvp && (
         <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
-          <Text style={st.mvpIcon}>{complete ? '🏅' : '🔥'}</Text>
+          <View style={[st.mvpAvatar, { backgroundColor: teamColor(mvp.side) }]}>
+            <Text style={st.mvpAvatarText}>{initials(mask.byId(mvp.id, mvp.name))}</Text>
+            <Text style={st.mvpBadge}>{complete ? '🏅' : '🔥'}</Text>
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={st.mvpLabel}>{complete ? 'Player of the Match' : 'Top performer'}</Text>
             <Text style={st.mvpName} numberOfLines={1}>{mask.byId(mvp.id, mvp.name)}</Text>
@@ -138,7 +141,9 @@ const st = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
   },
-  mvpIcon: { fontSize: 24 },
+  mvpAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  mvpAvatarText: { color: '#06120D', fontSize: theme.font.body, fontWeight: '900' },
+  mvpBadge: { position: 'absolute', bottom: -5, right: -5, fontSize: 16 },
   mvpLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   mvpName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   mvpDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },

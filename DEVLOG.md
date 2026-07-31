@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary top-performer card: player avatar + award badge · SHIPPED + VERIFIED
+
+The MVP / "Top performer" card led with a plain 🏅/🔥 emoji, not the player — inconsistent with the ratings rows
+now using avatars. Made it a star-player card.
+
+- **Change:** the card now leads with the player's team-coloured **initials avatar**, with the award emoji
+  (🏅 complete · 🔥 live) as a small badge in the avatar's corner. Label / name / stat detail / ★rating unchanged.
+  The stat-award grid below (Top scorer, etc.) keeps its stat icons — those are stat callouts, not person cards.
+- **Files:** `src/components/MatchSummary.tsx` (MVP row + `mvpAvatar`/`mvpAvatarText`/`mvpBadge` styles).
+- **Verified live (demo):** m1 football Summary → TOP PERFORMER = red **AM** avatar with a 🔥 corner badge · Aarav
+  Mehta · 1 goal · ★5.0, above the avatar ratings list. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary player ratings: initials avatars · SHIPPED + VERIFIED
 
 The ratings list was the last person-list still using a tiny team-colour dot; every other list (scorer, hosts,
