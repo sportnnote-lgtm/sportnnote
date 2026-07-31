@@ -47,6 +47,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket final result banner: broadcast result board · SHIPPED + VERIFIED
+
+The **post-match** cricket result was a bare one-liner — `🏆 {resultLine}` — which showed only the margin
+("Won by 14 runs") with **no winning team named and no scores**. (The live in-progress banner had just been given
+a proper broadcast layout; the final view hadn't.) Replaced it with a result board matching the live banner's
+container + the generic `MatchSummary` result treatment.
+
+- **Change:** a **FINAL** tag, then both innings stacked (team name + `runs/wkts` + overs in the team colour), the
+  **winner's row emphasised and the loser's dimmed** (0.45), a 🏆 on the winning row, and a green winner line that
+  **names the side** — "RED won by 14 runs" (or "Match tied" when undecided). Winner side is derived locally
+  (Super Over → chase-succeeded → margin), since `resultLine` only carries the margin phrase.
+- **Files:** `src/sports/cricket/index.tsx` (`CricketSummary` post-match branch; `FinalSide` sub-component;
+  `finalTag` / `finalScoreCol` / `finalSide` / `finalLost` / `finalTeam` / `finalScore` / `finalOvers` /
+  `finalCrown` / `finalWinner` / `drawn` styles).
+- **Verified live (demo):** completed cricket RED 118/5 vs GLD 104/6 → FINAL board with RED emphasised + 🏆, GLD
+  dimmed, "RED won by 14 runs". View-only (opened an already-finished match). 86 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket live result banner: structured broadcast layout · SHIPPED + VERIFIED
 
 The live (in-progress) result banner at the top of the cricket Summary crammed everything into one run-on line —

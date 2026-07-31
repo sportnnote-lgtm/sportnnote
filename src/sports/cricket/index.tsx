@@ -731,9 +731,37 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
     );
   }
 
+  // Who won — so the final banner can name the side and dim the loser's score
+  // (resultLine only carries the margin, e.g. "Won by 26 runs").
+  const winnerSide: 'home' | 'away' | null = (() => {
+    if (s.superOver) return superOverWinner(s.superOver.state);
+    const chase = s.scores[s.battingSide];
+    if (chase.runs >= (s.target ?? Infinity)) return s.battingSide;
+    const margin = s.scores[other(s.battingSide)].runs - chase.runs;
+    return margin === 0 ? null : other(s.battingSide);
+  })();
+  const resultTail = resultLine(s);
+  const FinalSide = ({ side }: { side: 'home' | 'away' }) => (
+    <View style={[sum.finalSide, winnerSide && winnerSide !== side && sum.finalLost]}>
+      <Text style={[sum.finalTeam, { color: teamColor(side) }]} numberOfLines={1}>{teamName(side)}</Text>
+      <Text style={[sum.finalScore, { color: teamColor(side) }]}>{s.scores[side].runs}/{s.scores[side].wickets}</Text>
+      <Text style={sum.finalOvers}>({oversStr(s.scores[side].balls, s.ballsPerOver)})</Text>
+      {winnerSide === side ? <Text style={sum.finalCrown}>🏆</Text> : null}
+    </View>
+  );
+
   return (
     <View style={{ gap: theme.spacing(3) }}>
-      <Text style={[ctrl.label, { fontSize: theme.font.h3 }]}>🏆 {resultLine(s)}</Text>
+      <View style={sum.liveResult}>
+        <Text style={sum.finalTag}>Final</Text>
+        <View style={sum.finalScoreCol}>
+          <FinalSide side="home" />
+          <FinalSide side="away" />
+        </View>
+        {winnerSide
+          ? <Text style={sum.finalWinner}>{teamName(winnerSide)} {resultTail.charAt(0).toLowerCase() + resultTail.slice(1)}</Text>
+          : <Text style={sum.drawn}>{resultTail}</Text>}
+      </View>
 
       {mvp && <Award icon="🏅" label="Player of the Match" p={mvp} detail={mvpDetail(mvp)} />}
       <View style={sum.row}>
@@ -1102,6 +1130,16 @@ const sum = StyleSheet.create({
   chaseNeed: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900' },
   chaseMeta: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 1 },
   liveLine: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', textAlign: 'center' },
+  finalTag: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  finalScoreCol: { alignSelf: 'stretch', gap: theme.spacing(1) },
+  finalSide: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
+  finalLost: { opacity: 0.45 },
+  finalTeam: { fontSize: theme.font.body, fontWeight: '800' },
+  finalScore: { fontSize: theme.font.h2, fontWeight: '900' },
+  finalOvers: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  finalCrown: { fontSize: theme.font.body },
+  finalWinner: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', textAlign: 'center', marginTop: theme.spacing(1) },
+  drawn: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '900', textAlign: 'center', marginTop: theme.spacing(1) },
   award: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
