@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab manager/coach field: person row + reveal-to-edit · SHIPPED + VERIFIED
+
+The manager/coach field (inside each squad card) was an always-open text input for hosts, or a muted "🧑‍💼
+Manager: X" line for viewers. Gave it the scorer/hosts person-row treatment.
+
+- **Set:** an initials-avatar row — "Coach R. Menon · 🧑‍💼 Manager / coach" — with a **Change** link for hosts.
+- **Editing:** Change (or "＋ Add manager / coach" when empty) reveals the labelled text field with a **Done** to
+  collapse back. The reveal is explicit so live-binding the name doesn't flip the row mid-type.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`squadCard` manager block + `editingManager` state + mgr styles).
+  View layer; `setManager` write path unchanged.
+- **Verified live (demo):** m1 Red House squad → person row **CR** · "Coach R. Menon" · Manager / coach · Change;
+  tapping Change revealed the prefilled field + Done. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab scoring-settings card: count + sections + cleaner stepper · SHIPPED + VERIFIED
 
 Polished the football-only scoring-settings card to match the rest of the Info tab.

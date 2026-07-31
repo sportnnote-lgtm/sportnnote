@@ -123,6 +123,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
   const [editingStream, setEditingStream] = useState(false);
+  const [editingManager, setEditingManager] = useState<'home' | 'away' | null>(null);
   useEffect(() => { setStreamInput(meta.streamUrl ?? ''); }, [meta.streamUrl]);
   // Per-dispute "add a new name" inputs (reassign to someone not in the system).
   const [newName, setNewName] = useState<Record<string, string>>({});
@@ -620,14 +621,37 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   </>
                 );
               })()}
-              {/* Manager / coach — fully optional (local games often have none). */}
-              {canManage && matchId ? (
-                <View style={{ marginTop: theme.spacing(2) }}>
-                  <TextField label="Manager / coach (optional)" value={meta.managers?.[sd] ?? ''} onChange={(v) => setManager(sd, v)} placeholder="e.g. L. de la Fuente" />
-                </View>
-              ) : meta.managers?.[sd] ? (
-                <Text style={textStyles.muted}>🧑‍💼 Manager: {meta.managers[sd]}</Text>
-              ) : null}
+              {/* Manager / coach — fully optional (local games often have none).
+                  Set → a person row; managers can reveal the field to change it. */}
+              {(() => {
+                const mgr = meta.managers?.[sd];
+                if (editingManager === sd && canManage && matchId) {
+                  return (
+                    <View style={{ marginTop: theme.spacing(2), gap: theme.spacing(1) }}>
+                      <TextField label="Manager / coach (optional)" value={mgr ?? ''} onChange={(v) => setManager(sd, v)} placeholder="e.g. L. de la Fuente" autoCapitalize="words" />
+                      <Text style={st.editLink} accessibilityRole="button" onPress={() => setEditingManager(null)}>Done</Text>
+                    </View>
+                  );
+                }
+                if (mgr) {
+                  return (
+                    <View style={st.mgrRow}>
+                      <View style={st.mgrAvatar}><Text style={st.mgrAvatarText}>{scorerInitials(mgr)}</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>{mgr}</Text>
+                        <Text style={textStyles.muted}>🧑‍💼 Manager / coach</Text>
+                      </View>
+                      {canManage && matchId && (
+                        <Text style={st.editLink} accessibilityRole="button" onPress={() => setEditingManager(sd)}>Change</Text>
+                      )}
+                    </View>
+                  );
+                }
+                if (canManage && matchId) {
+                  return <Text style={[st.editLink, { marginTop: theme.spacing(2) }]} accessibilityRole="button" onPress={() => setEditingManager(sd)}>＋ Add manager / coach</Text>;
+                }
+                return null;
+              })()}
               {canEditSquad && matchId && <Text style={st.editLink} accessibilityRole="button" onPress={() => editSquad(sd)}>✎ Edit matchday squad</Text>}
               {/* Populate this team right here — the natural place to look. Locked to
                   this side, so there's no Home/Away toggle to get wrong. */}
@@ -1315,6 +1339,9 @@ const st = StyleSheet.create({
   squadBtns: { flexDirection: 'row', gap: theme.spacing(2) },
   scorerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), marginTop: theme.spacing(1) },
   scorerIcon: { fontSize: 16 },
+  mgrRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), marginTop: theme.spacing(2) },
+  mgrAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  mgrAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
   scorerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   scorerAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
   scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
