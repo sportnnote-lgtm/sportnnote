@@ -6,12 +6,17 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, EmptyState, textStyles } from './ui';
 
+/** Up to two initials from a name, for a host avatar. */
+const initials = (name?: string): string =>
+  (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '🤝';
+
 export function HostsCard({
   hostIds,
   nameOf,
   candidates,
   canManage,
   onChange,
+  meId,
   subtitle = 'Hosts can assign the scorer and manage this. Reminders go to all of them.',
 }: {
   hostIds: string[];
@@ -19,6 +24,8 @@ export function HostsCard({
   candidates: { id: string; name: string }[];
   canManage: boolean;
   onChange: (ids: string[]) => void;
+  /** the viewer's player id — their host row is highlighted with "· you" */
+  meId?: string;
   subtitle?: string;
 }) {
   const [adding, setAdding] = useState(false);
@@ -27,7 +34,7 @@ export function HostsCard({
   return (
     <Card style={{ gap: theme.spacing(2) }}>
       <View style={st.head}>
-        <Text style={textStyles.h3}>Hosts</Text>
+        <Text style={textStyles.h3}>Hosts{hostIds.length ? ` · ${hostIds.length}` : ''}</Text>
         {canManage && addable.length > 0 && (
           <Text style={st.link} onPress={() => setAdding((v) => !v)}>{adding ? 'Close' : '+ Add host'}</Text>
         )}
@@ -37,15 +44,20 @@ export function HostsCard({
       {hostIds.length === 0 ? (
         <EmptyState icon="🤝" title="No hosts yet" compact />
       ) : (
-        hostIds.map((id) => (
-          <View key={id} style={st.row}>
-            <Text style={st.icon}>🧑‍💼</Text>
-            <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(id) ?? 'Host'}</Text>
-            {canManage && hostIds.length > 1 && (
-              <Text style={st.remove} onPress={() => onChange(hostIds.filter((h) => h !== id))}>Remove</Text>
-            )}
-          </View>
-        ))
+        hostIds.map((id) => {
+          const me = !!meId && id === meId;
+          return (
+            <View key={id} style={st.row}>
+              <View style={[st.avatar, me && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}>
+                <Text style={[st.avatarText, me && { color: '#0B0F14' }]}>{initials(nameOf(id))}</Text>
+              </View>
+              <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(id) ?? 'Host'}{me ? ' · you' : ''}</Text>
+              {canManage && hostIds.length > 1 && (
+                <Text style={st.remove} onPress={() => onChange(hostIds.filter((h) => h !== id))}>Remove</Text>
+              )}
+            </View>
+          );
+        })
       )}
 
       {canManage && adding && (
@@ -73,7 +85,8 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
-  icon: { fontSize: 16 },
+  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
   remove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   picker: { gap: theme.spacing(1) },
   opt: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },

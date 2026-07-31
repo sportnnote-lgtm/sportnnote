@@ -1059,6 +1059,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   candidates={scorerCandidates.map((p) => ({ id: p.id, name: p.fullName }))}
                   canManage={canManage}
                   onChange={setHosts}
+                  meId={myPlayerId ?? undefined}
                   subtitle="Hosts for this game (in addition to the tournament's hosts). Reminders to assign a scorer go to all of them."
                 />
               )}

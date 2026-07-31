@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab hosts card: avatar rows + count + "you" · SHIPPED + VERIFIED
+
+Brought the shared `HostsCard` in line with the scorer/squad polish: each host row now shows an initials avatar
+instead of the generic 🧑‍💼, the header carries a count ("Hosts · 1"), and the viewer's own row is highlighted
+(green avatar + "· you") via a new optional `meId` prop. Add-host picker and Remove are unchanged.
+
+- **Files:** `src/components/HostsCard.tsx` (avatar rows + count + `initials` helper + `meId`);
+  `src/screens/LiveScoringScreen.tsx` passes `meId={myPlayerId}`. The component is also used on the tournament
+  screen, which omits `meId` → neutral avatars + count there too. Pure view layer.
+- **Verified live (demo):** cg7 Info → "Hosts · 1", green **AM** avatar · "Aarav Mehta · you" (Aarav is the
+  viewer and the sole host). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab scorer card: person row with avatar + live state · SHIPPED + VERIFIED
 
 Polished the "Match scorer" card from an icon + name line into a person row consistent with the squad sheet.
