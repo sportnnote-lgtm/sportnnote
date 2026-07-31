@@ -295,7 +295,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     [L.captainId, L.viceCaptainId]
       .filter((x): x is string => !!x)
       .forEach((pid) =>
-        void notify({ title: `📋 Squad needed — ${teamNm}`, body: `Please set your matchday XI & subs for ${label}.`, playerId: pid, matchId })
+        void notify({ title: `📋 Squad needed — ${teamNm}`, body: `Please set your matchday squad for ${label}.`, playerId: pid, matchId })
       );
   };
 
@@ -539,11 +539,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const hasCaptain = !!(L.captainId || L.viceCaptainId);
       return (
         <View style={st.infoCard}>
-          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'XI set' : 'XI not set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? null : sd)}>
+          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? null : sd)}>
             <View style={[st.legendDot, { backgroundColor: color }]} />
             <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]}>{sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name}</Text>
             <Text style={[textStyles.muted, { color: set ? theme.colors.primary : theme.colors.textMuted }]}>
-              {set ? '✓ XI set' : 'XI not set'}
+              {set ? '✓ Squad set' : 'Squad to be set'}
             </Text>
             <Text style={st.caret}>{open ? '⌃' : '⌄'}</Text>
           </TouchableOpacity>
@@ -558,8 +558,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {/* Setting the XI is a pre-match task — don't nag once the match is live or done. */}
           {!set && canManage && matchId && meta.status !== 'live' && meta.status !== 'completed' && (
             hasCaptain ? (
-              <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the XI" onPress={() => remindCaptain(sd)}>
-                <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the XI</Text>
+              <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the squad" onPress={() => remindCaptain(sd)}>
+                <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the squad</Text>
               </TouchableOpacity>
             ) : (
               <Text style={textStyles.muted}>No captain set — assign one from the team's squad page to remind them.</Text>

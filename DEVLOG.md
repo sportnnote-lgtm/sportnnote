@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Matchday-squad status: "Squad set" not "XI set" (size-agnostic) · SHIPPED + VERIFIED
+
+The Info tab's per-team status read **"✓ XI set"** for *every* sport — but "XI" means eleven, so it was wrong
+on 7-a-side football, basketball (5), cricket (8), etc. Made it size-agnostic.
+
+- **What changed:** the shared squad-card status in `LiveScoringScreen` now reads **"✓ Squad set"** /
+  **"Squad to be set"** (was "✓ XI set" / "XI not set"); the captain-reminder button now says "…to set the
+  **squad**"; and the two "Squad needed" nudges (`LiveScoringScreen` notify + `reminders.ts`) now say "set
+  your matchday **squad**" instead of "matchday XI & subs". Chose "Squad" over "Team" (it's the matchday
+  selection, matching the "Matchday squads" header) and over "XI" (size-specific). Purely wording; no data
+  change, so no `DEMO_KEY` bump. Stale code comments referencing the old string were updated too.
+- **Files:** `src/screens/LiveScoringScreen.tsx`, `src/data/reminders.ts` (+ comment touch-ups in
+  `demoStore.ts`/`cricketSeed.ts`).
+- **Verified live (demo):** m1 (7-a-side) Info → both teams **"✓ Squad set"**; applies to every sport since
+  it's the shared component. 84 tests, typecheck, console clean.
+- **Note:** the squad/lineup *editor* screens still use "XI" in a few spots (e.g. CricketLineup "become the
+  XI", LineupEditor "not in the XI") — left for a follow-up; this pass covered the live match Info surface the
+  user flagged.
+
 ### 2026-07-30 — m1 rebuilt as a clean 7-v-7 · SHIPPED + VERIFIED
 
 Follow-up to the m1 squads fix: m1 is a **7-a-side** tie but fielded 6/5 on the 11-slot 4-3-3 template, so its

@@ -191,7 +191,7 @@ export function computeDueReminders(
           playerId: pid,
           matchId: m.id,
           title: `📋 Squad needed — ${team.name}`,
-          body: `Set your matchday XI & subs for ${label} — starts ${w.label}.`,
+          body: `Set your matchday squad for ${label} — starts ${w.label}.`,
         });
       }
     }

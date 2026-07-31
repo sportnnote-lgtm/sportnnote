@@ -533,7 +533,7 @@ function seedBasketballLineup(): MatchLineup {
 }
 
 // Matchday squads for the live basketball match (cg7) — the same starting five as
-// the seeded lineup, so the Info tab reads "✓ XI set" like the other live matches.
+// the seeded lineup, so the Info tab reads "✓ Squad set" like the other live matches.
 const CG7_SQUADS: MatchSquads = {
   home: { starters: ['p-ind-1', 'p-ind-3', 'p-ind-5', 'p-ind-2', 'p-ind-4'], subs: [] },
   away: { starters: ['p-kor-1', 'p-kor-3', 'p-kor-5', 'p-kor-2', 'p-kor-4'], subs: [] },
@@ -578,13 +578,13 @@ function seedCupLineup(): MatchLineup {
 
 // Matchday squads for the live house football match (m1) — mirrors seedLineup's
 // fielded XI + the benched player each side has (Harsha/Aman), matching the seeded
-// 30' substitution (Varun → Harsha). Makes Info read "✓ XI set".
+// 30' substitution (Varun → Harsha). Makes Info read "✓ Squad set".
 const M1_SQUADS: MatchSquads = {
   home: { starters: ['p-neil', 'p-rh-3', 'p-rh-1', 'p-rh-6', 'p-rohan', 'p-rh-7', 'p-aarav'], subs: ['p-rh-9'] },
   away: { starters: ['p-maya', 'p-bh-6', 'p-bh-2', 'p-bh-1', 'p-bh-3', 'p-ishaan', 'p-bh-7'], subs: ['p-bh-9'] },
 };
 
-// Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ XI set".
+// Matchday squads for the cup final (kc3) — the seeded XI, so Info reads "✓ Squad set".
 const KC3_SQUADS: MatchSquads = {
   home: { starters: ['p-fal-4', 'p-fal-6', 'p-fal-3', 'p-fal-7', 'p-fal-5', 'p-fal-8', 'p-fal-9', 'p-fal-10', 'p-bpl-aditya', 'p-bpl-rahul', 'p-fal-11'], subs: ['p-fal-12', 'p-fal-13', 'p-fal-14'] },
   away: { starters: ['p-str-3', 'p-str-5', 'p-str-2', 'p-str-6', 'p-str-4', 'p-str-7', 'p-str-8', 'p-str-9', 'p-str-10', 'p-bpl-sameer', 'p-str-11'], subs: ['p-str-12', 'p-str-13', 'p-str-14'] },

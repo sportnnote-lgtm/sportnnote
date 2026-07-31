@@ -287,7 +287,7 @@ function buildLiveInnings(): MatchEventRecord[] {
 /** matchId → replayable event log for the in-progress live cricket fixture. */
 export const CRICKET_LIVE_EVENTS: Record<string, MatchEventRecord[]> = { [LIVE.id]: buildLiveInnings() };
 
-/** Matchday XIs for the live fixture (m8) so its Info reads "✓ XI set" — the 8
+/** Matchday XIs for the live fixture (m8) so its Info reads "✓ Squad set" — the 8
  *  Red/Blue players already in the seeded scorecard, in batting order. */
 export const CRICKET_LIVE_SQUADS: Record<string, MatchSquads> = {
   [LIVE.id]: {
