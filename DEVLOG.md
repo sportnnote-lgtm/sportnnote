@@ -30,6 +30,40 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Top scoreboard: stop showing the "LIVE" dot on matches that haven't started · SHIPPED + VERIFIED
+
+The top scoreboard node in `LiveScoringScreen` was passed `live={!complete}`. For an **upcoming / scheduled**
+match (not started, not complete) `!complete` is `true`, so the top board lit up its red "live" dot / LIVE
+treatment even though play hadn't begun — contradicting the match header, which correctly read **UPCOMING**.
+
+- **Change:** pass `live={matchLive}` instead of `live={!complete}` to the `scoreboardNode`, on **both** branches
+  (the `plugin.Scoreboard` custom board and the generic `<Scoreboard>`). `matchLive` already existed in the
+  component: `const matchLive = !complete && (meta.status === 'live' || started)`. Affects the top board for every sport.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (scoreboardNode, ~L462–468).
+- **Verified:** `npm run typecheck` clean; `node --test tests/*.test.mts` → 86/86 pass. In the running web app
+  (demo): upcoming **Tennis** (custom board) and the match header both read UPCOMING with **no** live dot; live
+  **Basketball** (custom board) and live **Football** (generic board) still show the red ● LIVE dot on the Info-tab
+  top board. Both the `LineScoreboard` and generic `Scoreboard` `live` paths confirmed.
+
+---
+
+### 2026-08-01 — Cricket "This over" dots: contrast fix + dot-ball glyph + over-runs total · FIX + VERIFIED
+
+The over strip's ball dots had a **dark-on-dark contrast bug**: neutral run balls (0–3) used a dark `surfaceAlt`
+fill with near-black `#06120D` text, so those digits were barely legible (only the coloured 4/6/W/extra dots read
+clearly). Fixed and enriched the strip.
+
+- **Change:** neutral dots now use light text (`theme.colors.text`) + a subtle border so 0–3 read clearly, while
+  boundary/wicket/extra dots keep the bright-fill + dark-text convention. A dot ball (`0`) renders as a `·` glyph
+  (cricket convention). Added a running **"N runs"** total after the dots (decoded from the ball symbols via a new
+  `ballRuns` helper — handles `4`/`6`, `2+W`, `wd`, `2nb`, `lb2`, etc.). Also folded byes-with-runs (`2nb`) into
+  the extras colour, which the old check missed.
+- **Files:** `src/sports/cricket/index.tsx` (`LiveExtras` over strip, `ballRuns` helper, `ballDotNeutral` /
+  `ballSymNeutral` / `overRuns` styles).
+- **Verified live (demo):** cricket chase, current over `2 · 4 · 3` → neutral 2/3 render light on bordered dots
+  (computed color `rgb(245,247,250)`), the 4 is dark-on-green, and the strip totals **"9 runs"**. View-only.
+  86 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket scorecard: highlight the batters at the crease + current bowler · SHIPPED + VERIFIED
 
 The batting card only flagged not-out batters with a trailing `*` — nothing showed **who is actually on strike**

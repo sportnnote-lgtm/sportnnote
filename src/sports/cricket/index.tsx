@@ -831,8 +831,19 @@ function InningsCard({
 const overSymbolColor = (sym: string) =>
   sym === 'W' || sym.endsWith('W') ? theme.colors.danger
     : sym === '4' || sym === '6' ? theme.colors.primary
-    : sym === 'wd' || sym === 'nb' || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
+    : sym === 'wd' || sym === 'nb' || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
     : theme.colors.surfaceAlt;
+
+/** Runs conceded on a single ball, decoded from its over-strip symbol
+ *  (e.g. '4'→4, '2+W'→2, 'wd'→1, '2nb'→3, 'lb2'→2, 'W'/'0'→0). */
+const ballRuns = (sym: string): number => {
+  if (sym.endsWith('nb')) return 1 + (parseInt(sym, 10) || 0);
+  if (sym === 'wd') return 1;
+  if (sym.startsWith('lb')) return parseInt(sym.slice(2), 10) || 1;
+  if (sym.startsWith('b')) return parseInt(sym.slice(1), 10) || 1;
+  if (sym.endsWith('W')) return parseInt(sym, 10) || 0;
+  return parseInt(sym, 10) || 0;
+};
 
 const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore }) => {
   const s = state as CricketState;
@@ -850,11 +861,18 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
             {s.thisOver.length === 0 ? (
               <Text style={ctrl.meta}>—</Text>
             ) : (
-              s.thisOver.map((sym, i) => (
-                <View key={i} style={[ctrl.ballDot, { backgroundColor: overSymbolColor(sym) }]}>
-                  <Text style={ctrl.ballSym}>{sym}</Text>
-                </View>
-              ))
+              <>
+                {s.thisOver.map((sym, i) => {
+                  const bg = overSymbolColor(sym);
+                  const neutral = bg === theme.colors.surfaceAlt;
+                  return (
+                    <View key={i} style={[ctrl.ballDot, { backgroundColor: bg }, neutral && ctrl.ballDotNeutral]}>
+                      <Text style={[ctrl.ballSym, neutral && ctrl.ballSymNeutral]}>{sym === '0' ? '·' : sym}</Text>
+                    </View>
+                  );
+                })}
+                <Text style={ctrl.overRuns}>{s.thisOver.reduce((a, x) => a + ballRuns(x), 0)} runs</Text>
+              </>
             )}
           </View>
         )}
@@ -1007,7 +1025,10 @@ const ctrl = StyleSheet.create({
   potm: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   overRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), flexWrap: 'wrap' },
   ballDot: { minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  ballDotNeutral: { borderWidth: 1, borderColor: theme.colors.border },
   ballSym: { color: '#06120D', fontSize: theme.font.tiny, fontWeight: '800' },
+  ballSymNeutral: { color: theme.colors.text },
+  overRuns: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', marginLeft: theme.spacing(1) },
   scTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.spacing(2) },
   // collapsible innings card
   innHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
