@@ -82,6 +82,22 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket Impact Player flow: substitution read-back · SHIPPED + VERIFIED
+
+The Impact Player wizard (who makes way → who comes in) carried the "who's leaving" info only inside the second
+step's prompt text — no persistent cue, unlike the wicket flow and setup panel which now show progress. Gave it a
+matching recap strip.
+
+- **Change:** once the outgoing player is chosen, an **accent-amber** recap strip (matching the ⚡ Impact Player
+  theme, and mirroring the wicket flow's danger-red read-back) shows "⚡ {player} makes way". The second-step
+  prompt is simplified to "Choose the Impact Player coming in" since the recap now carries the name (was "Impact
+  Player coming in for {name}").
+- **Files:** `src/sports/cricket/index.tsx` (`ScoringControls` `impact` branch; `impactRecap` / `impactRecapText`
+  styles).
+- **Verified live (demo):** started m9, full setup, ⚡ Bring in Impact Player — RED → "Who makes way?"; picked
+  Vikram Rao → amber recap "⚡ Vikram Rao makes way" + "Choose the Impact Player coming in". Demo mutated to reach
+  the flow, then localStorage cleared to restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket wicket flow: live dismissal read-back · SHIPPED + VERIFIED
 
 The wicket wizard (dismissal → runs → fielder → batter → next batsman) showed only the current step's prompt —

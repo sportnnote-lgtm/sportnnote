@@ -338,6 +338,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <Text style={ctrl.label}>⚡ Impact Player — {sideName}</Text>
           <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setImpact(null)} />
         </View>
+        {impact.out ? <View style={ctrl.impactRecap}><Text style={ctrl.impactRecapText}>⚡ {impact.out.fullName} makes way</Text></View> : null}
         {!impact.out ? (
           <>
             <Text style={ctrl.meta}>Who makes way? (takes no further part — can't be batting or bowling now)</Text>
@@ -351,7 +352,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           </>
         ) : (
           <>
-            <Text style={ctrl.meta}>Impact Player coming in for {impact.out.fullName}</Text>
+            <Text style={ctrl.meta}>Choose the Impact Player coming in</Text>
             {inOptions.length > 0 ? (
               <View style={ctrl.chips}>
                 {inOptions.map((p) => (
@@ -1080,6 +1081,8 @@ const ctrl = StyleSheet.create({
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
   wktRecap: { backgroundColor: theme.colors.danger + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   wktRecapText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
+  impactRecap: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
+  impactRecapText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   soBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
   soTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },
   soLine: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
