@@ -16,7 +16,7 @@ export interface LineCol { label: string; highlight?: boolean }
 export interface LineRow { name: string; color: string; lead: string; cells: string[] }
 
 export function LineScoreboard({
-  status, live, clock, leadLabel, columns, home, away,
+  status, live, clock, leadLabel, columns, home, away, winner,
 }: {
   /** top line (e.g. "Set 2 · best of 3"); omit when passing a `clock` node instead */
   status?: string;
@@ -29,8 +29,11 @@ export function LineScoreboard({
   columns: LineCol[];
   home: LineRow;
   away: LineRow;
+  /** on a completed match, the winning side — its row gets a 🏆 and the losing row
+   *  dims, so the final board reads as a result */
+  winner?: 'home' | 'away' | null;
 }) {
-  const rows = [home, away];
+  const rows: Array<LineRow & { side: 'home' | 'away' }> = [{ ...home, side: 'home' }, { ...away, side: 'away' }];
   return (
     <View style={st.wrap}>
       <View style={st.statusRow}>
@@ -59,17 +62,24 @@ export function LineScoreboard({
             ))}
           </View>
 
-          {rows.map((r, ri) => (
-            <View key={ri} style={st.row}>
-              <Text style={[st.name, { color: r.color }]} numberOfLines={1}>{r.name}</Text>
-              <View style={st.leadCell}><Text style={st.leadText}>{r.lead}</Text></View>
-              {r.cells.map((cell, ci) => (
-                <View key={ci} style={[st.cell, columns[ci]?.highlight && st.cellHi]}>
-                  <Text style={[st.cellText, columns[ci]?.highlight && st.cellTextHi]}>{cell}</Text>
+          {rows.map((r, ri) => {
+            const won = winner === r.side;
+            const lost = !!winner && !won;
+            return (
+              <View key={ri} style={[st.row, lost && st.rowLost]}>
+                <View style={st.nameRow}>
+                  <Text style={[st.name, { color: r.color }]} numberOfLines={1}>{r.name}</Text>
+                  {won ? <Text style={st.trophy}>🏆</Text> : null}
                 </View>
-              ))}
-            </View>
-          ))}
+                <View style={st.leadCell}><Text style={st.leadText}>{r.lead}</Text></View>
+                {r.cells.map((cell, ci) => (
+                  <View key={ci} style={[st.cell, columns[ci]?.highlight && st.cellHi]}>
+                    <Text style={[st.cellText, columns[ci]?.highlight && st.cellTextHi]}>{cell}</Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
     </View>
@@ -98,7 +108,10 @@ const st = StyleSheet.create({
   colPillText: { color: '#0B0F14', fontSize: theme.font.small, fontWeight: '900' },
 
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(2) },
-  name: { width: 120, fontSize: theme.font.h3, fontWeight: '900' },
+  rowLost: { opacity: 0.55 },
+  nameRow: { width: 120, flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1) },
+  name: { flexShrink: 1, fontSize: theme.font.h3, fontWeight: '900' },
+  trophy: { fontSize: theme.font.small },
   leadCell: { width: 52, height: 40, borderRadius: theme.radius.sm, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   leadText: { color: theme.colors.accent, fontSize: theme.font.h2, fontWeight: '900' },
   cell: { width: CELL, height: 40, alignItems: 'center', justifyContent: 'center' },

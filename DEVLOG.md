@@ -30,6 +30,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Completed-match final scoreboard: broadcast board reads as a result · SHIPPED + VERIFIED
+
+Follow-up to the broadcast boards: make a finished match read as a broadcast FINAL. Two parts —
+
+- **Winner treatment on the line-score board.** `LineScoreboard` gains a `winner` prop: the winning row gets a
+  🏆 and the losing row dims, so a completed match (which renders `plugin.Scoreboard` with `live=false`) reads as
+  a result. Each of the 5 sports passes the winner when `ended`. Tennis also switches its headline from POINTS to
+  **SETS** when ended (the current-game points are 0-0 after match point, so SETS is the number a fan reads).
+- **A completed match that actually shows it.** All the demo's finished matches for these sports were archived
+  (aggregate score only, no log → the plain fallback card). Gave the completed volleyball **m5** (Green 3–1 Red,
+  best of 5) a full event log via the `vbEvents` generator (now roster-parameterised), so it replays to an ended
+  state and renders the broadcast FINAL board — SETS + per-set columns + winner. `M5_SQUADS` + empty lineup added;
+  m5 format set to `setsToWin: 3`; `DEMO_KEY` v31→v32. The archived fallback card (matches with no log) also gets
+  a 🏆 on the winner line for consistency.
+- **Files:** `src/components/LineScoreboard.tsx`, the 5 sport plugins, `src/data/demoStore.ts`,
+  `src/core/mockData.ts`, `src/screens/LiveScoringScreen.tsx` (fallback card).
+- **Verified live (demo):** completed the live volleyball (m10) in-app → board read **MATCH OVER · BEST OF 3**,
+  RED 🏆 [2] 25 25 / BLU [0] 21 21 (loser dimmed) — the exact path m5 uses. Cleared storage to restore the demo.
+  86 tests, typecheck clean.
+
 ### 2026-07-31 — Scoring tab shows the broadcast board (was a one-row MiniScore) · SHIPPED + VERIFIED
 
 Follow-up to the broadcast boards: the scorer's tab still showed the compact one-line MiniScore. On the Scoring

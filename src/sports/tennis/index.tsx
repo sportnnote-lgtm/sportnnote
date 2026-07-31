@@ -193,14 +193,19 @@ const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({
   const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
   const cell = (side: 'home' | 'away', i: number) =>
     i < s.sets.length ? String(s.sets[i][side === 'home' ? 0 : 1]) : String(s.games[side]);
+  // After the match the current-game POINTS are meaningless (0-0), so the headline
+  // becomes SETS won — the result a fan reads off a final board.
+  const winner = s.ended ? (s.setsWon.home > s.setsWon.away ? 'home' : 'away') : undefined;
+  const lead = (side: 'home' | 'away') => (s.ended ? String(s.setsWon[side]) : disp(s, side));
   return (
     <LineScoreboard
       status={`${s.ended ? 'Match Over' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}`} · best of ${s.setsToWin * 2 - 1}`}
       live={live}
-      leadLabel="POINTS"
+      leadLabel={s.ended ? 'SETS' : 'POINTS'}
       columns={columns}
-      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: disp(s, 'home'), cells: columns.map((_, i) => cell('home', i)) }}
-      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: disp(s, 'away'), cells: columns.map((_, i) => cell('away', i)) }}
+      winner={winner}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: lead('home'), cells: columns.map((_, i) => cell('home', i)) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: lead('away'), cells: columns.map((_, i) => cell('away', i)) }}
     />
   );
 };

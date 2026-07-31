@@ -616,6 +616,12 @@ const M12_SQUADS: MatchSquads = {
   away: { starters: ['p-bh-3'], subs: [] },
 };
 
+// The sixes for the completed volleyball match (m5) — the players in its seeded log.
+const M5_SQUADS: MatchSquads = {
+  home: { starters: ['p-diya', 'p-ananya', 'p-gh-3', 'p-gh-6', 'p-gh-9', 'p-gh-10'], subs: [] },
+  away: { starters: ['p-rohan', 'p-sana', 'p-rh-1', 'p-rh-2', 'p-rh-4', 'p-rh-7'], subs: [] },
+};
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -777,7 +783,7 @@ export const demo = {
   // m4 (kabaddi) intentionally has empty lineups — kabaddi's positional court is
   // hidden for now (only 6 kabaddi players per house), so its Score tab shows the
   // timeline + player stats without a half-empty mat.
-  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), m4: { home: [], away: [] }, m10: { home: [], away: [] }, m11: { home: [], away: [] }, m12: { home: [], away: [] }, 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
+  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), m4: { home: [], away: [] }, m10: { home: [], away: [] }, m11: { home: [], away: [] }, m12: { home: [], away: [] }, m5: { home: [], away: [] }, 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table.
    *  The completed cricket fixtures ship a full ball-by-ball log so they replay to
    *  a real, ENDED scorecard, and the live cricket fixture (m8) ships a mid-innings
@@ -785,7 +791,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { m1: M1_SQUADS, m4: M4_SQUADS, m10: M10_SQUADS, m11: M11_SQUADS, m12: M12_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { m1: M1_SQUADS, m4: M4_SQUADS, m10: M10_SQUADS, m11: M11_SQUADS, m12: M12_SQUADS, m5: M5_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -815,7 +821,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v31'; // v31: live tennis singles m12 (2 sets) + per-set player-stats box score
+const DEMO_KEY = 'sportfolio.demo.v32'; // v32: completed volleyball m5 gets a full event log (broadcast FINAL board) + winner treatment
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -904,11 +910,11 @@ const kabPt = (seq: number, type: 'RAID' | 'TACKLE', side: 'home' | 'away', poin
 // an ace — so the per-set box score has real, reproducible data on both teams.
 const VB_HOME: [string, string][] = [['p-rohan', 'Rohan Nair'], ['p-sana', 'Sana Qureshi'], ['p-rh-1', 'Kiran Rao'], ['p-rh-2', 'Aditya Pai'], ['p-rh-4', 'Pooja Hegde'], ['p-rh-7', 'Rakesh Gowda']];
 const VB_AWAY: [string, string][] = [['p-maya', 'Maya Pillai'], ['p-bh-1', 'Faisal Khan'], ['p-bh-2', 'Rohit Pillai'], ['p-bh-4', 'Nisha Rao'], ['p-bh-7', 'Vivek Shenoy'], ['p-bh-9', 'Aman Joshi']];
-function vbEvents(sets: [number, number][]): MatchEventRecord[] {
+function vbEvents(sets: [number, number][], homeRoster = VB_HOME, awayRoster = VB_AWAY): MatchEventRecord[] {
   const out: MatchEventRecord[] = [];
   let seq = 0, hi = 0, ai = 0;
   const emit = (side: 'home' | 'away') => {
-    const roster = side === 'home' ? VB_HOME : VB_AWAY;
+    const roster = side === 'home' ? homeRoster : awayRoster;
     const idx = side === 'home' ? hi++ : ai++; // that side's own running point count
     const [pid, name] = roster[idx % roster.length];
     // Ace ~ every 5th point FOR THAT SIDE (not the global count — else strict
@@ -1077,6 +1083,11 @@ demo.matchEvents['m4'] = [
 // Live volleyball (m10) — Red vs Blue, best of 3. Red took set 1 (25–21); set 2 is
 // live at 19–21, so the per-set player-stats toggle has real data on both sides.
 demo.matchEvents['m10'] = vbEvents([[25, 21], [19, 21]]);
+// Completed volleyball (m5) — Green House beat Red House 3–1 (best of 5). A full
+// event log so the finished match shows the broadcast FINAL board (per-set columns
+// + winner), not just an aggregate card. Sets: 25-20, 23-25, 25-18, 25-22.
+const VB_GREEN: [string, string][] = [['p-diya', 'Diya Rao'], ['p-ananya', 'Ananya Iyer'], ['p-gh-3', 'Sandeep Rao'], ['p-gh-6', 'Girish Naik'], ['p-gh-9', 'Bhavana Rao'], ['p-gh-10', 'Megha Iyer']];
+demo.matchEvents['m5'] = vbEvents([[25, 20], [23, 25], [25, 18], [25, 22]], VB_GREEN, VB_HOME);
 // Live badminton doubles (m11) — Red pair vs Blue pair, best of 3. Red took game 1
 // (21–17); game 2 is live at 14–16, so the per-game player-stats toggle has data.
 demo.matchEvents['m11'] = bmEvents([[21, 17], [14, 16]]);

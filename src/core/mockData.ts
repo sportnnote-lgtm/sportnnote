@@ -204,6 +204,7 @@ export const MATCHES: Match[] = [
   {
     id: 'm5', tournamentId: 't1', sport: 'volleyball', status: 'completed',
     startsAt: '2026-06-14T15:00:00',
+    format: { playersPerSide: 6, setsToWin: 3, pointsPerSet: 25 }, // best of 5 — replays to Green 3–1
     homeTeam: team('gh', 'Green House', 'GRN', 'volleyball', houses.green),
     awayTeam: team('rh', 'Red House', 'RED', 'volleyball', houses.red),
     winner: 'home', score: { home: 3, away: 1 },

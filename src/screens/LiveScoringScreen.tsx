@@ -442,7 +442,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         {meta.winner === 'draw'
           ? 'Match drawn'
           : meta.winner
-          ? `${(meta.winner === 'home' ? homeName : awayName)} won`
+          ? `🏆 ${(meta.winner === 'home' ? homeName : awayName)} won`
           : 'Completed'}
       </Text>
     </View>

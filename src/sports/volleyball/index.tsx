@@ -146,6 +146,7 @@ const VolleyballScoreboard: NonNullable<SportPlugin<VolleyballState>['Scoreboard
       live={live}
       leadLabel="SETS"
       columns={columns}
+      winner={s.ended ? (s.setsWon.home > s.setsWon.away ? 'home' : 'away') : undefined}
       home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.setsWon.home), cells: columns.map((_, i) => cell('home', i)) }}
       away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.setsWon.away), cells: columns.map((_, i) => cell('away', i)) }}
     />

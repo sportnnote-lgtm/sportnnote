@@ -442,6 +442,7 @@ const BasketballScoreboard: NonNullable<SportPlugin<BasketballState>['Scoreboard
       clock={<LiveClock state={s} />}
       leadLabel="TOTAL"
       columns={columns}
+      winner={s.ended ? (s.home >= s.away ? 'home' : 'away') : undefined}
       home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.home), cells: columns.map((_, i) => String(pts('home', i + 1))) }}
       away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.away), cells: columns.map((_, i) => String(pts('away', i + 1))) }}
     />
