@@ -668,7 +668,13 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 }
                 return null;
               })()}
-              {canEditSquad && matchId && <Text style={st.editLink} accessibilityRole="button" onPress={() => editSquad(sd)}>✎ Edit matchday squad</Text>}
+              {canEditSquad && matchId && (
+                <TouchableOpacity style={st.editSquadBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={set ? 'Edit matchday squad' : 'Set matchday squad'} onPress={() => editSquad(sd)}>
+                  <Text style={st.editSquadIcon}>{set ? '✎' : '＋'}</Text>
+                  <Text style={st.editSquadLabel}>{set ? 'Edit matchday squad' : 'Set matchday squad'}</Text>
+                  <Text style={st.editSquadChevron}>›</Text>
+                </TouchableOpacity>
+              )}
               {/* Populate this team right here — the natural place to look. Locked to
                   this side, so there's no Home/Away toggle to get wrong. */}
               {canEditSquad && matchId && meta.homeTeamId && meta.awayTeamId && (
@@ -1386,6 +1392,10 @@ const st = StyleSheet.create({
   lineups: { gap: theme.spacing(3) },
   lineupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  editSquadBtn: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), marginTop: theme.spacing(1) },
+  editSquadIcon: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800' },
+  editSquadLabel: { flex: 1, color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+  editSquadChevron: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   partRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: 1 },
   squadSection: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginTop: theme.spacing(2), marginBottom: theme.spacing(1) },
   jersey: { width: 26, height: 26, borderRadius: 6, borderWidth: 1.5, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },

@@ -30,6 +30,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab edit-squad button: action row + contextual label · SHIPPED + VERIFIED
+
+The "✎ Edit matchday squad" affordance was a thin green text link — easy to miss next to the full-width
+Add-player card. Made it a proper bordered action row (icon · label · ›) matching that card, and gave it a
+contextual label: **Set matchday squad** when the squad is empty (a CTA), **Edit matchday squad** when it's set.
+
+- **Files:** `src/screens/LiveScoringScreen.tsx` (squad-card edit affordance + `editSquadBtn`/`editSquadIcon`/
+  `editSquadLabel`/`editSquadChevron` styles). Pure view layer; `editSquad` navigation unchanged.
+- **Verified live (demo):** cg7 (squad set) → "✎ Edit matchday squad ›"; m7 (squads unset) → "＋ Set matchday
+  squad ›". 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab remind-captain button: sent-state feedback · SHIPPED + VERIFIED
 
 The squad card's "🔔 Remind {captain} to set the squad" button fired the notification silently with no feedback.
