@@ -30,6 +30,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary result label: live dot · SHIPPED + VERIFIED
+
+The result block's top line was plain text — "Live · 1st Half" while live, "Full time" when done. Gave the live
+state the app's red live dot instead of the text prefix.
+
+- **Change:** live → a red dot + the uppercase status ("● 1ST HALF"); completed → the status alone
+  ("FULL TIME"), no dot. Matches the top scoreboard / LIVE-pill cue used everywhere else.
+- **Files:** `src/components/MatchSummary.tsx` (result label row + `resultLabelRow`/`liveDot` styles).
+- **Verified live (demo):** m1 football Summary → "● 1ST HALF" with the red dot above the 2/RED : 1/BLU board.
+  86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary result score: score-over-name per side · SHIPPED + VERIFIED
 
 The result block read "2 · RED · BLU · 1" — both team names squished in the middle, each score far from its team.

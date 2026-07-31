@@ -49,7 +49,10 @@ export function MatchSummary({
     <View style={{ gap: theme.spacing(3) }}>
       {/* Result */}
       <View style={st.result}>
-        <Text style={st.resultLabel}>{complete ? summary.statusLine : `Live · ${summary.statusLine}`}</Text>
+        <View style={st.resultLabelRow}>
+          {!complete ? <View style={st.liveDot} /> : null}
+          <Text style={st.resultLabel}>{summary.statusLine}</Text>
+        </View>
         <View style={st.scoreRow}>
           <View style={[st.side, decided && !homeWon && st.scoreLost]}>
             <Text style={[st.score, { color: homeColor }]}>{summary.homeScore}</Text>
@@ -141,6 +144,8 @@ const st = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
     padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
   },
+  resultLabelRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger },
   resultLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   note: { color: theme.colors.textMuted, fontSize: theme.font.small, marginTop: -theme.spacing(1) },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
