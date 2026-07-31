@@ -15,6 +15,8 @@ interface Item {
   label: string;
   detail: string;
   side: 'home' | 'away';
+  /** outcome accent: goals green, red cards red, yellows amber */
+  tone?: 'boundary' | 'wicket' | 'extra';
 }
 
 function eventItem(e: FootballEvent, homeName: string, awayName: string): Item {
@@ -39,7 +41,8 @@ function eventItem(e: FootballEvent, homeName: string, awayName: string): Item {
       detail = `${e.secondName ?? '—'} ◂ ${who}`;
       break;
   }
-  return { key: `e${e.id}`, minute: e.minute, order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side };
+  const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' ? 'extra' : undefined;
+  return { key: `e${e.id}`, minute: e.minute, order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone };
 }
 
 // Every scored action earns a timeline row — the scorer should see each tap here.
@@ -74,6 +77,7 @@ export function Timeline({
   awayName,
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
+  max = 60,
 }: {
   events: FootballEvent[];
   stats?: StatEvent[];
@@ -81,36 +85,47 @@ export function Timeline({
   awayName: string;
   homeColor?: string;
   awayColor?: string;
+  max?: number;
 }) {
   const mask = useMask();
-  const items: Item[] = [
+  const all: Item[] = [
     ...events.map((e) => eventItem(e, homeName, awayName)),
     ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName)),
   ].sort((a, b) => b.minute - a.minute || b.order - a.order);
+  const items = all.slice(0, max);
+  const hidden = all.length - items.length;
 
-  if (items.length === 0) {
+  if (all.length === 0) {
     return <Text style={st.empty}>No events yet — updates appear here as the match unfolds.</Text>;
   }
   return (
     <View style={st.wrap}>
       {items.map((it, i) => {
-        const color = it.side === 'home' ? homeColor : awayColor;
+        const sideColor = it.side === 'home' ? homeColor : awayColor;
+        // Goals/cards accent the node — and the label for the big ones — over the team colour.
+        const toneColor = it.tone === 'boundary' ? theme.colors.primary : it.tone === 'wicket' ? theme.colors.danger : it.tone === 'extra' ? theme.colors.accent : null;
+        const nodeColor = toneColor ?? sideColor;
+        const latest = i === 0;
         return (
           <View key={it.key} style={st.row}>
-            {/* Timeline spine: a continuous rail with a team-coloured node per event. */}
+            {/* Timeline spine: a continuous rail with a coloured node per event; the
+                newest event's node gets a ring so the eye lands on it first. */}
             <View style={st.rail}>
               <View style={[st.railLine, i === 0 && st.railLineFirst, i === items.length - 1 && st.railLineLast]} />
-              <View style={[st.node, { backgroundColor: color }]} />
+              {latest ? <View style={[st.nodeHalo, { borderColor: nodeColor }]} /> : null}
+              <View style={[st.node, { backgroundColor: nodeColor }]} />
             </View>
-            <Text style={[st.minute, { color }]}>{it.minute}&apos;</Text>
+            <Text style={[st.minute, { color: sideColor }]}>{it.minute}&apos;</Text>
             <Text style={st.icon}>{it.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={st.label}>{it.label}</Text>
+              <Text style={[st.label, (it.tone === 'boundary' || it.tone === 'wicket') && { color: toneColor! }]}>{it.label}</Text>
               <Text style={st.detail}>{mask.text(it.detail)}</Text>
             </View>
+            {latest ? <Text style={st.latestTag}>LATEST</Text> : null}
           </View>
         );
       })}
+      {hidden > 0 ? <Text style={st.moreNote}>＋ {hidden} earlier {hidden === 1 ? 'event' : 'events'}</Text> : null}
     </View>
   );
 }
@@ -129,8 +144,11 @@ const st = StyleSheet.create({
   railLineFirst: { top: '50%' },
   railLineLast: { bottom: '50%' },
   node: { width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.bg },
+  nodeHalo: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 2, opacity: 0.5 },
   minute: { fontSize: theme.font.body, fontWeight: '800', width: 34 },
   icon: { fontSize: 18 },
   label: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   detail: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  latestTag: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
+  moreNote: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', marginTop: theme.spacing(2), marginLeft: theme.spacing(5) },
 });

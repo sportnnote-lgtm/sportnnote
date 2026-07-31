@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Football timeline: LATEST + cap + outcome tones · SHIPPED + VERIFIED
+
+Football's Timeline (its own component, merging events + tracked stats) already used the rail look but lagged the
+others. Brought it fully in line.
+
+- **LATEST** ring + tag on the newest event; a "＋ N earlier events" footer past a 60-row cap (was uncapped).
+- **Outcome tones** (like cricket): goals/own-goals **green** (label too), red cards **red** (label too), yellow
+  cards **amber** node; shots/fouls/subs/etc. keep the team colour.
+- **Files:** `src/sports/football/Timeline.tsx` (`Item.tone`, `eventItem` mapping, render + `nodeHalo`/`latestTag`/
+  `moreNote` styles).
+- **Verified live (demo):** m1 Timeline → "Goal · Rohan Nair" green + newest ringed + **LATEST**; "Yellow card"
+  amber node; shots/subs/fouls team-coloured; no footer (< cap). 86 tests, typecheck clean.
+
+**Timeline sweep complete** — every sport's Score/Timeline feed now shares one rail-and-nodes style with the
+LATEST marker and truncation footer; cricket and football add outcome tones (boundary/goal green, wicket/red-card
+red, extra/yellow amber).
+
 ### 2026-07-31 — Cricket ball-by-ball: outcome-coloured balls · SHIPPED + VERIFIED
 
 Cricket already used the shared `LiveTimeline` (so it got LATEST + the truncation footer), but every ball was
