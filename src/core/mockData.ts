@@ -215,7 +215,7 @@ export const MATCHES: Match[] = [
     venueName: 'Chinnaswamy Stadium',
     hostIds: ['p-aarav', 'p-ishaan'], // co-hosted
     scorerId: 'p-ishaan', // scored on another device — the demo user only views
-    score: { home: 78, away: 0 }, // mid-innings — Red 78/3, Blue yet to bat (replayed from seeded events)
+    score: { home: 118, away: 72 }, // 2nd innings — Red 118/6 (10 ov), Blue chasing 72/3, need 47 off 21 (replayed from seeded events)
     homeTeam: team('rh', 'Red House', 'RED', 'cricket', houses.red),
     awayTeam: team('bh', 'Blue House', 'BLU', 'cricket', houses.blue),
     state: null,

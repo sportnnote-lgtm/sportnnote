@@ -80,17 +80,20 @@ describe('completed cricket seeds replay to the right final state', () => {
   });
 });
 
-describe('live cricket seed replays to a real in-progress state', () => {
+describe('live cricket seed replays to a real in-progress chase', () => {
   const s = replay(CRICKET_LIVE_EVENTS[LIVE.id], { overs: LIVE.overs, playersPerSide: LIVE.players });
 
-  test(`${LIVE.id}: ${LIVE.runs}/${LIVE.wickets}, mid-innings (not ended)`, () => {
+  test(`${LIVE.id}: Red ${LIVE.first.runs}/${LIVE.first.wickets}, Blue chasing ${LIVE.chase.runs}/${LIVE.chase.wickets} (not ended)`, () => {
     assert.equal(s.ended, false, 'live match must not be ended');
-    assert.equal(s.innings, 1, 'still the first innings');
-    assert.equal(s.battingSide, 'home', 'Red batting first');
-    assert.equal(s.scores.home.runs, LIVE.runs, 'home runs');
-    assert.equal(s.scores.home.wickets, LIVE.wickets, 'home wickets');
-    assert.equal(s.scores.home.balls, LIVE.balls, 'balls bowled so far');
-    assert.equal(s.scores.away.balls, 0, 'Blue has not batted');
+    assert.equal(s.innings, 2, 'into the second innings');
+    assert.equal(s.battingSide, 'away', 'Blue chasing');
+    assert.equal(s.scores.home.runs, LIVE.first.runs, 'Red first-innings runs');
+    assert.equal(s.scores.home.wickets, LIVE.first.wickets, 'Red first-innings wickets');
+    assert.equal(s.scores.home.balls, LIVE.overs * LIVE.bpo, 'Red bowled its full overs');
+    assert.equal(s.scores.away.runs, LIVE.chase.runs, 'Blue chase runs');
+    assert.equal(s.scores.away.wickets, LIVE.chase.wickets, 'Blue chase wickets');
+    assert.equal(s.scores.away.balls, LIVE.chase.balls, 'balls faced in the chase');
+    assert.equal(s.target, LIVE.first.runs + 1, 'target = first innings + 1');
   });
 
   test('the current crease and bowler are set for the live view', () => {

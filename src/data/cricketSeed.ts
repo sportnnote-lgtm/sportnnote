@@ -225,24 +225,29 @@ export const CRICKET_SEED_EXPECT = PLANS.map((p) => ({
   awayWkts: p.first.side === 'home' ? p.second.wickets : p.first.wickets,
 }));
 
-// The live demo fixture (m8, Red vs Blue, 10-over t1): Red batting first, part-way
-// through the innings, so the cricket live view opens onto a real in-progress card
-// instead of 0/0.
-export const LIVE = { id: 'm8', runs: 78, wickets: 3, balls: 45, overs: 10, players: 8 };
+// The live demo fixture (m8, Red vs Blue, 10-over t1): Red have posted their full
+// innings and Blue are part-way through the CHASE — so the cricket live view opens
+// onto both a completed innings card AND an in-progress one, plus the 2nd-innings
+// chase UI (target / required rate / "need N off M") that no other live demo shows.
+// Red 118/6 (10 ov); Blue 72/3 (6.3 ov) chasing 119 — need 47 off 21.
+export const LIVE = {
+  id: 'm8', overs: 10, players: 8, bpo: 6,
+  first: { runs: 118, wickets: 6 },          // Red, all 10 overs bowled
+  chase: { runs: 72, wickets: 3, balls: 39 }, // Blue, 6.3 overs into the chase
+};
 
-/** Mirrors buildInnings but sets a bowler per over (so the live view shows the
- *  current bowler), stops mid-over, and pins the current striker/non-striker so
- *  the card shows who's at the crease. */
-function buildLiveInnings(): MatchEventRecord[] {
-  const out: MatchEventRecord[] = [];
-  const bpo = 6;
-  const batters = RED, bowlers = attack(BLUE);
-  const scoringBalls = LIVE.balls - LIVE.wickets;
-  const scores = makeScores(scoringBalls, LIVE.runs);
-  const wicketAt = new Set([12, 24, 33]); // spread, none on an over boundary or the tail
-  let seq = 0;
+/** A partial chase innings for the live fixture: like buildInnings but stops
+ *  mid-innings, sets a bowler per over (so the live view shows the current bowler)
+ *  and pins the current striker/non-striker so the card shows who's at the crease. */
+function buildPartialChase(startSeq: number, out: MatchEventRecord[]): void {
+  const bpo = LIVE.bpo;
+  const batters = BLUE, bowlers = attack(RED);
+  const { runs, wickets, balls: liveBalls } = LIVE.chase;
+  const scores = makeScores(liveBalls - wickets, runs);
+  const wicketAt = new Set([9, 21, 30]); // spread through the chase, none on the last ball
+  let seq = startSeq;
   const push = (type: string, payload: Record<string, unknown>) =>
-    out.push({ seq: ++seq, type, side: 'home', payload, attribution: null });
+    out.push({ seq: ++seq, type, side: 'away', payload, attribution: null });
 
   let strikerPos = 0;
   const crease: P[] = [batters[0], batters[1]];
@@ -255,7 +260,7 @@ function buildLiveInnings(): MatchEventRecord[] {
   let bowler = nextBowler();
   push('SET_BOWLER', { id: bowler.id, name: bowler.name });
 
-  for (let ball = 0; ball < LIVE.balls; ball++) {
+  for (let ball = 0; ball < liveBalls; ball++) {
     if (ballsInOver === bpo) { ballsInOver = 0; bowler = nextBowler(); push('SET_BOWLER', { id: bowler.id, name: bowler.name }); }
     const striker = crease[strikerPos];
     const overEnd = ballsInOver + 1 === bpo;
@@ -281,6 +286,17 @@ function buildLiveInnings(): MatchEventRecord[] {
   // Pin the current crease so the live card shows who's batting now.
   push('SET_STRIKER', { id: crease[strikerPos].id, name: crease[strikerPos].name });
   push('SET_NONSTRIKER', { id: crease[1 - strikerPos].id, name: crease[1 - strikerPos].name });
+}
+
+/** Red bat their full innings (the reducer auto-switches at the 10-over mark),
+ *  then Blue's chase is seeded part-way — a live two-innings scorecard. */
+function buildLiveInnings(): MatchEventRecord[] {
+  const out: MatchEventRecord[] = [];
+  const seq = buildInnings(
+    { side: 'home', batters: RED, bowlers: attack(BLUE), overs: LIVE.overs, ballsPerOver: LIVE.bpo, target: LIVE.first.runs, wickets: LIVE.first.wickets },
+    0, out,
+  );
+  buildPartialChase(seq, out);
   return out;
 }
 

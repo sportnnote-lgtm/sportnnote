@@ -30,6 +30,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Cricket per-innings: live 2nd-innings chase seed + viewer-facing chase equation · SHIPPED + VERIFIED
+
+Cricket's per-innings breakdown is structural (two collapsible innings cards, not a toggle) and was already
+demoable on the **completed** fixtures (ck1/ck2/s6/s7 replay full two-innings cards). But the **live** cricket
+match (m8) was stuck mid-1st-innings, so a reviewer opening the live fixture saw only one populated card and
+never the 2nd-innings chase experience — the same gap the other sports had (only one period of live data).
+
+- **Seed:** m8 is now a live **2nd-innings chase**. Red bat their full 10 overs (the reducer auto-switches at the
+  over limit — t1 cricket is `overs: 10`), then Blue's chase is seeded part-way: **Red 118/6 (10.0) · Blue 72/3
+  (6.3), chasing 119 — need 47 off 21**. Rebuilt `cricketSeed.ts` (`buildLiveInnings` now = full 1st innings via
+  the existing `buildInnings` + a new `buildPartialChase`), updated the seed test to assert the chase state
+  (innings 2, both totals, `target = first + 1`, crease/bowler pinned), m8 score in `mockData.ts`, `DEMO_KEY`
+  v26 → v27.
+- **Fix surfaced by the seed:** the chase equation (target / runs needed / balls left / required rate) only ever
+  rendered inside the **scorer's** controls (Super Over banner, DLS box) — a view-only spectator of a run chase
+  saw none of it. Added it to the live status line in `CricketSummary`: for the 2nd innings the LIVE line now
+  appends `· chasing {target} · need {N} off {M} · RRR {r}`.
+- **Files:** `src/data/cricketSeed.ts`, `src/core/mockData.ts`, `src/sports/cricket/index.tsx`,
+  `tests/cricket-seed.test.mts`.
+- **Verified live (demo):** m8 opens onto a full two-innings scorecard — Red 118/6 (8 batters, dismissals, CRR
+  11.80, 5 bowlers) and Blue 72/3 (Sanjay Menon 30*, "Yet to bat: Karan Bose, Ajay Kamath, Vivek Anand", Red's 5
+  bowlers, Suresh Pillai mid-over 1.3). Summary LIVE line reads "Innings 2 · BLU 72/3 (6.3) · RR 11.08 · chasing
+  119 · need 47 off 21 · RRR 13.43" (math exact). Standouts/ratings span both innings. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Football per-period Stats: hide the toggle until a 2nd period exists · SHIPPED + VERIFIED
 
 Reviewed football's per-period Stats split (the original the basketball/kabaddi ports copied). It was already

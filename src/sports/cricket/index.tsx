@@ -671,9 +671,19 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
     }
     const bat = s.battingSide;
     const inn = s.scores[bat];
+    // In the chase, spell out the equation a spectator wants — target, runs still
+    // needed, balls left and the required rate — which otherwise only ever showed
+    // in the scorer's own controls (Super Over / DLS), never to a view-only viewer.
+    const chaseTail = () => {
+      const runsNeeded = Math.max(0, (s.target ?? 0) - inn.runs);
+      const ballsLeft = Math.max(0, s.oversLimit * s.ballsPerOver - inn.balls);
+      const rrr = ballsLeft > 0 ? (runsNeeded / (ballsLeft / s.ballsPerOver)).toFixed(2) : '—';
+      return ` · chasing ${s.target} · need ${runsNeeded} off ${ballsLeft} · RRR ${rrr}`;
+    };
     const liveLine = s.pendingTie
       ? '🔥 Scores level'
-      : `Innings ${s.innings} · ${teamName(bat)} ${inn.runs}/${inn.wickets} (${oversStr(inn.balls, s.ballsPerOver)}) · RR ${runRate(inn.runs, inn.balls, s.ballsPerOver)}`;
+      : `Innings ${s.innings} · ${teamName(bat)} ${inn.runs}/${inn.wickets} (${oversStr(inn.balls, s.ballsPerOver)}) · RR ${runRate(inn.runs, inn.balls, s.ballsPerOver)}`
+        + (s.innings === 2 && s.target ? chaseTail() : '');
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <View style={sum.liveResult}>
