@@ -30,6 +30,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-30 — Cross-sport stats port (1/2): basketball per-quarter box score · SHIPPED + VERIFIED
+
+Parked-backlog item — port football's per-period Stats split to the other event-log sports. Part 1: basketball.
+Every `BBEvent` already carries `quarter` (incl. backfilled/edited via the scorer), so this is a pure
+view-layer add — the analogue of football's `StatsComparison` Overall/1st-half/2nd-half toggle.
+
+- **What changed:** `BoxScore.tally()` gains a `scope` param ('all' | quarter) that filters events by
+  `e.quarter`; the box score renders an **Overall / Q1 / Q2 … (OT)** chip toggle (SelectChip) that re-tallies
+  over the selected quarter. The toggle only appears once **≥2 periods** exist (a single-quarter game shows the
+  plain box score, unchanged). `LiveExtras` passes the periods played (`periodLabel(i, regPeriods)`), so labels
+  are Q/H/OT-aware. Both team tables share one scope.
+- **Files:** `src/sports/basketball/BoxScore.tsx`, `src/sports/basketball/index.tsx`. View-only — no reducer,
+  no seed, no `DEMO_KEY` bump.
+- **Verified live (demo):** cg7 in Q1 shows **no** toggle (zero disruption to the reviewed tabs). Then via the
+  scorer: End Q1 → Start Q2 → Tej Anand +2 → box score shows **Overall / Q1 / Q2**; Overall = Tej 7 (5+2), Q1 =
+  Tej 5, Q2 = Tej 2 — filtering correct on both teams. Reloaded to restore the Q1 seed. 86 tests, typecheck,
+  console clean.
+- **Next (part 2):** kabaddi — bigger lift (it has no per-player stats table yet), so it needs an aggregator
+  built first, then the same per-half toggle.
+
 ### 2026-07-30 — Cricket Summary MVP line drops the "· —" filler · SHIPPED + VERIFIED
 
 Reviewing the live cricket (m8) Summary (the "standouts so far" view): it was otherwise correct — LIVE header,

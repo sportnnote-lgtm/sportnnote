@@ -1,14 +1,18 @@
 /** Live box score — per-player tallies (PTS/REB/AST/PF) derived from the
- *  play-by-play, one table per team. The basketball analogue of the pitch map. */
-import React from 'react';
+ *  play-by-play, one table per team. The basketball analogue of the pitch map.
+ *  A period toggle (Overall / Q1 / Q2 …) re-tallies over just that quarter — the
+ *  analogue of football's per-half Stats split. */
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
+import { SelectChip } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { BBEvent } from './events';
 
 interface Line { name: string; pts: number; reb: number; ast: number; pf: number }
 
-function tally(events: BBEvent[], side: 'home' | 'away', roster: Player[]): Line[] {
+/** Tally a side's players; `scope` limits to one quarter, or 'all' for the game. */
+export function tally(events: BBEvent[], side: 'home' | 'away', roster: Player[], scope: 'all' | number = 'all'): Line[] {
   const byName = new Map<string, Line>();
   const ensure = (name: string) => {
     if (!byName.has(name)) byName.set(name, { name, pts: 0, reb: 0, ast: 0, pf: 0 });
@@ -17,6 +21,7 @@ function tally(events: BBEvent[], side: 'home' | 'away', roster: Player[]): Line
   roster.forEach((p) => ensure(p.fullName));
   for (const e of events) {
     if (e.side !== side || !e.playerName) continue;
+    if (scope !== 'all' && e.quarter !== scope) continue;
     const l = ensure(e.playerName);
     if (e.type === 'score') l.pts += e.points ?? 0;
     else if (e.type === 'rebound') l.reb += 1;
@@ -63,6 +68,7 @@ export function BoxScore({
   awayRoster = [],
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
+  periods = [],
 }: {
   events: BBEvent[];
   homeName: string;
@@ -71,16 +77,32 @@ export function BoxScore({
   awayRoster?: Player[];
   homeColor?: string;
   awayColor?: string;
+  /** The quarters played so far, e.g. [{value:1,label:'Q1'},…]. The period
+   *  toggle only shows once two or more periods exist (before that, Overall
+   *  and the single quarter are identical). */
+  periods?: { value: number; label: string }[];
 }) {
+  const [scope, setScope] = useState<'all' | number>('all');
+  // Guard against a stale selection if the shown periods shrink (e.g. reload).
+  const active = scope !== 'all' && !periods.some((p) => p.value === scope) ? 'all' : scope;
   return (
     <View style={{ gap: theme.spacing(3) }}>
-      <Table title={homeName} color={homeColor} lines={tally(events, 'home', homeRoster)} />
-      <Table title={awayName} color={awayColor} lines={tally(events, 'away', awayRoster)} />
+      {periods.length >= 2 && (
+        <View style={st.scopeRow}>
+          <SelectChip label="Overall" active={active === 'all'} onPress={() => setScope('all')} />
+          {periods.map((p) => (
+            <SelectChip key={p.value} label={p.label} active={active === p.value} onPress={() => setScope(p.value)} />
+          ))}
+        </View>
+      )}
+      <Table title={homeName} color={homeColor} lines={tally(events, 'home', homeRoster, active)} />
+      <Table title={awayName} color={awayColor} lines={tally(events, 'away', awayRoster, active)} />
     </View>
   );
 }
 
 const st = StyleSheet.create({
+  scopeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   table: {
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
     borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(1),

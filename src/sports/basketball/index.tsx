@@ -415,12 +415,14 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
   awayRoster,
 }) => {
   const s = state as BasketballState;
+  // Periods played so far, for the box score's per-quarter toggle (Q1…, then OT).
+  const periods = Array.from({ length: Math.max(1, s.quarter) }, (_, i) => ({ value: i + 1, label: periodLabel(i + 1, s.regPeriods) }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Play-by-play</Text>
       <Timeline events={s.events} homeColor={homeColor} awayColor={awayColor} />
       <Text style={ctrl.label}>Box score</Text>
-      <BoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+      <BoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} />
     </View>
   );
 };
