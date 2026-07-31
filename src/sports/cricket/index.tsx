@@ -32,20 +32,31 @@ import type { CricketState, DismissalKind, Innings } from './engine';
 /** Shown when a match ends level (or a Super Over round ties): start the (next)
  *  Super Over, or accept the tie and end the match. */
 function SuperOverDecision({
-  rootState, dispatch, homeName, awayName,
+  rootState, dispatch, homeName, awayName, homeColor, awayColor,
 }: {
   rootState: CricketState; dispatch: (a: ScoreAction) => void; homeName: string; awayName: string;
+  homeColor?: string; awayColor?: string;
 }) {
   const so = rootState.superOver;
   const nm = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
-  const level = `${homeName} ${rootState.scores.home.runs}/${rootState.scores.home.wickets}   ·   ${awayName} ${rootState.scores.away.runs}/${rootState.scores.away.wickets}`;
+  const col = (sd: 'home' | 'away') => (sd === 'home' ? (homeColor ?? theme.colors.home) : (awayColor ?? theme.colors.away));
   const tiedRound = !!so && superOverWinner(so.state) === null; // a Super Over that itself tied
   const nextRound = (so?.round ?? 0) + 1;
   const nextFirst = so ? other(so.battingFirst) : rootState.battingSide;
   return (
     <View style={ctrl.wktPanel}>
       <Text style={ctrl.soTitle}>🔥 {tiedRound ? `Super Over ${so!.round} tied!` : 'Scores level — it’s a tie!'}</Text>
-      <Text style={ctrl.meta}>{level}</Text>
+      <View style={ctrl.tieBoard}>
+        <View style={ctrl.tieSide}>
+          <Text style={[ctrl.tieScore, { color: col('home') }]}>{rootState.scores.home.runs}/{rootState.scores.home.wickets}</Text>
+          <Text style={[ctrl.tieName, { color: col('home') }]} numberOfLines={1}>{homeName}</Text>
+        </View>
+        <View style={ctrl.tieTag}><Text style={ctrl.tieTagText}>TIED</Text></View>
+        <View style={ctrl.tieSide}>
+          <Text style={[ctrl.tieScore, { color: col('away') }]}>{rootState.scores.away.runs}/{rootState.scores.away.wickets}</Text>
+          <Text style={[ctrl.tieName, { color: col('away') }]} numberOfLines={1}>{awayName}</Text>
+        </View>
+      </View>
       {!!so && so.history.map((h) => (
         <Text key={h.round} style={ctrl.meta}>Super Over {h.round}: {homeName} {h.home} · {awayName} {h.away} — tied</Text>
       ))}
@@ -164,7 +175,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
   // Regulation ended level (or a Super Over just tied) — offer the tie-breaker.
   if (rootState.pendingTie && !soActive) {
-    return <SuperOverDecision rootState={rootState} dispatch={dispatch} homeName={homeName} awayName={awayName} />;
+    return <SuperOverDecision rootState={rootState} dispatch={dispatch} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />;
   }
 
   const battingName = state.battingSide === 'home' ? homeName : awayName;
@@ -1083,6 +1094,12 @@ const ctrl = StyleSheet.create({
   wktRecapText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   impactRecap: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   impactRecapText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  tieBoard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
+  tieSide: { flex: 1, alignItems: 'center', gap: 2 },
+  tieScore: { fontSize: theme.font.h2, fontWeight: '900' },
+  tieName: { fontSize: theme.font.small, fontWeight: '800' },
+  tieTag: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
+  tieTagText: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
   soBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
   soTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },
   soLine: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },

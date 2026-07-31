@@ -83,6 +83,25 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket Super Over / tie decision: broadcast tie board · SHIPPED + VERIFIED
+
+The tie-break decision panel (`SuperOverDecision`, shown when a regulation match finishes level) rendered the
+level scores as a plain concatenated muted string ("Red House 118/6 · Blue House 118/6") — underwhelming for what
+is the most dramatic moment of a match. Gave it the broadcast result-board treatment the live/final banners use.
+
+- **Change:** the scores now render as a two-column board — each side's `runs/wkts` **in the team colour, score
+  over name** — with a centred amber **TIED** tag between them (mirrors the `MatchSummary`/final-banner
+  `side`/`score`/`name` structure). `SuperOverDecision` now takes `homeColor`/`awayColor` (passed from
+  `ScoringControls`, which already has them). The Super Over history, the "bat first · 1 over · 2 wickets" hint,
+  and the Start-Super-Over / accept-the-tie actions are unchanged.
+- **Files:** `src/sports/cricket/index.tsx` (`SuperOverDecision` props + tie board; call site; `tieBoard` /
+  `tieSide` / `tieScore` / `tieName` / `tieTag` / `tieTagText` styles).
+- **Verified live (demo):** engineered a real tie on m9 — ended innings 1 at 0, then bowled BLU all out for 0
+  (7 wickets) — reaching the panel: "🔥 Scores level — it's a tie!" with **RED 0/0** (red) · **TIED** · **BLU 0/7**
+  (blue). Also re-confirmed the wicket read-back on every dismissal + the all-out confirm path. Demo heavily
+  mutated then localStorage cleared to restore the seed (dev server crashed on rebuild mid-run; restarted via the
+  launch config, seed reloaded clean). 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket Impact Player flow: substitution read-back · SHIPPED + VERIFIED
 
 The Impact Player wizard (who makes way → who comes in) carried the "who's leaving" info only inside the second
