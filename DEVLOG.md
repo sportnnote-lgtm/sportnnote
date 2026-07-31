@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab calendar button: gated to upcoming + countdown hint · SHIPPED + VERIFIED
+
+The "📅 Add to my calendar" button showed for every match with a start time — including live and finished ones,
+where adding to a calendar is pointless. Gated it to **upcoming** matches only (`!started && !complete`) and
+paired it with a countdown.
+
+- **Countdown hint:** "⏱ Starts in 14h" / "in 3 days" / "in 20 min" above the button (accent, computed from
+  `meta.startsAt` vs now), so a scheduled match reads how soon it is at a glance.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`startsIn` computation + gated button + `kickoffHint` style).
+  Pure view layer; `addToCalendar`/`exportToCalendar` unchanged.
+- **Verified live (demo):** scheduled tennis (m7) → "⏱ Starts in 14h" + Add-to-calendar button; live cg7 → the
+  button and hint are gone. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab add-player card: pending count + avatar rows + tags · SHIPPED + VERIFIED
 
 Brought the shared `AddInvitePlayer` card in line with the rest of the Info tab, and seeded a pending invite so

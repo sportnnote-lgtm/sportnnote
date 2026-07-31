@@ -518,6 +518,13 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const scrollTabs = TABS.length > 3;
     const fmt = meta.config ?? {};
     const dateStr = meta.startsAt ? formatDateTime(meta.startsAt, viewerTz) : '—';
+    // Countdown for an upcoming match — "adding to calendar" only makes sense before
+    // kickoff, so the button (and this hint) show only while the match is scheduled.
+    const untilStart = meta.startsAt && !started && !complete ? new Date(meta.startsAt).getTime() - Date.now() : -1;
+    const startsIn = untilStart <= 0 ? null
+      : untilStart < 3_600_000 ? `in ${Math.max(1, Math.round(untilStart / 60_000))} min`
+      : untilStart < 86_400_000 ? `in ${Math.round(untilStart / 3_600_000)}h`
+      : `in ${Math.round(untilStart / 86_400_000)} day${Math.round(untilStart / 86_400_000) === 1 ? '' : 's'}`;
     // Push this match into the viewer's own device calendar. The .ics DTSTART is
     // UTC, so every calendar shows it at the right local time automatically.
     const addToCalendar = () => {
@@ -1101,8 +1108,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                     accessibilityLabel={`Open ${meta.tournamentName}`}
                   />
                 )}
-                {meta.startsAt && (
-                  <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} style={{ marginTop: theme.spacing(2) }} />
+                {meta.startsAt && !started && !complete && (
+                  <View style={{ marginTop: theme.spacing(2), gap: theme.spacing(2) }}>
+                    {startsIn ? <Text style={st.kickoffHint}>⏱ Starts {startsIn}</Text> : null}
+                    <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} />
+                  </View>
                 )}
               </View>
               {disputesCard}
@@ -1323,6 +1333,7 @@ const st = StyleSheet.create({
   infoLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   infoIcon: { fontSize: 15, width: 18, textAlign: 'center' },
   infoValue: { flexShrink: 1, textAlign: 'right' },
+  kickoffHint: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800', textAlign: 'center' },
   squadHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   caret: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', width: 18, textAlign: 'center' },
   venueLink: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
