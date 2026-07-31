@@ -82,6 +82,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket wicket flow: live dismissal read-back · SHIPPED + VERIFIED
+
+The wicket wizard (dismissal → runs → fielder → batter → next batsman) showed only the current step's prompt —
+the scorer never saw the **dismissal building up**, so they confirmed a wicket without a read-back of what they'd
+actually entered. Added a running recap strip that composes the dismissal in real scorecard notation as each step
+is answered.
+
+- **Change:** exported `composeDismissal` from the engine (the same helper that writes the scorecard's "c Veer b
+  Ishaan" text) and reused it in `ScoringControls`' wicket panel. A danger-tinted recap strip now shows the
+  dismissal forming — e.g. "Rohan Nair caught" → "Rohan Nair c Sanjay Menon b Ishaan Verma" — including the run-out
+  runs tail ("· N runs") and the chosen out-batter, so the wicket reads back before the confirming tap.
+- **Files:** `src/sports/cricket/engine.ts` (export `composeDismissal`); `src/sports/cricket/index.tsx` (import
+  it; build `wktRecap` in the `wf` branch; `wktRecap` / `wktRecapText` styles).
+- **Verified live (demo):** started m9, full setup, WICKET → CAUGHT → recap "Rohan Nair caught"; picked fielder →
+  "Rohan Nair c Sanjay Menon b Ishaan Verma", flow advanced to "Next batsman in". Demo mutated to reach the flow,
+  then localStorage cleared to restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket setup panel: per-side readiness tags · SHIPPED + VERIFIED
 
 The pre-match `SetupPanel` (tap players to assign captain/keeper) told the scorer "both are needed per side to

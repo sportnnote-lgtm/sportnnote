@@ -22,7 +22,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { cricketVoice } from '../voiceParsers';
 import {
-  init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER,
+  init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
   oversStr, runRate, inPowerplay,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
@@ -244,6 +244,15 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     const fielderStep = !!k && needsFielder(k) && !wf.fielder && !runsStep;
     const batterStep = !!k && needsBatter(k) && !wf.batterOut && !runsStep && (!needsFielder(k) || !!wf.fielder);
     const newBatStep = !!k && !runsStep && (!needsFielder(k) || !!wf.fielder) && (!needsBatter(k) || !!wf.batterOut);
+    // Live scorecard-style recap of the dismissal as the scorer builds it, so the
+    // wicket reads back ("c Fielder b Bowler") before the final confirming tap.
+    const keeperNm = state.keepers[other(state.battingSide)]?.name;
+    const haveFielder = !needsFielder(k as DismissalKind) || !!wf.fielder;
+    const batterKnown = !needsBatter(k as DismissalKind) || !!wf.batterOut;
+    const outName = (wf.batterOut === 'nonstriker' ? nonStrikerName : strikerName) ?? 'Batter';
+    const descriptor = !k ? '' : haveFielder ? composeDismissal(k, bowlerName, wf.fielder?.fullName, keeperNm) : WICKET_LABEL[k].toLowerCase();
+    const runsTail = k === 'runout' && wf.runs != null ? ` · ${wf.runs} run${wf.runs === 1 ? '' : 's'}` : '';
+    const wktRecap = k ? `${batterKnown ? `${outName} ` : ''}${descriptor}${runsTail}` : '';
     return (
       <View style={ctrl.wktPanel}>
         <View style={ctrl.creaseHead}>
@@ -251,6 +260,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setWf(null)} />
         </View>
         {state.freeHit && <Text style={ctrl.freeHit}>🟢 FREE HIT — only a run out counts</Text>}
+        {wktRecap ? <View style={ctrl.wktRecap}><Text style={ctrl.wktRecapText}>{wktRecap}</Text></View> : null}
 
         {!k && (
           <>
@@ -1068,6 +1078,8 @@ const ctrl = StyleSheet.create({
   needTag: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
   needTagText: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800' },
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
+  wktRecap: { backgroundColor: theme.colors.danger + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
+  wktRecapText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   soBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
   soTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },
   soLine: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },

@@ -602,5 +602,5 @@ function resultLine(s: CricketState): string {
   return `Won by ${margin} run${margin === 1 ? '' : 's'}`;
 }
 
-export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER };
+export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal };
 export type { Innings };
