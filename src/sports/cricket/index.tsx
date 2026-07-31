@@ -686,21 +686,35 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
     // In the chase, spell out the equation a spectator wants — target, runs still
     // needed, balls left and the required rate — which otherwise only ever showed
     // in the scorer's own controls (Super Over / DLS), never to a view-only viewer.
-    const chaseTail = () => {
-      const runsNeeded = Math.max(0, (s.target ?? 0) - inn.runs);
-      const ballsLeft = Math.max(0, s.oversLimit * s.ballsPerOver - inn.balls);
-      const rrr = ballsLeft > 0 ? (runsNeeded / (ballsLeft / s.ballsPerOver)).toFixed(2) : '—';
-      return ` · chasing ${s.target} · need ${runsNeeded} off ${ballsLeft} · RRR ${rrr}`;
-    };
-    const liveLine = s.pendingTie
-      ? '🔥 Scores level'
-      : `Innings ${s.innings} · ${teamName(bat)} ${inn.runs}/${inn.wickets} (${oversStr(inn.balls, s.ballsPerOver)}) · RR ${runRate(inn.runs, inn.balls, s.ballsPerOver)}`
-        + (s.innings === 2 && s.target ? chaseTail() : '');
+    const inChase = s.innings === 2 && !!s.target;
+    const runsNeeded = Math.max(0, (s.target ?? 0) - inn.runs);
+    const ballsLeft = Math.max(0, s.oversLimit * s.ballsPerOver - inn.balls);
+    const rrr = ballsLeft > 0 ? (runsNeeded / (ballsLeft / s.ballsPerOver)).toFixed(2) : '—';
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <View style={sum.liveResult}>
-          <View style={sum.liveTag}><View style={sum.liveDot} /><Text style={sum.liveTagText}>LIVE</Text></View>
-          <Text style={sum.liveLine} numberOfLines={2}>{liveLine}</Text>
+          <View style={sum.liveHead}>
+            <View style={sum.liveTag}><View style={sum.liveDot} /><Text style={sum.liveTagText}>LIVE</Text></View>
+            <Text style={sum.liveInnings}>Innings {s.innings}</Text>
+          </View>
+          {s.pendingTie ? (
+            <Text style={sum.liveLine}>🔥 Scores level</Text>
+          ) : (
+            <>
+              <View style={sum.liveScoreRow}>
+                <Text style={[sum.liveTeam, { color: teamColor(bat) }]} numberOfLines={1}>{teamName(bat)}</Text>
+                <Text style={[sum.liveScore, { color: teamColor(bat) }]}>{inn.runs}/{inn.wickets}</Text>
+                <Text style={sum.liveOvers}>({oversStr(inn.balls, s.ballsPerOver)} ov)</Text>
+              </View>
+              <Text style={sum.liveRR}>Run rate {runRate(inn.runs, inn.balls, s.ballsPerOver)}</Text>
+              {inChase ? (
+                <View style={sum.chaseStrip}>
+                  <Text style={sum.chaseNeed}>Need {runsNeeded} off {ballsLeft}</Text>
+                  <Text style={sum.chaseMeta}>Target {s.target} · RRR {rrr}</Text>
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
 
         <Text style={ctrl.label}>Standouts so far</Text>
@@ -1074,9 +1088,19 @@ const sum = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
     padding: theme.spacing(4), alignItems: 'center', gap: theme.spacing(2),
   },
+  liveHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(2) },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger },
   liveTagText: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  liveInnings: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  liveScoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
+  liveTeam: { fontSize: theme.font.body, fontWeight: '800' },
+  liveScore: { fontSize: theme.font.h2, fontWeight: '900' },
+  liveOvers: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  liveRR: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700' },
+  chaseStrip: { alignItems: 'center', alignSelf: 'center', marginTop: theme.spacing(1), paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(4), backgroundColor: theme.colors.primary + '14', borderRadius: theme.radius.sm },
+  chaseNeed: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900' },
+  chaseMeta: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 1 },
   liveLine: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', textAlign: 'center' },
   award: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),

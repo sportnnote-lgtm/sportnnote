@@ -47,6 +47,22 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket live result banner: structured broadcast layout · SHIPPED + VERIFIED
+
+The live (in-progress) result banner at the top of the cricket Summary crammed everything into one run-on line —
+"Innings 2 · BLU 72/3 (6.3) · RR 11.08 · chasing 119 · need 47 off 21 · RRR 13.43" — which wrapped to two lines
+and was hard to scan. Restructured it into a proper broadcast banner.
+
+- **Change:** a header row (**● LIVE · INNINGS N**), then the batting side's **score shown prominently in the team
+  colour** (team name + big `runs/wkts` + overs), a muted **Run rate** sub-line, and — in a second-innings chase —
+  a green-tinted **chase strip** that isolates the equation (**Need X off Y** bold, **Target · RRR** muted). The
+  "scores level" tie state keeps its single-line treatment.
+- **Files:** `src/sports/cricket/index.tsx` (`CricketSummary` live branch; new `liveHead` / `liveInnings` /
+  `liveScoreRow` / `liveTeam` / `liveScore` / `liveOvers` / `liveRR` / `chaseStrip` / `chaseNeed` / `chaseMeta`
+  styles; dropped the `chaseTail` string builder).
+- **Verified live (demo):** cricket chase Summary → "● LIVE · INNINGS 2", "BLU 72/3 (6.3 ov)" in blue, "Run rate
+  11.08", chase pill "Need 47 off 21 / Target 119 · RRR 13.43". View-only. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket top performers: player avatar + award badge · SHIPPED + VERIFIED
 
 The cricket "Standouts so far" / post-match award cards (`CricketSummary`'s `Award` — Top performer, Top bat,
