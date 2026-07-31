@@ -51,6 +51,11 @@ export function MatchSummary({
           <Text style={st.vs}>{homeName}  ·  {awayName}</Text>
           <Text style={[st.score, { color: awayColor }, decided && !awayWon && st.scoreLost]}>{summary.awayScore}</Text>
         </View>
+        {complete && decided ? (
+          <Text style={st.winner}>🏆 {homeWon ? homeName : awayName} won</Text>
+        ) : complete && !isNaN(hs) && !isNaN(as) && hs === as ? (
+          <Text style={st.drawn}>Match drawn</Text>
+        ) : null}
       </View>
 
       {mvp && (
@@ -120,6 +125,8 @@ const st = StyleSheet.create({
   score: { fontSize: theme.font.h1, fontWeight: '900' },
   scoreLost: { opacity: 0.45 },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  winner: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
+  drawn: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5 },
   mvp: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3),
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),

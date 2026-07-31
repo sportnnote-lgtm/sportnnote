@@ -30,6 +30,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Match summary: winner line on the result · SHIPPED + VERIFIED
+
+The generic `MatchSummary` (football + basketball/kabaddi/volleyball/badminton/tennis Summary tabs) dimmed the
+loser's score once decided but never said who won. Added a result line matching the final scoreboard's treatment.
+
+- **Change:** when a completed match is decided, show "🏆 {winner} won" (green) under the score; a completed tie
+  shows "Match drawn". Live matches show nothing extra. Works wherever the summary reports the match result that
+  persists at full time (football goals, basketball total); for set/game sports whose summary reports the
+  in-progress sub-unit (0 after the final point), it simply stays hidden — no regression.
+- **Files:** `src/components/MatchSummary.tsx` (result winner/drawn line + styles).
+- **Verified live (demo):** m1 football live → no winner line; then ended m1 in-app (2–1) → Summary showed
+  "🏆 RED won" + FINAL header + Player of the Match Aarav Mehta ★5.0. Cleared storage to restore. 86 tests,
+  typecheck clean.
+
 ### 2026-07-31 — Football pitch: fuller markings (goal areas, spots) · SHIPPED + VERIFIED
 
 The lineup pitch had only a halfway line, centre circle and two penalty boxes. Added the details that make it read
