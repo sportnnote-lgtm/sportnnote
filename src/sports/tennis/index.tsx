@@ -14,6 +14,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { TennisBoxScore } from './BoxScore';
+import { LineScoreboard } from '../../components/LineScoreboard';
 
 const SETS_TO_WIN = 2;
 
@@ -183,6 +184,27 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
   );
 };
 
+/** Broadcast-style board: current-game POINTS + a column of games per set, the
+ *  live set highlighted — the layout tennis TV graphics use. */
+const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+  const s = state as TennisState;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  const nSets = Math.max(1, s.ended ? s.sets.length : setNo); // sets played + the one in progress
+  const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
+  const cell = (side: 'home' | 'away', i: number) =>
+    i < s.sets.length ? String(s.sets[i][side === 'home' ? 0 : 1]) : String(s.games[side]);
+  return (
+    <LineScoreboard
+      status={`${s.ended ? 'Match Over' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}`} · best of ${s.setsToWin * 2 - 1}`}
+      live={live}
+      leadLabel="POINTS"
+      columns={columns}
+      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: disp(s, 'home'), cells: columns.map((_, i) => cell('home', i)) }}
+      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: disp(s, 'away'), cells: columns.map((_, i) => cell('away', i)) }}
+    />
+  );
+};
+
 export const tennisPlugin: SportPlugin<TennisState> = {
   id: 'tennis',
   name: 'Tennis',
@@ -191,6 +213,7 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  Scoreboard: TennisScoreboard,
   summary: (s) => ({
     homeScore: disp(s, 'home'),
     awayScore: disp(s, 'away'),
