@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary result score: score-over-name per side · SHIPPED + VERIFIED
+
+The result block read "2 · RED · BLU · 1" — both team names squished in the middle, each score far from its team.
+Restructured to a proper result board.
+
+- **Change:** two columns — each side is its **score over its team name** (team-coloured), with a colon between,
+  matching the top scoreboard. The loser-dim now applies to the whole losing side (score + name), and the winner
+  line ("🏆 … won") / "Match drawn" stays below. Dropped the unused `vs` style.
+- **Files:** `src/components/MatchSummary.tsx` (result score row + `side`/`sideName`/`colon` styles).
+- **Verified live (demo):** m1 football Summary → "2 / RED  :  1 / BLU" with team-coloured names, no winner line
+  (live). 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary stat awards: player avatar + stat badge · SHIPPED + VERIFIED
 
 Applied the top-performer card's treatment to the stat-award grid (Top scorer, Top passer, …) so the whole

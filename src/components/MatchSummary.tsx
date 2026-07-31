@@ -51,9 +51,15 @@ export function MatchSummary({
       <View style={st.result}>
         <Text style={st.resultLabel}>{complete ? summary.statusLine : `Live · ${summary.statusLine}`}</Text>
         <View style={st.scoreRow}>
-          <Text style={[st.score, { color: homeColor }, decided && !homeWon && st.scoreLost]}>{summary.homeScore}</Text>
-          <Text style={st.vs}>{homeName}  ·  {awayName}</Text>
-          <Text style={[st.score, { color: awayColor }, decided && !awayWon && st.scoreLost]}>{summary.awayScore}</Text>
+          <View style={[st.side, decided && !homeWon && st.scoreLost]}>
+            <Text style={[st.score, { color: homeColor }]}>{summary.homeScore}</Text>
+            <Text style={[st.sideName, { color: homeColor }]} numberOfLines={1}>{homeName}</Text>
+          </View>
+          <Text style={st.colon}>:</Text>
+          <View style={[st.side, decided && !awayWon && st.scoreLost]}>
+            <Text style={[st.score, { color: awayColor }]}>{summary.awayScore}</Text>
+            <Text style={[st.sideName, { color: awayColor }]} numberOfLines={1}>{awayName}</Text>
+          </View>
         </View>
         {complete && decided ? (
           <Text style={st.winner}>🏆 {homeWon ? homeName : awayName} won</Text>
@@ -137,10 +143,12 @@ const st = StyleSheet.create({
   },
   resultLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   note: { color: theme.colors.textMuted, fontSize: theme.font.small, marginTop: -theme.spacing(1) },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  side: { flex: 1, alignItems: 'center', gap: 2 },
+  sideName: { fontSize: theme.font.small, fontWeight: '800' },
+  colon: { color: theme.colors.textMuted, fontSize: theme.font.h2, fontWeight: '300', marginHorizontal: theme.spacing(2) },
   score: { fontSize: theme.font.h1, fontWeight: '900' },
   scoreLost: { opacity: 0.45 },
-  vs: { color: theme.colors.textMuted, fontSize: theme.font.small },
   winner: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
   drawn: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5 },
   mvp: {
