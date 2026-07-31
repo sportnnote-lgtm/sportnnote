@@ -79,14 +79,20 @@ export function MatchSummary({
 
       {awards.length > 0 && (
         <View style={st.awardGrid}>
-          {awards.map((a) => (
+          {awards.map((a) => {
+            const nm = mask.byId(a.player.id, a.player.name);
+            return (
             <TouchableOpacity accessibilityRole="button" key={a.label} activeOpacity={0.85} onPress={() => onPlayer?.(a.player.id)} style={st.award}>
-              <Text style={st.awardIcon}>{a.icon}</Text>
+              <View style={[st.awardAvatar, { backgroundColor: teamColor(a.player.side) }]}>
+                <Text style={st.awardAvatarText}>{initials(nm)}</Text>
+                <Text style={st.awardBadge}>{a.icon}</Text>
+              </View>
               <Text style={st.awardLabel} numberOfLines={1}>{a.label}</Text>
-              <Text style={st.awardName} numberOfLines={1}>{mask.byId(a.player.id, a.player.name)}</Text>
+              <Text style={st.awardName} numberOfLines={1}>{nm}</Text>
               <Text style={st.awardVal} numberOfLines={1}>{a.value} {statLabel(a.stat, a.value)}</Text>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -154,7 +160,9 @@ const st = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
     borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
   },
-  awardIcon: { fontSize: 20 },
+  awardAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  awardAvatarText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '900' },
+  awardBadge: { position: 'absolute', bottom: -4, right: -4, fontSize: 13 },
   awardLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
   awardName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   awardVal: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '700' },

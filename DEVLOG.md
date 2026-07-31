@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary stat awards: player avatar + stat badge · SHIPPED + VERIFIED
+
+Applied the top-performer card's treatment to the stat-award grid (Top scorer, Top passer, …) so the whole
+Summary tab shares one avatar language.
+
+- **Change:** each award card now leads with the player's team-coloured **initials avatar** with its stat icon
+  (⚽ etc.) as a corner badge, instead of a standalone stat emoji. Label / name / value unchanged. (`Award.player`
+  is a `MatchRating`, so it carries `side` for the avatar colour.)
+- **Files:** `src/components/MatchSummary.tsx` (award card + `awardAvatar`/`awardAvatarText`/`awardBadge` styles).
+- **Verified live (demo):** m1 football Summary → TOP SCORER = red **AM** avatar with a ⚽ corner badge · Aarav
+  Mehta · 1 goal, matching the TOP PERFORMER card and the ratings rows. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary top-performer card: player avatar + award badge · SHIPPED + VERIFIED
 
 The MVP / "Top performer" card led with a plain 🏅/🔥 emoji, not the player — inconsistent with the ratings rows
