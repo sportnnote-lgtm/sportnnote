@@ -30,6 +30,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab squad cards: team-sheet layout · SHIPPED + VERIFIED
+
+Polished the Info tab's matchday squad cards from a flat "· Name  #12" list into a proper team sheet.
+
+- **Header** now shows the squad size — "✓ Squad set · 8".
+- **Starting / Substitutes split:** the applied roster (ordered starters-then-subs) is partitioned back into two
+  labelled sections ("STARTING 7", "SUBSTITUTES 1"); a team with no squad set still shows one flat list.
+- **Rows:** each player gets a jersey-number badge (bordered in the team colour) instead of an inline "#12", plus
+  a **C** (captain, amber) / **V** (vice) tag and a 🧤 for the keeper. The dispute/report/object links are
+  unchanged.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`squadCard` markup + styles). Pure view layer.
+- **Verified live (demo):** cg7 → "Indiranagar United · ✓ Squad set · 5", STARTING 5 with jersey badges; m1
+  football → STARTING 7 (Aarav **C**, Rohan **V**) + SUBSTITUTES 1 (Harsha Bhat). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Scoring tab match header (all four tabs now share it) · SHIPPED + VERIFIED
 
 Added the shared `MatchHeader` to the top of the Scoring tab too, so every tab (Info / Score-via-board /

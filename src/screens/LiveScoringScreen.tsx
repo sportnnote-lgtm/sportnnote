@@ -542,13 +542,21 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const L = leadersFor(sd);
       const set = squadSet(sd);
       const hasCaptain = !!(L.captainId || L.viceCaptainId);
+      // Split the applied roster (ordered starters-then-subs) back into the two
+      // groups so the sheet reads like a real team sheet; when no squad is set the
+      // roster is the whole team, shown as one flat list.
+      const sq = sd === 'home' ? squads?.home : squads?.away;
+      const starterIds = new Set(sq?.starters ?? []);
+      const starters = set ? roster.filter((p) => starterIds.has(p.id)) : roster;
+      const subs = set ? roster.filter((p) => !starterIds.has(p.id)) : [];
+      const count = (sq?.starters.length ?? 0) + (sq?.subs.length ?? 0);
       return (
         <View style={st.infoCard}>
           <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? null : sd)}>
             <View style={[st.legendDot, { backgroundColor: color }]} />
             <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]}>{sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name}</Text>
             <Text style={[textStyles.muted, { color: set ? theme.colors.primary : theme.colors.textMuted }]}>
-              {set ? '✓ Squad set' : 'Squad to be set'}
+              {set ? `✓ Squad set · ${count}` : 'Squad to be set'}
             </Text>
             <Text style={st.caret}>{open ? '⌃' : '⌄'}</Text>
           </TouchableOpacity>
@@ -573,25 +581,44 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
           {open && (
             <View style={{ gap: theme.spacing(1), marginTop: theme.spacing(2) }}>
-              {roster.length === 0 ? <Text style={textStyles.muted}>Squad not set.</Text> : roster.map((p) => {
-                const disputed = disputedOpenIds.has(p.id);
-                const reported = !disputed && flaggedIds.has(p.id);
-                const mine = p.id === myPlayerId;
+              {(() => {
+                const playerRow = (p: Player) => {
+                  const disputed = disputedOpenIds.has(p.id);
+                  const reported = !disputed && flaggedIds.has(p.id);
+                  const mine = p.id === myPlayerId;
+                  const role = p.id === L.captainId ? 'C' : p.id === L.viceCaptainId ? 'V' : null;
+                  const keeper = p.id === sq?.keeperId;
+                  return (
+                    <View key={p.id} style={st.partRow}>
+                      {p.jerseyNo != null ? (
+                        <View style={[st.jersey, { borderColor: color }]}><Text style={[st.jerseyNum, { color }]}>{p.jerseyNo}</Text></View>
+                      ) : <View style={st.jersey} />}
+                      <Text style={[textStyles.body, { flex: 1 }, disputed && st.disputedName]} numberOfLines={1}>
+                        {disputed ? '❌ X — disputed' : p.fullName}
+                        {!disputed && keeper ? '  🧤' : ''}
+                        {reported ? '  ⚐ reported' : ''}
+                      </Text>
+                      {!disputed && role ? <View style={[st.roleTag, role === 'C' && st.roleCaptain]}><Text style={[st.roleTagText, role === 'C' && st.roleTagTextDark]}>{role}</Text></View> : null}
+                      {mine && !disputed && !reported && matchId && (
+                        <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel="Object: I'm not in this match" onPress={() => objectToMatch(sd, p)}>🚩 Not me — object</Text>
+                      )}
+                      {!mine && iAmInMatch && !disputed && !reported && matchId && (
+                        <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel={`Report ${p.fullName}`} onPress={() => reportPlayer(sd, p)}>⚐ Report</Text>
+                      )}
+                    </View>
+                  );
+                };
+                if (roster.length === 0) return <Text style={textStyles.muted}>Squad not set.</Text>;
+                if (!set) return <>{roster.map(playerRow)}</>;
                 return (
-                  <View key={p.id} style={st.partRow}>
-                    <Text style={[textStyles.body, { flex: 1 }, disputed && st.disputedName]}>
-                      · {disputed ? '❌ X — disputed' : `${p.fullName}${p.jerseyNo ? `  #${p.jerseyNo}` : ''}`}
-                      {reported ? '  ⚐ reported' : ''}
-                    </Text>
-                    {mine && !disputed && !reported && matchId && (
-                      <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel="Object: I'm not in this match" onPress={() => objectToMatch(sd, p)}>🚩 Not me — object</Text>
-                    )}
-                    {!mine && iAmInMatch && !disputed && !reported && matchId && (
-                      <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel={`Report ${p.fullName}`} onPress={() => reportPlayer(sd, p)}>⚐ Report</Text>
-                    )}
-                  </View>
+                  <>
+                    <Text style={st.squadSection}>Starting {starters.length}</Text>
+                    {starters.map(playerRow)}
+                    {subs.length > 0 && <Text style={st.squadSection}>Substitutes {subs.length}</Text>}
+                    {subs.map(playerRow)}
+                  </>
                 );
-              })}
+              })()}
               {/* Manager / coach — fully optional (local games often have none). */}
               {canManage && matchId ? (
                 <View style={{ marginTop: theme.spacing(2) }}>
@@ -1214,7 +1241,14 @@ const st = StyleSheet.create({
   lineups: { gap: theme.spacing(3) },
   lineupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
-  partRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  partRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: 1 },
+  squadSection: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginTop: theme.spacing(2), marginBottom: theme.spacing(1) },
+  jersey: { width: 26, height: 26, borderRadius: 6, borderWidth: 1.5, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  jerseyNum: { fontSize: theme.font.small, fontWeight: '900' },
+  roleTag: { minWidth: 18, height: 18, borderRadius: 4, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  roleCaptain: { backgroundColor: theme.colors.accent },
+  roleTagText: { color: theme.colors.text, fontSize: theme.font.tiny, fontWeight: '900' },
+  roleTagTextDark: { color: '#0B0F14' },
   disputedName: { color: theme.colors.danger, fontWeight: '800', textDecorationLine: 'line-through' },
   objectLink: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   disputeBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },
