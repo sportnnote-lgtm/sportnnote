@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab scoring-settings card: count + sections + cleaner stepper · SHIPPED + VERIFIED
+
+Polished the football-only scoring-settings card to match the rest of the Info tab.
+
+- **Header** gains an "N of 12 tracked" count on the right.
+- **Section subheadings** — "Stats captured" over the toggle chips, "Match length" over the stepper (squad-card
+  style). The active chips already highlight green, so the redundant "✓ " prefix on each label is dropped.
+- **Stepper** reads "−5 · 45 min / half · +5" with a bigger, centred value.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`scoringSettingsCard` + `stepperRow`/`stepperVal` styles). View layer.
+- **Verified live (demo):** m1 football Info → "⚙️ Scoring settings · 11 of 12 tracked", STATS CAPTURED chips
+  (Passes off = the one untracked), MATCH LENGTH stepper at 45 min / half. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab disputes card: counts, sections, status tags · SHIPPED + VERIFIED
 
 Brought the participation-disputes card in line with the rest of the Info tab.

@@ -731,23 +731,26 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       ['attackContribution', 'Attacking play'], ['defenceContribution', 'Defensive play'],
     ];
     const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
+    const trackedCount = fb ? TRACKABLE.filter(([k]) => fb.track?.[k]).length : 0;
     const scoringSettingsCard = fb && (canScore || canManage) && !complete ? (
       <View style={st.infoCard}>
-        <Text style={textStyles.h3}>⚙️ Scoring settings</Text>
+        <View style={st.streamHead}>
+          <Text style={textStyles.h3}>⚙️ Scoring settings</Text>
+          <Text style={textStyles.muted}>{trackedCount} of {TRACKABLE.length} tracked</Text>
+        </View>
         <Text style={textStyles.muted}>Capture only what this scorer can keep up with — toggles apply to this match only.</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
+        <Text style={st.squadSection}>Stats captured</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) }}>
           {TRACKABLE.map(([key, label]) => {
             const on = fb.track?.[key] ?? false;
-            return <SelectChip key={key} label={`${on ? '✓ ' : ''}${label}`} active={on} onPress={() => applyFormat({ [`track${cap(key)}`]: !on })} />;
+            return <SelectChip key={key} label={label} active={on} onPress={() => applyFormat({ [`track${cap(key)}`]: !on })} />;
           })}
         </View>
-        <View style={st.infoRow}>
-          <Text style={textStyles.muted}>Half length</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) }}>
-            <SelectChip label="−5" active={false} onPress={() => applyFormat({ halfMinutes: Math.max(5, (fb.halfMinutes ?? 45) - 5) })} />
-            <Text style={[textStyles.body, { fontWeight: '800', minWidth: 64, textAlign: 'center' }]}>{fb.halfMinutes ?? 45} min</Text>
-            <SelectChip label="+5" active={false} onPress={() => applyFormat({ halfMinutes: Math.min(60, (fb.halfMinutes ?? 45) + 5) })} />
-          </View>
+        <Text style={st.squadSection}>Match length</Text>
+        <View style={st.stepperRow}>
+          <SelectChip label="−5" active={false} onPress={() => applyFormat({ halfMinutes: Math.max(5, (fb.halfMinutes ?? 45) - 5) })} />
+          <Text style={st.stepperVal}>{fb.halfMinutes ?? 45}<Text style={textStyles.muted}> min / half</Text></Text>
+          <SelectChip label="+5" active={false} onPress={() => applyFormat({ halfMinutes: Math.min(60, (fb.halfMinutes ?? 45) + 5) })} />
         </View>
       </View>
     ) : null;
@@ -1291,6 +1294,8 @@ const st = StyleSheet.create({
   tabTextActive: { color: '#06120D', fontWeight: '800' },
   infoCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4), gap: theme.spacing(2), ...theme.shadow.card },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3), paddingVertical: theme.spacing(1) },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  stepperVal: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900', minWidth: 96, textAlign: 'center' },
   infoLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   infoIcon: { fontSize: 15, width: 18, textAlign: 'center' },
   infoValue: { flexShrink: 1, textAlign: 'right' },
