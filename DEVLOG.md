@@ -30,6 +30,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab scorer card: person row with avatar + live state · SHIPPED + VERIFIED
+
+Polished the "Match scorer" card from an icon + name line into a person row consistent with the squad sheet.
+
+- **Avatar:** an initials circle — green (this-device highlight) when you're the scorer, neutral otherwise;
+  a ➕ placeholder when unassigned.
+- **Status sub-line:** "📱 Scoring from this device" (you), "Scoring from their device" (someone else),
+  "Assigned scorer" (set but not underway), or "Set before kickoff" (unassigned).
+- **LIVE pill** on the right while the match is underway and a scorer is set. The Change/Assign/Close control and
+  the picker are unchanged.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`scorerCard` row + `scorerInitials` helper + styles). View layer.
+- **Verified live (demo):** cg7 (you score) → green **AM** · "Scoring from this device" · ● LIVE · Change;
+  m8 cricket (someone else) → neutral **IV** · "Ishaan Verma · Scoring from their device". 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab squad cards: team-sheet layout · SHIPPED + VERIFIED
 
 Polished the Info tab's matchday squad cards from a flat "· Name  #12" list into a proper team sheet.

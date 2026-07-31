@@ -655,10 +655,24 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           One device updates the score live; everyone else follows along. The organizer sets this before kickoff.
         </Text>
         <View style={st.scorerRow}>
-          <Text style={st.scorerIcon}>{scorerId ? '🎯' : '➕'}</Text>
-          <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]} numberOfLines={1}>
-            {scorerId ? `${scorerName ?? 'Assigned scorer'}${iAmScorer ? ' · this device' : ''}` : 'Not assigned yet'}
-          </Text>
+          {scorerId ? (
+            <View style={[st.scorerAvatar, iAmScorer && { backgroundColor: theme.colors.primary }]}>
+              <Text style={[st.scorerAvatarText, iAmScorer && { color: '#0B0F14' }]}>{scorerInitials(scorerName)}</Text>
+            </View>
+          ) : (
+            <View style={st.scorerAvatar}><Text style={st.scorerIcon}>➕</Text></View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>
+              {scorerId ? (scorerName ?? 'Assigned scorer') : 'Not assigned yet'}
+            </Text>
+            <Text style={textStyles.muted} numberOfLines={1}>
+              {!scorerId ? 'Set before kickoff' : iAmScorer ? '📱 Scoring from this device' : matchLive ? 'Scoring from their device' : 'Assigned scorer'}
+            </Text>
+          </View>
+          {scorerId && matchLive ? (
+            <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>LIVE</Text></View>
+          ) : null}
           {canManage && (
             <Text
               style={st.editLink}
@@ -1089,6 +1103,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     );
 }
 
+/** Up to two initials from a name, for the scorer avatar. */
+function scorerInitials(name?: string): string {
+  const parts = (name ?? '').split(' ').filter(Boolean);
+  return parts.slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '🎯';
+}
+
 /** Human-readable summary of a match's chosen format, per sport. */
 function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -1230,7 +1250,12 @@ const st = StyleSheet.create({
   squadRow: { gap: theme.spacing(2) },
   squadBtns: { flexDirection: 'row', gap: theme.spacing(2) },
   scorerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), marginTop: theme.spacing(1) },
-  scorerIcon: { fontSize: 18 },
+  scorerIcon: { fontSize: 16 },
+  scorerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  scorerAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
+  scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  scorerLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
+  scorerLiveText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
   scorerPicker: { marginTop: theme.spacing(2), gap: theme.spacing(1) },
   scorerOpt: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   scorerOptText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
