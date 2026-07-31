@@ -19,4 +19,5 @@ export interface LiveEvent {
   minute?: number;
   half?: number;
   set?: number; // volleyball: which set this point belongs to (per-set stats)
+  game?: number; // badminton: which game this point belongs to (per-game stats)
 }

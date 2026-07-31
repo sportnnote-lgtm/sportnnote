@@ -244,6 +244,18 @@ export const MATCHES: Match[] = [
     awayTeam: team('bh', 'Blue House', 'BLU', 'volleyball', houses.blue),
     state: null,
   },
+  {
+    id: 'm11', tournamentId: 't1', sport: 'badminton', status: 'live',
+    startsAt: '2026-06-19T17:00:00',
+    venueName: 'Padukone Badminton Academy',
+    hostIds: ['p-aarav'],
+    scorerId: 'p-aanya', // a player scores → view-only for the demo user (opens on the content tab)
+    score: { home: 14, away: 16 }, // current game (game 2); Red lead 1–0 on games — doubles (replayed from seeded points)
+    format: { playersPerSide: 2, pointsPerGame: 21, cap: 30, gamesToWin: 2 },
+    homeTeam: team('rh', 'Red House', 'RED', 'badminton', houses.red),
+    awayTeam: team('bh', 'Blue House', 'BLU', 'badminton', houses.blue),
+    state: null,
+  },
 ];
 
 // Completed results across sports so per-sport standings have real data.

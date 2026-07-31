@@ -30,6 +30,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Badminton per-game player stats (new box score) + seeded live doubles match · SHIPPED + VERIFIED
+
+Badminton was the last event-log sport without per-player stats — like volleyball, its live view had only
+game-score chips and a rally log. Built the per-game box score (the badminton analogue) and seeded a live
+**doubles** match, where a per-player split is genuinely useful (which of a pair is carrying the rallies).
+
+- **Data model:** added `game?: number` to the shared `LiveEvent`; the badminton reducer now stamps
+  `kind`/`playerName`/`game`/`points` on each rally point (previously the scorer was only in the `detail` string).
+- **New `BadmintonBoxScore`** (`src/sports/badminton/BoxScore.tsx`): **PTS** per player, one table per side, with
+  an **Overall / Game 1 / Game 2 …** toggle that re-tallies over one game. Shows once ≥2 games exist — same rule
+  as the other sports. Wired into `LiveExtras` between Games and the rally log.
+- **Seed:** new live match **m11** — Red pair (Aanya Mehta / Divya Menon) vs Blue pair (Aisha Begum / Tina Dsa),
+  best of 3. Deterministic generator (`bmEvents`, points rotate between each pair's two) replays to **Red 21–17
+  (game 1), 14–16 (game 2 live)**, Red 1–0 on games. View-only (scored by a player) so it opens straight onto the
+  box score. `M11_SQUADS` + empty lineup; `mockData` m11 live; `DEMO_KEY` v29→v30. The existing m3 (singles,
+  single-game-to-11 demo, scored by the demo user) is untouched.
+- **Files:** `src/sports/liveEvents.ts`, `src/sports/badminton/index.tsx`, `src/sports/badminton/BoxScore.tsx`,
+  `src/data/demoStore.ts`, `src/core/mockData.ts`.
+- **Verified live (demo):** m11 (via Live → See all — it's now the 7th live match, past the home feed's cap of 5)
+  opens onto the stats — Overall Red 35 (Aanya 18, Divya 17) / Blue 33 (Aisha 17, Tina 16); Game 1 = 21/17,
+  Game 2 = 14/16 (sums check). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Volleyball per-set player stats (new box score) + seeded live 2-set match · SHIPPED + VERIFIED
 
 Volleyball was the biggest gap of the per-period sweep: its live view had **no per-player stats at all** — just
