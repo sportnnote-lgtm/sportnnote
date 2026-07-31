@@ -30,6 +30,33 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Cross-sport stats port (2/2): kabaddi per-half player stats + seeded live m4 · SHIPPED + VERIFIED
+
+Part 2 of the parked stats port. Kabaddi had **no per-player stats table at all** (its Score tab was just the
+Timeline), so this was the bigger lift flagged in part 1: build the aggregator, then add the same per-half
+toggle basketball/football have — and seed a live kabaddi match to demo it (the demo had none).
+
+- **What changed:**
+  - New `src/sports/kabaddi/BoxScore.tsx` — `KabaddiBoxScore` renders a **RAID / TCKL / PTS** table per side,
+    derived from the LiveEvents timeline. `tally(events, side, scope)` sums raid vs tackle points, filtered by
+    `e.half`; players sort by total, rows show only players with points. An **Overall / 1st half / 2nd half …**
+    SelectChip toggle re-tallies over one half, appearing only once **≥2 halves** exist (mirrors basketball's
+    per-quarter split; a circular import is avoided by passing precomputed `periods` labels as a prop).
+  - `src/sports/kabaddi/index.tsx` — `LiveExtras` computes the halves played and renders **Player stats** +
+    the table below the Timeline.
+- **Seed (to demo it):** m4 (Blue House vs Gold House) promoted from `scheduled` to a **live** view-only match
+  — new `demo.matchEvents['m4']` event log (KICKOFF → raids/tackles → NEXT_HALF → more), replayed to
+  **Blue 14 · Gold 13** across two halves; `M4_SQUADS` (6 per house) so Info reads "✓ Squad set"; empty
+  `demo.lineups['m4']` (kabaddi's positional court stays hidden — only 6 players/house). `mockData.ts` m4 →
+  live + `score`, scorer `p-ishaan` (a player → view-only for the demo user, opens on the Score tab).
+  `DEMO_KEY` v24 → v25.
+- **Files:** `src/sports/kabaddi/BoxScore.tsx` (new), `src/sports/kabaddi/index.tsx`, `src/data/demoStore.ts`,
+  `src/core/mockData.ts`.
+- **Verified live (demo):** m4 opens on Score — HALF 2 · 33' · 14:13, timeline correct. Player stats:
+  Overall BLU 14 (11 raid + 3 tackle) / GLD 13 (9 + 4) — both match the score. Toggle → **1st half**: BLU 8
+  (Ishaan 3, Karan 2, Faisal 1, Rohit 1, Sameer 1) / GLD 7 (Imran 2, Naveen 2, Mahesh 2, Kiran 1); H2-only
+  players correctly drop out. Matches the seed (H1 8-7 → H2 6-6). 86 tests, typecheck clean.
+
 ### 2026-07-30 — Cross-sport stats port (1/2): basketball per-quarter box score · SHIPPED + VERIFIED
 
 Parked-backlog item — port football's per-period Stats split to the other event-log sports. Part 1: basketball.

@@ -179,12 +179,13 @@ export const MATCHES: Match[] = [
     state: null,
   },
   {
-    id: 'm4', tournamentId: 't1', sport: 'kabaddi', status: 'scheduled',
+    id: 'm4', tournamentId: 't1', sport: 'kabaddi', status: 'live',
     startsAt: '2026-06-16T16:00:00',
     venueName: 'Kanteerava Indoor Arena',
     hostIds: ['p-aarav'],
-    scorerId: 'p-aarav', // demo user scores — shows rolling substitutions live
+    scorerId: 'p-ishaan', // a player scores → view-only for the demo user (opens on the content tab)
     format: { playersPerSide: 7, substitutes: 5, halfMinutes: 20 },
+    score: { home: 14, away: 13 }, // mid-2nd-half — replayed from seeded raid/tackle events
     homeTeam: team('bh', 'Blue House', 'BLU', 'kabaddi', houses.blue),
     awayTeam: team('yh', 'Gold House', 'GLD', 'kabaddi', houses.gold),
     state: null,

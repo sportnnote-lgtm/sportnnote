@@ -590,6 +590,13 @@ const KC3_SQUADS: MatchSquads = {
   away: { starters: ['p-str-3', 'p-str-5', 'p-str-2', 'p-str-6', 'p-str-4', 'p-str-7', 'p-str-8', 'p-str-9', 'p-str-10', 'p-bpl-sameer', 'p-str-11'], subs: ['p-str-12', 'p-str-13', 'p-str-14'] },
 };
 
+// Matchday squads for the live kabaddi match (m4) — the six kabaddi players each
+// house fields, so Info reads "✓ Squad set".
+const M4_SQUADS: MatchSquads = {
+  home: { starters: ['p-ishaan', 'p-bh-1', 'p-bh-2', 'p-bh-3', 'p-bh-6', 'p-bh-7'], subs: [] },
+  away: { starters: ['p-yh-1', 'p-yh-2', 'p-yh-6', 'p-yh-8', 'p-yh-9', 'p-meera'], subs: [] },
+};
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -748,7 +755,10 @@ export const demo = {
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],
   statLines: statLines.map((s) => ({ ...s, date: s.date ? anchorDate(s.date) : s.date })),
-  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
+  // m4 (kabaddi) intentionally has empty lineups — kabaddi's positional court is
+  // hidden for now (only 6 kabaddi players per house), so its Score tab shows the
+  // timeline + player stats without a half-empty mat.
+  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), m4: { home: [], away: [] }, 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table.
    *  The completed cricket fixtures ship a full ball-by-ball log so they replay to
    *  a real, ENDED scorecard, and the live cricket fixture (m8) ships a mid-innings
@@ -756,7 +766,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { m1: M1_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { m1: M1_SQUADS, m4: M4_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -786,7 +796,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v24'; // v24: m1 is a clean 7-v-7 (2-3-1 lineup, full XIs, 3 players gain football)
+const DEMO_KEY = 'sportfolio.demo.v25'; // v25: live kabaddi match (m4) with a 2-half raid/tackle event log for the stats port
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -867,6 +877,8 @@ const bbStat = (seq: number, side: 'home' | 'away', type: 'REBOUND' | 'ASSIST' |
   ({ seq, type, side, payload: { minute, quarter: 1 }, attribution: { playerId: pid, stat: BB_STAT_KEY[type], by: 1, playerName: name } });
 const fbStat = (seq: number, side: 'home' | 'away', kind: string, o: { onTarget?: boolean; pid?: string; name?: string; statKey?: string; at?: number; possSide?: 'home' | 'away'; minute?: number } = {}): MatchEventRecord =>
   ({ seq, type: 'STAT', side, payload: { kind, onTarget: o.onTarget, at: o.at, possSide: o.possSide, minute: o.minute ?? 0 }, attribution: o.pid ? { playerId: o.pid, stat: o.statKey ?? `${kind}s`, by: 1, playerName: o.name } : null });
+const kabPt = (seq: number, type: 'RAID' | 'TACKLE', side: 'home' | 'away', points: number, minute: number, half: 1 | 2, pid: string, name: string): MatchEventRecord =>
+  ({ seq, type, side, payload: { points, minute, half }, attribution: { playerId: pid, stat: type === 'RAID' ? 'raidPoints' : 'tacklePoints', by: points, playerName: name } });
 demo.matchEvents['m1'] = [
   { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 32 * 60000, possSide: 'home' } },
   fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-aarav', name: 'Aarav Mehta', statKey: 'shots', minute: 11 }),
@@ -914,6 +926,34 @@ demo.matchEvents['cg7'] = [
   bbStat(24, 'home', 'REBOUND', 5, 'p-ind-1', 'Tej Anand'),
   bbStat(25, 'away', 'REBOUND', 6, 'p-kor-5', 'Rohit Gowda'),
   bbStat(26, 'away', 'FOUL', 6, 'p-kor-5', 'Rohit Gowda'),
+];
+// Live kabaddi (m4) — Blue House vs Gold House, into the 2nd half. Raid/tackle
+// points across both halves so the Player-stats table's per-half toggle has real
+// data. Final (live): Blue 14 · Gold 13.
+demo.matchEvents['m4'] = [
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 30 * 60000 } },
+  kabPt(2, 'RAID', 'home', 2, 2, 1, 'p-ishaan', 'Ishaan Verma'),
+  kabPt(3, 'RAID', 'away', 1, 3, 1, 'p-yh-1', 'Imran Pasha'),
+  kabPt(4, 'TACKLE', 'home', 1, 4, 1, 'p-bh-1', 'Faisal Khan'),
+  kabPt(5, 'RAID', 'away', 2, 6, 1, 'p-yh-2', 'Naveen Shetty'),
+  kabPt(6, 'RAID', 'home', 1, 7, 1, 'p-bh-2', 'Rohit Pillai'),
+  kabPt(7, 'TACKLE', 'away', 1, 9, 1, 'p-yh-8', 'Kiran Joshi'),
+  kabPt(8, 'RAID', 'home', 2, 11, 1, 'p-bh-6', 'Karan Mehta'),
+  kabPt(9, 'RAID', 'away', 2, 13, 1, 'p-yh-6', 'Mahesh Naik'),
+  kabPt(10, 'TACKLE', 'home', 1, 15, 1, 'p-bh-3', 'Sameer Das'),
+  kabPt(11, 'RAID', 'away', 1, 17, 1, 'p-yh-1', 'Imran Pasha'),
+  kabPt(12, 'RAID', 'home', 1, 19, 1, 'p-ishaan', 'Ishaan Verma'),
+  { seq: 13, type: 'NEXT_HALF', side: null, payload: {} },
+  { seq: 14, type: 'KICKOFF', side: null, payload: { at: nowMs - 10 * 60000 } },
+  kabPt(15, 'RAID', 'home', 2, 21, 2, 'p-bh-2', 'Rohit Pillai'),
+  kabPt(16, 'RAID', 'away', 2, 22, 2, 'p-yh-2', 'Naveen Shetty'),
+  kabPt(17, 'TACKLE', 'away', 1, 23, 2, 'p-yh-9', 'Asha Rao'),
+  kabPt(18, 'RAID', 'home', 2, 24, 2, 'p-ishaan', 'Ishaan Verma'),
+  kabPt(19, 'TACKLE', 'home', 1, 25, 2, 'p-bh-7', 'Vivek Shenoy'),
+  kabPt(20, 'RAID', 'away', 1, 26, 2, 'p-yh-6', 'Mahesh Naik'),
+  kabPt(21, 'RAID', 'home', 1, 27, 2, 'p-bh-6', 'Karan Mehta'),
+  kabPt(22, 'TACKLE', 'away', 1, 28, 2, 'p-yh-8', 'Kiran Joshi'),
+  kabPt(23, 'TACKLE', 'away', 1, 29, 2, 'p-meera', 'Meera Joshi'),
 ];
 // Cup final (t7): a knockout tie level 1–1 in the 2nd half — ending it goes to
 // a penalty shootout. Seeded end-to-end (shots, corners, fouls, cards, offsides
