@@ -30,6 +30,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Cricket scorecard: highlight the batters at the crease + current bowler · SHIPPED + VERIFIED
+
+The batting card only flagged not-out batters with a trailing `*` — nothing showed **who is actually on strike**
+right now, and the bowling card gave no cue for **who is currently bowling**. Added a broadcast-style live cue to
+the `InningsCard` (only on the side that is currently batting, and only while the match is live).
+
+- **Change:** the two at-crease batters (`strikerId` / `nonStrikerId`) get a subtle primary-tinted row, a bold
+  green name and a green runs figure; the striker also gets a 🏏 marker. In the bowling table the current bowler
+  (`bowlerId`) gets the same tinted row + 🎯 marker + green wicket count. A completed innings (not the batting
+  side) shows no highlight, so a full-time scorecard stays neutral. Bowlers switched from `Object.values` to
+  `Object.entries` so the row can match `bowlerId`.
+- **Files:** `src/sports/cricket/index.tsx` (`InningsCard` batting/bowling rows + `atCrease` guard; new
+  `trowLive` / `bNameLive` / `cNumLive` styles).
+- **Verified live (demo):** cricket Red v Blue chase → BLU (batting) card shows **Sanjay Menon 🏏** (striker) and
+  **Imran Sheikh** (non-striker) tinted green, dismissed batters plain; bowling shows **Suresh Pillai 🎯**
+  highlighted; the completed RED innings shows no highlight. View-only (no demo mutation). 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary ratings note: context-aware, always shown · SHIPPED + VERIFIED
 
 The note under the ratings header only appeared for **live** matches ("Updates live — final ratings lock…"); a

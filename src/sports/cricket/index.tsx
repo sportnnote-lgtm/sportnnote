@@ -733,7 +733,8 @@ function InningsCard({
 }) {
   const inn = s.scores[side];
   const batters = Object.entries(s.batting).filter(([, c]) => c.side === side).map(([id, c]) => ({ id, ...c }));
-  const bowlers = Object.values(s.bowling).filter((b) => b.side === other(side));
+  const bowlers = Object.entries(s.bowling).filter(([, b]) => b.side === other(side)).map(([id, b]) => ({ id, ...b }));
+  const atCrease = batting && !s.ended; // this side is the one currently batting
   const battedIds = new Set(batters.map((b) => b.id));
   const toBat = roster.filter((p) => !battedIds.has(p.id));
   const sr = (runs: number, balls: number) => (balls ? ((runs / balls) * 100).toFixed(1) : '-');
@@ -768,19 +769,23 @@ function InningsCard({
                 <Text style={[ctrl.cNum, ctrl.th]}>6s</Text>
                 <Text style={[ctrl.cWide, ctrl.th]}>SR</Text>
               </View>
-              {batters.map((b) => (
-                <View key={b.id} style={ctrl.trow}>
+              {batters.map((b) => {
+                const onStrike = atCrease && b.id === s.strikerId;
+                const live = atCrease && (b.id === s.strikerId || b.id === s.nonStrikerId);
+                return (
+                <View key={b.id} style={[ctrl.trow, live && ctrl.trowLive]}>
                   <View style={ctrl.cName}>
-                    <Text style={ctrl.bName} numberOfLines={1}>{b.name || 'Batter'}{role(b.id)}{!b.out && !b.retired ? ' *' : ''}</Text>
+                    <Text style={[ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1}>{b.name || 'Batter'}{role(b.id)}{!b.out && !b.retired ? ' *' : ''}{onStrike ? ' 🏏' : ''}</Text>
                     <Text style={ctrl.bDismiss} numberOfLines={1}>{b.out ? (b.dismissal ?? 'out') : b.retired ? (b.dismissal ?? 'retired hurt') : 'not out'}</Text>
                   </View>
-                  <Text style={ctrl.cNum}>{b.runs}</Text>
+                  <Text style={[ctrl.cNum, live && ctrl.cNumLive]}>{b.runs}</Text>
                   <Text style={ctrl.cNum}>{b.balls}</Text>
                   <Text style={ctrl.cNum}>{b.fours}</Text>
                   <Text style={ctrl.cNum}>{b.sixes}</Text>
                   <Text style={ctrl.cWide}>{sr(b.runs, b.balls)}</Text>
                 </View>
-              ))}
+                );
+              })}
             </>
           )}
 
@@ -803,15 +808,18 @@ function InningsCard({
                 <Text style={[ctrl.cNum, ctrl.th]}>W</Text>
                 <Text style={[ctrl.cWide, ctrl.th]}>Eco</Text>
               </View>
-              {bowlers.map((b, i) => (
-                <View key={i} style={ctrl.trow}>
-                  <Text style={[ctrl.cName, ctrl.bName]} numberOfLines={1}>{b.name || 'Bowler'}</Text>
+              {bowlers.map((b) => {
+                const live = atCrease && b.id === s.bowlerId;
+                return (
+                <View key={b.id} style={[ctrl.trow, live && ctrl.trowLive]}>
+                  <Text style={[ctrl.cName, ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1}>{b.name || 'Bowler'}{live ? ' 🎯' : ''}</Text>
                   <Text style={ctrl.cNum}>{oversStr(b.balls, s.ballsPerOver)}</Text>
                   <Text style={ctrl.cNum}>{b.runs}</Text>
-                  <Text style={ctrl.cNum}>{b.wickets}</Text>
+                  <Text style={[ctrl.cNum, live && ctrl.cNumLive]}>{b.wickets}</Text>
                   <Text style={ctrl.cWide}>{eco(b.runs, b.balls)}</Text>
                 </View>
-              ))}
+                );
+              })}
             </>
           )}
         </View>
@@ -1012,10 +1020,13 @@ const ctrl = StyleSheet.create({
   thead: { flexDirection: 'row', alignItems: 'center', paddingBottom: theme.spacing(1) },
   th: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase' },
   trow: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(1) },
+  trowLive: { backgroundColor: theme.colors.primary + '14', borderRadius: theme.radius.sm, marginHorizontal: -theme.spacing(1), paddingHorizontal: theme.spacing(1) },
   cName: { flex: 1 },
   cNum: { width: 34, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
+  cNumLive: { color: theme.colors.primary, fontWeight: '900' },
   cWide: { width: 52, textAlign: 'right', color: theme.colors.textMuted, fontSize: theme.font.small },
   bName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '600' },
+  bNameLive: { color: theme.colors.primary, fontWeight: '800' },
   bDismiss: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: theme.spacing(1) },
   totalLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
