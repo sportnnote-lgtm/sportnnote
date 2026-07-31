@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Football lineups: team-labelled bench columns · SHIPPED + VERIFIED
+
+The FIFA-style LineupView (both XIs on a pitch with avatars, cards, goals, sub arrows, captain marks, formation
+pills, legend) is already rich. One clarity gap: the bench was a single centred "Bench" title over two unlabelled
+columns — you had to infer home-left / away-right.
+
+- **Change:** each bench column now has a team-coloured header — "RED · 1", "BLU · 1" (name + sub count) — so
+  each side's bench is labelled at a glance. Rest of the view unchanged.
+- **Files:** `src/sports/football/LineupView.tsx` (`BenchList` header + `benchHead`/`benchColTitle` styles).
+- **Verified live (demo):** m1 Lineups → pitch with RN Nair (yellow + goal) and VK Kamath (sub-off 30'), and the
+  bench under it labelled "RED · 1" (Harsha Bhat ↑ 30') / "BLU · 1" (Aman Joshi). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Football stats: hide untracked rows, list them in the footer · SHIPPED + VERIFIED
 
 The team-stats comparison (bars + leader-highlighted values + the per-period toggle) was already strong, but it

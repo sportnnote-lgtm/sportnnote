@@ -138,11 +138,15 @@ export function LineupView({
     </View>
   );
 
-  const BenchList = ({ roster, lineup, color, side }: { roster: Player[]; lineup: LineupSlot[]; color: string; side: 'home' | 'away' }) => {
+  const BenchList = ({ roster, lineup, color, side, teamName }: { roster: Player[]; lineup: LineupSlot[]; color: string; side: 'home' | 'away'; teamName: string }) => {
     const mask = useMask();
     const list = bench(roster, lineup);
     return (
       <View style={s.benchCol}>
+        <View style={[s.benchHead, side === 'away' && { flexDirection: 'row-reverse' }]}>
+          <View style={[s.teamDot, { backgroundColor: color }]} />
+          <Text style={[s.benchColTitle, { color }]} numberOfLines={1}>{teamName} · {list.length}</Text>
+        </View>
         {list.length === 0 ? <Text style={s.muted}>No bench listed</Text> : list.map((p) => {
           const onMin = cameOn[p.fullName];
           const m = marks[p.fullName];
@@ -184,8 +188,8 @@ export function LineupView({
 
       <Text style={s.benchTitle}>Bench</Text>
       <View style={s.benchWrap}>
-        <BenchList roster={homeRoster} lineup={homeLineup} color={homeColor} side="home" />
-        <BenchList roster={awayRoster} lineup={awayLineup} color={awayColor} side="away" />
+        <BenchList roster={homeRoster} lineup={homeLineup} color={homeColor} side="home" teamName={homeName} />
+        <BenchList roster={awayRoster} lineup={awayLineup} color={awayColor} side="away" teamName={awayName} />
       </View>
 
       <View style={s.legend}>
@@ -225,6 +229,8 @@ const s = StyleSheet.create({
   benchTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', textAlign: 'center' },
   benchWrap: { flexDirection: 'row', gap: theme.spacing(3) },
   benchCol: { flex: 1, gap: theme.spacing(2) },
+  benchHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
+  benchColTitle: { flex: 1, fontSize: theme.font.tiny, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
   benchRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   benchName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '600' },
   benchSub: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '700' },
