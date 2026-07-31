@@ -13,6 +13,10 @@ import { openWhatsApp } from '../core/connect';
 import { isValidPhone } from '../core/phone';
 import type { Player, SportId } from '../core/types';
 
+/** Up to two initials from a name, for an invited-player avatar. */
+const initials = (name?: string): string =>
+  (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
 export function AddInvitePlayer({
   homeTeamId, awayTeamId, homeTeamName, awayTeamName, sport, invited, onChanged, fixedSide, title,
 }: {
@@ -75,7 +79,10 @@ export function AddInvitePlayer({
     <View style={st.inviteCard}>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={title ?? 'Add or invite a player'} accessibilityState={{ expanded: open }} activeOpacity={0.8} style={st.inviteHead} onPress={() => setOpen((o) => !o)}>
         <Text style={st.inviteTitle}>{title ?? '＋ Add / invite a player'}</Text>
-        <Text style={st.caretMuted}>{open ? '▴' : '▾'}</Text>
+        <View style={st.headRight}>
+          {invited.length > 0 ? <View style={st.pendingCount}><Text style={st.pendingCountText}>{invited.length} pending</Text></View> : null}
+          <Text style={st.caretMuted}>{open ? '▴' : '▾'}</Text>
+        </View>
       </TouchableOpacity>
       {open && (
         <View style={{ gap: theme.spacing(3) }}>
@@ -111,11 +118,16 @@ export function AddInvitePlayer({
 
           {invited.length > 0 && (
             <View style={{ gap: theme.spacing(2) }}>
-              <Text style={st.invitedLabel}>Invited — pending registration</Text>
+              <Text style={st.invitedLabel}>Invited · {invited.length} pending registration</Text>
               {invited.map((p) => (
                 <View key={p.id} style={st.invitedRow}>
-                  <Text style={st.invitedName} numberOfLines={1}>⏳ {p.fullName}{p.phone ? `  ·  ${p.phone}` : ''}</Text>
-                  <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered (demo)</Text>
+                  <View style={st.invAvatar}><Text style={st.invAvatarText}>{initials(p.fullName)}</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.invitedName} numberOfLines={1}>{p.fullName}</Text>
+                    {p.phone ? <Text style={st.invitedPhone} numberOfLines={1}>{p.phone}</Text> : null}
+                  </View>
+                  <View style={st.pendingTag}><Text style={st.pendingTagText}>PENDING</Text></View>
+                  <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
                 </View>
               ))}
             </View>
@@ -130,12 +142,20 @@ const st = StyleSheet.create({
   inviteCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(3) },
   inviteHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inviteTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  pendingCount: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.accent },
+  pendingCountText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900' },
   caretMuted: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   sideRow: { flexDirection: 'row', gap: theme.spacing(2) },
   inviteNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
   matchedNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   invitedLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
-  invitedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
-  invitedName: { color: theme.colors.text, fontSize: theme.font.small, flex: 1 },
-  registeredLink: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  invitedRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
+  invAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  invAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
+  invitedName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  invitedPhone: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  pendingTag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.accent },
+  pendingTagText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
+  registeredLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
 });

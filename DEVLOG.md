@@ -30,6 +30,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab add-player card: pending count + avatar rows + tags · SHIPPED + VERIFIED
+
+Brought the shared `AddInvitePlayer` card in line with the rest of the Info tab, and seeded a pending invite so
+the state is demoable.
+
+- **Header** gains an amber **N pending** pill (visible even collapsed) when there are unregistered invites.
+- **Invited list:** each pending player is now an initials-avatar row — name + phone subline + an amber
+  **PENDING** tag + a "Mark registered" link — instead of a flat "⏳ Name · phone". Section header carries the
+  count ("Invited · N pending registration").
+- **Seed:** added one organizer-invited prospect (Rehan Malik, Blue House, not in the matchday squad) so the
+  pending list actually renders in the demo (the real invite flow opens WhatsApp, so it can't be exercised
+  headlessly). `DEMO_KEY` v32→v33.
+- **Files:** `src/components/AddInvitePlayer.tsx` (header count + avatar rows + `initials` helper + styles);
+  `src/data/demoStore.ts` (seed + key). The card is also used on the scoring tab and squad cards → all benefit.
+- **Verified live (demo):** m1 Blue House squad → "＋ Add another player · 1 pending"; expanded → INVITED · 1
+  PENDING REGISTRATION, **RM** · Rehan Malik · +91 90000 12345 · amber PENDING · Mark registered. 86 tests,
+  typecheck clean.
+
 ### 2026-07-31 — Info tab manager/coach field: person row + reveal-to-edit · SHIPPED + VERIFIED
 
 The manager/coach field (inside each squad card) was an always-open text input for hosts, or a muted "🧑‍💼

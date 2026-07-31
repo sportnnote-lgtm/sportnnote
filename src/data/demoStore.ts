@@ -155,6 +155,9 @@ const players: Player[] = [
   { id: 'p-bh-7', fullName: 'Vivek Shenoy', jerseyNo: 27, sports: ['kabaddi', 'volleyball', 'tennis', 'football'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-8', fullName: 'Tina Dsa', jerseyNo: 28, sports: ['tennis', 'badminton', 'basketball'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
   { id: 'p-bh-9', fullName: 'Aman Joshi', jerseyNo: 29, sports: ['football', 'volleyball', 'badminton'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru' },
+  // Organizer-invited prospect who hasn't registered yet — shows in the team's
+  // "invited · pending" list on the add-player card until they install & sign up.
+  { id: 'p-bh-inv', fullName: 'Rehan Malik', sports: ['football'], houseName: 'Blue House', houseColor: BLUE, city: 'Bengaluru', invited: true, phone: '+91 90000 12345' },
   // Green House depth (incl. a full cricket squad — the house had none)
   { id: 'p-gh-1', fullName: 'Rahul Gupta', jerseyNo: 20, sports: ['cricket', 'football', 'kabaddi'], houseName: 'Green House', houseColor: GREEN, city: 'Bengaluru' },
   { id: 'p-gh-2', fullName: 'Vikas Shetty', jerseyNo: 21, sports: ['cricket', 'kabaddi'], houseName: 'Green House', houseColor: GREEN, city: 'Bengaluru' },
@@ -821,7 +824,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v32'; // v32: completed volleyball m5 gets a full event log (broadcast FINAL board) + winner treatment
+const DEMO_KEY = 'sportfolio.demo.v33'; // v33: one invited/pending player (Rehan Malik, Blue House) to demo the add-player pending list
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
