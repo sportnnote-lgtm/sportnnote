@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab remind-captain button: sent-state feedback · SHIPPED + VERIFIED
+
+The squad card's "🔔 Remind {captain} to set the squad" button fired the notification silently with no feedback.
+Added a confirmed state.
+
+- **After tapping:** the button becomes "✓ Reminder sent to {captain} & vice" (green) with a subtle **Remind
+  again** link. Tracked per side (`remindedSides`), so reminding Red doesn't change Blue's button.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`remindCaptain` sets the flag; squad-card branch renders the
+  sent state; `remindDone`/`remindDoneText`/`remindAgain` styles). View-layer + the existing notify path.
+- **Verified live (demo):** m7 (scheduled, squads unset) Red House → tapped "Remind Aarav Mehta" → flipped to
+  "✓ Reminder sent to Aarav Mehta & vice · Remind again"; Blue House's button stayed untapped. Cleared storage
+  to drop the queued notification. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab calendar button: gated to upcoming + countdown hint · SHIPPED + VERIFIED
 
 The "📅 Add to my calendar" button showed for every match with a start time — including live and finished ones,

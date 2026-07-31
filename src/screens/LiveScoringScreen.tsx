@@ -124,6 +124,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [streamInput, setStreamInput] = useState('');
   const [editingStream, setEditingStream] = useState(false);
   const [editingManager, setEditingManager] = useState<'home' | 'away' | null>(null);
+  const [remindedSides, setRemindedSides] = useState<Record<'home' | 'away', boolean>>({ home: false, away: false });
   useEffect(() => { setStreamInput(meta.streamUrl ?? ''); }, [meta.streamUrl]);
   // Per-dispute "add a new name" inputs (reassign to someone not in the system).
   const [newName, setNewName] = useState<Record<string, string>>({});
@@ -304,6 +305,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       .forEach((pid) =>
         void notify({ title: `📋 Squad needed — ${teamNm}`, body: `Please set your matchday squad for ${label}.`, playerId: pid, matchId })
       );
+    setRemindedSides((r) => ({ ...r, [sd]: true }));
   };
 
   const [pickScorer, setPickScorer] = useState(false);
@@ -580,9 +582,16 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {/* Setting the XI is a pre-match task — don't nag once the match is live or done. */}
           {!set && canManage && matchId && meta.status !== 'live' && meta.status !== 'completed' && (
             hasCaptain ? (
-              <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the squad" onPress={() => remindCaptain(sd)}>
-                <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the squad</Text>
-              </TouchableOpacity>
+              remindedSides[sd] ? (
+                <View style={st.remindDone}>
+                  <Text style={st.remindDoneText} numberOfLines={1}>✓ Reminder sent to {nameOf(L.captainId) ?? 'the captain'}{L.viceCaptainId ? ' & vice' : ''}</Text>
+                  <Text style={st.remindAgain} accessibilityRole="button" onPress={() => remindCaptain(sd)}>Remind again</Text>
+                </View>
+              ) : (
+                <TouchableOpacity style={st.remindBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Remind the captain to set the squad" onPress={() => remindCaptain(sd)}>
+                  <Text style={st.remindText}>🔔 Remind {nameOf(L.captainId) ? `${nameOf(L.captainId)}` : 'captain'} to set the squad</Text>
+                </TouchableOpacity>
+              )
             ) : (
               <Text style={textStyles.muted}>No captain set — assign one from the team's squad page to remind them.</Text>
             )
@@ -1371,6 +1380,9 @@ const st = StyleSheet.create({
   assignBtnText: { color: '#06120D', fontSize: theme.font.body, fontWeight: '800' },
   remindBtn: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   remindText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  remindDone: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), flexWrap: 'wrap' },
+  remindDoneText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', flexShrink: 1 },
+  remindAgain: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   lineups: { gap: theme.spacing(3) },
   lineupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
