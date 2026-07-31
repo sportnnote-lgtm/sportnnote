@@ -867,13 +867,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     ) : null;
     const disputesCard = disputes.length > 0 ? (
       <View style={st.infoCard}>
-        <Text style={textStyles.h3}>🚩 Participation disputes</Text>
+        <View style={st.streamHead}>
+          <Text style={textStyles.h3}>🚩 Participation disputes</Text>
+          {flaggedCount > 0 ? <View style={st.disputeCount}><Text style={st.disputeCountText}>{flaggedCount} ACTIVE</Text></View> : null}
+        </View>
         <Text style={textStyles.muted}>Objections (the player themselves) hide the name as “X” immediately. Reports (from a teammate or opponent) notify the organizer, who decides whether to escalate after a ground-level check. Reassigning moves the scores to whoever actually played, once both captains confirm.</Text>
 
         {/* Peer reports awaiting the organizer's call. */}
+        {reportedDisputes.length > 0 && <Text style={st.squadSection}>Reported {reportedDisputes.length}</Text>}
         {reportedDisputes.map((d) => (
           <View key={d.id} style={st.disputeBox}>
-            <Text style={[textStyles.body, { fontWeight: '700' }]}>⚐ {d.playerName} — {d.side === 'home' ? homeName : awayName}</Text>
+            <View style={st.disputeTitleRow}>
+              <Text style={[textStyles.body, { fontWeight: '700', flex: 1 }]} numberOfLines={1}>{d.playerName} — {d.side === 'home' ? homeName : awayName}</Text>
+              <DisputeTag kind="reported" />
+            </View>
             <Text style={textStyles.muted}>Reported by {d.raisedByName ?? 'a player'}. Organizer to verify off-app, then escalate or dismiss.</Text>
             {canResolveDisputes ? (
               <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
@@ -887,12 +894,16 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           </View>
         ))}
 
+        {openDisputes.length > 0 && <Text style={st.squadSection}>Under review {openDisputes.length}</Text>}
         {openDisputes.map((d) => {
           const sideRoster = (d.side === 'home' ? homeFull : awayFull).filter((p) => p.id !== d.playerId);
           const ready = !!d.replacementId && !!d.homeCaptainOk && !!d.awayCaptainOk;
           return (
             <View key={d.id} style={st.disputeBox}>
-              <Text style={[textStyles.body, { fontWeight: '700' }]}>❌ {d.playerName}’s spot — {d.side === 'home' ? homeName : awayName}</Text>
+              <View style={st.disputeTitleRow}>
+                <Text style={[textStyles.body, { fontWeight: '700', flex: 1 }]} numberOfLines={1}>{d.playerName}’s spot — {d.side === 'home' ? homeName : awayName}</Text>
+                <DisputeTag kind="open" />
+              </View>
               {!canResolveDisputes ? (
                 <Text style={textStyles.muted}>Awaiting both captains and the organizer to review.</Text>
               ) : (
@@ -933,13 +944,16 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
         {settledDisputes.length > 0 && (
           <>
-            <Text style={[textStyles.muted, { marginTop: theme.spacing(2) }]}>Resolved &amp; dismissed</Text>
+            <Text style={st.squadSection}>Resolved &amp; dismissed {settledDisputes.length}</Text>
             {settledDisputes.map((d) => (
               <View key={d.id} style={[st.disputeBox, { opacity: 0.85 }]}>
-                <Text style={[textStyles.body, { fontWeight: '700' }]}>
-                  {d.status === 'resolved' ? '✅' : '✕'} {d.playerName} — {d.side === 'home' ? homeName : awayName}
-                  {d.status === 'resolved' && d.replacementName ? ` → ${d.replacementName}` : ''}
-                </Text>
+                <View style={st.disputeTitleRow}>
+                  <Text style={[textStyles.body, { fontWeight: '700', flex: 1 }]} numberOfLines={1}>
+                    {d.playerName} — {d.side === 'home' ? homeName : awayName}
+                    {d.status === 'resolved' && d.replacementName ? ` → ${d.replacementName}` : ''}
+                  </Text>
+                  <DisputeTag kind={d.status === 'resolved' ? 'resolved' : 'dismissed'} />
+                </View>
                 <DisputeHistory events={d.history} />
               </View>
             ))}
@@ -1212,6 +1226,17 @@ function OfflineSyncBanner({ matchId }: { matchId: string }) {
 }
 
 /** Compact append-only audit trail for a dispute — every step with who & when. */
+/** A coloured status pill for a dispute box header. */
+function DisputeTag({ kind }: { kind: 'reported' | 'open' | 'resolved' | 'dismissed' }) {
+  const map = {
+    reported: { label: 'REPORTED', bg: theme.colors.accent, fg: '#0B0F14' },
+    open: { label: 'UNDER REVIEW', bg: theme.colors.danger, fg: '#fff' },
+    resolved: { label: 'RESOLVED', bg: theme.colors.primary, fg: '#0B0F14' },
+    dismissed: { label: 'DISMISSED', bg: theme.colors.surface, fg: theme.colors.textMuted },
+  }[kind];
+  return <View style={[st.dtag, { backgroundColor: map.bg }]}><Text style={[st.dtagText, { color: map.fg }]}>{map.label}</Text></View>;
+}
+
 function DisputeHistory({ events }: { events?: DisputeEvent[] }) {
   if (!events?.length) return null;
   const icon = (a: DisputeEvent['action']) =>
@@ -1317,6 +1342,11 @@ const st = StyleSheet.create({
   disputedName: { color: theme.colors.danger, fontWeight: '800', textDecorationLine: 'line-through' },
   objectLink: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   disputeBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },
+  disputeCount: { paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  disputeCountText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
+  disputeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  dtag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill },
+  dtagText: { fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   disputeBanner: { backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.danger, padding: theme.spacing(3) },
   disputeBannerText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },

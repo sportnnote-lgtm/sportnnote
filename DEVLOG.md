@@ -30,6 +30,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab disputes card: counts, sections, status tags · SHIPPED + VERIFIED
+
+Brought the participation-disputes card in line with the rest of the Info tab.
+
+- **Header** gains a red **N ACTIVE** pill (open + reported count).
+- **Section subheadings** with counts for all three groups — "Reported N", "Under review N", "Resolved &
+  dismissed N" (the first two had none before; matches the squad card's STARTING/SUBSTITUTES style).
+- **Status tag** on each dispute box: amber **REPORTED**, red **UNDER REVIEW**, green **RESOLVED**, muted
+  **DISMISSED** (a new `DisputeTag` helper) — replacing the ad-hoc ⚐/❌/✅ prefixes. Resolve/escalate/dismiss
+  controls and the audit trail are unchanged.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`disputesCard` + `DisputeTag` + styles). Pure view layer.
+- **Verified live (demo):** reported Neil Kapoor on m1 from the squad card → the disputes card showed "🚩
+  Participation disputes · 1 ACTIVE", a "REPORTED 1" section, and the box "Neil Kapoor — RED" with an amber
+  **REPORTED** tag + Escalate/Dismiss + audit trail. Cleared storage to restore the demo. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab format/date/venue rows: icon-led detail list · SHIPPED + VERIFIED
 
 Turned the plain label/value rows into a consistent icon-led detail list, and unified all four through one
