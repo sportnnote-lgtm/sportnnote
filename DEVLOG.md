@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Basketball play-by-play: unified rail style + LATEST + cap · SHIPPED + VERIFIED
+
+Basketball had its own timeline layout (quarter stamp + a right-side dot + bordered rows) and rendered **every**
+play with no cap. Rebuilt it to share the other sports' rail-and-nodes look for a consistent timeline everywhere.
+
+- **Rail spine** with a team-coloured node per play (was a trailing side-dot); the newest play gets a node ring +
+  right-aligned **LATEST** tag; a "＋ N earlier plays" footer once past the 60-row cap (previously uncapped).
+- Keeps the basketball specifics — the "Q2 6'" stamp, `BB_META` icons (🏀/🔁/🟨/Ⓐ), and the "+2 Player" detail.
+- **Files:** `src/sports/basketball/Timeline.tsx` (rewritten to match `LiveTimeline`).
+- **Verified live (demo):** cg7 Score → Play-by-play with the coloured rail, newest (Q2 6' Foul · Rohit Gowda)
+  ringed and tagged **LATEST**; no footer (28 plays < cap). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Score tab timeline: LATEST marker + truncation footer · SHIPPED + VERIFIED
 
 The shared `LiveTimeline` (kabaddi / volleyball / badminton / tennis point-&-rally logs) capped at 60 rows and
