@@ -45,9 +45,28 @@ on 7-a-side football, basketball (5), cricket (8), etc. Made it size-agnostic.
   `demoStore.ts`/`cricketSeed.ts`).
 - **Verified live (demo):** m1 (7-a-side) Info → both teams **"✓ Squad set"**; applies to every sport since
   it's the shared component. 84 tests, typecheck, console clean.
-- **Note:** the squad/lineup *editor* screens still use "XI" in a few spots (e.g. CricketLineup "become the
-  XI", LineupEditor "not in the XI") — left for a follow-up; this pass covered the live match Info surface the
-  user flagged.
+- **Follow-up (done — see next entry):** the editor screens' "XI" wording was swept in the change below.
+
+### 2026-07-30 — Sweep "XI" out of the squad/lineup editor screens · SHIPPED + VERIFIED
+
+Completed the terminology sweep across the remaining user-facing "XI" strings (all size-specific):
+
+- **CricketLineupScreen:** "become the XI (batting 1–N)" → "form the batting order (1–N)"; the count header
+  "{team} XI — n/N" → "{team} lineup — n/N".
+- **LineupEditorScreen:** "squad members not in the XI" → "…not in the starting lineup"; "Everyone is in the
+  XI." → "Everyone is in the starting lineup."
+- **MatchSquadScreen:** the quick actions "Fill XI" → "Fill starters" and "Copy last match's XI" → "Copy last
+  match's squad".
+- **SquadScreen:** "Matchday XI & substitute selection…" → "Matchday squad & substitute selection…".
+- **Help centre** (`supportKB` title + body, `supportGuides`): "playing XI / squad" title → "Set the matchday
+  squad for a match"; "Copy last match's XI" → "…squad". Kept the "playing 11" / "starting five" search
+  keywords (people still search those) — the support-KB search test still matches on them.
+- **Files:** `CricketLineupScreen.tsx`, `LineupEditorScreen.tsx`, `MatchSquadScreen.tsx`, `SquadScreen.tsx`,
+  `supportKB.ts`, `supportGuides.ts`. Remaining "XI" are code comments only (dev shorthand, not rendered).
+- **Verified:** 84 tests (incl. the support-KB search test) + typecheck + console clean. Wording-only, no
+  `DEMO_KEY` bump. The editor screens are gated behind manage/pre-match flows that aren't drivable in the web
+  harness, so these strings were verified by code + typecheck + tests; the live-facing "✓ Squad set" label was
+  screenshot-verified in the entry above.
 
 ### 2026-07-30 — m1 rebuilt as a clean 7-v-7 · SHIPPED + VERIFIED
 

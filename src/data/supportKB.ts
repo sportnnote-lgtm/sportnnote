@@ -115,7 +115,7 @@ For some sports you can also edit a recorded moment in place from the match time
   },
   {
     id: 'set-lineup-squad',
-    title: 'Set the playing XI / squad for a match',
+    title: 'Set the matchday squad for a match',
     category: 'Live scoring',
     summary: 'Open the match, pick who starts and who is on the bench from the full squad.',
     keywords: ['lineup', 'playing 11', 'starting five', 'squad', 'bench', 'subs', 'players'],
@@ -123,7 +123,7 @@ For some sports you can also edit a recorded moment in place from the match time
 
 - On the match, open the squad/lineup for each team.
 - Tap players to move them between Starting and Bench. A counter shows how many you've picked versus how many the format needs.
-- Use "Fill" to auto-complete the starters, or "Copy last match's XI" to reuse your previous side.
+- Use "Fill starters" to auto-complete the starters, or "Copy last match's squad" to reuse your previous side.
 
 If a player you need isn't in the squad, use "Add / invite a player" right there to add them.`,
   },

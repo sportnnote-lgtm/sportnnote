@@ -170,10 +170,10 @@ export default function LineupEditorScreen() {
         ))}
 
         <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Substitutes</Text>
-        <Text style={textStyles.muted}>Bench players (squad members not in the XI).</Text>
+        <Text style={textStyles.muted}>Bench players (squad members not in the starting lineup).</Text>
         <View style={st.chips}>
           {roster.filter((p) => !assignedIds.has(p.id)).length === 0 ? (
-            <Text style={textStyles.muted}>Everyone is in the XI.</Text>
+            <Text style={textStyles.muted}>Everyone is in the starting lineup.</Text>
           ) : (
             roster
               .filter((p) => !assignedIds.has(p.id))

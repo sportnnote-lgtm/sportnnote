@@ -166,7 +166,7 @@ export default function SquadScreen() {
         )}
 
         <Text style={st.note}>
-          Matchday XI &amp; substitute selection is available for football (Lineup editor on the live match); rolling it out to every sport is next.
+          Matchday squad &amp; substitute selection is available for football (Lineup editor on the live match); rolling it out to every sport is next.
         </Text>
       </ScrollView>
     </SafeAreaView>

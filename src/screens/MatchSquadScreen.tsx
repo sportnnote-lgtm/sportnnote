@@ -184,13 +184,13 @@ export default function MatchSquadScreen() {
           </View>
           <View style={{ flex: 1 }} />
           {startCount < playersPerSide && eligible.length > startCount + subCount ? (
-            <Text style={st.quick} onPress={fillXI}>Fill XI</Text>
+            <Text style={st.quick} onPress={fillXI}>Fill starters</Text>
           ) : null}
           {startCount + subCount > 0 ? <Text style={st.quick} onPress={clearAll}>Clear</Text> : null}
         </View>
         {lastEligibleCount > 0 && (
           <TouchableOpacity accessibilityRole="button" style={st.copyBtn} activeOpacity={0.85} onPress={copyLastXI}>
-            <Text style={st.copyText}>↻ Copy last match’s XI ({lastEligibleCount})</Text>
+            <Text style={st.copyText}>↻ Copy last match’s squad ({lastEligibleCount})</Text>
           </TouchableOpacity>
         )}
       </View>

@@ -102,13 +102,13 @@ export default function CricketLineupScreen() {
         </View>
 
         <Text style={textStyles.muted}>
-          The first {playersPerSide} become the XI (batting {1}–{playersPerSide}); anyone tapped after that is a substitute.
+          The first {playersPerSide} form the batting order ({1}–{playersPerSide}); anyone tapped after that is a substitute.
           Only verified players can be added.
         </Text>
 
-        {/* The ordered XI so far */}
+        {/* The ordered batting lineup so far */}
         <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>
-          {teamName} XI — <Text style={starters.length >= playersPerSide ? st.countFull : undefined}>{starters.length}/{playersPerSide}</Text>
+          {teamName} lineup — <Text style={starters.length >= playersPerSide ? st.countFull : undefined}>{starters.length}/{playersPerSide}</Text>
         </Text>
         {picked.length === 0 ? (
           <Text style={textStyles.muted}>No one picked yet — tap players below to build the order.</Text>

@@ -76,7 +76,7 @@ For some sports you can also edit a recorded moment in place from the match time
 ## Pick the lineup
 1. Open the match and go to the **Squad / Lineup** step (shown before you start, and reachable from the match menu).
 2. For each team, tap players to move them between **Starting** and **Bench**. A counter shows how many you've picked versus how many the format needs.
-3. Use **Fill** to auto-complete the starters, or **Copy last match's XI** to reuse this team's previous side.
+3. Use **Fill starters** to auto-complete the starters, or **Copy last match's squad** to reuse this team's previous side.
 4. Missing a player? Tap **+ Add / invite a player** to add them without leaving the screen.
 
 You can start scoring without a full lineup and add players later, but setting it up front means you can pick the scorer or goal-scorer straight from the list.`,
