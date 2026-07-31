@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary empty state: live/complete-aware copy · SHIPPED + VERIFIED
+
+The ratings empty state showed one generic line ("No individual stats recorded for this match") for every case.
+Made it context-aware with a helpful hint.
+
+- **Change:** live/upcoming → "No player stats yet" + "Ratings build here as the scorer attributes goals, points
+  and other actions to players."; completed → "No individual stats recorded" + "This match was scored at team
+  level — no actions were attributed to players." (uses `EmptyState`'s existing `hint`.)
+- **Files:** `src/components/MatchSummary.tsx` (empty-state branch).
+- **Verified live (demo):** m7 tennis (upcoming, no stats) Summary → "📊 No player stats yet · Ratings build
+  here as the scorer attributes…". 86 tests, typecheck clean.
+
 ### 2026-08-01 — Summary result label: live dot · SHIPPED + VERIFIED
 
 The result block's top line was plain text — "Live · 1st Half" while live, "Full time" when done. Gave the live

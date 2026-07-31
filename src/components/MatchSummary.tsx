@@ -110,7 +110,14 @@ export function MatchSummary({
         <Text style={st.note}>Updates live — final ratings lock when the match ends.</Text>
       )}
       {players.length === 0 ? (
-        <EmptyState icon="📊" title="No individual stats recorded for this match" compact />
+        <EmptyState
+          icon="📊"
+          title={complete ? 'No individual stats recorded' : 'No player stats yet'}
+          hint={complete
+            ? 'This match was scored at team level — no actions were attributed to players.'
+            : 'Ratings build here as the scorer attributes goals, points and other actions to players.'}
+          compact
+        />
       ) : (
         <Card>
           {players.map((p: MatchRating, i) => {
