@@ -47,6 +47,22 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket scoring controls: run pad in the batting side's colour · FIX + VERIFIED
+
+The cricket scorer's run buttons (0/1/2/3) were hardcoded `variant="home"`, which is a **fixed blue**
+(`#4DA3FF`) regardless of who's batting — semantically meaningless (it reads as "home") and unrelated to the
+batting side. `ScoringControls` already receives `homeColor`/`awayColor` (the screen passes them; the prop's
+own doc says "so the scorer's controls match the teams") but cricket never used them.
+
+- **Change:** the run-number buttons now render in the **batting side's kit colour** (`battingColor`), so the pad
+  visually belongs to whoever's batting; boundaries (4/6) stay primary green. Applied consistently to all three
+  run-value groups — the main 0–6 row, the bye/leg-bye values, and the no-ball off-the-bat runs.
+- **Files:** `src/sports/cricket/index.tsx` (`ScoringControls` — destructure `homeColor`/`awayColor`, derive
+  `battingColor`, swap `variant="home"` → `color={battingColor}` on the three run-value rows).
+- **Verified live (demo):** started m9, completed setup to reach the pad → 0/1/2/3 render `rgb(255,92,92)` (Red
+  House, the batting side) and 4/6 `rgb(61,220,151)` (green), where they were previously blue. Demo mutated to
+  reach the pad, then localStorage cleared to restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket Info tab: clearer, complete format line · FIX + VERIFIED
 
 Reviewing the cricket Info tab: every surface (header, scorer, hosts, matchday squads, date/venue rows) is a

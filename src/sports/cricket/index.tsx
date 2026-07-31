@@ -139,7 +139,7 @@ const needsFielder = (k: DismissalKind) => k === 'caught' || k === 'runout';
 const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'retired' || k === 'timedout';
 
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
-  state: rootState, dispatch, homeName, awayName, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
+  state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
   const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number } | null>(null);
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | null>(null);
@@ -161,6 +161,9 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const bowlingName = state.battingSide === 'home' ? awayName : homeName;
   const battingRoster = state.battingSide === 'home' ? homeRoster : awayRoster;
   const bowlingRoster = state.battingSide === 'home' ? awayRoster : homeRoster;
+  // Runs go to whoever is batting, so tint the run pad in the batting side's kit
+  // colour (boundaries stay green); the pad visually "belongs" to that team.
+  const battingColor = state.battingSide === 'home' ? (homeColor ?? theme.colors.home) : (awayColor ?? theme.colors.away);
   const rosterFor = (sd: 'home' | 'away') => (sd === 'home' ? homeRoster : awayRoster);
   const cur = state.scores[state.battingSide];
 
@@ -407,7 +410,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
       <View style={ctrl.row}>
         {[0, 1, 2, 3, 4, 6].map((r) => (
-          <Button key={r} label={String(r)} variant={r === 4 || r === 6 ? 'primary' : 'home'} style={ctrl.flex} disabled={!canScore} onPress={() => runs(r)} />
+          <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={ctrl.flex} disabled={!canScore} onPress={() => runs(r)} />
         ))}
       </View>
 
@@ -420,7 +423,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         {(extraMode === 'b' || extraMode === 'lb') && (
           <View style={ctrl.row}>
             {[1, 2, 3, 4].map((n) => (
-              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} variant="home" style={ctrl.flex}
+              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={ctrl.flex}
                 onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
             ))}
           </View>
@@ -430,7 +433,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <Text style={ctrl.meta}>No ball — runs off the bat?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4, 6].map((n) => (
-                <Button key={n} label={n === 0 ? 'Nb' : `Nb+${n}`} variant={n === 4 || n === 6 ? 'primary' : 'home'} style={ctrl.flex}
+                <Button key={n} label={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={ctrl.flex}
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n } }); setExtraMode(null); }} />
               ))}
             </View>
