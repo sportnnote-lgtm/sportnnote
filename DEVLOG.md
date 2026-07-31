@@ -30,6 +30,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Basketball per-quarter box score: made demoable in the seed · SHIPPED + VERIFIED
+
+The per-quarter toggle (part 1 of the stats port) was view-only with no seed change, so it only showed after a
+scorer manually ended Q1 — a reviewer opening cg7 cold saw the plain box score (all data sat in Q1). Same gap
+the kabaddi seed closed for halves. Fix: split the existing cg7 event log across **Q1 → Q2** (added a
+`NEXT_QUARTER` + Q2 `KICKOFF`, and a `quarter` arg on the `bbScore`/`bbStat` seed helpers) so both quarters
+carry real data out of the box.
+
+- **No score/stat drift:** final stays **14 · 11** and every player's Overall line is byte-for-byte the same —
+  only the quarter each play lands in changed (Q1 8–7, Q2 6–4). The pre-seeded box-score `line()` entries and
+  ratings are untouched.
+- **Files:** `src/data/demoStore.ts` (cg7 event log + helper signatures), `DEMO_KEY` v25 → v26. No view/reducer
+  change — the toggle from part 1 does the rest.
+- **Verified live (demo):** cg7 opens at **Q2 · 5'**; play-by-play now shows real quarter stamps (Q2 6'… Q1…)
+  instead of everything reading Q1. Box score toggle shows **Overall / Q1 / Q2** — Overall IND 14 (Tej 5, Akash
+  5, Sahil 4) / KOR 11; Q1 filter = 8–7 (Tej 3, Akash 3, Sahil 2 / Vinay 3, Manoj 2, Rohit 2). 86 tests,
+  typecheck clean.
+
 ### 2026-07-31 — Cross-sport stats port (2/2): kabaddi per-half player stats + seeded live m4 · SHIPPED + VERIFIED
 
 Part 2 of the parked stats port. Kabaddi had **no per-player stats table at all** (its Score tab was just the

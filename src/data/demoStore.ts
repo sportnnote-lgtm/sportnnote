@@ -796,7 +796,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v25'; // v25: live kabaddi match (m4) with a 2-half raid/tackle event log for the stats port
+const DEMO_KEY = 'sportfolio.demo.v26'; // v26: cg7 basketball split across Q1+Q2 so the per-quarter box-score toggle is demoable
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -870,11 +870,11 @@ export function startDemoAutosave(): void {
 // Seed in-progress event logs so the "live" matches show a real, mid-game score
 // (rebuilt through each sport's pure reducer) instead of starting at 0–0.
 const nowMs = Date.now();
-const bbScore = (seq: number, side: 'home' | 'away', points: number, minute: number, pid: string, name: string): MatchEventRecord =>
-  ({ seq, type: 'SCORE', side, payload: { points, minute, quarter: 1 }, attribution: { playerId: pid, stat: 'points', by: points, playerName: name } });
+const bbScore = (seq: number, side: 'home' | 'away', points: number, minute: number, pid: string, name: string, q = 1): MatchEventRecord =>
+  ({ seq, type: 'SCORE', side, payload: { points, minute, quarter: q }, attribution: { playerId: pid, stat: 'points', by: points, playerName: name } });
 const BB_STAT_KEY: Record<'REBOUND' | 'ASSIST' | 'FOUL', string> = { REBOUND: 'rebounds', ASSIST: 'assists', FOUL: 'fouls' };
-const bbStat = (seq: number, side: 'home' | 'away', type: 'REBOUND' | 'ASSIST' | 'FOUL', minute: number, pid: string, name: string): MatchEventRecord =>
-  ({ seq, type, side, payload: { minute, quarter: 1 }, attribution: { playerId: pid, stat: BB_STAT_KEY[type], by: 1, playerName: name } });
+const bbStat = (seq: number, side: 'home' | 'away', type: 'REBOUND' | 'ASSIST' | 'FOUL', minute: number, pid: string, name: string, q = 1): MatchEventRecord =>
+  ({ seq, type, side, payload: { minute, quarter: q }, attribution: { playerId: pid, stat: BB_STAT_KEY[type], by: 1, playerName: name } });
 const fbStat = (seq: number, side: 'home' | 'away', kind: string, o: { onTarget?: boolean; pid?: string; name?: string; statKey?: string; at?: number; possSide?: 'home' | 'away'; minute?: number } = {}): MatchEventRecord =>
   ({ seq, type: 'STAT', side, payload: { kind, onTarget: o.onTarget, at: o.at, possSide: o.possSide, minute: o.minute ?? 0 }, attribution: o.pid ? { playerId: o.pid, stat: o.statKey ?? `${kind}s`, by: 1, playerName: o.name } : null });
 const kabPt = (seq: number, type: 'RAID' | 'TACKLE', side: 'home' | 'away', points: number, minute: number, half: 1 | 2, pid: string, name: string): MatchEventRecord =>
@@ -897,35 +897,40 @@ demo.matchEvents['m1'] = [
   { seq: 15, type: 'YELLOW', side: 'away', payload: { minute: 26 }, attribution: { playerId: 'p-ishaan', stat: 'yellowCards', by: 1, playerName: 'Ishaan Verma' } },
   { seq: 16, type: 'SUB', side: 'home', payload: { minute: 30, offName: 'Varun Kamath', onName: 'Harsha Bhat' }, attribution: null },
 ];
+// Split across two quarters (into Q2 now) so the box score's per-quarter toggle
+// has real data on both sides. Final unchanged: home 14 · away 11 (Q1 8–7, Q2 6–4);
+// every player's Overall line is preserved — only the quarter each play lands in changed.
 demo.matchEvents['cg7'] = [
-  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 8 * 60000 } },
-  bbScore(2, 'home', 3, 1, 'p-ind-1', 'Tej Anand'),
-  bbScore(3, 'away', 3, 1, 'p-kor-1', 'Vinay Kumar'),
-  bbScore(4, 'home', 3, 2, 'p-ind-5', 'Akash Pillai'),
-  bbScore(5, 'away', 2, 3, 'p-kor-5', 'Rohit Gowda'),
-  bbScore(6, 'home', 2, 4, 'p-ind-3', 'Sahil Verma'),
-  bbScore(7, 'away', 2, 4, 'p-kor-3', 'Manoj Pai'),
-  bbScore(8, 'home', 2, 5, 'p-ind-1', 'Tej Anand'),
-  bbScore(9, 'away', 2, 6, 'p-kor-1', 'Vinay Kumar'),
-  bbScore(10, 'home', 2, 6, 'p-ind-5', 'Akash Pillai'),
-  bbScore(11, 'away', 2, 7, 'p-kor-5', 'Rohit Gowda'),
-  bbScore(12, 'home', 2, 7, 'p-ind-3', 'Sahil Verma'),
-  // Rebounds, assists & fouls so the box score isn't points-only — and the two
-  // bench players (Nidhi Rao, Priya Shet) get on the board.
-  bbStat(13, 'home', 'ASSIST', 1, 'p-ind-4', 'Nidhi Rao'),
-  bbStat(14, 'away', 'ASSIST', 1, 'p-kor-1', 'Vinay Kumar'),
-  bbStat(15, 'home', 'REBOUND', 2, 'p-ind-4', 'Nidhi Rao'),
-  bbStat(16, 'away', 'REBOUND', 2, 'p-kor-4', 'Priya Shet'),
-  bbStat(17, 'home', 'ASSIST', 2, 'p-ind-1', 'Tej Anand'),
-  bbStat(18, 'away', 'FOUL', 3, 'p-kor-3', 'Manoj Pai'),
-  bbStat(19, 'home', 'REBOUND', 3, 'p-ind-5', 'Akash Pillai'),
-  bbStat(20, 'away', 'ASSIST', 3, 'p-kor-4', 'Priya Shet'),
-  bbStat(21, 'home', 'REBOUND', 4, 'p-ind-4', 'Nidhi Rao'),
-  bbStat(22, 'home', 'FOUL', 4, 'p-ind-3', 'Sahil Verma'),
-  bbStat(23, 'away', 'REBOUND', 5, 'p-kor-4', 'Priya Shet'),
-  bbStat(24, 'home', 'REBOUND', 5, 'p-ind-1', 'Tej Anand'),
-  bbStat(25, 'away', 'REBOUND', 6, 'p-kor-5', 'Rohit Gowda'),
-  bbStat(26, 'away', 'FOUL', 6, 'p-kor-5', 'Rohit Gowda'),
+  { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 18 * 60000 } },
+  // — Q1 (8–7) —
+  bbScore(2, 'home', 3, 2, 'p-ind-1', 'Tej Anand', 1),
+  bbScore(3, 'away', 3, 3, 'p-kor-1', 'Vinay Kumar', 1),
+  bbScore(4, 'home', 3, 5, 'p-ind-5', 'Akash Pillai', 1),
+  bbScore(5, 'away', 2, 6, 'p-kor-5', 'Rohit Gowda', 1),
+  bbScore(6, 'home', 2, 8, 'p-ind-3', 'Sahil Verma', 1),
+  bbScore(7, 'away', 2, 9, 'p-kor-3', 'Manoj Pai', 1),
+  bbStat(8, 'home', 'ASSIST', 7, 'p-ind-4', 'Nidhi Rao', 1),
+  bbStat(9, 'away', 'ASSIST', 8, 'p-kor-1', 'Vinay Kumar', 1),
+  bbStat(10, 'home', 'REBOUND', 9, 'p-ind-4', 'Nidhi Rao', 1),
+  bbStat(11, 'away', 'REBOUND', 9, 'p-kor-4', 'Priya Shet', 1),
+  // — Q2 (6–4), clock ~4' in —
+  { seq: 12, type: 'NEXT_QUARTER', side: null, payload: {} },
+  { seq: 13, type: 'KICKOFF', side: null, payload: { at: nowMs - 4 * 60000 } },
+  bbScore(14, 'home', 2, 1, 'p-ind-1', 'Tej Anand', 2),
+  bbScore(15, 'away', 2, 2, 'p-kor-1', 'Vinay Kumar', 2),
+  bbScore(16, 'home', 2, 3, 'p-ind-5', 'Akash Pillai', 2),
+  bbScore(17, 'away', 2, 4, 'p-kor-5', 'Rohit Gowda', 2),
+  bbScore(18, 'home', 2, 5, 'p-ind-3', 'Sahil Verma', 2),
+  bbStat(19, 'home', 'ASSIST', 2, 'p-ind-1', 'Tej Anand', 2),
+  bbStat(20, 'away', 'FOUL', 2, 'p-kor-3', 'Manoj Pai', 2),
+  bbStat(21, 'home', 'REBOUND', 3, 'p-ind-5', 'Akash Pillai', 2),
+  bbStat(22, 'away', 'ASSIST', 3, 'p-kor-4', 'Priya Shet', 2),
+  bbStat(23, 'home', 'REBOUND', 4, 'p-ind-4', 'Nidhi Rao', 2),
+  bbStat(24, 'home', 'FOUL', 4, 'p-ind-3', 'Sahil Verma', 2),
+  bbStat(25, 'away', 'REBOUND', 5, 'p-kor-4', 'Priya Shet', 2),
+  bbStat(26, 'home', 'REBOUND', 5, 'p-ind-1', 'Tej Anand', 2),
+  bbStat(27, 'away', 'REBOUND', 6, 'p-kor-5', 'Rohit Gowda', 2),
+  bbStat(28, 'away', 'FOUL', 6, 'p-kor-5', 'Rohit Gowda', 2),
 ];
 // Live kabaddi (m4) — Blue House vs Gold House, into the 2nd half. Raid/tackle
 // points across both halves so the Player-stats table's per-half toggle has real
