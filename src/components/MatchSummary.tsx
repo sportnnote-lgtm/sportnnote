@@ -17,7 +17,7 @@ const initials = (name?: string): string =>
 
 export function MatchSummary({
   statLines, sport, homeRoster, awayRoster, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away,
-  summary, complete, onPlayer,
+  summary, complete, live, onPlayer,
 }: {
   statLines: StatLine[];
   sport: SportId;
@@ -29,6 +29,8 @@ export function MatchSummary({
   awayColor?: string;
   summary: ScoreSummary;
   complete: boolean;
+  /** match is underway (not just "not complete") — drives the result live dot */
+  live?: boolean;
   onPlayer?: (id: string) => void;
 }) {
   const { players, mvp } = matchRatings(statLines, sport, homeRoster, awayRoster);
@@ -50,7 +52,7 @@ export function MatchSummary({
       {/* Result */}
       <View style={st.result}>
         <View style={st.resultLabelRow}>
-          {!complete ? <View style={st.liveDot} /> : null}
+          {live && !complete ? <View style={st.liveDot} /> : null}
           <Text style={st.resultLabel}>{summary.statusLine}</Text>
         </View>
         <View style={st.scoreRow}>

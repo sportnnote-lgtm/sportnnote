@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary result label: no live dot on upcoming matches · FIX + VERIFIED
+
+Follow-up to the result-label live dot: it keyed off `!complete`, so an *upcoming* match's summary showed a red
+live dot even though its match header reads UPCOMING. `MatchSummary` only knew `complete`, not whether play had
+started. Added a `live` prop.
+
+- **Change:** the result-label dot now shows only when `live && !complete`; `LiveScoringScreen` passes
+  `live={matchLive}` (which is `!complete && (status==='live' || started)`). Upcoming → no dot; live → dot.
+- **Files:** `src/components/MatchSummary.tsx` (`live` prop + dot gate), `src/screens/LiveScoringScreen.tsx`.
+- **Verified live (demo):** m7 tennis (upcoming) Summary → "SET 1 · BEST OF 3" with no dot (top board keeps its
+  own). 86 tests, typecheck clean. (Noted separately: the top LineScoreboard still shows a dot on upcoming
+  matches — pre-existing, all sports — left for a dedicated pass.)
+
 ### 2026-08-01 — Summary empty state: live/complete-aware copy · SHIPPED + VERIFIED
 
 The ratings empty state showed one generic line ("No individual stats recorded for this match") for every case.
