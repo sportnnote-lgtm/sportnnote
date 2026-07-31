@@ -460,11 +460,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // The top scoreboard — a sport supplies its own, else the universal one. Cricket
   // hides it (its scorecard shows the score).
   const scoreboardNode = plugin.hideScoreboard ? null : plugin.Scoreboard ? (
-    <plugin.Scoreboard state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={!complete} />
+    <plugin.Scoreboard state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={matchLive} />
   ) : (
     <Scoreboard
       summary={summary} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-      live={!complete} centerNode={plugin.LiveClock ? <plugin.LiveClock state={state} /> : undefined}
+      live={matchLive} centerNode={plugin.LiveClock ? <plugin.LiveClock state={state} /> : undefined}
     />
   );
 
@@ -1206,9 +1206,16 @@ function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   const parts: string[] = [];
   if (fmt.overs != null) parts.push(`${fmt.overs} overs`);
   if (fmt.playersPerSide != null) parts.push(`${fmt.playersPerSide}-a-side`);
-  if (fmt.substitutes != null && Number(fmt.substitutes) > 0) parts.push(`${fmt.substitutes} subs`);
-  if (sport === 'cricket' && fmt.impactPlayer) parts.push('Impact Player');
-  if (sport === 'cricket' && Number(fmt.powerplayOvers ?? 0) > 0) parts.push(`PP ${fmt.powerplayOvers}`);
+  if (fmt.substitutes != null && Number(fmt.substitutes) > 0) {
+    const n = Number(fmt.substitutes);
+    parts.push(`${n} sub${n === 1 ? '' : 's'}`);
+  }
+  if (sport === 'cricket') {
+    const bpo = Number(fmt.ballsPerOver ?? 6);
+    if (bpo !== 6) parts.push(`${bpo} balls/over`);
+    if (fmt.impactPlayer) parts.push('Impact Player');
+    if (Number(fmt.powerplayOvers ?? 0) > 0) parts.push(`${fmt.powerplayOvers}-over powerplay`);
+  }
   if (sport === 'basketball' && fmt.foulsToFoulOut != null) parts.push(`${fmt.foulsToFoulOut} fouls out`);
   // set/game-based sports — describe the match length
   const bestOf = (n: number, unit: string) => (n === 1 ? `single ${unit}` : `best of ${n * 2 - 1} ${unit}s`);

@@ -47,6 +47,21 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket Info tab: clearer, complete format line · FIX + VERIFIED
+
+Reviewing the cricket Info tab: every surface (header, scorer, hosts, matchday squads, date/venue rows) is a
+shared component already polished in the tab-by-tab sweep — the one cricket-specific piece is the **Format** row,
+built by `formatLine`. It had three issues: it printed **"1 subs"** (bad grammar), showed the powerplay as the
+cryptic **"PP 3"**, and never surfaced **balls-per-over**, so a non-standard over length (box cricket / The
+Hundred, both supported by the engine's `ballsPerOver` config) was invisible.
+
+- **Change:** substitutes now pluralise correctly (`1 sub` / `2 subs`) — a fix that benefits every sport; the
+  cricket branch renders `${n}-over powerplay` instead of `PP ${n}`, and adds `${n} balls/over` whenever the
+  format uses a non-6-ball over.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`formatLine`).
+- **Verified live (demo):** m9 (IPL-style fixture I score) Info → Format reads **"10 overs · 8-a-side · 1 sub ·
+  Impact Player · 3-over powerplay"** (balls/over correctly hidden at the standard 6). View-only. 86 tests, clean.
+
 ### 2026-08-01 — Cricket final result banner: broadcast result board · SHIPPED + VERIFIED
 
 The **post-match** cricket result was a bare one-liner — `🏆 {resultLine}` — which showed only the margin
