@@ -172,8 +172,13 @@ export function LineupView({
       <View style={s.pitch}>
         <View style={s.halfway} />
         <View style={s.centre} />
+        <View style={s.centreSpot} />
         <View style={[s.box, s.boxTop]} />
         <View style={[s.box, s.boxBottom]} />
+        <View style={[s.goalArea, s.goalAreaTop]} />
+        <View style={[s.goalArea, s.goalAreaBottom]} />
+        <View style={[s.penSpot, s.penSpotTop]} />
+        <View style={[s.penSpot, s.penSpotBottom]} />
         {/* Home occupies the top half (matching its header above); away the bottom. */}
         {homeLineup.map((slot, i) => (
           <PlayerDot key={`h${i}`} slot={slot} color={homeColor} jersey={jersey(slot.playerId, homeById)} photoUrl={photo(slot.playerId, homeById)} marks={slot.playerName ? marks[slot.playerName] : undefined}
@@ -215,6 +220,13 @@ const s = StyleSheet.create({
   box: { position: 'absolute', left: '25%', width: '50%', height: '13%', borderWidth: 1, borderColor: line },
   boxTop: { top: 0, borderTopWidth: 0 },
   boxBottom: { bottom: 0, borderBottomWidth: 0 },
+  centreSpot: { position: 'absolute', top: '50%', left: '50%', width: 4, height: 4, borderRadius: 2, backgroundColor: line, marginLeft: -2, marginTop: -2 },
+  goalArea: { position: 'absolute', left: '37.5%', width: '25%', height: '6%', borderWidth: 1, borderColor: line },
+  goalAreaTop: { top: 0, borderTopWidth: 0 },
+  goalAreaBottom: { bottom: 0, borderBottomWidth: 0 },
+  penSpot: { position: 'absolute', left: '50%', width: 3, height: 3, borderRadius: 1.5, backgroundColor: line, marginLeft: -1.5 },
+  penSpotTop: { top: '9%' },
+  penSpotBottom: { bottom: '9%' },
   dotWrap: { position: 'absolute', width: 70, marginLeft: -35, alignItems: 'center' },
   name: { color: '#fff', fontSize: 9, fontWeight: '700', marginTop: 2 },
   subMin: { color: theme.colors.danger, fontSize: 8, fontWeight: '800' },

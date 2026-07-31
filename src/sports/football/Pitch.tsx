@@ -41,8 +41,13 @@ export function Pitch({
       {/* markings */}
       <View style={styles.halfway} />
       <View style={styles.centre} />
+      <View style={styles.centreSpot} />
       <View style={[styles.box, styles.boxTop]} />
       <View style={[styles.box, styles.boxBottom]} />
+      <View style={[styles.goalArea, styles.goalAreaTop]} />
+      <View style={[styles.goalArea, styles.goalAreaBottom]} />
+      <View style={[styles.penSpot, styles.penSpotTop]} />
+      <View style={[styles.penSpot, styles.penSpotBottom]} />
 
       {homeLineup.map((s, i) => (
         <Dot key={`h${i}`} slot={s} color={homeColor} top={`${(1 - (s.y * 0.46 + 0.05)) * 100}%`} left={`${s.x * 100}%`} />
@@ -73,6 +78,13 @@ const styles = StyleSheet.create({
   box: { position: 'absolute', left: '25%', width: '50%', height: '14%', borderWidth: 1, borderColor: line },
   boxTop: { top: 0, borderTopWidth: 0 },
   boxBottom: { bottom: 0, borderBottomWidth: 0 },
+  centreSpot: { position: 'absolute', top: '50%', left: '50%', width: 4, height: 4, borderRadius: 2, backgroundColor: line, marginLeft: -2, marginTop: -2 },
+  goalArea: { position: 'absolute', left: '37.5%', width: '25%', height: '6.5%', borderWidth: 1, borderColor: line },
+  goalAreaTop: { top: 0, borderTopWidth: 0 },
+  goalAreaBottom: { bottom: 0, borderBottomWidth: 0 },
+  penSpot: { position: 'absolute', left: '50%', width: 3, height: 3, borderRadius: 1.5, backgroundColor: line, marginLeft: -1.5 },
+  penSpotTop: { top: '9.5%' },
+  penSpotBottom: { bottom: '9.5%' },
   dotWrap: { position: 'absolute', width: 64, marginLeft: -32, alignItems: 'center' },
   dot: {
     width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',

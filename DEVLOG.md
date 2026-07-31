@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Football pitch: fuller markings (goal areas, spots) · SHIPPED + VERIFIED
+
+The lineup pitch had only a halfway line, centre circle and two penalty boxes. Added the details that make it read
+as a real football pitch: a **centre spot**, both **6-yard goal areas**, and both **penalty spots** — thin white
+lines at the same rgba(255,255,255,0.25) as the rest.
+
+- **Files:** `src/sports/football/LineupView.tsx` (the visible lineup pitch) and `src/sports/football/Pitch.tsx`
+  (football's `Court`, used in the squad "arrange on pitch" editor) — kept identical so both pitches match. Pure
+  view layer; players/markers unchanged.
+- **Verified live (demo):** m1 Lineups pitch → the 6-yard goal area box now renders inside the penalty box, plus
+  the faint centre/penalty spots. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Football lineups: team-labelled bench columns · SHIPPED + VERIFIED
 
 The FIFA-style LineupView (both XIs on a pitch with avatars, cards, goals, sub arrows, captain marks, formation
