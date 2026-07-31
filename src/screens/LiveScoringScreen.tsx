@@ -924,15 +924,21 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {activeTab === 'scoring' && (
             <>
               {matchId && canScore ? <OfflineSyncBanner matchId={matchId} /> : null}
-              {/* Compact running score, so the scorer never leaves this tab to
-                  check the state. Shown for every sport here — the big board above
-                  the tabs is suppressed on this tab to avoid duplicating it. */}
+              {/* Running score, so the scorer never leaves this tab to check the
+                  state. The big board above the tabs is suppressed here to avoid
+                  duplication. Sports with a broadcast board (tennis/volleyball/
+                  badminton/basketball/kabaddi) show the same line-score the viewer
+                  sees; football/cricket keep the compact one-row MiniScore. */}
               {started && !complete && (
-                <MiniScore
-                  summary={summary} homeName={homeName} awayName={awayName}
-                  homeColor={homeColor} awayColor={awayColor} live={live}
-                  clockNode={plugin.LiveClock ? <plugin.LiveClock state={state} /> : undefined}
-                />
+                plugin.Scoreboard ? (
+                  <plugin.Scoreboard state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} />
+                ) : (
+                  <MiniScore
+                    summary={summary} homeName={homeName} awayName={awayName}
+                    homeColor={homeColor} awayColor={awayColor} live={live}
+                    clockNode={plugin.LiveClock ? <plugin.LiveClock state={state} /> : undefined}
+                  />
+                )
               )}
               {undoBar}
               {canScore && meta.homeTeamId && meta.awayTeamId && (

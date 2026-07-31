@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Scoring tab shows the broadcast board (was a one-row MiniScore) · SHIPPED + VERIFIED
+
+Follow-up to the broadcast boards: the scorer's tab still showed the compact one-line MiniScore. On the Scoring
+tab, sports with a broadcast board now render that same line-score above the controls, so the scorer sees the
+full per-period picture (not just the running total) while scoring — and it updates live as they score.
+
+- **Change:** `LiveScoringScreen` — on the Scoring tab, render `plugin.Scoreboard` when present, else `MiniScore`.
+  The top board is already suppressed on this tab, so there's no duplication. Football/cricket (no
+  `plugin.Scoreboard`) keep the compact MiniScore.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (one render branch). No component/reducer/seed changes.
+- **Verified live (demo):** cg7 basketball on the Scoring tab shows TOTAL·Q1·Q2 with the ticking clock; scoring
+  +1 IND updated the board to 15 (Q2 7) live, Undo restored 14 (Q2 6). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Broadcast-style scoreboards for the 5 non-cricket/football sports · SHIPPED + VERIFIED
 
 Feedback: the live scoreboards should replicate the international/TV conventions users know (e.g. a tennis board
