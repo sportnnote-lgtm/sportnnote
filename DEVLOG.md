@@ -30,6 +30,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Court/lineups header: placed count + legend chips · SHIPPED + VERIFIED
+
+Polished the wrapper around the positional court (the Lineups block on the Score tab, for sports with a
+`plugin.Court` like basketball). The court map itself is unchanged.
+
+- **Header** gains a placed count — "5 v 5 placed" — beside the Edit link.
+- **Legend** is now two coloured team pills (dot + name) instead of a bare dots-and-muted-text row.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (`courtNode` header/legend + `homePlaced`/`awayPlaced` +
+  `legendChip`/`legendName`/`lineupHeadRight`/`lineupCount` styles). Pure view layer.
+- **Verified live (demo):** cg7 Score tab → "Lineups · 5 v 5 placed · Edit ›", IND/KOR legend pills, and both
+  teams' ten players placed on the court (Tej/Sahil/… and Vinay/Manoj/…). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Info tab edit-squad button: action row + contextual label · SHIPPED + VERIFIED
 
 The "✎ Edit matchday squad" affordance was a thin green text link — easy to miss next to the full-width

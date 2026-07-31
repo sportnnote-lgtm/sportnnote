@@ -479,19 +479,28 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   ) : null;
   const liveExtrasNode = renderLiveExtras();
 
+  const homePlaced = homeLineup.filter((s) => s.playerId).length;
+  const awayPlaced = awayLineup.filter((s) => s.playerId).length;
   const courtNode = !plugin.lineupsInExtras && plugin.Court && (homeLineup.length > 0 || awayLineup.length > 0) ? (
     <View style={st.lineups}>
       <View style={st.lineupHeader}>
         <Text style={textStyles.h3}>Lineups</Text>
-        {canEditSquad && matchId && (
-          <Text style={st.editLink} onPress={() => editSquad('home')}>Edit ›</Text>
-        )}
+        <View style={st.lineupHeadRight}>
+          <Text style={st.lineupCount}>{homePlaced} v {awayPlaced} placed</Text>
+          {canEditSquad && matchId && (
+            <Text style={st.editLink} onPress={() => editSquad('home')}>Edit ›</Text>
+          )}
+        </View>
       </View>
       <View style={st.legend}>
-        <View style={[st.legendDot, { backgroundColor: homeColor ?? theme.colors.home }]} />
-        <Text style={textStyles.muted}>{homeName}</Text>
-        <View style={[st.legendDot, { backgroundColor: awayColor ?? theme.colors.away, marginLeft: theme.spacing(3) }]} />
-        <Text style={textStyles.muted}>{awayName}</Text>
+        <View style={st.legendChip}>
+          <View style={[st.legendDot, { backgroundColor: homeColor ?? theme.colors.home }]} />
+          <Text style={st.legendName} numberOfLines={1}>{homeName}</Text>
+        </View>
+        <View style={st.legendChip}>
+          <View style={[st.legendDot, { backgroundColor: awayColor ?? theme.colors.away }]} />
+          <Text style={st.legendName} numberOfLines={1}>{awayName}</Text>
+        </View>
       </View>
       <plugin.Court homeLineup={homeLineup} awayLineup={awayLineup} homeColor={homeColor} awayColor={awayColor} />
     </View>
@@ -1416,6 +1425,10 @@ const st = StyleSheet.create({
   disputeBanner: { backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.danger, padding: theme.spacing(3) },
   disputeBannerText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   legend: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  legendChip: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3) },
+  legendName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  lineupHeadRight: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  lineupCount: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   legendDot: { width: 12, height: 12, borderRadius: 6 },
   controls: {
     backgroundColor: theme.colors.surface,
