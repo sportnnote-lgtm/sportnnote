@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Score tab timeline: LATEST marker + truncation footer · SHIPPED + VERIFIED
+
+The shared `LiveTimeline` (kabaddi / volleyball / badminton / tennis point-&-rally logs) capped at 60 rows and
+silently dropped the rest. Two additions:
+
+- **Truncation footer:** "＋ N earlier events" when the log is longer than the cap — no more silent drop.
+- **Latest marker:** the newest (top) event gets a team-coloured ring around its node and a right-aligned
+  **LATEST** tag, so the eye lands on what just happened.
+- **Files:** `src/sports/LiveTimeline.tsx` (`hidden`/`latest` render + `nodeHalo`/`latestTag`/`moreNote` styles).
+  Pure view layer; benefits every sport that uses it.
+- **Verified live (demo):** tennis m12 point log → top event tagged **LATEST**, footer "＋ 34 earlier events"
+  (94 total, 60 shown); rail nodes colour by player, with 🎯 Ace and ✅ Game markers intact. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Court/lineups header: placed count + legend chips · SHIPPED + VERIFIED
 
 Polished the wrapper around the positional court (the Lineups block on the Score tab, for sports with a
