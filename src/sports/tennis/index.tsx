@@ -13,6 +13,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
+import { TennisBoxScore } from './BoxScore';
 
 const SETS_TO_WIN = 2;
 
@@ -101,7 +102,9 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   const tb = inTiebreak(s);
   const pts = { ...s.pts, [side]: s.pts[side] + 1 };
   const setNo = s.setsWon.home + s.setsWon.away + 1;
-  events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side });
+  // Structured fields (kind/playerName/set/points) let the per-set box score tally
+  // points & aces per player, filtered by set — the timeline ignores them.
+  events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, set: setNo, points: 1 });
 
   if (tb) {
     // First to the tiebreak target, win by 2. A match tiebreak records its own
@@ -157,8 +160,11 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ dispatch
   );
 };
 
-const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state, homeColor, awayColor }) => {
+const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
   const s = state as TennisState;
+  // Sets played so far (completed + the one in progress) drive the box-score toggle.
+  const currentSet = s.setsWon.home + s.setsWon.away + 1;
+  const periods = Array.from({ length: s.ended ? s.sets.length : currentSet }, (_, i) => ({ value: i + 1, label: `Set ${i + 1}` }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -169,6 +175,8 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
           s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {g[0]}-{g[1]}</Text>)
         )}
       </View>
+      <Text style={ctrl.label}>Player stats</Text>
+      <TennisBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} />
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." />
     </View>

@@ -256,6 +256,18 @@ export const MATCHES: Match[] = [
     awayTeam: team('bh', 'Blue House', 'BLU', 'badminton', houses.blue),
     state: null,
   },
+  {
+    id: 'm12', tournamentId: 't1', sport: 'tennis', status: 'live',
+    startsAt: '2026-06-19T18:30:00',
+    venueName: 'KSLTA Tennis Courts',
+    hostIds: ['p-aarav'],
+    scorerId: 'p-rh-6', // a player scores → view-only for the demo user (opens on the content tab)
+    score: { home: 3, away: 2 }, // games in the live set (set 2); Red lead 1–0 on sets — singles (replayed from seeded points)
+    format: { playersPerSide: 1, setsToWin: 2 },
+    homeTeam: team('rh', 'Red House', 'RED', 'tennis', houses.red),
+    awayTeam: team('bh', 'Blue House', 'BLU', 'tennis', houses.blue),
+    state: null,
+  },
 ];
 
 // Completed results across sports so per-sport standings have real data.

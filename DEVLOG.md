@@ -30,6 +30,33 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Tennis per-set player stats (new box score) + seeded live singles match · SHIPPED + VERIFIED
+
+Tennis was the last sport in the per-period sweep and the most structurally complex (points → games → sets,
+deuce/ad, tiebreaks). Its live view had only set-score chips and a point log — no per-player stats. Built the
+per-set box score (Points + Aces, like volleyball's) and seeded a live singles match to demo it.
+
+- **Data model:** the tennis reducer now stamps `kind`/`playerName`/`set`/`points` on each scored point (reusing
+  the shared `LiveEvent.set` field). Previously the scorer only lived in the event's `detail` string.
+- **New `TennisBoxScore`** (`src/sports/tennis/BoxScore.tsx`): **PTS + ACE** per player, one table per side, with
+  an **Overall / Set 1 / Set 2 …** toggle. Shows once ≥2 sets exist. Works for singles (one row a side) and
+  doubles. Wired into `LiveExtras` between Sets and the point log.
+- **Seed:** new live match **m12** — Varun Kamath (Red) vs Sameer Das (Blue), best of 3. A deterministic
+  generator (`tnEvents`) plays through the real points→games→sets reducer to exact scores: **Red 6–4 (set 1),
+  3–2 · 30–15 (set 2 live)**. Each game is won on the winner's 4th point with the loser scoring 0–2 first, so
+  **points won ≠ 4×games** (Red 45 total, not 24); aces land ~every 7th point per side. View-only (scored by a
+  player) so it opens on the box score. `M12_SQUADS` + empty lineup; `mockData` m12 live; `DEMO_KEY` v30→v31.
+  Existing m7 (singles, 6-6-tiebreak demo, scored by the demo user) is untouched.
+- **Files:** `src/sports/tennis/index.tsx`, `src/sports/tennis/BoxScore.tsx`, `src/data/demoStore.ts`,
+  `src/core/mockData.ts`.
+- **Verified live (demo):** m12 (via Live → See all) opens onto the stats — scoreboard "SET 2 · BEST OF 3",
+  30:15, "Games 3-2 · 6-4". Overall Varun 45/6 aces, Sameer 33/4; Set 1 = 28/21 (4/3 aces), Set 2 = 17/12 (2/1) —
+  both points and aces sum exactly to Overall. 86 tests, typecheck clean.
+
+**Sweep complete.** All seven event-log sports now demo a per-period player-stats breakdown on a live match:
+basketball (quarter), kabaddi (half), football (period), cricket (innings), volleyball (set), badminton (game),
+tennis (set).
+
 ### 2026-07-31 — Badminton per-game player stats (new box score) + seeded live doubles match · SHIPPED + VERIFIED
 
 Badminton was the last event-log sport without per-player stats — like volleyball, its live view had only

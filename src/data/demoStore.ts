@@ -610,6 +610,12 @@ const M11_SQUADS: MatchSquads = {
   away: { starters: ['p-bh-5', 'p-bh-8'], subs: [] },
 };
 
+// The two singles players for the live tennis match (m12) — Info reads "✓ Squad set".
+const M12_SQUADS: MatchSquads = {
+  home: { starters: ['p-rh-6'], subs: [] },
+  away: { starters: ['p-bh-3'], subs: [] },
+};
+
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const SEED_LISTINGS: Listing[] = [
   {
@@ -771,7 +777,7 @@ export const demo = {
   // m4 (kabaddi) intentionally has empty lineups — kabaddi's positional court is
   // hidden for now (only 6 kabaddi players per house), so its Score tab shows the
   // timeline + player stats without a half-empty mat.
-  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), m4: { home: [], away: [] }, m10: { home: [], away: [] }, m11: { home: [], away: [] }, 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
+  lineups: { m1: seedLineup(), cg7: seedBasketballLineup(), kc3: seedCupLineup(), m4: { home: [], away: [] }, m10: { home: [], away: [] }, m11: { home: [], away: [] }, m12: { home: [], away: [] }, 'm-eng-cro': WC_LINEUP, 'm-bra-nor': BN_LINEUP, 'm-por-esp': PE_LINEUP, 'm-arg-egy': AE_LINEUP } as Record<string, MatchLineup>,
   /** append-only scoring log per match — mirrors the Supabase match_events table.
    *  The completed cricket fixtures ship a full ball-by-ball log so they replay to
    *  a real, ENDED scorecard, and the live cricket fixture (m8) ships a mid-innings
@@ -779,7 +785,7 @@ export const demo = {
    *  logs are added below. */
   matchEvents: { ...CRICKET_MATCH_EVENTS, ...CRICKET_LIVE_EVENTS } as Record<string, MatchEventRecord[]>,
   /** matchday squads (starting XI + subs) per match */
-  matchSquads: { m1: M1_SQUADS, m4: M4_SQUADS, m10: M10_SQUADS, m11: M11_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
+  matchSquads: { m1: M1_SQUADS, m4: M4_SQUADS, m10: M10_SQUADS, m11: M11_SQUADS, m12: M12_SQUADS, 'm-eng-cro': WC_SQUADS, 'm-bra-nor': BN_SQUADS, 'm-por-esp': PE_SQUADS, 'm-arg-egy': AE_SQUADS, cg7: CG7_SQUADS, kc3: KC3_SQUADS, ...CRICKET_LIVE_SQUADS } as Record<string, MatchSquads>,
   /** player participation objections (identity disputes) across matches */
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
@@ -809,7 +815,7 @@ export const demo = {
 // The demo store is in-memory, so a reload/app-kill wipes anything the user
 // created. We snapshot it to AsyncStorage (demo mode only) and restore on start.
 // Version-keyed so a future seed/shape change discards stale saves cleanly.
-const DEMO_KEY = 'sportfolio.demo.v30'; // v30: live badminton doubles m11 (2 games) + per-game player-stats box score
+const DEMO_KEY = 'sportfolio.demo.v31'; // v31: live tennis singles m12 (2 sets) + per-set player-stats box score
 
 /** captainTeams is a Set (not JSON-safe) → store as an array. */
 function serializeDemo(): string {
@@ -945,6 +951,48 @@ function bmEvents(games: [number, number][]): MatchEventRecord[] {
   }
   return out;
 }
+
+// Tennis singles point-log generator (m12). Emits POINT/ACE events that replay,
+// through the points→games→sets reducer, to exact set/game scores. Each game is
+// won on the winner's 4th point (the loser first scores 0–2, so points won ≠ just
+// 4×games); aces land ~every 7th point per side. No 6-6 tiebreak in the seed.
+const TN_HOME: [string, string] = ['p-rh-6', 'Varun Kamath'];
+const TN_AWAY: [string, string] = ['p-bh-3', 'Sameer Das'];
+function tnEvents(completedSets: [number, number][], live: { games: [number, number]; cur: [number, number] }): MatchEventRecord[] {
+  const out: MatchEventRecord[] = [];
+  let seq = 0, hi = 0, ai = 0, gameNo = 0;
+  const emit = (side: 'home' | 'away') => {
+    const [pid, name] = side === 'home' ? TN_HOME : TN_AWAY;
+    const ace = (side === 'home' ? hi++ : ai++) % 7 === 6;
+    out.push({ seq: ++seq, type: ace ? 'ACE' : 'POINT', side, attribution: { playerId: pid, stat: ace ? 'aces' : 'points', playerName: name } });
+  };
+  // One game won by `w`: the loser scores 0–2 points (varied), then `w` takes four
+  // straight to close it at 4-0/4-1/4-2 (win by ≥2, never deuce).
+  const game = (w: 'home' | 'away') => {
+    const l = gameNo++ % 3;
+    const loser = w === 'home' ? 'away' : 'home';
+    for (let i = 0; i < l; i++) emit(loser);
+    for (let i = 0; i < 4; i++) emit(w);
+  };
+  // Play a set to an exact game score: interleave wins to the loser's tally (no
+  // premature set), then the leader closes it out.
+  const playSet = (h: number, a: number) => {
+    const lo = Math.min(h, a);
+    for (let i = 0; i < lo; i++) { game('home'); game('away'); }
+    const leader = h >= a ? 'home' : 'away';
+    for (let i = 0; i < Math.abs(h - a); i++) game(leader);
+  };
+  for (const [h, a] of completedSets) playSet(h, a);
+  // Live set: its completed games, then a partial current game (never completed).
+  const [lh, la] = live.games;
+  const lo = Math.min(lh, la);
+  for (let i = 0; i < lo; i++) { game('home'); game('away'); }
+  const leader = lh >= la ? 'home' : 'away';
+  for (let i = 0; i < Math.abs(lh - la); i++) game(leader);
+  for (let i = 0; i < live.cur[1]; i++) emit('away');
+  for (let i = 0; i < live.cur[0]; i++) emit('home');
+  return out;
+}
 demo.matchEvents['m1'] = [
   { seq: 1, type: 'KICKOFF', side: null, payload: { at: nowMs - 32 * 60000, possSide: 'home' } },
   fbStat(2, 'home', 'shot', { onTarget: true, pid: 'p-aarav', name: 'Aarav Mehta', statKey: 'shots', minute: 11 }),
@@ -1032,6 +1080,10 @@ demo.matchEvents['m10'] = vbEvents([[25, 21], [19, 21]]);
 // Live badminton doubles (m11) — Red pair vs Blue pair, best of 3. Red took game 1
 // (21–17); game 2 is live at 14–16, so the per-game player-stats toggle has data.
 demo.matchEvents['m11'] = bmEvents([[21, 17], [14, 16]]);
+// Live tennis singles (m12) — Varun Kamath (Red) vs Sameer Das (Blue), best of 3.
+// Red took set 1 (6–4); set 2 is live at 3–2, 30–15 — so the per-set stats toggle
+// has data across both sets.
+demo.matchEvents['m12'] = tnEvents([[6, 4]], { games: [3, 2], cur: [2, 1] });
 // Cup final (t7): a knockout tie level 1–1 in the 2nd half — ending it goes to
 // a penalty shootout. Seeded end-to-end (shots, corners, fouls, cards, offsides
 // and possession swings) so the live match's Stats/Timeline/Summary are full,
