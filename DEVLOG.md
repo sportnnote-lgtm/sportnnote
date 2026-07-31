@@ -30,6 +30,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Info tab match header: teams-in-colours identity + status chip · SHIPPED + VERIFIED
+
+The Info tab opened with a plain "IND vs BLU" text line beside a small logo. Since the broadcast board already
+shows the score above the tabs, the Info header should establish match *identity* — who's playing. Rebuilt it as
+a proper match header:
+
+- **Top row:** the match logo (editable by hosts), the sport (🏀 BASKETBALL), and a status chip — **LIVE** (red,
+  with a dot), **FINAL**, or **UPCOMING** (derived from `complete`/`started`/`meta.status`; distinct from the
+  existing `live` = "synced to backend").
+- **Teams row:** both **full** team names (`homeTeamName`/`awayTeamName`, not the RED/BLU codes) in their team
+  colours, each over a colour bar, either side of a **VS**. The Format/Date/Venue/Tournament rows and calendar
+  button stay below.
+- **Files:** `src/screens/LiveScoringScreen.tsx` (header markup + styles + `matchLive`/`statusLabel`; dropped the
+  now-unused `matchTitleRow` style). Pure view layer.
+- **Verified live (demo):** cg7 → "🏀 BASKETBALL · ● LIVE", Indiranagar United (orange) VS Koramangala Kings
+  (blue) with colour bars; scheduled tennis (m7) → "🎾 TENNIS · UPCOMING", Red House VS Blue House. 86 tests,
+  typecheck clean.
+
 ### 2026-07-31 — Completed-match final scoreboard: broadcast board reads as a result · SHIPPED + VERIFIED
 
 Follow-up to the broadcast boards: make a finished match read as a broadcast FINAL. Two parts —
