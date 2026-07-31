@@ -11,6 +11,10 @@ import { matchRatings, awardsFor, ratingStars, statLabel, type MatchRating } fro
 import type { Player, SportId, StatLine } from '../core/types';
 import type { ScoreSummary } from '../sports/types';
 
+/** Up to two initials from a (possibly masked) name, for a rating-row avatar. */
+const initials = (name?: string): string =>
+  (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
 export function MatchSummary({
   statLines, sport, homeRoster, awayRoster, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away,
   summary, complete, onPlayer,
@@ -93,12 +97,15 @@ export function MatchSummary({
         <Card>
           {players.map((p: MatchRating, i) => {
             const tier = podiumColor(i);
+            const dispName = mask.byId(p.id, p.name);
             return (
             <TouchableOpacity accessibilityRole="button" key={p.id} activeOpacity={onPlayer ? 0.8 : 1} onPress={() => onPlayer?.(p.id)} style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 0 && st.divider]}>
               <RankBadge index={i} width={22} />
-              <View style={[st.dot, { backgroundColor: teamColor(p.side) }]} />
+              <View style={[st.rateAvatar, { backgroundColor: teamColor(p.side) }]}>
+                <Text style={st.rateAvatarText}>{initials(dispName)}</Text>
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={textStyles.body} numberOfLines={1}>{mask.byId(p.id, p.name)}</Text>
+                <Text style={textStyles.body} numberOfLines={1}>{dispName}</Text>
                 <Text style={st.detail} numberOfLines={1}>{p.detail}</Text>
               </View>
               <View style={st.ratingCol}>
@@ -149,6 +156,8 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  rateAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rateAvatarText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '900' },
   detail: { color: theme.colors.textMuted, fontSize: theme.font.tiny, marginTop: 1 },
   ratingCol: { alignItems: 'flex-end', minWidth: 64 },
   stars: { color: theme.colors.accent, fontSize: theme.font.tiny },

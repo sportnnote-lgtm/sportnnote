@@ -30,6 +30,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Summary player ratings: initials avatars · SHIPPED + VERIFIED
+
+The ratings list was the last person-list still using a tiny team-colour dot; every other list (scorer, hosts,
+squad, manager, invited) now uses an initials avatar. Unified it.
+
+- **Change:** each rating row's dot becomes a team-coloured **initials avatar** (dark text). Rank badges (🥇🥈🥉/
+  number), podium-tinted top-3 rows, stat detail, stars and the rating number are all unchanged. Initials come
+  from the masked display name, so a disputed player still shows "X".
+- **Files:** `src/components/MatchSummary.tsx` (`initials` helper + avatar row + styles). Benefits every sport on
+  the generic summary.
+- **Verified live (demo):** m1 football Summary → 🥇 AM Aarav Mehta ★5.0, 🥈 IV Ishaan Verma 4.5 (blue avatar),
+  🥉 RN Rohan Nair 4.0, 4 NK Neil Kapoor 1.0 — team-coloured avatars with podium tints. 86 tests, typecheck clean.
+
 ### 2026-08-01 — Match summary: winner line on the result · SHIPPED + VERIFIED
 
 The generic `MatchSummary` (football + basketball/kabaddi/volleyball/badminton/tennis Summary tabs) dimmed the
