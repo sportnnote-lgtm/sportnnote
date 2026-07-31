@@ -30,6 +30,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Broadcast-style scoreboards for the 5 non-cricket/football sports · SHIPPED + VERIFIED
+
+Feedback: the live scoreboards should replicate the international/TV conventions users know (e.g. a tennis board
+shows a POINTS column plus a column of games per set — 6-4, 5-7, 1-0 — current set highlighted), not a generic
+`home : away` total. Cricket and football already read right and are untouched.
+
+- **Shared `LineScoreboard`** (`src/components/LineScoreboard.tsx`): a leading emphasized column (the headline
+  number) + one column per period, the live period highlighted; a `clock` node (a sport's `LiveClock`) can take
+  the status row so running-total sports keep a ticking clock. Sports opt in via `plugin.Scoreboard`.
+- **Per-sport boards:**
+  - **Tennis** — `POINTS` (current game 0/15/30/40) + games per set. e.g. 30/15 · S1 6-4 · S2 3-2.
+  - **Volleyball** — `SETS` won + points per set. e.g. 1/0 · 25-21 · 19-21.
+  - **Badminton** — `GAMES` won + points per game. e.g. 1/0 · 21-17 · 14-16.
+  - **Basketball** — `TOTAL` + points per quarter (from the event log). e.g. 14/11 · Q1 8-7 · Q2 6-4.
+  - **Kabaddi** — `TOTAL` + points per half. e.g. 14/13 · H1 8-7 · H2 6-6.
+- **Files:** `src/components/LineScoreboard.tsx` (new) + `Scoreboard` added to the tennis/volleyball/badminton/
+  basketball/kabaddi plugins. Pure view layer — no reducers, seeds or `DEMO_KEY` touched. The generic
+  `home : away` `<Scoreboard/>` still serves football; the scorer's compact MiniScore is unchanged.
+- **Verified live (demo):** all five boards render their broadcast layout with the correct per-period splits and
+  the current period highlighted (screenshots match the totals from the box scores). 86 tests, typecheck clean.
+
 ### 2026-07-31 — Tennis per-set player stats (new box score) + seeded live singles match · SHIPPED + VERIFIED
 
 Tennis was the last sport in the per-period sweep and the most structurally complex (points → games → sets,
