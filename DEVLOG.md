@@ -30,6 +30,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Football per-period Stats: hide the toggle until a 2nd period exists · SHIPPED + VERIFIED
+
+Reviewed football's per-period Stats split (the original the basketball/kabaddi ports copied). It was already
+demoable and **correct** — verified on kc3 (Falcons v City Strikers, into the 2nd half): every Overall value =
+1st half + 2nd half exactly (Shots 5/5 = 3/3 + 2/2, on-target 4/2, Fouls 2/2, Yellow 1/2, Offsides 1/1, Corners
+2/2), and Possession correctly shows only in Overall scope. No seed change needed (unlike basketball/kabaddi,
+football's seed already had a both-halves live match).
+
+The review did surface one consistency wart: football **always** rendered the Overall/1st half/2nd half chips,
+so a match still in the 1st half (m1, Red v Blue) showed a redundant toggle where "Overall" == "1st half" plus a
+dead all-zeros "2nd half" filter — exactly the "two dead filters" the ET code already guarded against, but for
+the half chips. Aligned it with the basketball/kabaddi rule: **show the period split only once `s.half >= 2`**,
+and gate each ET chip on its own period (`ET 2` only at `half >= 4`, where before both ET chips appeared together
+at ET 1). `active` falls back to Overall if the selected scope isn't among the shown periods.
+
+- **Files:** `src/sports/football/index.tsx` (`StatsComparison` only — view layer, no reducer/seed change).
+- **Verified live (demo):** m1 (1st half) → **no toggle**, plain table with Possession. kc3 (both halves) →
+  **Overall / 1st half / 2nd half**, no dead ET chips, filtering still exact. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Basketball per-quarter box score: made demoable in the seed · SHIPPED + VERIFIED
 
 The per-quarter toggle (part 1 of the stats port) was view-only with no seed change, so it only showed after a

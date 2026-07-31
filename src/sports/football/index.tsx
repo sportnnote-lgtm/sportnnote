@@ -1446,11 +1446,18 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
   // Split the table into Overall / 1st half / 2nd half. Events carry their half,
   // so per-half totals are just the same aggregation over a filtered event set.
   const [scope, setScope] = useState<'all' | 1 | 2 | 3 | 4>('all');
-  const inScope = (h?: 1 | 2 | 3 | 4) => scope === 'all' || h === scope;
-  // Extra-time periods only get their own chips once they've actually been played,
-  // otherwise every 90-minute match shows two dead filters.
-  const etPlayed = s.half >= 3;
-  const scoped = scope === 'all'
+  // Only offer the period split once a 2nd period has actually started — while a
+  // match is still in the 1st half, "Overall" and "1st half" are identical, so the
+  // toggle (and a dead all-zeros "2nd half" filter) would just be noise. Each ET
+  // period's chip appears as it's played. Mirrors the basketball/kabaddi toggles.
+  const periods: ('all' | 1 | 2 | 3 | 4)[] = s.half >= 2
+    ? ['all', 1, 2, ...(s.half >= 3 ? [3 as const] : []), ...(s.half >= 4 ? [4 as const] : [])]
+    : [];
+  const scopeLabel = (k: 'all' | 1 | 2 | 3 | 4) =>
+    k === 'all' ? 'Overall' : k === 1 ? '1st half' : k === 2 ? '2nd half' : k === 3 ? 'ET 1' : 'ET 2';
+  const active: 'all' | 1 | 2 | 3 | 4 = periods.includes(scope) ? scope : 'all';
+  const inScope = (h?: 1 | 2 | 3 | 4) => active === 'all' || h === active;
+  const scoped = active === 'all'
     ? s
     : { ...s, stats: s.stats.filter((e) => inScope(e.half)), events: s.events.filter((e) => inScope(e.half)) };
   const { totals, possession, passAcc } = footballStats(scoped, Date.now());
@@ -1476,15 +1483,17 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
     { label: 'Attacking plays', home: `${totals.home.attackContributions}`, away: `${totals.away.attackContributions}`, tracked: t.attackContribution },
     { label: 'Defensive plays', home: `${totals.home.defenceContributions}`, away: `${totals.away.defenceContributions}`, tracked: t.defenceContribution },
   ];
-  const shownRows = rows.filter((r) => scope === 'all' || !r.overallOnly);
+  const shownRows = rows.filter((r) => active === 'all' || !r.overallOnly);
   const anyUntracked = shownRows.some((r) => !r.tracked);
   return (
     <View style={{ gap: theme.spacing(2) }}>
-      <View style={sv.scopeRow}>
-        {([['all', 'Overall'], [1, '1st half'], [2, '2nd half'], ...(etPlayed ? ([[3, 'ET 1'], [4, 'ET 2']] as const) : [])] as const).map(([key, label]) => (
-          <SelectChip key={label} label={label} active={scope === key} onPress={() => setScope(key)} />
-        ))}
-      </View>
+      {periods.length > 0 ? (
+        <View style={sv.scopeRow}>
+          {periods.map((key) => (
+            <SelectChip key={String(key)} label={scopeLabel(key)} active={active === key} onPress={() => setScope(key)} />
+          ))}
+        </View>
+      ) : null}
       <View style={sv.head}>
         <Text style={[sv.headTeam, { color: homeColor }]} numberOfLines={1}>{homeName}</Text>
         <Text style={sv.headTitle}>TEAM STATS</Text>
