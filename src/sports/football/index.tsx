@@ -1483,8 +1483,10 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
     { label: 'Attacking plays', home: `${totals.home.attackContributions}`, away: `${totals.away.attackContributions}`, tracked: t.attackContribution },
     { label: 'Defensive plays', home: `${totals.home.defenceContributions}`, away: `${totals.away.defenceContributions}`, tracked: t.defenceContribution },
   ];
-  const shownRows = rows.filter((r) => active === 'all' || !r.overallOnly);
-  const anyUntracked = shownRows.some((r) => !r.tracked);
+  // Show only the stats this match is capturing; list the rest compactly below so
+  // the comparison isn't padded with a stack of "☁ not tracked" rows.
+  const shownRows = rows.filter((r) => (active === 'all' || !r.overallOnly) && r.tracked);
+  const untracked = rows.filter((r) => !r.tracked).map((r) => r.label);
   return (
     <View style={{ gap: theme.spacing(2) }}>
       {periods.length > 0 ? (
@@ -1499,9 +1501,9 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
         <Text style={sv.headTitle}>TEAM STATS</Text>
         <Text style={[sv.headTeam, { color: awayColor, textAlign: 'right' }]} numberOfLines={1}>{awayName}</Text>
       </View>
-      {shownRows.map((r) => <StatRow key={r.label} label={r.label} home={r.home} away={r.away} homeColor={homeColor} awayColor={awayColor} tracked={r.tracked} />)}
-      {anyUntracked ? (
-        <Text style={sv.coverageHint}>☁ not tracked — the scorer isn’t capturing this stat for this match (Scoring settings · Info tab).</Text>
+      {shownRows.map((r) => <StatRow key={r.label} label={r.label} home={r.home} away={r.away} homeColor={homeColor} awayColor={awayColor} tracked />)}
+      {untracked.length ? (
+        <Text style={sv.coverageHint}>☁ Not tracked: {untracked.join(', ')} — turn on in Scoring settings (Info tab).</Text>
       ) : null}
     </View>
   );

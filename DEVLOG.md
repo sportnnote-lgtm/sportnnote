@@ -30,6 +30,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Football stats: hide untracked rows, list them in the footer · SHIPPED + VERIFIED
+
+The team-stats comparison (bars + leader-highlighted values + the per-period toggle) was already strong, but it
+padded the list with a "☁ not tracked" row for every stat this match isn't capturing — up to 18 rows, mostly
+empty for a lightly-tracked game.
+
+- **Change:** render only the **tracked** stats; collapse the rest into one footer line — "☁ Not tracked:
+  Passes, Pass accuracy — turn on in Scoring settings (Info tab)" — which also names exactly what's missing
+  (the old hint was generic).
+- **Files:** `src/sports/football/index.tsx` (`StatsComparison` row filter + footer). Pure view layer;
+  `StatRow`/bars/toggle unchanged.
+- **Verified live (demo):** m1 Stats → Shots 5-2, Possession 70-30 etc. with comparison bars, Passes/Pass
+  accuracy dropped from the list and named in the footer. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Football timeline: LATEST + cap + outcome tones · SHIPPED + VERIFIED
 
 Football's Timeline (its own component, merging events + tracked stats) already used the rail look but lagged the
