@@ -928,6 +928,16 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {/* The scorer's controls live on their own tab now. */}
           {activeTab === 'scoring' && (
             <>
+              <View style={st.infoCard}>
+                <MatchHeader
+                  sportIcon={plugin.icon} sportName={plugin.name}
+                  statusLabel={statusLabel} matchLive={matchLive} complete={complete}
+                  homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
+                  homeColor={homeColor} awayColor={awayColor}
+                  hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
+                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                />
+              </View>
               {matchId && canScore ? <OfflineSyncBanner matchId={matchId} /> : null}
               {/* Running score, so the scorer never leaves this tab to check the
                   state. The big board above the tabs is suppressed here to avoid

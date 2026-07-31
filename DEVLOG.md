@@ -30,6 +30,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Scoring tab match header (all four tabs now share it) · SHIPPED + VERIFIED
+
+Added the shared `MatchHeader` to the top of the Scoring tab too, so every tab (Info / Score-via-board /
+Summary / Scoring) opens with the same match identity. Order on the scorer's tab: header → broadcast board →
+undo/add-player → controls.
+
+- **Files:** `src/screens/LiveScoringScreen.tsx` (one `<MatchHeader/>` at the top of the scoring branch). Pure
+  view layer; the board and controls below are unchanged.
+- **Verified live (demo):** cg7 Scoring tab → "🏀 BASKETBALL · ● LIVE", Indiranagar United VS Koramangala Kings,
+  above the TOTAL·Q1·Q2 board and the scoring controls. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Summary tab match header (shared `MatchHeader` component) · SHIPPED + VERIFIED
 
 Give the Summary tab the same match-identity header the Info tab got, so both read consistently. Extracted the
