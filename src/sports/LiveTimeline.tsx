@@ -25,21 +25,25 @@ export function LiveTimeline({
   return (
     <View style={st.wrap}>
       {ordered.map((e, i) => {
-        const color = e.side === 'away' ? awayColor : e.side === 'home' ? homeColor : theme.colors.textMuted;
+        const sideColor = e.side === 'away' ? awayColor : e.side === 'home' ? homeColor : theme.colors.textMuted;
+        // An outcome tone (cricket boundary/wicket/extra) accents the node — and the
+        // label for the big moments — over the plain team colour.
+        const toneColor = e.tone === 'boundary' ? theme.colors.primary : e.tone === 'wicket' ? theme.colors.danger : e.tone === 'extra' ? theme.colors.accent : null;
+        const nodeColor = toneColor ?? sideColor;
         const latest = i === 0;
         return (
           <View key={e.id} style={st.row}>
-            {/* Timeline spine: a continuous rail with a team-coloured node per event.
+            {/* Timeline spine: a continuous rail with a coloured node per event.
                 The newest event's node gets a ring so the eye lands on it first. */}
             <View style={st.rail}>
               <View style={[st.railLine, i === 0 && st.railLineFirst, i === ordered.length - 1 && st.railLineLast]} />
-              {latest ? <View style={[st.nodeHalo, { borderColor: color }]} /> : null}
-              <View style={[st.node, { backgroundColor: color }]} />
+              {latest ? <View style={[st.nodeHalo, { borderColor: nodeColor }]} /> : null}
+              <View style={[st.node, { backgroundColor: nodeColor }]} />
             </View>
-            <Text style={[st.stamp, { color }]} numberOfLines={1}>{e.stamp}</Text>
+            <Text style={[st.stamp, { color: sideColor }]} numberOfLines={1}>{e.stamp}</Text>
             <Text style={st.icon}>{e.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={st.label}>{e.label}</Text>
+              <Text style={[st.label, (e.tone === 'boundary' || e.tone === 'wicket') && { color: toneColor! }]}>{e.label}</Text>
               {e.detail ? <Text style={st.detail}>{mask.text(e.detail)}</Text> : null}
             </View>
             {latest ? <Text style={st.latestTag}>LATEST</Text> : null}

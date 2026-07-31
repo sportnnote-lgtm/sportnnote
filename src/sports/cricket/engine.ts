@@ -368,7 +368,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         bowling: bumpBowl({ runs: r, balls: 1 }),
         thisOver: [...baseOver, r === 4 ? '4' : r === 6 ? '6' : String(r)],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat, tone: r === 4 || r === 6 ? 'boundary' : undefined }],
         seq,
       };
       // Strike rotation: odd runs swap ends, and the end of an over swaps ends.
@@ -389,7 +389,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         bowling: bumpBowl({ balls: 1 }),
         thisOver: [...baseOver, (isLeg ? 'lb' : 'b') + (r > 1 ? r : '')],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat, tone: 'extra' }],
         seq,
       };
       return afterLegalBall(next, (r % 2 === 1) !== overEnd);
@@ -418,7 +418,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           scores: { ...s.scores, [bat]: { ...cur, wickets: cur.wickets + (isWicket ? 1 : 0) } },
           batting,
           dismissals: isWicket ? [...s.dismissals, { kind, outId }] : s.dismissals,
-          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat) }],
+          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat), tone: 'wicket' }],
           seq,
           ...creaseFor(newBatId, newBatName),
         };
@@ -448,7 +448,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         dismissals: [...s.dismissals, { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName }],
         thisOver: [...baseOver, completed > 0 ? `${completed}+W` : 'W'],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat) }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
         seq,
         ...creaseFor(newBatId, newBatName),
       };
@@ -473,7 +473,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         batting,
         bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }),
         thisOver: [...(s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver), sym],
-        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat }],
+        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat, tone: 'extra' }],
         seq,
         freeHit: isNoBall ? true : s.freeHit,
       };

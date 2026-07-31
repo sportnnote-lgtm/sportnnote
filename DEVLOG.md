@@ -30,6 +30,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-07-31 — Cricket ball-by-ball: outcome-coloured balls · SHIPPED + VERIFIED
+
+Cricket already used the shared `LiveTimeline` (so it got LATEST + the truncation footer), but every ball was
+the same team colour. Made each ball read like a broadcast ball tracker — the outcome accents the node (and the
+label for the big moments).
+
+- **New `LiveEvent.tone`** ('boundary' | 'wicket' | 'extra'); the cricket engine stamps it per ball — FOUR/SIX →
+  boundary, any wicket → wicket, wide/no-ball/byes → extra. `LiveTimeline` colours the node (and, for boundaries
+  & wickets, the label) by tone: **green** boundary, **red** wicket, **amber** extra; plain runs keep the side
+  colour. Other sports pass no tone → unchanged.
+- **Files:** `src/sports/liveEvents.ts` (tone field), `src/sports/cricket/engine.ts` (5 ball events tagged),
+  `src/sports/LiveTimeline.tsx` (tone → node/label colour). No totals change — the seed test still passes.
+- **Verified live (demo):** m8 ball-by-ball → "FOUR"/"SIX" green with green nodes, "CAUGHT" red with a red node,
+  regular runs in team colour, newest ball tagged LATEST. 86 tests, typecheck clean.
+
 ### 2026-07-31 — Basketball play-by-play: unified rail style + LATEST + cap · SHIPPED + VERIFIED
 
 Basketball had its own timeline layout (quarter stamp + a right-side dot + bordered rows) and rendered **every**

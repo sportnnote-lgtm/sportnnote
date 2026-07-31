@@ -20,4 +20,7 @@ export interface LiveEvent {
   half?: number;
   set?: number; // volleyball: which set this point belongs to (per-set stats)
   game?: number; // badminton: which game this point belongs to (per-game stats)
+  /** Optional outcome accent for the timeline node/label — e.g. cricket colours a
+   *  boundary green, a wicket red, an extra amber. Absent → node uses the side colour. */
+  tone?: 'boundary' | 'wicket' | 'extra';
 }
