@@ -384,6 +384,13 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   // Sides that still have their Impact Player available (format-gated).
   const impactSides = (['home', 'away'] as const).filter((sd) => state.impactEnabled && !state.impactUsed[sd]);
 
+  // Over-complete flow: the reducer clears the bowler after the 6th legal ball, so
+  // `!bowlerId` with a whole number of overs bowled means an over just finished.
+  const oversDone = Math.floor(cur.balls / state.ballsPerOver);
+  const nextOverNo = oversDone + 1;
+  const oversLabel = state.oversLimit < 100 ? ` of ${state.oversLimit}` : ''; // hide for timeless/Test
+  const overJustDone = !bowlerId && cur.balls > 0 && cur.balls % state.ballsPerOver === 0;
+
   // Rain (DLS) input: validate against the reducer's own bounds (must be more than
   // overs already bowled, fewer than the current limit) and preview the effect —
   // the revised chase target — using the same dls helpers the reducer applies.
@@ -498,13 +505,15 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
       {/* Bowler — must be (re)named at the start of each over. */}
       <View style={{ gap: theme.spacing(2) }}>
+        {overJustDone ? <View style={ctrl.overDone}><Text style={ctrl.overDoneText}>✓ Over {oversDone} complete — new bowler needed</Text></View> : null}
         <Text style={ctrl.label}>
-          🎯 {bowlerId ? `Bowling: ${bowlerName}` : `New over — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
+          🎯 {bowlerId ? `Bowling: ${bowlerName}` : `Over ${nextOverNo}${oversLabel} — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
         </Text>
         <View style={ctrl.chips}>
           {bowlingRoster.map((p) => (
             <SelectChip
-              key={p.id} label={isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName}
+              key={p.id}
+              label={p.id === state.lastOverBowlerId ? `${p.fullName} · last over` : isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName}
               active={bowlerId === p.id}
               disabled={p.id === state.lastOverBowlerId || isUnavailable(p.id)}
               onPress={() => dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName } })}
@@ -1139,6 +1148,8 @@ const ctrl = StyleSheet.create({
   },
   rainErr: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
   rainPreview: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+  overDone: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
+  overDoneText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   wktPanel: {
     gap: theme.spacing(3),
     backgroundColor: theme.colors.surface,

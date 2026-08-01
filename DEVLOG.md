@@ -83,6 +83,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket over-complete flow: clear over cue + over number · SHIPPED + VERIFIED
+
+When an over finishes the reducer clears `bowlerId`, and the pad just relabelled to "New over — pick bowler" —
+no over number, no clear "an over just ended" moment, and the disabled last-over bowler chip didn't say why it
+was disabled. Made the over boundary a proper beat.
+
+- **Change:** the bowler prompt now names the over ("**Over N of M — pick {team} bowler**"; the "of M" is hidden
+  for timeless/Test). When an over has just completed (`!bowlerId` with a whole number of overs bowled) an amber
+  **"✓ Over N complete — new bowler needed"** cue appears above it. The disabled last-over bowler's chip now reads
+  "**{name} · last over**" so it's obvious why it can't be picked.
+- **Files:** `src/sports/cricket/index.tsx` (derived `oversDone`/`nextOverNo`/`oversLabel`/`overJustDone`; bowler
+  section header + cue + chip label; `overDone` / `overDoneText` styles).
+- **Verified live (demo):** m9 after setup → opening prompt read "Over 1 of 10 — pick BLU bowler"; bowled 6 dots →
+  "✓ Over 1 complete — new bowler needed" + "Over 2 of 10 — pick BLU bowler", the last bowler shown as "Ishaan
+  Verma · last over" (disabled). Also confirmed strike rotates correctly at over-end. Demo mutated then localStorage
+  cleared to restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket voice scoring: credit the striker/bowler (stat parity) · FIX + VERIFIED
 
 `cricketVoice` built its RUNS and WICKET actions **without `attribution`**, so voice-scored deliveries didn't
