@@ -83,6 +83,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket voice scoring: credit the striker/bowler (stat parity) · FIX + VERIFIED
+
+`cricketVoice` built its RUNS and WICKET actions **without `attribution`**, so voice-scored deliveries didn't
+credit any player — voice-scored runs/wickets skipped the player stat lines that the tap flow records (its
+`runs()` / `finishWicket()` pass attribution), and the shared `VoiceScorer` feedback couldn't name anyone
+("✅ runs — Red House", no batter). A parity gap between voice and tap.
+
+- **Change:** voice RUNS now carries `{playerId: strikerId, stat:'runs', by:r, playerName:strikerName}` and voice
+  WICKET carries `{playerId: bowlerId, stat:'wickets', by:1, playerName:bowlerName}` **for bowler dismissals only**
+  — run-outs (and extras: wide/bye/leg-bye/no-ball) stay unattributed, exactly matching the tap flow. So voice
+  scoring now feeds player stats and the feedback line names the batter/bowler.
+- **Files:** `src/sports/voiceParsers.ts` (`cricketVoice` RUNS + WICKET returns).
+- **Verified (demo):** via the `__sportfolioVoice.cricketVoice` inspection hook — "four" → RUNS + striker
+  attribution (by 4), "two runs" → RUNS (by 2), "bowled"/"caught" → WICKET + bowler attribution (by 1), "run out"
+  → WICKET with **no** attribution, "wide" → EXTRA with **no** attribution. Pure-function check, no demo mutation.
+  96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket rain/DLS box: validation + live target preview · SHIPPED + VERIFIED
 
 The rain box (☔ reduce overs, shown when `state.dls`) had two gaps: **Apply silently no-op'd** on out-of-range

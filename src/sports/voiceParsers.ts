@@ -72,7 +72,9 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
       : /\brun ?out\b/.test(q) ? 'runout'
       : /\bhit ?wicket\b/.test(q) ? 'hitwicket'
       : 'bowled';
-    return [wrap('WICKET', { kind })];
+    // Credit the bowler for a bowler's wicket (not a run out) — parity with the
+    // plugin's tap flow, so voice-scored wickets count toward player stats too.
+    return [{ ...wrap('WICKET', { kind }), attribution: s.bowlerId && kind !== 'runout' ? { playerId: s.bowlerId, stat: 'wickets', by: 1, playerName: s.bowlerName } : undefined }];
   }
 
   // Runs — a run word or a bare 0-6.
@@ -84,7 +86,7 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
   else if (/\bcouple\b|\bdouble\b/.test(q)) r = 2;
   else r = runsOffText;
   const runWord = /\b(dot|no run|nothing|zero|four|boundary|six|maximum|single|couple|double|run|runs|scored?)\b/.test(q);
-  if (r != null && r >= 0 && r <= 6 && (runWord || /^\d$/.test(q.trim()))) return [wrap('RUNS', { runs: r })];
+  if (r != null && r >= 0 && r <= 6 && (runWord || /^\d$/.test(q.trim()))) return [{ ...wrap('RUNS', { runs: r }), attribution: s.strikerId ? { playerId: s.strikerId, stat: 'runs', by: r, playerName: s.strikerName } : undefined }];
   return null;
 }
 
