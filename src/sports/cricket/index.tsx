@@ -445,7 +445,11 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         {need && <Text style={ctrl.hint}>Pick {need} to start scoring.</Text>}
       </View>
 
-      {state.freeHit && <Text style={ctrl.freeHit}>🟢 FREE HIT</Text>}
+      {state.freeHit && (
+        <View style={ctrl.freeHitBox}>
+          <Text style={ctrl.freeHitText}>🟢 FREE HIT — {strikerName ?? 'the batter'} can’t be out (run out only)</Text>
+        </View>
+      )}
 
       {/* Rain (DLS): cut the overs; in the chase the target auto-revises. */}
       {state.dls && !state.ended && !soActive && (
@@ -540,7 +544,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       )}
 
       <View style={ctrl.row}>
-        <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf(state.freeHit ? { kind: 'runout' } : {})} />
+        <Button label={state.freeHit ? 'RUN OUT' : 'WICKET'} variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf(state.freeHit ? { kind: 'runout' } : {})} />
         <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => ball({ type: 'EXTRA', payload: { kind: 'Wide' } })} />
         <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
       </View>
@@ -1122,6 +1126,8 @@ const ctrl = StyleSheet.create({
   needTag: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
   needTagText: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800' },
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
+  freeHitBox: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.primary, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
+  freeHitText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.3 },
   wktRecap: { backgroundColor: theme.colors.danger + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   wktRecapText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   impactRecap: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },

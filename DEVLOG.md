@@ -83,6 +83,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket free hit: explained callout + honest WICKET button · SHIPPED + VERIFIED
+
+After a no-ball the next delivery is a free hit (the batter can't be dismissed except run out), but the UI only
+showed a bare "🟢 FREE HIT" text line — no explanation of the rule (unlike the POWERPLAY note right above it,
+which spells its restriction out) — and the WICKET button still read "WICKET" even though it routed straight to
+the run-out flow. Made the free-hit state clear.
+
+- **Change:** the free-hit indicator is now a green-tinted bordered **callout** matching the powerplay/rain/
+  over-complete cue language: "🟢 FREE HIT — {striker} can't be out (run out only)". The WICKET button relabels
+  to **"RUN OUT"** while a free hit is live (it already forced `kind: 'runout'`), so the button is honest about
+  what it does.
+- **Files:** `src/sports/cricket/index.tsx` (free-hit note → callout; WICKET button label; `freeHitBox` /
+  `freeHitText` styles).
+- **Verified live (demo):** m9 after setup → bowled a No ball → the callout read "🟢 FREE HIT — Rohan Nair can't
+  be out (run out only)" and the wicket button changed to "RUN OUT". Demo mutated then localStorage cleared to
+  restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket over-complete flow: clear over cue + over number · SHIPPED + VERIFIED
 
 When an over finishes the reducer clears `bowlerId`, and the pad just relabelled to "New over — pick bowler" —
