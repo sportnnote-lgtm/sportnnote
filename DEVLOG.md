@@ -83,6 +83,29 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket rain/DLS box: validation + live target preview · SHIPPED + VERIFIED
+
+The rain box (☔ reduce overs, shown when `state.dls`) had two gaps: **Apply silently no-op'd** on out-of-range
+input (the reducer rejects overs ≤ bowled or ≥ current limit, and the button just did `if (n) dispatch` — so a bad
+value did nothing with no explanation), and it gave **no preview** of the DLS effect the scorer is about to apply
+— which for a rain rule is the whole point.
+
+- **Change:** the input is now validated against the reducer's own bounds; **Apply is disabled** unless the value
+  is a whole number in `(oversBowled, oversLimit)`. On invalid input a red hint spells out the range ("Enter a
+  whole number between N and M"); on valid input a green preview shows the effect — innings 1 "Innings capped at N
+  overs", the chase "New target X — need Y off the last N overs" — computed with the **same `resourcePct` /
+  `revisedTarget` dls helpers the reducer uses** (single source of truth). The placeholder now shows the valid
+  range too.
+- **Also:** enabled `dls: true` on the demo IPL-style fixture **m9** (a limited-overs staple, and it makes rain
+  demoable — no seeded match had DLS before).
+- **Files:** `src/sports/cricket/index.tsx` (`import { resourcePct, revisedTarget } from './dls'`; hoisted
+  `rainN`/`rainOversDone`/`rainValid`/`rainPreview`; rain-box JSX; `rainErr` / `rainPreview` styles);
+  `src/core/mockData.ts` (m9 format `dls: true`).
+- **Verified live (demo):** m9 after setup → typed 12 (over limit) → red "Enter a whole number between 1 and 9",
+  Apply disabled; typed 5 → green "Innings capped at 5 overs", Apply enabled; ended innings 1 → innings-2 rain box
+  showed "New target 1 — need 1 off the last 5 overs". Demo mutated then localStorage cleared to restore the seed.
+  96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket Super Over / tie decision: broadcast tie board · SHIPPED + VERIFIED
 
 The tie-break decision panel (`SuperOverDecision`, shown when a regulation match finishes level) rendered the

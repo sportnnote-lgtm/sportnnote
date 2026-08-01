@@ -227,8 +227,9 @@ export const MATCHES: Match[] = [
     venueName: 'Chinnaswamy Stadium',
     hostIds: ['p-aarav'],
     scorerId: 'p-aarav', // the demo user scores this one — shows the IPL-style rules live
-    // per-match format: IPL-style Impact Player + a 3-over powerplay (8-a-side squads)
-    format: { overs: 10, playersPerSide: 8, substitutes: 1, impactPlayer: true, powerplayOvers: 3 },
+    // per-match format: IPL-style Impact Player + a 3-over powerplay (8-a-side squads),
+    // with DLS on so the scorer can cut overs for rain (a limited-overs staple).
+    format: { overs: 10, playersPerSide: 8, substitutes: 1, impactPlayer: true, powerplayOvers: 3, dls: true },
     homeTeam: team('rh', 'Red House', 'RED', 'cricket', houses.red),
     awayTeam: team('bh', 'Blue House', 'BLU', 'cricket', houses.blue),
     state: null,

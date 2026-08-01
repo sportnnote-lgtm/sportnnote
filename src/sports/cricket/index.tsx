@@ -26,6 +26,7 @@ import {
   oversStr, runRate, inPowerplay,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
+import { resourcePct, revisedTarget } from './dls';
 
 /* ------------------------------- Controls ---------------------------------- */
 
@@ -383,6 +384,23 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   // Sides that still have their Impact Player available (format-gated).
   const impactSides = (['home', 'away'] as const).filter((sd) => state.impactEnabled && !state.impactUsed[sd]);
 
+  // Rain (DLS) input: validate against the reducer's own bounds (must be more than
+  // overs already bowled, fewer than the current limit) and preview the effect —
+  // the revised chase target — using the same dls helpers the reducer applies.
+  const rainN = parseInt(rain, 10);
+  const rainOversDone = Math.floor(cur.balls / state.ballsPerOver);
+  const rainValid = rain !== '' && !isNaN(rainN) && rainN > rainOversDone && rainN < state.oversLimit;
+  const rainPreview = (() => {
+    if (!rainValid) return null;
+    const lost = Math.max(0, resourcePct(state.oversLimit - rainOversDone, cur.wickets) - resourcePct(rainN - rainOversDone, cur.wickets));
+    if (state.innings === 2) {
+      const t1 = state.scores[other(state.battingSide)].runs;
+      const nt = revisedTarget(t1, 100 - state.r1Lost, 100 - (state.r2Lost + lost));
+      return `New target ${nt} — need ${Math.max(0, nt - cur.runs)} off the last ${rainN - rainOversDone} overs`;
+    }
+    return `Innings capped at ${rainN} overs`;
+  })();
+
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {soActive && (() => {
@@ -432,10 +450,15 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           </Text>
           <View style={ctrl.row}>
             <View style={ctrl.flex}>
-              <TextField label="" value={rain} onChange={(t) => setRain(t.replace(/[^0-9]/g, ''))} placeholder={`New total overs (< ${state.oversLimit})`} autoCapitalize="none" />
+              <TextField label="" value={rain} onChange={(t) => setRain(t.replace(/[^0-9]/g, ''))} placeholder={`New total overs (${rainOversDone + 1}–${state.oversLimit - 1})`} autoCapitalize="none" />
             </View>
-            <Button label="Apply" variant="ghost" onPress={() => { const n = parseInt(rain, 10); if (n) dispatch({ type: 'RAIN', payload: { overs: n } }); setRain(''); }} />
+            <Button label="Apply" variant="ghost" disabled={!rainValid} onPress={() => { dispatch({ type: 'RAIN', payload: { overs: rainN } }); setRain(''); }} />
           </View>
+          {rain !== '' && !rainValid ? (
+            <Text style={ctrl.rainErr}>Enter a whole number between {rainOversDone + 1} and {state.oversLimit - 1}.</Text>
+          ) : rainPreview ? (
+            <Text style={ctrl.rainPreview}>→ {rainPreview}</Text>
+          ) : null}
         </View>
       )}
 
@@ -1114,6 +1137,8 @@ const ctrl = StyleSheet.create({
     borderColor: theme.colors.accent,
     padding: theme.spacing(3),
   },
+  rainErr: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
+  rainPreview: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   wktPanel: {
     gap: theme.spacing(3),
     backgroundColor: theme.colors.surface,
