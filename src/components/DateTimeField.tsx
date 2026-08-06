@@ -2,7 +2,7 @@
  *  so it renders identically on iOS, Android and the web preview — no native
  *  datetime module. Holds a Date value; the caller owns it. */
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { textStyles } from './ui';
 
@@ -57,10 +57,17 @@ export function DateTimeField({
   const base = value ?? new Date();
   const [viewY, setViewY] = useState(base.getFullYear());
   const [viewM, setViewM] = useState(base.getMonth());
+  // Which sub-view is showing: the day grid, or a month / year pick-list.
+  const [pick, setPick] = useState<'day' | 'month' | 'year'>('day');
+  // Year range for the pick-list: a few years ahead (future match dates) down to
+  // 1900 (old-enough DOBs), newest first. The arrows still go beyond if needed.
+  const nowY = new Date().getFullYear();
+  const years = Array.from({ length: nowY + 5 - 1900 + 1 }, (_, i) => nowY + 5 - i);
 
   function show() {
     setViewY(base.getFullYear());
     setViewM(base.getMonth());
+    setPick('day');
     setOpen(true);
   }
 
@@ -70,6 +77,8 @@ export function DateTimeField({
     setViewM(((m % 12) + 12) % 12);
     setViewY(y);
   }
+  // Year jump — a DOB is years back, so month-only stepping is unusable.
+  const stepYear = (delta: number) => setViewY((y) => y + delta);
 
   function pickDay(day: number) {
     onChange(new Date(viewY, viewM, day, base.getHours(), base.getMinutes()));
@@ -111,55 +120,88 @@ export function DateTimeField({
         <View style={st.backdrop}>
           <View style={st.sheet}>
             <View style={st.calHead}>
-              <TouchableOpacity
-                onPress={() => step(-1)}
-                style={st.navBtn}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Previous month"
-              >
-                <Text style={st.navTxt}>‹</Text>
-              </TouchableOpacity>
-              <Text style={st.monthTitle} accessibilityRole="header">{MONTHS[viewM]} {viewY}</Text>
-              <TouchableOpacity
-                onPress={() => step(1)}
-                style={st.navBtn}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Next month"
-              >
-                <Text style={st.navTxt}>›</Text>
-              </TouchableOpacity>
+              <View style={st.navGroup}>
+                <TouchableOpacity onPress={() => stepYear(-1)} style={st.navBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Previous year">
+                  <Text style={st.navTxt}>«</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => step(-1)} style={st.navBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Previous month">
+                  <Text style={st.navTxt}>‹</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={st.titleGroup}>
+                <TouchableOpacity onPress={() => setPick((p) => (p === 'month' ? 'day' : 'month'))} accessibilityRole="button" accessibilityLabel="Choose month">
+                  <Text style={[st.monthTitle, pick === 'month' && st.titleActive]}>{MONTHS[viewM]}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setPick((p) => (p === 'year' ? 'day' : 'year'))} accessibilityRole="button" accessibilityLabel="Choose year">
+                  <Text style={[st.monthTitle, pick === 'year' && st.titleActive]}>{viewY}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={st.navGroup}>
+                <TouchableOpacity onPress={() => step(1)} style={st.navBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Next month">
+                  <Text style={st.navTxt}>›</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => stepYear(1)} style={st.navBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Next year">
+                  <Text style={st.navTxt}>»</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <View style={st.weekRow}>
-              {WEEKDAYS.map((w) => (
-                <Text key={w} style={st.weekday}>{w}</Text>
-              ))}
-            </View>
-
-            {rows.map((row, ri) => (
-              <View key={ri} style={st.weekRow}>
-                {row.map((day, ci) => (
-                  <View key={ci} style={st.cell}>
-                    {day != null && (
-                      <TouchableOpacity
-                        style={[st.day, isSelectedDay(day) && st.daySel]}
-                        onPress={() => pickDay(day)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${day} ${MONTHS[viewM]} ${viewY}`}
-                        accessibilityState={{ selected: isSelectedDay(day) }}
-                      >
-                        <Text style={[st.dayTxt, isSelectedDay(day) && st.dayTxtSel]}>{day}</Text>
-                      </TouchableOpacity>
-                    )}
+            {pick === 'month' && (
+              <View style={st.pickWrap}>
+                {MONTHS.map((m, i) => (
+                  <View key={m} style={st.monthCell}>
+                    <TouchableOpacity style={[st.pickBtn, i === viewM && st.pickBtnSel]} onPress={() => { setViewM(i); setPick('day'); }} accessibilityRole="button" accessibilityLabel={m} accessibilityState={{ selected: i === viewM }}>
+                      <Text style={[st.pickTxt, i === viewM && st.pickTxtSel]}>{m.slice(0, 3)}</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
-            ))}
+            )}
 
-            {mode === 'datetime' && <TimeEditor value={base} onChange={onChange} />}
+            {pick === 'year' && (
+              <ScrollView style={st.yearScroll} contentContainerStyle={st.pickWrap}>
+                {years.map((y) => (
+                  <View key={y} style={st.yearCell}>
+                    <TouchableOpacity style={[st.pickBtn, y === viewY && st.pickBtnSel]} onPress={() => { setViewY(y); setPick('day'); }} accessibilityRole="button" accessibilityLabel={String(y)} accessibilityState={{ selected: y === viewY }}>
+                      <Text style={[st.pickTxt, y === viewY && st.pickTxtSel]}>{y}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {pick === 'day' && (
+              <>
+                <View style={st.weekRow}>
+                  {WEEKDAYS.map((w) => (
+                    <Text key={w} style={st.weekday}>{w}</Text>
+                  ))}
+                </View>
+
+                {rows.map((row, ri) => (
+                  <View key={ri} style={st.weekRow}>
+                    {row.map((day, ci) => (
+                      <View key={ci} style={st.cell}>
+                        {day != null && (
+                          <TouchableOpacity
+                            style={[st.day, isSelectedDay(day) && st.daySel]}
+                            onPress={() => pickDay(day)}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${day} ${MONTHS[viewM]} ${viewY}`}
+                            accessibilityState={{ selected: isSelectedDay(day) }}
+                          >
+                            <Text style={[st.dayTxt, isSelectedDay(day) && st.dayTxtSel]}>{day}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                ))}
+
+                {mode === 'datetime' && <TimeEditor value={base} onChange={onChange} />}
+              </>
+            )}
 
             <TouchableOpacity style={st.done} onPress={() => setOpen(false)} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Done">
               <Text style={st.doneTxt}>Done</Text>
@@ -269,9 +311,13 @@ const st = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000AA',
     justifyContent: 'center',
+    alignItems: 'center', // centre horizontally so the capped sheet doesn't stretch
     padding: theme.spacing(4),
   },
   sheet: {
+    width: '100%',
+    maxWidth: 340, // cap on tablets/web so cells stay compact & the header/Done fit
+    alignSelf: 'center',
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
@@ -280,6 +326,17 @@ const st = StyleSheet.create({
     gap: theme.spacing(2),
   },
   calHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  navGroup: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1) },
+  titleGroup: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  titleActive: { color: theme.colors.primary },
+  pickWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  monthCell: { width: '33.333%', padding: 3 },
+  yearCell: { width: '25%', padding: 3 },
+  yearScroll: { maxHeight: 230 },
+  pickBtn: { paddingVertical: theme.spacing(3), borderRadius: theme.radius.sm, alignItems: 'center', backgroundColor: theme.colors.surfaceAlt },
+  pickBtnSel: { backgroundColor: theme.colors.primary },
+  pickTxt: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  pickTxtSel: { color: '#06120D', fontWeight: '800' },
   navBtn: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',

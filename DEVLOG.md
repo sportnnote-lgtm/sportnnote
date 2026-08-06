@@ -31,6 +31,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — DOB calendar: fits the screen + month/year pick-lists · FIX + VERIFIED
+
+Found during the live sign-up (staging cutover): the DOB date picker (`DateField` in `DateTimeField.tsx`) was
+**unusable on a tablet/wide viewport** — the modal `sheet` had no width cap, so the backdrop stretched it nearly
+full-width and the `flex:1 aspectRatio:1` day cells ballooned; the 6-row grid grew taller than the screen, so the
+vertically-centred sheet pushed its **header (month/year + nav arrows) off the top** — no way to change month or
+year. And even when visible, month-only stepping made a birth year (years back) impractical.
+
+- **Change:**
+  1. **Fits any screen** — cap the sheet (`maxWidth: 340`, `width: 100%`, `alignSelf: center`; backdrop
+     `alignItems: center`) so it stays compact & centred with the header and Done always visible.
+  2. **Arrows** — header is `« ‹ Month YYYY › »`: `«`/`»` step the year (new `stepYear`), `‹`/`›` step the month.
+  3. **Pick-lists** (the real fix for a distant DOB) — the **month** and **year** in the header are now tappable
+     (`pick` state `day|month|year`): month opens a 3×4 grid (Jan–Dec); year opens a **scrollable** grid
+     (`now+5 … 1900`, newest first) — so a 2000-born taps *Year → scroll → 2000* instead of 26 arrow presses.
+- **Files:** `src/components/DateTimeField.tsx`. Generic `DateField`, so match-date pickers benefit too.
+- **Verified live (staging AuthScreen, 1280-wide):** picker opens compact & centred; tapped **Year** → scrolled →
+  **2000** → returned to the Aug 2000 day grid; tapped **Month** → 3×4 grid with **Aug** highlighted. 96 tests,
+  typecheck clean. (Inspected the picker only — no account created.)
+
+---
+
 ### 2026-08-01 — Voice scoring: hands-free confirm/undo lane (auto-scoring foundation) · SHIPPED + VERIFIED
 
 Groundwork for the "referee narrates → scorecard updates" vision. The recognizer already did **continuous,
