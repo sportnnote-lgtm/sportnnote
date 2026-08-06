@@ -31,6 +31,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Grouped tournaments, Phase 1: the advancement engine · SHIPPED + TESTED
+
+Prioritised for the pilot (running real grouped tournaments): the pure logic to turn "N teams → G groups →
+top-K advance → knockout" into fixtures + a seeded bracket. Phase 1 is the engine only — pure, fully unit-tested,
+no schema/UI risk. (Phase 2 wires the UI + persistence + a migration.)
+
+- **What's built:**
+  - `fixtures.ts` — `drawGroups(teamIds, numGroups)` (even round-robin dealing: 20/4→5·5, 25/5→5·5, 22/4→6,6,5,5;
+    labels A,B,C…) and `groupStage(...)` (a round-robin *within* each group, every pairing tagged with its group).
+  - `groups.ts` (new) — `groupTables(matches, sport)` (per-group league tables), `advancement(tables, topPerGroup,
+    bestPlacedSlots)` (direct top-K **plus** the best (K+1)-placed wildcards across groups, ranked points→GD→GF —
+    the classic "5 groups → top 3 + best 4th = Round of 16"), `seedKnockout(qualified)` (1-v-last seeding **with a
+    de-clash pass** so a group-stage rematch can't happen in round one → recovers the A1-vB2/B1-vA2 cross bracket),
+    and `knockoutRoundLabel(n)`.
+  - `Match` gained optional `group` / `stage` fields (the model foundation; demo-first, Supabase migration in P2).
+- **Files:** `src/core/types.ts`, `src/data/fixtures.ts`, `src/data/groups.ts` (new), `tests/groups.test.mts` (new).
+- **Tested:** 12 new cases (draw evenness, within-group-only fixtures, per-group ranking, top-2→8, top-1+best-1,
+  5-groups→16, seeded no-rematch bracket, odd-count bye, round labels). 108 tests total, typecheck clean.
+- **Next (Phase 2):** "Group stage" option in Auto-generate fixtures (pick teams + #groups + top-K), per-group
+  tables on the tournament screen, an "Advance to knockout" action, repos writes for `group`/`stage`, migration 0002.
+
 ### 2026-08-01 — DOB calendar: fits the screen + month/year pick-lists · FIX + VERIFIED
 
 Found during the live sign-up (staging cutover): the DOB date picker (`DateField` in `DateTimeField.tsx`) was

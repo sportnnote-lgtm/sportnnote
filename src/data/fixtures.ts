@@ -38,6 +38,30 @@ export function roundRobin(teamIds: string[], doubleRound = false): GeneratedPai
   return out;
 }
 
+/** A round-robin pairing tagged with the group it belongs to. */
+export interface GroupPairing extends GeneratedPairing { group: string }
+
+/** Split teams into `numGroups` groups by serpentine-free round-robin dealing
+ *  (team i → group i % g), so counts stay as even as possible (25/5 → 5·5,
+ *  22/4 → 6,6,5,5). Group labels are A, B, C… Returns the teamId list per group. */
+export function drawGroups(teamIds: string[], numGroups: number): { name: string; teamIds: string[] }[] {
+  const ids = [...new Set(teamIds)];
+  const g = Math.max(1, Math.min(Math.floor(numGroups) || 1, ids.length || 1));
+  const groups = Array.from({ length: g }, (_, i) => ({ name: String.fromCharCode(65 + i), teamIds: [] as string[] }));
+  ids.forEach((id, i) => groups[i % g].teamIds.push(id));
+  return groups;
+}
+
+/** Group stage = a round-robin *within* each group (not across), every pairing
+ *  tagged with its group. Feeds a grouped tournament's league phase. */
+export function groupStage(teamIds: string[], numGroups: number, doubleRound = false): GroupPairing[] {
+  const out: GroupPairing[] = [];
+  for (const grp of drawGroups(teamIds, numGroups)) {
+    for (const p of roundRobin(grp.teamIds, doubleRound)) out.push({ ...p, group: grp.name });
+  }
+  return out;
+}
+
 /**
  * First-round knockout pairings (1v2, 3v4, …). An odd team out gets a bye and
  * simply isn't scheduled this round. Later rounds depend on results, so they
@@ -53,4 +77,4 @@ export function knockoutFirstRound(teamIds: string[]): GeneratedPairing[] {
 }
 
 // Test/inspection hook (parity with the other engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioFixtures = { roundRobin, knockoutFirstRound };
+(globalThis as unknown as Record<string, unknown>).__sportfolioFixtures = { roundRobin, knockoutFirstRound, drawGroups, groupStage };

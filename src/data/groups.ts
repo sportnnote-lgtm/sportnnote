@@ -1,0 +1,113 @@
+/**
+ * Grouped-tournament advancement — the pure logic that turns finished group
+ * tables into a seeded knockout. Handles the two shapes an organizer wants:
+ *   • "top N of each group advance" (e.g. top 2 → quarter-finals), and
+ *   • "top N + the best (N+1)-placed teams across all groups" to fill an
+ *     awkward bracket (e.g. 5 groups → top 3 = 15, + the best 4th-placed = 16
+ *     for a Round of 16 — the classic 24/25-team format), ranked by the same
+ *     tie-breakers the league table uses (points → goal difference → goals for).
+ * No I/O — the screen feeds it match results and gets back the bracket to create.
+ */
+import type { Match, SportId } from '../core/types.ts';
+import { teamStandings, type TeamStanding } from './standings.ts';
+import type { GeneratedPairing } from './fixtures.ts';
+
+/** One group's ranked table. */
+export interface GroupTable { name: string; rows: TeamStanding[] }
+
+/** A team that has advanced, with how it got there. */
+export interface Qualifier {
+  teamId: string;
+  name: string;
+  group: string;
+  /** finishing position in its group (1 = winner) */
+  rank: number;
+  /** 'direct' = a top-N finish; 'best' = a best-placed wildcard */
+  via: 'direct' | 'best';
+}
+
+/** League tie-break order: points, then goal difference, then goals for, then name. */
+const rankCmp = (x: TeamStanding, y: TeamStanding) =>
+  y.points - x.points || y.diff - x.diff || y.for - x.for || x.name.localeCompare(y.name);
+
+/** Per-group tables for a sport: partition the tournament's matches by their
+ *  `group` tag and rank each with the normal league logic. Ungrouped matches
+ *  (e.g. knockout ties) are ignored. */
+export function groupTables(matches: Match[], sport: SportId): GroupTable[] {
+  const byGroup = new Map<string, Match[]>();
+  for (const m of matches) {
+    if (m.sport !== sport || !m.group) continue;
+    const list = byGroup.get(m.group) ?? [];
+    list.push(m);
+    byGroup.set(m.group, list);
+  }
+  return [...byGroup.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, ms]) => ({ name, rows: teamStandings(ms, sport) }));
+}
+
+/**
+ * Who advances. `topPerGroup` teams from each group qualify directly; if
+ * `bestPlacedSlots > 0`, that many more come from the best (topPerGroup+1)-placed
+ * teams across all groups (ranked by the league tie-breakers). Returns the
+ * qualifiers in **seed order** — all group winners first (best record first),
+ * then all runners-up, … then the best-placed wildcards — which is what
+ * `seedKnockout` pairs into a bracket.
+ */
+export function advancement(tables: GroupTable[], topPerGroup: number, bestPlacedSlots = 0): Qualifier[] {
+  const direct: { q: Qualifier; row: TeamStanding }[] = [];
+  const bestPool: { row: TeamStanding; group: string }[] = [];
+  for (const t of tables) {
+    t.rows.forEach((row, i) => {
+      if (i < topPerGroup) direct.push({ q: { teamId: row.teamId, name: row.name, group: t.name, rank: i + 1, via: 'direct' }, row });
+      else if (i === topPerGroup && bestPlacedSlots > 0) bestPool.push({ row, group: t.name });
+    });
+  }
+  // Seed the direct qualifiers: by rank first (all 1st places, then all 2nds…),
+  // and within a rank by record — so winners occupy the top seeds.
+  direct.sort((a, b) => a.q.rank - b.q.rank || rankCmp(a.row, b.row));
+  const best = bestPool
+    .sort((a, b) => rankCmp(a.row, b.row))
+    .slice(0, bestPlacedSlots)
+    .map(({ row, group }): Qualifier => ({ teamId: row.teamId, name: row.name, group, rank: topPerGroup + 1, via: 'best' }));
+  return [...direct.map((d) => d.q), ...best];
+}
+
+/**
+ * Seeded first round from a seed-ordered qualifier list: 1v last, 2v second-last,
+ * … then a **de-clash pass** — a group-stage rematch shouldn't happen in round one,
+ * so any tie whose two teams share a group swaps its lower seed with another tie's
+ * to break the clash (this recovers the classic A1-vB2 / B1-vA2 cross-group bracket
+ * from top-2-of-four-groups). An odd count byes the top seed through. The swap is
+ * best-effort: a pathological group split may leave one unavoidable rematch.
+ */
+export function seedKnockout(qualified: Qualifier[]): GeneratedPairing[] {
+  const seeds = qualified.slice(qualified.length % 2); // odd → top seed gets a bye
+  const ties: [Qualifier, Qualifier][] = [];
+  for (let i = 0; i < seeds.length / 2; i++) ties.push([seeds[i], seeds[seeds.length - 1 - i]]);
+  for (let i = 0; i < ties.length; i++) {
+    if (ties[i][0].group !== ties[i][1].group) continue;
+    // find another tie we can swap away-teams with, resolving this clash without
+    // creating one in the other tie.
+    for (let j = 0; j < ties.length; j++) {
+      if (j === i) continue;
+      if (ties[i][0].group !== ties[j][1].group && ties[j][0].group !== ties[i][1].group) {
+        const tmp = ties[i][1]; ties[i][1] = ties[j][1]; ties[j][1] = tmp;
+        break;
+      }
+    }
+  }
+  return ties.map(([h, a]) => ({ homeId: h.teamId, awayId: a.teamId, round: 1 }));
+}
+
+/** Label the knockout round for N teams (drives Match.stage / the bracket UI). */
+export function knockoutRoundLabel(teams: number): string {
+  if (teams <= 2) return 'final';
+  if (teams <= 4) return 'sf';
+  if (teams <= 8) return 'qf';
+  if (teams <= 16) return 'r16';
+  return 'r32';
+}
+
+// Test/inspection hook (parity with the other engines).
+(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel };
