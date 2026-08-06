@@ -70,6 +70,8 @@ interface TeamRow {
 interface MatchRow {
   id: string;
   tournament_id: string;
+  group_label: string | null;
+  stage: string | null;
   sport: string;
   status: MatchStatus;
   starts_at: string;
@@ -105,6 +107,8 @@ function toMatch(r: MatchRow): Match {
   return {
     id: r.id,
     tournamentId: r.tournament_id,
+    group: r.group_label ?? undefined,
+    stage: r.stage ?? undefined,
     sport: r.sport as SportId,
     status: r.status,
     startsAt: r.starts_at,
@@ -123,7 +127,7 @@ function toMatch(r: MatchRow): Match {
 }
 
 const MATCH_SELECT =
-  'id, tournament_id, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, state,' +
+  'id, tournament_id, group_label, stage, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, state,' +
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
 
@@ -1622,6 +1626,9 @@ export async function setTeamRoster(teamId: string, roster: string[]): Promise<v
 export interface NewMatch {
   /** omit for an ad-hoc friendly (a match with no tournament) */
   tournamentId?: string;
+  /** grouped-tournament group label (e.g. "A") + phase ('group' | 'r16' | 'qf' | 'sf' | 'final') */
+  group?: string;
+  stage?: string;
   sport: SportId;
   homeTeamId: string;
   awayTeamId: string;
@@ -1642,6 +1649,8 @@ export async function createMatch(input: NewMatch): Promise<Match> {
     const away = demo.teams.find((t) => t.id === input.awayTeamId)!;
     return addMatch({
       tournamentId: input.tournamentId,
+      group: input.group,
+      stage: input.stage,
       sport: input.sport,
       status: 'scheduled',
       startsAt: input.startsAt,
@@ -1659,6 +1668,8 @@ export async function createMatch(input: NewMatch): Promise<Match> {
     .from('matches')
     .insert({
       tournament_id: input.tournamentId ?? null,
+      group_label: input.group ?? null,
+      stage: input.stage ?? null,
       sport: input.sport,
       home_team_id: input.homeTeamId,
       away_team_id: input.awayTeamId,

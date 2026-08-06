@@ -14,18 +14,18 @@ import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById } from '../data/hooks';
 import { createMatch, getMyPlayerId } from '../data/repos';
-import { roundRobin, knockoutFirstRound, type GeneratedPairing } from '../data/fixtures';
+import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Structure = 'league' | 'knockout';
+type Structure = 'league' | 'knockout' | 'groups';
 
 const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 
-interface Draft extends GeneratedPairing { when: Date }
+interface Draft extends GeneratedPairing { when: Date; group?: string }
 
 export default function GenerateFixturesScreen() {
   const nav = useNavigation<Nav>();
@@ -41,6 +41,7 @@ export default function GenerateFixturesScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [structure, setStructure] = useState<Structure>(tournament?.structure === 'knockout' ? 'knockout' : 'league');
   const [doubleRound, setDoubleRound] = useState(false);
+  const [numGroups, setNumGroups] = useState('4');
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -62,10 +63,20 @@ export default function GenerateFixturesScreen() {
   const toggleTeam = (id: string) => { invalidate(); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
   const allSelected = teams.length > 0 && selected.length === teams.length;
 
+  const groupCount = Math.max(2, Math.min(parseInt(numGroups, 10) || 2, Math.floor(selected.length / 2) || 2));
+  // Preview the group split (sizes) once enough teams are picked.
+  const groupSizes = useMemo(
+    () => (structure === 'groups' && selected.length >= 2 ? drawGroups(selected, groupCount).map((g) => g.teamIds.length) : []),
+    [structure, selected, groupCount],
+  );
+
   function generate() {
     if (selected.length < 2) return setError('Pick at least two teams.');
     setError(null);
-    const pairings = structure === 'knockout' ? knockoutFirstRound(selected) : roundRobin(selected, doubleRound);
+    const pairings: (GeneratedPairing & { group?: string })[] =
+      structure === 'knockout' ? knockoutFirstRound(selected)
+        : structure === 'groups' ? groupStage(selected, groupCount, doubleRound)
+        : roundRobin(selected, doubleRound);
     const gap = Math.max(0, parseInt(gapMin, 10) || 0);
     setDrafts(pairings.map((p, i) => ({ ...p, when: new Date(start.getTime() + i * gap * 60000) })));
   }
@@ -90,6 +101,7 @@ export default function GenerateFixturesScreen() {
       for (const d of drafts) {
         await createMatch({
           tournamentId: params.tournamentId, sport,
+          group: d.group, stage: d.group ? 'group' : undefined,
           homeTeamId: d.homeId, awayTeamId: d.awayId,
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
@@ -140,13 +152,27 @@ export default function GenerateFixturesScreen() {
         <Text style={textStyles.muted}>Format</Text>
         <View style={st.chips}>
           <SelectChip label="🔁 Round-robin (league)" active={structure === 'league'} onPress={() => { setStructure('league'); invalidate(); }} />
+          <SelectChip label="👥 Group stage" active={structure === 'groups'} onPress={() => { setStructure('groups'); invalidate(); }} />
           <SelectChip label="🏆 Knockout (round 1)" active={structure === 'knockout'} onPress={() => { setStructure('knockout'); invalidate(); }} />
         </View>
-        {structure === 'league' && (
+        {(structure === 'league' || structure === 'groups') && (
           <View style={st.chips}>
             <SelectChip label="Single — each pair once" active={!doubleRound} onPress={() => { setDoubleRound(false); invalidate(); }} />
             <SelectChip label="Double — home & away" active={doubleRound} onPress={() => { setDoubleRound(true); invalidate(); }} />
           </View>
+        )}
+        {structure === 'groups' && (
+          <>
+            <View style={st.row}>
+              <View style={st.flex}><TextField label="Number of groups" value={numGroups} onChange={(t) => { setNumGroups(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+              <View style={st.flex} />
+            </View>
+            {groupSizes.length > 0 && (
+              <Text style={textStyles.muted}>
+                {selected.length} teams → {groupSizes.length} groups (A–{String.fromCharCode(64 + groupSizes.length)}) of {groupSizes.join(', ')}. Round-robin within each; the top finishers advance to a knockout (from the tournament page) once the groups finish.
+              </Text>
+            )}
+          </>
         )}
         {/* Show which tie-breaker these knockout fixtures will inherit from the tournament. */}
         {structure === 'knockout' && sport === 'football' && (
@@ -180,7 +206,7 @@ export default function GenerateFixturesScreen() {
                     <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
-                  <DateTimeField label={`Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
+                  <DateTimeField label={`${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
                 </View>
               ))}
               <Button label={busy ? 'Creating…' : `✅ Create ${drafts.length} match${drafts.length === 1 ? '' : 'es'}`} onPress={create} disabled={busy} />

@@ -31,6 +31,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Grouped tournaments, Phase 2a: generate groups + per-group tables · SHIPPED + VERIFIED
+
+Wired the Phase 1 engine into the app: an organizer can now generate a group stage and see per-group tables.
+
+- **Auto-generate fixtures** gained a **👥 Group stage** structure: pick teams + number of groups → a live split
+  preview ("8 teams → 2 groups (A–B) of 4, 4") → generates a round-robin *within* each group, every match tagged
+  with its group (`group` + `stage:'group'`).
+- **Tournament screen** renders a **table per group** (GROUP A, GROUP B…) via `groupTables` when the tournament
+  has grouped matches, instead of one flat league table.
+- **Persistence**: `NewMatch`/`createMatch` carry `group`/`stage` on both paths — demo (in-memory) and Supabase
+  (new `group_label`/`stage` columns; `group` is a SQL keyword so the DB column is `group_label`, mapped to the
+  app's `match.group`). Migration **0002** (`supabase/migrations/20260806120000_grouped_tournaments.sql`) adds the
+  two nullable columns + a `(tournament_id, stage)` index. Additive & idempotent — flat league/knockout/friendly
+  matches are unaffected.
+- **Files:** `src/data/repos.ts`, `src/screens/GenerateFixturesScreen.tsx`, `src/screens/
+  TournamentProfileScreen.tsx`, `supabase/migrations/20260806120000_grouped_tournaments.sql` (new).
+- **Verified live (demo mode):** Karnataka State Cup → Auto-generate → Group stage, 8 teams, 2 groups → 12 matches
+  labelled "Group A/B · Round N" (within-group only) → Create → tournament shows GROUP A + GROUP B tables. 108
+  tests, typecheck clean.
+- **⚠️ To use live:** run migration 0002 in the Supabase SQL editor **before** the live app reads matches (the app
+  now selects `group_label`/`stage`, which don't exist until the migration runs).
+- **Next (Phase 2b):** the "Advance to knockout" action — compute `advancement` from finished group tables →
+  create the seeded bracket (stage r16/qf/…) → the existing 🏆 bracket auto-advances to the final.
+
 ### 2026-08-01 — Grouped tournaments, Phase 1: the advancement engine · SHIPPED + TESTED
 
 Prioritised for the pilot (running real grouped tournaments): the pure logic to turn "N teams → G groups →

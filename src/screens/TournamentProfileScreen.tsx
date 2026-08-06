@@ -25,6 +25,7 @@ import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders } from '../data/standings';
+import { groupTables } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -137,6 +138,8 @@ export default function TournamentProfileScreen() {
 
   const overall = useMemo(() => overallStandings(matches, sports), [matches, sports]);
   const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport) : []), [matches, activeSport]);
+  // Grouped tournaments show a table per group instead of one flat league table.
+  const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport) : []), [matches, activeSport]);
   const categories = useMemo(
     () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),
     [lines, players, activeSport]
@@ -381,13 +384,20 @@ export default function TournamentProfileScreen() {
             ))}
           </ScrollView>
         )}
-        {activeSport && (
+        {activeSport && groups.length > 0 ? (
+          groups.map((g) => (
+            <View key={g.name} style={{ gap: theme.spacing(1) }}>
+              <Text style={st.groupHead}>Group {g.name}</Text>
+              <LeagueTable teams={g.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+            </View>
+          ))
+        ) : activeSport ? (
           <LeagueTable
             teams={table}
             onTeam={(teamId) => nav.navigate('Team', { teamId })}
             emptyLabel={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet.`}
           />
-        )}
+        ) : null}
 
         {activeSport && categories.length > 0 && (
           <>
@@ -434,6 +444,7 @@ const st = StyleSheet.create({
   tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap' },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   section: { marginTop: theme.spacing(2) },
+  groupHead: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(2) },
   oRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(1) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   dot: { width: 14, height: 14, borderRadius: 7 },
