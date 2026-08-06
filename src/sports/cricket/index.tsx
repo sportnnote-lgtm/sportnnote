@@ -167,6 +167,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | null>(null);
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player } | null>(null);
   const [rain, setRain] = useState('');
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   // While a Super Over is live, ALL the live-scoring UI below operates on the
   // nested mini-match; dispatched actions are routed there by the reducer. The
@@ -549,10 +550,30 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
       </View>
 
-      {state.innings === 1 ? (
-        <Button label="End innings →" onPress={() => dispatch({ type: 'END_INNINGS' })} />
+      {/* Ending an innings/match is a big, easy-to-mis-tap action — confirm it,
+          and show the key facts (score, overs, resulting target) first. */}
+      {confirmEnd ? (
+        <View style={ctrl.confirmBox}>
+          <Text style={ctrl.confirmText}>
+            {state.innings === 1
+              ? `End ${battingName}'s innings at ${cur.runs}/${cur.wickets} (${oversStr(cur.balls, state.ballsPerOver)} ov)? ${bowlingName} will chase ${cur.runs + 1}.`
+              : `End the match with ${battingName} on ${cur.runs}/${cur.wickets}${state.target ? `, chasing ${state.target}` : ''}?`}
+          </Text>
+          <View style={ctrl.row}>
+            <Button label="Cancel" variant="ghost" style={ctrl.flex} onPress={() => setConfirmEnd(false)} />
+            {state.innings === 1 ? (
+              <Button label="End innings →" style={ctrl.flex} onPress={() => { dispatch({ type: 'END_INNINGS' }); setConfirmEnd(false); }} />
+            ) : (
+              <Button label="End match" variant="danger" style={ctrl.flex} onPress={() => { dispatch({ type: 'END' }); setConfirmEnd(false); }} />
+            )}
+          </View>
+        </View>
       ) : (
-        <Button label="End match" variant="danger" onPress={() => dispatch({ type: 'END' })} />
+        <Button
+          label={state.innings === 1 ? 'End innings →' : 'End match'}
+          variant={state.innings === 1 ? 'ghost' : 'danger'}
+          onPress={() => setConfirmEnd(true)}
+        />
       )}
     </View>
   );
@@ -1156,6 +1177,8 @@ const ctrl = StyleSheet.create({
   rainPreview: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   overDone: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   overDoneText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  confirmBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
+  confirmText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   wktPanel: {
     gap: theme.spacing(3),
     backgroundColor: theme.colors.surface,

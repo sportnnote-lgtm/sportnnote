@@ -83,6 +83,23 @@ treatment even though play hadn't begun — contradicting the match header, whic
 
 ---
 
+### 2026-08-01 — Cricket end-innings / end-match: confirm step with context · SHIPPED + VERIFIED
+
+"End innings →" and "End match" dispatched immediately on tap — a big button at the bottom of the pad, easy to
+mis-hit, ending an innings (or the whole match) with no confirmation and no context. Added a confirm step that
+also states the key facts.
+
+- **Change:** tapping End now arms an inline confirm (Cancel + the action) instead of firing. Innings 1 reads
+  "End {batting}'s innings at {runs}/{wkts} ({overs} ov)? {bowling} will chase {runs+1}." (previewing the resulting
+  target); the chase reads "End the match with {batting} on {runs}/{wkts}, chasing {target}?". The primary End
+  button is now `ghost` for the innings break and `danger` for ending the match (matching severity). New
+  `confirmEnd` state resets on either choice.
+- **Files:** `src/sports/cricket/index.tsx` (`confirmEnd` state; end-innings/end-match confirm block; `confirmBox`
+  / `confirmText` styles).
+- **Verified live (demo):** m9 after setup → "End innings →" armed "End RED's innings at 0/0 (0.0 ov)? BLU will
+  chase 1."; confirmed → innings 2; "End match" armed "End the match with BLU on 0/0, chasing 1?" (Cancel + red
+  End match). Demo mutated then localStorage cleared to restore the seed. 96 tests, typecheck clean.
+
 ### 2026-08-01 — Cricket free hit: explained callout + honest WICKET button · SHIPPED + VERIFIED
 
 After a no-ball the next delivery is a free hit (the batter can't be dismissed except run out), but the UI only
