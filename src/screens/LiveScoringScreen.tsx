@@ -431,6 +431,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               voice={plugin.voice} state={state} dispatch={dispatch}
               homeName={homeName} awayName={awayName}
               homeRoster={homeScoreRoster} awayRoster={awayScoreRoster}
+              onUndo={undo}
             />
           )}
         </View>

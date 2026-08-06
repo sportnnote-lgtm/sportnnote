@@ -848,7 +848,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     }
   };
 
-  const speech = useSpeech(processCommand);
+  const speech = useSpeech((t) => processCommand(t)); // ignore the confidence arg here
   const sendTyped = () => { if (voiceText.trim()) { processCommand(voiceText); setVoiceText(''); } };
   // Use a real player from this match in the example, not a stock "Kane" no one
   // on the teamsheet recognises. Falls back to a name-free example if empty.

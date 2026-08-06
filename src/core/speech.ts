@@ -52,7 +52,7 @@ export function registerNativeSpeech(adapter: NativeSpeechAdapter): void {
   nativeAdapter = adapter;
 }
 
-export function useSpeech(onResult: (text: string) => void): SpeechHook {
+export function useSpeech(onResult: (text: string, confidence?: number) => void): SpeechHook {
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const recRef = useRef<any>(null);
@@ -87,15 +87,16 @@ export function useSpeech(onResult: (text: string) => void): SpeechHook {
     rec.onresult = (e: any) => {
       let finalT = '';
       let interimT = '';
+      let finalConf: number | undefined; // 0..1 from the last final result (0/absent ⇒ unknown)
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) finalT += r[0].transcript;
+        if (r.isFinal) { finalT += r[0].transcript; finalConf = r[0].confidence; }
         else interimT += r[0].transcript;
       }
       setInterim(interimT);
       if (finalT.trim()) {
         setInterim('');
-        onResultRef.current(finalT.trim());
+        onResultRef.current(finalT.trim(), finalConf);
       }
     };
     rec.onend = () => {

@@ -31,6 +31,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-01 — Voice scoring: hands-free confirm/undo lane (auto-scoring foundation) · SHIPPED + VERIFIED
+
+Groundwork for the "referee narrates → scorecard updates" vision. The recognizer already did **continuous,
+hands-free** listening (`speech.ts` — `continuous: true`, auto-restart on `onend`, web + native adapter); the gap
+was entirely in the consumer (`VoiceScorer`), which **applied every recognized phrase immediately** and discarded
+the confidence signal — so a single mishear silently changed the scoreline. Rebuilt the panel around a
+**confirm/undo lane** so any input source (typed, voice, or a future ML model) is safe.
+
+- **Change:**
+  - `speech.ts` now passes the recognizer **confidence** through `onResult(text, confidence?)` (web reads
+    `result.confidence`; native/unknown ⇒ trusted). Backward-compatible — existing 1-arg callers unaffected
+    (football's inline voice call-site adapted).
+  - `VoiceScorer` rebuilt: a **Confirm ↔ Auto** toggle (default **Confirm**). Confirm mode proposes every call
+    ("Call 'four' → 4 runs — RED" with ✓ Apply / ✕) — nothing hits the score until you tap. Auto mode applies
+    **confident** calls immediately; low-confidence calls still fall back to confirm. A live **Recent calls** feed
+    (last 6, with ✅/↩︎/🤔) plus a **↩ Undo last** wired to the screen's rewind (`onUndo` threaded from
+    `LiveScoringScreen`). The parser/attribution work is unchanged — this is the safety + hands-free layer on top.
+- **Files:** `src/core/speech.ts` (confidence), `src/sports/VoiceScorer.tsx` (rebuild), `src/screens/
+  LiveScoringScreen.tsx` (pass `onUndo`), `src/sports/football/index.tsx` (call-site adapt).
+- **Verified live (demo):** m9 cricket → Confirm mode: typed "four" → proposal shown, score stayed 0/0 → Apply →
+  4/0 + feed "✅ 4 runs — RED". Flipped **Auto ON** → "six" applied directly → 10/0. **Undo last** → reverted to
+  4/0. Demo mutated then localStorage cleared to restore the seed. 96 tests, typecheck clean.
+- **Still ahead for full auto-scoring** (north-star, post-pilot): always-on capture device (mic/earpiece; Meta
+  glasses lack an open live-audio SDK today), a cloud STT for stadium-noise accuracy, and — the moonshot —
+  video-based event detection. The event-sourced architecture means each just emits the same `ScoreAction`.
+
+---
+
 ### 2026-08-01 — Surgical timeline editor ported to the rally sports (volleyball · tennis · badminton) · SHIPPED + VERIFIED
 
 The last open item from the cross-sport backlog: football/basketball/kabaddi had the full **🗓 Correct the
