@@ -8,7 +8,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { drawGroups, groupStage } from '../src/data/fixtures.ts';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel, type GroupTable } from '../src/data/groups.ts';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, type GroupTable } from '../src/data/groups.ts';
 import { type TeamStanding } from '../src/data/standings.ts';
 import type { Match } from '../src/core/types.ts';
 
@@ -116,6 +116,27 @@ describe('advancement', () => {
     assert.equal(q.length, 16);
     assert.equal(q.filter((x) => x.via === 'best').length, 1);
     assert.equal(q.find((x) => x.via === 'best')!.teamId, 'C4');
+  });
+});
+
+describe('qualifiersFromSelection (manual override)', () => {
+  const tables: GroupTable[] = [
+    { name: 'A', rows: [row('A1', 9, 5, 8), row('A2', 6, 2, 5), row('A3', 3, -3, 3)] },
+    { name: 'B', rows: [row('B1', 7, 4, 7), row('B2', 4, 1, 4), row('B3', 3, 0, 3)] },
+  ];
+  test('builds qualifiers from an arbitrary pick, seeded winners-first then by record', () => {
+    // Organizer overrides: takes A1, B1 (winners) and B2, A3 (a runner-up + a 3rd).
+    const q = qualifiersFromSelection(tables, ['A3', 'B2', 'B1', 'A1']);
+    assert.equal(q.length, 4);
+    // ranks come from finishing position within the group
+    assert.deepEqual(q.map((x) => [x.teamId, x.rank]), [['A1', 1], ['B1', 1], ['B2', 2], ['A3', 3]]);
+    // seed order: all rank-1s first (A1 9pts before B1 7pts), then rank-2 (B2), then rank-3 (A3)
+    assert.deepEqual(q.map((x) => x.teamId), ['A1', 'B1', 'B2', 'A3']);
+    assert.ok(q.every((x) => x.via === 'direct'));
+  });
+  test('ignores ids not in any group table', () => {
+    const q = qualifiersFromSelection(tables, ['A1', 'ZZ', 'B1']);
+    assert.deepEqual(q.map((x) => x.teamId), ['A1', 'B1']);
   });
 });
 

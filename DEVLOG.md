@@ -31,6 +31,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Custom-control (b): organizer picks who advances · SHIPPED + VERIFIED
+
+Advance-to-knockout was rule-only (top-K + best-placed by points→GD→GF). Real tournaments need an
+override — to honour an off-app tie-break, or to hand-fill an awkward field. Advance mode now has a
+**⚙️ By standings / ✏️ Pick manually** toggle.
+
+- **Pick manually** shows every team from the group tables, grouped and ranked (`1. Team A1 · 4pt`),
+  pre-selected with the rule-based qualifiers so the organizer starts from the natural result and just
+  edits it. The running count + qualifier read-back update live; the generated bracket seeds from the
+  hand-picked set (winners first, then runners-up, …) and still de-clashes group rematches.
+- **Engine** (`src/data/groups.ts`, pure + tested): `qualifiersFromSelection(tables, selectedTeamIds)` —
+  builds seed-ordered Qualifiers from an arbitrary pick, using each team's group finishing position.
+  2 new tests.
+- **Files:** `src/data/groups.ts`, `src/screens/GenerateFixturesScreen.tsx`, `tests/groups.test.mts`.
+- **Verified (demo mode):** Groups Cup (3 groups of 3, all group games played) → Advance → Pick manually
+  showed the checklist pre-selected with the rule top-2 (6 teams) → dropped Team C2, added Team A3 →
+  preview "6 qualify → qf · hand-picked: A1, B1, C1, A2, B2, A3" → bracket **A1 v B2, B1 v A3, C1 v A2**
+  (de-clashed, the natural A1-v-A3 swapped). 120 tests, typecheck clean. No new migration.
+- **Next (custom-control c):** play-in / preliminary rounds to size an odd field to a clean bracket
+  (the 12 → 8-or-16 case).
+
 ### 2026-08-07 — Custom-control (a): manual stage tagging + a real, advancing bracket · SHIPPED + VERIFIED
 
 The knockout used to be display-only: auto-generate created *round 1* and the bracket screen

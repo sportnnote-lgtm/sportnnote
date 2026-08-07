@@ -15,7 +15,7 @@ import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '../data/hooks';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel } from '../data/groups';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection } from '../data/groups';
 import { stageForTeams } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
@@ -61,6 +61,9 @@ export default function GenerateFixturesScreen() {
   const [numGroups, setNumGroups] = useState('4');
   const [topK, setTopK] = useState('2');
   const [bestPlaced, setBestPlaced] = useState('0');
+  // Custom-control: override who advances (advance-to-knockout mode).
+  const [manualAdvance, setManualAdvance] = useState(false);
+  const [manualSel, setManualSel] = useState<string[]>([]);
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -85,7 +88,7 @@ export default function GenerateFixturesScreen() {
   }, [participants, touchedSel]);
 
   const invalidate = () => setDrafts(null);
-  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); invalidate(); };
+  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); invalidate(); };
   const toggleTeam = (id: string) => { invalidate(); setTouchedSel(true); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
   const allSelected = teams.length > 0 && selected.length === teams.length;
 
@@ -106,14 +109,34 @@ export default function GenerateFixturesScreen() {
     () => (hasGroups ? advancement(gtables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0)) : []),
     [gtables, hasGroups, topK, bestPlaced],
   );
+  // Custom control: the organizer overrides who advances (an off-app tie-break,
+  // or to fill an awkward field). `manualSel` is the chosen team ids; the
+  // effective qualifiers are theirs when customizing, else the rule-based set.
+  const effectiveQualifiers = useMemo(
+    () => (manualAdvance ? qualifiersFromSelection(gtables, manualSel) : qualifiers),
+    [manualAdvance, gtables, manualSel, qualifiers],
+  );
+  // Seed the manual picks from the rule-based qualifiers the first time the
+  // organizer opens the override (so they start from the natural result).
+  const toggleManualAdvance = () => {
+    invalidate();
+    setManualAdvance((on) => {
+      if (!on) setManualSel(qualifiers.map((q) => q.teamId));
+      return !on;
+    });
+  };
+  const toggleAdvanceTeam = (id: string) => {
+    invalidate();
+    setManualSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  };
 
   function generate() {
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
     if (structure === 'advance') {
-      if (qualifiers.length < 2) return setError('Not enough qualifiers yet — finish the group matches first.');
+      if (effectiveQualifiers.length < 2) return setError(manualAdvance ? 'Pick at least two teams to advance.' : 'Not enough qualifiers yet — finish the group matches first.');
       setError(null);
-      const stage = knockoutRoundLabel(qualifiers.length);
-      setDrafts(seedKnockout(qualifiers).map((p, i) => ({ ...p, stage, when: new Date(start.getTime() + i * gap0 * 60000) })));
+      const stage = knockoutRoundLabel(effectiveQualifiers.length);
+      setDrafts(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: new Date(start.getTime() + i * gap0 * 60000) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
@@ -231,22 +254,48 @@ export default function GenerateFixturesScreen() {
         )}
         {structure === 'advance' && (
           <>
-            <View style={st.row}>
-              <View style={st.flex}><TextField label="Advance per group" value={topK} onChange={(t) => { setTopK(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
-              <View style={st.flex}><TextField label="Best-placed wildcards" value={bestPlaced} onChange={(t) => { setBestPlaced(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+            {/* How who-advances is decided: by the standings rules, or hand-picked. */}
+            <View style={st.chips}>
+              <SelectChip label="⚙️ By standings" active={!manualAdvance} onPress={() => { if (manualAdvance) toggleManualAdvance(); }} />
+              <SelectChip label="✏️ Pick manually" active={manualAdvance} onPress={() => { if (!manualAdvance) toggleManualAdvance(); }} />
             </View>
+
+            {!manualAdvance ? (
+              <View style={st.row}>
+                <View style={st.flex}><TextField label="Advance per group" value={topK} onChange={(t) => { setTopK(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+                <View style={st.flex}><TextField label="Best-placed wildcards" value={bestPlaced} onChange={(t) => { setBestPlaced(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+              </View>
+            ) : (
+              <>
+                <Text style={textStyles.muted}>Tap the teams that advance — ordered by group standing (1 = winner). {manualSel.length} selected.</Text>
+                {gtables.map((g) => (
+                  <View key={g.name} style={{ gap: theme.spacing(1) }}>
+                    <Text style={st.groupHead}>GROUP {g.name}</Text>
+                    <View style={st.chips}>
+                      {g.rows.map((r, i) => (
+                        <SelectChip key={r.teamId} label={`${i + 1}. ${r.name} · ${r.points}pt`} active={manualSel.includes(r.teamId)} onPress={() => toggleAdvanceTeam(r.teamId)} />
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
             {!groupsDone && (
               <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
                 ⚠️ {groupMatches.filter((m) => m.status === 'completed').length}/{groupMatches.length} group matches finished — finishing all of them first makes the standings final. You can still preview the bracket now.
               </Text>
             )}
-            {qualifiers.length > 0 ? (
+            {effectiveQualifiers.length > 0 ? (
               <Text style={textStyles.muted}>
-                {qualifiers.length} qualify → {knockoutRoundLabel(qualifiers.length)} · top {Math.max(1, parseInt(topK, 10) || 1)} from each of {gtables.length} groups
-                {(parseInt(bestPlaced, 10) || 0) > 0 ? ` + ${parseInt(bestPlaced, 10)} best-placed` : ''}: {qualifiers.map((q) => `${q.name}${q.via === 'best' ? '*' : ''}`).join(', ')}.
+                {effectiveQualifiers.length} qualify → {knockoutRoundLabel(effectiveQualifiers.length)}
+                {manualAdvance
+                  ? ' · hand-picked'
+                  : ` · top ${Math.max(1, parseInt(topK, 10) || 1)} from each of ${gtables.length} groups${(parseInt(bestPlaced, 10) || 0) > 0 ? ` + ${parseInt(bestPlaced, 10)} best-placed` : ''}`}
+                : {effectiveQualifiers.map((q) => `${q.name}${q.via === 'best' ? '*' : ''}`).join(', ')}.
               </Text>
             ) : (
-              <Text style={textStyles.muted}>No qualifiers yet — the group tables need at least some results.</Text>
+              <Text style={textStyles.muted}>{manualAdvance ? 'Pick the teams that advance above.' : 'No qualifiers yet — the group tables need at least some results.'}</Text>
             )}
           </>
         )}
@@ -304,4 +353,5 @@ const st = StyleSheet.create({
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },
   draftCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
+  groupHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
 });

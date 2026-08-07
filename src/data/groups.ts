@@ -109,5 +109,26 @@ export function knockoutRoundLabel(teams: number): string {
   return 'r32';
 }
 
+/**
+ * Qualifiers for a **manually chosen** set of teams (custom control): the
+ * organizer overrides who advances — to reflect an off-app tie-break, or to fill
+ * an awkward field the rules can't. Builds a Qualifier for each selected team
+ * from its group + finishing position, seeded the same way the rule-based path
+ * seeds direct qualifiers: by finishing rank (all group winners first, then all
+ * runners-up, …), and within a rank by record. Teams not in any group table are
+ * ignored. `via` is 'direct' for every manual pick (no best-placed distinction).
+ */
+export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: string[]): Qualifier[] {
+  const sel = new Set(selectedTeamIds);
+  const picks: { q: Qualifier; row: TeamStanding }[] = [];
+  for (const t of tables) {
+    t.rows.forEach((row, i) => {
+      if (sel.has(row.teamId)) picks.push({ q: { teamId: row.teamId, name: row.name, group: t.name, rank: i + 1, via: 'direct' }, row });
+    });
+  }
+  picks.sort((a, b) => a.q.rank - b.q.rank || rankCmp(a.row, b.row));
+  return picks.map((p) => p.q);
+}
+
 // Test/inspection hook (parity with the other engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel };
+(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection };
