@@ -31,6 +31,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Litmus validation pass: can we schedule real tournaments as-is? · DONE
+
+Put the tournament engine against the acceptance test — schedule two real international formats end-to-end.
+Added `tests/litmus.test.mts` (6 tests, permanent regression guard) driving the *actual* engine at full
+scale, plus a demo UI spot-check.
+
+- **FIFA World Cup 2026 (48 teams) — ✅ schedulable.** Engine: `drawGroups(48,12)` → 12 groups of 4 → 72
+  group games → `advancement(tables, 2, 8)` = **32** (24 top-2 + 8 best-3rd) → `planKnockout(32)` clean →
+  `seedKnockout` → 16 R32 ties → `nextRoundPairs` chain walks **R32 → R16 → QF → SF → Final** to a single
+  champion. UI spot-check: seeded 48 teams / 12 groups / 72 completed games → Advance (top 2 + 8 best-placed)
+  read "32 qualify → r32" with the 8 wildcards marked → Generate → 16 R32 ties (Nation 1 v Nation 46 …).
+- **Asia Cup cricket (6 teams) — ⚠️ partly.** Group stage → top 2 = 4 works. Super Four (a *second
+  round-robin* of the 4 → top 2 → final) — the engine can build it (`roundRobin(4)` = 6 games → `teamStandings`
+  → top 2 → final), but the app's "advance groups → …" only targets a **knockout**, not a second league
+  phase. So Super Four isn't chainable in-app yet.
+- **Confirmed remaining gaps (both known):**
+  1. **Super Four / second group phase** — "advance groups → a new league phase" (needed for Asia Cup).
+  2. **3rd-place playoff** — pair the two SF losers (a real WC fixture).
+- **Files:** `tests/litmus.test.mts` (new). 132 tests, typecheck clean. No code/schema change — this is a
+  validation pass; the spine (participants → groups → advance rule/manual → play-in → advancing bracket) held.
+
 ### 2026-08-07 — Custom-control (c): play-in rounds for odd fields · SHIPPED + VERIFIED
 
 The last custom-control piece: size an odd knockout field to a clean bracket. Real qualifier counts rarely
