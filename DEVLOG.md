@@ -31,6 +31,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Custom-control (c): play-in rounds for odd fields · SHIPPED + VERIFIED
+
+The last custom-control piece: size an odd knockout field to a clean bracket. Real qualifier counts rarely
+land on 2/4/8/16 — 12 qualifiers, 6, 5… Now the generator plans it and a **play-in round** trims it.
+
+- **Field planner** (`planKnockout(n)` in `bracket.ts`): when N isn't a power of two, the advance/knockout
+  generator warns ("6 teams isn't a clean bracket") and offers a **⚖️ Play-in round** toggle — bottom
+  `2·(N−P)` seeds play `N−P` ties, top `2P−N` **bye**, leaving P (largest power of two ≤ N) for the main
+  round. The preview names the byes. E.g. 12 → 4 ties + 4 byes → QF; 6 → 2 ties + 2 byes → SF.
+- **Byes without phantom matches**: the top-seed ids ride on the play-in matches as a typed `byes: string[]`
+  (new nullable `byes uuid[]` column — **migration 0004**). No fake "bye" match records → match lists &
+  standings untouched.
+- **Bracket advances through the bye**: `nextRoundPairs` merges a play-in round's winners **and** its byes,
+  spread by standard seeding (`seedOrder`) so each bye meets a play-in survivor (no bye-vs-bye). The bracket
+  shows "⏭️ Byes to the next round: …" and "▶ Create [round]" builds the clean main round.
+- **Engine** (`bracket.ts`, pure + tested): `planKnockout`, `seedPlayIn`, bye-aware `nextRoundPairs`. 6 new
+  tests. Also: `BracketScreen` now resolves names from the team list (so byes that played no match still
+  show their names).
+- **Files:** `src/core/types.ts` (`Match.byes`), `src/data/bracket.ts`, `src/data/repos.ts`,
+  `src/screens/GenerateFixturesScreen.tsx`, `src/screens/BracketScreen.tsx`,
+  `supabase/migrations/20260807130000_match_byes.sql` (new), `tests/bracket.test.mts`.
+- **Verified (demo mode):** (1) Gen Knockout (6 teams) → Knockout → "⚖️ Play-in round" → "bottom 4 play 2
+  ties; top 2 bye → 4 for the Semi-finals. Byes: Team 1, Team 2" → drafts Team 3 v 6, Team 4 v 5 (QF). (2)
+  Play-in Cup with 2 completed play-in ties (byes t1,t2) → bracket showed the QF + "Byes: Team 1, Team 2" →
+  **Create Semi-finals** → **Team 1 v Team 4, Team 2 v Team 3** (each bye vs a winner). 126 tests, typecheck
+  clean.
+- **⚠️ To use live:** run **migration 0004** (`supabase/migrations/20260807130000_match_byes.sql`) before the
+  live app reads matches (it now selects the `byes` column). Custom-control path (a→b→c) is complete.
+
 ### 2026-08-07 — Custom-control (b): organizer picks who advances · SHIPPED + VERIFIED
 
 Advance-to-knockout was rule-only (top-K + best-placed by points→GD→GF). Real tournaments need an

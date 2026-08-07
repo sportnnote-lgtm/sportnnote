@@ -16,7 +16,7 @@ import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection } from '../data/groups';
-import { stageForTeams } from '../data/bracket';
+import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -27,7 +27,7 @@ type Structure = 'league' | 'knockout' | 'groups' | 'advance';
 
 const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 
-interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string }
+interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[] }
 
 // Human labels for the knockout stages seedKnockout/knockoutRoundLabel emit.
 const STAGE_LABEL: Record<string, string> = { final: 'Final', sf: 'Semi-final', qf: 'Quarter-final', r16: 'Round of 16', r32: 'Round of 32' };
@@ -64,6 +64,8 @@ export default function GenerateFixturesScreen() {
   // Custom-control: override who advances (advance-to-knockout mode).
   const [manualAdvance, setManualAdvance] = useState(false);
   const [manualSel, setManualSel] = useState<string[]>([]);
+  // Custom-control: add a play-in round to size an odd field to a clean bracket.
+  const [playIn, setPlayIn] = useState(false);
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -88,7 +90,7 @@ export default function GenerateFixturesScreen() {
   }, [participants, touchedSel]);
 
   const invalidate = () => setDrafts(null);
-  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); invalidate(); };
+  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); setPlayIn(false); invalidate(); };
   const toggleTeam = (id: string) => { invalidate(); setTouchedSel(true); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
   const allSelected = teams.length > 0 && selected.length === teams.length;
 
@@ -130,17 +132,37 @@ export default function GenerateFixturesScreen() {
     setManualSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   };
 
+  // The seed-ordered knockout field, and how it plans out (clean vs play-in). In
+  // advance mode the seeds are the qualifiers; in knockout mode, the picked teams.
+  const koFieldIds = useMemo(
+    () => (structure === 'advance' ? effectiveQualifiers.map((q) => q.teamId) : structure === 'knockout' ? selected : []),
+    [structure, effectiveQualifiers, selected],
+  );
+  const koPlan = useMemo(() => planKnockout(koFieldIds.length), [koFieldIds.length]);
+  const byeNames = (ids: string[]) => ids.map((id) => teamName[id] ?? id).join(', ');
+
   function generate() {
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
+    const at = (i: number) => new Date(start.getTime() + i * gap0 * 60000);
     if (structure === 'advance') {
       if (effectiveQualifiers.length < 2) return setError(manualAdvance ? 'Pick at least two teams to advance.' : 'Not enough qualifiers yet — finish the group matches first.');
       setError(null);
+      if (playIn && !koPlan.clean) {
+        const pi = seedPlayIn(koFieldIds);
+        setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
+        return;
+      }
       const stage = knockoutRoundLabel(effectiveQualifiers.length);
-      setDrafts(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: new Date(start.getTime() + i * gap0 * 60000) })));
+      setDrafts(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: at(i) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
     setError(null);
+    if (structure === 'knockout' && playIn && !koPlan.clean) {
+      const pi = seedPlayIn(selected);
+      setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
+      return;
+    }
     const pairings: (GeneratedPairing & { group?: string })[] =
       structure === 'knockout' ? knockoutFirstRound(selected)
         : structure === 'groups' ? groupStage(selected, groupCount, doubleRound)
@@ -148,8 +170,7 @@ export default function GenerateFixturesScreen() {
     // Tag a plain knockout's round 1 with its stage (r16/qf/…) so the bracket
     // renders it as a real round and can advance winners to the next one.
     const koStage = structure === 'knockout' ? stageForTeams(selected.length) : undefined;
-    const gap = Math.max(0, parseInt(gapMin, 10) || 0);
-    setDrafts(pairings.map((p, i) => ({ ...p, stage: koStage, when: new Date(start.getTime() + i * gap * 60000) })));
+    setDrafts(pairings.map((p, i) => ({ ...p, stage: koStage, when: at(i) })));
   }
 
   async function create() {
@@ -172,7 +193,7 @@ export default function GenerateFixturesScreen() {
       for (const d of drafts) {
         await createMatch({
           tournamentId: params.tournamentId, sport,
-          group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined),
+          group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined), byes: d.byes,
           homeTeamId: d.homeId, awayTeamId: d.awayId,
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
@@ -298,6 +319,19 @@ export default function GenerateFixturesScreen() {
               <Text style={textStyles.muted}>{manualAdvance ? 'Pick the teams that advance above.' : 'No qualifiers yet — the group tables need at least some results.'}</Text>
             )}
           </>
+        )}
+        {/* Play-in round — offered when the knockout field isn't a clean power of two. */}
+        {(structure === 'advance' || structure === 'knockout') && koFieldIds.length >= 3 && !koPlan.clean && (
+          <View style={{ gap: theme.spacing(2) }}>
+            <View style={st.chips}>
+              <SelectChip label="⚖️ Play-in round" active={playIn} onPress={() => { setPlayIn((v) => !v); invalidate(); }} />
+            </View>
+            <Text style={[textStyles.muted, !playIn && { color: theme.colors.accent }]}>
+              {playIn
+                ? `Play-in: bottom ${koPlan.playInTies * 2} seeds play ${koPlan.playInTies} tie${koPlan.playInTies === 1 ? '' : 's'}; top ${koPlan.byes} bye → ${koPlan.mainSize} for the ${KO_STAGE_LABEL[koPlan.mainStage]}. Byes: ${byeNames(seedPlayIn(koFieldIds).byeIds)}.`
+                : `⚠️ ${koFieldIds.length} teams isn't a clean bracket. Turn on a play-in to trim to ${koPlan.mainSize} (${KO_STAGE_LABEL[koPlan.mainStage]}) with top seeds byeing — or generate as-is (everyone plays round 1).`}
+            </Text>
+          </View>
         )}
         {/* Show which tie-breaker these knockout fixtures will inherit from the tournament. */}
         {(structure === 'knockout' || structure === 'advance') && sport === 'football' && (

@@ -74,6 +74,7 @@ interface MatchRow {
   tournament_id: string;
   group_label: string | null;
   stage: string | null;
+  byes: string[] | null;
   sport: string;
   status: MatchStatus;
   starts_at: string;
@@ -111,6 +112,7 @@ function toMatch(r: MatchRow): Match {
     tournamentId: r.tournament_id,
     group: r.group_label ?? undefined,
     stage: r.stage ?? undefined,
+    byes: r.byes ?? undefined,
     sport: r.sport as SportId,
     status: r.status,
     startsAt: r.starts_at,
@@ -129,7 +131,7 @@ function toMatch(r: MatchRow): Match {
 }
 
 const MATCH_SELECT =
-  'id, tournament_id, group_label, stage, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, state,' +
+  'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, state,' +
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
 
@@ -1677,6 +1679,8 @@ export interface NewMatch {
   /** grouped-tournament group label (e.g. "A") + phase ('group' | 'r16' | 'qf' | 'sf' | 'final') */
   group?: string;
   stage?: string;
+  /** play-in round: top-seed team ids that bye this round (see Match.byes) */
+  byes?: string[];
   sport: SportId;
   homeTeamId: string;
   awayTeamId: string;
@@ -1699,6 +1703,7 @@ export async function createMatch(input: NewMatch): Promise<Match> {
       tournamentId: input.tournamentId,
       group: input.group,
       stage: input.stage,
+      byes: input.byes,
       sport: input.sport,
       status: 'scheduled',
       startsAt: input.startsAt,
@@ -1718,6 +1723,7 @@ export async function createMatch(input: NewMatch): Promise<Match> {
       tournament_id: input.tournamentId ?? null,
       group_label: input.group ?? null,
       stage: input.stage ?? null,
+      byes: input.byes ?? null,
       sport: input.sport,
       home_team_id: input.homeTeamId,
       away_team_id: input.awayTeamId,

@@ -457,6 +457,10 @@ export interface Match {
   group?: string;
   /** tournament phase — 'group' or a knockout round id ('r16' | 'qf' | 'sf' | 'final') */
   stage?: string;
+  /** play-in round only: the top-seeded team ids that bye this round (they skip
+   *  it and join its winners in the next round). Lets the bracket advance a
+   *  play-in → a clean main round without phantom "bye" match records. */
+  byes?: string[];
   sport: SportId;
   status: MatchStatus;
   startsAt: string;

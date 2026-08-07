@@ -31,6 +31,59 @@ export function stageForTeams(teams: number): KoStage {
   if (teams <= 64) return 'r64';
   return 'r128';
 }
+
+/** Is n a power of two (n ≥ 1)? A clean bracket has a power-of-two field. */
+const isPow2 = (n: number): boolean => n >= 1 && (n & (n - 1)) === 0;
+
+/**
+ * How an N-team field resolves to a clean knockout. When N isn't a power of two,
+ * a **play-in round** trims it: the bottom `2·(N−P)` seeds play `N−P` ties and
+ * the top `2P−N` seeds *bye*, leaving P (the largest power of two ≤ N) for the
+ * main round. E.g. 12 → play-in of 4 ties (seeds 5–12), 4 byes → 8 for the QF.
+ */
+export interface KnockoutPlan {
+  field: number;        // N — teams entering the knockout
+  clean: boolean;       // N is already a power of two → no play-in needed
+  mainSize: number;     // P — the clean main-round field
+  playInTies: number;   // N − P play-in contests
+  byes: number;         // 2P − N top seeds skip the play-in
+  playInStage: KoStage; // stage tag for the play-in round
+  mainStage: KoStage;   // stage the play-in feeds into
+}
+export function planKnockout(field: number): KnockoutPlan {
+  const n = Math.max(0, Math.floor(field));
+  let p = 1;
+  while (p * 2 <= n) p *= 2; // largest power of two ≤ n
+  const clean = isPow2(n);
+  const mainSize = clean ? n : p;
+  const playInTies = n - mainSize;
+  return {
+    field: n, clean, mainSize, playInTies, byes: mainSize - playInTies,
+    playInStage: stageForTeams(clean ? Math.max(2, n) : mainSize * 2),
+    mainStage: stageForTeams(Math.max(2, mainSize)),
+  };
+}
+
+/** A play-in round: the bottom-seed ties + the top-seed byes. */
+export interface PlayIn {
+  ties: { homeId: string; awayId: string }[];
+  byeIds: string[];
+  playInStage: KoStage;
+  mainStage: KoStage;
+}
+/**
+ * Split a seed-ordered field (best → worst) into a play-in round: the top seeds
+ * bye, the rest play (highest-remaining vs lowest-remaining). Winners + byes then
+ * form the clean main round (see `nextRoundPairs`, which merges them by seeding).
+ */
+export function seedPlayIn(seedIds: string[]): PlayIn {
+  const plan = planKnockout(seedIds.length);
+  const byeIds = seedIds.slice(0, plan.byes);
+  const pool = seedIds.slice(plan.byes); // the 2·(N−P) teams that play in
+  const ties: { homeId: string; awayId: string }[] = [];
+  for (let i = 0; i < plan.playInTies; i++) ties.push({ homeId: pool[i], awayId: pool[pool.length - 1 - i] });
+  return { ties, byeIds, playInStage: plan.playInStage, mainStage: plan.mainStage };
+}
 export interface BracketTeam {
   name: string;
   color?: string;
@@ -163,13 +216,29 @@ export function matchWinnerId(m: Match): string | undefined {
  * the round is ready to advance. A trailing unpaired winner (odd count) byes.
  */
 export function nextRoundPairs(round: KnockoutRound): { homeId: string; awayId: string; stage: KoStage }[] | null {
-  if (round.matches.length < 2) return null; // the final has nothing after it
   const winners = round.matches.map(matchWinnerId);
   if (winners.some((w) => !w)) return null; // round not finished
-  const ids = winners as string[];
-  const stage = stageForTeams(ids.length);
+  const w = winners as string[];
+  // Play-in byes (top seeds that skipped this round) advance alongside winners.
+  const byes = [...new Set(round.matches.flatMap((m) => m.byes ?? []))];
+  if (w.length + byes.length < 2) return null; // the final — nothing after it
+
+  if (byes.length === 0) {
+    // A normal round is already in bracket order → pair adjacent winners.
+    if (w.length < 2) return null;
+    const stage = stageForTeams(w.length);
+    const pairs: { homeId: string; awayId: string; stage: KoStage }[] = [];
+    for (let i = 0; i + 1 < w.length; i += 2) pairs.push({ homeId: w[i], awayId: w[i + 1], stage });
+    return pairs;
+  }
+
+  // Play-in → main round: byes (top seeds) + winners, spread by standard seeding
+  // so the top seeds are kept apart and each meets a play-in survivor.
+  const seeds = [...byes, ...w];
+  const stage = stageForTeams(seeds.length);
+  const slots = isPow2(seeds.length) ? seedOrder(seeds.length).map((s) => seeds[s - 1]) : seeds;
   const pairs: { homeId: string; awayId: string; stage: KoStage }[] = [];
-  for (let i = 0; i + 1 < ids.length; i += 2) pairs.push({ homeId: ids[i], awayId: ids[i + 1], stage });
+  for (let i = 0; i + 1 < slots.length; i += 2) pairs.push({ homeId: slots[i], awayId: slots[i + 1], stage });
   return pairs;
 }
 

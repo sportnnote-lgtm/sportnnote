@@ -8,7 +8,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   knockoutStageRounds, nextRoundPairs, matchWinnerId, stageForTeams, stageChampionId,
-  isKoStage, koStageRank, type KnockoutRound,
+  isKoStage, koStageRank, planKnockout, seedPlayIn, type KnockoutRound,
 } from '../src/data/bracket.ts';
 import type { Match } from '../src/core/types.ts';
 
@@ -88,6 +88,71 @@ describe('nextRoundPairs (progression)', () => {
   test('null for the final (nothing after it)', () => {
     const fin: KnockoutRound = { stage: 'final', label: 'Final', matches: [km('f', 'final', 'A', 'B', 1, 0)] };
     assert.equal(nextRoundPairs(fin), null);
+  });
+});
+
+describe('planKnockout (field sizing)', () => {
+  test('a power-of-two field is clean — no play-in', () => {
+    const p = planKnockout(8);
+    assert.equal(p.clean, true);
+    assert.equal(p.playInTies, 0);
+    assert.equal(p.byes, 8); // n/a, but 2P−N = N here
+  });
+  test('12 → play-in of 4 ties (seeds 5–12), 4 byes → 8 for the QF', () => {
+    const p = planKnockout(12);
+    assert.deepEqual(
+      [p.clean, p.mainSize, p.playInTies, p.byes, p.playInStage, p.mainStage],
+      [false, 8, 4, 4, 'r16', 'qf'],
+    );
+  });
+  test('6 → 2 ties + 2 byes → 4 for the SF; 5 → 1 tie + 3 byes → 4', () => {
+    assert.deepEqual([planKnockout(6).playInTies, planKnockout(6).byes, planKnockout(6).mainStage], [2, 2, 'sf']);
+    assert.deepEqual([planKnockout(5).playInTies, planKnockout(5).byes, planKnockout(5).mainStage], [1, 3, 'sf']);
+  });
+});
+
+describe('seedPlayIn', () => {
+  test('top seeds bye; the rest pair highest-vs-lowest', () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `s${i + 1}`); // s1 best … s12 worst
+    const pi = seedPlayIn(ids);
+    assert.deepEqual(pi.byeIds, ['s1', 's2', 's3', 's4']);
+    assert.equal(pi.ties.length, 4);
+    // pool = s5..s12 → s5 v s12, s6 v s11, s7 v s10, s8 v s9
+    assert.deepEqual(pi.ties[0], { homeId: 's5', awayId: 's12' });
+    assert.deepEqual(pi.ties[3], { homeId: 's8', awayId: 's9' });
+    assert.deepEqual([pi.playInStage, pi.mainStage], ['r16', 'qf']);
+  });
+});
+
+describe('nextRoundPairs with play-in byes', () => {
+  const kmBye = (id: string, h: string, a: string, hs: number, as: number, byes: string[]): Match =>
+    ({ ...km(id, 'r16', h, a, hs, as), byes }) as Match;
+  test('merges byes (top seeds) with play-in winners, spread by seeding', () => {
+    // 4 play-in ties (r16), each tagged with the 4 byes b1–b4. Home wins each → w = home ids.
+    const byes = ['b1', 'b2', 'b3', 'b4'];
+    const round: KnockoutRound = {
+      stage: 'r16', label: 'Round of 16',
+      matches: [kmBye('1', 'w1', 'x1', 1, 0, byes), kmBye('2', 'w2', 'x2', 1, 0, byes), kmBye('3', 'w3', 'x3', 1, 0, byes), kmBye('4', 'w4', 'x4', 1, 0, byes)],
+    };
+    const pairs = nextRoundPairs(round);
+    assert.ok(pairs);
+    assert.ok(pairs!.every((p) => p.stage === 'qf'));
+    // seeds [b1,b2,b3,b4,w1,w2,w3,w4] placed by seedOrder(8) → each bye meets a winner
+    assert.deepEqual(pairs, [
+      { homeId: 'b1', awayId: 'w4', stage: 'qf' },
+      { homeId: 'b4', awayId: 'w1', stage: 'qf' },
+      { homeId: 'b2', awayId: 'w3', stage: 'qf' },
+      { homeId: 'b3', awayId: 'w2', stage: 'qf' },
+    ]);
+    // every quarter-final is a bye vs a play-in winner (no bye-vs-bye)
+    assert.ok(pairs!.every((p) => (p.homeId.startsWith('b') ? p.awayId.startsWith('w') : p.homeId.startsWith('w') && p.awayId.startsWith('b'))));
+  });
+  test('a single play-in tie + 3 byes advances (does not read as a final)', () => {
+    const round: KnockoutRound = { stage: 'qf', label: 'QF', matches: [kmBye('1', 'w1', 'x1', 2, 1, ['b1', 'b2', 'b3'])] };
+    const pairs = nextRoundPairs(round);
+    assert.ok(pairs);
+    assert.equal(pairs!.length, 2);
+    assert.ok(pairs!.every((p) => p.stage === 'sf'));
   });
 });
 

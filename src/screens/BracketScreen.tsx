@@ -16,7 +16,7 @@ import { SelectChip, Button, ScreenTitle, FormError, textStyles } from '../compo
 import { PODIUM } from '../components/Rank';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
-import { useTournament, useTournamentById, useLeagueData, useOrganizations } from '../data/hooks';
+import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams } from '../data/hooks';
 import { getMyPlayerId, createMatch } from '../data/repos';
 import { canManageTournament } from '../core/org';
 import {
@@ -88,14 +88,18 @@ export default function BracketScreen() {
   // ── Staged (real) bracket: actual knockout matches, grouped by stage.
   const koRounds = useMemo(() => knockoutStageRounds(sportMatches), [sportMatches]);
   const isStaged = koRounds.length > 0;
+  // Names/colours for every team — including bye teams that played no match, so
+  // the "byes to next round" line resolves their names, not raw ids.
+  const allTeams = useTeams(activeSport);
   const nameColor = useMemo(() => {
     const m = new Map<string, { name: string; color?: string }>();
+    for (const t of allTeams) m.set(t.id, { name: t.name, color: t.colorHex });
     for (const x of sportMatches) {
       m.set(x.homeTeam.id, { name: x.homeTeam.name, color: x.homeTeam.colorHex });
       m.set(x.awayTeam.id, { name: x.awayTeam.name, color: x.awayTeam.colorHex });
     }
     return m;
-  }, [sportMatches]);
+  }, [allTeams, sportMatches]);
   const stagedChampionId = useMemo(() => stageChampionId(koRounds), [koRounds]);
 
   // The next round to create: winners of the furthest completed round, if that
@@ -179,12 +183,20 @@ export default function BracketScreen() {
 
         {isStaged ? (
           <>
-            {koRounds.map((round) => (
-              <View key={round.stage} style={{ gap: theme.spacing(2) }}>
-                <Text style={textStyles.h3}>{round.label}</Text>
-                {round.matches.map((m) => <StagedMatchCard key={m.id} m={m} />)}
-              </View>
-            ))}
+            {koRounds.map((round) => {
+              const roundByes = [...new Set(round.matches.flatMap((m) => m.byes ?? []))];
+              return (
+                <View key={round.stage} style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.h3}>{round.label}</Text>
+                  {round.matches.map((m) => <StagedMatchCard key={m.id} m={m} />)}
+                  {roundByes.length > 0 && (
+                    <Text style={textStyles.muted}>
+                      ⏭️ Byes to the next round: {roundByes.map((id) => nameColor.get(id)?.name ?? id).join(', ')}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
             {canManage && pendingNext && pendingNext.length > 0 && (
               <Button
                 label={busy ? 'Creating…' : `▶ Create ${KO_STAGE_LABEL[pendingNext[0].stage]} (${pendingNext.length} tie${pendingNext.length === 1 ? '' : 's'})`}
