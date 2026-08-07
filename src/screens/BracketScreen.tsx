@@ -22,6 +22,7 @@ import { canManageTournament } from '../core/org';
 import {
   knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn,
   knockoutStageRounds, nextRoundPairs, matchWinnerId, stageChampionId, KO_STAGE_LABEL,
+  thirdPlacePair, THIRD_PLACE_STAGE,
 } from '../data/bracket';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -107,27 +108,41 @@ export default function BracketScreen() {
   const lastRound = koRounds[koRounds.length - 1];
   const pendingNext = useMemo(() => (lastRound ? nextRoundPairs(lastRound) : null), [lastRound]);
 
-  async function createNextRound() {
-    if (!pendingNext || !tournamentId) return;
+  // 3rd-place playoff — the two semi-final losers. Offered once both semis are
+  // decided and it hasn't been created yet.
+  const thirdMatch = useMemo(() => sportMatches.find((m) => m.stage === THIRD_PLACE_STAGE), [sportMatches]);
+  const sfRound = useMemo(() => koRounds.find((r) => r.stage === 'sf'), [koRounds]);
+  const pendingThird = useMemo(() => (sfRound && !thirdMatch ? thirdPlacePair(sfRound) : null), [sfRound, thirdMatch]);
+
+  async function createRound(pairs: { homeId: string; awayId: string; stage: string }[], baseTimeMs: number) {
+    if (!tournamentId) return;
     setError(null); setBusy(true);
     try {
-      // Kick the next round off after the last match of the current one.
-      const base = Math.max(...lastRound.matches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
       const format = tournament?.formats?.[activeSport] ?? {};
-      for (let i = 0; i < pendingNext.length; i++) {
-        const p = pendingNext[i];
+      for (let i = 0; i < pairs.length; i++) {
         await createMatch({
-          tournamentId, sport: activeSport, stage: p.stage,
-          homeTeamId: p.homeId, awayTeamId: p.awayId,
-          startsAt: new Date(base + (i + 1) * 24 * 60 * 60 * 1000).toISOString(),
+          tournamentId, sport: activeSport, stage: pairs[i].stage,
+          homeTeamId: pairs[i].homeId, awayTeamId: pairs[i].awayId,
+          startsAt: new Date(baseTimeMs + (i + 1) * 24 * 60 * 60 * 1000).toISOString(),
           hostIds: myId ? [myId] : [], format,
         });
       }
       setNonce((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create the next round');
+      setError(e instanceof Error ? e.message : 'Could not create the matches');
     } finally { setBusy(false); }
   }
+
+  const createNextRound = () => {
+    if (!pendingNext || !lastRound) return;
+    const base = Math.max(...lastRound.matches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
+    return createRound(pendingNext, base);
+  };
+  const createThirdPlace = () => {
+    if (!pendingThird || !sfRound) return;
+    const base = Math.max(...sfRound.matches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
+    return createRound([{ ...pendingThird, stage: THIRD_PLACE_STAGE }], base);
+  };
 
   // ── Computed (preview) bracket fallback: seed the non-group teams into a draw.
   const previewTeams = useMemo(() => {
@@ -197,10 +212,24 @@ export default function BracketScreen() {
                 </View>
               );
             })}
+            {thirdMatch && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>🥉 Third-place playoff</Text>
+                <StagedMatchCard m={thirdMatch} />
+              </View>
+            )}
             {canManage && pendingNext && pendingNext.length > 0 && (
               <Button
                 label={busy ? 'Creating…' : `▶ Create ${KO_STAGE_LABEL[pendingNext[0].stage]} (${pendingNext.length} tie${pendingNext.length === 1 ? '' : 's'})`}
                 onPress={createNextRound}
+                disabled={busy}
+              />
+            )}
+            {canManage && pendingThird && (
+              <Button
+                label={busy ? 'Creating…' : '🥉 Create 3rd-place playoff'}
+                variant="ghost"
+                onPress={createThirdPlace}
                 disabled={busy}
               />
             )}

@@ -7,8 +7,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  knockoutStageRounds, nextRoundPairs, matchWinnerId, stageForTeams, stageChampionId,
-  isKoStage, koStageRank, planKnockout, seedPlayIn, type KnockoutRound,
+  knockoutStageRounds, nextRoundPairs, matchWinnerId, matchLoserId, thirdPlacePair,
+  stageForTeams, stageChampionId, isKoStage, koStageRank, planKnockout, seedPlayIn, type KnockoutRound,
 } from '../src/data/bracket.ts';
 import type { Match } from '../src/core/types.ts';
 
@@ -153,6 +153,24 @@ describe('nextRoundPairs with play-in byes', () => {
     assert.ok(pairs);
     assert.equal(pairs!.length, 2);
     assert.ok(pairs!.every((p) => p.stage === 'sf'));
+  });
+});
+
+describe('3rd-place playoff', () => {
+  test('matchLoserId is the beaten team; undefined if undecided', () => {
+    assert.equal(matchLoserId(km('m', 'sf', 'A', 'B', 2, 1)), 'B');
+    assert.equal(matchLoserId(km('m', 'sf', 'A', 'B', 1, 3)), 'A');
+    assert.equal(matchLoserId(km('m', 'sf', 'A', 'B')), undefined);
+  });
+  test('pairs the two semi-final losers once both semis are decided', () => {
+    const sf: KnockoutRound = { stage: 'sf', label: 'SF', matches: [km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D', 0, 1)] };
+    assert.deepEqual(thirdPlacePair(sf), { homeId: 'B', awayId: 'C' }); // losers of each semi
+  });
+  test('null until both semis are done, and only for a 2-match SF round', () => {
+    const half: KnockoutRound = { stage: 'sf', label: 'SF', matches: [km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D')] };
+    assert.equal(thirdPlacePair(half), null);
+    const qf: KnockoutRound = { stage: 'qf', label: 'QF', matches: [km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D', 1, 0)] };
+    assert.equal(thirdPlacePair(qf), null);
   });
 });
 

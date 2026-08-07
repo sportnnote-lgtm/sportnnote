@@ -15,7 +15,8 @@ import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '../data/hooks';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection } from '../data/groups';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, type GroupTable } from '../data/groups';
+import { teamStandings } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
@@ -66,6 +67,9 @@ export default function GenerateFixturesScreen() {
   const [manualSel, setManualSel] = useState<string[]>([]);
   // Custom-control: add a play-in round to size an odd field to a clean bracket.
   const [playIn, setPlayIn] = useState(false);
+  // Advance target when coming from the group stage: a knockout, or a Super
+  // round-robin phase (Asia-Cup style). From a Super phase it's always knockout.
+  const [advanceTo, setAdvanceTo] = useState<'knockout' | 'super'>('knockout');
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -90,7 +94,7 @@ export default function GenerateFixturesScreen() {
   }, [participants, touchedSel]);
 
   const invalidate = () => setDrafts(null);
-  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); setPlayIn(false); invalidate(); };
+  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); setPlayIn(false); setAdvanceTo('knockout'); invalidate(); };
   const toggleTeam = (id: string) => { invalidate(); setTouchedSel(true); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
   const allSelected = teams.length > 0 && selected.length === teams.length;
 
@@ -101,22 +105,38 @@ export default function GenerateFixturesScreen() {
     [structure, selected, groupCount],
   );
 
-  // ── Advance-to-knockout: derive qualifiers from this tournament's finished
-  //    group tables (only offered once the tournament actually has group matches).
+  // ── Advance: derive qualifiers from a finished phase — the group stage, or a
+  //    Super round-robin phase (Super Four/Six) if one exists. Offered once the
+  //    tournament actually has a phase to advance from.
   const gtables = useMemo(() => groupTables(tourMatches, sport), [tourMatches, sport]);
   const hasGroups = gtables.length > 0;
   const groupMatches = tourMatches.filter((m) => m.stage === 'group' && m.sport === sport);
-  const groupsDone = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'completed');
+  // Super phase (a second round-robin among group qualifiers) — a single league table.
+  const superMatches = tourMatches.filter((m) => m.stage === 'super' && m.sport === sport);
+  const hasSuper = superMatches.length > 0;
+  const superTable = useMemo<GroupTable[]>(
+    () => (hasSuper ? [{ name: superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size), rows: teamStandings(superMatches, sport) }] : []),
+    [hasSuper, superMatches, sport],
+  );
+  // Advance from the *latest* phase that exists: the Super phase once it's there,
+  // else the group stage.
+  const advanceFromSuper = hasSuper;
+  const sourceTables = advanceFromSuper ? superTable : gtables;
+  const sourceMatches = advanceFromSuper ? superMatches : groupMatches;
+  const sourceDone = sourceMatches.length > 0 && sourceMatches.every((m) => m.status === 'completed');
+  // What the advance produces: a knockout bracket, or (from the group stage only)
+  // a Super round-robin phase. Advancing from a Super phase always goes to knockout.
+  const target: 'knockout' | 'super' = advanceFromSuper ? 'knockout' : advanceTo;
   const qualifiers = useMemo(
-    () => (hasGroups ? advancement(gtables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0)) : []),
-    [gtables, hasGroups, topK, bestPlaced],
+    () => (sourceTables.length ? advancement(sourceTables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0)) : []),
+    [sourceTables, topK, bestPlaced],
   );
   // Custom control: the organizer overrides who advances (an off-app tie-break,
   // or to fill an awkward field). `manualSel` is the chosen team ids; the
   // effective qualifiers are theirs when customizing, else the rule-based set.
   const effectiveQualifiers = useMemo(
-    () => (manualAdvance ? qualifiersFromSelection(gtables, manualSel) : qualifiers),
-    [manualAdvance, gtables, manualSel, qualifiers],
+    () => (manualAdvance ? qualifiersFromSelection(sourceTables, manualSel) : qualifiers),
+    [manualAdvance, sourceTables, manualSel, qualifiers],
   );
   // Seed the manual picks from the rule-based qualifiers the first time the
   // organizer opens the override (so they start from the natural result).
@@ -145,8 +165,14 @@ export default function GenerateFixturesScreen() {
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
     const at = (i: number) => new Date(start.getTime() + i * gap0 * 60000);
     if (structure === 'advance') {
-      if (effectiveQualifiers.length < 2) return setError(manualAdvance ? 'Pick at least two teams to advance.' : 'Not enough qualifiers yet — finish the group matches first.');
+      if (effectiveQualifiers.length < 2) return setError(manualAdvance ? 'Pick at least two teams to advance.' : 'Not enough matches finished yet to advance.');
       setError(null);
+      if (target === 'super') {
+        // Advance the qualifiers into a second round-robin phase (Super Four/Six).
+        const rr = roundRobin(effectiveQualifiers.map((q) => q.teamId), doubleRound);
+        setDrafts(rr.map((p, i) => ({ ...p, stage: 'super', when: at(i) })));
+        return;
+      }
       if (playIn && !koPlan.clean) {
         const pi = seedPlayIn(koFieldIds);
         setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
@@ -180,9 +206,11 @@ export default function GenerateFixturesScreen() {
       const myId = await getMyPlayerId(profile?.id);
       let format = tournament?.formats?.[sport] ?? defaultsFor(getSport(sport).formatFields ?? []);
       // Knockout fixtures inherit the tournament's tie-breaker (football only —
-      // the decider is football's). League fixtures keep the default (draws allowed).
+      // the decider is football's). League/group/super fixtures keep the default
+      // (draws allowed) — only real knockout ties carry a stage that isn't group/super.
       const kf = tournament?.knockoutFormat;
-      if ((structure === 'knockout' || structure === 'advance') && sport === 'football' && kf) {
+      const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super');
+      if (koLike && sport === 'football' && kf) {
         format = {
           ...format,
           decider: kf.decider, // 'extra_time' | 'penalties'
@@ -250,8 +278,8 @@ export default function GenerateFixturesScreen() {
           <SelectChip label="🔁 Round-robin (league)" active={structure === 'league'} onPress={() => { setStructure('league'); invalidate(); }} />
           <SelectChip label="👥 Group stage" active={structure === 'groups'} onPress={() => { setStructure('groups'); invalidate(); }} />
           <SelectChip label="🏆 Knockout (round 1)" active={structure === 'knockout'} onPress={() => { setStructure('knockout'); invalidate(); }} />
-          {hasGroups && (
-            <SelectChip label="🏅 Advance groups → knockout" active={structure === 'advance'} onPress={() => { setStructure('advance'); invalidate(); }} />
+          {(hasGroups || hasSuper) && (
+            <SelectChip label={advanceFromSuper ? '🏅 Advance Super phase' : '🏅 Advance groups'} active={structure === 'advance'} onPress={() => { setStructure('advance'); invalidate(); }} />
           )}
         </View>
         {(structure === 'league' || structure === 'groups') && (
@@ -275,6 +303,15 @@ export default function GenerateFixturesScreen() {
         )}
         {structure === 'advance' && (
           <>
+            {/* What the advance produces — a knockout, or (from the group stage) a
+                Super round-robin phase. Advancing from a Super phase is always a knockout. */}
+            {!advanceFromSuper && (
+              <View style={st.chips}>
+                <SelectChip label="🏆 To knockout" active={advanceTo === 'knockout'} onPress={() => { setAdvanceTo('knockout'); invalidate(); }} />
+                <SelectChip label="🔁 To Super round-robin" active={advanceTo === 'super'} onPress={() => { setAdvanceTo('super'); invalidate(); }} />
+              </View>
+            )}
+
             {/* How who-advances is decided: by the standings rules, or hand-picked. */}
             <View style={st.chips}>
               <SelectChip label="⚙️ By standings" active={!manualAdvance} onPress={() => { if (manualAdvance) toggleManualAdvance(); }} />
@@ -283,15 +320,15 @@ export default function GenerateFixturesScreen() {
 
             {!manualAdvance ? (
               <View style={st.row}>
-                <View style={st.flex}><TextField label="Advance per group" value={topK} onChange={(t) => { setTopK(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
-                <View style={st.flex}><TextField label="Best-placed wildcards" value={bestPlaced} onChange={(t) => { setBestPlaced(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+                <View style={st.flex}><TextField label={advanceFromSuper ? 'Advance (top N)' : 'Advance per group'} value={topK} onChange={(t) => { setTopK(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+                {!advanceFromSuper && <View style={st.flex}><TextField label="Best-placed wildcards" value={bestPlaced} onChange={(t) => { setBestPlaced(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>}
               </View>
             ) : (
               <>
-                <Text style={textStyles.muted}>Tap the teams that advance — ordered by group standing (1 = winner). {manualSel.length} selected.</Text>
-                {gtables.map((g) => (
+                <Text style={textStyles.muted}>Tap the teams that advance — ordered by standing (1 = top). {manualSel.length} selected.</Text>
+                {sourceTables.map((g) => (
                   <View key={g.name} style={{ gap: theme.spacing(1) }}>
-                    <Text style={st.groupHead}>GROUP {g.name}</Text>
+                    <Text style={st.groupHead}>{advanceFromSuper ? g.name : `GROUP ${g.name}`}</Text>
                     <View style={st.chips}>
                       {g.rows.map((r, i) => (
                         <SelectChip key={r.teamId} label={`${i + 1}. ${r.name} · ${r.points}pt`} active={manualSel.includes(r.teamId)} onPress={() => toggleAdvanceTeam(r.teamId)} />
@@ -302,26 +339,25 @@ export default function GenerateFixturesScreen() {
               </>
             )}
 
-            {!groupsDone && (
+            {!sourceDone && sourceMatches.length > 0 && (
               <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
-                ⚠️ {groupMatches.filter((m) => m.status === 'completed').length}/{groupMatches.length} group matches finished — finishing all of them first makes the standings final. You can still preview the bracket now.
+                ⚠️ {sourceMatches.filter((m) => m.status === 'completed').length}/{sourceMatches.length} {advanceFromSuper ? 'Super-phase' : 'group'} matches finished — finishing all of them first makes the standings final. You can still preview now.
               </Text>
             )}
             {effectiveQualifiers.length > 0 ? (
               <Text style={textStyles.muted}>
-                {effectiveQualifiers.length} qualify → {knockoutRoundLabel(effectiveQualifiers.length)}
-                {manualAdvance
-                  ? ' · hand-picked'
-                  : ` · top ${Math.max(1, parseInt(topK, 10) || 1)} from each of ${gtables.length} groups${(parseInt(bestPlaced, 10) || 0) > 0 ? ` + ${parseInt(bestPlaced, 10)} best-placed` : ''}`}
+                {target === 'super'
+                  ? `${effectiveQualifiers.length} advance → ${superPhaseLabel(effectiveQualifiers.length)} · round-robin, ${doubleRound ? effectiveQualifiers.length * (effectiveQualifiers.length - 1) : (effectiveQualifiers.length * (effectiveQualifiers.length - 1)) / 2} games`
+                  : `${effectiveQualifiers.length} qualify → ${knockoutRoundLabel(effectiveQualifiers.length)}${manualAdvance ? ' · hand-picked' : advanceFromSuper ? ` · top ${Math.max(1, parseInt(topK, 10) || 1)} of the ${sourceTables[0]?.name ?? 'Super phase'}` : ` · top ${Math.max(1, parseInt(topK, 10) || 1)} from each of ${gtables.length} groups${(parseInt(bestPlaced, 10) || 0) > 0 ? ` + ${parseInt(bestPlaced, 10)} best-placed` : ''}`}`}
                 : {effectiveQualifiers.map((q) => `${q.name}${q.via === 'best' ? '*' : ''}`).join(', ')}.
               </Text>
             ) : (
-              <Text style={textStyles.muted}>{manualAdvance ? 'Pick the teams that advance above.' : 'No qualifiers yet — the group tables need at least some results.'}</Text>
+              <Text style={textStyles.muted}>{manualAdvance ? 'Pick the teams that advance above.' : 'Nothing to advance yet — the standings need at least some results.'}</Text>
             )}
           </>
         )}
         {/* Play-in round — offered when the knockout field isn't a clean power of two. */}
-        {(structure === 'advance' || structure === 'knockout') && koFieldIds.length >= 3 && !koPlan.clean && (
+        {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && koFieldIds.length >= 3 && !koPlan.clean && (
           <View style={{ gap: theme.spacing(2) }}>
             <View style={st.chips}>
               <SelectChip label="⚖️ Play-in round" active={playIn} onPress={() => { setPlayIn((v) => !v); invalidate(); }} />
@@ -334,7 +370,7 @@ export default function GenerateFixturesScreen() {
           </View>
         )}
         {/* Show which tie-breaker these knockout fixtures will inherit from the tournament. */}
-        {(structure === 'knockout' || structure === 'advance') && sport === 'football' && (
+        {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && sport === 'football' && (
           <Text style={textStyles.muted}>
             {tournament?.knockoutFormat
               ? `⚖️ If level at full time: ${tournament.knockoutFormat.decider === 'extra_time'
@@ -365,7 +401,7 @@ export default function GenerateFixturesScreen() {
                     <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
-                  <DateTimeField label={d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? d.stage.toUpperCase() : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
+                  <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? d.stage.toUpperCase() : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
                 </View>
               ))}
               <Button label={busy ? 'Creating…' : `✅ Create ${drafts.length} match${drafts.length === 1 ? '' : 'es'}`} onPress={create} disabled={busy} />

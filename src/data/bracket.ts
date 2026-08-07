@@ -209,6 +209,24 @@ export function matchWinnerId(m: Match): string | undefined {
   return m.winner === 'home' ? m.homeTeam.id : m.awayTeam.id;
 }
 
+/** The losing team's id for a completed, decided match (else undefined). */
+export function matchLoserId(m: Match): string | undefined {
+  if (m.status !== 'completed' || !m.winner || m.winner === 'draw') return undefined;
+  return m.winner === 'home' ? m.awayTeam.id : m.homeTeam.id;
+}
+
+/** Stage tag for the 3rd-place playoff (the two semi-final losers). Not a
+ *  size-based knockout round, so it's handled separately from KO_STAGES. */
+export const THIRD_PLACE_STAGE = 'third';
+/** The 3rd-place playoff pairing — the two semi-final losers — once both semis
+ *  are decided. Returns null otherwise. */
+export function thirdPlacePair(sf: KnockoutRound): { homeId: string; awayId: string } | null {
+  if (sf.stage !== 'sf' || sf.matches.length !== 2) return null;
+  const losers = sf.matches.map(matchLoserId);
+  if (losers.some((l) => !l)) return null;
+  return { homeId: losers[0]!, awayId: losers[1]! };
+}
+
 /**
  * The next round's pairings from a completed round: winners in bracket order,
  * paired adjacently (match 0 winner v match 1 winner, …). Returns null unless

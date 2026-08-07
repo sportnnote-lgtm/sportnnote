@@ -109,6 +109,15 @@ export function knockoutRoundLabel(teams: number): string {
   return 'r32';
 }
 
+/** Name a "Super" round-robin phase by its size — Super Four / Six / Eight
+ *  (the Asia-Cup-style second group among the group-stage qualifiers). */
+export function superPhaseLabel(teams: number): string {
+  if (teams === 4) return 'Super Four';
+  if (teams === 6) return 'Super Six';
+  if (teams === 8) return 'Super Eight';
+  return `Super ${teams}`;
+}
+
 /**
  * Qualifiers for a **manually chosen** set of teams (custom control): the
  * organizer overrides who advances — to reflect an off-app tie-break, or to fill

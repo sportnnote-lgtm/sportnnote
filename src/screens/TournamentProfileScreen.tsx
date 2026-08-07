@@ -25,7 +25,7 @@ import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders } from '../data/standings';
-import { groupTables } from '../data/groups';
+import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -141,6 +141,11 @@ export default function TournamentProfileScreen() {
   const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport) : []), [matches, activeSport]);
   // Grouped tournaments show a table per group instead of one flat league table.
   const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport) : []), [matches, activeSport]);
+  // A Super round-robin phase (Asia-Cup style), if the tournament has one — its
+  // own league table, separate from the group stage.
+  const superMatches = useMemo(() => (activeSport ? matches.filter((m) => m.stage === 'super' && m.sport === activeSport) : []), [matches, activeSport]);
+  const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport) : []), [superMatches, activeSport]);
+  const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
   const categories = useMemo(
     () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),
     [lines, players, activeSport]
@@ -404,6 +409,13 @@ export default function TournamentProfileScreen() {
             emptyLabel={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet.`}
           />
         ) : null}
+
+        {activeSport && superMatches.length > 0 && (
+          <View style={{ gap: theme.spacing(1) }}>
+            <Text style={st.groupHead}>🔁 {superName}</Text>
+            <LeagueTable teams={superTable} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+          </View>
+        )}
 
         {activeSport && categories.length > 0 && (
           <>

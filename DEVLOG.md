@@ -31,6 +31,39 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Super Four (multi-phase) + 3rd-place playoff · SHIPPED + VERIFIED
+
+Closed the two litmus gaps. Both real formats — FIFA WC 2026 and an Asia Cup — are now schedulable in-app.
+
+**Super Four / second group phase** (Asia-Cup style: group stage → a second round-robin among the
+qualifiers → final):
+- Auto-generate → Advance now has a **target** selector (from the group stage): **🏆 To knockout** or
+  **🔁 To Super round-robin**. The latter runs `roundRobin(qualifiers)` tagged `stage:'super'` (a single
+  league, no group).
+- Advance is now phase-aware: once a Super phase exists it advances **from** it (chip reads "🏅 Advance
+  Super phase"), forcing a knockout target — so Super Four → Final falls out naturally. `sourceTables`
+  drives rule/manual qualifier selection uniformly for either phase.
+- The tournament page renders the **Super table** (`🔁 Super Four/Six/Eight`, named by size via
+  `superPhaseLabel`). Group tables and the knockout bracket ignore `stage:'super'`; the Super table is its
+  own `teamStandings` of the super games. League-style draws are allowed (the knockout tie-break is applied
+  only to real knockout drafts now).
+
+**3rd-place playoff:**
+- `BracketScreen` offers **🥉 Create 3rd-place playoff** once both semi-finals are decided — pairs the two
+  SF losers (`thirdPlacePair`), tagged `stage:'third'` (`THIRD_PLACE_STAGE`), rendered in its own section.
+  Not a size-based round, so it's handled outside `KO_STAGES`/progression.
+- Engine (`bracket.ts`): `matchLoserId`, `thirdPlacePair`, `THIRD_PLACE_STAGE`. 3 new tests.
+
+- **Files:** `src/data/bracket.ts`, `src/data/groups.ts` (`superPhaseLabel`), `src/screens/
+  GenerateFixturesScreen.tsx`, `src/screens/BracketScreen.tsx`, `src/screens/TournamentProfileScreen.tsx`,
+  `tests/bracket.test.mts`, `tests/litmus.test.mts` (comment).
+- **Verified (demo mode):** Asia Cup (2 groups of 3) → Advance → To Super round-robin → "4 advance → Super
+  Four · 6 games"; Super Test (completed super games) → tournament shows the Super Four table → Advance
+  Super phase → "2 qualify → final · top 2 of the Super Four" → SP 1 v SP 2. Playoff Test (2 completed
+  semis) → bracket → **🥉 Create 3rd-place playoff** → TP 2 v TP 3. 135 tests, typecheck clean.
+- **No new migration** — reuses `stage` (`super`/`third` are just tags). Migrations 0002/0003 run live;
+  **0004 (byes) still pending** before play-ins go live.
+
 ### 2026-08-07 — Litmus validation pass: can we schedule real tournaments as-is? · DONE
 
 Put the tournament engine against the acceptance test — schedule two real international formats end-to-end.

@@ -142,7 +142,8 @@ describe('LITMUS · Asia Cup (6 → 2 groups → Super Four → Final)', () => {
     assert.equal(final.length, 1); // top 2 → the final
   });
 
-  // GAP: the engine can build Super Four (roundRobin + standings), but the app's
-  // "advance groups → …" flow only targets a KNOCKOUT, not a second league phase.
-  // Wiring an "advance → group/league phase" option is the remaining UI work.
+  // Super Four is now wired in-app: Auto-generate → Advance groups → "To Super
+  // round-robin" creates the stage:'super' games; the tournament shows the Super
+  // table; and "Advance Super phase" → knockout produces the final. (This test
+  // proves the underlying engine; the UI chain is verified in the demo pass.)
 });
