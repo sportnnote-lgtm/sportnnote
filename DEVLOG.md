@@ -31,6 +31,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Grouped tournaments, Phase 2b: advance groups → seeded knockout · SHIPPED + VERIFIED
+
+Closed the loop: once the group stage finishes, an organizer turns the final tables into a seeded bracket in one step.
+
+- **Auto-generate fixtures** gained a **🏅 Advance groups → knockout** structure, shown *only* when the tournament
+  already has group matches (`hasGroups`). It hides the team picker and instead reads this tournament's finished
+  group tables (`groupTables(tourMatches, sport)` via `useLeagueData`).
+- **Controls:** *Advance per group* (top-K) + *Best-placed wildcards* (the "5 groups → top 3 + best 4th" case).
+  Live preview reads back the field size + seeds, e.g. "2 qualify → final · top 1 from each of 2 groups: Falcons,
+  Wolves." A **⚠️ groups-incomplete** note shows the finished/total count but still lets you preview.
+- **Generate** runs `advancement(tables, topK, bestPlaced)` → `seedKnockout` (1-v-last with a de-clash pass so no
+  group rematch in round one) → drafts stamped with the stage label from `knockoutRoundLabel` (final/sf/qf/r16/r32).
+- **Persistence**: `create()` writes `stage` on each tie; football ties inherit the tournament's knockout tie-break
+  (extra time / penalties), same as the flat knockout path. The existing 🏆 bracket then auto-advances qf→sf→final.
+- **Files:** `src/screens/GenerateFixturesScreen.tsx` (also: name lookup now merges the pickable team list with the
+  team ids embedded in the tournament's matches, so advance-bracket cards resolve names).
+- **Verified live (demo mode):** seeded a 2-group cup (Falcons/Sharks, Wolves/Bears) with finished group matches →
+  Advance mode appeared → top-2 gave "4 qualify → sf" with a correctly de-clashed bracket (Falcons v Bears, Wolves
+  v Sharks — no group rematch); top-1 gave "Falcons v Wolves — Final". Created → matches persisted with resolved
+  teams + `stage:'final'`. 108 tests, typecheck clean.
+- **Live-ready:** migration 0002 has been run in Supabase, so the `group_label`/`stage` columns exist; the app now
+  boots to live (AuthScreen) with no schema/console errors. Grouped tournaments are fully usable end-to-end.
+
 ### 2026-08-01 — Grouped tournaments, Phase 2a: generate groups + per-group tables · SHIPPED + VERIFIED
 
 Wired the Phase 1 engine into the app: an organizer can now generate a group stage and see per-group tables.

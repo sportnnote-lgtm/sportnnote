@@ -12,20 +12,24 @@ import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
-import { useTeams, useTournamentById } from '../data/hooks';
+import { useTeams, useTournamentById, useLeagueData } from '../data/hooks';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel } from '../data/groups';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Structure = 'league' | 'knockout' | 'groups';
+type Structure = 'league' | 'knockout' | 'groups' | 'advance';
 
 const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 
-interface Draft extends GeneratedPairing { when: Date; group?: string }
+interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string }
+
+// Human labels for the knockout stages seedKnockout/knockoutRoundLabel emit.
+const STAGE_LABEL: Record<string, string> = { final: 'Final', sf: 'Semi-final', qf: 'Quarter-final', r16: 'Round of 16', r32: 'Round of 32' };
 
 export default function GenerateFixturesScreen() {
   const nav = useNavigation<Nav>();
@@ -36,12 +40,22 @@ export default function GenerateFixturesScreen() {
 
   const [sport, setSport] = useState<SportId>(params.sport ?? tourSports[0] ?? 'football');
   const teams = useTeams(sport);
-  const teamName = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t.name])), [teams]);
+  const { matches: tourMatches } = useLeagueData(params.tournamentId);
+  // Name lookup for draft cards: the pickable team list, plus the team ids
+  // embedded in this tournament's matches (advance-mode brackets seed from
+  // those, whose ids can differ from the team-list ids).
+  const teamName = useMemo(() => {
+    const m: Record<string, string> = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+    for (const mt of tourMatches) { m[mt.homeTeam.id] ??= mt.homeTeam.name; m[mt.awayTeam.id] ??= mt.awayTeam.name; }
+    return m;
+  }, [teams, tourMatches]);
 
   const [selected, setSelected] = useState<string[]>([]);
   const [structure, setStructure] = useState<Structure>(tournament?.structure === 'knockout' ? 'knockout' : 'league');
   const [doubleRound, setDoubleRound] = useState(false);
   const [numGroups, setNumGroups] = useState('4');
+  const [topK, setTopK] = useState('2');
+  const [bestPlaced, setBestPlaced] = useState('0');
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -70,7 +84,26 @@ export default function GenerateFixturesScreen() {
     [structure, selected, groupCount],
   );
 
+  // ── Advance-to-knockout: derive qualifiers from this tournament's finished
+  //    group tables (only offered once the tournament actually has group matches).
+  const gtables = useMemo(() => groupTables(tourMatches, sport), [tourMatches, sport]);
+  const hasGroups = gtables.length > 0;
+  const groupMatches = tourMatches.filter((m) => m.stage === 'group' && m.sport === sport);
+  const groupsDone = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'completed');
+  const qualifiers = useMemo(
+    () => (hasGroups ? advancement(gtables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0)) : []),
+    [gtables, hasGroups, topK, bestPlaced],
+  );
+
   function generate() {
+    const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
+    if (structure === 'advance') {
+      if (qualifiers.length < 2) return setError('Not enough qualifiers yet — finish the group matches first.');
+      setError(null);
+      const stage = knockoutRoundLabel(qualifiers.length);
+      setDrafts(seedKnockout(qualifiers).map((p, i) => ({ ...p, stage, when: new Date(start.getTime() + i * gap0 * 60000) })));
+      return;
+    }
     if (selected.length < 2) return setError('Pick at least two teams.');
     setError(null);
     const pairings: (GeneratedPairing & { group?: string })[] =
@@ -90,7 +123,7 @@ export default function GenerateFixturesScreen() {
       // Knockout fixtures inherit the tournament's tie-breaker (football only —
       // the decider is football's). League fixtures keep the default (draws allowed).
       const kf = tournament?.knockoutFormat;
-      if (structure === 'knockout' && sport === 'football' && kf) {
+      if ((structure === 'knockout' || structure === 'advance') && sport === 'football' && kf) {
         format = {
           ...format,
           decider: kf.decider, // 'extra_time' | 'penalties'
@@ -101,7 +134,7 @@ export default function GenerateFixturesScreen() {
       for (const d of drafts) {
         await createMatch({
           tournamentId: params.tournamentId, sport,
-          group: d.group, stage: d.group ? 'group' : undefined,
+          group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined),
           homeTeamId: d.homeId, awayTeamId: d.awayId,
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
@@ -131,22 +164,26 @@ export default function GenerateFixturesScreen() {
           </>
         )}
 
-        <View style={st.rowBetween}>
-          <Text style={textStyles.muted}>Teams · {selected.length} selected</Text>
-          {teams.length >= 2 && (
-            <Text style={st.link} onPress={() => { invalidate(); setSelected(allSelected ? [] : teams.map((t) => t.id)); }}>
-              {allSelected ? 'Clear' : 'Select all'}
-            </Text>
-          )}
-        </View>
-        {teams.length < 2 ? (
-          <Text style={textStyles.muted}>Add at least two {getSport(sport).name} teams under “Manage teams” first.</Text>
-        ) : (
-          <View style={st.chips}>
-            {teams.map((t) => (
-              <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggleTeam(t.id)} />
-            ))}
-          </View>
+        {structure !== 'advance' && (
+          <>
+            <View style={st.rowBetween}>
+              <Text style={textStyles.muted}>Teams · {selected.length} selected</Text>
+              {teams.length >= 2 && (
+                <Text style={st.link} onPress={() => { invalidate(); setSelected(allSelected ? [] : teams.map((t) => t.id)); }}>
+                  {allSelected ? 'Clear' : 'Select all'}
+                </Text>
+              )}
+            </View>
+            {teams.length < 2 ? (
+              <Text style={textStyles.muted}>Add at least two {getSport(sport).name} teams under “Manage teams” first.</Text>
+            ) : (
+              <View style={st.chips}>
+                {teams.map((t) => (
+                  <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggleTeam(t.id)} />
+                ))}
+              </View>
+            )}
+          </>
         )}
 
         <Text style={textStyles.muted}>Format</Text>
@@ -154,6 +191,9 @@ export default function GenerateFixturesScreen() {
           <SelectChip label="🔁 Round-robin (league)" active={structure === 'league'} onPress={() => { setStructure('league'); invalidate(); }} />
           <SelectChip label="👥 Group stage" active={structure === 'groups'} onPress={() => { setStructure('groups'); invalidate(); }} />
           <SelectChip label="🏆 Knockout (round 1)" active={structure === 'knockout'} onPress={() => { setStructure('knockout'); invalidate(); }} />
+          {hasGroups && (
+            <SelectChip label="🏅 Advance groups → knockout" active={structure === 'advance'} onPress={() => { setStructure('advance'); invalidate(); }} />
+          )}
         </View>
         {(structure === 'league' || structure === 'groups') && (
           <View style={st.chips}>
@@ -174,8 +214,29 @@ export default function GenerateFixturesScreen() {
             )}
           </>
         )}
+        {structure === 'advance' && (
+          <>
+            <View style={st.row}>
+              <View style={st.flex}><TextField label="Advance per group" value={topK} onChange={(t) => { setTopK(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+              <View style={st.flex}><TextField label="Best-placed wildcards" value={bestPlaced} onChange={(t) => { setBestPlaced(t.replace(/[^0-9]/g, '')); invalidate(); }} autoCapitalize="none" /></View>
+            </View>
+            {!groupsDone && (
+              <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
+                ⚠️ {groupMatches.filter((m) => m.status === 'completed').length}/{groupMatches.length} group matches finished — finishing all of them first makes the standings final. You can still preview the bracket now.
+              </Text>
+            )}
+            {qualifiers.length > 0 ? (
+              <Text style={textStyles.muted}>
+                {qualifiers.length} qualify → {knockoutRoundLabel(qualifiers.length)} · top {Math.max(1, parseInt(topK, 10) || 1)} from each of {gtables.length} groups
+                {(parseInt(bestPlaced, 10) || 0) > 0 ? ` + ${parseInt(bestPlaced, 10)} best-placed` : ''}: {qualifiers.map((q) => `${q.name}${q.via === 'best' ? '*' : ''}`).join(', ')}.
+              </Text>
+            ) : (
+              <Text style={textStyles.muted}>No qualifiers yet — the group tables need at least some results.</Text>
+            )}
+          </>
+        )}
         {/* Show which tie-breaker these knockout fixtures will inherit from the tournament. */}
-        {structure === 'knockout' && sport === 'football' && (
+        {(structure === 'knockout' || structure === 'advance') && sport === 'football' && (
           <Text style={textStyles.muted}>
             {tournament?.knockoutFormat
               ? `⚖️ If level at full time: ${tournament.knockoutFormat.decider === 'extra_time'
@@ -206,7 +267,7 @@ export default function GenerateFixturesScreen() {
                     <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
-                  <DateTimeField label={`${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
+                  <DateTimeField label={d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? d.stage.toUpperCase() : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
                 </View>
               ))}
               <Button label={busy ? 'Creating…' : `✅ Create ${drafts.length} match${drafts.length === 1 ? '' : 'es'}`} onPress={create} disabled={busy} />
