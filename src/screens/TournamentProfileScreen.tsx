@@ -19,7 +19,7 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
-import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations } from '../data/hooks';
+import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams } from '../data/hooks';
 import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads } from '../data/repos';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
@@ -39,6 +39,7 @@ export default function TournamentProfileScreen() {
   const teams = useTeamSummaries();
   const { isFollowing, toggle } = useFollow(profile?.id);
   const { matches, lines, players } = useLeagueData(params.tournamentId);
+  const participants = useTournamentTeams(params.tournamentId);
   const allPlayers = usePlayers();
   const orgs = useOrganizations();
 
@@ -253,6 +254,11 @@ export default function TournamentProfileScreen() {
 
         {canManageHosts && (
           <View style={{ gap: theme.spacing(2) }}>
+            <Button
+              label={participants.length ? `👥 Participating teams · ${participants.length}` : '👥 Add participating teams'}
+              variant="ghost"
+              onPress={() => nav.navigate('TournamentTeams', { tournamentId: tournament.id })}
+            />
             <Button label="📅 Schedule a match" variant="ghost" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
             <Button label="⚡ Auto-generate fixtures" variant="ghost" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
           </View>

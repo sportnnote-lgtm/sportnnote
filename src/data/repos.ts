@@ -27,6 +27,8 @@ import {
   setOrgMembers as demoSetOrgMembers,
   setTeamLeaders as demoSetTeamLeaders,
   addOrganization,
+  addTournamentTeamsDemo,
+  removeTournamentTeamDemo,
 } from './demoStore';
 import { emptyFormation } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
@@ -1621,6 +1623,52 @@ export async function setTeamRoster(teamId: string, roster: string[]): Promise<v
     return;
   }
   await supabase.from('teams').update({ roster }).eq('id', teamId);
+}
+
+/* -------------------------- Tournament participants ------------------------ */
+// The teams an organizer registers into a tournament — the roster that drives
+// format decisions (how many teams → groups / bracket size). Distinct from the
+// teams merely appearing in a tournament's matches. See migration 0003.
+
+/** The teams registered to a tournament (optionally narrowed to one sport). */
+export async function getTournamentTeams(tournamentId: string, sport?: SportId): Promise<Team[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    const ids = new Set(demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId).map((r) => r.teamId));
+    return demo.teams.filter((t) => ids.has(t.id) && (!sport || t.sport === sport));
+  }
+  const { data, error } = await supabase
+    .from('tournament_teams')
+    .select('teams(id,name,short_name,sport,color_hex,org_id,roster)')
+    .eq('tournament_id', tournamentId);
+  if (error || !data) return [];
+  // The joined `teams` relation may come back as an object or a single-element
+  // array depending on the client's inference — normalise both to a row.
+  const teams = (data as unknown as { teams: TeamRow | TeamRow[] | null }[])
+    .map((r) => (Array.isArray(r.teams) ? r.teams[0] : r.teams))
+    .filter((t): t is TeamRow => !!t)
+    .map(toTeam);
+  return sport ? teams.filter((t) => t.sport === sport) : teams;
+}
+
+/** Register one or more teams as tournament participants (idempotent). */
+export async function addTournamentTeams(tournamentId: string, teamIds: string[]): Promise<void> {
+  if (!teamIds.length) return;
+  if (!isSupabaseConfigured || !supabase) {
+    addTournamentTeamsDemo(tournamentId, teamIds);
+    return;
+  }
+  await supabase
+    .from('tournament_teams')
+    .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId })), { onConflict: 'tournament_id,team_id' });
+}
+
+/** Drop a team from a tournament's participant list. */
+export async function removeTournamentTeam(tournamentId: string, teamId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    removeTournamentTeamDemo(tournamentId, teamId);
+    return;
+  }
+  await supabase.from('tournament_teams').delete().eq('tournament_id', tournamentId).eq('team_id', teamId);
 }
 
 export interface NewMatch {

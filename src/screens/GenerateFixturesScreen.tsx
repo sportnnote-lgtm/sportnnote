@@ -12,7 +12,7 @@ import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
-import { useTeams, useTournamentById, useLeagueData } from '../data/hooks';
+import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '../data/hooks';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel } from '../data/groups';
@@ -40,6 +40,7 @@ export default function GenerateFixturesScreen() {
 
   const [sport, setSport] = useState<SportId>(params.sport ?? tourSports[0] ?? 'football');
   const teams = useTeams(sport);
+  const participants = useTournamentTeams(params.tournamentId, sport);
   const { matches: tourMatches } = useLeagueData(params.tournamentId);
   // Name lookup for draft cards: the pickable team list, plus the team ids
   // embedded in this tournament's matches (advance-mode brackets seed from
@@ -51,6 +52,9 @@ export default function GenerateFixturesScreen() {
   }, [teams, tourMatches]);
 
   const [selected, setSelected] = useState<string[]>([]);
+  // Once the organizer edits the selection we stop auto-seeding it from the
+  // registered participants (so a background refetch can't clobber their edits).
+  const [touchedSel, setTouchedSel] = useState(false);
   const [structure, setStructure] = useState<Structure>(tournament?.structure === 'knockout' ? 'knockout' : 'league');
   const [doubleRound, setDoubleRound] = useState(false);
   const [numGroups, setNumGroups] = useState('4');
@@ -67,14 +71,21 @@ export default function GenerateFixturesScreen() {
   useEffect(() => {
     if (tourSports.length && !tourSports.includes(sport)) {
       setSport(params.sport && tourSports.includes(params.sport) ? params.sport : tourSports[0]);
-      setSelected([]); setDrafts(null);
+      setSelected([]); setTouchedSel(false); setDrafts(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
 
+  // Default the team picker to the tournament's registered participants — the
+  // organizer sets "who's in" once, then generates fixtures without re-picking.
+  useEffect(() => {
+    if (!touchedSel && participants.length) setSelected(participants.map((t) => t.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants, touchedSel]);
+
   const invalidate = () => setDrafts(null);
-  const pickSport = (s: SportId) => { setSport(s); setSelected([]); invalidate(); };
-  const toggleTeam = (id: string) => { invalidate(); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
+  const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); invalidate(); };
+  const toggleTeam = (id: string) => { invalidate(); setTouchedSel(true); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
   const allSelected = teams.length > 0 && selected.length === teams.length;
 
   const groupCount = Math.max(2, Math.min(parseInt(numGroups, 10) || 2, Math.floor(selected.length / 2) || 2));
@@ -169,7 +180,7 @@ export default function GenerateFixturesScreen() {
             <View style={st.rowBetween}>
               <Text style={textStyles.muted}>Teams · {selected.length} selected</Text>
               {teams.length >= 2 && (
-                <Text style={st.link} onPress={() => { invalidate(); setSelected(allSelected ? [] : teams.map((t) => t.id)); }}>
+                <Text style={st.link} onPress={() => { invalidate(); setTouchedSel(true); setSelected(allSelected ? [] : teams.map((t) => t.id)); }}>
                   {allSelected ? 'Clear' : 'Select all'}
                 </Text>
               )}

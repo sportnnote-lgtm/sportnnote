@@ -31,6 +31,39 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Tournament participants: register the teams that are in · SHIPPED + VERIFIED
+
+The foundation for real tournament organization. Until now a tournament had **no team list** —
+"who's in" was only implied by its matches, so you couldn't state a team count or decide a format
+(groups, bracket size) from it. This is the litmus-test groundwork ([[sportfolio-tournament-vision]]):
+you can't schedule a FIFA World Cup or an Asia Cup without first registering the participants.
+
+- **New "Participating teams" screen** (`TournamentTeamsScreen.tsx`): reached from a tournament's
+  organizer actions ("👥 Participating teams · N"). Multi-sport meets get a sport picker; pick from the
+  sport's teams as toggle chips, add a new team inline (name/short/colour), then Save. Shows the live
+  count and a one-tap "N teams already playing here aren't registered — add them" backfill for
+  tournaments that already have fixtures.
+- **Auto-generate fixtures** now **defaults its team picker to the registered participants** — set
+  "who's in" once, then generate without re-picking (still fully editable; a `touchedSel` guard stops a
+  background refetch from clobbering edits).
+- **Data**: a `tournament_teams` join table (migration **0003**,
+  `supabase/migrations/20260807120000_tournament_teams.sql`) — additive, RLS (public read / authed
+  write), independent of every existing table. Demo mirror: `demo.tournamentTeams` + `addTournamentTeamsDemo`/
+  `removeTournamentTeamDemo` (no `DEMO_KEY` bump — `applyDemo` keeps the default for absent keys).
+  Repos: `getTournamentTeams` / `addTournamentTeams` (idempotent upsert) / `removeTournamentTeam`; hook
+  `useTournamentTeams(tournamentId, sport?, nonce?)`.
+- **Files:** `TournamentTeamsScreen.tsx` (new), `src/screens/TournamentProfileScreen.tsx`,
+  `src/screens/GenerateFixturesScreen.tsx`, `src/data/repos.ts`, `src/data/hooks.ts`,
+  `src/data/demoStore.ts`, `src/navigation/{types,RootNavigator}.tsx`, migration 0003 (new).
+- **Verified (demo mode):** Annual Sports Meet → Participating teams → picked 4 (Red/Blue/Green/Gold
+  House) → Save → tournament shows "👥 Participating teams · 4" → Auto-generate opens with those 4
+  pre-selected. 108 tests, typecheck clean.
+- **⚠️ To use live:** run migration 0003 in the Supabase SQL editor before the live app reads
+  participants (it now selects from `tournament_teams`, which doesn't exist until the migration runs —
+  reads fail-soft to empty, writes fail, until then).
+- **Next (custom-control path):** manual knockout reconciliation — organizer picks who advances when
+  qualifiers aren't a clean power of 2, play-in rounds to size the field, and manual stage tagging.
+
 ### 2026-08-07 — Grouped tournaments, Phase 2b: advance groups → seeded knockout · SHIPPED + VERIFIED
 
 Closed the loop: once the group stage finishes, an organizer turns the final tables into a seeded bracket in one step.

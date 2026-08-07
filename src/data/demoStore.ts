@@ -799,6 +799,11 @@ export const demo = {
   disputes: [] as MatchDispute[],
   /** team invites keyed by token, and the teams the demo user captains */
   invites: {} as Record<string, TeamInvite>,
+  /** explicit tournament ↔ team registrations (the participating roster). Empty
+   *  by default — the seed tournaments imply their teams via matches; organizers
+   *  register participants up front for new tournaments. Mirrors the live
+   *  `tournament_teams` join table (migration 0003). */
+  tournamentTeams: [] as { tournamentId: string; teamId: string }[],
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },
@@ -1315,6 +1320,20 @@ export function addMatch(m: Omit<Match, 'id'>): Match {
   const created: Match = { ...m, id: genId('m') };
   demo.matches.push(created);
   return created;
+}
+
+/** Register teams as participants of a tournament (idempotent — ignores dupes). */
+export function addTournamentTeamsDemo(tournamentId: string, teamIds: string[]): void {
+  for (const teamId of teamIds) {
+    if (!demo.tournamentTeams.some((r) => r.tournamentId === tournamentId && r.teamId === teamId)) {
+      demo.tournamentTeams.push({ tournamentId, teamId });
+    }
+  }
+}
+
+/** Drop a team from a tournament's participant list. */
+export function removeTournamentTeamDemo(tournamentId: string, teamId: string): void {
+  demo.tournamentTeams = demo.tournamentTeams.filter((r) => !(r.tournamentId === tournamentId && r.teamId === teamId));
 }
 
 export function addPlayer(p: Omit<Player, 'id'>): Player {

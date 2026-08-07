@@ -21,6 +21,7 @@ import CreateTournamentScreen from '../screens/CreateTournamentScreen';
 import TeamsScreen from '../screens/TeamsScreen';
 import ScheduleMatchScreen from '../screens/ScheduleMatchScreen';
 import GenerateFixturesScreen from '../screens/GenerateFixturesScreen';
+import TournamentTeamsScreen from '../screens/TournamentTeamsScreen';
 import OrganizerDashboardScreen from '../screens/OrganizerDashboardScreen';
 import NotificationPrefsScreen from '../screens/NotificationPrefsScreen';
 import PlayerProfileScreen from '../screens/PlayerProfileScreen';
@@ -154,6 +155,11 @@ export default function RootNavigator() {
               name="GenerateFixtures"
               component={GenerateFixturesScreen}
               options={{ ...stackScreenOpts, title: 'Auto-generate Fixtures' }}
+            />
+            <Stack.Screen
+              name="TournamentTeams"
+              component={TournamentTeamsScreen}
+              options={{ ...stackScreenOpts, title: 'Participating Teams' }}
             />
             <Stack.Screen
               name="OrganizerDashboard"

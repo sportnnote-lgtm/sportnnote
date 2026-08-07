@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   getMatches,
   getTeams,
+  getTournamentTeams,
   getTournament,
   getTournaments,
   getMyTournaments,
@@ -430,6 +431,21 @@ export function useTeams(sport?: SportId, nonce = 0) {
         on = false;
       };
     }, [sport, nonce])
+  );
+  return teams;
+}
+
+/** The teams registered as participants of a tournament (optionally one sport).
+ *  `nonce` forces a refetch after add/remove. */
+export function useTournamentTeams(tournamentId?: string, sport?: SportId, nonce = 0) {
+  const [teams, setTeams] = useState<Team[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      if (!tournamentId) { setTeams([]); return; }
+      getTournamentTeams(tournamentId, sport).then((t) => on && setTeams(t));
+      return () => { on = false; };
+    }, [tournamentId, sport, nonce])
   );
   return teams;
 }
