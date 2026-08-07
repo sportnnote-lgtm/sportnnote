@@ -16,7 +16,13 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import { useTeams } from '../data/hooks';
 import { createMatch, createTeam, getMyPlayerId, setMatchScorer } from '../data/repos';
 import { useAuth } from '../core/auth';
+import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
 import type { SportId, Team } from '../core/types';
+
+// What phase of the tournament a match belongs to. 'league' = a plain
+// table/round-robin game (no tag); 'group' = a group-stage game (needs a group
+// letter); the rest are knockout stages. Drives the standings/bracket views.
+type Phase = 'league' | 'group' | KoStage;
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -58,6 +64,10 @@ export default function ScheduleMatchScreen() {
   const [venue, setVenue] = useState('');
   const [venueUrl, setVenueUrl] = useState('');
   const [stream, setStream] = useState('');
+  // Which phase this match belongs to (tournament matches only) — lets an
+  // organizer hand-tag a group game or a specific knockout tie (e.g. a Final).
+  const [phase, setPhase] = useState<Phase>('league');
+  const [groupLabel, setGroupLabel] = useState('A');
   // Per-match rules — seeded from the sport's defaults so casual users can ignore it.
   const [format, setFormat] = useState<Record<string, FormatVal>>(
     () => (route.params?.sport ? defaultsFor(getSport(route.params.sport).formatFields ?? []) : {})
@@ -103,6 +113,10 @@ export default function ScheduleMatchScreen() {
         sport,
         homeTeamId: home,
         awayTeamId: away,
+        // Phase tags (tournament matches only): a group game carries its group +
+        // stage:'group'; a knockout tie carries its stage; a league game neither.
+        group: !isFriendly && phase === 'group' ? groupLabel.trim().toUpperCase() || 'A' : undefined,
+        stage: isFriendly ? undefined : isKoStage(phase) ? phase : phase === 'group' ? 'group' : undefined,
         startsAt: when.toISOString(),
         venueName: venue.trim() || undefined,
         venueMapsUrl: venueUrl.trim() || undefined,
@@ -149,6 +163,25 @@ export default function ScheduleMatchScreen() {
             <TeamPicker label="Away team" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} />
 
             <DateTimeField label="Kickoff" value={when} onChange={setWhen} />
+
+            {/* Phase tag — only for tournament matches. Lets an organizer place a
+                match precisely: a group game, or a specific knockout tie that then
+                shows in the right round of the bracket. */}
+            {!isFriendly && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <FieldLabel>Stage</FieldLabel>
+                <View style={st.chips}>
+                  <SelectChip label="League" active={phase === 'league'} onPress={() => setPhase('league')} />
+                  <SelectChip label="👥 Group" active={phase === 'group'} onPress={() => setPhase('group')} />
+                  {KO_STAGES.map((s) => (
+                    <SelectChip key={s} label={KO_STAGE_LABEL[s]} active={phase === s} onPress={() => setPhase(s)} />
+                  ))}
+                </View>
+                {phase === 'group' && (
+                  <TextField label="Group" value={groupLabel} onChange={(t) => setGroupLabel(t.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase())} placeholder="A" autoCapitalize="characters" />
+                )}
+              </View>
+            )}
 
             {(getSport(sport).formatFields ?? []).length > 0 && (
               <SportFormatEditor sport={sport} value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} />

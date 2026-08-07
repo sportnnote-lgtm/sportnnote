@@ -16,6 +16,7 @@ import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel } from '../data/groups';
+import { stageForTeams } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -121,8 +122,11 @@ export default function GenerateFixturesScreen() {
       structure === 'knockout' ? knockoutFirstRound(selected)
         : structure === 'groups' ? groupStage(selected, groupCount, doubleRound)
         : roundRobin(selected, doubleRound);
+    // Tag a plain knockout's round 1 with its stage (r16/qf/…) so the bracket
+    // renders it as a real round and can advance winners to the next one.
+    const koStage = structure === 'knockout' ? stageForTeams(selected.length) : undefined;
     const gap = Math.max(0, parseInt(gapMin, 10) || 0);
-    setDrafts(pairings.map((p, i) => ({ ...p, when: new Date(start.getTime() + i * gap * 60000) })));
+    setDrafts(pairings.map((p, i) => ({ ...p, stage: koStage, when: new Date(start.getTime() + i * gap * 60000) })));
   }
 
   async function create() {

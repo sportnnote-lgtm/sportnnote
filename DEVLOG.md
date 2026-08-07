@@ -31,6 +31,39 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-07 — Custom-control (a): manual stage tagging + a real, advancing bracket · SHIPPED + VERIFIED
+
+The knockout used to be display-only: auto-generate created *round 1* and the bracket screen
+re-seeded a draw from every team in the tournament's matches (so a grouped tournament's bracket wrongly
+included all group teams, matched by name). Now the bracket is **stage-driven** and it **progresses**.
+
+- **Manual stage tagging** — "Schedule a match" (tournament matches only) gained a **Stage** picker:
+  League / 👥 Group (+ a group-letter field) / Round of 128 → Final. An organizer can now hand-place any
+  match — a group game or a specific knockout tie — so it lands in the right round of the bracket.
+- **Auto-generate "knockout (round 1)"** now tags its ties with the round's stage (`stageForTeams(N)` →
+  r16/qf/…), so a plain knockout is a real staged round too, not an untagged blob.
+- **Stage-driven bracket** (`BracketScreen` rewrite) — when the tournament has stage-tagged knockout
+  matches it renders the **actual matches** grouped by stage (r32 → … → final) with real scores +
+  winners; group-stage matches are excluded (fixes the grouped-tournament bug). No staged matches → it
+  falls back to the old computed preview draw (from non-group teams), so simple/legacy tournaments are
+  unaffected.
+- **Round progression** — when a round is fully decided, an organizer gets **"▶ Create [next round]"**,
+  which seeds the next round's ties from the winners in bracket order and schedules them (stage-tagged).
+  The bracket then shows the new round; the final's winner surfaces as 🏆 Champion.
+- **Engine** (`src/data/bracket.ts`, pure + tested): `KO_STAGES`/`KO_STAGE_LABEL`/`isKoStage`/
+  `koStageRank`/`stageForTeams`; `knockoutStageRounds(matches)`, `matchWinnerId`, `nextRoundPairs(round)`
+  (null until the round is complete; adjacent-winner pairing), `stageChampionId`. 10 new tests
+  (`tests/bracket.test.mts`).
+- **Files:** `src/data/bracket.ts`, `src/screens/BracketScreen.tsx` (rewrite), `src/screens/
+  ScheduleMatchScreen.tsx`, `src/screens/GenerateFixturesScreen.tsx`, `src/data/hooks.ts` (`useLeagueData`
+  gained a refetch nonce), `tests/bracket.test.mts` (new).
+- **Verified (demo mode):** seeded a Knockout Cup with 2 completed semi-finals → bracket showed the real
+  Semi-finals (Falcons 2–0, Wolves 3–1, winners ticked) + "▶ Create Final (1 tie)" → tapped → **Final:
+  Falcons vs Wolves** created & persisted with `stage:'final'`. Schedule screen's Stage picker + group
+  field confirmed. 118 tests (108 + 10), typecheck clean.
+- **Next (custom-control b, c):** organizer picks who advances (override the rule-based qualifiers), then
+  play-in rounds to size an odd field to a clean bracket.
+
 ### 2026-08-07 — Tournament participants: register the teams that are in · SHIPPED + VERIFIED
 
 The foundation for real tournament organization. Until now a tournament had **no team list** —

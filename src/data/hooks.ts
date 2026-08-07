@@ -101,7 +101,7 @@ export function useTournamentById(id?: string) {
 /** All matches + stat lines + players, scoped to one tournament's matches.
  *  One fetch powers a whole tournament/sport dashboard via the pure functions
  *  in standings.ts. */
-export function useLeagueData(tournamentId?: string) {
+export function useLeagueData(tournamentId?: string, nonce = 0) {
   const [data, setData] = useState<{ matches: Match[]; lines: StatLine[]; players: Player[]; loading: boolean }>({
     matches: [], lines: [], players: [], loading: true,
   });
@@ -120,7 +120,7 @@ export function useLeagueData(tournamentId?: string) {
       return () => {
         on = false;
       };
-    }, [tournamentId])
+    }, [tournamentId, nonce])
   );
   return data;
 }
