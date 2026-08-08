@@ -280,6 +280,8 @@ interface PlayerRow {
   house_name: string | null;
   house_color: string | null;
   city: string | null;
+  gender: string | null;
+  bio: string | null;
   phone: string | null;
   email: string | null;
   phone_verified: boolean | null;
@@ -299,6 +301,8 @@ const toPlayer = (r: PlayerRow): Player => ({
   houseName: r.house_name ?? undefined,
   houseColor: r.house_color ?? undefined,
   city: r.city ?? undefined,
+  gender: r.gender ?? undefined,
+  bio: r.bio ?? undefined,
   phone: r.phone ?? undefined,
   email: r.email ?? undefined,
   phoneVerified: r.phone_verified ?? undefined,
@@ -310,7 +314,7 @@ const toPlayer = (r: PlayerRow): Player => ({
   verification: r.verification ?? undefined,
 });
 
-const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification';
+const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification';
 
 export async function getPlayers(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) return demo.players;
@@ -1163,7 +1167,7 @@ export async function createPlayer(input: NewPlayer, profileId?: string): Promis
 }
 
 export type PlayerPatch = Partial<
-  Pick<Player, 'fullName' | 'city' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification'>
+  Pick<Player, 'fullName' | 'city' | 'gender' | 'bio' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification'>
 >;
 
 /** Where verification documents and support cases are routed for the support team.
@@ -1208,6 +1212,8 @@ export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void
   const row: Record<string, unknown> = {};
   if (patch.fullName !== undefined) row.full_name = patch.fullName;
   if (patch.city !== undefined) row.city = patch.city || null;
+  if (patch.gender !== undefined) row.gender = patch.gender || null;
+  if (patch.bio !== undefined) row.bio = patch.bio || null;
   if (patch.houseName !== undefined) row.house_name = patch.houseName || null;
   if (patch.jerseyNo !== undefined) row.jersey_no = patch.jerseyNo ?? null;
   if (patch.sports !== undefined) row.sports = patch.sports;
@@ -1362,6 +1368,23 @@ export async function getMyPlayerId(profileId?: string): Promise<string | null> 
   if (!profileId) return null;
   const { data } = await supabase.from('players').select('id').eq('profile_id', profileId).single();
   return data?.id ?? null;
+}
+
+/** Create the signed-in account's own player profile (once), linked via
+ *  profile_id and seeded from the sign-up details (name/phone/dob/guardian).
+ *  Idempotent — returns the existing player's id if one is already linked. */
+export async function createMyPlayer(profileId: string): Promise<string> {
+  if (!isSupabaseConfigured || !supabase) return demo.players[0]?.id ?? addPlayer({ fullName: 'You', sports: [] }).id;
+  const existing = await getMyPlayerId(profileId);
+  if (existing) return existing;
+  const { data: prof } = await supabase.from('profiles').select('full_name, phone, dob, guardian').eq('id', profileId).single();
+  const { data, error } = await supabase
+    .from('players')
+    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ?? null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Could not create your profile');
+  return data.id as string;
 }
 
 /* ----------------------------- Organizer writes ---------------------------- */

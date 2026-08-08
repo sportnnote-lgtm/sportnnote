@@ -26,6 +26,9 @@ export function ProfileView({
   onEditProfile,
   onOpenOrg,
   onOpenSettings,
+  onCreateProfile,
+  creating,
+  onSignOut,
 }: {
   playerId: string | null;
   follow?: { following: boolean; onToggle: () => void };
@@ -37,6 +40,12 @@ export function ProfileView({
   onOpenOrg?: (orgId: string) => void;
   /** own profile: open the Settings home (preferences, account, sign out) */
   onOpenSettings?: () => void;
+  /** own profile with no player yet: create it (first-time setup) */
+  onCreateProfile?: () => void;
+  /** true while the player profile is being created */
+  creating?: boolean;
+  /** own profile: sign out of the account */
+  onSignOut?: () => void;
 }) {
   const { player, stats: allStats, official, friendly } = usePlayerProfile(playerId);
   const orgs = useOrganizations();
@@ -57,10 +66,27 @@ export function ProfileView({
   };
 
   if (!player || !allStats || !official || !friendly) {
+    // Own account with no player yet (a fresh sign-up): make this actionable —
+    // set up the profile, reach Settings, or sign out — instead of a dead-end.
+    // Viewing someone else with no profile just shows the neutral empty state.
+    const owner = !!(onCreateProfile || onSignOut);
     return (
-      <View style={st.empty}>
-        <EmptyState icon="🙋" title="No player profile found" hint="This account doesn’t have a player profile yet." />
-      </View>
+      <ScrollView contentContainerStyle={st.content}>
+        <View style={st.emptyBlock}>
+          <EmptyState
+            icon="🙋"
+            title={owner ? 'Set up your profile' : 'No player profile found'}
+            hint={owner
+              ? 'Add your name, contact, location and the sports you play — so teams and organizers can find you.'
+              : 'This account doesn’t have a player profile yet.'}
+          />
+          {onCreateProfile && (
+            <Button label={creating ? 'Setting up…' : '✎ Set up your profile'} onPress={onCreateProfile} disabled={creating} />
+          )}
+          {owner && onOpenSettings && <Button label="⚙  Settings" variant="ghost" onPress={onOpenSettings} />}
+          {onSignOut && <Button label="Sign out" variant="ghost" onPress={onSignOut} />}
+        </View>
+      </ScrollView>
     );
   }
 
@@ -98,6 +124,7 @@ export function ProfileView({
           <Text style={textStyles.muted}>
             {player.houseName ?? 'Independent'}
             {ageFromDob(player.dob) !== undefined ? ` · ${ageFromDob(player.dob)} yrs` : ''}
+            {player.gender ? ` · ${player.gender}` : ''}
             {player.city ? ` · ${player.city}` : ''}
             {player.jerseyNo ? ` · #${player.jerseyNo}` : ''}
           </Text>
@@ -108,6 +135,10 @@ export function ProfileView({
           </View>
         </View>
       </View>
+
+      {player.bio ? (
+        <Card><Text style={textStyles.body}>{player.bio}</Text></Card>
+      ) : null}
 
       {onEditProfile && (
         <Button label="✎ Edit profile" variant="ghost" onPress={onEditProfile} />
@@ -264,6 +295,9 @@ export function ProfileView({
       {onOpenSettings && (
         <Button label="⚙  Settings" variant="ghost" onPress={onOpenSettings} style={{ marginTop: theme.spacing(2) }} />
       )}
+      {onSignOut && (
+        <Button label="Sign out" variant="ghost" onPress={onSignOut} />
+      )}
     </ScrollView>
   );
 }
@@ -378,6 +412,7 @@ function VerificationCard({ player, owner }: { player: Player; owner: boolean })
 const st = StyleSheet.create({
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing(6) },
+  emptyBlock: { gap: theme.spacing(3), paddingVertical: theme.spacing(8) },
   headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
   verifiedTick: { fontSize: theme.font.body },
   verifyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2) },

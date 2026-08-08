@@ -18,11 +18,15 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
+const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
 export default function EditProfileScreen({ route, navigation }: Props) {
   const { playerId } = route.params;
 
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
+  const [gender, setGender] = useState('');
+  const [bio, setBio] = useState('');
   const [dob, setDob] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -45,6 +49,8 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       if (!on || !p) return;
       setName(p.fullName);
       setCity(p.city ?? '');
+      setGender(p.gender ?? '');
+      setBio(p.bio ?? '');
       setDob(p.dob ?? '');
       setPhone(p.phone ?? '');
       setEmail(p.email ?? '');
@@ -122,6 +128,8 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       await updatePlayer(playerId, {
         fullName: name.trim(),
         city: city.trim(),
+        gender: gender.trim(),
+        bio: bio.trim(),
         dob: dob.trim(),
         phone: phone.trim(),
         email: email.trim(),
@@ -147,19 +155,32 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Edit profile" subtitle="Your details, as you want them shown" />
 
-        <TextField label="Full name" value={name} onChange={setName} placeholder="Your name" />
+        <TextField label="Full name" value={name} onChange={setName} placeholder="First & last name" />
         <View style={st.row}>
-          <View style={st.flex}><TextField label="Base city" value={city} onChange={setCity} placeholder="Bengaluru" /></View>
+          <View style={st.flex}><TextField label="Location (city)" value={city} onChange={setCity} placeholder="Bengaluru" /></View>
           <View style={st.flex}>
             <DateField label="Date of birth" value={dob} onChange={setDob} />
             {age !== undefined ? <Text style={st.ageHint}>Age: {age} yrs</Text> : null}
           </View>
         </View>
+
+        <View style={{ gap: theme.spacing(1) }}>
+          <FieldLabel>Gender</FieldLabel>
+          <View style={st.chips}>
+            {GENDERS.map((g) => (
+              <SelectChip key={g} label={g} active={gender === g} onPress={() => setGender(gender === g ? '' : g)} />
+            ))}
+          </View>
+        </View>
+
         <View style={st.row}>
           <View style={st.flex}><TextField label="Contact number" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" /></View>
           <View style={st.flex}><TextField label="Email" value={email} onChange={setEmail} placeholder="you@email.com" autoCapitalize="none" /></View>
         </View>
         <Text style={textStyles.muted}>Your contact details are visible only to you.</Text>
+
+        <TextField label="About you (optional)" value={bio} onChange={setBio} placeholder="A short note about you — how you play, what you're into…" multiline />
+
 
         <Card style={{ gap: theme.spacing(2) }}>
           <Text style={textStyles.h3}>👪 Parent / Guardian {guardianRequired ? '· required' : '(optional)'}</Text>

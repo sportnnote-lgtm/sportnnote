@@ -65,6 +65,10 @@ export interface Player {
   houseName?: string; // team/club/house affiliation, e.g. "Red House"
   houseColor?: string;
   city?: string; // home city/community — powers discovery across schools
+  /** self-described gender (free-form; UI offers common options + "prefer not to say") */
+  gender?: string;
+  /** a short "about me" the player writes for their profile */
+  bio?: string;
   /** date of birth (YYYY-MM-DD); age is derived for display */
   dob?: string;
   /** contact details the player maintains on their own profile */

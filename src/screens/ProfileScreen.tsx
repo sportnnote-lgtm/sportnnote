@@ -6,15 +6,16 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { ProfileView } from '../components/ProfileView';
 import { useAuth } from '../core/auth';
-import { getMyPlayerId } from '../data/repos';
+import { getMyPlayerId, createMyPlayer } from '../data/repos';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const nav = useNavigation<Nav>();
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,6 +27,20 @@ export default function ProfileScreen() {
     }, [profile?.id])
   );
 
+  // First-time setup: create the account's own player profile, then open the
+  // editor so they can fill in their details.
+  const createProfile = async () => {
+    if (!profile?.id || creating) return;
+    setCreating(true);
+    try {
+      const id = await createMyPlayer(profile.id);
+      setPlayerId(id);
+      nav.navigate('EditProfile', { playerId: id });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ProfileView
@@ -34,6 +49,9 @@ export default function ProfileScreen() {
         onEditProfile={playerId ? () => nav.navigate('EditProfile', { playerId }) : undefined}
         onOpenOrg={(orgId) => nav.navigate('Organization', { orgId })}
         onOpenSettings={() => nav.navigate('Settings')}
+        onCreateProfile={createProfile}
+        creating={creating}
+        onSignOut={signOut}
       />
     </SafeAreaView>
   );

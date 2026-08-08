@@ -31,6 +31,33 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-08 — Profile: setup flow, edit-info fields (gender/bio), visible sign-out · SHIPPED + VERIFIED
+
+A freshly signed-up account has a `profiles` row but no `players` row, so the Profile tab was a dead-end
+("No player profile found") with no way to create one, edit info, or sign out.
+
+- **Actionable empty state** — the Profile tab now shows **✎ Set up your profile** (creates the account's
+  player via `createMyPlayer`, seeded from sign-up name/phone/dob/guardian, then opens the editor) plus
+  **Settings** and **Sign out**. The shared `ProfileView` keeps the neutral empty state when viewing
+  *someone else* (owner-only actions gated on `onCreateProfile`/`onSignOut`).
+- **Visible sign-out** — a **Sign out** button now sits on the Profile tab itself (it previously lived only
+  inside Settings), in both the empty and populated states.
+- **Edit-info fields** — `EditProfileScreen` gained **Gender** (Male / Female / Other / Prefer not to say)
+  and **About you** (multiline bio). Existing fields cover name, location (city), DOB, contact number,
+  email, guardian, and per-sport details. `ProfileView` shows gender in the subtitle and the bio in a card.
+- **Data:** `Player` gained `gender?`/`bio?`; `repos` maps them (PlayerRow / toPlayer / PLAYER_SELECT /
+  PlayerPatch / updatePlayer) + new `createMyPlayer`; **migration 0005** (`players.gender`, `players.bio`).
+- **Files:** `src/core/types.ts`, `src/data/repos.ts`, `src/screens/ProfileScreen.tsx`,
+  `src/screens/EditProfileScreen.tsx`, `src/components/ProfileView.tsx`,
+  `supabase/migrations/20260808120000_player_gender_bio.sql` (new).
+- **Verified (demo mode):** Profile shows the Sign-out button; Edit profile has Gender + About you; set
+  Male + a bio → Save → profile subtitle shows "· Male ·" and the bio card renders. 135 tests, typecheck
+  clean. (The create-from-empty flow is live-only — demo always has a seed player — verified by types/logic.)
+- **⚠️ To use live:** run **migration 0005** (`supabase/migrations/20260808120000_player_gender_bio.sql`)
+  before the live app reads players (it now selects `gender`/`bio`). Note: `first name / last name` are kept
+  as a single **Full name** field (the app is built on `fullName`; splitting would ripple through display,
+  initials & search — deferred unless wanted).
+
 ### 2026-08-07 — Super Four (multi-phase) + 3rd-place playoff · SHIPPED + VERIFIED
 
 Closed the two litmus gaps. Both real formats — FIFA WC 2026 and an Asia Cup — are now schedulable in-app.
