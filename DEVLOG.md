@@ -31,6 +31,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-10 — Real email verification (OTP) + honest phone labelling · SHIPPED + VERIFIED
+
+Contact "Verify" was a mock: the code was generated client-side and shown on-screen ("Demo code: …"),
+nothing sent — so users tapped Verify and waited for an SMS/email that never came. Now **email is real**;
+phone is clearly labelled as temporary until an SMS provider is added.
+
+- **Real email OTP** for the player's own email: a server generates a 6-digit code, stores it **hashed**
+  (10-min expiry, one per player+channel, 5-attempt cap), and **emails it via Resend**; verification is
+  checked server-side and flips `email_verified`. Two edge functions — **`send-contact-otp`** and
+  **`verify-contact-otp`** — both authenticate the caller (JWT) and confirm they own the player (the target
+  address is read from the DB, never the client). Backed by **migration 0006** (`contact_otps` table,
+  server-only RLS).
+- **Graceful fallback:** if the function isn't deployed / no `RESEND_API_KEY`, email verification degrades
+  to the on-screen code (labelled "Email delivery isn't set up here — use this code: …"). Phone always uses
+  the on-screen code, now labelled **"📱 SMS codes are coming soon — for now, use this code: …"**.
+- **Client:** `beginContactVerification` (invokes send-contact-otp for email; else returns an on-screen
+  code) + `verifyContactOtp` (invokes verify-contact-otp). `ContactCard` rewired with a `real` mode +
+  `emailOtp` prop (own card only — the guardian card keeps the on-screen code). `ProfileView` passes
+  `emailOtp` on the own-contact card.
+- **Files:** `src/data/repos.ts`, `src/components/ContactCard.tsx`, `src/components/ProfileView.tsx`,
+  `supabase/functions/send-contact-otp/index.ts` + `verify-contact-otp/index.ts` (new),
+  `supabase/migrations/20260810120000_contact_otps.sql` (new).
+- **Verified (demo):** phone Verify shows the "SMS coming soon · use this code: NNN" label → entering it
+  flips to ✓ Verified; the email-fallback label renders too. 135 tests, typecheck clean.
+- **⚠️ For live email OTP:** run **migration 0006** and deploy the functions —
+  `supabase functions deploy send-contact-otp && supabase functions deploy verify-contact-otp` (reuse
+  `RESEND_API_KEY`). Until then, email uses the labelled on-screen fallback. Phone stays on-screen until an
+  SMS provider (Twilio/MSG91) is wired.
+
 ### 2026-08-10 — Co-hosts: look up or invite people to co-host a tournament · SHIPPED + VERIFIED
 
 Create Tournament only let you host as *yourself or an org* — no way to add another person as a co-host, and

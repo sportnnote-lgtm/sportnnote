@@ -1280,6 +1280,37 @@ export async function verifyContact(id: string, channel: 'phone' | 'email'): Pro
   await updatePlayer(id, channel === 'phone' ? { phoneVerified: true } : { emailVerified: true });
 }
 
+/**
+ * Start verifying a player's own contact channel. For **email** in a live build
+ * this emails a real 6-digit code (generated + stored hashed server-side) and
+ * returns `{ sent: true }`. Otherwise — phone (no SMS provider yet), or email
+ * when the edge function isn't deployed/keyed, or demo mode — there's no real
+ * delivery, so it returns a client-side `demoCode` the UI shows and checks
+ * locally (clearly labelled as temporary). */
+export async function beginContactVerification(playerId: string, channel: 'phone' | 'email'): Promise<{ sent: boolean; demoCode?: string }> {
+  if (isSupabaseConfigured && supabase && channel === 'email') {
+    try {
+      const { data, error } = await supabase.functions.invoke('send-contact-otp', { body: { playerId, channel } });
+      if (!error && (data as { sent?: boolean } | null)?.sent) return { sent: true };
+    } catch {
+      // fall through to the on-screen code
+    }
+  }
+  return { sent: false, demoCode: String(Math.floor(100000 + Math.random() * 900000)) };
+}
+
+/** Verify an emailed OTP server-side; on success the edge function flips the
+ *  player's email_verified flag. Returns whether the code matched. */
+export async function verifyContactOtp(playerId: string, channel: 'phone' | 'email', code: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { data, error } = await supabase.functions.invoke('verify-contact-otp', { body: { playerId, channel, code } });
+    return !error && !!(data as { verified?: boolean } | null)?.verified;
+  } catch {
+    return false;
+  }
+}
+
 /** Mark a guardian's contact channel verified (same OTP flow as the player's own). */
 export async function verifyGuardianContact(id: string, channel: 'phone' | 'email'): Promise<void> {
   const p = await getPlayer(id);

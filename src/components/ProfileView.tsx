@@ -178,6 +178,7 @@ export function ProfileView({
           email={player.email}
           phoneVerified={player.phoneVerified}
           emailVerified={player.emailVerified}
+          emailOtp
         />
       )}
 

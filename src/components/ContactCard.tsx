@@ -1,12 +1,12 @@
-/** The owner-only contact card with per-channel OTP verification. The channel
- *  used at sign-up is already verified; the other shows a "Verify" action that
- *  runs a quick OTP check. (Demo: the code is generated client-side and shown
- *  as a hint; a real build would send it over SMS/email.) */
+/** The owner-only contact card with per-channel OTP verification. For the
+ *  player's own EMAIL this sends a real code (via the send-contact-otp edge
+ *  function) and verifies it server-side. Phone (no SMS provider yet) and the
+ *  guardian card fall back to a clearly-labelled on-screen code. */
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, Pill, textStyles } from './ui';
-import { verifyContact } from '../data/repos';
+import { verifyContact, beginContactVerification, verifyContactOtp } from '../data/repos';
 
 type Channel = 'phone' | 'email';
 
@@ -19,6 +19,7 @@ export function ContactCard({
   title = 'Contact · only you can see this',
   name,
   verify = verifyContact,
+  emailOtp = false,
 }: {
   playerId: string;
   phone?: string;
@@ -31,6 +32,8 @@ export function ContactCard({
   name?: string;
   /** how a channel is marked verified — defaults to verifying the player's own */
   verify?: (playerId: string, channel: Channel) => Promise<void>;
+  /** enable REAL emailed OTP for the email row (only for the player's own card) */
+  emailOtp?: boolean;
 }) {
   const [verified, setVerified] = useState<Record<Channel, boolean>>({
     phone: !!phoneVerified,
@@ -38,22 +41,41 @@ export function ContactCard({
   });
   const [active, setActive] = useState<Channel | null>(null);
   const [code, setCode] = useState('');
-  const [sent, setSent] = useState('');
+  const [sent, setSent] = useState('');         // the on-screen code (fallback modes only)
+  const [real, setReal] = useState(false);       // true ⇒ a code was actually emailed
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const start = (channel: Channel) => {
+  const start = async (channel: Channel) => {
     setActive(channel);
     setCode('');
     setError(null);
-    setSent(String(Math.floor(100000 + Math.random() * 900000)));
+    setSent('');
+    setReal(false);
+    // Real emailed OTP only for the player's own email; everything else uses the
+    // on-screen code until its delivery channel is wired up.
+    if (emailOtp && channel === 'email') {
+      setBusy(true);
+      const r = await beginContactVerification(playerId, channel);
+      setBusy(false);
+      if (r.sent) { setReal(true); return; }
+      setSent(r.demoCode ?? '');
+    } else {
+      setSent(String(Math.floor(100000 + Math.random() * 900000)));
+    }
   };
 
   const confirm = async (channel: Channel) => {
-    if (code.trim() !== sent) {
-      setError('Incorrect code — try again.');
-      return;
+    setError(null);
+    if (real) {
+      setBusy(true);
+      const ok = await verifyContactOtp(playerId, channel, code.trim());
+      setBusy(false);
+      if (!ok) { setError('Incorrect or expired code — check your email and try again.'); return; }
+    } else {
+      if (code.trim() !== sent) { setError('Incorrect code — try again.'); return; }
+      await verify(playerId, channel);
     }
-    await verify(playerId, channel);
     setVerified((v) => ({ ...v, [channel]: true }));
     setActive(null);
   };
@@ -71,7 +93,11 @@ export function ContactCard({
       </View>
       {active === channel && !verified[channel] && (
         <View style={st.otp}>
-          <Text style={textStyles.muted}>Enter the 6-digit code sent to {value}.</Text>
+          <Text style={textStyles.muted}>
+            {busy ? 'Sending a code…'
+              : real ? `We emailed a 6-digit code to ${value}. Enter it below.`
+              : 'Enter the 6-digit code below.'}
+          </Text>
           <View style={st.otpRow}>
             <TextInput
               style={st.input}
@@ -81,12 +107,23 @@ export function ContactCard({
               placeholderTextColor={theme.colors.textMuted}
               keyboardType="number-pad"
               maxLength={6}
+              editable={!busy}
             />
-            <TouchableOpacity accessibilityRole="button" style={st.confirmBtn} activeOpacity={0.85} onPress={() => confirm(channel)}>
+            <TouchableOpacity accessibilityRole="button" style={[st.confirmBtn, busy && { opacity: 0.5 }]} disabled={busy} activeOpacity={0.85} onPress={() => confirm(channel)}>
               <Text style={st.confirmText}>Confirm</Text>
             </TouchableOpacity>
           </View>
-          {error ? <Text style={st.error}>{error}</Text> : <Text style={st.hint}>Demo code: {sent}</Text>}
+          {error ? (
+            <Text style={st.error}>{error}</Text>
+          ) : real ? (
+            <Text style={st.hint}>Didn’t get it? Check spam, or tap Verify again to resend.</Text>
+          ) : sent ? (
+            <Text style={st.hint}>
+              {channel === 'phone'
+                ? `📱 SMS codes are coming soon — for now, use this code: ${sent}`
+                : `Email delivery isn’t set up here — use this code: ${sent}`}
+            </Text>
+          ) : null}
         </View>
       )}
     </View>
