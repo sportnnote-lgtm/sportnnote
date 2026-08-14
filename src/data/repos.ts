@@ -1287,19 +1287,20 @@ export async function verifyContact(id: string, channel: 'phone' | 'email'): Pro
  * when the edge function isn't deployed/keyed, or demo mode — there's no real
  * delivery, so it returns a client-side `demoCode` the UI shows and checks
  * locally (clearly labelled as temporary). */
-export async function beginContactVerification(playerId: string, channel: 'phone' | 'email'): Promise<{ sent: boolean; demoCode?: string; reason?: string }> {
-  let reason: string | undefined;
+export async function beginContactVerification(playerId: string, channel: 'phone' | 'email'): Promise<{ sent: boolean; demoCode?: string }> {
   if (isSupabaseConfigured && supabase && channel === 'email') {
     try {
       const { data, error } = await supabase.functions.invoke('send-contact-otp', { body: { playerId, channel } });
       const d = data as { sent?: boolean; reason?: string; detail?: string } | null;
       if (!error && d?.sent) return { sent: true };
-      reason = error ? (error.message || 'request-failed') : d?.reason ? `${d.reason}${d.detail ? ` · ${d.detail}` : ''}` : undefined;
+      // Not delivered — log why (unverified sender domain, etc.) for debugging; the
+      // UI just falls back to the on-screen code.
+      console.warn('send-contact-otp not delivered:', error?.message ?? d?.reason, d?.detail ?? '');
     } catch (e) {
-      reason = e instanceof Error ? e.message : 'error';
+      console.warn('send-contact-otp failed:', e);
     }
   }
-  return { sent: false, demoCode: String(Math.floor(100000 + Math.random() * 900000)), reason };
+  return { sent: false, demoCode: String(Math.floor(100000 + Math.random() * 900000)) };
 }
 
 /** Verify an emailed OTP server-side; on success the edge function flips the

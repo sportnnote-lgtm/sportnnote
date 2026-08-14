@@ -14,7 +14,7 @@ type Channel = 'phone' | 'email';
 // code) survives a remount — e.g. when the profile refetches after you switch to
 // your email tab to grab the code and switch back. Keyed per card so it doesn't
 // leak between the own-contact and guardian cards. Cleared once you finish/close.
-type VState = { active: Channel | null; real: boolean; sent: string; code: string; reason: string | null };
+type VState = { active: Channel | null; real: boolean; sent: string; code: string };
 const otpSession = new Map<string, VState>();
 
 export function ContactCard({
@@ -52,15 +52,14 @@ export function ContactCard({
   const [code, setCode] = useState(saved?.code ?? '');
   const [sent, setSent] = useState(saved?.sent ?? '');   // the on-screen code (fallback modes only)
   const [real, setReal] = useState(saved?.real ?? false); // true ⇒ a code was actually emailed
-  const [reason, setReason] = useState<string | null>(saved?.reason ?? null); // why a real send didn't happen
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Persist the open verification across remounts (see otpSession above).
   useEffect(() => {
-    if (active) otpSession.set(sessionKey, { active, real, sent, code, reason });
+    if (active) otpSession.set(sessionKey, { active, real, sent, code });
     else otpSession.delete(sessionKey);
-  }, [sessionKey, active, real, sent, code, reason]);
+  }, [sessionKey, active, real, sent, code]);
 
   const start = async (channel: Channel) => {
     setActive(channel);
@@ -68,7 +67,6 @@ export function ContactCard({
     setError(null);
     setSent('');
     setReal(false);
-    setReason(null);
     // Real emailed OTP only for the player's own email; everything else uses the
     // on-screen code until its delivery channel is wired up.
     if (emailOtp && channel === 'email') {
@@ -77,7 +75,6 @@ export function ContactCard({
       setBusy(false);
       if (r.sent) { setReal(true); return; }
       setSent(r.demoCode ?? '');
-      setReason(r.reason ?? null);
     } else {
       setSent(String(Math.floor(100000 + Math.random() * 900000)));
     }
@@ -136,14 +133,11 @@ export function ContactCard({
           ) : real ? (
             <Text style={st.hint}>Didn’t get it? Check spam, or tap Verify again to resend.</Text>
           ) : sent ? (
-            <>
-              <Text style={st.hint}>
-                {channel === 'phone'
-                  ? `📱 SMS codes are coming soon — for now, use this code: ${sent}`
-                  : `Email delivery isn’t set up here — use this code: ${sent}`}
-              </Text>
-              {reason ? <Text style={st.diag}>couldn’t email — {reason}</Text> : null}
-            </>
+            <Text style={st.hint}>
+              {channel === 'phone'
+                ? `📱 SMS codes are coming soon — for now, use this code: ${sent}`
+                : `Couldn’t email a code just now — use this one: ${sent}`}
+            </Text>
           ) : null}
         </View>
       )}
@@ -176,6 +170,5 @@ const st = StyleSheet.create({
   confirmBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4) },
   confirmText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '800' },
   hint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
-  diag: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700' },
   error: { color: theme.colors.danger, fontSize: theme.font.tiny },
 });
