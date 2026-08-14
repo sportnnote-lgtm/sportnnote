@@ -31,6 +31,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-10 — Co-hosts: look up or invite people to co-host a tournament · SHIPPED + VERIFIED
+
+Create Tournament only let you host as *yourself or an org* — no way to add another person as a co-host, and
+no way to bring someone who isn't on the app yet. New end-to-end **co-host** flow.
+
+- **`CoHostPicker`** (new, reusable component) in Create Tournament: a **"Co-hosts (optional)"** section with
+  **+ Add co-host** → a lookup field (**name / phone / email**) showing matching users → tap **+ Add**. Added
+  co-hosts show as removable chips.
+- **Invite someone new** → for a person not on Sportfolio, an inline form (name + phone + email) with three
+  channels: **📧 Email · 💬 WhatsApp · ✉️ SMS**. It creates a **pending player** (the existing invite-to-install
+  model), adds them as an `· invited` co-host, and sends the invite with an install/register link
+  (`https://sportfolio.app/join/:id`). They become an active host when they register.
+- **Channels:** WhatsApp/SMS are client-side `Linking` (`openWhatsApp`/new `openSms`, `wa.me` / `sms:`) — no
+  backend. **Email** goes through a **new `send-invite` edge function** (Resend, arbitrary recipient, modelled
+  on support-escalate) with a **`mailto:` fallback** so it works even before that function is deployed.
+- **Data:** `findPlayerByEmail`, `lookupPeople` (name + exact phone/email, merged), `invitePerson`
+  (find-or-create pending, not team-bound); `NewTournament.coHostIds` → `createTournament` sets
+  `host_ids = unique([creator, ...coHostIds])` on both paths. New `src/core/invite.ts` (install link + message
+  + `sendInviteEmail`). No migration (reuses players/tournaments).
+- **Files:** `src/data/repos.ts`, `src/core/connect.ts` (`openSms`), `src/core/invite.ts` (new),
+  `src/components/CoHostPicker.tsx` (new), `src/screens/CreateTournamentScreen.tsx`,
+  `supabase/functions/send-invite/index.ts` (new).
+- **Verified (demo):** searched "Rohan" → added Rohan Nair (existing) → invited "Priya Coach" by email
+  (pending player created + `· invited` chip + mailto fallback fired) → Created → tournament `host_ids` =
+  [Aarav (creator), Rohan Nair, Priya Coach]. 135 tests, typecheck clean.
+- **⚠️ For live email:** deploy the edge function — `supabase functions deploy send-invite` (reuses the
+  existing `RESEND_API_KEY`; optional `INVITE_FROM`). Until then, email uses the `mailto:` fallback;
+  WhatsApp/SMS work immediately. Later: swap WhatsApp/SMS from client-share to server-send if wanted.
+
 ### 2026-08-08 — Profile: setup flow, edit-info fields (gender/bio), visible sign-out · SHIPPED + VERIFIED
 
 A freshly signed-up account has a `profiles` row but no `players` row, so the Profile tab was a dead-end

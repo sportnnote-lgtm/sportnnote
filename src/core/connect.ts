@@ -36,6 +36,14 @@ export function openWhatsApp(phone?: string, text?: string): void {
   void Linking.openURL(url);
 }
 
+/** Open the device SMS composer to a number with a prefilled body. */
+export function openSms(phone?: string, text?: string): void {
+  const digits = (phone ?? '').replace(/[^0-9]/g, '');
+  if (!digits) return;
+  const url = `sms:${digits}${text ? `?body=${encodeURIComponent(text)}` : ''}`;
+  void Linking.openURL(url);
+}
+
 /** "2h ago", "3d ago", "just now" from an ISO timestamp. */
 export function timeAgo(iso: string, now: number): string {
   const then = new Date(iso).getTime();

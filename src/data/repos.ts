@@ -760,7 +760,53 @@ export async function findPlayerByPhone(phone: string): Promise<Player | null> {
   return row ? toPlayer(row) : null;
 }
 
+/** Identity lookup by email (secondary to phone) — the one player who registered
+ *  this email, or null. Case-insensitive. */
+export async function findPlayerByEmail(email: string): Promise<Player | null> {
+  const e = email.trim().toLowerCase();
+  if (!e.includes('@')) return null;
+  if (!isSupabaseConfigured || !supabase) return demo.players.find((p) => (p.email ?? '').toLowerCase() === e) ?? null;
+  const { data } = await supabase.from('players').select(PLAYER_SELECT).ilike('email', e).limit(1);
+  const row = (data as PlayerRow[] | null)?.[0];
+  return row ? toPlayer(row) : null;
+}
+
+/** People search for the co-host picker: name substring + an exact phone/email
+ *  identity match, merged and de-duplicated (best few). */
+export async function lookupPeople(query: string): Promise<Player[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const results = new Map<string, Player>();
+  for (const p of await searchPlayers({ query: q })) results.set(p.id, p);
+  if (q.includes('@')) { const p = await findPlayerByEmail(q); if (p) results.set(p.id, p); }
+  else if (q.replace(/[^0-9]/g, '').length >= 7) { const p = await findPlayerByPhone(q); if (p) results.set(p.id, p); }
+  return [...results.values()].slice(0, 8);
+}
+
 export interface InvitePlayerResult { player: Player; status: 'existing' | 'invited'; }
+
+/** Find a person by phone/email, or create a PENDING player for them (not tied
+ *  to any team) so they can be added as a co-host and invited to install. Mirrors
+ *  invitePlayer's model: one number/email ⇒ one identity; new ⇒ a pending row the
+ *  invitee claims by registering. The caller sends the actual invite message. */
+export async function invitePerson(args: { name: string; phone?: string; email?: string }): Promise<InvitePlayerResult> {
+  const name = args.name.trim() || 'Guest';
+  const phone = args.phone?.trim();
+  const email = args.email?.trim().toLowerCase();
+  const existing = (phone ? await findPlayerByPhone(phone) : null) ?? (email ? await findPlayerByEmail(email) : null);
+  if (existing) return { player: existing, status: 'existing' };
+  if (!isSupabaseConfigured || !supabase) {
+    const p = addPlayer({ fullName: name, sports: [], phone: phone ? normalizePhone(phone) : undefined, email: email || undefined, invited: true });
+    return { player: p, status: 'invited' };
+  }
+  const { data, error } = await supabase
+    .from('players')
+    .insert({ full_name: name, sports: [], phone: phone ? normalizePhone(phone) : null, email: email ?? null, phone_verified: false })
+    .select(PLAYER_SELECT)
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Could not create the invite');
+  return { player: toPlayer(data as PlayerRow), status: 'invited' };
+}
 
 /** Add a player to a team by name + phone (the invite-to-install growth loop).
  *  If the number belongs to a registered player, they're added directly (confirmed).
@@ -1404,6 +1450,8 @@ export interface NewTournament {
   knockoutFormat?: Tournament['knockoutFormat'];
   /** organizer's per-tournament reminder lead times (minutes before kickoff); absent ⇒ players use their own */
   reminderLeadMinutes?: number[];
+  /** additional individual co-hosts (player ids) to add alongside the creator */
+  coHostIds?: string[];
 }
 
 export async function createTournament(input: NewTournament): Promise<Tournament> {
@@ -1411,7 +1459,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
   // Org-hosted → no individual hostIds (the org's members are the hosts);
   // otherwise the creator is the sole individual host.
   if (!isSupabaseConfigured || !supabase)
-    return addTournament({ ...input, isOpen: input.isOpen, hostIds: input.hostOrgId ? [] : me ? [me] : [] });
+    return addTournament({ ...input, isOpen: input.isOpen, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
   const { data: auth } = await supabase.auth.getUser();
   // Hosts are tracked by player id (what the host UI checks), so the creator's
   // player id — not the auth/profile id — becomes the first host.
@@ -1429,7 +1477,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
       structure: input.structure ?? null,
       knockout_format: input.knockoutFormat ?? null,
       organizer_id: auth.user?.id ?? null,
-      host_ids: input.hostOrgId ? [] : myPlayerId ? [myPlayerId] : [],
+      host_ids: [...new Set([...(input.hostOrgId ? [] : myPlayerId ? [myPlayerId] : []), ...(input.coHostIds ?? [])])],
       is_open: input.isOpen ?? false,
       reminder_lead_minutes: input.reminderLeadMinutes ?? null,
     })

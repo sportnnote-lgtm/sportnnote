@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
+import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { createTournament, getMyPlayerId, getPlayer } from '../data/repos';
@@ -56,6 +57,7 @@ export default function CreateTournamentScreen() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myName, setMyName] = useState('You');
   const [hostChoice, setHostChoice] = useState<'self' | string>(params?.orgId ?? 'self');
+  const [coHosts, setCoHosts] = useState<CoHost[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   React.useEffect(() => {
     let on = true;
@@ -124,6 +126,7 @@ export default function CreateTournamentScreen() {
           ? { decider: koDecider, ...(koDecider === 'extra_time' ? { extraTimeMinutes: etMinutes, extraTimeSubs: etSubs } : {}) }
           : undefined,
         reminderLeadMinutes: customReminders ? reminderMins : undefined,
+        coHostIds: coHosts.map((c) => c.id),
       });
       nav.goBack();
     } catch (e) {
@@ -151,6 +154,16 @@ export default function CreateTournamentScreen() {
             ? 'You host this tournament personally.'
             : 'Everyone in this organization can manage it and gets host reminders.'}
         </Text>
+
+        {/* Add other people as co-hosts — look them up, or invite them to install. */}
+        <CoHostPicker
+          value={coHosts}
+          onChange={setCoHosts}
+          inviterName={myName}
+          excludeIds={myId ? [myId] : []}
+          context={name.trim() || undefined}
+        />
+
         <View style={st.row}>
           <View style={st.flex}><DateField label="Start date" value={start} onChange={setStart} /></View>
           <View style={st.flex}><DateField label="End date" value={end} onChange={setEnd} /></View>
