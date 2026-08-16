@@ -20,8 +20,8 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
-import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads } from '../data/repos';
+import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
+import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus } from '../data/repos';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
 import { notify } from '../core/notifications';
@@ -75,19 +75,31 @@ export default function TournamentProfileScreen() {
     setReminderMins(mins);
     if (tournament) void setTournamentReminderLeads(tournament.id, mins);
   };
-  // Open tournaments: a non-host can request to register, notifying the hosts.
-  const [requested, setRequested] = useState(false);
-  const requestToJoin = () => {
+  // Captain self-service: enter one of your teams into this tournament (a
+  // 'pending' entry the organizer approves), or accept an invite for your team.
+  const { ids: captainIds } = useCaptainships();
+  const [entryTick, setEntryTick] = useState(0);
+  const entries = useTournamentEntries(params.tournamentId, undefined, entryTick);
+  const [entryNote, setEntryNote] = useState<string | null>(null);
+  const statusByTeam = new Map(entries.map((e) => [e.team.id, e.status]));
+  const myEligibleTeams = teams.filter(
+    (t) => captainIds.includes(t.id) && t.sports.some((s) => (tournament?.sports ?? []).includes(s)),
+  );
+  const notifyHosts = (title: string, body: string) => {
     if (!tournament) return;
-    const myName = (myId && playerName(myId)) || 'A player';
-    for (const hid of tournamentHostPlayerIds(tournament, orgs)) {
-      void notify({
-        title: `📝 Registration request — ${tournament.name}`,
-        body: `${myName} wants to register a team. Tap to view & follow up.`,
-        playerId: myId ?? undefined,
-      });
-    }
-    setRequested(true);
+    for (const hid of tournamentHostPlayerIds(tournament, orgs)) void notify({ title, body, playerId: hid });
+  };
+  const requestEnter = async (teamId: string, teamName: string) => {
+    await requestJoinTournament(params.tournamentId, teamId);
+    notifyHosts(`📝 Entry request — ${tournament?.name ?? ''}`, `${teamName} requested to join. Review it in Participating teams.`);
+    setEntryNote(`Requested — ${teamName} is awaiting the organizer’s approval.`);
+    setEntryTick((n) => n + 1);
+  };
+  const acceptInvite = async (teamId: string, teamName: string) => {
+    await setTournamentTeamStatus(params.tournamentId, teamId, 'confirmed');
+    notifyHosts(`✅ Invite accepted — ${tournament?.name ?? ''}`, `${teamName} accepted your invite.`);
+    setEntryNote(`${teamName} is in! 🎉`);
+    setEntryTick((n) => n + 1);
   };
 
   const sports = tournament?.sports ?? [];
@@ -190,13 +202,33 @@ export default function TournamentProfileScreen() {
           );
         })()}
 
-        {tournament.isOpen && !canManageHosts && (
-          <Button
-            label={requested ? '✓ Registration request sent' : '📝 Request to join'}
-            variant={requested ? 'ghost' : 'primary'}
-            onPress={requestToJoin}
-          />
-        )}
+        {myEligibleTeams.length > 0 && (() => {
+          const invitedMine = myEligibleTeams.filter((t) => statusByTeam.get(t.id) === 'invited');
+          const requestable = tournament.isOpen ? myEligibleTeams.filter((t) => !statusByTeam.has(t.id)) : [];
+          const pendingMine = myEligibleTeams.filter((t) => statusByTeam.get(t.id) === 'pending');
+          if (!invitedMine.length && !requestable.length && !pendingMine.length) return null;
+          return (
+            <Card style={{ gap: theme.spacing(2) }}>
+              <Text style={textStyles.h3}>Enter a team</Text>
+              {invitedMine.map((t) => (
+                <View key={t.id} style={st.entryRow}>
+                  <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{t.name} · invited</Text>
+                  <Button label="Accept invite" onPress={() => acceptInvite(t.id, t.name)} />
+                </View>
+              ))}
+              {requestable.map((t) => (
+                <View key={t.id} style={st.entryRow}>
+                  <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{t.name}</Text>
+                  <Button label="Request to enter" variant="ghost" onPress={() => requestEnter(t.id, t.name)} />
+                </View>
+              ))}
+              {pendingMine.map((t) => (
+                <Text key={t.id} style={textStyles.muted}>{t.name} · requested — awaiting approval</Text>
+              ))}
+              {entryNote ? <Text style={st.entryNote}>{entryNote}</Text> : null}
+            </Card>
+          );
+        })()}
 
         <View style={st.tags}>
           {sports.map((s) => (
@@ -465,6 +497,9 @@ export default function TournamentProfileScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
+  flex1: { flex: 1 },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  entryNote: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '600' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing(3) },
   segment: { flexDirection: 'row', backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, padding: 3 },
   segBtn: { flex: 1, paddingVertical: theme.spacing(2), borderRadius: theme.radius.pill, alignItems: 'center' },

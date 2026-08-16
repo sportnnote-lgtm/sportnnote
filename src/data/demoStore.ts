@@ -30,6 +30,7 @@ import type {
   TeamInvite,
   TeamLeadership,
   Tournament,
+  TournamentEntryStatus,
 } from '../core/types';
 
 let counter = 1;
@@ -803,7 +804,7 @@ export const demo = {
    *  by default — the seed tournaments imply their teams via matches; organizers
    *  register participants up front for new tournaments. Mirrors the live
    *  `tournament_teams` join table (migration 0003). */
-  tournamentTeams: [] as { tournamentId: string; teamId: string }[],
+  tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus }[],
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },
@@ -1322,13 +1323,21 @@ export function addMatch(m: Omit<Match, 'id'>): Match {
   return created;
 }
 
-/** Register teams as participants of a tournament (idempotent — ignores dupes). */
-export function addTournamentTeamsDemo(tournamentId: string, teamIds: string[]): void {
+/** Register teams as participants of a tournament (idempotent). A team already
+ *  present is bumped to the given status (e.g. an organizer confirming a request). */
+export function addTournamentTeamsDemo(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed'): void {
   for (const teamId of teamIds) {
-    if (!demo.tournamentTeams.some((r) => r.tournamentId === tournamentId && r.teamId === teamId)) {
-      demo.tournamentTeams.push({ tournamentId, teamId });
-    }
+    const existing = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
+    if (existing) existing.status = status;
+    else demo.tournamentTeams.push({ tournamentId, teamId, status });
   }
+}
+
+/** Move a team's entry to a new lifecycle status (confirmed / invited / pending). */
+export function setTournamentTeamStatusDemo(tournamentId: string, teamId: string, status: TournamentEntryStatus): void {
+  const row = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
+  if (row) row.status = status;
+  else demo.tournamentTeams.push({ tournamentId, teamId, status });
 }
 
 /** Drop a team from a tournament's participant list. */

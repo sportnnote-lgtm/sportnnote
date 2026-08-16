@@ -6,6 +6,7 @@ import {
   getMatches,
   getTeams,
   getTournamentTeams,
+  getTournamentEntries,
   getTournament,
   getTournaments,
   getMyTournaments,
@@ -40,6 +41,7 @@ import type {
   Team,
   TeamSummary,
   Tournament,
+  TournamentEntry,
 } from '../core/types';
 
 export interface PlayerSummary {
@@ -448,4 +450,19 @@ export function useTournamentTeams(tournamentId?: string, sport?: SportId, nonce
     }, [tournamentId, sport, nonce])
   );
   return teams;
+}
+
+/** Every team entry (confirmed / invited / pending) for a tournament — the
+ *  organizer's lifecycle view and the captain's "am I in?" check. */
+export function useTournamentEntries(tournamentId?: string, sport?: SportId, nonce = 0) {
+  const [entries, setEntries] = useState<TournamentEntry[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      if (!tournamentId) { setEntries([]); return; }
+      getTournamentEntries(tournamentId, sport).then((e) => on && setEntries(e));
+      return () => { on = false; };
+    }, [tournamentId, sport, nonce])
+  );
+  return entries;
 }

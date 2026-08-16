@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-16 — Team-entry overhaul ② Invite / self-register + lifecycle · BUILT (needs migration 0007)
+
+Team participation is now a lifecycle, not a flat "in / not in": `confirmed`
+(counts toward format + fixtures), `invited` (organizer invited, captain accepts),
+`pending` (captain requested, organizer approves).
+
+- **Migration 0007** (`20260816120000_tournament_entry_status.sql`): adds
+  `tournament_teams.status` (default `confirmed`, checked enum) + a status index.
+  RLS unchanged (0003 already lets any authed user write) so captain
+  self-registration + organizer approvals both work. **Must be run on live.**
+- **Data layer** (`repos.ts`): `getTournamentTeams` now returns confirmed-only;
+  new `getTournamentEntries` (all statuses), `requestJoinTournament` (pending),
+  `setTournamentTeamStatus`, and `addTournamentTeams(…, status)`. Hook
+  `useTournamentEntries`. Demo store carries `status`.
+- **Organizer** (`TournamentTeamsScreen`): a "Requests & invites" gate —
+  Accept/Decline requests, Confirm/Cancel invites (captain notified either way) —
+  plus an "Add directly / Invite (captain accepts)" mode toggle on the picker.
+- **Captain** (`TournamentProfileScreen`): replaced the vague notify-only "Request
+  to join" with a real "Enter a team" card — request to enter your captained team
+  (→ pending, hosts notified) or Accept an invite (→ confirmed).
+- **Backward-compatible rollout:** `getTournamentEntries` + `addTournamentTeams`
+  fall back to a status-less read/write when the column is absent (pre-0007),
+  treating rows as confirmed — so the existing participants feature keeps working
+  before the migration. Verified live: confirmed adds persist ("Participating
+  teams · 1") via the fallback with 0007 not yet applied. Invited/pending need 0007.
+- Verified: `tsc` clean, 135 tests pass; ① + ② organizer/captain UI exercised on
+  the live app in-browser. **Note:** localhost:8091 is the LIVE app (authenticated
+  session), not demo — created throwaway test data (tournament "Test Cup (entry
+  flow)", team "Red House", pending player "Ravi Kumar"); no messages were sent.
+
+---
+
 ### 2026-08-16 — Team-entry overhaul ① Real team entry + contact · SHIPPED
 
 The old "add teams" model assumed teams already existed on the app (created by

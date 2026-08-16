@@ -28,6 +28,7 @@ import {
   setTeamLeaders as demoSetTeamLeaders,
   addOrganization,
   addTournamentTeamsDemo,
+  setTournamentTeamStatusDemo,
   removeTournamentTeamDemo,
 } from './demoStore';
 import { emptyFormation } from '../sports/football/formation';
@@ -56,6 +57,8 @@ import type {
   TeamLeadership,
   TeamSummary,
   Tournament,
+  TournamentEntry,
+  TournamentEntryStatus,
 } from '../core/types';
 
 /** A teams row joined into a match. */
@@ -1738,36 +1741,80 @@ export async function setTeamRoster(teamId: string, roster: string[]): Promise<v
 // format decisions (how many teams → groups / bracket size). Distinct from the
 // teams merely appearing in a tournament's matches. See migration 0003.
 
-/** The teams registered to a tournament (optionally narrowed to one sport). */
+/** The CONFIRMED teams of a tournament (optionally narrowed to one sport) — the
+ *  roster that drives format planning + fixtures. Invited / pending entries are
+ *  excluded here; use getTournamentEntries for the full lifecycle view. */
 export async function getTournamentTeams(tournamentId: string, sport?: SportId): Promise<Team[]> {
+  const entries = await getTournamentEntries(tournamentId, sport);
+  return entries.filter((e) => e.status === 'confirmed').map((e) => e.team);
+}
+
+/** Every team entry for a tournament with its lifecycle status (confirmed /
+ *  invited / pending). The organizer's management view; the captain-facing
+ *  screens use it to know whether their team is already in / invited. */
+export async function getTournamentEntries(tournamentId: string, sport?: SportId): Promise<TournamentEntry[]> {
   if (!isSupabaseConfigured || !supabase) {
-    const ids = new Set(demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId).map((r) => r.teamId));
-    return demo.teams.filter((t) => ids.has(t.id) && (!sport || t.sport === sport));
+    const rows = demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId);
+    return rows
+      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status }))
+      .filter((e): e is TournamentEntry => !!e.team && (!sport || e.team.sport === sport));
   }
-  const { data, error } = await supabase
-    .from('tournament_teams')
-    .select('teams(id,name,short_name,sport,color_hex,org_id,roster)')
-    .eq('tournament_id', tournamentId);
+  // Try the status-aware read (migration 0007). If the `status` column isn't
+  // there yet, Supabase errors — fall back to a status-less read and treat every
+  // row as 'confirmed', so the existing participants feature keeps working before
+  // the migration is applied (only the invited/pending lifecycle waits for 0007).
+  const TEAM_COLS = 'teams(id,name,short_name,sport,color_hex,org_id,roster)';
+  const withStatus = await supabase.from('tournament_teams').select(`status, ${TEAM_COLS}`).eq('tournament_id', tournamentId);
+  const res: { data: unknown; error: unknown } = withStatus.error
+    ? await supabase.from('tournament_teams').select(TEAM_COLS).eq('tournament_id', tournamentId)
+    : withStatus;
+  const { data, error } = res;
   if (error || !data) return [];
   // The joined `teams` relation may come back as an object or a single-element
   // array depending on the client's inference — normalise both to a row.
-  const teams = (data as unknown as { teams: TeamRow | TeamRow[] | null }[])
-    .map((r) => (Array.isArray(r.teams) ? r.teams[0] : r.teams))
-    .filter((t): t is TeamRow => !!t)
-    .map(toTeam);
-  return sport ? teams.filter((t) => t.sport === sport) : teams;
+  const entries = (data as unknown as { status?: TournamentEntryStatus; teams: TeamRow | TeamRow[] | null }[])
+    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus }))
+    .filter((e): e is { team: TeamRow; status: TournamentEntryStatus } => !!e.team)
+    .map((e) => ({ team: toTeam(e.team), status: e.status }));
+  return sport ? entries.filter((e) => e.team.sport === sport) : entries;
 }
 
-/** Register one or more teams as tournament participants (idempotent). */
-export async function addTournamentTeams(tournamentId: string, teamIds: string[]): Promise<void> {
+/** Register one or more teams as tournament participants (idempotent). Status
+ *  defaults to 'confirmed' (a direct add); pass 'invited' to invite a team the
+ *  captain must accept. Re-adding an existing team bumps it to the given status. */
+export async function addTournamentTeams(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed'): Promise<void> {
   if (!teamIds.length) return;
   if (!isSupabaseConfigured || !supabase) {
-    addTournamentTeamsDemo(tournamentId, teamIds);
+    addTournamentTeamsDemo(tournamentId, teamIds, status);
     return;
   }
-  await supabase
+  const { error } = await supabase
     .from('tournament_teams')
-    .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId })), { onConflict: 'tournament_id,team_id' });
+    .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId, status })), { onConflict: 'tournament_id,team_id' });
+  // Pre-migration-0007 fallback: no `status` column yet. A plain 'confirmed' add
+  // still works without it; invited/pending genuinely need the migration.
+  if (error) {
+    if (status !== 'confirmed') throw new Error(error.message);
+    await supabase
+      .from('tournament_teams')
+      .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId })), { onConflict: 'tournament_id,team_id' });
+  }
+}
+
+/** A captain self-registers one of their teams — creates a 'pending' entry the
+ *  organizer approves. Idempotent; a team already in stays as it is. */
+export async function requestJoinTournament(tournamentId: string, teamId: string): Promise<void> {
+  await addTournamentTeams(tournamentId, [teamId], 'pending');
+}
+
+/** Move a team's entry to a new lifecycle status (organizer approve/decline, or
+ *  a captain accepting an invite → 'confirmed'). */
+export async function setTournamentTeamStatus(tournamentId: string, teamId: string, status: TournamentEntryStatus): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    setTournamentTeamStatusDemo(tournamentId, teamId, status);
+    return;
+  }
+  await supabase.from('tournament_teams').update({ status }).eq('tournament_id', tournamentId).eq('team_id', teamId);
 }
 
 /** Drop a team from a tournament's participant list. */

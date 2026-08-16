@@ -20,11 +20,12 @@ import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
-import { useTournamentById, useTeams, useTournamentTeams, useLeagueData } from '../data/hooks';
-import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite } from '../data/repos';
+import { useTournamentById, useTeams, useTournamentTeams, useTournamentEntries, useLeagueData } from '../data/hooks';
+import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders } from '../data/repos';
 import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
-import type { SportId } from '../core/types';
+import { notify } from '../core/notifications';
+import type { SportId, TournamentEntry } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -42,7 +43,14 @@ export default function TournamentTeamsScreen() {
   const [tick, setTick] = useState(0); // bump to refetch teams / registrations after a write
   const allTeams = useTeams(sport, tick);
   const registered = useTournamentTeams(params.tournamentId, sport, tick);
+  const entries = useTournamentEntries(params.tournamentId, sport, tick);
   const { matches } = useLeagueData(params.tournamentId);
+  // Lifecycle entries the organizer must act on (confirmed teams are the chips).
+  const pending = entries.filter((e) => e.status === 'pending');
+  const invited = entries.filter((e) => e.status === 'invited');
+  const lifecycleIds = new Set([...pending, ...invited].map((e) => e.team.id));
+  // The direct-add chip picker only offers teams not already awaiting a decision.
+  const pickable = allTeams.filter((t) => !lifecycleIds.has(t.id));
 
   const [selected, setSelected] = useState<string[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
@@ -54,6 +62,8 @@ export default function TournamentTeamsScreen() {
   const [short, setShort] = useState('');
   const [color, setColor] = useState(PALETTE[0]);
   const [adding, setAdding] = useState(false);
+  // How newly-picked teams enter: directly confirmed, or invited (captain accepts).
+  const [entryMode, setEntryMode] = useState<'confirmed' | 'invited'>('confirmed');
   // Optional team manager/captain captured while adding — attributes the team to
   // a real person and invites them to claim it & manage the squad.
   const [mgrOpen, setMgrOpen] = useState(false);
@@ -138,13 +148,41 @@ export default function TournamentTeamsScreen() {
     } finally { setBusy(false); }
   }
 
+  // Organizer acts on a request/invite. `confirm` → the team is in; otherwise the
+  // entry is dropped. Either way the team's captain is notified of the outcome.
+  async function decide(entry: TournamentEntry, confirm: boolean) {
+    setError(null); setBusy(true);
+    try {
+      if (confirm) await setTournamentTeamStatus(params.tournamentId, entry.team.id, 'confirmed');
+      else await removeTournamentTeam(params.tournamentId, entry.team.id);
+      const { captainId } = await getTeamLeaders(entry.team.id);
+      if (captainId) {
+        const where = tournament?.name ?? 'the tournament';
+        void notify(confirm
+          ? { title: `${entry.team.name} is in! 🎉`, body: `Your entry to ${where} was confirmed.`, playerId: captainId }
+          : { title: `${entry.team.name} — entry update`, body: `Your entry to ${where} wasn’t accepted.`, playerId: captainId });
+      }
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the entry');
+    } finally { setBusy(false); }
+  }
+
   async function save() {
     setError(null); setBusy(true);
     try {
       const added = selected.filter((id) => !original.includes(id));
       const removed = original.filter((id) => !selected.includes(id));
-      if (added.length) await addTournamentTeams(params.tournamentId, added);
+      if (added.length) await addTournamentTeams(params.tournamentId, added, entryMode);
       for (const id of removed) await removeTournamentTeam(params.tournamentId, id);
+      // Invited teams: let each captain know they've been invited to accept.
+      if (entryMode === 'invited') {
+        for (const id of added) {
+          const { captainId } = await getTeamLeaders(id);
+          const team = allTeams.find((t) => t.id === id);
+          if (captainId) void notify({ title: `📨 You're invited — ${tournament?.name ?? 'a tournament'}`, body: `${team?.name ?? 'Your team'} was invited to join. Open the tournament to accept.`, playerId: captainId });
+        }
+      }
       setDirty(false);
       setTick((n) => n + 1);
       nav.goBack();
@@ -171,11 +209,43 @@ export default function TournamentTeamsScreen() {
           </>
         )}
 
+        {/* Lifecycle gate: requests to join (approve/decline) and pending invites
+            (confirm/cancel). Only confirmed teams count toward the format. */}
+        {(pending.length > 0 || invited.length > 0) && (
+          <Card style={{ gap: theme.spacing(3) }}>
+            {pending.length > 0 && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>Requests to join · {pending.length}</Text>
+                {pending.map((e) => (
+                  <View key={e.team.id} style={st.entryRow}>
+                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                    <Button label="Accept" onPress={() => decide(e, true)} disabled={busy} />
+                    <Button label="Decline" variant="ghost" onPress={() => decide(e, false)} disabled={busy} />
+                  </View>
+                ))}
+              </View>
+            )}
+            {invited.length > 0 && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>Invited · {invited.length}</Text>
+                <Text style={textStyles.muted}>Awaiting the captain’s acceptance — or confirm them yourself.</Text>
+                {invited.map((e) => (
+                  <View key={e.team.id} style={st.entryRow}>
+                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                    <Button label="Confirm" onPress={() => decide(e, true)} disabled={busy} />
+                    <Button label="Cancel" variant="ghost" onPress={() => decide(e, false)} disabled={busy} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        )}
+
         <View style={st.rowBetween}>
           <Text style={textStyles.h3}>{selected.length} team{selected.length === 1 ? '' : 's'} in</Text>
-          {allTeams.length > 0 && (
-            <Text style={st.link} onPress={() => { setDirty(true); setSelected(selected.length === allTeams.length ? [] : allTeams.map((t) => t.id)); }}>
-              {selected.length === allTeams.length ? 'Clear all' : 'Select all'}
+          {pickable.length > 0 && (
+            <Text style={st.link} onPress={() => { setDirty(true); setSelected(selected.length === pickable.length ? [] : pickable.map((t) => t.id)); }}>
+              {selected.length === pickable.length ? 'Clear all' : 'Select all'}
             </Text>
           )}
         </View>
@@ -186,11 +256,18 @@ export default function TournamentTeamsScreen() {
           </Text>
         )}
 
-        {allTeams.length === 0 ? (
-          <Text style={textStyles.muted}>No {sportName} teams yet. Add one below.</Text>
+        {pickable.length > 0 && (
+          <View style={st.chips}>
+            <SelectChip label="Add directly" active={entryMode === 'confirmed'} onPress={() => setEntryMode('confirmed')} />
+            <SelectChip label="Invite (captain accepts)" active={entryMode === 'invited'} onPress={() => setEntryMode('invited')} />
+          </View>
+        )}
+
+        {pickable.length === 0 ? (
+          <Text style={textStyles.muted}>No {sportName} teams to add yet. Add one below.</Text>
         ) : (
           <View style={st.chips}>
-            {allTeams.map((t) => (
+            {pickable.map((t) => (
               <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggle(t.id)} />
             ))}
           </View>
@@ -254,7 +331,7 @@ export default function TournamentTeamsScreen() {
 
         <FormError message={error} />
         <Button
-          label={busy ? 'Saving…' : dirty ? `Save ${selected.length} participant${selected.length === 1 ? '' : 's'}` : 'Done'}
+          label={busy ? 'Saving…' : !dirty ? 'Done' : entryMode === 'invited' ? 'Send invites & save' : `Save ${selected.length} participant${selected.length === 1 ? '' : 's'}`}
           onPress={save}
           disabled={busy}
         />
@@ -269,6 +346,7 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },

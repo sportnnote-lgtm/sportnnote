@@ -281,6 +281,16 @@ export interface Team {
   adhoc?: boolean;
 }
 
+/** A team's participation in a tournament is a lifecycle, not a boolean:
+ *  'confirmed' = in (only these count toward format/fixtures); 'invited' = the
+ *  organizer invited the team, awaiting the captain's acceptance; 'pending' =
+ *  the captain requested to join, awaiting organizer approval. See migration 0007. */
+export type TournamentEntryStatus = 'confirmed' | 'invited' | 'pending';
+export interface TournamentEntry {
+  team: Team;
+  status: TournamentEntryStatus;
+}
+
 /** Who leads a team — responsible for setting the matchday squad. */
 /** A player's objection that their name/identity is being used in a match they
  *  aren't part of. While open, the disputed identity is masked ("X") and the
