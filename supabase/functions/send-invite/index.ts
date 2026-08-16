@@ -26,6 +26,8 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const FROM = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'Sportfolio <onboarding@resend.dev>';
+// Replies to an invite should reach the Sportfolio inbox, not the no-reply sender.
+const REPLY_TO = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
 // A single, reasonable email address — we email arbitrary recipients, so guard it.
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
@@ -36,7 +38,7 @@ async function sendEmail(to: string, subject: string, text: string): Promise<boo
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, text }),
+      body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, text }),
     });
     return res.ok;
   } catch (e) {

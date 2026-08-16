@@ -1218,7 +1218,7 @@ export type PlayerPatch = Partial<
 
 /** Where verification documents and support cases are routed for the support team.
  *  Kept in sync with SUPPORT_EMAIL in supabase/functions/support-escalate. */
-export const SUPPORT_EMAIL = 'hrudhaypvtemp@gmail.com';
+export const SUPPORT_EMAIL = 'sportnnote@gmail.com';
 
 /** Details of an escalated support case (see data/supportKB.ts SupportCaseContext). */
 export interface SupportCaseInput {

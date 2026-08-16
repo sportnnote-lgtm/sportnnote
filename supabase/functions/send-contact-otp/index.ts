@@ -28,6 +28,7 @@ const CORS = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const FROM = Deno.env.get('OTP_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'Sportfolio <onboarding@resend.dev>';
+const REPLY_TO = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
 const URL = Deno.env.get('SUPABASE_URL')!;
 
 async function sha256(s: string): Promise<string> {
@@ -45,6 +46,7 @@ async function sendEmail(to: string, code: string): Promise<{ ok: boolean; reaso
       body: JSON.stringify({
         from: FROM,
         to: [to],
+        reply_to: REPLY_TO,
         subject: `Your Sportfolio verification code: ${code}`,
         text: `Your Sportfolio verification code is ${code}. It expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email.`,
       }),
