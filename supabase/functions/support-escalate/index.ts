@@ -18,7 +18,7 @@
  * Deploy:  supabase functions deploy support-escalate
  * Secrets: supabase secrets set RESEND_API_KEY=re_...
  *          supabase secrets set SUPPORT_EMAIL=sportnnote@gmail.com
- *          supabase secrets set SUPPORT_FROM="Sportfolio <onboarding@resend.dev>"
+ *          supabase secrets set SUPPORT_FROM="SportnNote <onboarding@resend.dev>"
  *   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -34,7 +34,7 @@ const json = (body: unknown, status = 200) =>
 // Keep in sync with SUPPORT_EMAIL in src/data/repos.ts (the client's mailto fallback).
 const SUPPORT_EMAIL = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
 // Resend requires a verified sender; its shared sandbox address works for testing.
-const SUPPORT_FROM = Deno.env.get('SUPPORT_FROM') ?? 'Sportfolio Support <onboarding@resend.dev>';
+const SUPPORT_FROM = Deno.env.get('SUPPORT_FROM') ?? 'SportnNote Support <onboarding@resend.dev>';
 
 async function sendEmail(subject: string, text: string): Promise<boolean> {
   const key = Deno.env.get('RESEND_API_KEY');
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     .filter(Boolean)
     .join('\n');
   const delivered = await sendEmail(
-    `Sportfolio support: ${question.slice(0, 60)}${question.length > 60 ? '…' : ''}`,
+    `SportnNote support: ${question.slice(0, 60)}${question.length > 60 ? '…' : ''}`,
     emailBody,
   );
 

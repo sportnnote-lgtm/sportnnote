@@ -542,7 +542,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     const addToCalendar = () => {
       if (!meta.startsAt) return;
       void exportToCalendar(`${homeName}-vs-${awayName}`, [{
-        uid: `match-${matchId ?? `${homeName}-${awayName}`}@sportfolio`,
+        uid: `match-${matchId ?? `${homeName}-${awayName}`}@sportnnote`,
         title: `${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`,
         start: meta.startsAt,
         location: meta.venueName,

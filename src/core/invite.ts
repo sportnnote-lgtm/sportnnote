@@ -6,19 +6,19 @@ import { Linking } from 'react-native';
 import { supabase } from './supabase';
 
 /** Where invites point people to install + register. The deep-link
- *  `https://sportfolio.app/join/:token` (and `sportfolio://join/:token`) resolves
+ *  `https://sportnnote.app/join/:token` (and `sportnnote://join/:token`) resolves
  *  to the Join screen — see RootNavigator linking config. */
-export const APP_INSTALL_URL = 'https://sportfolio.app';
+export const APP_INSTALL_URL = 'https://sportnnote.app';
 export const joinLink = (id: string) => `${APP_INSTALL_URL}/join/${id}`;
 
 /** The invite message, shared across every channel (email / WhatsApp / SMS). */
 export function inviteMessage(opts: { name: string; inviterName: string; link: string; context?: string }): string {
   const who = opts.name.trim() || 'there';
   const what = opts.context ? ` ${opts.context}` : '';
-  return `Hi ${who}! ${opts.inviterName} invited you to co-host${what} on Sportfolio 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
+  return `Hi ${who}! ${opts.inviterName} invited you to co-host${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
 }
 
-export const inviteSubject = (inviterName: string) => `${inviterName} invited you to co-host on Sportfolio`;
+export const inviteSubject = (inviterName: string) => `${inviterName} invited you to co-host on SportnNote`;
 
 /**
  * Send an invite email. Tries the `send-invite` edge function (a real, sent

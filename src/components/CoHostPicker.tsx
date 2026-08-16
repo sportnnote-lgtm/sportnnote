@@ -1,5 +1,5 @@
 /** Add co-hosts to an event: look someone up by name / phone / email and add
- *  them, or — if they're not on Sportfolio yet — invite them to install &
+ *  them, or — if they're not on SportnNote yet — invite them to install &
  *  register by email, WhatsApp or SMS (they're added as a pending co-host who
  *  becomes active once they register). Used at tournament creation; reusable
  *  anywhere hosts are managed. */
@@ -138,14 +138,14 @@ export function CoHostPicker({
           ))}
 
           {query.trim().length >= 2 && !searching && results.length === 0 && !invOpen && (
-            <Text style={st.muted}>No one on Sportfolio matches “{query.trim()}”.</Text>
+            <Text style={st.muted}>No one on SportnNote matches “{query.trim()}”.</Text>
           )}
 
           {!invOpen ? (
             <Text style={st.link} onPress={openInvite}>➕ Invite someone new to the app</Text>
           ) : (
             <View style={{ gap: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(2) }}>
-              <Text style={textStyles.h3}>Invite to Sportfolio</Text>
+              <Text style={textStyles.h3}>Invite to SportnNote</Text>
               <Text style={textStyles.muted}>They’ll get a link to install the app &amp; register, and join as a co-host.</Text>
               <TextField label="Name" value={iName} onChange={setIName} placeholder="Their name" />
               <View style={st.row}>

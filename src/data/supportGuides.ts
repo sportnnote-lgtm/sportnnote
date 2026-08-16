@@ -17,7 +17,7 @@
  */
 
 export const GUIDES: Record<string, string> = {
-  'what-is-sportfolio': `Sportfolio lets anyone score a match live and share it — like CricHeroes, but for **every sport** (football, cricket, basketball, kabaddi, tennis, badminton, volleyball and more).
+  'what-is-sportfolio': `SportnNote lets anyone score a match live and share it — like CricHeroes, but for **every sport** (football, cricket, basketball, kabaddi, tennis, badminton, volleyball and more).
 
 ## What you can do
 - **Score a match** ball-by-ball or point-by-point, live, even offline.
@@ -49,7 +49,7 @@ Your taps are saved on the device instantly, so you never lose scoring even if t
 
 Friendlies show up in your matches and count toward players' **friendly** stats, kept separate from official tournament stats — so a player's tournament record stays clean.`,
 
-  'offline-scoring': `Matches happen on grounds with patchy signal. Sportfolio is built for that.
+  'offline-scoring': `Matches happen on grounds with patchy signal. SportnNote is built for that.
 
 ## How it works
 - Every tap is saved **on the device immediately** — you can score a whole match in airplane mode.
@@ -71,7 +71,7 @@ In demo mode there's no cloud sync — everything stays on the device, which is 
 
 For some sports you can also edit a recorded moment in place from the match timeline.`,
 
-  'set-lineup-squad': `Before a match, tell Sportfolio who's actually playing so stats attach to the right people.
+  'set-lineup-squad': `Before a match, tell SportnNote who's actually playing so stats attach to the right people.
 
 ## Pick the lineup
 1. Open the match and go to the **Squad / Lineup** step (shown before you start, and reachable from the match menu).
@@ -141,10 +141,10 @@ If a table looks wrong, check you're viewing the right tournament and that the f
 ## Add a player
 1. Open the team (from a match, a tournament, or **Discover → People**).
 2. Tap **Manage squad** / **+ Add / invite a player**.
-3. Search for an existing Sportfolio player and add them, or create a new one with just a name.
+3. Search for an existing SportnNote player and add them, or create a new one with just a name.
 4. Set each player's **jersey number** so they're easy to pick while scoring.
 
-A player is identified by their **phone number**, so the same number is always the same person across teams and tournaments. If they're not on Sportfolio yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
+A player is identified by their **phone number**, so the same number is always the same person across teams and tournaments. If they're not on SportnNote yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
 
   'join-team-code': `If someone runs a team and wants you on the roster, they can share an **invite code**.
 
@@ -173,7 +173,7 @@ Manage everyone you follow from **Settings → Following**. Tap **✓ Following*
 
 Reminders cover matches you're **playing in** and matches for **anyone you follow**. Want quiet? Clear every lead time and reminders switch **off**.
 
-Reminders rely on notifications being allowed for Sportfolio on your device. If you're not getting them, check your phone's notification settings for the app.`,
+Reminders rely on notifications being allowed for SportnNote on your device. If you're not getting them, check your phone's notification settings for the app.`,
 
   'change-timezone': `All match times display in your chosen time zone (default India / IST), so kickoffs and reminders line up with your clock.
 

@@ -125,7 +125,7 @@ export default function SettingsScreen() {
           <Row icon="💬" label="Help & support" value="Guides · contact us" onPress={() => nav.navigate('Support')} />
         </Group>
 
-        <Text style={st.version}>Sportfolio v{version}{demo ? ' · demo mode' : ''}</Text>
+        <Text style={st.version}>SportnNote v{version}{demo ? ' · demo mode' : ''}</Text>
 
         {!demo && (
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sign out" activeOpacity={0.7} onPress={signOut} style={st.signOut}>

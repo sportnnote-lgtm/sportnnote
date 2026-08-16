@@ -180,23 +180,23 @@ export default function CalendarScreen() {
 
   // Build calendar (.ics) events for export.
   const matchEvent = (m: Match): CalEvent => ({
-    uid: `m-${m.id}@sportfolio`,
+    uid: `m-${m.id}@sportnnote`,
     title: `${getSport(m.sport).icon} ${m.homeTeam.name} vs ${m.awayTeam.name}`,
     start: m.startsAt,
     location: m.venueName,
     description: `${getSport(m.sport).name} match`,
   });
   const tournamentEvent = (t: Tournament): CalEvent => ({
-    uid: `t-${t.id}@sportfolio`,
+    uid: `t-${t.id}@sportnnote`,
     title: `🏆 ${t.name}`,
     start: t.startDate,
     end: t.endDate,
     description: `${t.sports.map((s) => getSport(s).name).join(', ')} · hosted by ${t.hostName}`,
   });
   const exportDay = () =>
-    void exportToCalendar(`sportfolio-${selected}`, [...selTournaments.map(tournamentEvent), ...selMatches.map(matchEvent)]);
+    void exportToCalendar(`sportnnote-${selected}`, [...selTournaments.map(tournamentEvent), ...selMatches.map(matchEvent)]);
   const exportAgenda = () =>
-    void exportToCalendar('sportfolio-upcoming', agendaDays.flatMap(([, it]) => [...it.starts.map(tournamentEvent), ...it.matches.map(matchEvent)]));
+    void exportToCalendar('sportnnote-upcoming', agendaDays.flatMap(([, it]) => [...it.starts.map(tournamentEvent), ...it.matches.map(matchEvent)]));
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>

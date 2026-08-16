@@ -1,5 +1,5 @@
 /**
- * Phone number = the primary identity key across Sportfolio.
+ * Phone number = the primary identity key across SportnNote.
  *
  * Platform baseline: one number ⇒ one person. A profile is recognised by its
  * contact number first; the name (and everything else) is pulled from that

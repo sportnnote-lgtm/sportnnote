@@ -2,7 +2,7 @@
  * Edge Function: send-invite
  * ------------------------------------------------------------------------
  * Emails an app invite to a specific person (e.g. a co-host who isn't on
- * Sportfolio yet). The client (`src/core/invite.ts` → sendInviteEmail) posts
+ * SportnNote yet). The client (`src/core/invite.ts` → sendInviteEmail) posts
  * the recipient + message; this sends it via Resend. If RESEND_API_KEY isn't
  * set (or the send fails), `delivered:false` is returned and the client falls
  * back to opening a pre-filled mail composer (mailto) itself.
@@ -25,8 +25,8 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const FROM = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'Sportfolio <onboarding@resend.dev>';
-// Replies to an invite should reach the Sportfolio inbox, not the no-reply sender.
+const FROM = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'SportnNote <onboarding@resend.dev>';
+// Replies to an invite should reach the SportnNote inbox, not the no-reply sender.
 const REPLY_TO = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
 // A single, reasonable email address — we email arbitrary recipients, so guard it.
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid JSON' }, 400);
   }
   const to = typeof body.to === 'string' ? body.to.trim() : '';
-  const subject = typeof body.subject === 'string' ? body.subject.trim() : 'You’re invited to Sportfolio';
+  const subject = typeof body.subject === 'string' ? body.subject.trim() : 'You’re invited to SportnNote';
   const text = typeof body.text === 'string' ? body.text : '';
   if (!isEmail(to)) return json({ error: 'a valid recipient email is required' }, 400);
   if (!text) return json({ error: 'text is required' }, 400);

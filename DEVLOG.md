@@ -1,6 +1,6 @@
-# Sportfolio — Development Log
+# SportnNote — Development Log
 
-A running record of the product + engineering work done on Sportfolio (the Expo/React
+A running record of the product + engineering work done on SportnNote (the Expo/React
 Native multi-sport scoring app — "CricHeroes for every sport", school/college sports
 meets in India). Kept as a reference for what was built, why, where, and how it was
 verified. **Maintained continuously — new work is appended here as it ships.**
@@ -8,6 +8,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 > Convention: each entry notes the change, the key files, and its verification status.
 > Dates are absolute. "Demo mode" = the in-memory/AsyncStorage build (no Supabase),
 > which is how the app runs locally.
+> **Note:** the product was renamed **Sportfolio → SportnNote** on 2026-08-10 (see that
+> day's entry). Earlier entries below say "Sportfolio" — that was the name at the time.
+
+---
+
+### 2026-08-10 — Rebrand: Sportfolio → SportnNote · SHIPPED + VERIFIED
+
+"Sportfolio" was taken (existing company + app), so the product is now **SportnNote**,
+tagline **"Play a Sport, Make a Note."** (dedicated inbox `sportnnote@gmail.com`).
+
+- **Wordmark** is two-tone `Sport`(text)·`nNote`(accent) on the Auth + Home screens; both
+  taglines now read "Play a Sport, Make a Note." Verified rendering on the live Auth screen.
+- **User-facing text** everywhere (screens, help centre/KB, invite + verification + support
+  email copy, iOS permission strings) → SportnNote.
+- **Identifiers:** `app.json` name `SportnNote` / slug `sportnnote` / scheme `sportnnote`;
+  `package.json` name; deep-link prefixes `sportnnote://` + `https://sportnnote.app`;
+  calendar `.ics` PRODID/UIDs/filenames. Email sender name → `SportnNote <…>` (secret
+  updated; support-escalate/send-invite/send-contact-otp redeployed).
+- **Left intentionally unchanged** (internal, invisible, would wipe state or churn): the
+  `__sportfolio*` debug hooks, localStorage keys (`sportfolio.demo.v33`, `.timeZone`,
+  `.outbox`, `.reminderPrefs`), and the KB entry id `what-is-sportfolio`.
+- **Domain:** the deep-link + email sender domain is now **`sportnnote.app`** (to be
+  registered/verified — see [[sportfolio-repo]] email notes). 135 tests, typecheck clean.
 
 ---
 

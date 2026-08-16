@@ -46,11 +46,11 @@ export const CATEGORY_ICON: Record<SupportCategory, string> = {
 export const ARTICLES: Article[] = [
   {
     id: 'what-is-sportfolio',
-    title: 'What is Sportfolio?',
+    title: 'What is SportnNote?',
     category: 'Getting started',
     summary: 'A live-scoring app for every sport — score a match, run a tournament, follow players.',
     keywords: ['about', 'overview', 'cricheroes', 'purpose'],
-    body: `Sportfolio lets anyone score a match live and share it — like CricHeroes, but for every sport (football, cricket, basketball, kabaddi, tennis, badminton, volleyball and more).
+    body: `SportnNote lets anyone score a match live and share it — like CricHeroes, but for every sport (football, cricket, basketball, kabaddi, tennis, badminton, volleyball and more).
 
 You can:
 - Score a match ball-by-ball or point-by-point, live, even offline.
@@ -198,7 +198,7 @@ If a table looks wrong, check you're viewing the right tournament and that the f
     body: `You can add a player from a team's squad page, or directly on a match via "Add / invite a player".
 
 - A player is identified by their phone number, so the same number is always the same person across teams and tournaments.
-- If they're not on Sportfolio yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
+- If they're not on SportnNote yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
   },
   {
     id: 'join-team-code',
@@ -376,7 +376,7 @@ export interface SupportCaseContext {
  * so it can be unit-tested and reused.
  */
 export function buildSupportMailto(to: string, ctx: SupportCaseContext): string {
-  const subject = `Sportfolio support: ${ctx.question.slice(0, 60)}${ctx.question.length > 60 ? '…' : ''}`;
+  const subject = `SportnNote support: ${ctx.question.slice(0, 60)}${ctx.question.length > 60 ? '…' : ''}`;
   const lines = [
     ctx.question,
     '',

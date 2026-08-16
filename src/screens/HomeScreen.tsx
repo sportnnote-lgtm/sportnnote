@@ -87,8 +87,8 @@ export default function HomeScreen() {
         {/* Header: wordmark · profile · notifications */}
         <View style={st.header}>
           <View style={st.brand}>
-            <Text style={st.wordmark}>Sport<Text style={st.wordmarkAccent}>folio</Text></Text>
-            <Text style={textStyles.muted}>Your sporting world, live.</Text>
+            <Text style={st.wordmark}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
+            <Text style={textStyles.muted}>Play a Sport, Make a Note.</Text>
           </View>
           <VoiceNav matches={matches} onOpenMatch={openScorer} />
           {canScore && (

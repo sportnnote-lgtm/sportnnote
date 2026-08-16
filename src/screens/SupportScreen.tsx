@@ -87,7 +87,7 @@ export default function SupportScreen() {
 
   const [sent, setSent] = useState(false);
   const escalate = async () => {
-    const question = trimmed || 'I need help with Sportfolio';
+    const question = trimmed || 'I need help with SportnNote';
     const triedSummary = aiAnswer ? 'AI assistant (unresolved)' : results.length ? results.map((r) => r.article.title).slice(0, 3).join('; ') : undefined;
     // Live mode records the case + emails support server-side; if that isn't
     // wired (demo, or email not configured yet) fall back to a pre-filled email.

@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "sportfolio",
-    "slug": "sportfolio",
+    "name": "SportnNote",
+    "slug": "sportnnote",
     "version": "1.0.0",
-    "scheme": "sportfolio",
+    "scheme": "sportnnote",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Sportfolio uses the microphone for hands-free voice scoring and navigation.",
-        "NSSpeechRecognitionUsageDescription": "Sportfolio uses speech recognition to let you score and navigate by voice."
+        "NSMicrophoneUsageDescription": "SportnNote uses the microphone for hands-free voice scoring and navigation.",
+        "NSSpeechRecognitionUsageDescription": "SportnNote uses speech recognition to let you score and navigate by voice."
       }
     },
     "android": {

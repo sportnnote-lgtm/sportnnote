@@ -54,7 +54,7 @@ export function buildICS(events: CalEvent[]): string {
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Sportfolio//Calendar//EN',
+    'PRODID:-//SportnNote//Calendar//EN',
     'CALSCALE:GREGORIAN',
     ...events.map((e) => vevent(e, dtstamp)),
     'END:VCALENDAR',

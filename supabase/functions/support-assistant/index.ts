@@ -32,7 +32,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const SYSTEM = [
-  'You are the in-app support assistant for Sportfolio, a live-scoring app for many sports',
+  'You are the in-app support assistant for SportnNote, a live-scoring app for many sports',
   '(organizers/scorers run matches and tournaments). Answer the user\'s question using ONLY',
   'the provided Help context. Be concise, friendly, and task-shaped (tell them what to tap/do).',
   'If the context does not contain the answer, do NOT guess: set resolved to false and say a',

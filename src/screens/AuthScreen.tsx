@@ -67,7 +67,7 @@ export default function AuthScreen() {
   // Password sign-up / sign-in — captures identity + guardian consent on sign-up.
   function submitPassword() {
     if (mode === 'up') {
-      if (!isValidPhone(mobile)) return setError('Enter your mobile number — it’s your Sportfolio identity.');
+      if (!isValidPhone(mobile)) return setError('Enter your mobile number — it’s your SportnNote identity.');
       if (!dob.trim() || age === undefined) return setError('Enter a valid date of birth (YYYY-MM-DD).');
       if (minor) {
         if (!gName.trim()) return setError('A parent/guardian name is required to create an under-18 account.');
@@ -122,8 +122,8 @@ export default function AuthScreen() {
     <SafeAreaView style={st.safe}>
       <ScrollView contentContainerStyle={st.content}>
         <View style={st.brand}>
-          <Text style={st.logo}>🏅 Sport<Text style={st.logoAccent}>folio</Text></Text>
-          <Text style={[textStyles.muted, st.tagline]}>Track every sport, every match, every player.</Text>
+          <Text style={st.logo}>🏅 Sport<Text style={st.logoAccent}>nNote</Text></Text>
+          <Text style={[textStyles.muted, st.tagline]}>Play a Sport, Make a Note.</Text>
         </View>
 
         <Card style={st.formCard}>
@@ -173,7 +173,7 @@ export default function AuthScreen() {
               >
                 <Text style={[st.checkbox, consent && st.checkboxOn]}>{consent ? '☑' : '☐'}</Text>
                 <Text style={st.consentText}>
-                  I am {gName.trim() ? `${gName.trim()}’s ` : 'the '}parent/guardian and I consent to them creating and using a Sportfolio account.
+                  I am {gName.trim() ? `${gName.trim()}’s ` : 'the '}parent/guardian and I consent to them creating and using a SportnNote account.
                 </Text>
               </TouchableOpacity>
             </View>

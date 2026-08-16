@@ -1,4 +1,4 @@
-# Sportfolio
+# SportnNote
 
 A multi-sport tracking & scoring app — "CricHeroes for every sport." First
 target: a school/college **annual sports meet** (schedules, teams, live scores,

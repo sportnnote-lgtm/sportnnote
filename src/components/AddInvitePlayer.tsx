@@ -58,10 +58,10 @@ export function AddInvitePlayer({
     try {
       const res = await invitePlayer({ teamId, teamName, name: (matched?.fullName ?? name).trim(), phone, sport });
       if (res.status === 'existing') {
-        setNote(`✓ Added ${res.player.fullName} — already on Sportfolio.`);
+        setNote(`✓ Added ${res.player.fullName} — already on SportnNote.`);
       } else {
-        const link = `https://sportfolio.app/join/${res.player.id}`;
-        openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on Sportfolio 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}`);
+        const link = `https://sportnnote.app/join/${res.player.id}`;
+        openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}`);
         setNote(`⏳ Invited ${res.player.fullName} — WhatsApp opened. They're confirmed once they register.`);
       }
       setPhone(''); setName(''); setMatched(null);
@@ -101,7 +101,7 @@ export function AddInvitePlayer({
           ) : looking ? (
             <Text style={textStyles.muted}>Checking this number…</Text>
           ) : matched ? (
-            <Text style={st.matchedNote}>✓ {matched.fullName} — already on Sportfolio. Adding them to {teamName}.</Text>
+            <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote. Adding them to {teamName}.</Text>
           ) : (
             <>
               <TextField label="Player name" value={name} onChange={setName} placeholder="e.g. Rahul Sharma" />

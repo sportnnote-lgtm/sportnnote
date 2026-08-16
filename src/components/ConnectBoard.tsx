@@ -48,7 +48,7 @@ export function ConnectBoard() {
 
   const reachOut = (l: Listing) => {
     const who = l.teamName ?? l.authorName;
-    openWhatsApp(l.contactPhone, `Hi ${who}, I saw your Sportfolio post (${kindMeta(l.kind).short}) and I'm interested.`);
+    openWhatsApp(l.contactPhone, `Hi ${who}, I saw your SportnNote post (${kindMeta(l.kind).short}) and I'm interested.`);
   };
 
   return (
