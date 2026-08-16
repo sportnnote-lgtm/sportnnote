@@ -23,6 +23,8 @@ export function CoHostPicker({
   inviterName,
   excludeIds = [],
   context,
+  label = 'Co-hosts (optional)',
+  hideList = false,
 }: {
   value: CoHost[];
   onChange: (list: CoHost[]) => void;
@@ -32,6 +34,11 @@ export function CoHostPicker({
   excludeIds?: string[];
   /** what they're being invited to co-host, e.g. the tournament name */
   context?: string;
+  /** header label (e.g. "Add or invite a host" when reused post-creation) */
+  label?: string;
+  /** hide the selected-chips list — when an outer component already shows the
+   *  hosts (e.g. the tournament page's HostsCard) and this is add/invite only */
+  hideList?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -108,11 +115,11 @@ export function CoHostPicker({
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <View style={st.head}>
-        <FieldLabel>Co-hosts (optional)</FieldLabel>
+        <FieldLabel>{label}</FieldLabel>
         <Text style={st.link} onPress={() => { setOpen((v) => !v); setNote(null); }}>{open ? 'Done' : '+ Add co-host'}</Text>
       </View>
 
-      {value.length > 0 && (
+      {!hideList && value.length > 0 && (
         <View style={st.chips}>
           {value.map((c) => (
             <View key={c.id} style={st.hostChip}>

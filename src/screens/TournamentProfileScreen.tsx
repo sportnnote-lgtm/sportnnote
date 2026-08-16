@@ -13,6 +13,7 @@ import { LeagueTable } from '../components/LeagueTable';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { HostsCard } from '../components/HostsCard';
+import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
@@ -247,14 +248,27 @@ export default function TournamentProfileScreen() {
             </Card>
           </TouchableOpacity>
         ) : (
-          <HostsCard
-            hostIds={hostIds}
-            nameOf={(id) => playerName(id)}
-            candidates={allPlayers.map((p) => ({ id: p.id, name: p.fullName }))}
-            canManage={canManageHosts}
-            onChange={saveHosts}
-            subtitle="Everyone who runs this tournament. Any host can manage matches and gets reminders to assign scorers."
-          />
+          <View style={{ gap: theme.spacing(3) }}>
+            <HostsCard
+              hostIds={hostIds}
+              nameOf={(id) => playerName(id)}
+              candidates={[]}
+              canManage={canManageHosts}
+              onChange={saveHosts}
+              subtitle="Everyone who runs this tournament. Any host can manage matches and gets reminders to assign scorers."
+            />
+            {canManageHosts && (
+              <CoHostPicker
+                value={hostIds.map((id) => ({ id, name: playerName(id) ?? 'Host' }))}
+                onChange={(list: CoHost[]) => saveHosts(list.map((c) => c.id))}
+                inviterName={playerName(myId ?? '') ?? profile?.fullName ?? 'A host'}
+                excludeIds={myId ? [myId] : []}
+                context={tournament.name}
+                label="Add or invite a host"
+                hideList
+              />
+            )}
+          </View>
         )}
 
         {canManageHosts && (

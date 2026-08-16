@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-16 — Co-hosts on the tournament page · SHIPPED
+
+The add/invite-a-host lookup previously only existed at tournament creation. Now the
+same `CoHostPicker` (search existing users by name/phone/email, or invite someone new
+by email/WhatsApp/SMS) is available on the tournament page itself, so hosts can be
+added *after* a tournament exists.
+
+- `CoHostPicker` gained two props: `label` (header text) and `hideList` (suppress its
+  own selected-chips list when an outer component already renders the hosts).
+- `TournamentProfileScreen`: the individual-host section now shows `HostsCard`
+  (display + remove; `candidates={[]}` disables its old candidate-list add) with a
+  `CoHostPicker` beneath it in `hideList` mode. Adds/invites persist straight to the
+  tournament's `host_ids` via `setTournamentHosts`; invited pending players become
+  active hosts once they register. Gated on `canManageHosts`.
+- Verified: `tsc` clean, bundle compiles, app boots with no console errors. The
+  tournament page is behind login (user drives the end-to-end check).
+
+---
+
 ### 2026-08-10 — Rebrand: Sportfolio → SportnNote · SHIPPED + VERIFIED
 
 "Sportfolio" was taken (existing company + app), so the product is now **SportnNote**,
