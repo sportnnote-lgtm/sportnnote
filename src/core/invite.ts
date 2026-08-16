@@ -11,14 +11,20 @@ import { supabase } from './supabase';
 export const APP_INSTALL_URL = 'https://sportnnote.in';
 export const joinLink = (id: string) => `${APP_INSTALL_URL}/join/${id}`;
 
+/** What someone is being invited to do — co-host an event (default) or manage a
+ *  team's squad. Keeps the co-host wording untouched for existing callers. */
+export type InviteRole = 'co-host' | 'manage';
+const inviteVerb = (role?: InviteRole) => (role === 'manage' ? 'manage' : 'co-host');
+
 /** The invite message, shared across every channel (email / WhatsApp / SMS). */
-export function inviteMessage(opts: { name: string; inviterName: string; link: string; context?: string }): string {
+export function inviteMessage(opts: { name: string; inviterName: string; link: string; context?: string; role?: InviteRole }): string {
   const who = opts.name.trim() || 'there';
   const what = opts.context ? ` ${opts.context}` : '';
-  return `Hi ${who}! ${opts.inviterName} invited you to co-host${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
+  return `Hi ${who}! ${opts.inviterName} invited you to ${inviteVerb(opts.role)}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
 }
 
-export const inviteSubject = (inviterName: string) => `${inviterName} invited you to co-host on SportnNote`;
+export const inviteSubject = (inviterName: string, role?: InviteRole) =>
+  `${inviterName} invited you to ${role === 'manage' ? 'manage a team' : 'co-host'} on SportnNote`;
 
 /**
  * Send an invite email. Tries the `send-invite` edge function (a real, sent
@@ -26,8 +32,8 @@ export const inviteSubject = (inviterName: string) => `${inviterName} invited yo
  * opening the device mail composer pre-filled (mailto). Returns true only when a
  * server email was actually sent.
  */
-export async function sendInviteEmail(to: string, opts: { name: string; inviterName: string; link: string; context?: string }): Promise<boolean> {
-  const subject = inviteSubject(opts.inviterName);
+export async function sendInviteEmail(to: string, opts: { name: string; inviterName: string; link: string; context?: string; role?: InviteRole }): Promise<boolean> {
+  const subject = inviteSubject(opts.inviterName, opts.role);
   const text = inviteMessage(opts);
   if (supabase) {
     try {

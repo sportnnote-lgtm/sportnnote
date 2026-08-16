@@ -3,7 +3,13 @@
  *  split into groups or size a bracket, and until now a tournament had no team
  *  list (participation was only implied by its matches). Pick from the sport's
  *  teams (or add a new one), then Save. The count drives the format planner and
- *  the auto-fixtures team picker defaults to whatever's registered here. */
+ *  the auto-fixtures team picker defaults to whatever's registered here.
+ *
+ *  Adding a team the real-event way: most teams aren't on the app yet, so the
+ *  organizer enters them — and a team is a real entity, not an orphan shell. A
+ *  new team is attributed to the hosting community, and you can capture a
+ *  manager/captain contact who gets invited to claim the team & manage its
+ *  squad (a team-claim invite → join link, sent by email / WhatsApp / SMS). */
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,8 +19,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
+import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentTeams, useLeagueData } from '../data/hooks';
-import { addTournamentTeams, removeTournamentTeam, createTeam } from '../data/repos';
+import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite } from '../data/repos';
+import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
+import { openWhatsApp, openSms } from '../core/connect';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -24,8 +33,10 @@ const PALETTE = ['#FF5C5C', '#4DA3FF', '#3DDC97', '#FFB454', '#B98AFF', '#FF8AC4
 export default function TournamentTeamsScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'TournamentTeams'>>();
+  const { profile } = useAuth();
   const tournament = useTournamentById(params.tournamentId);
   const tourSports = tournament?.sports ?? [];
+  const inviterName = profile?.fullName ?? 'The organizer';
 
   const [sport, setSport] = useState<SportId>(params.sport ?? tourSports[0] ?? 'football');
   const [tick, setTick] = useState(0); // bump to refetch teams / registrations after a write
@@ -43,6 +54,14 @@ export default function TournamentTeamsScreen() {
   const [short, setShort] = useState('');
   const [color, setColor] = useState(PALETTE[0]);
   const [adding, setAdding] = useState(false);
+  // Optional team manager/captain captured while adding — attributes the team to
+  // a real person and invites them to claim it & manage the squad.
+  const [mgrOpen, setMgrOpen] = useState(false);
+  const [mgrName, setMgrName] = useState('');
+  const [mgrPhone, setMgrPhone] = useState('');
+  const [mgrEmail, setMgrEmail] = useState('');
+  // Confirmation shown after a team is added (with an optional share-invite CTA).
+  const [added, setAdded] = useState<{ note: string; link?: string; phone?: string; name?: string; context?: string } | null>(null);
 
   // Seed the selection from what's registered — but only until the user edits it,
   // so a background refetch doesn't clobber in-progress changes.
@@ -76,10 +95,41 @@ export default function TournamentTeamsScreen() {
 
   async function addNewTeam() {
     if (!name.trim() || !short.trim()) return setError('Name and short code are required.');
-    setError(null); setBusy(true);
+    setError(null); setBusy(true); setAdded(null);
     try {
-      const t = await createTeam({ name: name.trim(), shortName: short.trim().toUpperCase(), sport, colorHex: color });
-      setName(''); setShort(''); setAdding(false);
+      // Attribute the team to the hosting community, when there is one, so it
+      // isn't an orphan shell.
+      const t = await createTeam({
+        name: name.trim(),
+        shortName: short.trim().toUpperCase(),
+        sport,
+        colorHex: color,
+        orgId: tournament?.hostOrgId,
+      });
+
+      // If a manager/captain contact was given, tie a real person to the team and
+      // invite them to claim it + manage the squad (team-claim invite → join link).
+      const mName = mgrName.trim();
+      const mPhone = mgrPhone.trim();
+      const mEmail = mgrEmail.trim();
+      const context = `${t.name}${tournament ? ` at ${tournament.name}` : ''}`;
+      if (mName || mPhone || mEmail) {
+        const { player } = await invitePerson({ name: mName || t.name, phone: mPhone || undefined, email: mEmail || undefined });
+        await setTeamLeaders(t.id, { captainId: player.id });
+        const invite = await createInvite(t.id, t.name, 'captain');
+        const link = joinLink(invite.token);
+        if (mEmail) {
+          const sent = await sendInviteEmail(mEmail, { name: player.fullName, inviterName, link, context, role: 'manage' });
+          setAdded({ note: sent ? `✅ ${t.name} added · invite emailed to ${player.fullName}.` : `✅ ${t.name} added · couldn’t email — share this link with ${player.fullName}: ${link}` });
+        } else {
+          // No email: offer WhatsApp/SMS (opens the app) and show the link to share.
+          setAdded({ note: `✅ ${t.name} added · invite ${player.fullName} to manage the squad:`, link, phone: mPhone || undefined, name: player.fullName, context });
+        }
+      } else {
+        setAdded({ note: `✅ ${t.name} added.` });
+      }
+
+      setName(''); setShort(''); setMgrName(''); setMgrPhone(''); setMgrEmail(''); setMgrOpen(false); setAdding(false);
       setDirty(true);
       setSelected((p) => [...p, t.id]);
       setTick((n) => n + 1);
@@ -160,6 +210,22 @@ export default function TournamentTeamsScreen() {
                 <Text key={c} accessibilityRole="button" onPress={() => setColor(c)} style={[st.swatch, { backgroundColor: c }, color === c && st.swatchActive]} />
               ))}
             </View>
+
+            {/* Optional team manager: makes the team a real, contactable entity and
+                invites that person to claim it & manage the squad. */}
+            {mgrOpen ? (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.muted}>Team manager / captain — they’ll be invited to claim the team and set its squad.</Text>
+                <TextField label="Manager name" value={mgrName} onChange={setMgrName} placeholder="Who runs this team?" />
+                <View style={st.row}>
+                  <View style={st.flex1}><TextField label="Phone" value={mgrPhone} onChange={setMgrPhone} placeholder="+91…" autoCapitalize="none" /></View>
+                  <View style={st.flex1}><TextField label="Email" value={mgrEmail} onChange={setMgrEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
+                </View>
+              </View>
+            ) : (
+              <Text style={st.link} onPress={() => setMgrOpen(true)}>＋ Add a team manager (optional)</Text>
+            )}
+
             <View style={st.row}>
               <View style={st.flex1}><Button label="Cancel" variant="ghost" onPress={() => { setAdding(false); setError(null); }} /></View>
               <View style={st.flex1}><Button label={busy ? 'Adding…' : 'Add & select'} onPress={addNewTeam} disabled={busy} /></View>
@@ -167,6 +233,23 @@ export default function TournamentTeamsScreen() {
           </Card>
         ) : (
           <Button label="＋ New team" variant="ghost" onPress={() => setAdding(true)} />
+        )}
+
+        {added && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.body}>{added.note}</Text>
+            {added.link && (
+              <View style={st.chips}>
+                {added.phone ? (
+                  <>
+                    <Button label="💬 WhatsApp" variant="ghost" onPress={() => openWhatsApp(added.phone!, inviteMessage({ name: added.name ?? '', inviterName, link: added.link!, context: added.context, role: 'manage' }))} />
+                    <Button label="✉️ SMS" variant="ghost" onPress={() => openSms(added.phone!, inviteMessage({ name: added.name ?? '', inviterName, link: added.link!, context: added.context, role: 'manage' }))} />
+                  </>
+                ) : null}
+              </View>
+            )}
+            <Text style={st.link} onPress={() => setAdded(null)}>Dismiss</Text>
+          </Card>
         )}
 
         <FormError message={error} />

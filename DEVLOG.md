@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-16 — Team-entry overhaul ① Real team entry + contact · SHIPPED
+
+The old "add teams" model assumed teams already existed on the app (created by
+individuals) and the organizer just picked them; the on-the-fly "New team" form
+made an orphan (name/short/colour — no owner, no contact, no squad). Real events
+work the other way: the organizer brings teams in and each team is a real,
+contactable entity. This is phase ① of a 3-part overhaul (② invite/self-register,
+③ categories/divisions).
+
+- `TournamentTeamsScreen`: the "New team" form now (a) attributes the team to the
+  hosting community (`orgId = tournament.hostOrgId`) so it isn't an orphan, and
+  (b) has an optional **team manager / captain** section (name + phone + email).
+  When given, it finds/creates that person (`invitePerson`), sets them as captain
+  (`setTeamLeaders`), mints a **team-claim invite** (`createInvite` → `join/:token`),
+  and sends it: email auto-sends (`sendInviteEmail`, `role: 'manage'`); phone shows
+  WhatsApp/SMS buttons. A post-add confirmation card shows the outcome + share CTA.
+- `core/invite.ts`: generalized `inviteMessage` / `inviteSubject` / `sendInviteEmail`
+  with an optional `role: 'co-host' | 'manage'` (defaults to co-host, so existing
+  co-host callers are unchanged); "manage" wording points at claiming a team.
+- Verified: `tsc` clean, bundle compiles, app boots with no console errors. Screen
+  is behind login (user drives the end-to-end check).
+
+---
+
 ### 2026-08-16 — Co-hosts on the tournament page · SHIPPED
 
 The add/invite-a-host lookup previously only existed at tournament creation. Now the
