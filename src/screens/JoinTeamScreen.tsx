@@ -66,7 +66,7 @@ export default function JoinTeamScreen() {
         )}
 
         <Text style={st.note}>
-          Opening a shared link (sportnnote.app/join/CODE) brings you here with the code filled in.
+          Opening a shared link (sportnnote.in/join/CODE) brings you here with the code filled in.
         </Text>
       </ScrollView>
     </SafeAreaView>

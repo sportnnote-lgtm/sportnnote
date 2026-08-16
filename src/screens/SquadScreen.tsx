@@ -103,7 +103,7 @@ export default function SquadScreen() {
           />
           {inviteCode && (
             <Text style={st.link} selectable>
-              Code: {inviteCode}{'\n'}sportnnote.app/join/{inviteCode}
+              Code: {inviteCode}{'\n'}sportnnote.in/join/{inviteCode}
             </Text>
           )}
         </Card>

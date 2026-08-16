@@ -60,7 +60,7 @@ export function AddInvitePlayer({
       if (res.status === 'existing') {
         setNote(`✓ Added ${res.player.fullName} — already on SportnNote.`);
       } else {
-        const link = `https://sportnnote.app/join/${res.player.id}`;
+        const link = `https://sportnnote.in/join/${res.player.id}`;
         openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}`);
         setNote(`⏳ Invited ${res.player.fullName} — WhatsApp opened. They're confirmed once they register.`);
       }

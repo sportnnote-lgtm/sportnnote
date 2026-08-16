@@ -52,10 +52,10 @@ import type { RootStackParamList, TabParamList } from './types';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// Deep links: sportnnote://join/CODE or https://sportnnote.app/join/CODE open
+// Deep links: sportnnote://join/CODE or https://sportnnote.in/join/CODE open
 // the Join screen with the code prefilled.
 const linking = {
-  prefixes: ['sportnnote://', 'https://sportnnote.app'],
+  prefixes: ['sportnnote://', 'https://sportnnote.in'],
   config: { screens: { JoinTeam: 'join/:token' } },
 };
 

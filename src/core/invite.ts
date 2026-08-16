@@ -6,9 +6,9 @@ import { Linking } from 'react-native';
 import { supabase } from './supabase';
 
 /** Where invites point people to install + register. The deep-link
- *  `https://sportnnote.app/join/:token` (and `sportnnote://join/:token`) resolves
+ *  `https://sportnnote.in/join/:token` (and `sportnnote://join/:token`) resolves
  *  to the Join screen — see RootNavigator linking config. */
-export const APP_INSTALL_URL = 'https://sportnnote.app';
+export const APP_INSTALL_URL = 'https://sportnnote.in';
 export const joinLink = (id: string) => `${APP_INSTALL_URL}/join/${id}`;
 
 /** The invite message, shared across every channel (email / WhatsApp / SMS). */
