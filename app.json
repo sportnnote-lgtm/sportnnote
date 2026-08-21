@@ -8,6 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "in.sportnnote.app",
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "SportnNote uses the microphone for hands-free voice scoring and navigation.",
@@ -15,6 +16,7 @@
       }
     },
     "android": {
+      "package": "in.sportnnote.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
