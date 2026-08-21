@@ -20,7 +20,7 @@ import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
-import { useTournamentById, useTeams, useTournamentTeams, useTournamentEntries, useLeagueData } from '../data/hooks';
+import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
 import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders } from '../data/repos';
 import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
@@ -42,15 +42,28 @@ export default function TournamentTeamsScreen() {
   const [sport, setSport] = useState<SportId>(params.sport ?? tourSports[0] ?? 'football');
   const [tick, setTick] = useState(0); // bump to refetch teams / registrations after a write
   const allTeams = useTeams(sport, tick);
-  const registered = useTournamentTeams(params.tournamentId, sport, tick);
   const entries = useTournamentEntries(params.tournamentId, sport, tick);
+  const categories = useTournamentCategories(params.tournamentId, tick);
   const { matches } = useLeagueData(params.tournamentId);
-  // Lifecycle entries the organizer must act on (confirmed teams are the chips).
-  const pending = entries.filter((e) => e.status === 'pending');
-  const invited = entries.filter((e) => e.status === 'invited');
-  const lifecycleIds = new Set([...pending, ...invited].map((e) => e.team.id));
-  // The direct-add chip picker only offers teams not already awaiting a decision.
-  const pickable = allTeams.filter((t) => !lifecycleIds.has(t.id));
+
+  // Division (category) the organizer is editing. Null when the tournament runs
+  // as a single implicit division. Teams are rostered per division.
+  const [activeCatId, setActiveCatId] = useState<string | null>(null);
+  const activeCat = categories.length ? (activeCatId ?? categories[0].id) : null;
+  const inScope = (e: TournamentEntry) => !activeCat || (e.categoryId ?? null) === activeCat;
+
+  // Lifecycle entries the organizer must act on, scoped to the active division.
+  const pending = entries.filter((e) => e.status === 'pending' && inScope(e));
+  const invited = entries.filter((e) => e.status === 'invited' && inScope(e));
+  const confirmedInScope = entries.filter((e) => e.status === 'confirmed' && inScope(e));
+  // A team enters exactly one division: hide teams entered elsewhere (another
+  // division, or awaiting a decision); confirmed teams in THIS division stay as
+  // selectable chips.
+  const entryByTeam = new Map(entries.map((e) => [e.team.id, e] as const));
+  const pickable = allTeams.filter((t) => {
+    const e = entryByTeam.get(t.id);
+    return !e || (e.status === 'confirmed' && inScope(e));
+  });
 
   const [selected, setSelected] = useState<string[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
@@ -73,14 +86,16 @@ export default function TournamentTeamsScreen() {
   // Confirmation shown after a team is added (with an optional share-invite CTA).
   const [added, setAdded] = useState<{ note: string; link?: string; phone?: string; name?: string; context?: string } | null>(null);
 
-  // Seed the selection from what's registered — but only until the user edits it,
-  // so a background refetch doesn't clobber in-progress changes.
+  // Seed the selection from what's confirmed in the active division — but only
+  // until the user edits it, so a background refetch doesn't clobber in-progress
+  // changes. Reseeds when the division switches.
   useEffect(() => {
     if (dirty) return;
-    const ids = registered.map((t) => t.id);
+    const ids = entries.filter((e) => e.status === 'confirmed' && inScope(e)).map((e) => e.team.id);
     setSelected(ids);
     setOriginal(ids);
-  }, [registered, dirty]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, activeCat, dirty]);
 
   // Keep the sport valid on multi-sport meets.
   useEffect(() => {
@@ -89,6 +104,7 @@ export default function TournamentTeamsScreen() {
   }, [tournament?.id]);
 
   const pickSport = (s: SportId) => { setSport(s); setDirty(false); };
+  const pickCategory = (id: string) => { setActiveCatId(id); setDirty(false); setAdded(null); };
   const toggle = (id: string) => {
     setDirty(true);
     setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -173,7 +189,7 @@ export default function TournamentTeamsScreen() {
     try {
       const added = selected.filter((id) => !original.includes(id));
       const removed = original.filter((id) => !selected.includes(id));
-      if (added.length) await addTournamentTeams(params.tournamentId, added, entryMode);
+      if (added.length) await addTournamentTeams(params.tournamentId, added, entryMode, activeCat ?? undefined);
       for (const id of removed) await removeTournamentTeam(params.tournamentId, id);
       // Invited teams: let each captain know they've been invited to accept.
       if (entryMode === 'invited') {
@@ -204,6 +220,19 @@ export default function TournamentTeamsScreen() {
             <View style={st.chips}>
               {tourSports.map((s) => (
                 <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}`} active={sport === s} onPress={() => pickSport(s)} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Division selector — when the meet runs age × gender divisions, teams
+            are rostered per division. */}
+        {categories.length > 0 && (
+          <>
+            <Text style={textStyles.muted}>Division</Text>
+            <View style={st.chips}>
+              {categories.map((c) => (
+                <SelectChip key={c.id} label={c.label} active={activeCat === c.id} onPress={() => pickCategory(c.id)} />
               ))}
             </View>
           </>

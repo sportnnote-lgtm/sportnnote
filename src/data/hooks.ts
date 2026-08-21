@@ -7,6 +7,7 @@ import {
   getTeams,
   getTournamentTeams,
   getTournamentEntries,
+  getTournamentCategories,
   getTournament,
   getTournaments,
   getMyTournaments,
@@ -41,6 +42,7 @@ import type {
   Team,
   TeamSummary,
   Tournament,
+  TournamentCategory,
   TournamentEntry,
 } from '../core/types';
 
@@ -450,6 +452,21 @@ export function useTournamentTeams(tournamentId?: string, sport?: SportId, nonce
     }, [tournamentId, sport, nonce])
   );
   return teams;
+}
+
+/** The divisions (age × gender) a tournament defines. Empty ⇒ single implicit
+ *  division (or pre-migration-0008). */
+export function useTournamentCategories(tournamentId?: string, nonce = 0) {
+  const [cats, setCats] = useState<TournamentCategory[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      if (!tournamentId) { setCats([]); return; }
+      getTournamentCategories(tournamentId).then((c) => on && setCats(c));
+      return () => { on = false; };
+    }, [tournamentId, nonce])
+  );
+  return cats;
 }
 
 /** Every team entry (confirmed / invited / pending) for a tournament — the

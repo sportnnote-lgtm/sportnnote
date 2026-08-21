@@ -30,6 +30,7 @@ import type {
   TeamInvite,
   TeamLeadership,
   Tournament,
+  TournamentCategory,
   TournamentEntryStatus,
 } from '../core/types';
 
@@ -804,7 +805,9 @@ export const demo = {
    *  by default — the seed tournaments imply their teams via matches; organizers
    *  register participants up front for new tournaments. Mirrors the live
    *  `tournament_teams` join table (migration 0003). */
-  tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus }[],
+  tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus; categoryId?: string }[],
+  /** divisions (age × gender) a tournament defines — see migration 0008. */
+  tournamentCategories: [] as TournamentCategory[],
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },
@@ -1324,13 +1327,41 @@ export function addMatch(m: Omit<Match, 'id'>): Match {
 }
 
 /** Register teams as participants of a tournament (idempotent). A team already
- *  present is bumped to the given status (e.g. an organizer confirming a request). */
-export function addTournamentTeamsDemo(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed'): void {
+ *  present is bumped to the given status (e.g. an organizer confirming a request);
+ *  a categoryId, when given, sets/updates the division the entry belongs to. */
+export function addTournamentTeamsDemo(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed', categoryId?: string): void {
   for (const teamId of teamIds) {
     const existing = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
-    if (existing) existing.status = status;
-    else demo.tournamentTeams.push({ tournamentId, teamId, status });
+    if (existing) { existing.status = status; if (categoryId !== undefined) existing.categoryId = categoryId; }
+    else demo.tournamentTeams.push({ tournamentId, teamId, status, categoryId });
   }
+}
+
+/** Move a team's entry into a division (or clear with undefined) without
+ *  touching its status. */
+export function setTournamentTeamCategoryDemo(tournamentId: string, teamId: string, categoryId: string | undefined): void {
+  const row = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
+  if (row) row.categoryId = categoryId;
+}
+
+/** The divisions a tournament defines (in display order). */
+export function getTournamentCategoriesDemo(tournamentId: string): TournamentCategory[] {
+  return demo.tournamentCategories
+    .filter((c) => c.tournamentId === tournamentId)
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+}
+
+/** Attach divisions to a tournament; returns the created rows (with ids). */
+export function addTournamentCategoriesDemo(tournamentId: string, cats: Omit<TournamentCategory, 'id' | 'tournamentId'>[]): TournamentCategory[] {
+  const created = cats.map((c) => ({ ...c, id: genId('cat'), tournamentId }));
+  demo.tournamentCategories.push(...created);
+  return created;
+}
+
+/** Remove a division; its team entries fall back to no division. */
+export function removeTournamentCategoryDemo(categoryId: string): void {
+  demo.tournamentCategories = demo.tournamentCategories.filter((c) => c.id !== categoryId);
+  for (const r of demo.tournamentTeams) if (r.categoryId === categoryId) r.categoryId = undefined;
 }
 
 /** Move a team's entry to a new lifecycle status (confirmed / invited / pending). */

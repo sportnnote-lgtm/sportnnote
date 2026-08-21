@@ -289,6 +289,31 @@ export type TournamentEntryStatus = 'confirmed' | 'invited' | 'pending';
 export interface TournamentEntry {
   team: Team;
   status: TournamentEntryStatus;
+  /** the division this entry belongs to (see TournamentCategory). Absent ⇒ the
+   *  tournament's single/implicit division. */
+  categoryId?: UUID;
+}
+
+/** A division within a tournament — the backbone of school meets: age group ×
+ *  gender (U14 Boys, U16 Girls, Open Mixed…). A tournament with no categories
+ *  behaves as one implicit division. See migration 0008. */
+export type CategoryGender = 'boys' | 'girls' | 'mixed';
+export interface TournamentCategory {
+  id: UUID;
+  tournamentId: UUID;
+  /** display label, always set (e.g. 'U14 Boys' or a custom name) */
+  label: string;
+  /** structured age band, e.g. 'U14' (absent for a free-form custom division) */
+  ageGroup?: string;
+  gender?: CategoryGender;
+  sort?: number;
+}
+/** A new division to attach to a tournament (id/tournamentId assigned on insert). */
+export interface NewTournamentCategory {
+  label: string;
+  ageGroup?: string;
+  gender?: CategoryGender;
+  sort?: number;
 }
 
 /** Who leads a team — responsible for setting the matchday squad. */

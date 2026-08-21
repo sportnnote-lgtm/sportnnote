@@ -12,6 +12,8 @@ import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, text
 import { DateField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
 import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
+import { DivisionsEditor } from '../components/DivisionsEditor';
+import type { NewTournamentCategory } from '../core/types';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { createTournament, getMyPlayerId, getPlayer } from '../data/repos';
@@ -58,6 +60,7 @@ export default function CreateTournamentScreen() {
   const [myName, setMyName] = useState('You');
   const [hostChoice, setHostChoice] = useState<'self' | string>(params?.orgId ?? 'self');
   const [coHosts, setCoHosts] = useState<CoHost[]>([]);
+  const [divisions, setDivisions] = useState<NewTournamentCategory[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   React.useEffect(() => {
     let on = true;
@@ -127,6 +130,7 @@ export default function CreateTournamentScreen() {
           : undefined,
         reminderLeadMinutes: customReminders ? reminderMins : undefined,
         coHostIds: coHosts.map((c) => c.id),
+        categories: divisions.length ? divisions : undefined,
       });
       nav.goBack();
     } catch (e) {
@@ -163,6 +167,9 @@ export default function CreateTournamentScreen() {
           excludeIds={myId ? [myId] : []}
           context={name.trim() || undefined}
         />
+
+        {/* Divisions (age × gender) — school meets run many at once. Optional. */}
+        <DivisionsEditor value={divisions} onChange={setDivisions} />
 
         <View style={st.row}>
           <View style={st.flex}><DateField label="Start date" value={start} onChange={setStart} /></View>

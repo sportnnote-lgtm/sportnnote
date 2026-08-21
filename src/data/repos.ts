@@ -30,6 +30,10 @@ import {
   addTournamentTeamsDemo,
   setTournamentTeamStatusDemo,
   removeTournamentTeamDemo,
+  getTournamentCategoriesDemo,
+  addTournamentCategoriesDemo,
+  removeTournamentCategoryDemo,
+  setTournamentTeamCategoryDemo,
 } from './demoStore';
 import { emptyFormation } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
@@ -57,8 +61,10 @@ import type {
   TeamLeadership,
   TeamSummary,
   Tournament,
+  TournamentCategory,
   TournamentEntry,
   TournamentEntryStatus,
+  NewTournamentCategory,
 } from '../core/types';
 
 /** A teams row joined into a match. */
@@ -1490,14 +1496,19 @@ export interface NewTournament {
   reminderLeadMinutes?: number[];
   /** additional individual co-hosts (player ids) to add alongside the creator */
   coHostIds?: string[];
+  /** divisions (age × gender) to create for this tournament, if any */
+  categories?: NewTournamentCategory[];
 }
 
 export async function createTournament(input: NewTournament): Promise<Tournament> {
   const me = demo.players[0]?.id;
   // Org-hosted → no individual hostIds (the org's members are the hosts);
   // otherwise the creator is the sole individual host.
-  if (!isSupabaseConfigured || !supabase)
-    return addTournament({ ...input, isOpen: input.isOpen, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
+  if (!isSupabaseConfigured || !supabase) {
+    const t = addTournament({ ...input, isOpen: input.isOpen, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
+    if (input.categories?.length) addTournamentCategoriesDemo(t.id, input.categories);
+    return t;
+  }
   const { data: auth } = await supabase.auth.getUser();
   // Hosts are tracked by player id (what the host UI checks), so the creator's
   // player id — not the auth/profile id — becomes the first host.
@@ -1522,7 +1533,13 @@ export async function createTournament(input: NewTournament): Promise<Tournament
     .select(TOURNAMENT_SELECT)
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create tournament');
-  return toTournament(data);
+  const tournament = toTournament(data);
+  // Attach divisions, if any (best-effort — needs migration 0008; a tournament
+  // without categories is valid, so don't fail creation if this can't be stored).
+  if (input.categories?.length) {
+    try { await addTournamentCategories(tournament.id, input.categories); } catch { /* pre-0008 or transient */ }
+  }
+  return tournament;
 }
 
 /* ------------------------------ Organizations ------------------------------ */
@@ -1756,49 +1773,104 @@ export async function getTournamentEntries(tournamentId: string, sport?: SportId
   if (!isSupabaseConfigured || !supabase) {
     const rows = demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId);
     return rows
-      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status }))
-      .filter((e): e is TournamentEntry => !!e.team && (!sport || e.team.sport === sport));
+      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status, categoryId: r.categoryId }))
+      .filter((e) => !!e.team && (!sport || e.team!.sport === sport))
+      .map((e) => ({ team: e.team as Team, status: e.status, categoryId: e.categoryId }));
   }
-  // Try the status-aware read (migration 0007). If the `status` column isn't
-  // there yet, Supabase errors — fall back to a status-less read and treat every
-  // row as 'confirmed', so the existing participants feature keeps working before
-  // the migration is applied (only the invited/pending lifecycle waits for 0007).
+  // Read with the widest column set, then degrade gracefully if a column isn't in
+  // the live DB yet: category_id needs migration 0008, status needs 0007. Falling
+  // back keeps the existing participants feature working before each migration
+  // (missing category ⇒ no division; missing status ⇒ treated as confirmed).
   const TEAM_COLS = 'teams(id,name,short_name,sport,color_hex,org_id,roster)';
-  const withStatus = await supabase.from('tournament_teams').select(`status, ${TEAM_COLS}`).eq('tournament_id', tournamentId);
-  const res: { data: unknown; error: unknown } = withStatus.error
-    ? await supabase.from('tournament_teams').select(TEAM_COLS).eq('tournament_id', tournamentId)
-    : withStatus;
+  const attempts = [`status, category_id, ${TEAM_COLS}`, `status, ${TEAM_COLS}`, TEAM_COLS];
+  let res: { data: unknown; error: unknown } = { data: null, error: true };
+  for (const cols of attempts) {
+    res = await supabase.from('tournament_teams').select(cols).eq('tournament_id', tournamentId);
+    if (!res.error) break;
+  }
   const { data, error } = res;
   if (error || !data) return [];
   // The joined `teams` relation may come back as an object or a single-element
   // array depending on the client's inference — normalise both to a row.
-  const entries = (data as unknown as { status?: TournamentEntryStatus; teams: TeamRow | TeamRow[] | null }[])
-    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus }))
-    .filter((e): e is { team: TeamRow; status: TournamentEntryStatus } => !!e.team)
-    .map((e) => ({ team: toTeam(e.team), status: e.status }));
+  const entries = (data as unknown as { status?: TournamentEntryStatus; category_id?: string | null; teams: TeamRow | TeamRow[] | null }[])
+    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus, categoryId: r.category_id ?? undefined }))
+    .filter((e) => !!e.team)
+    .map((e) => ({ team: toTeam(e.team as TeamRow), status: e.status, categoryId: e.categoryId }));
   return sport ? entries.filter((e) => e.team.sport === sport) : entries;
 }
 
 /** Register one or more teams as tournament participants (idempotent). Status
  *  defaults to 'confirmed' (a direct add); pass 'invited' to invite a team the
  *  captain must accept. Re-adding an existing team bumps it to the given status. */
-export async function addTournamentTeams(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed'): Promise<void> {
+export async function addTournamentTeams(tournamentId: string, teamIds: string[], status: TournamentEntryStatus = 'confirmed', categoryId?: string): Promise<void> {
   if (!teamIds.length) return;
   if (!isSupabaseConfigured || !supabase) {
-    addTournamentTeamsDemo(tournamentId, teamIds, status);
+    addTournamentTeamsDemo(tournamentId, teamIds, status, categoryId);
     return;
   }
-  const { error } = await supabase
-    .from('tournament_teams')
-    .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId, status })), { onConflict: 'tournament_id,team_id' });
-  // Pre-migration-0007 fallback: no `status` column yet. A plain 'confirmed' add
-  // still works without it; invited/pending genuinely need the migration.
-  if (error) {
-    if (status !== 'confirmed') throw new Error(error.message);
-    await supabase
-      .from('tournament_teams')
-      .upsert(teamIds.map((teamId) => ({ tournament_id: tournamentId, team_id: teamId })), { onConflict: 'tournament_id,team_id' });
+  const base = (teamId: string) => ({ tournament_id: tournamentId, team_id: teamId });
+  const full = teamIds.map((id) => ({ ...base(id), status, ...(categoryId ? { category_id: categoryId } : {}) }));
+  const { error } = await supabase.from('tournament_teams').upsert(full, { onConflict: 'tournament_id,team_id' });
+  if (!error) return;
+  // Degrade if a column is missing: category_id needs 0008, status needs 0007. A
+  // plain confirmed add still works without either; invited/pending truly need 0007.
+  const withStatus = teamIds.map((id) => ({ ...base(id), status }));
+  const retry = await supabase.from('tournament_teams').upsert(withStatus, { onConflict: 'tournament_id,team_id' });
+  if (!retry.error) return;
+  if (status !== 'confirmed') throw new Error(retry.error.message);
+  await supabase.from('tournament_teams').upsert(teamIds.map(base), { onConflict: 'tournament_id,team_id' });
+}
+
+/* --------------------------- Tournament categories ------------------------- */
+// Divisions (age × gender) within a tournament — the backbone of school meets.
+// A separate table (migration 0008) so it never affects the main tournament read.
+
+const toCategory = (r: { id: string; tournament_id: string; label: string; age_group: string | null; gender: string | null; sort: number | null }): TournamentCategory => ({
+  id: r.id,
+  tournamentId: r.tournament_id,
+  label: r.label,
+  ageGroup: r.age_group ?? undefined,
+  gender: (r.gender ?? undefined) as TournamentCategory['gender'],
+  sort: r.sort ?? undefined,
+});
+
+/** The divisions a tournament defines (display order). Empty if none / pre-0008. */
+export async function getTournamentCategories(tournamentId: string): Promise<TournamentCategory[]> {
+  if (!isSupabaseConfigured || !supabase) return getTournamentCategoriesDemo(tournamentId);
+  const { data, error } = await supabase
+    .from('tournament_categories')
+    .select('id, tournament_id, label, age_group, gender, sort')
+    .eq('tournament_id', tournamentId)
+    .order('sort', { ascending: true });
+  if (error || !data) return []; // table absent (pre-0008) ⇒ no divisions
+  return (data as Parameters<typeof toCategory>[0][]).map(toCategory);
+}
+
+/** Attach one or more divisions to a tournament; returns the created rows. */
+export async function addTournamentCategories(tournamentId: string, cats: NewTournamentCategory[]): Promise<TournamentCategory[]> {
+  if (!cats.length) return [];
+  if (!isSupabaseConfigured || !supabase) return addTournamentCategoriesDemo(tournamentId, cats);
+  const { data, error } = await supabase
+    .from('tournament_categories')
+    .insert(cats.map((c, i) => ({ tournament_id: tournamentId, label: c.label, age_group: c.ageGroup ?? null, gender: c.gender ?? null, sort: c.sort ?? i })))
+    .select('id, tournament_id, label, age_group, gender, sort');
+  if (error || !data) throw new Error(error?.message ?? 'Could not add divisions');
+  return (data as Parameters<typeof toCategory>[0][]).map(toCategory);
+}
+
+/** Remove a division; its team entries fall back to no division (FK on delete set null). */
+export async function removeTournamentCategory(categoryId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) { removeTournamentCategoryDemo(categoryId); return; }
+  await supabase.from('tournament_categories').delete().eq('id', categoryId);
+}
+
+/** Move a team's entry into a division (or clear it with null). */
+export async function setTournamentTeamCategory(tournamentId: string, teamId: string, categoryId: string | null): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    setTournamentTeamCategoryDemo(tournamentId, teamId, categoryId ?? undefined);
+    return;
   }
+  await supabase.from('tournament_teams').update({ category_id: categoryId }).eq('tournament_id', tournamentId).eq('team_id', teamId);
 }
 
 /** A captain self-registers one of their teams — creates a 'pending' entry the
