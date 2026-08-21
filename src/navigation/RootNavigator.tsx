@@ -10,6 +10,7 @@ import { followStore } from '../data/followStore';
 import { getFollows, savePushToken, getCaptainTeams } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
+import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
 import HomeScreen from '../screens/HomeScreen';
 import MatchesScreen from '../screens/MatchesScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
