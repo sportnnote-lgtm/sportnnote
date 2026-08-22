@@ -37,6 +37,9 @@ export default function HomeScreen() {
 
   // Selected tournament (null = "All"). Default to the first once loaded.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Quick actions (voice / friendly / calendar) collapse under one toggle so the
+  // wordmark keeps its line; notifications stays always-visible.
+  const [actionsOpen, setActionsOpen] = useState(false);
   useEffect(() => {
     if (selectedId === null && tournaments.length === 1) setSelectedId(tournaments[0].id);
   }, [tournaments, selectedId]);
@@ -86,33 +89,12 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ScrollView contentContainerStyle={st.content}>
-        {/* Header: wordmark · profile · notifications */}
+        {/* Header: wordmark · notifications · quick-actions toggle */}
         <View style={st.header}>
           <View style={st.brand}>
-            <Text style={st.wordmark}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
-            <Text style={textStyles.muted}>Play a Sport, Make a Note.</Text>
+            <Text style={st.wordmark} numberOfLines={1}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
+            <Text style={textStyles.muted} numberOfLines={1}>Play a Sport, Make a Note.</Text>
           </View>
-          <VoiceNav matches={feed} onOpenMatch={openScorer} />
-          {canScore && (
-            <TouchableOpacity
-              style={st.iconBtn}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Schedule a friendly match"
-              onPress={() => nav.navigate('ScheduleMatch', {})}
-            >
-              <Text style={st.icon}>🤝</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={st.iconBtn}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Calendar"
-            onPress={() => nav.navigate('Calendar')}
-          >
-            <Text style={st.icon}>📅</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={st.iconBtn}
             activeOpacity={0.8}
@@ -127,7 +109,34 @@ export default function HomeScreen() {
               </View>
             )}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={st.iconBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: actionsOpen }}
+            accessibilityLabel="Quick actions"
+            onPress={() => setActionsOpen((v) => !v)}
+          >
+            <Text style={st.icon}>{actionsOpen ? '✕' : '⋯'}</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Quick actions, revealed inline so they don't crowd the wordmark. */}
+        {actionsOpen && (
+          <View style={st.quickActions}>
+            <VoiceNav matches={feed} onOpenMatch={openScorer} />
+            {canScore && (
+              <TouchableOpacity style={st.quickAction} activeOpacity={0.8} accessibilityRole="button"
+                onPress={() => { setActionsOpen(false); nav.navigate('ScheduleMatch', {}); }}>
+                <Text style={st.icon}>🤝</Text><Text style={st.quickLabel}>Start a friendly</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={st.quickAction} activeOpacity={0.8} accessibilityRole="button"
+              onPress={() => { setActionsOpen(false); nav.navigate('Calendar'); }}>
+              <Text style={st.icon}>📅</Text><Text style={st.quickLabel}>Calendar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {!isSupabaseConfigured && (
           <Card style={st.demo}>
@@ -248,6 +257,9 @@ const st = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
   },
   icon: { fontSize: 20 },
+  quickActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing(2), marginBottom: theme.spacing(3) },
+  quickAction: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3) },
+  quickLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   badge: {
     position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10,
     backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center',
