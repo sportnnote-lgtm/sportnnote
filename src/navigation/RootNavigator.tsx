@@ -11,6 +11,7 @@ import { getFollows, savePushToken, getCaptainTeams } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
+import { OnboardingOverlay } from '../components/OnboardingOverlay';
 import HomeScreen from '../screens/HomeScreen';
 import MatchesScreen from '../screens/MatchesScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
@@ -290,6 +291,7 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
+      {authed && <OnboardingOverlay />}
     </NavigationContainer>
   );
 }
