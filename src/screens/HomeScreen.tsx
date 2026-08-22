@@ -17,7 +17,7 @@ import { VoiceNav } from '../components/VoiceNav';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { isSupabaseConfigured } from '../core/supabase';
-import { useMyTournaments, useMatches, useNotifications, usePlayerProfile } from '../data/hooks';
+import { useMyTournaments, useScopedMatches, useNotifications, usePlayerProfile } from '../data/hooks';
 import { getMyPlayerId } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
@@ -30,7 +30,9 @@ export default function HomeScreen() {
   const nav = useNavigation<Nav>();
   const { profile } = useAuth();
   const tournaments = useMyTournaments(profile?.id);
-  const { matches, loading } = useMatches();
+  // Home is a personal feed: matches from what you follow (players/teams/
+  // tournaments) plus your own — not every match app-wide.
+  const { feed, loading } = useScopedMatches(profile?.id);
   const { unread } = useNotifications();
 
   // Selected tournament (null = "All"). Default to the first once loaded.
@@ -40,7 +42,7 @@ export default function HomeScreen() {
   }, [tournaments, selectedId]);
   const selected: Tournament | undefined = tournaments.find((t) => t.id === selectedId);
 
-  const scoped = selectedId ? matches.filter((m) => m.tournamentId === selectedId) : matches;
+  const scoped = selectedId ? feed.filter((m) => m.tournamentId === selectedId) : feed;
   const live = scoped.filter((m) => m.status === 'live');
   const upcoming = scoped.filter((m) => m.status === 'scheduled');
 
@@ -90,7 +92,7 @@ export default function HomeScreen() {
             <Text style={st.wordmark}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
             <Text style={textStyles.muted}>Play a Sport, Make a Note.</Text>
           </View>
-          <VoiceNav matches={matches} onOpenMatch={openScorer} />
+          <VoiceNav matches={feed} onOpenMatch={openScorer} />
           {canScore && (
             <TouchableOpacity
               style={st.iconBtn}
@@ -162,7 +164,7 @@ export default function HomeScreen() {
                       {selected.hostName} · {plural(selected.sports.length, 'sport')} · {formatDayShort(selected.startDate)} → {formatDayShort(selected.endDate)}
                     </Text>
                     {(() => {
-                      const s = tournamentStatus(selected, matchProgress(matches.filter((m) => m.tournamentId === selected.id)));
+                      const s = tournamentStatus(selected, matchProgress(feed.filter((m) => m.tournamentId === selected.id)));
                       return <View style={st.statusRow}><Pill label={s.label} color={s.color + '22'} textColor={s.color} /></View>;
                     })()}
                   </View>

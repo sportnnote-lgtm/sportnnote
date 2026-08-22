@@ -10,7 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
-import { useMatches } from '../data/hooks';
+import { useScopedMatches } from '../data/hooks';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { SPORT_LIST } from '../sports/registry';
@@ -37,7 +37,9 @@ export default function MatchesScreen() {
     if (params?.initialTab) setTab(params.initialTab);
     if (params?.initialSport) setFilter(params.initialSport);
   }, [params?.initialTab, params?.initialSport]);
-  const { matches, loading } = useMatches(filter);
+  // The Matches tab is only YOUR games — ones you play in, or organize/score.
+  const { mine, loading } = useScopedMatches(profile?.id);
+  const matches = filter === 'all' ? mine : mine.filter((m) => m.sport === filter);
   const canScore = canScoreByRole(profile?.role);
 
   // Live = in progress; Upcoming = scheduled (soonest first); Completed = most recent first.
@@ -69,7 +71,7 @@ export default function MatchesScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ScrollView contentContainerStyle={st.content}>
-        <ScreenTitle title="Matches" subtitle="Every game across every sport" />
+        <ScreenTitle title="Matches" subtitle="Games you play, organize or score" />
 
         <View style={st.segment}>
           {TABS.map((t) => {

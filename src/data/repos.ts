@@ -220,6 +220,74 @@ export async function getMatch(id: string): Promise<Match | null> {
   return toMatch(data as unknown as MatchRow);
 }
 
+/** Player rosters for a set of teams (teamId → player ids), merging the explicit
+ *  `roster` list, `team_members`, and (demo) house-name derivation. Used to map
+ *  players ↔ teams for the Home feed / "my matches" scoping. */
+export async function getTeamRosters(teamIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!teamIds.length) return out;
+  if (!isSupabaseConfigured || !supabase) {
+    for (const id of teamIds) {
+      const t = demo.teams.find((x) => x.id === id);
+      const roster = (t?.roster && t.roster.length)
+        ? t.roster
+        : t ? demo.players.filter((p) => p.houseName === t.name).map((p) => p.id) : [];
+      out.set(id, [...roster]);
+    }
+    return out;
+  }
+  const [{ data: teamsData }, { data: memberData }] = await Promise.all([
+    supabase.from('teams').select('id, roster').in('id', teamIds),
+    supabase.from('team_members').select('team_id, player_id').in('team_id', teamIds),
+  ]);
+  for (const r of (teamsData ?? []) as { id: string; roster: string[] | null }[]) out.set(r.id, [...(r.roster ?? [])]);
+  for (const r of (memberData ?? []) as { team_id: string; player_id: string }[]) {
+    const arr = out.get(r.team_id) ?? [];
+    if (!arr.includes(r.player_id)) arr.push(r.player_id);
+    out.set(r.team_id, arr);
+  }
+  return out;
+}
+
+/** Split all matches into the signed-in user's two views:
+ *  - `mine`: matches they play in (a team they're on) or organize/score (a match
+ *    or tournament they host, or are the designated scorer of).
+ *  - `feed`: `mine` PLUS matches from any player / team / tournament they follow
+ *    (following a player resolves to that player's team's matches).
+ *  Used by the Home page (feed) and the Matches tab (mine). */
+export async function getScopedMatches(profileId?: string): Promise<{ mine: Match[]; feed: Match[] }> {
+  const [matches, myPlayerId, followKeys, tournaments] = await Promise.all([
+    getMatches(), getMyPlayerId(profileId), getFollows(profileId), getTournaments(),
+  ]);
+  const followTeams = new Set<string>(), followTours = new Set<string>(), followPlayers = new Set<string>();
+  for (const k of followKeys) {
+    const [type, id] = k.split(':');
+    if (type === 'team') followTeams.add(id);
+    else if (type === 'tournament') followTours.add(id);
+    else if (type === 'player') followPlayers.add(id);
+  }
+  const teamIds = new Set<string>();
+  for (const m of matches) { if (m.homeTeam?.id) teamIds.add(m.homeTeam.id); if (m.awayTeam?.id) teamIds.add(m.awayTeam.id); }
+  const rosters = await getTeamRosters([...teamIds]);
+  const myTeams = new Set<string>(), followPlayerTeams = new Set<string>();
+  for (const [teamId, players] of rosters) {
+    if (myPlayerId && players.includes(myPlayerId)) myTeams.add(teamId);
+    if (players.some((p) => followPlayers.has(p))) followPlayerTeams.add(teamId);
+  }
+  const myTours = new Set(tournaments.filter((t) => myPlayerId && t.hostIds?.includes(myPlayerId)).map((t) => t.id));
+
+  const isMine = (m: Match) =>
+    !!(myPlayerId && (m.hostIds?.includes(myPlayerId) || m.scorerId === myPlayerId)) ||
+    (!!m.homeTeam && myTeams.has(m.homeTeam.id)) || (!!m.awayTeam && myTeams.has(m.awayTeam.id)) ||
+    (!!m.tournamentId && myTours.has(m.tournamentId));
+  const isFollowed = (m: Match) =>
+    (!!m.tournamentId && followTours.has(m.tournamentId)) ||
+    (!!m.homeTeam && (followTeams.has(m.homeTeam.id) || followPlayerTeams.has(m.homeTeam.id))) ||
+    (!!m.awayTeam && (followTeams.has(m.awayTeam.id) || followPlayerTeams.has(m.awayTeam.id)));
+
+  return { mine: matches.filter(isMine), feed: matches.filter((m) => isMine(m) || isFollowed(m)) };
+}
+
 /** House-level teams (one per house, across sports) — the unit for follows,
  *  team profiles and standings. Derived from the match schedule so ids match. */
 export async function getTeamSummaries(): Promise<TeamSummary[]> {

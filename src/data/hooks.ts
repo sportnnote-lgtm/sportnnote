@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   getMatches,
+  getScopedMatches,
   getTeams,
   getTournamentTeams,
   getTournamentEntries,
@@ -148,6 +149,24 @@ export function useMatches(filter?: SportId | 'all') {
     }, [filter])
   );
   return { matches, loading };
+}
+
+/** The signed-in user's two match views (see getScopedMatches): `feed` for the
+ *  Home page (things they follow + their own), `mine` for the Matches tab (only
+ *  matches they play in or organize/score). Refetches on focus, so following a
+ *  player then returning Home surfaces their matches. */
+export function useScopedMatches(profileId?: string, nonce = 0) {
+  const [data, setData] = useState<{ mine: Match[]; feed: Match[] }>({ mine: [], feed: [] });
+  const [loading, setLoading] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      setLoading(true);
+      getScopedMatches(profileId).then((r) => { if (on) { setData(r); setLoading(false); } });
+      return () => { on = false; };
+    }, [profileId, nonce])
+  );
+  return { ...data, loading };
 }
 
 /** Subscribe to the follow set + a typed toggle that also persists (live). */
