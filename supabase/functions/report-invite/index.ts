@@ -28,21 +28,27 @@ function page(title: string, body: string): Response {
   .card{max-width:420px;background:#141A21;border:1px solid #243040;border-radius:22px;padding:32px;text-align:center}
   h1{font-size:22px;margin:0 0 12px} p{color:#9FB0C0;font-size:15px;line-height:1.5;margin:0}
   .mark{font-size:44px;margin-bottom:8px}
-</style></head><body><div class="card"><div class="mark">✅</div><h1>${title}</h1><p>${body}</p></div></body></html>`;
-  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+</style></head><body><div class="card"><div class="mark">&#9989;</div><h1>${title}</h1><p>${body}</p></div></body></html>`;
+  // Set the type via a Headers object + explicit status so the edge runtime
+  // serves it as HTML (not text/plain). Body is ASCII so it can't mojibake.
+  const headers = new Headers();
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('Access-Control-Allow-Origin', '*');
+  return new Response(html, { status: 200, headers });
 }
 
 Deno.serve(async (req) => {
   const id = new URL(req.url).searchParams.get('p') ?? '';
   if (!UUID.test(id)) {
-    return page('Link not recognized', 'This report link looks invalid. If someone added you by mistake, ignore the message — you won’t be signed up for anything.');
+    return page('Link not recognized', 'This report link looks invalid. If someone added you by mistake, ignore the message - you will not be signed up for anything.');
   }
   try {
     const svc = createClient(PROJECT_URL, SERVICE);
     // Only flag an UNCLAIMED provisional player — never a registered account.
     await svc.from('players').update({ reported_at: new Date().toISOString() }).eq('id', id).is('profile_id', null);
   } catch {
-    return page('Something went wrong', 'We couldn’t record that just now. You can safely ignore the invite — nothing is created for you unless you install SportnNote and register yourself.');
+    return page('Something went wrong', 'We could not record that just now. You can safely ignore the invite - nothing is created for you unless you install SportnNote and register yourself.');
   }
-  return page('Thanks — noted', 'We’ve flagged that this isn’t you. The organizer will be told, and you won’t be added or signed up for anything. No app needed.');
+  return page('Thanks - noted', 'We have flagged that this is not you. The organizer will be told, and you will not be added or signed up for anything. No app needed.');
 });
