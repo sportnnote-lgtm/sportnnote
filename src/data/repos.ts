@@ -368,6 +368,7 @@ interface PlayerRow {
   dob?: string | null;
   guardian?: Player['guardian'] | null;
   verification?: Player['verification'] | null;
+  reported_at?: string | null;
 }
 const toPlayer = (r: PlayerRow): Player => ({
   id: r.id,
@@ -389,6 +390,7 @@ const toPlayer = (r: PlayerRow): Player => ({
   dob: r.dob ?? undefined,
   guardian: r.guardian ?? undefined,
   verification: r.verification ?? undefined,
+  reported: r.reported_at ? true : undefined,
 });
 
 const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification';
@@ -839,6 +841,22 @@ export async function findPlayerByPhone(phone: string): Promise<Player | null> {
 
 /** Identity lookup by email (secondary to phone) — the one player who registered
  *  this email, or null. Case-insensitive. */
+/** Which of the given players have reported "not me" (migration 0009). Fetched
+ *  separately from PLAYER_SELECT so it degrades gracefully before 0009 is run
+ *  (missing column → returns an empty set rather than breaking player reads). */
+export async function getReportedPlayerIds(ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!ids.length) return out;
+  if (!isSupabaseConfigured || !supabase) {
+    for (const id of ids) if (demo.players.find((p) => p.id === id)?.reported) out.add(id);
+    return out;
+  }
+  const { data, error } = await supabase.from('players').select('id').in('id', ids).not('reported_at', 'is', null);
+  if (error) return out; // pre-0009: column absent ⇒ no reports surfaced
+  for (const r of (data ?? []) as { id: string }[]) out.add(r.id);
+  return out;
+}
+
 export async function findPlayerByEmail(email: string): Promise<Player | null> {
   const e = email.trim().toLowerCase();
   if (!e.includes('@')) return null;

@@ -82,6 +82,9 @@ export interface Player {
    *  "pending" until they install + register (claim this record). Not eligible to
    *  be scored until then. Drives the invite-to-install growth loop. */
   invited?: boolean;
+  /** the person reported (via the "not me" invite link) that this provisional
+   *  identity isn't them. Flagged to the organizer + blocked from further use. */
+  reported?: boolean;
   /** parent/guardian contact — for young players who don't have their own phone
    *  or email. The guardian typically creates and manages the profile. Optional. */
   guardian?: GuardianContact;

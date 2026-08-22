@@ -8,8 +8,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { SelectChip, TextField, Button, textStyles } from './ui';
-import { invitePlayer, markPlayerRegistered, findPlayerByPhone } from '../data/repos';
+import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds } from '../data/repos';
 import { openWhatsApp } from '../core/connect';
+import { joinLink, reportLink } from '../core/invite';
 import { isValidPhone } from '../core/phone';
 import type { Player, SportId } from '../core/types';
 
@@ -31,6 +32,8 @@ export function AddInvitePlayer({
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [matched, setMatched] = useState<Player | null>(null);
+  const [matchedReported, setMatchedReported] = useState(false);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [looking, setLooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -41,18 +44,30 @@ export function AddInvitePlayer({
 
   // The number is the identity — recognise it first and pull up the known name.
   useEffect(() => {
-    if (!valid) { setMatched(null); setLooking(false); return; }
+    if (!valid) { setMatched(null); setMatchedReported(false); setLooking(false); return; }
     let on = true; setLooking(true);
-    findPlayerByPhone(phone).then((p) => {
+    findPlayerByPhone(phone).then(async (p) => {
       if (!on) return;
       setLooking(false); setMatched(p);
       if (p) setName(p.fullName); // one number ⇒ one name — never let a duplicate be typed
+      // Was this number reported as "not me"? Block re-adding until it's cleared.
+      setMatchedReported(p ? (await getReportedPlayerIds([p.id])).has(p.id) : false);
     });
     return () => { on = false; };
   }, [phone, valid]);
 
+  // Flag any pending invitees who reported "this isn't me".
+  useEffect(() => {
+    let on = true;
+    const ids = invited.map((p) => p.id);
+    if (!ids.length) { setReportedIds(new Set()); return; }
+    getReportedPlayerIds(ids).then((s) => { if (on) setReportedIds(s); });
+    return () => { on = false; };
+  }, [invited]);
+
   const submit = async () => {
     if (!valid || busy) return;
+    if (matchedReported) { setNote('⚠ This person reported that this number isn’t them — they can’t be added.'); return; }
     if (!matched && !name.trim()) { setNote('Enter the player’s name.'); return; }
     setBusy(true); setNote(null);
     try {
@@ -60,8 +75,9 @@ export function AddInvitePlayer({
       if (res.status === 'existing') {
         setNote(`✓ Added ${res.player.fullName} — already on SportnNote.`);
       } else {
-        const link = `https://sportnnote.in/join/${res.player.id}`;
-        openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}`);
+        const link = joinLink(res.player.id);
+        const report = reportLink(res.player.id);
+        openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`);
         setNote(`⏳ Invited ${res.player.fullName} — WhatsApp opened. They're confirmed once they register.`);
       }
       setPhone(''); setName(''); setMatched(null);
@@ -100,6 +116,8 @@ export function AddInvitePlayer({
             <Text style={textStyles.muted}>Enter a mobile number to add or invite a player. The number is how we recognise a person — one number, one profile.</Text>
           ) : looking ? (
             <Text style={textStyles.muted}>Checking this number…</Text>
+          ) : matched && matchedReported ? (
+            <Text style={st.reportedNote}>⚠ {matched.fullName} reported this number isn’t them — they can’t be added.</Text>
           ) : matched ? (
             <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote. Adding them to {teamName}.</Text>
           ) : (
@@ -112,7 +130,7 @@ export function AddInvitePlayer({
           <Button
             label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName}` : '＋ Add & send WhatsApp invite'}
             onPress={submit}
-            disabled={busy || !valid || (!matched && !name.trim())}
+            disabled={busy || !valid || matchedReported || (!matched && !name.trim())}
           />
           {note && <Text style={st.inviteNote}>{note}</Text>}
 
@@ -124,10 +142,18 @@ export function AddInvitePlayer({
                   <View style={st.invAvatar}><Text style={st.invAvatarText}>{initials(p.fullName)}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={st.invitedName} numberOfLines={1}>{p.fullName}</Text>
-                    {p.phone ? <Text style={st.invitedPhone} numberOfLines={1}>{p.phone}</Text> : null}
+                    {reportedIds.has(p.id)
+                      ? <Text style={st.reportedRowNote} numberOfLines={1}>⚠ reported this isn’t them</Text>
+                      : p.phone ? <Text style={st.invitedPhone} numberOfLines={1}>{p.phone}</Text> : null}
                   </View>
-                  <View style={st.pendingTag}><Text style={st.pendingTagText}>PENDING</Text></View>
-                  <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
+                  {reportedIds.has(p.id) ? (
+                    <View style={st.reportedTag}><Text style={st.reportedTagText}>REPORTED</Text></View>
+                  ) : (
+                    <>
+                      <View style={st.pendingTag}><Text style={st.pendingTagText}>PENDING</Text></View>
+                      <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
+                    </>
+                  )}
                 </View>
               ))}
             </View>
@@ -149,6 +175,10 @@ const st = StyleSheet.create({
   sideRow: { flexDirection: 'row', gap: theme.spacing(2) },
   inviteNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
   matchedNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  reportedNote: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
+  reportedRowNote: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
+  reportedTag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  reportedTagText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
   invitedLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   invitedRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   invAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },

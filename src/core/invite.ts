@@ -11,16 +11,25 @@ import { supabase } from './supabase';
 export const APP_INSTALL_URL = 'https://sportnnote.in';
 export const joinLink = (id: string) => `${APP_INSTALL_URL}/join/${id}`;
 
+/** The public "this isn't me" link for a provisional player — a browser page that
+ *  needs no app/account (served by the `report-invite` edge function). Falls back
+ *  to a deep link if the backend URL isn't configured (demo). */
+export const reportLink = (playerId: string) => {
+  const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  return base ? `${base}/functions/v1/report-invite?p=${playerId}` : `${APP_INSTALL_URL}/report/${playerId}`;
+};
+
 /** What someone is being invited to do — co-host an event (default) or manage a
  *  team's squad. Keeps the co-host wording untouched for existing callers. */
 export type InviteRole = 'co-host' | 'manage';
 const inviteVerb = (role?: InviteRole) => (role === 'manage' ? 'manage' : 'co-host');
 
 /** The invite message, shared across every channel (email / WhatsApp / SMS). */
-export function inviteMessage(opts: { name: string; inviterName: string; link: string; context?: string; role?: InviteRole }): string {
+export function inviteMessage(opts: { name: string; inviterName: string; link: string; context?: string; role?: InviteRole; reportUrl?: string }): string {
   const who = opts.name.trim() || 'there';
   const what = opts.context ? ` ${opts.context}` : '';
-  return `Hi ${who}! ${opts.inviterName} invited you to ${inviteVerb(opts.role)}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
+  const base = `Hi ${who}! ${opts.inviterName} invited you to ${inviteVerb(opts.role)}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
+  return opts.reportUrl ? `${base}\n\nNot you / didn’t expect this? Tell us (no app needed): ${opts.reportUrl}` : base;
 }
 
 export const inviteSubject = (inviterName: string, role?: InviteRole) =>
