@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-18 — Categories, Home feed, mobile build, onboarding · SHIPPED
+
+A big day. Migrations 0007 + 0008 are now live.
+
+- **Team-entry ③ — categories/divisions.** Migration 0008 (`tournament_categories`
+  + `tournament_teams.category_id`, separate table w/ backward-compat fallbacks).
+  `DivisionsEditor` at tournament creation; a Division selector on the
+  Participating-teams screen — teams rostered per division. Verified live.
+- **Home = a follow feed; Matches = only your games.** `getScopedMatches` splits
+  matches into `{ mine, feed }` (mine = play/organize/score; feed = mine + anyone
+  you follow, a followed player resolving to their team's matches); `getTeamRosters`
+  maps players↔teams; `useScopedMatches` hook. Home shows the feed, Matches shows
+  mine. Verified live on-device.
+- **Dev seeder.** `__DEV__`-only console hooks `__sportfolioSeedDemo()` /
+  `__sportfolioSeedMatches()` populate the live backend with a realistic, user-owned
+  demo (Inter-School Championship, U14 Boys / U16 Girls, teams, matches, and a
+  searchable/followable "Aarav Mehta"). Clean-slate wipe in `docs/seed-and-wipe.md`.
+- **Mobile build (EAS).** Bundle ids `in.sportnnote.app`, `eas.json` (preview =
+  Android APK), EAS project `@sportnnote.in/sportnnote`, `expo-updates` (OTA).
+  First Android APK built & installed. **Gotcha fixed:** EAS cloud builds don't get
+  `.env.local`; set `EXPO_PUBLIC_SUPABASE_*` as EAS env vars on the `preview`
+  environment or the app silently falls back to demo mode. `eas update` Hermes step
+  can OOM locally — prefer a cloud rebuild.
+- **First-run onboarding tour.** 7-step spotlight that dims the screen and rings the
+  actual element each step describes (a bottom-tab, or the ••• button), card anchored
+  beside it; captures touches; persists a seen-flag; **Replay app tour** in Settings.
+- **Home header fix.** Wordmark no longer wraps ('SportnNo/te'); voice/friendly/
+  calendar collapsed under a visible ••• quick-actions toggle beside notifications.
+
+---
+
 ### 2026-08-16 — Team-entry overhaul ② Invite / self-register + lifecycle · BUILT (needs migration 0007)
 
 Team participation is now a lifecycle, not a flat "in / not in": `confirmed`
