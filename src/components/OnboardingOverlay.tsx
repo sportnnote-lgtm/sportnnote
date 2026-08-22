@@ -3,12 +3,13 @@
  *  actual element it's describing (a bottom-tab, or the ••• quick-actions button),
  *  with the explainer card anchored right next to it. Deliberately brief (7 steps,
  *  under the 10-step cap). Persists a "seen" flag; replay via resetOnboarding(). */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { Modal, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
 import { Button } from './ui';
 import { hasSeenOnboarding, markOnboardingSeen } from '../core/onboarding';
+import { onboardingStore } from '../data/onboardingStore';
 
 // target: a bottom-tab index (0–4), 'more' (the ••• button), or undefined (centered).
 type Step = { icon: string; title: string; body: string; target?: number | 'more' };
@@ -29,12 +30,15 @@ const BTN = 44;
 export function OnboardingOverlay() {
   const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [visible, setVisible] = useState(false);
+  const visible = useSyncExternalStore(onboardingStore.subscribe, onboardingStore.getSnapshot, onboardingStore.getSnapshot);
   const [i, setI] = useState(0);
 
-  useEffect(() => { hasSeenOnboarding().then((seen) => { if (!seen) setVisible(true); }); }, []);
+  // Auto-open on first run; a "Replay tour" action opens it again via the store.
+  useEffect(() => { hasSeenOnboarding().then((seen) => { if (!seen) onboardingStore.request(); }); }, []);
+  // Always start a fresh run from the first step.
+  useEffect(() => { if (visible) setI(0); }, [visible]);
 
-  const finish = () => { void markOnboardingSeen(); setVisible(false); };
+  const finish = () => { void markOnboardingSeen(); onboardingStore.done(); };
   if (!visible) return null;
 
   const step = STEPS[i];

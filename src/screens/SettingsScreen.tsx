@@ -19,6 +19,7 @@ import { useAuth } from '../core/auth';
 import { isSupport } from '../core/roles';
 import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/time';
 import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
+import { onboardingStore } from '../data/onboardingStore';
 import { getMyPlayerId } from '../data/repos';
 import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
@@ -123,6 +124,8 @@ export default function SettingsScreen() {
 
         <Group title="Help">
           <Row icon="💬" label="Help & support" value="Guides · contact us" onPress={() => nav.navigate('Support')} />
+          <View style={st.divider} />
+          <Row icon="🧭" label="Replay app tour" onPress={() => { nav.navigate('Tabs', { screen: 'Home' }); onboardingStore.request(); }} />
         </Group>
 
         <Text style={st.version}>SportnNote v{version}{demo ? ' · demo mode' : ''}</Text>
