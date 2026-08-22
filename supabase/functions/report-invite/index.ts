@@ -14,7 +14,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const URL = Deno.env.get('SUPABASE_URL')!;
+const PROJECT_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     return page('Link not recognized', 'This report link looks invalid. If someone added you by mistake, ignore the message — you won’t be signed up for anything.');
   }
   try {
-    const svc = createClient(URL, SERVICE);
+    const svc = createClient(PROJECT_URL, SERVICE);
     // Only flag an UNCLAIMED provisional player — never a registered account.
     await svc.from('players').update({ reported_at: new Date().toISOString() }).eq('id', id).is('profile_id', null);
   } catch {
