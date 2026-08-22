@@ -29,8 +29,25 @@ function bestMatch(query: string, matches: Match[]): Match | undefined {
   return best?.m;
 }
 
-export function VoiceNav({ matches, onOpenMatch }: { matches: Match[]; onOpenMatch: (m: Match) => void }) {
-  const [open, setOpen] = useState(false);
+export function VoiceNav({
+  matches,
+  onOpenMatch,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger,
+}: {
+  matches: Match[];
+  onOpenMatch: (m: Match) => void;
+  /** controlled visibility — when provided, the caller owns the open state
+   *  (e.g. opened from a menu row) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** render only the panel, not the built-in mic button */
+  hideTrigger?: boolean;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (o: boolean) => (onOpenChange ? onOpenChange(o) : setInternalOpen(o));
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState('');
 
@@ -52,9 +69,11 @@ export function VoiceNav({ matches, onOpenMatch }: { matches: Match[]; onOpenMat
 
   return (
     <View style={open ? sv.wrap : undefined}>
-      <TouchableOpacity accessibilityRole="button" style={sv.iconBtn} activeOpacity={0.8} onPress={toggle} accessibilityLabel="Voice navigation">
-        <Text style={sv.icon}>{open ? '🎙️' : '🎙'}</Text>
-      </TouchableOpacity>
+      {!hideTrigger && (
+        <TouchableOpacity accessibilityRole="button" style={sv.iconBtn} activeOpacity={0.8} onPress={toggle} accessibilityLabel="Voice navigation">
+          <Text style={sv.icon}>{open ? '🎙️' : '🎙'}</Text>
+        </TouchableOpacity>
+      )}
       {open && (
         <View style={sv.panel}>
           <Text style={sv.title}>🎙 Voice — find &amp; open a game</Text>

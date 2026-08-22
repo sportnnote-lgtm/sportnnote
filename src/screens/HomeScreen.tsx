@@ -4,8 +4,8 @@
  *  matches below, and a sport row jumps into each sport's section (schedule,
  *  organize, standings & stats). Deep standings/stats live on those pages. */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
@@ -37,9 +37,11 @@ export default function HomeScreen() {
 
   // Selected tournament (null = "All"). Default to the first once loaded.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Quick actions (voice / friendly / calendar) collapse under one toggle so the
-  // wordmark keeps its line; notifications stays always-visible.
+  // Quick actions (voice / friendly / calendar) live in a dropdown menu under one
+  // toggle so the wordmark keeps its line; notifications stays always-visible.
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   useEffect(() => {
     if (selectedId === null && tournaments.length === 1) setSelectedId(tournaments[0].id);
   }, [tournaments, selectedId]);
@@ -117,26 +119,38 @@ export default function HomeScreen() {
             accessibilityLabel="Quick actions"
             onPress={() => setActionsOpen((v) => !v)}
           >
-            <Text style={[st.toggleGlyph, actionsOpen && { color: theme.colors.text }]}>{actionsOpen ? '✕' : '•••'}</Text>
+            <Text style={st.toggleGlyph}>{actionsOpen ? '▴' : '▾'}</Text>
           </TouchableOpacity>
+          {/* Voice panel opens from the menu; the built-in mic trigger is hidden. */}
+          <VoiceNav matches={feed} onOpenMatch={openScorer} open={voiceOpen} onOpenChange={setVoiceOpen} hideTrigger />
         </View>
 
-        {/* Quick actions, revealed inline so they don't crowd the wordmark. */}
-        {actionsOpen && (
-          <View style={st.quickActions}>
-            <VoiceNav matches={feed} onOpenMatch={openScorer} />
-            {canScore && (
-              <TouchableOpacity style={st.quickAction} activeOpacity={0.8} accessibilityRole="button"
-                onPress={() => { setActionsOpen(false); nav.navigate('ScheduleMatch', {}); }}>
-                <Text style={st.icon}>🤝</Text><Text style={st.quickLabel}>Start a friendly</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={st.quickAction} activeOpacity={0.8} accessibilityRole="button"
-              onPress={() => { setActionsOpen(false); nav.navigate('Calendar'); }}>
-              <Text style={st.icon}>📅</Text><Text style={st.quickLabel}>Calendar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Quick actions as an anchored dropdown menu. */}
+        <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
+          <Pressable style={st.menuBackdrop} onPress={() => setActionsOpen(false)}>
+            <View style={[st.menu, { top: insets.top + 60, right: theme.spacing(4) }]} onStartShouldSetResponder={() => true}>
+              {[
+                { icon: '🎙', label: 'Voice — find a game', onPress: () => setVoiceOpen(true) },
+                ...(canScore ? [{ icon: '🤝', label: 'Start a friendly', onPress: () => nav.navigate('ScheduleMatch', {}) }] : []),
+                { icon: '📅', label: 'Calendar', onPress: () => nav.navigate('Calendar') },
+              ].map((item, idx) => (
+                <React.Fragment key={item.label}>
+                  {idx > 0 && <View style={st.menuDivider} />}
+                  <TouchableOpacity
+                    style={st.menuRow}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.label}
+                    onPress={() => { setActionsOpen(false); item.onPress(); }}
+                  >
+                    <Text style={st.menuIcon}>{item.icon}</Text>
+                    <Text style={st.menuLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
 
         {!isSupabaseConfigured && (
           <Card style={st.demo}>
@@ -259,10 +273,13 @@ const st = StyleSheet.create({
   icon: { fontSize: 20 },
   // The quick-actions toggle is a text glyph (not an emoji), so it needs an
   // explicit, high-contrast colour — the accent makes it clearly tappable.
-  toggleGlyph: { fontSize: 20, color: theme.colors.primary, fontWeight: '900', letterSpacing: 1, lineHeight: 22 },
-  quickActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing(2), marginBottom: theme.spacing(3) },
-  quickAction: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3) },
-  quickLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  toggleGlyph: { fontSize: 16, color: theme.colors.primary, fontWeight: '900', lineHeight: 18 },
+  menuBackdrop: { flex: 1 },
+  menu: { position: 'absolute', minWidth: 232, backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(1), shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4) },
+  menuIcon: { fontSize: 18, width: 24, textAlign: 'center' },
+  menuLabel: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
+  menuDivider: { height: 1, backgroundColor: theme.colors.border, marginHorizontal: theme.spacing(3) },
   badge: {
     position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10,
     backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center',
