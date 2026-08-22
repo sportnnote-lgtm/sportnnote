@@ -117,7 +117,7 @@ export default function HomeScreen() {
             accessibilityLabel="Quick actions"
             onPress={() => setActionsOpen((v) => !v)}
           >
-            <Text style={st.icon}>{actionsOpen ? '✕' : '⋯'}</Text>
+            <Text style={[st.toggleGlyph, actionsOpen && { color: theme.colors.text }]}>{actionsOpen ? '✕' : '•••'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -257,6 +257,9 @@ const st = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
   },
   icon: { fontSize: 20 },
+  // The quick-actions toggle is a text glyph (not an emoji), so it needs an
+  // explicit, high-contrast colour — the accent makes it clearly tappable.
+  toggleGlyph: { fontSize: 20, color: theme.colors.primary, fontWeight: '900', letterSpacing: 1, lineHeight: 22 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing(2), marginBottom: theme.spacing(3) },
   quickAction: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3) },
   quickLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
