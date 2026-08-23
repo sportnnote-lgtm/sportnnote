@@ -17,14 +17,19 @@ in **corrections (undo), stats, and serve tracking**, not the score math.
 ## Gaps by theme
 
 ### 1. Undo / timeline editor — the split that matters
-| Sport | Editor? |
-|---|---|
-| Badminton, Tennis, Volleyball | ✅ full `RallyPointEditor` (remove/edit/insert) |
-| **Padel, Pickleball, Squash** | ❌ **none** — no undo, no correction |
+> **Correction (2026-08-24):** every sport has the global "↶ Undo" bar
+> (LiveScoringScreen) that pops the last event and replays — so padel/pickleball/
+> squash CAN undo a mis-tap. The split below is about the richer *surgical*
+> in-plugin editor (edit/insert an arbitrary past point), not undo.
 
-**Tier 1 fix:** wire `RallyPointEditor` into padel/pickleball/squash (rallyCore).
-A mis-tapped point is currently uncorrectable in those three. rallyCore's reducer
-ignores `EDIT_LOG`/`STAT_ADJUST` — needs the same replay path the others use.
+| Sport | Global undo | Surgical `RallyPointEditor` |
+|---|---|---|
+| Badminton, Tennis, Volleyball | ✅ | ✅ remove/edit/insert |
+| **Padel, Pickleball, Squash** | ✅ | ❌ (rallyCore ignores `EDIT_LOG`/`STAT_ADJUST`) |
+
+**Tier 2 fix (downgraded from Tier 1):** wire `RallyPointEditor` into padel/
+pickleball/squash (rallyCore) for parity — arbitrary-point edit. Undo already works,
+so this is polish, not a capture failure.
 
 ### 2. Per-player box score
 Badminton/tennis/volleyball emit `kind`/`set`/`points` → box score. **Padel,
