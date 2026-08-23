@@ -27,6 +27,7 @@ export function ContactCard({
   name,
   verify = verifyContact,
   emailOtp = false,
+  phoneOtp = false,
 }: {
   playerId: string;
   phone?: string;
@@ -41,6 +42,8 @@ export function ContactCard({
   verify?: (playerId: string, channel: Channel) => Promise<void>;
   /** enable REAL emailed OTP for the email row (only for the player's own card) */
   emailOtp?: boolean;
+  /** enable REAL WhatsApp OTP for the phone row (only for the player's own card) */
+  phoneOtp?: boolean;
 }) {
   const sessionKey = `${playerId}:${title}`;
   const saved = otpSession.get(sessionKey);
@@ -67,9 +70,9 @@ export function ContactCard({
     setError(null);
     setSent('');
     setReal(false);
-    // Real emailed OTP only for the player's own email; everything else uses the
-    // on-screen code until its delivery channel is wired up.
-    if (emailOtp && channel === 'email') {
+    // Real delivered OTP for the player's own email (Resend) or phone (WhatsApp);
+    // everything else uses the on-screen code until its channel is wired up.
+    if ((emailOtp && channel === 'email') || (phoneOtp && channel === 'phone')) {
       setBusy(true);
       const r = await beginContactVerification(playerId, channel);
       setBusy(false);
@@ -86,7 +89,7 @@ export function ContactCard({
       setBusy(true);
       const ok = await verifyContactOtp(playerId, channel, code.trim());
       setBusy(false);
-      if (!ok) { setError('Incorrect or expired code — check your email and try again.'); return; }
+      if (!ok) { setError(`Incorrect or expired code — check your ${channel === 'phone' ? 'WhatsApp' : 'email'} and try again.`); return; }
     } else {
       if (code.trim() !== sent) { setError('Incorrect code — try again.'); return; }
       await verify(playerId, channel);
@@ -110,7 +113,9 @@ export function ContactCard({
         <View style={st.otp}>
           <Text style={textStyles.muted}>
             {busy ? 'Sending a code…'
-              : real ? `We emailed a 6-digit code to ${value}. Enter it below.`
+              : real ? (channel === 'phone'
+                  ? `We sent a 6-digit code on WhatsApp to ${value}. Enter it below.`
+                  : `We emailed a 6-digit code to ${value}. Enter it below.`)
               : 'Enter the 6-digit code below.'}
           </Text>
           <View style={st.otpRow}>
