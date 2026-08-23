@@ -20,6 +20,7 @@ import LiveScoringScreen from '../screens/LiveScoringScreen';
 import AuthScreen from '../screens/AuthScreen';
 import OrganizeScreen from '../screens/OrganizeScreen';
 import CreateTournamentScreen from '../screens/CreateTournamentScreen';
+import EditTournamentScreen from '../screens/EditTournamentScreen';
 import TeamsScreen from '../screens/TeamsScreen';
 import ScheduleMatchScreen from '../screens/ScheduleMatchScreen';
 import GenerateFixturesScreen from '../screens/GenerateFixturesScreen';
@@ -252,6 +253,11 @@ export default function RootNavigator() {
               name="Tournament"
               component={TournamentProfileScreen}
               options={{ ...stackScreenOpts, title: 'Tournament' }}
+            />
+            <Stack.Screen
+              name="EditTournament"
+              component={EditTournamentScreen}
+              options={{ ...stackScreenOpts, title: 'Edit Tournament' }}
             />
             <Stack.Screen
               name="Organization"

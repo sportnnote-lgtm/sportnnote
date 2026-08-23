@@ -1672,6 +1672,39 @@ export async function createTournament(input: NewTournament): Promise<Tournament
   return tournament;
 }
 
+/** Editable tournament fields (host/organizer are fixed at creation; co-hosts and
+ *  divisions are managed on the tournament page). */
+export interface TournamentPatch {
+  name?: string;
+  sports?: SportId[];
+  startDate?: string;
+  endDate?: string;
+  structure?: Tournament['structure'];
+  knockoutFormat?: Tournament['knockoutFormat'];
+  formats?: Tournament['formats'];
+  isOpen?: boolean;
+}
+
+/** Update a tournament in place (RLS: only its organizer/hosts). Only the fields
+ *  present in the patch are changed. */
+export async function updateTournament(id: string, patch: TournamentPatch): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === id);
+    if (t) Object.assign(t, patch); // demo Tournament uses these camelCase keys
+    return;
+  }
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.sports !== undefined) row.sports = patch.sports;
+  if (patch.startDate !== undefined) row.start_date = patch.startDate;
+  if (patch.endDate !== undefined) row.end_date = patch.endDate;
+  if (patch.structure !== undefined) row.structure = patch.structure ?? null;
+  if (patch.knockoutFormat !== undefined) row.knockout_format = patch.knockoutFormat ?? null;
+  if (patch.formats !== undefined) row.formats = patch.formats ?? {};
+  if (patch.isOpen !== undefined) row.is_open = patch.isOpen;
+  if (Object.keys(row).length) await supabase.from('tournaments').update(row).eq('id', id);
+}
+
 /* ------------------------------ Organizations ------------------------------ */
 
 const toOrganization = (r: any): Organization => ({

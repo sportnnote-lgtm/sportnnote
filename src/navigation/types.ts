@@ -49,6 +49,7 @@ export type RootStackParamList = {
   Squad: { teamId: string };
   JoinTeam: { token?: string } | undefined;
   Tournament: { tournamentId: string };
+  EditTournament: { tournamentId: string };
   Organization: { orgId: string };
   Notifications: undefined;
   Calendar: undefined;

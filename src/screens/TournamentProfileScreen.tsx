@@ -312,6 +312,7 @@ export default function TournamentProfileScreen() {
             />
             <Button label="📅 Schedule a match" variant="ghost" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
             <Button label="⚡ Auto-generate fixtures" variant="ghost" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
+            <Button label="✎ Edit tournament" variant="ghost" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
           </View>
         )}
 
