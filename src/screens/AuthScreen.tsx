@@ -21,6 +21,13 @@ import type { Role } from '../core/types';
 const ROLES: Role[] = ['player', 'parent', 'scorer', 'organizer', 'fan'];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// SMS login is coded (sendPhoneOtp/verifyPhoneOtp) but needs a Supabase SMS
+// provider AND the phone to exist on auth.users — neither is set up yet, so the
+// SMS code path can't actually deliver. Keep it OFF for the pilot: email code +
+// password only. Flip to true once an SMS provider is configured on the live
+// project. Kept behind a flag (not deleted) so re-enabling is one line.
+const SMS_LOGIN_ENABLED = false;
+
 type Mode = 'in' | 'up';
 type Flow = 'password' | 'otp' | 'reset';
 
@@ -141,7 +148,7 @@ export default function AuthScreen() {
             </>
           )}
 
-          {mode === 'in' && flow === 'otp' && !sent && (
+          {SMS_LOGIN_ENABLED && mode === 'in' && flow === 'otp' && !sent && (
             <View style={{ gap: theme.spacing(1) }}>
               <Text style={textStyles.muted}>Send my code by…</Text>
               <View style={st.roles}>
