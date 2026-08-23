@@ -44,15 +44,18 @@ stat-lines). ⚠️ Fielding (catches/stumpings/run-outs) not credited to profil
 2. ✅ **Byes off a no-ball** (batsmen run without hitting) — SHIPPED. No-ball now
    captures off-bat runs AND byes separately.
 
-**Tier 2 — real but less frequent (next cricket pass):**
-3. **Run-out off a wide / no-ball** (a wicket on a non-legal delivery — must not
-   advance the over). Intricate to combine with the extra; deferred.
-4. Penalty runs (5-run), overthrows as a distinct concept, dead ball.
-5. **Fielding stats to profiles** (catches/stumpings/run-outs credited to the
-   fielder) — needs a 2nd attribution per wicket; deferred.
-6. Run-out strike-crossing is "approximated" (scorer can't pick who ends on strike).
+**Tier 2 — SHIPPED:**
+3. ✅ **Run-out off a wide / no-ball** — a wicket on a non-legal delivery: the over
+   doesn't advance, the +1 penalty applies, completed runs count (extras on a wide,
+   off-bat on a no-ball). Entry point in the Wide/No-ball panels ("…or a RUN OUT").
+4. ✅ **Penalty runs** — a "⚖️ Penalty +5" button adds 5 to the batting side as extras.
+5. ✅ **Fielding stats to profiles** — catches / stumpings / run-outs now credit the
+   fielder (via a new 2nd-attribution channel, `attribution2`, reversed on undo).
+   Catches added to the cricket leaderboards.
 
-**Tier 3:** `5` run button; rare dismissals (retired-out, obstructing); DRS.
+**Tier 3 (remaining):** overthrows as a distinct concept, dead ball; run-out
+strike-crossing still "approximated" (scorer can't pick who ends on strike); `5`
+run button; rare dismissals (retired-out, obstructing); DRS.
 
 ## Replay log
 _(after fixes — drive a real T20 scorecard through the app ball-by-ball.)_

@@ -24,7 +24,7 @@ import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
 import type { MatchEventRecord, SportId } from '../core/types';
-import type { ScoreAction } from '../sports/types';
+import type { Attribution, ScoreAction } from '../sports/types';
 
 const toAction = (e: MatchEventRecord): ScoreAction => ({
   type: e.type,
@@ -192,6 +192,14 @@ export function useLiveMatch(params: {
           });
         }
       }
+      // A second player credited by the same action (e.g. a fielder's catch on a
+      // bowler's wicket). Stat line only — no separate follower notification.
+      if (action.attribution2) {
+        const { playerId, stat, by = 1, extra, tracked } = action.attribution2;
+        const opponent = action.side === 'home' ? awayTeamName : homeTeamName;
+        void recordStatLine({ matchId, playerId, sport, stat, by, opponent, tracked });
+        if (extra) for (const [k, v] of Object.entries(extra)) void recordStatLine({ matchId, playerId, sport, stat: k, by: v, opponent, tracked });
+      }
 
       // Persist to the event log (demo store or Supabase) so the timeline is
       // durable and — in live mode — broadcast to every viewer.
@@ -218,7 +226,9 @@ export function useLiveMatch(params: {
         seq,
         type: action.type,
         side: action.side ?? null,
-        payload: action.payload ?? {},
+        // Stash a second attribution in the payload (no dedicated column) so undo
+        // can reverse it; the reducer ignores unknown payload keys on replay.
+        payload: action.attribution2 ? { ...(action.payload ?? {}), _attr2: action.attribution2 } : action.payload ?? {},
         attribution: action.attribution ?? null,
       };
       // Durably queue the event first (survives offline/refresh), then let the
@@ -250,6 +260,12 @@ export function useLiveMatch(params: {
           void recordStatLine({ matchId, playerId, sport, stat: k, by: -v });
         }
       }
+    }
+    // Reverse a second attribution stashed in the payload (e.g. a fielder's catch).
+    const a2 = (removed.payload as { _attr2?: Attribution } | null)?._attr2;
+    if (a2) {
+      void recordStatLine({ matchId, playerId: a2.playerId, sport, stat: a2.stat, by: -(a2.by ?? 1) });
+      if (a2.extra) for (const [k, v] of Object.entries(a2.extra)) void recordStatLine({ matchId, playerId: a2.playerId, sport, stat: k, by: -v });
     }
     // Re-derive from the truncated log. In live mode this DELETE also reaches
     // viewers' realtime subscriptions, which rebuild the same way.

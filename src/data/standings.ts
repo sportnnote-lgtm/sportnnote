@@ -101,6 +101,7 @@ export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> 
   cricket: [
     { key: 'runs', label: 'Runs' },
     { key: 'wickets', label: 'Wickets' },
+    { key: 'catches', label: 'Catches' },
   ],
   basketball: [
     { key: 'points', label: 'Points' },

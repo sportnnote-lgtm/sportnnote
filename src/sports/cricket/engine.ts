@@ -455,12 +455,61 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       // Completed-run parity and over-end both swap strike (run-out crossing approximated).
       return afterLegalBall(next, (completed % 2 === 1) !== overEnd);
     }
+    case 'PENALTY': {
+      // A 5-run penalty (illegal fielding, ball hitting a helmet, slow over-rate…):
+      // runs added to the batting side, not a ball, not charged to any bowler.
+      const r = Math.max(1, Number(a.payload?.runs ?? 5));
+      seq += 1;
+      return settle({
+        ...s,
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, extras: cur.extras + r } },
+        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '➕', label: `Penalty — ${r} runs`, detail: undefined, side: bat, tone: 'extra' }],
+        seq,
+      });
+    }
     case 'EXTRA': {
       const kind = String(a.payload?.kind ?? 'Wide');
       const isNoBall = kind === 'No ball';
       seq += 1;
       // Neither a wide nor a no-ball is a legal ball (no over progress).
       const overReset = s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver;
+
+      // Run-out off the extra: a wicket falls without a legal ball being bowled
+      // (the over does NOT advance). The +1 penalty stands; any completed runs
+      // count (off the bat on a no-ball, as extras on a wide); no bowler credit.
+      if (a.payload?.runout) {
+        const completed = Math.max(0, Number(a.payload?.runs ?? 0));
+        const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
+        const outId = batterOut === 'nonstriker' ? s.nonStrikerId : s.strikerId;
+        const outName = batterOut === 'nonstriker' ? s.nonStrikerName : s.strikerName;
+        const newBatId = a.payload?.newBatId as string | undefined;
+        const newBatName = a.payload?.newBatName as string | undefined;
+        const fielderId = a.payload?.fielderId as string | undefined;
+        const fielderName = a.payload?.fielderName as string | undefined;
+        const dismissal = composeDismissal('runout', undefined, fielderName);
+        let batting = s.batting;
+        if (isNoBall) batting = applyBat(batting, s.strikerId, s.strikerName, { runs: completed, balls: 1 });
+        batting = applyBat(batting, outId, outName, { out: true, dismissal });
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        const crease = batterOut === 'nonstriker'
+          ? { nonStrikerId: newBatId, nonStrikerName: newBatName }
+          : { strikerId: newBatId, strikerName: newBatName };
+        const sym = `${completed > 0 ? completed : ''}${isNoBall ? 'nb' : 'wd'}+W`;
+        let next: CricketState = {
+          ...s,
+          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + 1 + completed, extras: cur.extras + (isNoBall ? 1 : 1 + completed), wickets: cur.wickets + 1 } },
+          batting,
+          bowling: bumpBowl({ runs: 1 + completed, extras: isNoBall ? 1 : 1 + completed }),
+          dismissals: [...s.dismissals, { kind: 'runout', outId, fielderId, fielderName }],
+          thisOver: [...overReset, sym],
+          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '🎯', label: `${isNoBall ? 'No ball' : 'Wide'} — RUN OUT`, detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
+          seq,
+          freeHit: isNoBall ? true : s.freeHit,
+          ...crease,
+        };
+        if (completed % 2 === 1) next = swapStrike(next);
+        return settle(next);
+      }
       if (isNoBall) {
         // No-ball: +1 penalty, PLUS runs off the bat (credited to the striker) AND/OR
         // byes run without hitting (team extras, not charged to the bowler). The

@@ -24,6 +24,21 @@ export type ScoringArchetype =
   | 'raid' // kabaddi: raid & tackle points, timed halves
   | 'measured'; // athletics: times/distances ranked
 
+/** Player stat credit carried alongside a scoring action (a side-channel the
+ *  reducer ignores; the live-match layer turns it into a stat line). */
+export interface Attribution {
+  playerId: string;
+  stat: string;
+  by?: number;
+  playerName?: string;
+  /** extra stat increments credited in the same action, e.g. a shot on target
+   *  is {shotsOnTarget: 1} on top of stat:'shots'. */
+  extra?: Record<string, number>;
+  /** stat keys being tracked this match (scorer's per-game settings) — stamped
+   *  on the player's stat line so profiles can show per-stat game coverage. */
+  tracked?: string[];
+}
+
 /** A scoring event. `type` is sport-defined; payload is open. */
 export interface ScoreAction {
   type: string;
@@ -35,18 +50,11 @@ export interface ScoreAction {
    * straight from live scoring. The reducer ignores this (it only affects the
    * scoreboard via `type`/`side`); attribution is a side-channel.
    */
-  attribution?: {
-    playerId: string;
-    stat: string;
-    by?: number;
-    playerName?: string;
-    /** extra stat increments credited in the same action, e.g. a shot on target
-     *  is {shotsOnTarget: 1} on top of stat:'shots'. */
-    extra?: Record<string, number>;
-    /** stat keys being tracked this match (scorer's per-game settings) — stamped
-     *  on the player's stat line so profiles can show per-stat game coverage. */
-    tracked?: string[];
-  };
+  attribution?: Attribution;
+  /** A SECOND player credited by the same action — e.g. a caught wicket credits
+   *  the bowler (attribution) AND the fielder's catch (attribution2). Persisted
+   *  in the event payload so undo reverses it too. */
+  attribution2?: Attribution;
 }
 
 /** Context a sport's voice parser gets: the live state, team names and rosters

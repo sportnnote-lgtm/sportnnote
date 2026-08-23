@@ -75,3 +75,32 @@ describe('cricket — no-balls', () => {
     assert.equal(s.freeHit, true);
   });
 });
+
+describe('cricket — penalty runs & run-outs off an extra', () => {
+  test('a 5-run penalty is added as extras, not a ball', () => {
+    const s = reducer(opened(), { type: 'PENALTY', payload: { runs: 5 } });
+    assert.equal(home(s).runs, 5);
+    assert.equal(home(s).extras, 5);
+    assert.equal(home(s).balls, 0);
+  });
+
+  test('run-out off a wide: +1 + completed runs as extras, a wicket, no over progress', () => {
+    const s = ext(opened(), { kind: 'Wide', runout: true, runs: 1, batterOut: 'striker', fielderName: 'F', newBatId: 's3', newBatName: 'C' });
+    assert.equal(home(s).runs, 2); // 1 wide + 1 completed
+    assert.equal(home(s).extras, 2);
+    assert.equal(home(s).wickets, 1);
+    assert.equal(home(s).balls, 0); // NOT a legal ball
+    assert.equal(s.batting.s1.out, true);
+    assert.equal(s.bowling.b1.wickets, 0); // run-out — no bowler credit
+  });
+
+  test('run-out off a no-ball: +1, a free hit, the non-striker run out, no over progress', () => {
+    const s = ext(opened(), { kind: 'No ball', runout: true, runs: 0, batterOut: 'nonstriker', fielderName: 'F', newBatId: 's3', newBatName: 'C' });
+    assert.equal(home(s).runs, 1);
+    assert.equal(home(s).wickets, 1);
+    assert.equal(home(s).balls, 0);
+    assert.equal(s.freeHit, true);
+    assert.equal(s.batting.s1.balls, 1); // striker still faced the no-ball
+    assert.equal(s.batting.s2.out, true); // non-striker run out
+  });
+});

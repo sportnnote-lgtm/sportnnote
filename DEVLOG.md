@@ -32,6 +32,24 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Cricket finished: run-outs off an extra, penalty runs, fielding stats
+
+The deferred cricket items:
+- **Run-out off a wide / no-ball** — a wicket on a non-legal delivery: the over
+  doesn't advance, the +1 penalty applies, completed runs count (extras on a wide,
+  off-bat on a no-ball), no bowler credit. Entry via "…or a RUN OUT" in the Wide/
+  No-ball panels; reuses the wicket flow (runs→fielder→batter→new batsman).
+- **Penalty runs** — a `PENALTY` action + "⚖️ Penalty +5" button (extras to the
+  batting side).
+- **Fielding stats to profiles** — added a 2nd-attribution channel `attribution2`
+  to ScoreAction (persisted in the event payload, reversed on undo in useLiveMatch).
+  A caught wicket now credits the bowler AND the fielder's catch; stumped→keeper;
+  run-out→fielder. `catches` added to cricket leaderboards.
+
+3 more engine tests (9 in tests/cricket.test.mts). `tsc` clean; 163 tests.
+
+---
+
 ### 2026-08-24 — Per-sport capture audit + Basketball made ground-ready
 
 New workstream: verify every sport captures a real match as-is (settings, every
