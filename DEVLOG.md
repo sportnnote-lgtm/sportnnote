@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Go-live blockers 3–7 cleared → all 7 SHIPPED
+
+The rest of the pilot-blocker list from the readiness audit, in order:
+
+- **#3 players-PII RLS** (`c...`/migration `20260824120000`) — replaced the blanket
+  "authed write players FOR ALL" with scoped insert/update/delete (own claimed row
+  `profile_id=auth.uid()` or unclaimed provisional `profile_id IS NULL`). User runs 0010.
+- **#6 edit tournament** (`adbbb79`) — `updateTournament(id, patch)` + `EditTournamentScreen`
+  (name/dates/sports/structure/knockout/formats/open) + "✎ Edit tournament" on the
+  tournament page (hosts only). Pure code, no migration.
+- **#7 cross-sport house merge** (`4e1c725`) — `overallStandings` keyed the merge by
+  `teamId`, but a house is a separate single-sport team row per sport → a multi-sport
+  house showed as several rows and never combined points. Fixed: merge by name
+  (case/whitespace-insensitive). Added `tests/standings.test.mts`. Renders on
+  multi-sport tournament pages.
+- **#5 phone-OTP login** (`c5dc250`) — the SMS-code option was a silent dead-end (no
+  SMS provider, phone not on auth.users). Gated behind `SMS_LOGIN_ENABLED=false` in
+  `AuthScreen` → email-code + password only; phone code kept behind the flag.
+- **#4 email verification** (`837ded4`) — Path A (pilot: confirm-email OFF, works today)
+  + pre-built Path B so switching on later is a dashboard flip + one migration, no code:
+  migration `20260825120000` (handle_new_user trigger makes the profile as the DB from
+  user metadata; de-dupes handle), `signUp` passes `options.data` + idempotent upsert
+  fallback + returns `needsEmailConfirm`, AuthScreen shows "check your email".
+  Runbook `docs/email-verification.md` (ORDER: migrate before flipping confirm-email ON).
+
+All: `tsc` clean, 141 tests. **User actions pending:** run migrations 0010 + 0011 in the
+Supabase SQL editor (both safe to run now); confirm Authentication → Email → "Confirm
+email" is OFF for the pilot.
+
+---
+
 ### 2026-08-24 — Go-live audit + results write-back (blockers 1&2) · SHIPPED
 
 Ran a 4-area go-live readiness audit (auth/security, spectating, tournament types,
