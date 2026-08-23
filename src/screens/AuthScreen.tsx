@@ -62,13 +62,13 @@ export default function AuthScreen() {
   const switchFlow = (f: Flow) => { setFlow(f); clearFlow(); };
 
   /** Run an auth call with busy/error/note handling; onOk fires only on success. */
-  async function run(fn: () => Promise<{ error?: string }>, okNote?: string, onOk?: () => void) {
+  async function run<R extends { error?: string }>(fn: () => Promise<R>, okNote?: string, onOk?: (res: R) => void) {
     setBusy(true); setError(null); setNote(null);
     const res = await fn();
     setBusy(false);
     if (res.error) { setError(res.error); return; }
     if (okNote) setNote(okNote);
-    onOk?.();
+    onOk?.(res);
   }
 
   // Password sign-up / sign-in — captures identity + guardian consent on sign-up.
@@ -85,10 +85,19 @@ export default function AuthScreen() {
     const guardian = minor && gName.trim()
       ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
       : undefined;
-    void run(() =>
-      mode === 'in'
-        ? signIn(email.trim(), password)
-        : signUp(email.trim(), password, fullName.trim() || 'Player', role, dob.trim(), guardian, mobile.trim())
+    if (mode === 'in') return void run(() => signIn(email.trim(), password));
+    // On sign-up: if email confirmation is on, there's no session yet — tell the
+    // user to check their inbox instead of leaving them on a silent screen.
+    void run(
+      () => signUp(email.trim(), password, fullName.trim() || 'Player', role, dob.trim(), guardian, mobile.trim()),
+      undefined,
+      (res) => {
+        if (res.needsEmailConfirm) {
+          switchMode('in'); // switch to the sign-in tab (also clears the note)…
+          setNote(`Account created — check ${email.trim()} for a confirmation link, then sign in.`); // …so set it after
+        }
+        // Otherwise a session fired and onAuthStateChange signs you straight in.
+      }
     );
   }
 

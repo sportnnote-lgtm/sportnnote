@@ -25,7 +25,9 @@ interface AuthState {
     guardian?: GuardianContact,
     /** the user's mobile — their primary identity key (mandatory at sign-up) */
     phone?: string
-  ) => Promise<{ error?: string }>;
+    /** needsEmailConfirm: account created but no session yet — user must confirm
+     *  their email before signing in (only when "Confirm email" is ON). */
+  ) => Promise<{ error?: string; needsEmailConfirm?: boolean }>;
   signOut: () => Promise<void>;
   /** Passwordless sign-in: email a 6-digit code to an EXISTING user. */
   sendSignInOtp: (email: string) => Promise<{ error?: string }>;
@@ -113,18 +115,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signUp: async (email, password, fullName, role, dob, guardian, phone) => {
       if (!supabase) return {};
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const normPhone = phone ? normalizePhone(phone) : null;
+      // Pass the profile fields as user metadata so the DB trigger (migration
+      // 0011) can create the profile row — this works with OR without a session,
+      // so it's correct whether or not "Confirm email" is on. (dob is mandatory;
+      // phone is the primary identity key; guardian carries under-18 consent.)
+      const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}) };
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } });
       if (error) return { error: error.message };
-      if (data.user) {
-        const handle = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-        // dob is captured at sign-up (mandatory); phone is the primary identity key;
-        // the guardian (for under-18) is carried so the player profile picks it up.
+
+      if (data.session && data.user) {
+        // We have a session (Confirm email OFF, or the trigger isn't deployed):
+        // ensure the profile row exists. Idempotent — a harmless no-op when the
+        // trigger already created it. This is the fallback that keeps sign-up
+        // working on deployments where 0011 hasn't been applied yet.
+        const handle = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
         const { error: pErr } = await supabase
           .from('profiles')
-          .insert({ id: data.user.id, full_name: fullName, handle, role, dob, phone: phone ? normalizePhone(phone) : null, guardian: guardian ?? null });
+          .upsert(
+            { id: data.user.id, full_name: fullName, handle, role, dob, phone: normPhone, guardian: guardian ?? null },
+            { onConflict: 'id', ignoreDuplicates: true }
+          );
         if (pErr) return { error: pErr.message };
+        return {}; // session fires onAuthStateChange → loadProfile → signed in
       }
-      return {};
+
+      // No session → Confirm email is ON. The DB trigger has already created the
+      // profile; the user must confirm via the emailed link/code before signing in.
+      return { needsEmailConfirm: true };
     },
     signOut: async () => {
       if (supabase) await supabase.auth.signOut();
