@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Per-sport capture audit + Basketball made ground-ready
+
+New workstream: verify every sport captures a real match as-is (settings, every
+scorer action, corrections). Built the mechanism in `docs/sport-coverage/` — a
+matrix per sport (specialist "needs" vs app "does") → prioritised gap list →
+replay acceptance test. Method is **hybrid**: spec-diff all 10 fast, fix, then a
+real-match replay per sport.
+
+Audit headlines (all 10 inventoried): **cricket has NO undo/edit of a delivery**
+(highest severity — queued); basketball had no real free-throw capture;
+padel/pickleball/squash lack the timeline editor the other rally sports have;
+football is essentially ground-ready.
+
+**Basketball — Tier 1+2 shipped (commit `0d2fda4`):** free throws (made/miss/
+and-one/shooting-foul flow), foul types (personal/shooting/technical/flagrant/
+offensive; technicals excluded from bonus), substitutions with optional on-court
+five, steals/blocks/turnovers + STL/BLK/TO box score, off/def rebounds, timeouts
+(per-format limit). Extracted the pure core to `basketball/engine.ts` (mirrors
+cricket/kabaddi) → 13 unit tests. Shot-clock enforcement deferred (referee's
+call). `tsc` clean; 154 tests. Order next: cricket (undo), then kabaddi/volleyball/
+badminton/tennis, then padel/pickleball/squash.
+
+---
+
 ### 2026-08-24 — Go-live blockers 3–7 cleared → all 7 SHIPPED
 
 The rest of the pilot-blocker list from the readiness audit, in order:
