@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Go-live audit + results write-back (blockers 1&2) · SHIPPED
+
+Ran a 4-area go-live readiness audit (auth/security, spectating, tournament types,
+career/stats) → 7 blockers, published as the "SportnNote Pilot Readiness" artifact.
+Started on the #1 blocker: **the app scored games but never saved the result**, so
+all standings/records/win-rates read empty for real play.
+
+- New pure `SportPlugin.result(state) → {winner, home, away}` for all 10 sports
+  (goals/points, games/sets won, football shootout, cricket chase/super-over) — the
+  display summary is never parsed for winners.
+- `toMatch` derives winner + score from stored state (fixes for/against + works
+  retroactively; no migration).
+- `updateMatchSnapshot` on completion persists `matches.winner` and sets each
+  `stat_lines.won` for the winning side (live + demo). Unlocks team W/L/points,
+  team records, player wins/win-rate, and correct match history.
+- typecheck clean; 137 tests; app boots clean (read path safe on every match).
+- Remaining blockers: 3 players-PII RLS, 4 email-verify flow, 5 phone-OTP,
+  6 edit-tournament, 7 cross-sport house merge.
+
+---
+
 ### 2026-08-24 — ③ Phase 2: per-division fixtures / standings / bracket · SHIPPED
 
 Divisions (Phase 1) are now a real competition boundary, not just a roster tag.
