@@ -19,18 +19,25 @@ export function pointVoice(text: string, ctx: VoiceContext): ScoreAction[] | nul
   return [{ type: 'POINT', side, attribution: attribution(player, 'points') }];
 }
 
-/** Basketball: "two/three/free throw [player]", "rebound [player]", "foul [player]". */
+/** Basketball: "two/three [player]", "free throw [player]", "rebound/assist/steal/
+ *  block/turnover/foul [player]". */
 export function basketballVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
   const q = deburr(text);
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
   if (/\brebound\b/.test(q)) return [{ type: 'REBOUND', side, attribution: attribution(player, 'rebounds') }];
   if (/\bassist\b/.test(q)) return [{ type: 'ASSIST', side, attribution: attribution(player, 'assists') }];
-  if (/\bfoul\b/.test(q)) return [{ type: 'FOUL', side, attribution: attribution(player, 'fouls') }];
+  if (/\bsteal\b|stole\b/.test(q)) return [{ type: 'STEAL', side, attribution: attribution(player, 'steals') }];
+  if (/\bblock\b|blocked\b|swat/.test(q)) return [{ type: 'BLOCK', side, attribution: attribution(player, 'blocks') }];
+  if (/\bturnover\b|turned over|lost the ball/.test(q)) return [{ type: 'TURNOVER', side, attribution: attribution(player, 'turnovers') }];
+  if (/\bfoul\b/.test(q)) return [{ type: 'FOUL', side, payload: { foulType: 'personal' }, attribution: attribution(player, 'fouls') }];
+  // A spoken free throw is a made free throw (say "miss" via the buttons).
+  if (/\bfree ?throw\b|foul shot/.test(q))
+    return [{ type: 'FREE_THROW', side, payload: { made: true }, attribution: player ? { playerId: player.id, stat: 'points', by: 1, playerName: player.fullName, extra: { freeThrowsMade: 1, freeThrowsAtt: 1 } } : undefined }];
   let pts: number | undefined;
   if (/\bthree\b|three ?pointer|from (downtown|deep)/.test(q)) pts = 3;
   else if (/\btwo\b|\bbasket\b|\bbucket\b|lay ?up|dunk|jumper|and one/.test(q)) pts = 2;
-  else if (/\bfree ?throw\b|foul shot/.test(q)) pts = 1;
+  else if (/\bone\b|one ?pointer/.test(q)) pts = 1; // 3×3 one-pointer (inside the arc)
   if (pts) return [{ type: 'SCORE', side, payload: { points: pts }, attribution: attribution(player, 'points', pts) }];
   return null;
 }

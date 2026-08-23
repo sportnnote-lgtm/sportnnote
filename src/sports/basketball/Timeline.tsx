@@ -4,11 +4,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
-import { BB_META, type BBEvent } from './events';
+import { BB_META, FOUL_LABEL, type BBEvent } from './events';
 
 function describe(e: BBEvent): string {
   const who = e.playerName ?? 'Team';
   if (e.type === 'score') return `+${e.points ?? 0}  ${who}`;
+  if (e.type === 'freethrow') return `${e.made ? '✅ made' : '❌ miss'}  ${who}`;
+  if (e.type === 'sub' && e.onName) return `${who} ▸ ${e.onName}`;
+  if (e.type === 'foul' && e.foulType) return `${FOUL_LABEL[e.foulType]} · ${who}`;
+  if (e.type === 'rebound' && e.reboundType) return `${e.reboundType === 'off' ? 'Off.' : 'Def.'} · ${who}`;
   return who;
 }
 

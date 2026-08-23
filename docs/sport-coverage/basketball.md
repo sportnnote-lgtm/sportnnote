@@ -52,26 +52,31 @@ Litmus: *a scorer at a school/college game can capture everything that happens.*
 ## Player stats
 PTS / REB / AST / PF ✅ · STL / BLK / TO ❌ (scaffolding half-present).
 
-## Gaps — prioritised
+## Gaps — status (Tier 1+2 SHIPPED)
 
-**Tier 1 — real capture failures (a scorer WILL hit these in a normal game):**
-1. **Free throws.** No proper made/missed FT. A shooting foul (→2 FTs), an and-one
-   (make + 1 FT), and technical FTs cannot be scored correctly. Today a made FT is
-   indistinguishable from a field basket, and only appears in bonus. **This is the
-   #1 fix** — free throws are routine, not an edge case.
-2. **Foul types.** One generic foul can't distinguish a **shooting foul** (opens the
-   FT flow) or a **technical/flagrant** (→ FTs + possession). Needed for #1 to work.
-3. **Substitutions.** A `substitutes` setting exists but no way to record a sub or
-   know who's on court. Real games sub constantly.
+**Tier 1 — real capture failures — ✅ FIXED:**
+1. ✅ **Free throws** — dedicated FT flow: pick shooter, tap ✅ Made / ❌ Miss per
+   attempt (1 for and-one, 2 for shooting foul, 3 from the arc). Made FT scores 1 and
+   credits points + FTM/FTA; misses log the attempt.
+2. ✅ **Foul types** — Personal / Shooting / Technical / Flagrant / Offensive. Shooting/
+   technical/flagrant flow straight into the opponent's free throws. Technicals excluded
+   from the team-foul bonus.
+3. ✅ **Substitutions** — record off→on; optional "set the five on court" enables a live
+   on-court list that follows every sub.
 
-**Tier 2 — expected stats, not capture-blocking (cheap; scaffolding exists):**
-4. **Steal / block / turnover** buttons + stats (`steal`/`block` types already in
-   `BB_META`, just unwired) → BoxScore gains STL / BLK / TO.
-5. Offensive / defensive **rebound split**.
-6. **Timeouts** — track & show remaining per team.
+**Tier 2 — expected stats — ✅ FIXED:**
+4. ✅ **Steal / block / turnover** buttons + stats → BoxScore gains STL / BLK / TO;
+   steals & blocks added to profile leaderboards; voice recognises them.
+5. ✅ Offensive / defensive **rebound split** (rebound → Off/Def).
+6. ✅ **Timeouts** — per-team limit (by format), button shows remaining, disables at 0.
 
-**Tier 3 — polish (non-essential for manual scoring):**
-7. Missed FG attempts / shooting %. 8. Shot-clock & game-clock countdown, jump ball.
+**Tier 3 — deferred (non-essential for manual scoring):**
+7. Missed FG attempts / shooting %. 8. **Live shot-clock enforcement** (countdown +
+   violations) — heavier real-time build, and the referee's call; shot clock stays a
+   reference setting. 9. Game-clock countdown / auto-end, jump ball.
+
+**Engineering:** pure core extracted to `engine.ts` (like cricket/kabaddi) → 13 unit
+tests in `tests/basketball.test.mts`.
 
 ## Replay log
-_(to fill after fixes — drive a real box score / play-by-play through the app.)_
+_Next: drive a real box score / play-by-play through the app together (acceptance test)._

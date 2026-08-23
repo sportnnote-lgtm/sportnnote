@@ -106,6 +106,8 @@ export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> 
     { key: 'points', label: 'Points' },
     { key: 'rebounds', label: 'Rebounds' },
     { key: 'assists', label: 'Assists' },
+    { key: 'steals', label: 'Steals' },
+    { key: 'blocks', label: 'Blocks' },
   ],
   badminton: [{ key: 'points', label: 'Points' }],
   tennis: [
