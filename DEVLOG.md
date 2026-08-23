@@ -13,6 +13,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — ③ Phase 2: per-division fixtures / standings / bracket · SHIPPED
+
+Divisions (Phase 1) are now a real competition boundary, not just a roster tag.
+- A match's division is **derived** from its teams' entry roster — no
+  `matches.category_id` column (avoids another migration + the pre-migration read
+  risk). `groups.matchesInDivision(matches, entries, categoryId)` is the shared
+  filter; `useDivisions` hook + `DivisionTabs` component are the shared UI.
+- **GenerateFixtures**: a Division selector scopes the team picker (and advance-
+  mode group/super tables) to one division → fixtures generated within a division.
+- **SportHub** + **Standings**: Division selector scopes the schedule + table.
+- **Bracket**: Division selector scopes the knockout.
+- Backward-compatible: no categories ⇒ everything shown as before. Leaders on
+  Standings remain tournament-wide (follow-up). `tsc` clean; 137 tests (added
+  `matchesInDivision`). Also this session: provisional-player "not me" report
+  (report-invite fn) + WhatsApp phone OTP wired (pending Meta setup).
+
+---
+
 ### 2026-08-18 — Categories, Home feed, mobile build, onboarding · SHIPPED
 
 A big day. Migrations 0007 + 0008 are now live.
