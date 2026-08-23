@@ -164,7 +164,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
   const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number } | null>(null);
-  const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | null>(null);
+  const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | null>(null);
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player } | null>(null);
   const [rain, setRain] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -504,6 +504,24 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n } }); setExtraMode(null); }} />
               ))}
             </View>
+            <Text style={ctrl.meta}>…or byes run off the no-ball (missed the bat)?</Text>
+            <View style={ctrl.row}>
+              {[1, 2, 3, 4].map((n) => (
+                <Button key={n} label={`Nb+${n}b`} variant="ghost" style={ctrl.flex}
+                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', byes: n } }); setExtraMode(null); }} />
+              ))}
+            </View>
+          </>
+        )}
+        {extraMode === 'wd' && (
+          <>
+            <Text style={ctrl.meta}>Wide — any runs run (byes on the wide, or 4 if it beat the keeper)?</Text>
+            <View style={ctrl.row}>
+              {[0, 1, 2, 4].map((n) => (
+                <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n}`} color={n === 4 ? theme.colors.primary : battingColor} style={ctrl.flex}
+                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
+              ))}
+            </View>
           </>
         )}
       </View>
@@ -546,7 +564,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
       <View style={ctrl.row}>
         <Button label={state.freeHit ? 'RUN OUT' : 'WICKET'} variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf(state.freeHit ? { kind: 'runout' } : {})} />
-        <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => ball({ type: 'EXTRA', payload: { kind: 'Wide' } })} />
+        <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
         <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
       </View>
 
@@ -977,7 +995,7 @@ function InningsCard({
 const overSymbolColor = (sym: string) =>
   sym === 'W' || sym.endsWith('W') ? theme.colors.danger
     : sym === '4' || sym === '6' ? theme.colors.primary
-    : sym === 'wd' || sym === 'nb' || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
+    : sym.endsWith('wd') || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
     : theme.colors.surfaceAlt;
 
 /** Runs conceded on a single ball, decoded from its over-strip symbol

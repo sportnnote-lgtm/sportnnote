@@ -458,27 +458,49 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     case 'EXTRA': {
       const kind = String(a.payload?.kind ?? 'Wide');
       const isNoBall = kind === 'No ball';
-      // Runs scored off the bat on a no-ball — credited to the striker; the +1
-      // no-ball penalty is the only "extra".
-      const offBat = isNoBall ? Math.max(0, Number(a.payload?.runs ?? 0)) : 0;
       seq += 1;
-      // Wide/no-ball: NOT a legal ball (no over progress). A no-ball makes the
-      // next delivery a free hit. The striker faces a no-ball (counts as a BF).
-      let batting = s.batting;
-      if (isNoBall) batting = applyBat(s.batting, s.strikerId, s.strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
-      const sym = isNoBall ? (offBat > 0 ? `${offBat}nb` : 'nb') : 'wd';
+      // Neither a wide nor a no-ball is a legal ball (no over progress).
+      const overReset = s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver;
+      if (isNoBall) {
+        // No-ball: +1 penalty, PLUS runs off the bat (credited to the striker) AND/OR
+        // byes run without hitting (team extras, not charged to the bowler). The
+        // striker faces a no-ball (counts as a ball faced) and gets a free hit next.
+        const offBat = Math.max(0, Number(a.payload?.runs ?? 0));
+        const byes = Math.max(0, Number(a.payload?.byes ?? 0));
+        const total = 1 + offBat + byes;
+        const ran = offBat + byes; // runs run between the wickets → strike parity
+        const batting = applyBat(s.batting, s.strikerId, s.strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
+        const sym = `${ran > 0 ? ran : ''}nb`;
+        const label = `No ball${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''} — free hit`;
+        let next: CricketState = {
+          ...s,
+          // extras conceded = the +1 penalty + any byes (off-bat runs are the batter's)
+          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + 1 + byes } },
+          batting,
+          bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }), // bowler charged penalty + off-bat, not byes
+          thisOver: [...overReset, sym],
+          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label, detail: undefined, side: bat, tone: 'extra' }],
+          seq,
+          freeHit: true,
+        };
+        if (ran % 2 === 1) next = swapStrike(next); // crossed an odd number of times
+        return settle(next);
+      }
+      // Wide: +1 penalty PLUS any runs the batsmen run (byes on the wide, or a wide
+      // to the boundary = 4). All are extras charged to the bowler; no ball is faced.
+      const wideRuns = Math.max(0, Number(a.payload?.runs ?? 0));
+      const total = 1 + wideRuns;
+      const sym = wideRuns > 0 ? `${total}wd` : 'wd';
       let next: CricketState = {
         ...s,
-        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + 1 + offBat, extras: cur.extras + 1 } },
-        batting,
-        bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }),
-        thisOver: [...(s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver), sym],
-        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: isNoBall ? `No ball${offBat > 0 ? ` + ${offBat}` : ''} — free hit` : 'Wide', detail: undefined, side: bat, tone: 'extra' }],
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + total } },
+        bowling: bumpBowl({ runs: total, extras: total }),
+        thisOver: [...overReset, sym],
+        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: wideRuns > 0 ? `Wide + ${wideRuns}` : 'Wide', detail: undefined, side: bat, tone: 'extra' }],
         seq,
-        freeHit: isNoBall ? true : s.freeHit,
+        freeHit: s.freeHit,
       };
-      // Odd runs off the bat rotate strike (still a no-ball — the over doesn't advance).
-      if (isNoBall && offBat % 2 === 1) next = swapStrike(next);
+      if (wideRuns % 2 === 1) next = swapStrike(next);
       return settle(next);
     }
     case 'SET_STRIKER': {

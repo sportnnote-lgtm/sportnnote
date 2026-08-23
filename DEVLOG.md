@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Cricket extras + audit correction (undo already existed)
+
+**Correction:** the audit's "cricket has NO undo" was wrong — it only read the
+cricket plugin files. The global "↶ Undo last ball" bar in LiveScoringScreen pops
+the last event and replays the truncated log for EVERY sport (cricket included).
+Undo works; only surgical arbitrary-ball *editing* is absent (rare — undo walks
+back step-by-step). `docs/sport-coverage/cricket.md` corrected.
+
+**Cricket extras shipped:** wide + runs (byes on a wide / wide to the boundary —
+was a fixed +1) and byes off a no-ball (no-ball now captures off-bat runs AND byes
+separately, charged correctly: byes are team extras, not on the bowler or batter;
+the striker still faces the ball + gets the free hit). Engine-local change in
+`cricket/engine.ts` EXTRA case + a wide-runs picker and a no-ball-byes row in the
+controls. 6 new tests in `tests/cricket.test.mts`. `tsc` clean; 160 tests.
+Deferred (next cricket pass): run-out off a wide/no-ball, penalty runs, fielding
+stat attribution to profiles.
+
+---
+
 ### 2026-08-24 — Per-sport capture audit + Basketball made ground-ready
 
 New workstream: verify every sport captures a real match as-is (settings, every

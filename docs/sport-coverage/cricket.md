@@ -20,7 +20,8 @@ impact player. ✅ Rich. `substitutes` field exists but is **not wired** to any 
 | Penalty runs (5), overthrows, dead ball | ✔ | — | ❌ |
 | Striker/non-striker/bowler/keeper/captain setup | ✔ | ✔ | ✅ |
 | Impact player sub | ✔ | ✔ | ✅ |
-| **Undo / edit / remove a delivery** | ✔ **core** | **NONE** | ❌ **headline gap** |
+| **Undo a delivery** | ✔ **core** | ✅ global "↶ Undo last ball" bar (LiveScoringScreen) — pops the last event, reverses its stat line, replays the log; tap repeatedly to rewind | ✅ |
+| Edit an arbitrary past ball in place | nice | undo walks back step-by-step (no surgical edit like football/basketball) | ⚠️ |
 
 ## Lifecycle
 2 innings, auto strike rotation, auto over/innings end, chase auto-settle, DLS
@@ -31,18 +32,25 @@ Only `runs` (striker) + `wickets` (bowler) emitted as attribution; batting/bowli
 cards, dismissals, catches, economy computed inside the reducer (not external
 stat-lines). ⚠️ Fielding (catches/stumpings/run-outs) not credited to profiles.
 
-## Gaps — prioritised
-**Tier 1 — real capture failure:**
-1. **No undo / edit / remove of ANY delivery.** Once a ball is tapped it is
-   permanent — a mis-tap (wrong runs, wrong wicket) cannot be corrected. Football,
-   basketball, kabaddi all have a timeline editor; cricket, the hardest sport to
-   score, has none. **Highest-severity gap in the whole app.** Run-out strike-
-   crossing is also only "approximated" (scorer can't pick who's on strike after).
+> **Correction (2026-08-24):** the audit inventory (plugin files only) claimed
+> cricket had NO undo. That was wrong — the global "↶ Undo last ball" bar in
+> LiveScoringScreen pops the last event and replays for every sport, cricket
+> included. Undo works; only surgical arbitrary-ball *editing* is absent (rare).
 
-**Tier 2 — real but less frequent:**
-2. Wide/no-ball combos: byes off a wide, run-out off a wide/no-ball, wide+runs.
-3. Penalty runs (5-run), overthrows as runs, dead ball.
-4. Fielding stats to profiles (catches/stumpings/run-outs credited).
+## Gaps — prioritised
+**Tier 1 — real capture failures (wrong score on the board):**
+1. ✅ **Wide + runs** (byes run on a wide / wide to the boundary) — SHIPPED. Was a
+   fixed +1; now `Wide +1..+4`.
+2. ✅ **Byes off a no-ball** (batsmen run without hitting) — SHIPPED. No-ball now
+   captures off-bat runs AND byes separately.
+
+**Tier 2 — real but less frequent (next cricket pass):**
+3. **Run-out off a wide / no-ball** (a wicket on a non-legal delivery — must not
+   advance the over). Intricate to combine with the extra; deferred.
+4. Penalty runs (5-run), overthrows as a distinct concept, dead ball.
+5. **Fielding stats to profiles** (catches/stumpings/run-outs credited to the
+   fielder) — needs a 2nd attribution per wicket; deferred.
+6. Run-out strike-crossing is "approximated" (scorer can't pick who ends on strike).
 
 **Tier 3:** `5` run button; rare dismissals (retired-out, obstructing); DRS.
 
