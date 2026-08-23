@@ -62,13 +62,18 @@ export interface OverallStanding {
 
 /** Aggregate points across every sport in the meet — the headline house table. */
 export function overallStandings(matches: Match[], sports: SportId[]): OverallStanding[] {
+  // A house/school fields a SEPARATE team row per sport (each row is single-sport),
+  // so the cross-sport "overall" table must merge by NAME — the app's cross-sport
+  // identity convention (e.g. "Red House" football + "Red House" cricket = one
+  // house). Keying by teamId would show a multi-sport house as several rows.
   const totals = new Map<string, OverallStanding>();
   for (const sport of sports) {
     for (const t of teamStandings(matches, sport)) {
-      const o = totals.get(t.teamId) ?? { teamId: t.teamId, name: t.name, colorHex: t.colorHex, played: 0, points: 0 };
+      const key = t.name.trim().toLowerCase();
+      const o = totals.get(key) ?? { teamId: t.teamId, name: t.name, colorHex: t.colorHex, played: 0, points: 0 };
       o.played += t.played;
       o.points += t.points;
-      totals.set(t.teamId, o);
+      totals.set(key, o);
     }
   }
   return [...totals.values()].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
