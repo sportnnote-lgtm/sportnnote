@@ -197,6 +197,12 @@ export interface SportPlugin<S = unknown> {
   summary: (state: S) => ScoreSummary;
   /** Has the match reached its end condition? */
   isComplete: (state: S) => boolean;
+  /** The decided outcome once the match is complete: the winning side (or 'draw')
+   *  plus a numeric score per side for standings (goals / points / games / sets /
+   *  runs). Returns null while the match is undecided or still in progress. This
+   *  is the single source of truth the data layer uses to persist a match result
+   *  (winner + score) and each player's win — never parse the display summary. */
+  result?: (state: S) => { winner: 'home' | 'away' | 'draw'; home: number; away: number } | null;
   /** The scorer's control panel for this sport. */
   ScoringControls: React.FC<ScoringControlsProps<S>>;
   /** Optional rich widget shown on the live page (e.g. football pitch map). */

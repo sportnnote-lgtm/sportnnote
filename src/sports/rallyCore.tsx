@@ -203,6 +203,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     createInitialState: init,
     reducer,
     isComplete: (s) => s.ended,
+    result: (s) => (s.ended ? { winner: s.gamesWon.home > s.gamesWon.away ? 'home' : s.gamesWon.away > s.gamesWon.home ? 'away' : 'draw', home: s.gamesWon.home, away: s.gamesWon.away } : null),
     summary: (s) => ({
       homeScore: String(s.current.home),
       awayScore: String(s.current.away),

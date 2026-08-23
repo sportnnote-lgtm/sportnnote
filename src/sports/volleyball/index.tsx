@@ -179,6 +179,7 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   Scoreboard: VolleyballScoreboard,
   summary: (s) => ({
     homeScore: String(s.current.home),

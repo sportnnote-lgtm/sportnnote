@@ -1583,6 +1583,11 @@ export const footballPlugin: SportPlugin<FootballState> = {
   reducer,
   // A level knockout tie isn't complete until the shootout produces a winner.
   isComplete: (s) => s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null),
+  result: (s) => {
+    if (!(s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null))) return null;
+    const winner = s.home > s.away ? 'home' : s.away > s.home ? 'away' : (s.shootoutWinner ?? 'draw');
+    return { winner, home: s.home, away: s.away };
+  },
   summary: (s) => {
     const pens = penScore(s);
     // Cards are no longer a lumped tally on the scorecard — reds show as badges by

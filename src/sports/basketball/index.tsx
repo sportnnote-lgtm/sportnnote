@@ -457,6 +457,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  result: (s) => (s.ended ? { winner: s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw', home: s.home, away: s.away } : null),
   Scoreboard: BasketballScoreboard,
   summary: (s) => ({
     homeScore: String(s.home),

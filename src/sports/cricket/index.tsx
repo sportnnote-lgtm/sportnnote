@@ -1060,6 +1060,22 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  result: (s) => {
+    if (!s.ended) return null;
+    const score = { home: s.scores.home.runs, away: s.scores.away.runs };
+    // Mirror the final banner's winner logic (super over → chase → runs margin).
+    let winner: 'home' | 'away' | 'draw';
+    if (s.superOver) winner = superOverWinner(s.superOver.state) ?? 'draw';
+    else {
+      const chase = s.scores[s.battingSide];
+      if (chase.runs >= (s.target ?? Infinity)) winner = s.battingSide;
+      else {
+        const margin = s.scores[other(s.battingSide)].runs - chase.runs;
+        winner = margin === 0 ? 'draw' : other(s.battingSide);
+      }
+    }
+    return { winner, ...score };
+  },
   summary: (s) => {
     // While a Super Over is live/decided, tag each side's board with its SO runs.
     const so = s.superOver;

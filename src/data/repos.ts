@@ -113,9 +113,18 @@ const toTeam = (r: TeamRow): Team => ({
   adhoc: r.adhoc ?? undefined,
 });
 
+/** A completed match's result, derived from its stored sport state via the sport
+ *  plugin — the source of truth for winner + score. Defensive: a malformed state
+ *  must never break a match read (returns null). Null while in progress/undecided. */
+function deriveResult(sport: string, state: unknown): { winner: 'home' | 'away' | 'draw'; home: number; away: number } | null {
+  if (!state) return null;
+  try { return getSport(sport as SportId).result?.(state as never) ?? null; } catch { return null; }
+}
+
 function toMatch(r: MatchRow): Match {
   const home = one(r.home_team);
   const away = one(r.away_team);
+  const res = deriveResult(r.sport, r.state);
   return {
     id: r.id,
     tournamentId: r.tournament_id,
@@ -129,7 +138,11 @@ function toMatch(r: MatchRow): Match {
     venueName: r.venue_name ?? undefined,
     venueMapsUrl: r.venue_maps_url ?? undefined,
     streamUrl: r.stream_url ?? undefined,
-    winner: r.winner ?? undefined,
+    // Prefer the result derived from live state; fall back to the stored column
+    // (seed/archived matches with a winner but no state). Score has no column —
+    // it's always derived from state, so for/against works in standings.
+    winner: res?.winner ?? r.winner ?? undefined,
+    score: res ? { home: res.home, away: res.away } : undefined,
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
     scorerId: r.scorer_id ?? undefined,
@@ -1052,19 +1065,50 @@ export async function setMatchManagers(matchId: string, managers: { home?: strin
   await supabase.from('matches').update({ managers: { ...((data?.managers as object) ?? {}), ...managers } }).eq('id', matchId);
 }
 
+type MatchMeta = { sport: string; home_team_id: string; away_team_id: string };
 export async function updateMatchSnapshot(matchId: string, state: object, completed: boolean): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const m = demo.matches.find((x) => x.id === matchId);
-    if (m) {
-      m.state = state;
-      m.status = completed ? 'completed' : 'live';
+    if (!m) return;
+    m.state = state;
+    m.status = completed ? 'completed' : 'live';
+    if (completed) {
+      const res = deriveResult(m.sport, state);
+      m.winner = res?.winner;
+      m.score = res ? { home: res.home, away: res.away } : undefined;
+      const winTeam = res && res.winner !== 'draw' ? (res.winner === 'home' ? m.homeTeam : m.awayTeam) : null;
+      const winRoster = winTeam
+        ? (winTeam.roster && winTeam.roster.length ? winTeam.roster : demo.players.filter((p) => p.houseName === winTeam.name).map((p) => p.id))
+        : [];
+      for (const l of demo.statLines) if (l.matchId === matchId) l.won = !!winTeam && winRoster.includes(l.playerId);
     }
     return;
   }
+
+  // On completion, derive the result (winner + score) from the sport plugin and
+  // persist it: the winner column drives standings/records, and each player's
+  // stat line gets its `won` flag set so career wins/win-rate are correct.
+  let winner: 'home' | 'away' | 'draw' | null = null;
+  let meta: MatchMeta | null = null;
+  if (completed) {
+    const { data } = await supabase.from('matches').select('sport, home_team_id, away_team_id').eq('id', matchId).single();
+    meta = (data as MatchMeta | null) ?? null;
+    winner = meta ? (deriveResult(meta.sport, state)?.winner ?? null) : null;
+  }
   await supabase
     .from('matches')
-    .update({ state, status: completed ? 'completed' : 'live', updated_at: new Date().toISOString() })
+    .update({ state, status: completed ? 'completed' : 'live', winner, updated_at: new Date().toISOString() })
     .eq('id', matchId);
+
+  if (completed && meta) {
+    // Reset, then flag the winning side's players (handles draws + re-completion).
+    await supabase.from('stat_lines').update({ won: false }).eq('match_id', matchId);
+    if (winner && winner !== 'draw') {
+      const winTeamId = winner === 'home' ? meta.home_team_id : meta.away_team_id;
+      const winners = (await getTeamRosters([winTeamId])).get(winTeamId) ?? [];
+      if (winners.length) await supabase.from('stat_lines').update({ won: true }).eq('match_id', matchId).in('player_id', winners);
+    }
+  }
 }
 
 /* ----------------------------- Lineups (football) -------------------------- */

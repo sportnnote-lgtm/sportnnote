@@ -179,6 +179,7 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  result: (s) => (s.ended ? { winner: s.gamesWon.home > s.gamesWon.away ? 'home' : s.gamesWon.away > s.gamesWon.home ? 'away' : 'draw', home: s.gamesWon.home, away: s.gamesWon.away } : null),
   Scoreboard: BadmintonScoreboard,
   summary: (s) => ({
     homeScore: String(s.current.home),

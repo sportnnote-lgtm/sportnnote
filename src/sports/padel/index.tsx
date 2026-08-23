@@ -182,6 +182,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   summary: (s) => ({
     homeScore: disp(s, 'home'),
     awayScore: disp(s, 'away'),
