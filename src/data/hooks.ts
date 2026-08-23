@@ -473,6 +473,18 @@ export function useTournamentTeams(tournamentId?: string, sport?: SportId, nonce
   return teams;
 }
 
+/** Division scope for a tournament view: its categories, the entry roster (for
+ *  team→division mapping), and the currently-selected division (defaults to the
+ *  first). When a tournament has no categories, `activeCat` is null ⇒ callers
+ *  show everything (single implicit division). Pair with groups.matchesInDivision. */
+export function useDivisions(tournamentId?: string, nonce = 0) {
+  const categories = useTournamentCategories(tournamentId, nonce);
+  const entries = useTournamentEntries(tournamentId, undefined, nonce);
+  const [activeCatId, setActiveCat] = useState<string | null>(null);
+  const activeCat = categories.length ? (activeCatId ?? categories[0].id) : null;
+  return { categories, entries, activeCat, setActiveCat };
+}
+
 /** The divisions (age × gender) a tournament defines. Empty ⇒ single implicit
  *  division (or pre-migration-0008). */
 export function useTournamentCategories(tournamentId?: string, nonce = 0) {

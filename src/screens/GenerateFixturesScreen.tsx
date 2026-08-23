@@ -12,10 +12,11 @@ import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
-import { useTeams, useTournamentById, useLeagueData, useTournamentTeams } from '../data/hooks';
+import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivisions } from '../data/hooks';
+import { DivisionTabs } from '../components/DivisionTabs';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, type GroupTable } from '../data/groups';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL } from '../data/bracket';
 import { useAuth } from '../core/auth';
@@ -44,6 +45,13 @@ export default function GenerateFixturesScreen() {
   const teams = useTeams(sport);
   const participants = useTournamentTeams(params.tournamentId, sport);
   const { matches: tourMatches } = useLeagueData(params.tournamentId);
+  // Divisions: generate fixtures within one division (its rostered teams only).
+  const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params.tournamentId);
+  const divTeamIds = useMemo(
+    () => (activeCat ? new Set(entries.filter((e) => e.categoryId === activeCat).map((e) => e.team.id)) : null),
+    [entries, activeCat],
+  );
+  const pickTeams = useMemo(() => (divTeamIds ? teams.filter((t) => divTeamIds.has(t.id)) : teams), [teams, divTeamIds]);
   // Name lookup for draft cards: the pickable team list, plus the team ids
   // embedded in this tournament's matches (advance-mode brackets seed from
   // those, whose ids can differ from the team-list ids).
@@ -86,17 +94,22 @@ export default function GenerateFixturesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
 
-  // Default the team picker to the tournament's registered participants — the
-  // organizer sets "who's in" once, then generates fixtures without re-picking.
+  // Default the team picker to the registered participants of the active division
+  // — the organizer sets "who's in" once, then generates without re-picking.
+  const divParticipants = useMemo(
+    () => (divTeamIds ? participants.filter((t) => divTeamIds.has(t.id)) : participants),
+    [participants, divTeamIds],
+  );
   useEffect(() => {
-    if (!touchedSel && participants.length) setSelected(participants.map((t) => t.id));
+    if (!touchedSel && divParticipants.length) setSelected(divParticipants.map((t) => t.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participants, touchedSel]);
+  }, [divParticipants, touchedSel]);
 
   const invalidate = () => setDrafts(null);
   const pickSport = (s: SportId) => { setSport(s); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); setPlayIn(false); setAdvanceTo('knockout'); invalidate(); };
+  const pickCategory = (id: string) => { setActiveCat(id); setSelected([]); setTouchedSel(false); setManualAdvance(false); setManualSel([]); invalidate(); };
   const toggleTeam = (id: string) => { invalidate(); setTouchedSel(true); setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
-  const allSelected = teams.length > 0 && selected.length === teams.length;
+  const allSelected = pickTeams.length > 0 && selected.length === pickTeams.length;
 
   const groupCount = Math.max(2, Math.min(parseInt(numGroups, 10) || 2, Math.floor(selected.length / 2) || 2));
   // Preview the group split (sizes) once enough teams are picked.
@@ -108,11 +121,14 @@ export default function GenerateFixturesScreen() {
   // ── Advance: derive qualifiers from a finished phase — the group stage, or a
   //    Super round-robin phase (Super Four/Six) if one exists. Offered once the
   //    tournament actually has a phase to advance from.
-  const gtables = useMemo(() => groupTables(tourMatches, sport), [tourMatches, sport]);
+  // Advance-mode tables are scoped to the active division too (so a division's
+  // group stage advances only its own teams).
+  const scopedTourMatches = useMemo(() => matchesInDivision(tourMatches, entries, activeCat), [tourMatches, entries, activeCat]);
+  const gtables = useMemo(() => groupTables(scopedTourMatches, sport), [scopedTourMatches, sport]);
   const hasGroups = gtables.length > 0;
-  const groupMatches = tourMatches.filter((m) => m.stage === 'group' && m.sport === sport);
+  const groupMatches = scopedTourMatches.filter((m) => m.stage === 'group' && m.sport === sport);
   // Super phase (a second round-robin among group qualifiers) — a single league table.
-  const superMatches = tourMatches.filter((m) => m.stage === 'super' && m.sport === sport);
+  const superMatches = scopedTourMatches.filter((m) => m.stage === 'super' && m.sport === sport);
   const hasSuper = superMatches.length > 0;
   const superTable = useMemo<GroupTable[]>(
     () => (hasSuper ? [{ name: superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size), rows: teamStandings(superMatches, sport) }] : []),
@@ -251,21 +267,25 @@ export default function GenerateFixturesScreen() {
           </>
         )}
 
+        <DivisionTabs categories={divisions} activeCat={activeCat} onChange={pickCategory} />
+
         {structure !== 'advance' && (
           <>
             <View style={st.rowBetween}>
               <Text style={textStyles.muted}>Teams · {selected.length} selected</Text>
-              {teams.length >= 2 && (
-                <Text style={st.link} onPress={() => { invalidate(); setTouchedSel(true); setSelected(allSelected ? [] : teams.map((t) => t.id)); }}>
+              {pickTeams.length >= 2 && (
+                <Text style={st.link} onPress={() => { invalidate(); setTouchedSel(true); setSelected(allSelected ? [] : pickTeams.map((t) => t.id)); }}>
                   {allSelected ? 'Clear' : 'Select all'}
                 </Text>
               )}
             </View>
-            {teams.length < 2 ? (
-              <Text style={textStyles.muted}>Add at least two {getSport(sport).name} teams under “Manage teams” first.</Text>
+            {pickTeams.length < 2 ? (
+              <Text style={textStyles.muted}>
+                {activeCat ? 'Add at least two teams to this division under “Participating teams” first.' : `Add at least two ${getSport(sport).name} teams under “Manage teams” first.`}
+              </Text>
             ) : (
               <View style={st.chips}>
-                {teams.map((t) => (
+                {pickTeams.map((t) => (
                   <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggleTeam(t.id)} />
                 ))}
               </View>

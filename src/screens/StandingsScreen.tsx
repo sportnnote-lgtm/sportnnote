@@ -1,7 +1,7 @@
 /** Per-sport standings: a league table (P/W/L/Pts) plus the individual stat
  *  leaders. A sport selector appears for multi-sport meets; a single-sport
  *  tournament just shows that sport. */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -11,9 +11,11 @@ import { theme } from '../core/theme';
 import { Card, SelectChip, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
+import { DivisionTabs } from '../components/DivisionTabs';
 import { getSport } from '../sports/registry';
-import { useTournament, useTournamentById, useStandings } from '../data/hooks';
-import { leaderStat } from '../data/standings';
+import { useTournament, useTournamentById, useStandings, useDivisions } from '../data/hooks';
+import { leaderStat, teamStandings } from '../data/standings';
+import { matchesInDivision } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -32,13 +34,19 @@ export default function StandingsScreen() {
   // Clamp the shown sport to one this tournament actually has (a generic open
   // defaults to football, which the meet may not include).
   const activeSport = sports.includes(sport) ? sport : sports[0] ?? sport;
-  const { teams, leaders } = useStandings(activeSport, params?.tournamentId);
+  const { teams, leaders, matches } = useStandings(activeSport, params?.tournamentId);
+  // Scope the table to the selected division (age × gender), if any.
+  const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params?.tournamentId);
+  const table = useMemo(
+    () => (activeCat ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport) : teams),
+    [activeCat, matches, entries, activeSport, teams],
+  );
   const lead = leaderStat(activeSport);
   const [showTeams, setShowTeams] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);
   // Draws only matter for sports that can draw (football, cricket) — hide the
   // column for basketball/tennis/etc. where every result has a winner.
-  const hasDraws = teams.some((t) => t.drawn > 0);
+  const hasDraws = table.some((t) => t.drawn > 0);
 
   // Breadcrumb: name the nav bar after the tournament; the in-content title is "Standings".
   useEffect(() => {
@@ -58,10 +66,12 @@ export default function StandingsScreen() {
           </ScrollView>
         )}
 
+        <DivisionTabs categories={divisions} activeCat={activeCat} onChange={setActiveCat} />
+
         <SectionHeader
           title={`${getSport(activeSport).icon} Team standings`}
-          count={teams.length}
-          onSeeAll={teams.length > SECTION_CAP ? () => setShowTeams((v) => !v) : undefined}
+          count={table.length}
+          onSeeAll={table.length > SECTION_CAP ? () => setShowTeams((v) => !v) : undefined}
           expanded={showTeams}
         />
         <Card style={{ gap: theme.spacing(1) }}>
@@ -74,10 +84,10 @@ export default function StandingsScreen() {
             <Text style={[st.num, st.headText]}>L</Text>
             <Text style={[st.num, st.headText]}>Pts</Text>
           </View>
-          {teams.length === 0 ? (
+          {table.length === 0 ? (
             <EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
           ) : (
-            (showTeams ? teams : teams.slice(0, SECTION_CAP)).map((t, i) => {
+            (showTeams ? table : table.slice(0, SECTION_CAP)).map((t, i) => {
               const tier = podiumColor(i);
               return (
                 <TouchableOpacity

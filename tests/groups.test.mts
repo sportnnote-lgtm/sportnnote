@@ -8,9 +8,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { drawGroups, groupStage } from '../src/data/fixtures.ts';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, type GroupTable } from '../src/data/groups.ts';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision, type GroupTable } from '../src/data/groups.ts';
 import { type TeamStanding } from '../src/data/standings.ts';
-import type { Match } from '../src/core/types.ts';
+import type { Match, TournamentEntry } from '../src/core/types.ts';
 
 const ids = (n: number, p = 't') => Array.from({ length: n }, (_, i) => `${p}${i + 1}`);
 
@@ -174,5 +174,25 @@ describe('seeded knockout', () => {
     assert.equal(knockoutRoundLabel(4), 'sf');
     assert.equal(knockoutRoundLabel(8), 'qf');
     assert.equal(knockoutRoundLabel(16), 'r16');
+  });
+});
+
+describe('matchesInDivision — per-division scoping (Phase 2)', () => {
+  const entry = (id: string, categoryId?: string): TournamentEntry =>
+    ({ team: { id, name: id, shortName: id, sport: 'football' }, status: 'confirmed', categoryId }) as unknown as TournamentEntry;
+  const mk = (home: string, away: string): Match =>
+    ({ id: `${home}-${away}`, sport: 'football', status: 'scheduled', startsAt: '',
+       homeTeam: { id: home, name: home }, awayTeam: { id: away, name: away }, state: null }) as unknown as Match;
+
+  const entries = [entry('a', 'U14'), entry('b', 'U14'), entry('c', 'U16'), entry('d', 'U16')];
+  const matches = [mk('a', 'b'), mk('c', 'd')];
+
+  test('null/undefined categoryId returns every match (single implicit division)', () => {
+    assert.equal(matchesInDivision(matches, entries, null).length, 2);
+    assert.equal(matchesInDivision(matches, entries, undefined).length, 2);
+  });
+  test('scopes to a division by the teams’ roster', () => {
+    assert.deepEqual(matchesInDivision(matches, entries, 'U14').map((m) => m.id), ['a-b']);
+    assert.deepEqual(matchesInDivision(matches, entries, 'U16').map((m) => m.id), ['c-d']);
   });
 });

@@ -8,7 +8,7 @@
  *     tie-breakers the league table uses (points → goal difference → goals for).
  * No I/O — the screen feeds it match results and gets back the bracket to create.
  */
-import type { Match, SportId } from '../core/types.ts';
+import type { Match, SportId, TournamentEntry } from '../core/types.ts';
 import { teamStandings, type TeamStanding } from './standings.ts';
 import type { GeneratedPairing } from './fixtures.ts';
 
@@ -139,5 +139,17 @@ export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: s
   return picks.map((p) => p.q);
 }
 
+/** Filter matches to one division (category) of a tournament. A team belongs to
+ *  exactly one division and fixtures are generated within a division, so a match
+ *  is "in" a division when its teams are. `categoryId` null/undefined ⇒ no
+ *  divisions (or "all") ⇒ every match is returned unchanged. Lets standings,
+ *  schedules and brackets be scoped per division without a matches.category_id
+ *  column — the division is derived from the entry roster. */
+export function matchesInDivision(matches: Match[], entries: TournamentEntry[], categoryId?: string | null): Match[] {
+  if (!categoryId) return matches;
+  const div = new Map(entries.map((e) => [e.team.id, e.categoryId]));
+  return matches.filter((m) => div.get(m.homeTeam.id) === categoryId || div.get(m.awayTeam.id) === categoryId);
+}
+
 // Test/inspection hook (parity with the other engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection };
+(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision };

@@ -13,11 +13,13 @@ import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LeagueTable } from '../components/LeagueTable';
 import { StatLeaderRail } from '../components/StatLeaderRail';
+import { DivisionTabs } from '../components/DivisionTabs';
 import { getSport } from '../sports/registry';
-import { useLeagueData } from '../data/hooks';
+import { useLeagueData, useDivisions } from '../data/hooks';
 import { useAuth } from '../core/auth';
 import { canScoreByRole, canOrganize } from '../core/roles';
 import { teamStandings, categoryLeaders } from '../data/standings';
+import { matchesInDivision } from '../data/groups';
 import type { Match } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -37,11 +39,14 @@ export default function SportHubScreen() {
     if (tournamentName) nav.setOptions({ title: tournamentName });
   }, [nav, tournamentName]);
 
-  const sportMatches = useMemo(() => matches.filter((m) => m.sport === sport), [matches, sport]);
+  // Scope the schedule + table to the selected division (age × gender), if any.
+  const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(tournamentId);
+  const divMatches = useMemo(() => matchesInDivision(matches, entries, activeCat), [matches, entries, activeCat]);
+  const sportMatches = useMemo(() => divMatches.filter((m) => m.sport === sport), [divMatches, sport]);
   const live = sportMatches.filter((m) => m.status === 'live');
   const upcoming = sportMatches.filter((m) => m.status === 'scheduled');
   const results = sportMatches.filter((m) => m.status === 'completed');
-  const table = useMemo(() => teamStandings(matches, sport), [matches, sport]);
+  const table = useMemo(() => teamStandings(divMatches, sport), [divMatches, sport]);
   const categories = useMemo(() => categoryLeaders(lines, players, sport), [lines, players, sport]);
 
   const canScore = canScoreByRole(profile?.role);
@@ -61,6 +66,8 @@ export default function SportHubScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={tournamentName} />
+
+        <DivisionTabs categories={divisions} activeCat={activeCat} onChange={setActiveCat} />
 
         {canOrganize(profile?.role) && (
           <Button label="＋ Organize a game" variant="ghost" onPress={() => nav.navigate('ScheduleMatch', { tournamentId })} />

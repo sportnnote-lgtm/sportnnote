@@ -16,7 +16,9 @@ import { SelectChip, Button, ScreenTitle, FormError, textStyles } from '../compo
 import { PODIUM } from '../components/Rank';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
-import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams } from '../data/hooks';
+import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams, useDivisions } from '../data/hooks';
+import { matchesInDivision } from '../data/groups';
+import { DivisionTabs } from '../components/DivisionTabs';
 import { getMyPlayerId, createMatch } from '../data/repos';
 import { canManageTournament } from '../core/org';
 import {
@@ -71,7 +73,10 @@ export default function BracketScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { matches } = useLeagueData(tournamentId, nonce);
-  const sportMatches = useMemo(() => matches.filter((m) => m.sport === activeSport), [matches, activeSport]);
+  // Scope the bracket to the selected division (age × gender), if any.
+  const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(tournamentId, nonce);
+  const divMatches = useMemo(() => matchesInDivision(matches, entries, activeCat), [matches, entries, activeCat]);
+  const sportMatches = useMemo(() => divMatches.filter((m) => m.sport === activeSport), [divMatches, activeSport]);
 
   const orgs = useOrganizations();
   const [myId, setMyId] = useState<string | null>(null);
@@ -188,6 +193,8 @@ export default function BracketScreen() {
             ))}
           </ScrollView>
         )}
+
+        <DivisionTabs categories={divisions} activeCat={activeCat} onChange={setActiveCat} />
 
         {champName && (
           <View style={st.champ}>
