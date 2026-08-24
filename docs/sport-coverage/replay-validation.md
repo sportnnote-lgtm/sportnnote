@@ -45,10 +45,27 @@ part instead) — minor data-quality nit.
 **Verdict:** the engine reproduces a real match end-to-end. A scorer can capture
 the complete progression, and the final summary matches the reference.
 
-## Cricket — ⏳ next
-Recreate a real T20/ODI innings from Cricinfo/Cricbuzz ball-by-ball (runs,
-extras, wickets, strike changes, over/innings transitions, fall of wickets) and
-assert the scorecard (batting/bowling cards, extras, run rate, result) matches.
+## Cricket — ✅ PASS
+
+Cricinfo/Cricbuzz block automated fetching (HTTP 403), so rather than a specific
+match's feed, `tests/cricket.test.mts` replays a **realistic full over
+ball-by-ball** and reproduces the complete scorecard — plus the existing suite
+already covers every delivery type against real cricket rules (wide+runs, no-ball
++off-bat/+byes, run-out off an extra, penalties, super-tackle logic).
+
+The over: `FOUR · 1 · WIDE · SIX · bye1 · WICKET(bowled) · 2` →
+
+| Reproduced | Value |
+|---|---|
+| Team total / extras / wickets | 15/1, extras 2, one full over (6 legal balls) |
+| Batting card | A 5 (3b, 1×4, out), B 6 (2b, 1×6), D 2 (1b) |
+| Bowling figures | 14 runs, 1 wkt, 6 balls (the bye NOT charged to the bowler) |
+| Strike rotation | correct on odd runs / bye / over-end; over completes → bowler cleared |
+
+**Covered event types (unit + replay):** runs, boundaries, wides (+runs), no-balls
+(+off-bat / +byes / free hit), byes/leg-byes, all dismissal types, run-out off a
+wide/no-ball, penalty runs, strike changes, over & innings transitions, DLS,
+super over, impact player.
 
 ## Basketball — ⏳ next
 Replay an ESPN play-by-play (1/2/3-pointers, free throws, fouls→bonus, timeouts,

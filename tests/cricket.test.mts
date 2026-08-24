@@ -20,6 +20,9 @@ function opened(): CricketState {
 // Mimic the ball() wrapper: stamp the current striker/bowler onto the delivery.
 const ext = (s: CricketState, payload: Record<string, unknown>): CricketState =>
   reducer(s, { type: 'EXTRA', payload: { ...payload, strikerId: s.strikerId, strikerName: s.strikerName, bowlerId: s.bowlerId, bowlerName: s.bowlerName } } as ScoreAction);
+/** Any delivery, stamped with the live striker/bowler (as the on-screen ball() does). */
+const ball = (s: CricketState, type: string, payload: Record<string, unknown> = {}): CricketState =>
+  reducer(s, { type, side: s.battingSide, payload: { ...payload, strikerId: s.strikerId, strikerName: s.strikerName, bowlerId: s.bowlerId, bowlerName: s.bowlerName } } as ScoreAction);
 const home = (s: CricketState) => s.scores.home;
 
 describe('cricket — wides', () => {
@@ -104,3 +107,51 @@ describe('cricket — penalty runs & run-outs off an extra', () => {
     assert.equal(s.batting.s2.out, true); // non-striker run out
   });
 });
+
+describe('cricket — a full over replayed ball-by-ball (scorecard reproduction)', () => {
+  // A realistic mixed over off Bowler to A (non-striker B):
+  //  1) FOUR (A)            → A 4, keeps strike
+  //  2) single (A)          → A 5, strike to B
+  //  3) WIDE                → +1 extra, no ball faced
+  //  3) SIX (B)             → B 6, keeps strike
+  //  4) bye 1               → +1 extra, B faces, strike to A
+  //  5) WICKET bowled (A)   → A out, D comes in on strike
+  //  6) two (D)             → D 2, over ends → strike rotates, bowler cleared
+  const played = (() => {
+    let s = opened();
+    s = ball(s, 'RUNS', { runs: 4 });
+    s = ball(s, 'RUNS', { runs: 1 });
+    s = ball(s, 'EXTRA', { kind: 'Wide' });
+    s = ball(s, 'RUNS', { runs: 6 });
+    s = ball(s, 'BYES', { runs: 1 });
+    s = ball(s, 'WICKET', { kind: 'bowled', newBatId: 's3', newBatName: 'D' });
+    s = ball(s, 'RUNS', { runs: 2 });
+    return s;
+  })();
+
+  test('team total, extras and wickets are right (15/1, 2 extras)', () => {
+    assert.equal(home(played).runs, 15); // 4+1 + wide1 + 6 + bye1 + 2
+    assert.equal(home(played).extras, 2); // wide + bye
+    assert.equal(home(played).wickets, 1);
+    assert.equal(home(played).balls, 6); // exactly one over of legal balls
+  });
+
+  test('the over completed — bowler cleared, strike rotated', () => {
+    assert.equal(played.bowlerId, undefined); // new bowler needed next over
+    assert.equal(played.strikerName, 'B'); // strike rotated on the last ball of the over
+  });
+
+  test('batting card splits runs & balls correctly per batter', () => {
+    assert.deepEqual([played.batting.s1.runs, played.batting.s1.balls, played.batting.s1.out], [5, 3, true]); // A
+    assert.deepEqual([played.batting.s2.runs, played.batting.s2.balls], [6, 2]); // B
+    assert.deepEqual([played.batting.s3.runs, played.batting.s3.balls], [2, 1]); // D
+    assert.equal(played.batting.s1.fours, 1);
+    assert.equal(played.batting.s2.sixes, 1);
+  });
+
+  test('bowling figures are right (byes not charged to the bowler)', () => {
+    assert.equal(played.bowling.b1.runs, 14); // 4+1+6+2 off the bat + 1 wide; the bye is NOT charged
+    assert.equal(played.bowling.b1.wickets, 1);
+    assert.equal(played.bowling.b1.balls, 6);
+  });
+})
