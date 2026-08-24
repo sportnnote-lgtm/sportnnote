@@ -44,7 +44,7 @@ const Row = ({ label, roster, onPick, disabledFor }: { label: string; roster: Pl
 /** A multi-step capture in progress: free throws, foul-type pick, off/def rebound,
  *  a substitution, or setting the starting five. */
 type Flow =
-  | { kind: 'ft'; side: 'home' | 'away'; shooter?: Player; reason?: string }
+  | { kind: 'ft'; side: 'home' | 'away'; shooter?: Player; reason?: string; remaining?: number; total?: number }
   | { kind: 'foul'; side: 'home' | 'away'; fouler?: Player }
   | { kind: 'rebound'; side: 'home' | 'away'; player: Player }
   | { kind: 'sub'; side: 'home' | 'away'; off?: string }
@@ -159,6 +159,17 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     const cancel = <Button label="Cancel" variant="ghost" onPress={() => setFlow(null)} />;
     if (flow.kind === 'ft') {
       const roster = rosterOf(flow.side);
+      // Count-aware mode: once the number of shots is known, each Made/Miss
+      // auto-advances and the panel closes on the last shot — no "Done" tap.
+      const counted = flow.remaining != null && flow.total != null;
+      const shoot = (made: boolean) => {
+        freeThrow(flow.side, made, flow.shooter);
+        if (counted) {
+          const left = (flow.remaining ?? 1) - 1;
+          if (left <= 0) setFlow(null);
+          else setFlow({ ...flow, remaining: left });
+        }
+      };
       return (
         <View style={ctrl.editPanel}>
           <View style={ctrl.editHead}><Text style={ctrl.label}>🎯 Free throws — {nm}</Text>{cancel}</View>
@@ -174,12 +185,31 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               </View>
             </>
           )}
-          <View style={ctrl.row}>
-            <Button label="✅ Made +1" variant={flow.side} style={ctrl.flex} onPress={() => freeThrow(flow.side, true, flow.shooter)} />
-            <Button label="❌ Miss" variant="ghost" style={ctrl.flex} onPress={() => freeThrow(flow.side, false, flow.shooter)} />
-          </View>
-          <Text style={ctrl.meta}>Tap once per attempt — 1 for an and-one/technical, 2 for a shooting foul, 3 from the arc.</Text>
-          <Button label="Done" onPress={() => setFlow(null)} />
+          {!counted ? (
+            // Pick how many shots — then the panel counts them down for you.
+            <>
+              <Text style={ctrl.meta}>How many free throws?</Text>
+              <View style={ctrl.row}>
+                {[1, 2, 3].map((n) => (
+                  <Button key={n} label={n === 1 ? '1 (and-one / tech)' : `${n} shots`} variant="ghost" style={ctrl.flex}
+                    onPress={() => setFlow({ ...flow, remaining: n, total: n })} />
+                ))}
+              </View>
+              <View style={ctrl.row}>
+                <Button label="✅ Made +1" variant={flow.side} style={ctrl.flex} onPress={() => freeThrow(flow.side, true, flow.shooter)} />
+                <Button label="❌ Miss" variant="ghost" style={ctrl.flex} onPress={() => freeThrow(flow.side, false, flow.shooter)} />
+              </View>
+              <Button label="Done" onPress={() => setFlow(null)} />
+            </>
+          ) : (
+            <>
+              <Text style={ctrl.meta}>Shot {(flow.total ?? 1) - (flow.remaining ?? 1) + 1} of {flow.total} — tap the outcome</Text>
+              <View style={ctrl.row}>
+                <Button label="✅ Made +1" variant={flow.side} style={ctrl.flex} onPress={() => shoot(true)} />
+                <Button label="❌ Miss" variant="ghost" style={ctrl.flex} onPress={() => shoot(false)} />
+              </View>
+            </>
+          )}
         </View>
       );
     }
@@ -360,6 +390,9 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
             <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
           ))}
         </View>
+        {/* And-one: score the basket AND open the bonus free throw for the scorer. */}
+        <Button label="🔗 And-one (+2 & the foul shot)" variant="ghost"
+          onPress={() => { score(side, 2); setFlow({ kind: 'ft', side, shooter: selected, remaining: 1, total: 1, reason: 'And-one — the bonus free throw' }); }} />
       </View>
     );
   };
