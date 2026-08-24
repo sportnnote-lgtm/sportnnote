@@ -70,6 +70,12 @@ const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => {
   // effect); EDIT_LOG replays a corrected point list so the score & sets re-derive.
   if (a.type === 'STAT_ADJUST') return s;
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  if (a.type === 'TIMEOUT') {
+    // A team timeout — a non-scoring timeline marker (2 per set in indoor).
+    if (s.ended || !a.side) return s;
+    const setNo = s.setsWon.home + s.setsWon.away + 1;
+    return { ...s, seq: s.seq + 1, events: [...s.events, { id: s.seq + 1, stamp: `Set ${setNo}`, icon: '⏱️', label: 'Timeout', detail: undefined, side: a.side, kind: 'timeout', set: setNo }] };
+  }
   if (s.ended || !a.side || (a.type !== 'POINT' && a.type !== 'ACE' && a.type !== 'BLOCK')) return s;
   // Aces and (winning) blocks are also points — they just carry their own stat.
   const kind = a.type === 'ACE' ? 'ace' : a.type === 'BLOCK' ? 'block' : 'point';
@@ -122,6 +128,18 @@ const ScoringControls: SportPlugin<VolleyballState>['ScoringControls'] = ({ stat
       <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
       <Row label={`🧱 Block — ${homeName}`} roster={homeRoster} onPick={(p) => act('BLOCK', 'home', 'blocks', p)} fallback={`Block ${homeName}`} />
       <Row label={`🧱 Block — ${awayName}`} roster={awayRoster} onPick={(p) => act('BLOCK', 'away', 'blocks', p)} fallback={`Block ${awayName}`} />
+      {(() => {
+        // Timeouts this set (2 per set in indoor).
+        const setNo = s.setsWon.home + s.setsWon.away + 1;
+        const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
+        const label = (side: 'home' | 'away', nm: string) => `⏱️ Timeout — ${nm} (${Math.max(0, 2 - used(side))} left)`;
+        return (
+          <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
+            <Button label={label('home', homeName)} variant="ghost" style={{ flex: 1 }} disabled={used('home') >= 2} onPress={() => dispatch({ type: 'TIMEOUT', side: 'home' })} />
+            <Button label={label('away', awayName)} variant="ghost" style={{ flex: 1 }} disabled={used('away') >= 2} onPress={() => dispatch({ type: 'TIMEOUT', side: 'away' })} />
+          </View>
+        );
+      })()}
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
         homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🏐"

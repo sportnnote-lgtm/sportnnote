@@ -164,12 +164,19 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
   const s = state as TennisState;
   const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
     dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
+  // A double fault: the OPPONENT wins the point (a normal POINT, so the score &
+  // replay stay correct); the faulting server is credited a doubleFault via the
+  // 2nd-attribution channel (reversed on undo).
+  const doubleFault = (side: 'home' | 'away', p?: Player) =>
+    dispatch({ type: 'POINT', side: other(side), attribution2: p ? { playerId: p.id, stat: 'doubleFaults', playerName: p.fullName } : undefined });
   return (
     <View style={{ gap: theme.spacing(4) }}>
       <Row label={`🎾 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
       <Row label={`🎾 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
       <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
       <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
+      <Row label={`⚠️ Double fault — ${homeName}`} roster={homeRoster} onPick={(p) => doubleFault('home', p)} fallback={`Double fault ${homeName}`} />
+      <Row label={`⚠️ Double fault — ${awayName}`} roster={awayRoster} onPick={(p) => doubleFault('away', p)} fallback={`Double fault ${awayName}`} />
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
         homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾"
