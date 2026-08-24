@@ -10,6 +10,7 @@ import {
   knockoutStageRounds, nextRoundPairs, matchWinnerId, matchLoserId, thirdPlacePair,
   stageForTeams, stageChampionId, isKoStage, koStageRank, planKnockout, seedPlayIn, type KnockoutRound,
 } from '../src/data/bracket.ts';
+import { seriesLegFormat } from '../src/data/series.ts';
 import type { Match } from '../src/core/types.ts';
 
 // A knockout match: home vs away, tagged with its stage; `hs`/`as` decide the winner.
@@ -19,6 +20,9 @@ const km = (id: string, stage: string, homeId: string, awayId: string, hs?: numb
     score: hs == null ? undefined : { home: hs, away: as }, winner: hs == null ? undefined : hs > as! ? 'home' : hs < as! ? 'away' : 'draw',
     homeTeam: { id: homeId, name: homeId }, awayTeam: { id: awayId, name: awayId }, state: null,
   }) as unknown as Match;
+
+// Build a real single-stage round (with series-collapsed pairings) from matches.
+const roundOf = (...ms: Match[]): KnockoutRound => knockoutStageRounds(ms)[0];
 
 describe('stage helpers', () => {
   test('isKoStage accepts knockout stages, rejects group/none', () => {
@@ -70,10 +74,7 @@ describe('matchWinnerId', () => {
 
 describe('nextRoundPairs (progression)', () => {
   test('completed QF (4 matches) → 2 SF pairings of adjacent winners', () => {
-    const qf: KnockoutRound = {
-      stage: 'qf', label: 'Quarter-finals',
-      matches: [km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D', 0, 1), km('3', 'qf', 'E', 'F', 3, 1), km('4', 'qf', 'G', 'H', 0, 2)],
-    };
+    const qf = roundOf(km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D', 0, 1), km('3', 'qf', 'E', 'F', 3, 1), km('4', 'qf', 'G', 'H', 0, 2));
     const pairs = nextRoundPairs(qf);
     assert.ok(pairs);
     assert.deepEqual(pairs, [
@@ -82,11 +83,11 @@ describe('nextRoundPairs (progression)', () => {
     ]);
   });
   test('null until every match in the round is decided', () => {
-    const qf: KnockoutRound = { stage: 'qf', label: 'QF', matches: [km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D')] };
+    const qf = roundOf(km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D'));
     assert.equal(nextRoundPairs(qf), null);
   });
   test('null for the final (nothing after it)', () => {
-    const fin: KnockoutRound = { stage: 'final', label: 'Final', matches: [km('f', 'final', 'A', 'B', 1, 0)] };
+    const fin = roundOf(km('f', 'final', 'A', 'B', 1, 0));
     assert.equal(nextRoundPairs(fin), null);
   });
 });
@@ -130,10 +131,7 @@ describe('nextRoundPairs with play-in byes', () => {
   test('merges byes (top seeds) with play-in winners, spread by seeding', () => {
     // 4 play-in ties (r16), each tagged with the 4 byes b1–b4. Home wins each → w = home ids.
     const byes = ['b1', 'b2', 'b3', 'b4'];
-    const round: KnockoutRound = {
-      stage: 'r16', label: 'Round of 16',
-      matches: [kmBye('1', 'w1', 'x1', 1, 0, byes), kmBye('2', 'w2', 'x2', 1, 0, byes), kmBye('3', 'w3', 'x3', 1, 0, byes), kmBye('4', 'w4', 'x4', 1, 0, byes)],
-    };
+    const round = roundOf(kmBye('1', 'w1', 'x1', 1, 0, byes), kmBye('2', 'w2', 'x2', 1, 0, byes), kmBye('3', 'w3', 'x3', 1, 0, byes), kmBye('4', 'w4', 'x4', 1, 0, byes));
     const pairs = nextRoundPairs(round);
     assert.ok(pairs);
     assert.ok(pairs!.every((p) => p.stage === 'qf'));
@@ -148,7 +146,7 @@ describe('nextRoundPairs with play-in byes', () => {
     assert.ok(pairs!.every((p) => (p.homeId.startsWith('b') ? p.awayId.startsWith('w') : p.homeId.startsWith('w') && p.awayId.startsWith('b'))));
   });
   test('a single play-in tie + 3 byes advances (does not read as a final)', () => {
-    const round: KnockoutRound = { stage: 'qf', label: 'QF', matches: [kmBye('1', 'w1', 'x1', 2, 1, ['b1', 'b2', 'b3'])] };
+    const round = roundOf(kmBye('1', 'w1', 'x1', 2, 1, ['b1', 'b2', 'b3']));
     const pairs = nextRoundPairs(round);
     assert.ok(pairs);
     assert.equal(pairs!.length, 2);
@@ -163,13 +161,13 @@ describe('3rd-place playoff', () => {
     assert.equal(matchLoserId(km('m', 'sf', 'A', 'B')), undefined);
   });
   test('pairs the two semi-final losers once both semis are decided', () => {
-    const sf: KnockoutRound = { stage: 'sf', label: 'SF', matches: [km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D', 0, 1)] };
+    const sf = roundOf(km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D', 0, 1));
     assert.deepEqual(thirdPlacePair(sf), { homeId: 'B', awayId: 'C' }); // losers of each semi
   });
   test('null until both semis are done, and only for a 2-match SF round', () => {
-    const half: KnockoutRound = { stage: 'sf', label: 'SF', matches: [km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D')] };
+    const half = roundOf(km('1', 'sf', 'A', 'B', 2, 0), km('2', 'sf', 'C', 'D'));
     assert.equal(thirdPlacePair(half), null);
-    const qf: KnockoutRound = { stage: 'qf', label: 'QF', matches: [km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D', 1, 0)] };
+    const qf = roundOf(km('1', 'qf', 'A', 'B', 2, 0), km('2', 'qf', 'C', 'D', 1, 0));
     assert.equal(thirdPlacePair(qf), null);
   });
 });
@@ -180,5 +178,55 @@ describe('stageChampionId', () => {
     assert.equal(stageChampionId(decided), 'A');
     const pending = knockoutStageRounds([km('f', 'final', 'A', 'B')]);
     assert.equal(stageChampionId(pending), undefined);
+  });
+});
+
+describe('series-aware bracket (gap #3)', () => {
+  // A knockout leg carrying series metadata (two-legged tie by default).
+  const sLeg = (id: string, stage: string, seriesId: string, teamAId: string, home: string, away: string, legNo: number, hs?: number, as?: number): Match =>
+    ({ ...km(id, stage, home, away, hs, as), format: seriesLegFormat({ id: seriesId, format: 'aggregate', legs: 2, leg: legNo, teamAId }) }) as Match;
+
+  test('a two-legged tie counts as ONE pairing, resolved on aggregate', () => {
+    // SF1: A vs B two legs → A win on aggregate (2-1, 1-1 → 3-2).
+    const round = roundOf(
+      sLeg('s1l1', 'sf', 'S1', 'A', 'A', 'B', 1, 2, 1),
+      sLeg('s1l2', 'sf', 'S1', 'A', 'B', 'A', 2, 1, 1),
+    );
+    assert.equal(round.pairings.length, 1);        // one tie, not two matches
+    assert.equal(round.matches.length, 2);         // both legs still present
+    assert.equal(nextRoundPairs(round), null);     // a lone SF tie is the "final-1"? no — only 1 winner, nothing to pair
+  });
+
+  test('two two-legged semis advance the aggregate winners to the final', () => {
+    const round = roundOf(
+      // SF1: A beats B on aggregate (3-2)
+      sLeg('a1', 'sf', 'S1', 'A', 'A', 'B', 1, 2, 1),
+      sLeg('a2', 'sf', 'S1', 'A', 'B', 'A', 2, 1, 1),
+      // SF2: C beats D on aggregate (0-0, 2-0 → 2-0)
+      sLeg('b1', 'sf', 'S2', 'C', 'C', 'D', 1, 0, 0),
+      sLeg('b2', 'sf', 'S2', 'C', 'D', 'C', 2, 0, 2),
+    );
+    assert.equal(round.pairings.length, 2);
+    const pairs = nextRoundPairs(round);
+    assert.ok(pairs);
+    assert.deepEqual(pairs, [{ homeId: 'A', awayId: 'C', stage: 'final' }]);
+  });
+
+  test('the round does not advance until BOTH legs of a tie are done', () => {
+    const round = roundOf(
+      sLeg('a1', 'sf', 'S1', 'A', 'A', 'B', 1, 2, 1),
+      sLeg('a2', 'sf', 'S1', 'A', 'B', 'A', 2),           // leg 2 unplayed
+      sLeg('b1', 'sf', 'S2', 'C', 'C', 'D', 1, 1, 0),
+      sLeg('b2', 'sf', 'S2', 'C', 'D', 'C', 2, 0, 2),
+    );
+    assert.equal(nextRoundPairs(round), null);
+  });
+
+  test('stageChampionId resolves a two-legged final on aggregate', () => {
+    const rounds = knockoutStageRounds([
+      sLeg('f1', 'final', 'F', 'A', 'A', 'B', 1, 1, 0),
+      sLeg('f2', 'final', 'F', 'A', 'B', 'A', 2, 1, 3), // A wins 4-1 agg
+    ]);
+    assert.equal(stageChampionId(rounds), 'A');
   });
 });

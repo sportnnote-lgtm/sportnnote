@@ -9,6 +9,7 @@
  *     shows, and `nextRoundPairs` feeds its round-to-round progression.
  */
 import type { Match } from '../core/types';
+import { deriveSeries, readSeriesMeta, seriesWinnerId, type Series } from './series.ts';
 
 /** Knockout stages, biggest field → final. `stage` on a Match is one of these
  *  (or 'group' for a group-stage match, or absent for league/friendly). */
@@ -173,18 +174,89 @@ export function bracketChampion(rounds: BracketRound[], decide?: DecideFn): Brac
 
 /* ---------------------- Match-driven (staged) bracket ---------------------- */
 
-/** One real knockout round: its stage + the actual matches, in bracket order. */
+/** One knockout pairing: either a single match, or a multi-leg **series/tie**
+ *  (best-of / two-legged / rubbers) between the same two teams. The bracket
+ *  resolves and advances by the *pairing* winner, so a two-legged tie counts once,
+ *  not twice. `homeId`/`awayId` orient the pairing (the tie's A/B, or the single
+ *  match's sides). */
+export interface KnockoutPairing {
+  key: string;
+  stage: KoStage;
+  homeId: string;
+  awayId: string;
+  /** set when the pairing is one game */
+  match?: Match;
+  /** set when the pairing is a multi-leg tie */
+  series?: Series;
+}
+
+/** Collapse a stage's matches into pairings — series legs (shared `__seriesId`)
+ *  fold into one tie; every other match is its own pairing. Ordered by earliest
+ *  kickoff so bracket order (and adjacent-winner pairing) is preserved. */
+function pairingsInStage(stage: KoStage, matches: Match[]): KnockoutPairing[] {
+  const seriesLegs = new Map<string, Match[]>();
+  const pairings: KnockoutPairing[] = [];
+  for (const m of matches) {
+    const meta = readSeriesMeta(m);
+    if (meta) {
+      const g = seriesLegs.get(meta.id) ?? [];
+      g.push(m);
+      seriesLegs.set(meta.id, g);
+    } else {
+      pairings.push({ key: m.id, stage, homeId: m.homeTeam.id, awayId: m.awayTeam.id, match: m });
+    }
+  }
+  for (const [id, legs] of seriesLegs) {
+    const series = deriveSeries(legs)[0];
+    if (!series) continue;
+    pairings.push({
+      key: 'series:' + id,
+      stage,
+      homeId: series.teamA?.id ?? legs[0].homeTeam.id,
+      awayId: series.teamB?.id ?? legs[0].awayTeam.id,
+      series,
+    });
+  }
+  const earliest = (p: KnockoutPairing): string => {
+    const ms = p.series ? p.series.legs : p.match ? [p.match] : [];
+    return ms.reduce((min, m) => (m.startsAt && (!min || m.startsAt < min) ? m.startsAt : min), '') || '';
+  };
+  return pairings.sort((a, b) => earliest(a).localeCompare(earliest(b)) || a.key.localeCompare(b.key));
+}
+
+/** A round's pairings — using the precomputed ones, or deriving them from its
+ *  matches when a caller built the round by hand (matches only). */
+function roundPairings(round: KnockoutRound): KnockoutPairing[] {
+  return round.pairings ?? pairingsInStage(round.stage, round.matches);
+}
+
+/** The winning team id of a pairing (series winner, or single-match winner). */
+export function pairingWinnerId(p: KnockoutPairing): string | undefined {
+  return p.series ? seriesWinnerId(p.series) : p.match ? matchWinnerId(p.match) : undefined;
+}
+/** The losing team id of a decided pairing, else undefined. */
+export function pairingLoserId(p: KnockoutPairing): string | undefined {
+  const w = pairingWinnerId(p);
+  if (!w) return undefined;
+  if (p.series) return w === p.series.teamAId ? p.series.teamB?.id : p.series.teamAId;
+  return p.match ? matchLoserId(p.match) : undefined;
+}
+
+/** One real knockout round: its stage + the actual matches (all legs, flattened)
+ *  and the series-collapsed pairings the bracket advances by. */
 export interface KnockoutRound {
   stage: KoStage;
   label: string;
   matches: Match[];
+  pairings: KnockoutPairing[];
 }
 
 /**
  * Group a tournament's matches into real knockout rounds by their `stage` tag,
  * ordered biggest field → final. Group-stage / league / friendly matches (no
  * knockout stage) are ignored. Matches within a round keep bracket order (by
- * kickoff, then id) so adjacent winners meet in the next round.
+ * kickoff, then id) so adjacent winners meet in the next round; series legs are
+ * collapsed into a single pairing.
  */
 export function knockoutStageRounds(matches: Match[]): KnockoutRound[] {
   const byStage = new Map<KoStage, Match[]>();
@@ -200,6 +272,7 @@ export function knockoutStageRounds(matches: Match[]): KnockoutRound[] {
       stage,
       label: KO_STAGE_LABEL[stage],
       matches: ms.slice().sort((x, y) => (x.startsAt ?? '').localeCompare(y.startsAt ?? '') || x.id.localeCompare(y.id)),
+      pairings: pairingsInStage(stage, ms),
     }));
 }
 
@@ -221,8 +294,10 @@ export const THIRD_PLACE_STAGE = 'third';
 /** The 3rd-place playoff pairing — the two semi-final losers — once both semis
  *  are decided. Returns null otherwise. */
 export function thirdPlacePair(sf: KnockoutRound): { homeId: string; awayId: string } | null {
-  if (sf.stage !== 'sf' || sf.matches.length !== 2) return null;
-  const losers = sf.matches.map(matchLoserId);
+  if (sf.stage !== 'sf') return null;
+  const sfPairings = roundPairings(sf);
+  if (sfPairings.length !== 2) return null;
+  const losers = sfPairings.map(pairingLoserId);
   if (losers.some((l) => !l)) return null;
   return { homeId: losers[0]!, awayId: losers[1]! };
 }
@@ -234,8 +309,8 @@ export function thirdPlacePair(sf: KnockoutRound): { homeId: string; awayId: str
  * the round is ready to advance. A trailing unpaired winner (odd count) byes.
  */
 export function nextRoundPairs(round: KnockoutRound): { homeId: string; awayId: string; stage: KoStage }[] | null {
-  const winners = round.matches.map(matchWinnerId);
-  if (winners.some((w) => !w)) return null; // round not finished
+  const winners = roundPairings(round).map(pairingWinnerId);
+  if (winners.some((w) => !w)) return null; // round not finished (a tie undecided)
   const w = winners as string[];
   // Play-in byes (top seeds that skipped this round) advance alongside winners.
   const byes = [...new Set(round.matches.flatMap((m) => m.byes ?? []))];
@@ -263,5 +338,6 @@ export function nextRoundPairs(round: KnockoutRound): { homeId: string; awayId: 
 /** The tournament champion's team id, if the final has been decided. */
 export function stageChampionId(rounds: KnockoutRound[]): string | undefined {
   const final = rounds.find((r) => r.stage === 'final');
-  return final && final.matches.length === 1 ? matchWinnerId(final.matches[0]) : undefined;
+  const fp = final ? roundPairings(final) : [];
+  return fp.length === 1 ? pairingWinnerId(fp[0]) : undefined;
 }

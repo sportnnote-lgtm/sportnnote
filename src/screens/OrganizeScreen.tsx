@@ -83,6 +83,11 @@ export default function OrganizeScreen() {
           variant="ghost"
           onPress={() => nav.navigate('ScheduleMatch', {})}
         />
+        <Button
+          label="🔁 New series / tie"
+          variant="ghost"
+          onPress={() => nav.navigate('CreateSeries', {})}
+        />
         <Button label="📊 Organizer dashboard" variant="ghost" onPress={() => nav.navigate('OrganizerDashboard')} />
         <Text style={textStyles.muted}>
           Open a tournament to schedule its matches or auto-generate fixtures. A friendly is a one-off game — no tournament needed.

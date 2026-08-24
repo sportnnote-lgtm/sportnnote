@@ -28,6 +28,7 @@ import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { tournamentHostPlayerIds } from '../core/org';
+import { seriesMetaFromFormat } from '../data/series';
 import { matchEligibility } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
@@ -800,6 +801,22 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             )}
           </View>
         )}
+        {/* Part-of-a-series banner — links back to the tie's standing. */}
+        {(() => {
+          const sm = seriesMetaFromFormat(meta.config);
+          if (!sm) return null;
+          return (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View the series this match belongs to"
+              style={[st.reschedBanner, { backgroundColor: theme.colors.primary + '1A', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+              onPress={() => navigation.navigate('Series', { seriesId: sm.id })}
+            >
+              <Text style={st.reschedBannerText}>🔁 {sm.name ? sm.name + ' · ' : ''}Leg {sm.leg} of {sm.legs}</Text>
+              <Text style={[st.editLink, { marginTop: 0 }]}>View series ›</Text>
+            </TouchableOpacity>
+          );
+        })()}
         {/* Postponed / cancelled banner (everyone) + reschedule entry (hosts). */}
         {(meta.status === 'postponed' || meta.status === 'cancelled') && (
           <View style={[st.reschedBanner, { backgroundColor: (meta.status === 'cancelled' ? theme.colors.danger : theme.colors.accent) + '22' }]}>

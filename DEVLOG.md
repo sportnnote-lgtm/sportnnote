@@ -13,6 +13,52 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Series / ties wrapper, bracket-integrated (tournament gap #3)
+
+**Why:** the audit's highest-leverage gap. A bracket "match" was always ONE game,
+so nothing could model a best-of-X series (cricket bilateral, NBA playoff), a
+two-legged aggregate knockout (UCL), or a team tie of rubbers (Davis/Thomas Cup).
+One primitive — a tie that owns N child matches and resolves by most-wins or
+aggregate — unlocks all three across 5 sports.
+
+**Design (zero-migration):** a series has no table. Its config rides on each child
+match's `format` jsonb under `__series*` keys, and a series is *derived* by
+grouping matches with the same `__seriesId`. Works in demo + live immediately, and
+lets the bracket treat a tie as one pairing just by grouping.
+
+**Shipped:**
+- `data/series.ts` — pure engine: `seriesLegFormat`/`readSeriesMeta`/`deriveSeries`,
+  and `resolveSeries` → wins/aggregate, decided winner, dead-rubber & drawn-tie
+  handling. `best_of`/`rubbers` = majority of wins; `aggregate` = combined score,
+  then away-goals (optional), then the 2nd-leg result (ET/pens). 13 unit tests.
+- **Bracket integration** (`data/bracket.ts`): a `KnockoutPairing` is a single
+  match *or* a series; `knockoutStageRounds` collapses series legs into one
+  pairing; `nextRoundPairs` / `thirdPlacePair` / `stageChampionId` advance by the
+  *pairing* winner (a two-legged SF counts once, not twice). Back-compatible via a
+  `roundPairings()` fallback. 5 new tests; `BracketScreen` renders a series card
+  (wins/agg + each leg).
+- `repos.createSeries()` — spins up the N child matches (alternating home/away, 3
+  days apart), each carrying the series metadata + sport format.
+- New **CreateSeriesScreen** (Organize → "🔁 New series / tie") and **SeriesScreen**
+  (standing + tappable legs + winner). A "🔁 Leg X of N · View series" banner on
+  each leg's live-scoring Info tab links back to the tie.
+- **Fixed a latent bug:** the live match mapper (`toMatch`/`MATCH_SELECT`) never
+  returned `format`, so per-match format overrides silently never round-tripped
+  (and series metadata was invisible). Now mapped, with empty `{}` treated as
+  absent so tournament-format inheritance is preserved.
+
+**Verified live:** created a Best-of-3 (Cheetahs v Lions) from Organize → 3 legs
+appeared (alternating home/away, 3 days apart); the leg's Info tab showed the
+series banner; "View series" opened the standing with all three legs. `tsc` clean;
+222 tests pass. (No match-deletion feature exists, so the 3 test legs remain in the
+demo DB.)
+
+**Follow-up (optional):** a "New series" entry from inside a tournament (tagging a
+KO stage) so bracket-integrated ties are created without hand-tagging; match/series
+deletion; per-sport leg durations in the series card.
+
+---
+
 ### 2026-08-24 — Venue reuse + schedule-conflict detection (tournament gap #2)
 
 **Why:** the tournament audit's #2 gap — an organizer could book one ground for

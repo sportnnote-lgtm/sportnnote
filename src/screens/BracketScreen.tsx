@@ -24,8 +24,9 @@ import { canManageTournament } from '../core/org';
 import {
   knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn,
   knockoutStageRounds, nextRoundPairs, matchWinnerId, stageChampionId, KO_STAGE_LABEL,
-  thirdPlacePair, THIRD_PLACE_STAGE,
+  thirdPlacePair, THIRD_PLACE_STAGE, pairingWinnerId, type KnockoutPairing,
 } from '../data/bracket';
+import { resolveSeries, type SeriesFormat } from '../data/series';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -210,7 +211,7 @@ export default function BracketScreen() {
               return (
                 <View key={round.stage} style={{ gap: theme.spacing(2) }}>
                   <Text style={textStyles.h3}>{round.label}</Text>
-                  {round.matches.map((m) => <StagedMatchCard key={m.id} m={m} />)}
+                  {round.pairings.map((p) => <PairingCard key={p.key} p={p} />)}
                   {roundByes.length > 0 && (
                     <Text style={textStyles.muted}>
                       ⏭️ Byes to the next round: {roundByes.map((id) => nameColor.get(id)?.name ?? id).join(', ')}
@@ -240,7 +241,7 @@ export default function BracketScreen() {
                 disabled={busy}
               />
             )}
-            {canManage && lastRound && lastRound.matches.length > 1 && !pendingNext && (
+            {canManage && lastRound && lastRound.pairings.length > 1 && !pendingNext && (
               <Text style={textStyles.muted}>Finish every {lastRound.label} tie to unlock the next round.</Text>
             )}
             <FormError message={error} />
@@ -269,6 +270,51 @@ export default function BracketScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+const SERIES_LABEL: Record<SeriesFormat, (n: number) => string> = {
+  best_of: (n) => `Best of ${n}`,
+  aggregate: () => 'Two legs · aggregate',
+  rubbers: (n) => `${n} rubbers`,
+};
+
+/** A knockout pairing: a single match, or a multi-leg series/tie shown as one
+ *  card (series score + result, with each leg listed beneath). */
+function PairingCard({ p }: { p: KnockoutPairing }) {
+  if (!p.series) return p.match ? <StagedMatchCard m={p.match} /> : null;
+  const s = p.series;
+  const st2 = resolveSeries(s);
+  const winnerId = st2.winnerId;
+  const state = (id?: string): SlotState => (!winnerId ? 'neutral' : winnerId === id ? 'won' : 'lost');
+  const isAgg = s.format === 'aggregate';
+  const scoreA = isAgg ? st2.aggA : st2.winsA;
+  const scoreB = isAgg ? st2.aggB : st2.winsB;
+  const anyLive = s.legs.some((m) => m.status === 'live');
+  return (
+    <View style={[st.matchCard, anyLive && st.matchCardLive]}>
+      <View style={st.seriesHead}>
+        <Text style={st.seriesTag}>{s.name || SERIES_LABEL[s.format](s.legsPlanned)}</Text>
+        <Text style={st.seriesStatus}>{st2.decided ? 'DECIDED' : anyLive ? '● LIVE' : `${st2.played}/${s.legsPlanned}`}</Text>
+      </View>
+      <StagedSide name={s.teamA?.name ?? '—'} color={s.teamA?.colorHex} score={scoreA} state={state(s.teamA?.id)} />
+      <View style={st.vsRow}><Text style={st.vs}>{isAgg ? 'agg' : 'wins'}</Text></View>
+      <StagedSide name={s.teamB?.name ?? '—'} color={s.teamB?.colorHex} score={scoreB} state={state(s.teamB?.id)} />
+      <Text style={st.seriesSummary}>{st2.summary}</Text>
+      <View style={st.legList}>
+        {s.legs.map((m, i) => {
+          const w = matchWinnerId(m);
+          const res = m.score ? `${m.score.home}–${m.score.away}` : m.status === 'live' ? 'live' : '—';
+          return (
+            <Text key={m.id} style={st.legRow} numberOfLines={1}>
+              <Text style={st.legNo}>L{i + 1}  </Text>
+              {m.homeTeam.shortName} <Text style={st.legScore}>{res}</Text> {m.awayTeam.shortName}
+              {w ? `  · ${w === m.homeTeam.id ? m.homeTeam.shortName : m.awayTeam.shortName} won` : ''}
+            </Text>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -305,6 +351,14 @@ const st = StyleSheet.create({
   muted: { color: theme.colors.textMuted, fontWeight: '400' },
   vsRow: { alignItems: 'center' },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  seriesHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  seriesTag: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  seriesStatus: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
+  seriesSummary: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', marginTop: theme.spacing(1) },
+  legList: { gap: 2, marginTop: theme.spacing(1), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(2) },
+  legRow: { color: theme.colors.text, fontSize: theme.font.small },
+  legNo: { color: theme.colors.textMuted, fontWeight: '800' },
+  legScore: { fontWeight: '800' },
   champ: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),
     backgroundColor: PODIUM[0] + '1F', borderRadius: theme.radius.md, padding: theme.spacing(3),

@@ -29,6 +29,8 @@ export type RootStackParamList = {
   CreateCommunity: undefined;
   Teams: undefined;
   ScheduleMatch: { tournamentId?: string; sport?: SportId } | undefined;
+  CreateSeries: { tournamentId?: string; sport?: SportId } | undefined;
+  Series: { seriesId: string };
   EditMatch: { matchId: string };
   GenerateFixtures: { tournamentId: string; sport?: SportId };
   TournamentTeams: { tournamentId: string; sport?: SportId };

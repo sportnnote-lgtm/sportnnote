@@ -38,6 +38,7 @@ import {
 import { emptyFormation } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
 import { getSport } from '../sports/registry';
+import { seriesLegFormat, type SeriesFormat } from './series';
 import type {
   AcademicYear,
   FootballProfile,
@@ -95,6 +96,7 @@ interface MatchRow {
   host_ids: string[] | null;
   logo_url: string | null;
   scorer_id: string | null;
+  format: SportFormat | null;
   state: unknown;
   home_team: TeamRow | TeamRow[] | null;
   away_team: TeamRow | TeamRow[] | null;
@@ -146,6 +148,10 @@ function toMatch(r: MatchRow): Match {
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
     scorerId: r.scorer_id ?? undefined,
+    // Empty `{}` counts as "no per-match format" so the tournament's format is
+    // still inherited (the DB defaults the column to {}). A non-empty format —
+    // a friendly's rules, or series metadata — is kept.
+    format: r.format && Object.keys(r.format).length > 0 ? r.format : undefined,
     homeTeam: home ? toTeam(home) : (MATCHES[0].homeTeam as Team),
     awayTeam: away ? toTeam(away) : (MATCHES[0].awayTeam as Team),
     state: r.state ?? null,
@@ -153,7 +159,7 @@ function toMatch(r: MatchRow): Match {
 }
 
 const MATCH_SELECT =
-  'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, state,' +
+  'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, format, state,' +
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
 
@@ -2194,4 +2200,62 @@ export async function createMatch(input: NewMatch): Promise<Match> {
   const full = await getMatch(data.id);
   if (!full) throw new Error('Match created but could not be loaded');
   return full;
+}
+
+/* -------------------------------- Series / ties --------------------------- */
+
+export interface NewSeries {
+  tournamentId?: string;
+  sport: SportId;
+  teamAId: string;
+  teamBId: string;
+  format: SeriesFormat;
+  /** total legs/games — forced to 2 for aggregate (two-legged) */
+  legs: number;
+  name?: string;
+  /** aggregate: break a level tie on away goals before the 2nd-leg result */
+  awayGoals?: boolean;
+  /** for a bracket-integrated tie (a knockout stage played as a series) */
+  stage?: string;
+  /** first leg kickoff; later legs are spaced `intervalDays` apart */
+  startsAt: string;
+  intervalDays?: number;
+  hostIds?: string[];
+  venueName?: string;
+  venueMapsUrl?: string;
+  /** per-match sport rules (overs, players/side…) applied to every leg */
+  matchFormat?: SportFormat;
+}
+
+/** Create a series/tie: N child matches that share a `__seriesId` and carry the
+ *  series config on their `format`, so `deriveSeries` can reconstruct the tie and
+ *  the bracket can treat it as one pairing. Legs alternate home/away so each side
+ *  hosts (a two-legged tie is home-and-away by construction). */
+export async function createSeries(input: NewSeries): Promise<{ seriesId: string; matches: Match[] }> {
+  const seriesId = `series-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const legsCount = input.format === 'aggregate' ? 2 : Math.max(1, Math.floor(input.legs));
+  const gapMs = Math.max(0, input.intervalDays ?? 3) * 24 * 60 * 60 * 1000;
+  const base = new Date(input.startsAt).getTime();
+  const matches: Match[] = [];
+  for (let i = 0; i < legsCount; i++) {
+    const aHome = i % 2 === 0; // A hosts the odd legs; B the even ones
+    const seriesFmt = seriesLegFormat({
+      id: seriesId, format: input.format, legs: legsCount, leg: i + 1,
+      teamAId: input.teamAId, name: input.name, awayGoals: input.awayGoals,
+    });
+    const m = await createMatch({
+      tournamentId: input.tournamentId,
+      sport: input.sport,
+      stage: input.stage,
+      homeTeamId: aHome ? input.teamAId : input.teamBId,
+      awayTeamId: aHome ? input.teamBId : input.teamAId,
+      startsAt: new Date(base + i * gapMs).toISOString(),
+      hostIds: input.hostIds,
+      venueName: input.venueName,
+      venueMapsUrl: input.venueMapsUrl,
+      format: { ...(input.matchFormat ?? {}), ...seriesFmt },
+    });
+    matches.push(m);
+  }
+  return { seriesId, matches };
 }
