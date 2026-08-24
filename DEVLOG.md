@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Match & series deletion (fenced, safe-by-construction)
+
+**Why:** organizers need to clean up fixtures created by mistake, but deletion is
+destructive — a played match has events, stat lines and standings impact. Chosen
+policy (with the user): **fenced in-app delete** — deletable only while a match is
+still pre-match, so a played game's data can never be destroyed by a tap. A played
+match can only be Cancelled (gap #1), never deleted.
+
+**Shipped:**
+- `repos.deleteMatch()` — pre-match only (scheduled/postponed/cancelled); the live
+  path guards status in the WHERE clause and `.select()`s the deleted row so a
+  zero-row result (RLS/permission) surfaces an error instead of a false success.
+  Child rows cascade-delete. `deleteSeries()` — deletes all legs, but only when
+  every leg is still pre-match.
+- **EditMatchScreen** "Danger zone": host-only, two-step inline confirm (web-safe,
+  not `Alert.alert`), with a note when the match is a series leg ("deleting removes
+  just this leg").
+- **SeriesScreen** "Danger zone": delete the whole tie (host-only, only while every
+  leg is unplayed), two-step confirm.
+- Migration `20260827120000_match_delete_policy.sql` — a **fenced DELETE RLS
+  policy**: `can_manage_match(id) AND status in (scheduled,postponed,cancelled)`,
+  so even a direct API call can't delete a played match or one you don't manage.
+  (`matches` previously had no DELETE policy, so deletes silently affected 0 rows.)
+
+**Verified live:** the danger zone + confirm render; the series-leg note shows;
+deleting surfaced the guard-rail error (migration not yet applied) instead of a
+false success. Demo-mode deletion works immediately. `tsc` clean; 222 tests pass.
+**User must run migration 0013** for live deletion to take effect.
+
+---
+
 ### 2026-08-25 — Series / ties wrapper, bracket-integrated (tournament gap #3)
 
 **Why:** the audit's highest-leverage gap. A bracket "match" was always ONE game,

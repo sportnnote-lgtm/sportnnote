@@ -12,9 +12,10 @@ import { Button, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } 
 import { DateTimeField } from '../components/DateTimeField';
 import { VenueField } from '../components/VenueField';
 import { ConflictNotice } from '../components/ConflictNotice';
-import { getMatch, rescheduleMatch, setMatchStatus } from '../data/repos';
+import { getMatch, rescheduleMatch, setMatchStatus, deleteMatch } from '../data/repos';
 import { useMatches } from '../data/hooks';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
+import { readSeriesMeta } from '../data/series';
 import type { Match } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -29,6 +30,7 @@ export default function EditMatchScreen() {
   const [venueUrl, setVenueUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -81,6 +83,7 @@ export default function EditMatchScreen() {
   const started = match.status === 'live' || match.status === 'completed';
   const home = match.homeTeam?.name ?? 'Home';
   const away = match.awayTeam?.name ?? 'Away';
+  const seriesMeta = readSeriesMeta(match);
 
   async function saveSchedule() {
     setBusy(true); setError(null);
@@ -105,6 +108,16 @@ export default function EditMatchScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the match.');
     } finally {
+      setBusy(false);
+    }
+  }
+  async function removeMatch() {
+    setBusy(true); setError(null);
+    try {
+      await deleteMatch(params.matchId);
+      nav.popToTop(); // the match is gone — the scoring screen behind us is stale
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the match.');
       setBusy(false);
     }
   }
@@ -151,6 +164,26 @@ export default function EditMatchScreen() {
                 <Button label="▶ Restore to scheduled" variant="home" disabled={busy} onPress={() => changeStatus('scheduled')} />
               )}
             </View>
+
+            {/* Danger zone: hard-delete is only offered pre-match (no scoring data
+                to lose). A played match can only be Cancelled, above. */}
+            <View style={st.danger}>
+              <FieldLabel>Danger zone</FieldLabel>
+              {seriesMeta && (
+                <Text style={textStyles.muted}>This is leg {seriesMeta.leg} of a {seriesMeta.legs}-match series — deleting removes just this leg.</Text>
+              )}
+              {!confirmDelete ? (
+                <Button label="🗑 Delete match" variant="danger" disabled={busy} onPress={() => setConfirmDelete(true)} />
+              ) : (
+                <View style={{ gap: theme.spacing(2) }}>
+                  <Text style={st.confirmText}>Delete this match permanently? This can’t be undone.</Text>
+                  <View style={st.statusRow}>
+                    <Button label="Keep" variant="ghost" style={st.flex} disabled={busy} onPress={() => setConfirmDelete(false)} />
+                    <Button label={busy ? 'Deleting…' : 'Delete'} variant="danger" style={st.flex} disabled={busy} onPress={removeMatch} />
+                  </View>
+                </View>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -168,4 +201,6 @@ const st = StyleSheet.create({
   postponeBg: { backgroundColor: theme.colors.accent + '22' },
   cancelBg: { backgroundColor: theme.colors.danger + '22' },
   statusText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  danger: { gap: theme.spacing(2), marginTop: theme.spacing(4), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(4) },
+  confirmText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
 });

@@ -2,17 +2,19 @@
  *  aggregate), the decided winner, and every leg as a tappable card that opens
  *  the normal live-scoring screen. The standing recomputes from the legs' results
  *  each time it's opened, so scoring a leg and coming back updates the series. */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { ScreenTitle, LoadingState, textStyles } from '../components/ui';
+import { ScreenTitle, LoadingState, Button, FieldLabel, FormError, textStyles } from '../components/ui';
 import { PODIUM } from '../components/Rank';
 import { formatShort, useUserTimeZone } from '../core/time';
+import { useAuth } from '../core/auth';
 import { useMatches } from '../data/hooks';
+import { getMyPlayerId, deleteSeries } from '../data/repos';
 import { deriveSeries, resolveSeries, type SeriesFormat } from '../data/series';
 import type { Match } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -29,10 +31,33 @@ export default function SeriesScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Series'>>();
   const tz = useUserTimeZone();
+  const { profile } = useAuth();
   const { matches, loading } = useMatches('all');
 
   const series = useMemo(() => deriveSeries(matches).find((s) => s.id === params.seriesId), [matches, params.seriesId]);
   const standing = useMemo(() => (series ? resolveSeries(series) : null), [series]);
+
+  const [myId, setMyId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let on = true; getMyPlayerId(profile?.id).then((id) => on && setMyId(id)); return () => { on = false; }; }, [profile?.id]);
+
+  // Host of the tie = host of any of its legs. Deletable only while every leg is
+  // still pre-match (nothing scored to lose).
+  const canManage = !!myId && !!series && series.legs.some((m) => (m.hostIds ?? []).includes(myId));
+  const allPreMatch = !!series && series.legs.every((m) => m.status !== 'live' && m.status !== 'completed');
+
+  async function removeSeries() {
+    setBusy(true); setError(null);
+    try {
+      await deleteSeries(params.seriesId);
+      nav.popToTop();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the series.');
+      setBusy(false);
+    }
+  }
 
   if (loading && !series) {
     return <SafeAreaView style={st.safe} edges={['bottom']}><LoadingState label="Loading series…" /></SafeAreaView>;
@@ -110,6 +135,27 @@ export default function SeriesScreen() {
         {standing.decided && standing.gamesLeft > 0 && (
           <Text style={textStyles.muted}>The tie is decided — remaining matches are dead rubbers.</Text>
         )}
+
+        {/* Host-only delete — offered only while no leg has been played. */}
+        {canManage && (
+          <View style={st.danger}>
+            <FieldLabel>Danger zone</FieldLabel>
+            {!allPreMatch ? (
+              <Text style={textStyles.muted}>Some matches have already started, so this series can no longer be deleted.</Text>
+            ) : !confirmDelete ? (
+              <Button label={`🗑 Delete series (${series.legs.length} matches)`} variant="danger" disabled={busy} onPress={() => setConfirmDelete(true)} />
+            ) : (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={st.confirmText}>Delete this series and all {series.legs.length} of its matches? This can’t be undone.</Text>
+                <View style={st.confirmRow}>
+                  <Button label="Keep" variant="ghost" style={st.flex} disabled={busy} onPress={() => setConfirmDelete(false)} />
+                  <Button label={busy ? 'Deleting…' : 'Delete'} variant="danger" style={st.flex} disabled={busy} onPress={removeSeries} />
+                </View>
+              </View>
+            )}
+            <FormError message={error} />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -145,4 +191,8 @@ const st = StyleSheet.create({
   legTeamRight: { textAlign: 'right' },
   legScore: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   legVs: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  danger: { gap: theme.spacing(2), marginTop: theme.spacing(3), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(4) },
+  confirmText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
+  confirmRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  flex: { flex: 1 },
 });

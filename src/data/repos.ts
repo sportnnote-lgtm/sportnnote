@@ -38,7 +38,7 @@ import {
 import { emptyFormation } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
 import { getSport } from '../sports/registry';
-import { seriesLegFormat, type SeriesFormat } from './series';
+import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
   AcademicYear,
   FootballProfile,
@@ -1180,6 +1180,46 @@ export async function setMatchStatus(matchId: string, status: 'scheduled' | 'pos
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', matchId)
     .in('status', ['scheduled', 'postponed', 'cancelled']);
+}
+
+/** The pre-match states — the only ones a match can be hard-deleted from. A live
+ *  or completed game has real scoring data (events, stat lines, standings impact)
+ *  and can only be Cancelled, never deleted. */
+const DELETABLE_STATUSES = ['scheduled', 'postponed', 'cancelled'] as const;
+const isDeletableStatus = (s: MatchStatus): boolean => (DELETABLE_STATUSES as readonly string[]).includes(s);
+
+/** Permanently delete a match — allowed ONLY for a pre-match fixture (never a
+ *  live/completed one, so scoring data can't be destroyed). Child rows (events,
+ *  stat lines, lineups, squads, disputes) cascade-delete in the DB. */
+export async function deleteMatch(matchId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const idx = demo.matches.findIndex((x) => x.id === matchId);
+    if (idx < 0) return;
+    if (!isDeletableStatus(demo.matches[idx].status)) throw new Error('Only a match that has not started can be deleted.');
+    demo.matches.splice(idx, 1);
+    delete demo.lineups[matchId];
+    demo.disputes = demo.disputes.filter((d) => d.matchId !== matchId);
+    return;
+  }
+  // The status guard lives in the WHERE clause, so a direct call can never delete
+  // a live/completed match (it just matches zero rows). `.select()` returns the
+  // deleted row(s) — an empty result means nothing was removed (RLS blocked it, or
+  // the match isn't pre-match), which we surface instead of a false success.
+  const { data, error } = await supabase
+    .from('matches').delete().eq('id', matchId).in('status', DELETABLE_STATUSES as unknown as string[]).select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('Could not delete this match — it may have already started, or you may not have permission.');
+}
+
+/** Delete a whole series/tie — but only when every leg is still pre-match. If any
+ *  leg has been played the series is preserved (delete the stray legs by hand). */
+export async function deleteSeries(seriesId: string): Promise<void> {
+  const legs = (await getMatches()).filter((m) => readSeriesMeta(m)?.id === seriesId);
+  if (legs.length === 0) return;
+  if (legs.some((m) => !isDeletableStatus(m.status))) {
+    throw new Error('This series has matches that have already started — it can’t be deleted.');
+  }
+  for (const m of legs) await deleteMatch(m.id);
 }
 
 /* ----------------------------- Lineups (football) -------------------------- */
