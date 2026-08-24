@@ -9,7 +9,7 @@
  * No I/O — the screen feeds it match results and gets back the bracket to create.
  */
 import type { Match, SportId, TournamentEntry } from '../core/types.ts';
-import { teamStandings, type TeamStanding } from './standings.ts';
+import { teamStandings, defaultStandingsConfig, type TeamStanding, type StandingsConfig } from './standings.ts';
 import type { GeneratedPairing } from './fixtures.ts';
 
 /** One group's ranked table. */
@@ -26,14 +26,25 @@ export interface Qualifier {
   via: 'direct' | 'best';
 }
 
-/** League tie-break order: points, then goal difference, then goals for, then name. */
-const rankCmp = (x: TeamStanding, y: TeamStanding) =>
-  y.points - x.points || y.diff - x.diff || y.for - x.for || x.name.localeCompare(y.name);
+/** Cross-group seed comparison: points, then the config's numeric tie-breakers
+ *  (NRR / goal difference / goals for — head-to-head is meaningless between teams
+ *  from different groups), then name. */
+function seedCmp(cfg: StandingsConfig) {
+  const numeric = cfg.order.filter((t): t is 'nrr' | 'diff' | 'for' => t !== 'h2h');
+  return (x: TeamStanding, y: TeamStanding): number => {
+    if (y.points !== x.points) return y.points - x.points;
+    for (const t of numeric) {
+      const d = t === 'nrr' ? (y.nrr ?? 0) - (x.nrr ?? 0) : t === 'diff' ? y.diff - x.diff : y.for - x.for;
+      if (d) return d;
+    }
+    return x.name.localeCompare(y.name);
+  };
+}
 
 /** Per-group tables for a sport: partition the tournament's matches by their
  *  `group` tag and rank each with the normal league logic. Ungrouped matches
  *  (e.g. knockout ties) are ignored. */
-export function groupTables(matches: Match[], sport: SportId): GroupTable[] {
+export function groupTables(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): GroupTable[] {
   const byGroup = new Map<string, Match[]>();
   for (const m of matches) {
     if (m.sport !== sport || !m.group) continue;
@@ -43,7 +54,7 @@ export function groupTables(matches: Match[], sport: SportId): GroupTable[] {
   }
   return [...byGroup.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([name, ms]) => ({ name, rows: teamStandings(ms, sport) }));
+    .map(([name, ms]) => ({ name, rows: teamStandings(ms, sport, cfg) }));
 }
 
 /**
@@ -54,7 +65,8 @@ export function groupTables(matches: Match[], sport: SportId): GroupTable[] {
  * then all runners-up, … then the best-placed wildcards — which is what
  * `seedKnockout` pairs into a bracket.
  */
-export function advancement(tables: GroupTable[], topPerGroup: number, bestPlacedSlots = 0): Qualifier[] {
+export function advancement(tables: GroupTable[], topPerGroup: number, bestPlacedSlots = 0, cfg: StandingsConfig = defaultStandingsConfig('football')): Qualifier[] {
+  const cmp = seedCmp(cfg);
   const direct: { q: Qualifier; row: TeamStanding }[] = [];
   const bestPool: { row: TeamStanding; group: string }[] = [];
   for (const t of tables) {
@@ -65,9 +77,9 @@ export function advancement(tables: GroupTable[], topPerGroup: number, bestPlace
   }
   // Seed the direct qualifiers: by rank first (all 1st places, then all 2nds…),
   // and within a rank by record — so winners occupy the top seeds.
-  direct.sort((a, b) => a.q.rank - b.q.rank || rankCmp(a.row, b.row));
+  direct.sort((a, b) => a.q.rank - b.q.rank || cmp(a.row, b.row));
   const best = bestPool
-    .sort((a, b) => rankCmp(a.row, b.row))
+    .sort((a, b) => cmp(a.row, b.row))
     .slice(0, bestPlacedSlots)
     .map(({ row, group }): Qualifier => ({ teamId: row.teamId, name: row.name, group, rank: topPerGroup + 1, via: 'best' }));
   return [...direct.map((d) => d.q), ...best];
@@ -127,7 +139,8 @@ export function superPhaseLabel(teams: number): string {
  * runners-up, …), and within a rank by record. Teams not in any group table are
  * ignored. `via` is 'direct' for every manual pick (no best-placed distinction).
  */
-export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: string[]): Qualifier[] {
+export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: string[], cfg: StandingsConfig = defaultStandingsConfig('football')): Qualifier[] {
+  const cmp = seedCmp(cfg);
   const sel = new Set(selectedTeamIds);
   const picks: { q: Qualifier; row: TeamStanding }[] = [];
   for (const t of tables) {
@@ -135,7 +148,7 @@ export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: s
       if (sel.has(row.teamId)) picks.push({ q: { teamId: row.teamId, name: row.name, group: t.name, rank: i + 1, via: 'direct' }, row });
     });
   }
-  picks.sort((a, b) => a.q.rank - b.q.rank || rankCmp(a.row, b.row));
+  picks.sort((a, b) => a.q.rank - b.q.rank || cmp(a.row, b.row));
   return picks.map((p) => p.q);
 }
 

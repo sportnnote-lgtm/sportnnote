@@ -23,7 +23,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { cricketVoice } from '../voiceParsers';
 import {
   init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
-  oversStr, runRate, inPowerplay,
+  oversStr, runRate, inPowerplay, nrrOvers,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
@@ -1135,6 +1135,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     }
     return { winner, ...score };
   },
+  standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
   summary: (s) => {
     // While a Super Over is live/decided, tag each side's board with its SO runs.
     const so = s.superOver;

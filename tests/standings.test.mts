@@ -36,7 +36,7 @@ describe('overallStandings — cross-sport house merge', () => {
   test('points and games sum across every sport', () => {
     const red = table.find((t) => t.name === 'Red House')!;
     const blue = table.find((t) => t.name === 'Blue House')!;
-    assert.equal(red.points, 3);  // 2 (fb win) + 0 (ck loss) + 1 (ck draw)
+    assert.equal(red.points, 4);  // 3 (fb win) + 0 (ck loss) + 1 (ck draw)
     assert.equal(red.played, 3);
     assert.equal(blue.points, 3); // 0 (fb loss) + 2 (ck win) + 1 (ck draw)
     assert.equal(blue.played, 3);

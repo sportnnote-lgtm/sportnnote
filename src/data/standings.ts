@@ -18,18 +18,65 @@ export interface TeamStanding {
   against: number;
   diff: number;
   points: number;
+  /** rate denominators (cricket: overs faced / bowled) — drives NRR */
+  forUnits: number;
+  againstUnits: number;
+  /** net rate (cricket: net run rate) when the sport supplies rate units */
+  nrr?: number;
 }
 
-/** League table for a sport: 2 pts a win, 1 a draw, with for/against/diff. */
-export function teamStandings(matches: Match[], sport: SportId): TeamStanding[] {
+/** How a league/group table awards points and breaks ties. Points default per
+ *  sport (football 3-1-0, others 2-1-0); the tie-break order is applied within
+ *  any cluster still level after points. */
+export type TieBreaker = 'h2h' | 'nrr' | 'diff' | 'for';
+export interface StandingsConfig {
+  win: number;
+  draw: number;
+  loss: number;
+  order: TieBreaker[];
+}
+const isTieBreaker = (s: string): s is TieBreaker => s === 'h2h' || s === 'nrr' || s === 'diff' || s === 'for';
+
+/** Sensible defaults: football is the modern 3 points a win; cricket ranks ties
+ *  by net run rate; everything else by points difference. Head-to-head first,
+ *  which is how most real competitions read a two-team tie. */
+export function defaultStandingsConfig(sport: SportId): StandingsConfig {
+  const win = sport === 'football' ? 3 : 2;
+  const order: TieBreaker[] = sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
+  return { win, draw: 1, loss: 0, order };
+}
+
+/** Read a tournament's per-sport override from its `formats[sport]` (reserved
+ *  `winPoints`/`drawPoints`/`lossPoints`/`tieBreak` keys), falling back to the
+ *  sport defaults. Zero-migration: rides on the existing formats jsonb. */
+export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, unknown> | null): StandingsConfig {
+  const d = defaultStandingsConfig(sport);
+  if (!fmt) return d;
+  const num = (k: string, dv: number) => (typeof fmt[k] === 'number' ? (fmt[k] as number) : dv);
+  const order = typeof fmt.tieBreak === 'string'
+    ? (fmt.tieBreak as string).split(',').map((s) => s.trim()).filter(isTieBreaker)
+    : [];
+  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order };
+}
+
+/** DI so `standings.ts` can compute NRR without importing the sport registry
+ *  (which would pull React Native into the pure test runner). The app registers
+ *  a provider at startup (see registry.ts); returns the rate denominators —
+ *  cricket's overs faced by each side — or null for sports without a rate. */
+type RateProvider = (sport: SportId, state: unknown) => { home: number; away: number } | null;
+let rateProvider: RateProvider | null = null;
+export function setStandingsRateProvider(fn: RateProvider | null): void { rateProvider = fn; }
+
+/** League table for a sport, ranked by the config's points + tie-breakers. */
+export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): TeamStanding[] {
   const table = new Map<string, TeamStanding>();
   const ensure = (id: string, name: string, color?: string) => {
     if (!table.has(id))
-      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, for: 0, against: 0, diff: 0, points: 0 });
+      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0 });
     return table.get(id)!;
   };
-  for (const m of matches) {
-    if (m.sport !== sport || m.status !== 'completed' || !m.winner) continue;
+  const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && !!m.winner);
+  for (const m of played) {
     const h = ensure(m.homeTeam.id, m.homeTeam.name, m.homeTeam.colorHex);
     const a = ensure(m.awayTeam.id, m.awayTeam.name, m.awayTeam.colorHex);
     h.played += 1;
@@ -38,18 +85,78 @@ export function teamStandings(matches: Match[], sport: SportId): TeamStanding[] 
       h.for += m.score.home; h.against += m.score.away;
       a.for += m.score.away; a.against += m.score.home;
     }
+    const rate = rateProvider?.(sport, m.state);
+    if (rate) {
+      h.forUnits += rate.home; h.againstUnits += rate.away;
+      a.forUnits += rate.away; a.againstUnits += rate.home;
+    }
     if (m.winner === 'draw') {
-      h.drawn += 1; a.drawn += 1; h.points += 1; a.points += 1;
+      h.drawn += 1; a.drawn += 1; h.points += cfg.draw; a.points += cfg.draw;
     } else if (m.winner === 'home') {
-      h.won += 1; a.lost += 1; h.points += 2;
+      h.won += 1; a.lost += 1; h.points += cfg.win; a.points += cfg.loss;
     } else {
-      a.won += 1; h.lost += 1; a.points += 2;
+      a.won += 1; h.lost += 1; a.points += cfg.win; h.points += cfg.loss;
     }
   }
-  for (const t of table.values()) t.diff = t.for - t.against;
-  return [...table.values()].sort(
-    (x, y) => y.points - x.points || y.diff - x.diff || y.for - x.for || x.name.localeCompare(y.name)
-  );
+  for (const t of table.values()) {
+    t.diff = t.for - t.against;
+    if (t.forUnits > 0 && t.againstUnits > 0) t.nrr = t.for / t.forUnits - t.against / t.againstUnits;
+  }
+  return rankTeams([...table.values()], played, cfg);
+}
+
+/** Rank rows: by points, then break each still-tied cluster with the config's
+ *  ordered tie-breakers (head-to-head runs a mini-league among just that
+ *  cluster). Recursive so a partial tie falls through to the next criterion. */
+export function rankTeams(rows: TeamStanding[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
+  const out: TeamStanding[] = [];
+  const byPoints = [...rows].sort((x, y) => y.points - x.points);
+  for (let i = 0; i < byPoints.length; ) {
+    let j = i;
+    while (j < byPoints.length && byPoints[j].points === byPoints[i].points) j++;
+    out.push(...orderCluster(byPoints.slice(i, j), cfg.order, matches, cfg));
+    i = j;
+  }
+  return out;
+}
+
+function numericKey(t: TeamStanding, tb: Exclude<TieBreaker, 'h2h'>): number {
+  return tb === 'nrr' ? (t.nrr ?? 0) : tb === 'diff' ? t.diff : t.for;
+}
+
+/** Points a team took from matches played *only among the given cluster*. */
+function headToHeadPoints(teamId: string, cluster: TeamStanding[], matches: Match[], cfg: StandingsConfig): number {
+  const ids = new Set(cluster.map((c) => c.teamId));
+  let pts = 0;
+  for (const m of matches) {
+    if (!ids.has(m.homeTeam.id) || !ids.has(m.awayTeam.id)) continue;
+    const isHome = m.homeTeam.id === teamId;
+    const isAway = m.awayTeam.id === teamId;
+    if (!isHome && !isAway) continue;
+    if (m.winner === 'draw') pts += cfg.draw;
+    else if ((m.winner === 'home') === isHome) pts += cfg.win;
+    else pts += cfg.loss;
+  }
+  return pts;
+}
+
+function orderCluster(cluster: TeamStanding[], tbs: TieBreaker[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
+  if (cluster.length <= 1) return cluster;
+  if (tbs.length === 0) return [...cluster].sort((a, b) => a.name.localeCompare(b.name));
+  const [tb, ...rest] = tbs;
+  const keyed = cluster.map((t) => ({ t, k: tb === 'h2h' ? headToHeadPoints(t.teamId, cluster, matches, cfg) : numericKey(t, tb) }));
+  keyed.sort((a, b) => b.k - a.k);
+  const res: TeamStanding[] = [];
+  for (let i = 0; i < keyed.length; ) {
+    let j = i;
+    while (j < keyed.length && keyed[j].k === keyed[i].k) j++;
+    // Each sub-cluster that's still tied on this criterion drops to the NEXT
+    // tie-breaker (`rest`), so recursion always makes progress and terminates.
+    const sub = keyed.slice(i, j).map((x) => x.t);
+    res.push(...orderCluster(sub, rest, matches, cfg));
+    i = j;
+  }
+  return res;
 }
 
 export interface OverallStanding {

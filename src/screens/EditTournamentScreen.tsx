@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
+import { PointsEditor } from '../components/PointsEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { updateTournament } from '../data/repos';
 import { useTournamentById } from '../data/hooks';
@@ -176,7 +177,10 @@ export default function EditTournamentScreen() {
         )}
 
         {sports.map((sp) => (
-          <SportFormatEditor key={sp} sport={sp} heading="format" value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
+          <View key={sp} style={{ gap: theme.spacing(3) }}>
+            <SportFormatEditor sport={sp} heading="format" value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
+            <PointsEditor sport={sp} value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
+          </View>
         ))}
 
         <FieldLabel>Registration</FieldLabel>

@@ -14,7 +14,7 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { getSport } from '../sports/registry';
 import { useTournament, useTournamentById, useStandings, useDivisions } from '../data/hooks';
-import { leaderStat, teamStandings } from '../data/standings';
+import { leaderStat, teamStandings, standingsConfigFromFormat } from '../data/standings';
 import { matchesInDivision } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -38,8 +38,10 @@ export default function StandingsScreen() {
   // Scope the table to the selected division (age × gender), if any.
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params?.tournamentId);
   const table = useMemo(
-    () => (activeCat ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport) : teams),
-    [activeCat, matches, entries, activeSport, teams],
+    () => (activeCat
+      ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]))
+      : teams),
+    [activeCat, matches, entries, activeSport, teams, tournament],
   );
   const lead = leaderStat(activeSport);
   const [showTeams, setShowTeams] = useState(false);

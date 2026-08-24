@@ -17,7 +17,7 @@ import { DivisionTabs } from '../components/DivisionTabs';
 import { createMatch, getMyPlayerId } from '../data/repos';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
-import { teamStandings } from '../data/standings';
+import { teamStandings, standingsConfigFromFormat } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
@@ -124,15 +124,16 @@ export default function GenerateFixturesScreen() {
   // Advance-mode tables are scoped to the active division too (so a division's
   // group stage advances only its own teams).
   const scopedTourMatches = useMemo(() => matchesInDivision(tourMatches, entries, activeCat), [tourMatches, entries, activeCat]);
-  const gtables = useMemo(() => groupTables(scopedTourMatches, sport), [scopedTourMatches, sport]);
+  const stCfg = useMemo(() => standingsConfigFromFormat(sport, tournament?.formats?.[sport]), [sport, tournament]);
+  const gtables = useMemo(() => groupTables(scopedTourMatches, sport, stCfg), [scopedTourMatches, sport, stCfg]);
   const hasGroups = gtables.length > 0;
   const groupMatches = scopedTourMatches.filter((m) => m.stage === 'group' && m.sport === sport);
   // Super phase (a second round-robin among group qualifiers) — a single league table.
   const superMatches = scopedTourMatches.filter((m) => m.stage === 'super' && m.sport === sport);
   const hasSuper = superMatches.length > 0;
   const superTable = useMemo<GroupTable[]>(
-    () => (hasSuper ? [{ name: superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size), rows: teamStandings(superMatches, sport) }] : []),
-    [hasSuper, superMatches, sport],
+    () => (hasSuper ? [{ name: superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size), rows: teamStandings(superMatches, sport, stCfg) }] : []),
+    [hasSuper, superMatches, sport, stCfg],
   );
   // Advance from the *latest* phase that exists: the Super phase once it's there,
   // else the group stage.
@@ -144,15 +145,15 @@ export default function GenerateFixturesScreen() {
   // a Super round-robin phase. Advancing from a Super phase always goes to knockout.
   const target: 'knockout' | 'super' = advanceFromSuper ? 'knockout' : advanceTo;
   const qualifiers = useMemo(
-    () => (sourceTables.length ? advancement(sourceTables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0)) : []),
-    [sourceTables, topK, bestPlaced],
+    () => (sourceTables.length ? advancement(sourceTables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0), stCfg) : []),
+    [sourceTables, topK, bestPlaced, stCfg],
   );
   // Custom control: the organizer overrides who advances (an off-app tie-break,
   // or to fill an awkward field). `manualSel` is the chosen team ids; the
   // effective qualifiers are theirs when customizing, else the rule-based set.
   const effectiveQualifiers = useMemo(
-    () => (manualAdvance ? qualifiersFromSelection(sourceTables, manualSel) : qualifiers),
-    [manualAdvance, sourceTables, manualSel, qualifiers],
+    () => (manualAdvance ? qualifiersFromSelection(sourceTables, manualSel, stCfg) : qualifiers),
+    [manualAdvance, sourceTables, manualSel, qualifiers, stCfg],
   );
   // Seed the manual picks from the rule-based qualifiers the first time the
   // organizer opens the override (so they start from the natural result).

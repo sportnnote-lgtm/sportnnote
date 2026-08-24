@@ -27,7 +27,7 @@ import {
   getOrganizations,
 } from './repos';
 import { aggregate, type PlayerStats } from './stats';
-import { teamStandings, statLeaders, type TeamStanding, type StatLeader } from './standings';
+import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
 import { followStore, type FollowType } from './followStore';
 import { captainStore } from './captainStore';
 import { notifyStore } from './notifyStore';
@@ -315,14 +315,17 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([getMatches(), getAllStatLines(), getPlayers()]).then(([matches, lines, players]) => {
+      Promise.all([getMatches(), getAllStatLines(), getPlayers(), getTournaments()]).then(([matches, lines, players, tours]) => {
         if (!on) return;
         const scopedMatches = tournamentId ? matches.filter((m) => m.tournamentId === tournamentId) : matches;
         // Leaders come from stat lines, so scope those by the same match set.
         const ids = new Set(scopedMatches.map((m) => m.id));
         const scopedLines = tournamentId ? lines.filter((l) => ids.has(l.matchId)) : lines;
+        // Honour the tournament's points / tie-break overrides (else sport defaults).
+        const tour = tournamentId ? tours.find((t) => t.id === tournamentId) : undefined;
+        const cfg = standingsConfigFromFormat(sport, tour?.formats?.[sport]);
         setData({
-          teams: teamStandings(scopedMatches, sport),
+          teams: teamStandings(scopedMatches, sport, cfg),
           leaders: statLeaders(scopedLines, players, sport),
           matches: scopedMatches,
         });

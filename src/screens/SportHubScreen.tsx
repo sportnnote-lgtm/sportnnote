@@ -15,10 +15,10 @@ import { LeagueTable } from '../components/LeagueTable';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { getSport } from '../sports/registry';
-import { useLeagueData, useDivisions } from '../data/hooks';
+import { useLeagueData, useDivisions, useTournamentById } from '../data/hooks';
 import { useAuth } from '../core/auth';
 import { canScoreByRole, canOrganize } from '../core/roles';
-import { teamStandings, categoryLeaders } from '../data/standings';
+import { teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { matchesInDivision } from '../data/groups';
 import type { Match } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -46,7 +46,8 @@ export default function SportHubScreen() {
   const live = sportMatches.filter((m) => m.status === 'live');
   const upcoming = sportMatches.filter((m) => m.status === 'scheduled' || m.status === 'postponed');
   const results = sportMatches.filter((m) => m.status === 'completed');
-  const table = useMemo(() => teamStandings(divMatches, sport), [divMatches, sport]);
+  const tournament = useTournamentById(tournamentId);
+  const table = useMemo(() => teamStandings(divMatches, sport, standingsConfigFromFormat(sport, tournament?.formats?.[sport])), [divMatches, sport, tournament]);
   const categories = useMemo(() => categoryLeaders(lines, players, sport), [lines, players, sport]);
 
   const canScore = canScoreByRole(profile?.role);

@@ -9,6 +9,7 @@ import { RankBadge, podiumColor } from './Rank';
 import type { TeamStanding } from '../data/standings';
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+const signRate = (n: number) => (n > 0 ? `+${n.toFixed(2)}` : n.toFixed(2));
 
 export function LeagueTable({
   teams,
@@ -33,6 +34,7 @@ export function LeagueTable({
                 <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
                 <Text style={st.meta} numberOfLines={1}>
                   {t.played}P · {t.won}W {t.drawn}D {t.lost}L · {t.for}:{t.against} ({sign(t.diff)})
+                  {t.nrr !== undefined ? ` · NRR ${signRate(t.nrr)}` : ''}
                 </Text>
               </View>
               <View style={st.ptsCol}>

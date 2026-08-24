@@ -13,6 +13,40 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — League tie-breakers: configurable points, head-to-head, NRR (gap #4)
+
+**Why:** the audit flagged the standings as too blunt — win was hardcoded to 2
+points (football should be 3), and ties broke only on goal/point difference: no
+head-to-head, no cricket Net Run Rate.
+
+**Shipped (zero migration — overrides ride on `formats[sport]`):**
+- `data/standings.ts` — `StandingsConfig` (win/draw/loss points + ordered
+  tie-breakers), sensible per-sport defaults (**football 3-1-0**, cricket ranks by
+  **NRR**, everyone gets **head-to-head** first). `teamStandings(matches, sport,
+  cfg?)` stays back-compatible. New tie-break pipeline: rank by points, then break
+  each still-tied cluster by the configured order — `h2h` runs a mini-league among
+  just the tied teams (recursive, so partial ties fall through).
+- **NRR without coupling:** standings is consumed by the pure test runner, so it
+  can't import the sport registry (that'd pull in React Native). Instead a
+  rate-provider is dependency-injected — `registry.ts` wires it lazily on first
+  `getSport()` (not at module load, which crashed under Metro's import ordering).
+  Cricket's `nrrOvers()` returns overs faced (a side bowled out counts its full
+  quota — the standard NRR rule).
+- `groups.ts` group tables + cross-group seeding honour the same config (no h2h
+  across groups). Threaded the config through every standings view (StandingsScreen,
+  TournamentProfile, SportHub, GenerateFixtures, the `useStandings` hook).
+- `PointsEditor` on Edit Tournament (points-per-win 2/3 + a plain-language
+  tie-break summary); `LeagueTable` shows NRR for cricket.
+- 12 new unit tests (points / head-to-head / NRR via a stub provider / config
+  parsing).
+
+**Verified live:** the Points & tie-breakers editor renders with **3** selected for
+football and "ties broken by head-to-head, then points difference, then points
+scored". `tsc` clean; **234 tests pass**. (Also fixed a load-order crash the
+rate-provider injection first introduced.)
+
+---
+
 ### 2026-08-25 — Match & series deletion (fenced, safe-by-construction)
 
 **Why:** organizers need to clean up fixtures created by mistake, but deletion is

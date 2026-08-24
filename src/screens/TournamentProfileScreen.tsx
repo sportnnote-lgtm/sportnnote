@@ -25,7 +25,7 @@ import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentRemi
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
 import { notify } from '../core/notifications';
-import { overallStandings, teamStandings, categoryLeaders } from '../data/standings';
+import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -150,14 +150,15 @@ export default function TournamentProfileScreen() {
     return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [tournament, hostOrg, allPlayers]);
 
+  const stCfg = useMemo(() => (activeSport ? standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]) : undefined), [activeSport, tournament]);
   const overall = useMemo(() => overallStandings(matches, sports), [matches, sports]);
-  const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport) : []), [matches, activeSport]);
+  const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
   // Grouped tournaments show a table per group instead of one flat league table.
-  const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport) : []), [matches, activeSport]);
+  const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
   // A Super round-robin phase (Asia-Cup style), if the tournament has one — its
   // own league table, separate from the group stage.
   const superMatches = useMemo(() => (activeSport ? matches.filter((m) => m.stage === 'super' && m.sport === activeSport) : []), [matches, activeSport]);
-  const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport) : []), [superMatches, activeSport]);
+  const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport, stCfg) : []), [superMatches, activeSport, stCfg]);
   const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
   const categories = useMemo(
     () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),

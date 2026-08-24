@@ -201,6 +201,14 @@ const NO_DELIVERY: DismissalKind[] = ['retired', 'timedout'];
 
 // Overs bowled, e.g. 6 balls → "1.0" (used for over counts: totals, RR, figures).
 export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.${balls % bpo}`;
+
+/** Overs faced by each side for Net Run Rate. A side bowled out is charged its
+ *  full quota (the standard NRR rule), not the fraction it actually batted. */
+export function nrrOvers(s: CricketState): { home: number; away: number } {
+  const facedOvers = (inn: Innings) =>
+    inn.wickets >= s.wicketsLimit ? s.oversLimit : inn.balls / s.ballsPerOver;
+  return { home: facedOvers(s.scores.home), away: facedOvers(s.scores.away) };
+}
 // Delivery notation for ball-by-ball: the Nth ball reads over.ball with ball 1–bpo,
 // so the last ball of an over is "0.6" (not "1.0"). `balls` includes this delivery.
 export const ballStamp = (balls: number, bpo = 6) =>

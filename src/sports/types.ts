@@ -211,6 +211,10 @@ export interface SportPlugin<S = unknown> {
    *  is the single source of truth the data layer uses to persist a match result
    *  (winner + score) and each player's win — never parse the display summary. */
   result?: (state: S) => { winner: 'home' | 'away' | 'draw'; home: number; away: number } | null;
+  /** Rate denominators for a rate-based league tie-break — cricket returns the
+   *  overs faced by each side (a side bowled out counts its full quota), which
+   *  drives Net Run Rate. Sports without a rate omit this. */
+  standingsRate?: (state: S) => { home: number; away: number } | null;
   /** The scorer's control panel for this sport. */
   ScoringControls: React.FC<ScoringControlsProps<S>>;
   /** Optional rich widget shown on the live page (e.g. football pitch map). */

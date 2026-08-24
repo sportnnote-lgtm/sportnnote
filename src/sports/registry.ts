@@ -4,6 +4,7 @@
  */
 import type { SportId } from '../core/types';
 import type { SportPlugin } from './types';
+import { setStandingsRateProvider } from '../data/standings';
 import { footballPlugin } from './football';
 import { cricketPlugin } from './cricket';
 import { basketballPlugin } from './basketball';
@@ -30,6 +31,16 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
 
 export const SPORT_LIST = Object.values(SPORTS);
 
+// Let the (RN-free) standings engine compute NRR without importing this registry
+// — it can't, or the pure test runner would pull in React Native. We inject the
+// rate lookup lazily on first use (not at module load, which is fragile under
+// circular imports / hot-reload) — by the time a table is ranked, every module
+// is fully initialised.
+let rateWired = false;
 export function getSport(id: SportId): SportPlugin<any> {
+  if (!rateWired) {
+    rateWired = true;
+    setStandingsRateProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsRate?.(state) ?? null));
+  }
   return SPORTS[id];
 }
