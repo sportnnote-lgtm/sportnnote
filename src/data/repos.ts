@@ -1139,6 +1139,43 @@ export async function retireMatch(matchId: string, winner: 'home' | 'away', _rea
   if (winners.length) await supabase.from('stat_lines').update({ won: true }).eq('match_id', matchId).in('player_id', winners);
 }
 
+/** Move a scheduled match — new date/time and/or venue — without recreating it.
+ *  Only the provided fields change. (Kept separate from updateMatchSnapshot, which
+ *  owns live state/status.) */
+export async function rescheduleMatch(
+  matchId: string,
+  patch: { startsAt?: string; venueName?: string | null; venueMapsUrl?: string | null }
+): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (!m) return;
+    if (patch.startsAt !== undefined) m.startsAt = patch.startsAt;
+    if (patch.venueName !== undefined) m.venueName = patch.venueName ?? undefined;
+    if (patch.venueMapsUrl !== undefined) m.venueMapsUrl = patch.venueMapsUrl ?? undefined;
+    return;
+  }
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.startsAt !== undefined) row.starts_at = patch.startsAt;
+  if (patch.venueName !== undefined) row.venue_name = patch.venueName;
+  if (patch.venueMapsUrl !== undefined) row.venue_maps_url = patch.venueMapsUrl;
+  await supabase.from('matches').update(row).eq('id', matchId).eq('status', 'scheduled');
+}
+
+/** Postpone / cancel a scheduled match, or restore a postponed one to scheduled.
+ *  Guarded to the pre-match states so this never clobbers a live/completed game. */
+export async function setMatchStatus(matchId: string, status: 'scheduled' | 'postponed' | 'cancelled'): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (m && (m.status === 'scheduled' || m.status === 'postponed' || m.status === 'cancelled')) m.status = status;
+    return;
+  }
+  await supabase
+    .from('matches')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', matchId)
+    .in('status', ['scheduled', 'postponed', 'cancelled']);
+}
+
 /* ----------------------------- Lineups (football) -------------------------- */
 
 export async function getLineup(matchId: string, sport?: SportId): Promise<MatchLineup> {

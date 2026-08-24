@@ -489,7 +489,7 @@ export interface MatchEventRecord {
   attribution?: { playerId: string; stat: string; by?: number; playerName?: string; extra?: Record<string, number>; tracked?: string[] } | null;
 }
 
-export type MatchStatus = 'scheduled' | 'live' | 'completed';
+export type MatchStatus = 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
 
 export interface Match {
   id: UUID;

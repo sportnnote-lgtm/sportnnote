@@ -49,7 +49,9 @@ export default function HomeScreen() {
 
   const scoped = selectedId ? feed.filter((m) => m.tournamentId === selectedId) : feed;
   const live = scoped.filter((m) => m.status === 'live');
-  const upcoming = scoped.filter((m) => m.status === 'scheduled');
+  // Postponed games still appear under "Up next" (badged) so followers learn of
+  // the change; a cancelled game drops off the forward-looking feed.
+  const upcoming = scoped.filter((m) => m.status === 'scheduled' || m.status === 'postponed');
 
   // "Explore a sport" = the sports the user has signed up for (their profile's
   // declared sports); the rest are offered under "Try a new sport".

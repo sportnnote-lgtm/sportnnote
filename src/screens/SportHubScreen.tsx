@@ -44,7 +44,7 @@ export default function SportHubScreen() {
   const divMatches = useMemo(() => matchesInDivision(matches, entries, activeCat), [matches, entries, activeCat]);
   const sportMatches = useMemo(() => divMatches.filter((m) => m.sport === sport), [divMatches, sport]);
   const live = sportMatches.filter((m) => m.status === 'live');
-  const upcoming = sportMatches.filter((m) => m.status === 'scheduled');
+  const upcoming = sportMatches.filter((m) => m.status === 'scheduled' || m.status === 'postponed');
   const results = sportMatches.filter((m) => m.status === 'completed');
   const table = useMemo(() => teamStandings(divMatches, sport), [divMatches, sport]);
   const categories = useMemo(() => categoryLeaders(lines, players, sport), [lines, players, sport]);

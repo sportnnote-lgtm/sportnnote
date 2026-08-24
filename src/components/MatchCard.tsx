@@ -39,6 +39,8 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
   const time = formatShort(match.startsAt, tz);
   const live = match.status === 'live';
   const done = match.status === 'completed';
+  const postponed = match.status === 'postponed';
+  const cancelled = match.status === 'cancelled';
   const showScore = (live || done) && !!match.score;
 
   return (
@@ -59,6 +61,10 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
           <LiveBadge />
         ) : done ? (
           <Text style={s.finalTag}>FINAL</Text>
+        ) : cancelled ? (
+          <Text style={s.cancelledTag}>CANCELLED</Text>
+        ) : postponed ? (
+          <Text style={s.postponedTag}>POSTPONED</Text>
         ) : (
           <Text style={s.timeTag}>{time}</Text>
         )}
@@ -142,6 +148,8 @@ const s = StyleSheet.create({
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.colors.danger },
   liveText: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   finalTag: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
+  postponedTag: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
+  cancelledTag: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   timeTag: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
 
   board: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },

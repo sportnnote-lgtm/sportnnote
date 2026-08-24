@@ -23,6 +23,7 @@ import CreateTournamentScreen from '../screens/CreateTournamentScreen';
 import EditTournamentScreen from '../screens/EditTournamentScreen';
 import TeamsScreen from '../screens/TeamsScreen';
 import ScheduleMatchScreen from '../screens/ScheduleMatchScreen';
+import EditMatchScreen from '../screens/EditMatchScreen';
 import GenerateFixturesScreen from '../screens/GenerateFixturesScreen';
 import TournamentTeamsScreen from '../screens/TournamentTeamsScreen';
 import OrganizerDashboardScreen from '../screens/OrganizerDashboardScreen';
@@ -153,6 +154,11 @@ export default function RootNavigator() {
               name="ScheduleMatch"
               component={ScheduleMatchScreen}
               options={{ ...stackScreenOpts, title: 'Schedule Match' }}
+            />
+            <Stack.Screen
+              name="EditMatch"
+              component={EditMatchScreen}
+              options={{ ...stackScreenOpts, title: 'Reschedule Match' }}
             />
             <Stack.Screen
               name="GenerateFixtures"

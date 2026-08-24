@@ -43,11 +43,13 @@ export default function MatchesScreen() {
   const canScore = canScoreByRole(profile?.role);
 
   // Live = in progress; Upcoming = scheduled (soonest first); Completed = most recent first.
+  // Postponed / cancelled games are still pre-match, so they stay under Upcoming
+  // (badged) — otherwise the host loses sight of them and can't restore them.
   const live = matches
     .filter((m) => m.status === 'live')
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const upcoming = matches
-    .filter((m) => m.status === 'scheduled')
+    .filter((m) => m.status === 'scheduled' || m.status === 'postponed' || m.status === 'cancelled')
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const completed = matches
     .filter((m) => m.status === 'completed')

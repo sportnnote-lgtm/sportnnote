@@ -800,6 +800,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             )}
           </View>
         )}
+        {/* Postponed / cancelled banner (everyone) + reschedule entry (hosts). */}
+        {(meta.status === 'postponed' || meta.status === 'cancelled') && (
+          <View style={[st.reschedBanner, { backgroundColor: (meta.status === 'cancelled' ? theme.colors.danger : theme.colors.accent) + '22' }]}>
+            <Text style={st.reschedBannerText}>{meta.status === 'cancelled' ? '🚫 This match has been cancelled.' : '⏸️ This match has been postponed.'}</Text>
+          </View>
+        )}
+        {canManage && matchId && meta.status !== 'live' && (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reschedule or postpone this match" onPress={() => navigation.navigate('EditMatch', { matchId })}>
+            <Text style={[st.editLink, { marginTop: theme.spacing(2) }]}>🗓 Reschedule / postpone</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
 
@@ -1418,6 +1429,8 @@ const st = StyleSheet.create({
   retireRow: { flexDirection: 'row', gap: theme.spacing(2) },
   retiredBanner: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.md, padding: theme.spacing(3) },
   retiredText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  reschedBanner: { borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },
+  reschedBannerText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   sportName: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '800' },
   squadRow: { gap: theme.spacing(2) },
   squadBtns: { flexDirection: 'row', gap: theme.spacing(2) },

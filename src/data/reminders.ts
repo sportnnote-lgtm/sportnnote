@@ -302,7 +302,9 @@ const sent = new Set<string>();
  *  and "schedule ahead" (OS) passes share the same snapshot. */
 async function gatherReminderInputs(now: number) {
   const [matches, tournaments, orgs] = await Promise.all([getMatches(), getTournaments(), getOrganizations()]);
-  const upcoming = matches.filter((m) => m.status !== 'completed' && new Date(m.startsAt).getTime() > now);
+  // Only genuinely-scheduled future games get prep reminders — a postponed or
+  // cancelled match shouldn't nag the host to line up a scorer.
+  const upcoming = matches.filter((m) => m.status === 'scheduled' && new Date(m.startsAt).getTime() > now);
   const teamIds = Array.from(new Set(upcoming.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])));
   const leadersByTeam: Record<string, TeamLeadership> = {};
   const squadsByMatch: Record<string, MatchSquads> = {};

@@ -13,6 +13,40 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Match rescheduling & postpone (tournament gap #1)
+
+**Why:** the tournament-organization audit flagged that a fixture could be *created*
+but never *moved* — no way to change a scheduled match's date/venue or mark it
+postponed/cancelled without deleting and recreating it (losing hosts, squads, the
+whole row). This is the #1 real-organizer need (weather, venue clashes, no-shows).
+
+**Shipped:**
+- New `MatchStatus` adds `'postponed' | 'cancelled'` (`core/types.ts`); migration
+  `20260826120000_match_status_postpone.sql` widens the `matches_status_check`
+  constraint. **User must run migration 0012** before the live write is accepted
+  (until then the DB rejects the new statuses — supabase-js returns the error
+  without throwing, matching the repo's fire-and-forget update convention).
+- `rescheduleMatch(id, {startsAt, venueName, venueMapsUrl})` and
+  `setMatchStatus(id, status)` in `repos.ts` — both guarded to pre-match states
+  (`.eq('status','scheduled')` / `.in('status',[scheduled,postponed,cancelled])`)
+  so they can never clobber a live/completed game. Demo + live paths.
+- New `EditMatchScreen` ("Reschedule Match" route): pre-fills kickoff + venue,
+  saves via `rescheduleMatch`; Postpone / Cancel / Restore buttons per current
+  status. Host-only entry from the LiveScoring Info tab ("🗓 Reschedule / postpone"),
+  gated `canManage && status !== 'live'`; a postponed/cancelled banner shows to all
+  viewers. `MatchCard` gains POSTPONED / CANCELLED badges.
+- **List routing for the new states:** postponed/cancelled stay under **Upcoming**
+  in the Matches tab (badged) so a host never loses sight of them; Home "Up next"
+  and the SportHub upcoming list show postponed (badged) but drop cancelled; the
+  reminder engine no longer nags about postponed/cancelled fixtures.
+
+**Verified:** host-only entry renders (hidden for a viewer — gating confirmed live);
+EditMatchScreen renders with pre-filled data and the correct per-status buttons;
+navigation round-trips. Full write round-trip is pending migration 0012 on the live
+DB. `tsc` clean; 189 tests pass.
+
+---
+
 ### 2026-08-24 — Cricket extras + audit correction (undo already existed)
 
 **Correction:** the audit's "cricket has NO undo" was wrong — it only read the
