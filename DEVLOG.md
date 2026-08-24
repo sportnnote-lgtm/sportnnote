@@ -32,6 +32,27 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Deep scoring QA: 100 real matches across all 10 sports
+
+Comprehensive scoring validation. Built a **test matrix** of 100 real matches (10
+per sport, chosen for event variety) with reference links + fetchability tiers
+(artifact "Scoring Test Matrix"). Ran it in two tracks: **feed** (football/
+basketball/cricket — true event-by-event replay vs ESPN, cricket via the
+espn.com mirror since Cricinfo/Cricbuzz 403) and **reconstruct** (7 sports — no
+public point-by-point feed exists, so scorecard + structural coverage). Results
+in the "Scoring QA Report" artifact.
+
+Verdict: engine reproduces real matches across every sport + edge case; ease-of-
+scoring strong (cricket 1-tap runs + auto strike; football goal/penalty 5 taps is
+the one speed risk). **Tier-1 gaps (four real capture failures) fixed** (commit
+`ff2f0f1`): retirement/walkover early-end (cross-sport, `retireMatch` + live
+control), football in-play `STOPPAGE`, basketball player `EJECT`, cricket
+`CONCUSSION_SUB`. Tier-2/3 (football goal-tap reduction, FT auto-advance, kabaddi
+shootout, Dreambreaker, double faults, box scores) documented, not yet built.
+186 tests.
+
+---
+
 ### 2026-08-24 — Replay acceptance: reproduce real matches event-by-event
 
 The end-to-end validation behind the whole engine — replay a real match's event
