@@ -32,6 +32,19 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Scoring QA Tier-3 (polish)
+
+- **Volleyball timeouts** (`6aeab51`): TIMEOUT event + per-team buttons, 2/set, count shown.
+- **Tennis double faults** (`6aeab51`): replay-safe — a DF scores the opponent a normal
+  POINT (score + rally-editor stay correct) and credits the server via `attribution2`.
+- **Box scores for padel / pickleball / squash** (`712bfae`): structured point events
+  (kind/playerName/game|set/points) on rallyCore + padel + a shared `PointBoxScore`
+  → parity with badminton/tennis/volleyball box scores.
+- Remaining Tier-3 (deferred, lowest value): volleyball rotation/libero; tennis break
+  points; squash let/stroke; basketball jump-ball/minutes/+-. 189 tests.
+
+---
+
 ### 2026-08-24 — Scoring QA Tier-2 (ease-of-scoring + edge features)
 
 Following the Tier-1 gap fixes: the ease-of-scoring wins + two edge features.
