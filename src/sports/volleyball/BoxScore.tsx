@@ -8,21 +8,22 @@ import { theme } from '../../core/theme';
 import { SelectChip } from '../../components/ui';
 import type { LiveEvent } from '../liveEvents';
 
-interface Line { name: string; points: number; aces: number }
+interface Line { name: string; points: number; aces: number; blocks: number }
 
-/** Tally points & aces per player for one side; `scope` limits to one set. */
+/** Tally points, aces & blocks per player for one side; `scope` limits to one set. */
 export function tally(events: LiveEvent[], side: 'home' | 'away', scope: 'all' | number = 'all'): Line[] {
   const byName = new Map<string, Line>();
   const ensure = (name: string) => {
-    if (!byName.has(name)) byName.set(name, { name, points: 0, aces: 0 });
+    if (!byName.has(name)) byName.set(name, { name, points: 0, aces: 0, blocks: 0 });
     return byName.get(name)!;
   };
   for (const e of events) {
-    if (e.side !== side || !e.playerName || (e.kind !== 'point' && e.kind !== 'ace')) continue;
+    if (e.side !== side || !e.playerName || (e.kind !== 'point' && e.kind !== 'ace' && e.kind !== 'block')) continue;
     if (scope !== 'all' && e.set !== scope) continue;
     const l = ensure(e.playerName);
     l.points += 1;            // every scored point counts…
-    if (e.kind === 'ace') l.aces += 1; // …and an ace also lands in the ace column
+    if (e.kind === 'ace') l.aces += 1; // …an ace also lands in the ace column
+    if (e.kind === 'block') l.blocks += 1; // …a winning block in the block column
   }
   return [...byName.values()].sort((a, b) => b.points - a.points || b.aces - a.aces);
 }
@@ -36,6 +37,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
         <View style={{ flex: 1 }} />
         <Text style={st.head}>PTS</Text>
         <Text style={st.head}>ACE</Text>
+        <Text style={st.head}>BLK</Text>
       </View>
       {lines.length === 0 ? (
         <Text style={st.empty}>No points yet.</Text>
@@ -45,6 +47,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
             <Text style={st.name} numberOfLines={1}>{l.name}</Text>
             <Text style={[st.cell, st.total]}>{l.points}</Text>
             <Text style={st.cell}>{l.aces}</Text>
+            <Text style={st.cell}>{l.blocks}</Text>
           </View>
         ))
       )}

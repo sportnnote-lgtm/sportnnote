@@ -32,6 +32,25 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Racket/net sweep: voice aces, volleyball blocks
+
+- **Voice → ACE** for tennis & volleyball (a spoken "ace" used to log a plain
+  point, losing the stat). New `tennisVoice` / `volleyballVoice` parsers;
+  volleyball voice also does "block".
+- **Volleyball blocks** — a `🧱 Block` capture: a winning block scores a point +
+  credits a `blocks` stat; new BLK box-score column + leaderboard.
+- Taught the shared rally point-editor + `EDIT_LOG` replay (`rallyEdit.ts`) the
+  `block` kind (new `PointKind` + `isPointKind`), so a block survives an unrelated
+  timeline correction — guarded by `tests/rallyEdit.test.mts` (3 tests).
+- **Deferred:** tennis double faults (a DF scores the opponent, breaking the
+  editor's "point side = rally winner" invariant → would double-count on replay;
+  needs serve tracking); box scores + surgical editors for padel/pickleball/squash
+  (global undo already covers corrections; points already reach profiles).
+
+`tsc` clean; 166 tests.
+
+---
+
 ### 2026-08-24 — Cricket finished: run-outs off an extra, penalty runs, fielding stats
 
 The deferred cricket items:

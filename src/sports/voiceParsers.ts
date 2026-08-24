@@ -42,6 +42,26 @@ export function basketballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
   return null;
 }
 
+/** Tennis: "ace [player]" → the ACE action; anything else is a plain point.
+ *  (A spoken ace was previously logged as a generic point, losing the stat.) */
+export function tennisVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
+  const q = deburr(text);
+  const { side, player } = resolveSide(text, ctx);
+  if (!side) return null;
+  if (/\bace\b/.test(q)) return [{ type: 'ACE', side, attribution: attribution(player, 'aces') }];
+  return pointVoice(text, ctx);
+}
+
+/** Volleyball: "ace [player]" → ACE, "block [player]" → BLOCK; else a point. */
+export function volleyballVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
+  const q = deburr(text);
+  const { side, player } = resolveSide(text, ctx);
+  if (!side) return null;
+  if (/\bblock\b|blocked\b|\bstuff\b/.test(q)) return [{ type: 'BLOCK', side, attribution: attribution(player, 'blocks') }];
+  if (/\bace\b/.test(q)) return [{ type: 'ACE', side, attribution: attribution(player, 'aces') }];
+  return pointVoice(text, ctx);
+}
+
 /** Kabaddi: "raid [player]", "tackle [player]". */
 export function kabaddiVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
   const q = deburr(text);
@@ -98,4 +118,4 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
 }
 
 // Test/inspection hook (parity with the other __sportfolio* engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioVoice = { pointVoice, basketballVoice, kabaddiVoice, cricketVoice };
+(globalThis as unknown as Record<string, unknown>).__sportfolioVoice = { pointVoice, basketballVoice, kabaddiVoice, cricketVoice, tennisVoice, volleyballVoice };

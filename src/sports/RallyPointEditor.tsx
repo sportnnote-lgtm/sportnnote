@@ -15,13 +15,13 @@ import { Button, SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
-import { pointInputs, reconcileStatActions, type PointInput } from './rallyEdit';
+import { pointInputs, isPointKind, reconcileStatActions, type PointInput, type PointKind } from './rallyEdit';
 
 interface Draft {
   mode: 'edit' | 'insert';
   index: number; // edit → the row; insert → splice AFTER this index (-1 = at start)
   side: 'home' | 'away';
-  kind: 'point' | 'ace';
+  kind: PointKind;
   playerId?: string;
   playerName?: string;
 }
@@ -58,7 +58,7 @@ export function RallyPointEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const list = pointInputs(events); // forward order; index i ↔ i-th point event
-  const pointEvents = events.filter((e) => (e.kind === 'point' || e.kind === 'ace') && e.side);
+  const pointEvents = events.filter((e) => isPointKind(e.kind) && e.side); // must match `list` order
   const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
   const rosterFor = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster);
 
@@ -147,7 +147,7 @@ export function RallyPointEditor({
                   <View style={[st.dot, { backgroundColor: side === 'home' ? homeColor : awayColor }]} />
                   <Text style={st.period}>{periodLabel(e)}</Text>
                   <Text style={st.rowLabel} numberOfLines={1}>
-                    {e.kind === 'ace' ? '🎯' : pointIcon} {side === 'home' ? homeName : awayName}{e.playerName ? ` · ${e.playerName}` : ''}
+                    {e.kind === 'ace' ? '🎯' : e.kind === 'block' ? '🧱' : pointIcon} {side === 'home' ? homeName : awayName}{e.playerName ? ` · ${e.playerName}` : ''}
                   </Text>
                   {!draft && (
                     <>

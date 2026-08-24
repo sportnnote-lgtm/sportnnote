@@ -11,7 +11,7 @@ import { LiveTimeline } from '../LiveTimeline';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
-import { pointVoice } from '../voiceParsers';
+import { volleyballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
@@ -70,8 +70,11 @@ const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => {
   // effect); EDIT_LOG replays a corrected point list so the score & sets re-derive.
   if (a.type === 'STAT_ADJUST') return s;
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
-  if (s.ended || !a.side || (a.type !== 'POINT' && a.type !== 'ACE')) return s;
-  const ace = a.type === 'ACE';
+  if (s.ended || !a.side || (a.type !== 'POINT' && a.type !== 'ACE' && a.type !== 'BLOCK')) return s;
+  // Aces and (winning) blocks are also points — they just carry their own stat.
+  const kind = a.type === 'ACE' ? 'ace' : a.type === 'BLOCK' ? 'block' : 'point';
+  const icon = kind === 'ace' ? '🎯' : kind === 'block' ? '🧱' : '🏐';
+  const label = kind === 'ace' ? 'Ace' : kind === 'block' ? 'Block' : 'Point';
   const who = a.attribution?.playerName;
   const current = { ...s.current, [a.side]: s.current[a.side] + 1 };
   const setNo = s.setsWon.home + s.setsWon.away + 1;
@@ -79,8 +82,8 @@ const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => {
   let seq = s.seq;
   const events = [...s.events];
   // Structured fields (kind/playerName/set/points) let the per-set box score
-  // aggregate points & aces per player, filtered by set — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon: ace ? '🎯' : '🏐', label: ace ? 'Ace' : 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind: ace ? 'ace' : 'point', playerName: who, set: setNo, points: 1 });
+  // aggregate points/aces/blocks per player, filtered by set — the timeline ignores them.
+  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind, playerName: who, set: setNo, points: 1 });
 
   const h = current.home;
   const v = current.away;
@@ -117,6 +120,8 @@ const ScoringControls: SportPlugin<VolleyballState>['ScoringControls'] = ({ stat
       <Row label={`🏐 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
       <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
       <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
+      <Row label={`🧱 Block — ${homeName}`} roster={homeRoster} onPick={(p) => act('BLOCK', 'home', 'blocks', p)} fallback={`Block ${homeName}`} />
+      <Row label={`🧱 Block — ${awayName}`} roster={awayRoster} onPick={(p) => act('BLOCK', 'away', 'blocks', p)} fallback={`Block ${awayName}`} />
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
         homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🏐"
@@ -191,7 +196,7 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   LiveExtras,
   formation: () => courtFormation('volleyball'),
   Court: makeCourt('volleyball'),
-  voice: { hints: ['point home', 'point away', 'ace {name}'], parse: pointVoice },
+  voice: { hints: ['point home', 'ace {name}', 'block {name}'], parse: volleyballVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'indoor',

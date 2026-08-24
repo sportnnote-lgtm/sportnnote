@@ -18,22 +18,31 @@
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 
+/** Kinds of scored point a rally sport logs — each is a single point for `side`.
+ *  ('block' = a volleyball point won on a block.) */
+export type PointKind = 'point' | 'ace' | 'block';
+
 export interface PointInput {
   side: 'home' | 'away';
-  kind: 'point' | 'ace';
+  kind: PointKind;
   playerName?: string;
   /** resolved when the scorer picks a player in the editor; reconstructed events
    *  only carry the name, so profile reconciliation resolves the id by name. */
   playerId?: string;
 }
 
-/** Reconstruct the ordered scoring inputs from a sport's point log. Only real
- *  scored points carry kind 'point'/'ace'; game/set/match banner rows are skipped.
- *  Valid for rally sports where a point event's `side` IS who won the rally. */
+/** Every scored-point kind (skip game/set/match banner rows). Must match the
+ *  editor's displayed rows so their indices stay aligned. */
+export const isPointKind = (k?: string): k is PointKind => k === 'point' || k === 'ace' || k === 'block';
+
+/** Reconstruct the ordered scoring inputs from a sport's point log. Each scored
+ *  point's `side` IS who won the rally, so replaying them rebuilds the match. */
 export const pointInputs = (events: LiveEvent[]): PointInput[] =>
   events
-    .filter((e) => (e.kind === 'point' || e.kind === 'ace') && e.side)
-    .map((e) => ({ side: e.side as 'home' | 'away', kind: e.kind as 'point' | 'ace', playerName: e.playerName }));
+    .filter((e) => isPointKind(e.kind) && e.side)
+    .map((e) => ({ side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName }));
+
+const ACTION_OF: Record<PointKind, string> = { point: 'POINT', ace: 'ACE', block: 'BLOCK' };
 
 /** Replay a corrected point list through the sport's own pure reducer so every
  *  downstream game/set boundary recomputes correctly. `cleared` = the match reset
@@ -42,10 +51,10 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
   return points.reduce(
     (s, p) =>
       reducer(s, {
-        type: p.kind === 'ace' ? 'ACE' : 'POINT',
+        type: ACTION_OF[p.kind],
         side: p.side,
         attribution: p.playerName
-          ? { playerId: p.playerId ?? '', stat: p.kind === 'ace' ? 'aces' : 'points', playerName: p.playerName }
+          ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }
           : undefined,
       }),
     cleared,
@@ -53,8 +62,8 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
 }
 
 /** The stat a point credits to a player profile, mirroring how it was originally
- *  dispatched: an ace credits 'aces', any other point credits 'points'. */
-const statOf = (kind: 'point' | 'ace') => (kind === 'ace' ? 'aces' : 'points');
+ *  dispatched: an ace→'aces', a block→'blocks', any other point→'points'. */
+const statOf = (kind: PointKind) => (kind === 'ace' ? 'aces' : kind === 'block' ? 'blocks' : 'points');
 
 /** No-op `STAT_ADJUST` actions that reconcile player-profile tallies after an
  *  edit — +/- per (player, stat) for the difference between the old and new point

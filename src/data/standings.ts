@@ -118,6 +118,7 @@ export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> 
   volleyball: [
     { key: 'points', label: 'Points' },
     { key: 'aces', label: 'Aces' },
+    { key: 'blocks', label: 'Blocks' },
   ],
   kabaddi: [
     { key: 'raidPoints', label: 'Raid pts' },

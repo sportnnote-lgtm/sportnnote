@@ -11,7 +11,7 @@ import { LiveTimeline } from '../LiveTimeline';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
-import { pointVoice } from '../voiceParsers';
+import { tennisVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { TennisBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
@@ -250,7 +250,7 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   LiveExtras,
   formation: () => courtFormation('tennis'),
   Court: makeCourt('tennis'),
-  voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },
+  voice: { hints: ['point home', 'ace {name}', 'double fault {name}'], parse: tennisVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'bo3',

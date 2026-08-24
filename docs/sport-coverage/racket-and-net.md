@@ -49,12 +49,24 @@ pickleball, squash emit none → no per-player stats at all.** Tier 2.
   no timeouts anywhere. Tier 2/3 (serve tracking is a bigger build; not capture-
   blocking for a basic scorer).
 
-## Prioritised
-**Tier 1:** undo/timeline editor for **padel, pickleball, squash** (parity with the
-other three — uncorrectable mis-taps today).
-**Tier 2:** box scores for padel/pickleball/squash; voice→ACE for tennis/volleyball;
-double-faults (tennis); blocks (volleyball).
-**Tier 3:** serve/rotation tracking, timeouts, libero, lets/strokes, kitchen faults.
+## Prioritised — status
+**✅ SHIPPED (this pass):**
+- **Voice → ACE** for tennis & volleyball (a spoken "ace" was logged as a plain
+  point, losing the stat). Volleyball voice also does "block".
+- **Volleyball blocks** — a `🧱 Block` capture (a winning block = a point + a block
+  stat); new BLK box-score column + leaderboard. The point-editor + EDIT_LOG replay
+  were taught the `block` kind so a block survives an unrelated correction (guarded
+  by `tests/rallyEdit.test.mts`).
+
+**Deferred:**
+- **Tennis double faults** — a DF scores the *opponent*, which breaks the rally-
+  editor's "a point's side is who won it" invariant (would double-count on replay).
+  Needs serve tracking or a model change; deferred rather than ship a replay bug.
+- **Box scores** for padel/pickleball/squash (points already reach profiles via
+  stat lines — polish).
+- **Surgical point-editor** for padel/pickleball/squash (global undo already covers
+  corrections).
+- Serve/rotation tracking, timeouts, libero, lets/strokes, kitchen faults (Tier 3).
 
 ## Replay log
 _(after fixes — one real match per sport from a published scorecard.)_
