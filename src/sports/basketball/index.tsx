@@ -21,7 +21,7 @@ import { LineScoreboard } from '../../components/LineScoreboard';
 
 import {
   type BasketballState, init, reducer, periodLabel, currentMinute,
-  isFouledOut, inBonus, timeoutsUsed, onCourtNames,
+  isFouledOut, isPlayerOut, isEjected, inBonus, timeoutsUsed, onCourtNames,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -206,6 +206,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
                 ))}
               </View>
               <Text style={ctrl.meta}>Shooting, technical & flagrant fouls go to the free-throw line next.</Text>
+              <Button label={`🟥 Eject ${flow.fouler.fullName}`} variant="danger"
+                onPress={() => { fire({ type: 'EJECT', side: flow.side, attribution: { playerId: flow.fouler!.id, stat: 'ejections', playerName: flow.fouler!.fullName } }); setFlow(null); }} />
             </>
           )}
         </View>
@@ -271,8 +273,10 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
 
   // Foul-out enforcement (format: foulsToFoulOut). A disqualified player is
   // greyed out everywhere and can't be credited further actions.
-  const fouledOut = (p: Player) => isFouledOut(state, p.fullName);
-  const fouledOutNames = [...homeRoster, ...awayRoster].filter(fouledOut).map((p) => p.fullName);
+  // "Out" = fouled out OR ejected — both grey the player out and block credit.
+  const fouledOut = (p: Player) => isPlayerOut(state, p.fullName);
+  const outNames = [...homeRoster, ...awayRoster].filter(fouledOut)
+    .map((p) => `${p.fullName}${isEjected(state, p.fullName) ? ' (ejected)' : ''}`);
   // Team-foul bonus (format: foulsForBonus): once a side reaches the team-foul
   // limit in a quarter, the opponent shoots free throws.
   const homeBonus = inBonus(state, 'home');
@@ -363,8 +367,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {otBanner}
-      {fouledOutNames.length > 0 && (
-        <Text style={ctrl.fouledOut}>🚫 Fouled out ({state.foulOutLimit} fouls): {fouledOutNames.join(', ')}</Text>
+      {outNames.length > 0 && (
+        <Text style={ctrl.fouledOut}>🚫 Out: {outNames.join(', ')}</Text>
       )}
       {(homeBonus || awayBonus) && (
         <Text style={ctrl.bonus}>

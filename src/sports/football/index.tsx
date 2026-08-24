@@ -779,6 +779,10 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       {voiceBar}
       {t.possession && <PossessionBar state={state} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onSwitch={setPossession} />}
 
+      {/* In-play stoppage marker (injury / cooling break / VAR check) — a timeline
+          note; distinct from signalling ADDED time (which extends the clock). */}
+      <Button label="⏸️ Stoppage / injury" variant="ghost" onPress={() => dispatch({ type: 'STOPPAGE', side: state.possession.side ?? 'home' })} />
+
       {/* Goal — one flow: scorer (or own goal) → goal type → assist. */}
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>⚽ Goal</Text>

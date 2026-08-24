@@ -1,5 +1,5 @@
 /** A single timeline event during a football match. */
-export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub';
+export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub' | 'stoppage';
 
 export type GoalType = 'open' | 'penalty' | 'freekick' | 'header';
 
@@ -44,6 +44,7 @@ export const EVENT_META: Record<FootballEventType, { icon: string; label: string
   yellow: { icon: '🟨', label: 'Yellow card' },
   red: { icon: '🟥', label: 'Red card' },
   sub: { icon: '🔄', label: 'Substitution' },
+  stoppage: { icon: '⏸️', label: 'Stoppage' },
 };
 
 /**

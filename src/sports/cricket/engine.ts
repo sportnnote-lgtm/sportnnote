@@ -583,6 +583,23 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         seq,
       };
     }
+    case 'CONCUSSION_SUB': {
+      // A like-for-like injury/concussion replacement (NOT the IPL Impact Player):
+      // not format-gated, allowed any time; the injured player takes no further
+      // part and the replacement can bat/bowl (their card is created when they do).
+      const side = a.payload?.side as 'home' | 'away';
+      const inName = String(a.payload?.inName ?? '');
+      const outId = String(a.payload?.outId ?? '');
+      const outName = String(a.payload?.outName ?? '');
+      if ((side !== 'home' && side !== 'away') || !outId) return s;
+      seq += 1;
+      return {
+        ...s,
+        unavailable: [...s.unavailable, outId],
+        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🚑', label: 'CONCUSSION SUB', detail: `${inName} replaces ${outName} (injury)`, side }],
+        seq,
+      };
+    }
     case 'SWAP_STRIKE':
       return swapStrike(s);
     case 'SET_BOWLER': {

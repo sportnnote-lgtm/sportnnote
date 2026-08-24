@@ -22,7 +22,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -120,6 +120,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // The scorer taps "Start the match" before scoring begins; a match with events
   // is already underway. (Timer sports then expose their clock-start control.)
   const [localStarted, setLocalStarted] = useState(false);
+  const [retireOpen, setRetireOpen] = useState(false);
+  const [retiredLocally, setRetiredLocally] = useState<'home' | 'away' | null>(null);
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
   const [editingStream, setEditingStream] = useState(false);
@@ -388,6 +390,36 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       <Text style={st.undoText}>↶  Undo</Text>
       <Text style={st.undoHint}>rewind step-by-step</Text>
     </TouchableOpacity>
+  ) : null;
+
+  // End a match early with a declared winner — retirement / walkover / a conceded
+  // match, where the sport's normal end condition is never reached.
+  const retireWinner = (winner: 'home' | 'away') => {
+    if (!matchId) { setRetiredLocally(winner); setRetireOpen(false); return; }
+    void retireMatch(matchId, winner, 'retired');
+    setRetiredLocally(winner);
+    setRetireOpen(false);
+  };
+  const retireBar = canScore && !complete && retiredLocally == null ? (
+    !retireOpen ? (
+      <TouchableOpacity style={st.retireBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => setRetireOpen(true)}>
+        <Text style={st.retireText}>🏳️ End early — retirement / walkover</Text>
+      </TouchableOpacity>
+    ) : (
+      <View style={st.retirePanel}>
+        <Text style={st.retirePrompt}>End the match now — who is awarded the win?</Text>
+        <View style={st.retireRow}>
+          <Button label={homeName} variant="home" style={{ flex: 1 }} onPress={() => retireWinner('home')} />
+          <Button label={awayName} variant="away" style={{ flex: 1 }} onPress={() => retireWinner('away')} />
+        </View>
+        <Button label="Cancel" variant="ghost" onPress={() => setRetireOpen(false)} />
+      </View>
+    )
+  ) : null;
+  const retiredBanner = retiredLocally ? (
+    <View style={st.retiredBanner}>
+      <Text style={st.retiredText}>🏁 Match ended early — {retiredLocally === 'home' ? homeName : awayName} awarded the win (retirement / walkover).</Text>
+    </View>
   ) : null;
 
   const controlsNode = (
@@ -1093,8 +1125,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   />
                 )
               )}
+              {retiredBanner}
               {undoBar}
-              {canScore && meta.homeTeamId && meta.awayTeamId && (
+              {retireBar}
+              {canScore && !retiredLocally && meta.homeTeamId && meta.awayTeamId && (
                 <AddInvitePlayer
                   homeTeamId={meta.homeTeamId} awayTeamId={meta.awayTeamId}
                   homeTeamName={homeTeamName} awayTeamName={awayTeamName}
@@ -1102,7 +1136,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   onChanged={() => setRosterNonce((n) => n + 1)}
                 />
               )}
-              {controlsNode}
+              {!retiredLocally && controlsNode}
             </>
           )}
 
@@ -1377,6 +1411,13 @@ const st = StyleSheet.create({
   },
   undoText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   undoHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  retireBtn: { alignItems: 'center', paddingVertical: theme.spacing(2) },
+  retireText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  retirePanel: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
+  retirePrompt: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  retireRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  retiredBanner: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.md, padding: theme.spacing(3) },
+  retiredText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   sportName: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '800' },
   squadRow: { gap: theme.spacing(2) },
   squadBtns: { flexDirection: 'row', gap: theme.spacing(2) },

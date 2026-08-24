@@ -155,3 +155,12 @@ describe('cricket — a full over replayed ball-by-ball (scorecard reproduction)
     assert.equal(played.bowling.b1.balls, 6);
   });
 })
+
+describe('cricket — concussion substitute (Tier-1 gap fix)', () => {
+  test('a concussion sub removes the injured player and logs the replacement', () => {
+    const s = reducer(opened(), { type: 'CONCUSSION_SUB', payload: { side: 'home', outId: 's2', outName: 'B', inId: 'x9', inName: 'Sub' } });
+    assert.equal(s.unavailable.includes('s2'), true); // injured player out
+    const ev = s.events.find((e) => e.label === 'CONCUSSION SUB');
+    assert.ok(ev && /Sub replaces B/.test(ev.detail ?? ''));
+  });
+})

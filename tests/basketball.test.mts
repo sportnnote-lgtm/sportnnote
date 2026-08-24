@@ -166,3 +166,22 @@ describe('basketball — a real-game-style sequence replayed play-by-play', () =
     assert.equal(timeoutsUsed(g, 'home'), 1);
   });
 })
+
+import { isEjected, isPlayerOut } from '../src/sports/basketball/engine.ts';
+
+describe('basketball — player ejection (Tier-1 gap fix)', () => {
+  test('an ejected player is out for the game and cannot score, even under the foul limit', () => {
+    let s = run(init(), foul('home', 'E'), { type: 'EJECT', side: 'home', attribution: { playerId: 'E', stat: 'ejections', playerName: 'E' } });
+    assert.equal(isEjected(s, 'E'), true);
+    assert.equal(isPlayerOut(s, 'E'), true); // out, though only 1 personal foul
+    s = run(s, scoreAct('home', 2, 'E'));
+    assert.equal(s.home, 0); // blocked — ejected
+  });
+
+  test('removing the eject event reinstates the player', () => {
+    let s = run(init(), { type: 'EJECT', side: 'away', attribution: { playerId: 'F', stat: 'ejections', playerName: 'F' } });
+    const id = s.events.find((e) => e.type === 'eject')!.id;
+    s = reducer(s, { type: 'REMOVE_EVENT', side: 'away', payload: { id } });
+    assert.equal(isEjected(s, 'F'), false);
+  });
+})

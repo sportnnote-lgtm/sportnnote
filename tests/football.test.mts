@@ -119,3 +119,12 @@ describe('football — edge cases the commentary throws at a scorer', () => {
     assert.equal(s.events.find((e) => e.type === 'red')!.secondYellow, true);
   });
 });
+
+describe('football — in-play stoppage marker (Tier-1 gap fix)', () => {
+  test('a stoppage is a timeline event with no effect on the score', () => {
+    let s = run(init(), { type: 'KICKOFF', payload: { at: 1 } }, goal('home', 10, 'open', 'A'));
+    s = reducer(s, { type: 'STOPPAGE', side: 'home', payload: { minute: 12, reason: 'injury' } });
+    assert.equal(s.home, 1); // unchanged
+    assert.equal(s.events.filter((e) => e.type === 'stoppage').length, 1);
+  });
+})

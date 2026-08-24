@@ -9,7 +9,8 @@ export type BBEventType =
   | 'block'
   | 'turnover'
   | 'timeout'
-  | 'sub';
+  | 'sub'
+  | 'eject'; // a player removed for the rest of the game (ejection, not a foul-out)
 
 /** Foul kinds a scorer distinguishes at the ground. Shooting/technical/flagrant
  *  send a player to the free-throw line; technical fouls don't count toward the
@@ -47,6 +48,7 @@ export const BB_META: Record<BBEventType, { icon: string; label: string }> = {
   turnover: { icon: '🔄', label: 'Turnover' },
   timeout: { icon: '⏱️', label: 'Timeout' },
   sub: { icon: '🔀', label: 'Substitution' },
+  eject: { icon: '🟥', label: 'Ejected' },
 };
 
 /** Points a single event puts on the board — field goals and made free throws. */

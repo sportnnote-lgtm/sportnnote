@@ -165,7 +165,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 }) => {
   const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number; offExtra?: 'wide' | 'noball' } | null>(null);
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | null>(null);
-  const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player } | null>(null);
+  const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
   const [rain, setRain] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
 
@@ -213,7 +213,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const finishImpact = (inP: Player) => {
     if (!impact?.out) return;
     dispatch({
-      type: 'IMPACT_SUB',
+      type: impact.kind === 'concussion' ? 'CONCUSSION_SUB' : 'IMPACT_SUB',
       side: impact.side,
       payload: { side: impact.side, outId: impact.out.id, outName: impact.out.fullName, inId: inP.id, inName: inP.fullName },
     });
@@ -373,7 +373,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     return (
       <View style={ctrl.wktPanel}>
         <View style={ctrl.creaseHead}>
-          <Text style={ctrl.label}>⚡ Impact Player — {sideName}</Text>
+          <Text style={ctrl.label}>{impact.kind === 'concussion' ? '🚑 Concussion sub' : '⚡ Impact Player'} — {sideName}</Text>
           <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setImpact(null)} />
         </View>
         {impact.out ? <View style={ctrl.impactRecap}><Text style={ctrl.impactRecapText}>⚡ {impact.out.fullName} makes way</Text></View> : null}
@@ -390,7 +390,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           </>
         ) : (
           <>
-            <Text style={ctrl.meta}>Choose the Impact Player coming in</Text>
+            <Text style={ctrl.meta}>Choose the {impact.kind === 'concussion' ? 'replacement' : 'Impact Player'} coming in</Text>
             {inOptions.length > 0 ? (
               <View style={ctrl.chips}>
                 {inOptions.map((p) => (
@@ -585,9 +585,18 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             return used ? (
               <Text key={sd} style={ctrl.meta}>{nm}: {used.inName} in for {used.outName}</Text>
             ) : (
-              <Button key={sd} label={`⚡ Bring in Impact Player — ${nm}`} variant="ghost" onPress={() => setImpact({ side: sd })} />
+              <Button key={sd} label={`⚡ Bring in Impact Player — ${nm}`} variant="ghost" onPress={() => setImpact({ side: sd, kind: 'impact' })} />
             );
           })}
+        </View>
+      )}
+
+      {/* Concussion / injury replacement — a like-for-like sub (any time, not the
+          IPL Impact Player). The injured player takes no further part. */}
+      {canScore && (
+        <View style={ctrl.row}>
+          <Button label={`🚑 Concussion sub — ${homeName}`} variant="ghost" style={ctrl.flex} onPress={() => setImpact({ side: 'home', kind: 'concussion' })} />
+          <Button label={`🚑 Concussion sub — ${awayName}`} variant="ghost" style={ctrl.flex} onPress={() => setImpact({ side: 'away', kind: 'concussion' })} />
         </View>
       )}
 

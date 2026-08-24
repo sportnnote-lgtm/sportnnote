@@ -61,6 +61,13 @@ export const foulCount = (s: BasketballState, name?: string): number =>
 /** A player is fouled out once they reach the limit. */
 export const isFouledOut = (s: BasketballState, name?: string): boolean =>
   s.foulOutLimit > 0 && foulCount(s, name) >= s.foulOutLimit;
+/** A player was ejected (removed for the rest of the game — e.g. 2 technicals or
+ *  a flagrant-2), independent of the personal-foul limit. */
+export const isEjected = (s: BasketballState, name?: string): boolean =>
+  !!name && s.events.some((e) => e.type === 'eject' && e.playerName === name);
+/** A player takes no further part — fouled out OR ejected. */
+export const isPlayerOut = (s: BasketballState, name?: string): boolean =>
+  isFouledOut(s, name) || isEjected(s, name);
 /** Team fouls committed by one side in the current quarter (technical fouls don't
  *  count toward the team-foul bonus). */
 export const teamFoulsThisQuarter = (s: BasketballState, side: 'home' | 'away'): number =>
@@ -120,7 +127,7 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
     case 'SCORE': {
       if (!a.side) return s;
       // a disqualified player takes no further part
-      if (isFouledOut(s, name)) return s;
+      if (isPlayerOut(s, name)) return s;
       const pts = Number(a.payload?.points ?? 0);
       // First-to-N games (3×3 to 21, streetball) end the moment the target is
       // reached with the required margin.
@@ -129,29 +136,33 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
     case 'FREE_THROW': {
       // One free-throw attempt. A make adds a point; a miss is logged for the
       // attempt count. A shooting/technical foul awards these to the OTHER team.
-      if (!a.side || isFouledOut(s, name)) return s;
+      if (!a.side || isPlayerOut(s, name)) return s;
       const made = a.payload?.made === true;
       return scorePoints(a.side, made ? 1 : 0, { minute, type: 'freethrow', side: a.side, playerName: name, made, points: made ? 1 : 0 });
     }
     case 'REBOUND':
-      return a.side && !isFouledOut(s, name)
+      return a.side && !isPlayerOut(s, name)
         ? push(s, { minute, type: 'rebound', side: a.side, playerName: name, reboundType: a.payload?.reboundType as ReboundType | undefined }, quarter)
         : s;
     case 'ASSIST':
-      return a.side && !isFouledOut(s, name) ? push(s, { minute, type: 'assist', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'assist', side: a.side, playerName: name }, quarter) : s;
     case 'STEAL':
-      return a.side && !isFouledOut(s, name) ? push(s, { minute, type: 'steal', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'steal', side: a.side, playerName: name }, quarter) : s;
     case 'BLOCK':
-      return a.side && !isFouledOut(s, name) ? push(s, { minute, type: 'block', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'block', side: a.side, playerName: name }, quarter) : s;
     case 'TURNOVER':
-      return a.side && !isFouledOut(s, name) ? push(s, { minute, type: 'turnover', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'turnover', side: a.side, playerName: name }, quarter) : s;
     case 'FOUL':
       // count the foul, but never beyond the limit (already fouled out)
-      return a.side && !isFouledOut(s, name)
+      return a.side && !isPlayerOut(s, name)
         ? push(s, { minute, type: 'foul', side: a.side, playerName: name, foulType: (a.payload?.foulType as FoulType | undefined) ?? 'personal' }, quarter)
         : s;
     case 'TIMEOUT':
       return a.side ? push(s, { minute, type: 'timeout', side: a.side }, quarter) : s;
+    case 'EJECT':
+      // Remove a player for the rest of the game (2 technicals / flagrant-2 /
+      // fighting) — independent of the personal-foul limit. Blocks further credit.
+      return a.side && name && !isEjected(s, name) ? push(s, { minute, type: 'eject', side: a.side, playerName: name }, quarter) : s;
     case 'SET_LINEUP': {
       const home = (a.payload?.home as string[] | undefined) ?? s.onCourt?.home ?? [];
       const away = (a.payload?.away as string[] | undefined) ?? s.onCourt?.away ?? [];

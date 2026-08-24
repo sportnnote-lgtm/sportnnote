@@ -1111,6 +1111,34 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
   }
 }
 
+/** End a match early with an EXPLICIT winner — a retirement, walkover, or default
+ *  (an opponent conceding), where the sport's normal end condition was never met.
+ *  Keeps whatever score is on the board and stamps the winner + completed status
+ *  directly (toMatch falls back to this stored winner when the state isn't a
+ *  natural completion). `reason` is for the caller's log/UX; not persisted yet. */
+export async function retireMatch(matchId: string, winner: 'home' | 'away', _reason: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (!m) return;
+    m.status = 'completed';
+    m.winner = winner;
+    const winTeam = winner === 'home' ? m.homeTeam : m.awayTeam;
+    const winRoster = winTeam.roster && winTeam.roster.length
+      ? winTeam.roster
+      : demo.players.filter((p) => p.houseName === winTeam.name).map((p) => p.id);
+    for (const l of demo.statLines) if (l.matchId === matchId) l.won = winRoster.includes(l.playerId);
+    return;
+  }
+  await supabase.from('matches').update({ status: 'completed', winner, updated_at: new Date().toISOString() }).eq('id', matchId);
+  const { data } = await supabase.from('matches').select('home_team_id, away_team_id').eq('id', matchId).single();
+  const meta = data as { home_team_id: string; away_team_id: string } | null;
+  if (!meta) return;
+  await supabase.from('stat_lines').update({ won: false }).eq('match_id', matchId);
+  const winTeamId = winner === 'home' ? meta.home_team_id : meta.away_team_id;
+  const winners = (await getTeamRosters([winTeamId])).get(winTeamId) ?? [];
+  if (winners.length) await supabase.from('stat_lines').update({ won: true }).eq('match_id', matchId).in('player_id', winners);
+}
+
 /* ----------------------------- Lineups (football) -------------------------- */
 
 export async function getLineup(matchId: string, sport?: SportId): Promise<MatchLineup> {

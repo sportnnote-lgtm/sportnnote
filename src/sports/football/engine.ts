@@ -273,6 +273,10 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
     }
     case 'SET_STOPPAGE':
       return { ...s, stoppage: { ...s.stoppage, [s.half]: Math.max(0, Number(a.payload?.minutes ?? 0)) } };
+    case 'STOPPAGE':
+      // An in-play pause (injury / cooling break / VAR check) — a timeline marker,
+      // no scoring effect. `reason` (injury / var / cooling / other) is optional.
+      return push(s, { minute, half: evHalf, type: 'stoppage', side: a.side ?? 'home', playerName: a.payload?.reason as string | undefined });
     case 'YELLOW':
       return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name }) : s;
     case 'RED':
