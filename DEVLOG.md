@@ -32,6 +32,23 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Scoring QA Tier-2 (ease-of-scoring + edge features)
+
+Following the Tier-1 gap fixes: the ease-of-scoring wins + two edge features.
+- **Football goal 5 taps → 3** (`78bfb2a`): scorer pick goes straight to one panel;
+  open-play default; header/penalty/free-kick & assist optional; goal logged once
+  on finish. Voice path unchanged. Closes the "header not a goal type" gap too.
+- **Basketball free throws** (`8df27e9`): count-aware auto-close (pick 2/3/1, panel
+  counts down, no "Done") + a one-tap `🔗 And-one` on the scorer row.
+- **Kabaddi 5-raid shootout** (`51e4e2f`): START_SHOOTOUT + SHOOTOUT_RAID; five raids
+  a side then sudden death, regulation score stays tied, result() returns the
+  shootout winner; shootout panel + `decideRaidShootout`/`sum` in pure rules.ts.
+- **Pickleball Dreambreaker** (`51e4e2f`): a preset for the rally single game to 21
+  win-by-2 (rallyCore scores it exactly).
+Remaining Tier-2: football woodwork + VAR flow; basketball missed-shot/FG%. 189 tests.
+
+---
+
 ### 2026-08-24 — Deep scoring QA: 100 real matches across all 10 sports
 
 Comprehensive scoring validation. Built a **test matrix** of 100 real matches (10
