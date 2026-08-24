@@ -76,9 +76,12 @@ const BODY_PARTS: BodyPart[] = ['left', 'right', 'head', 'chest'];
 type Flow =
   | { mode: 'goal'; side: 'home' | 'away'; step: 'scorer' }
   | { mode: 'goal'; side: 'home' | 'away'; step: 'og' }
-  | { mode: 'goal'; side: 'home' | 'away'; step: 'type'; scorer: Player }
-  | { mode: 'goal'; side: 'home' | 'away'; step: 'body'; scorer: Player; goalType: GoalType }
-  | { mode: 'goal'; side: 'home' | 'away'; step: 'assist'; scorer: Player }
+  | { mode: 'goal'; side: 'home' | 'away'; step: 'type'; scorer: Player } // voice path only
+  | { mode: 'goal'; side: 'home' | 'away'; step: 'body'; scorer: Player; goalType: GoalType } // voice path only
+  // Consolidated fast panel: open-play is the default; type/header & assist are
+  // optional. `logged` = the goal is already on the board (voice path); otherwise
+  // it's recorded when the scorer finishes (picks an assister or "no assist").
+  | { mode: 'goal'; side: 'home' | 'away'; step: 'assist'; scorer: Player; goalType?: GoalType; bodyPart?: BodyPart; logged?: boolean }
   | { mode: 'foul'; step: 'team' }
   | { mode: 'foul'; step: 'by'; side: 'home' | 'away' }
   | { mode: 'foul'; step: 'victim'; side: 'home' | 'away'; fouler: Player }
@@ -371,7 +374,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           return;
         }
         if (flow.step === 'og') { const p = matchPlayer(text, xi(opp(flow.side))); if (p) { recordOwnGoal(flow.side, p); say(`Own goal by ${p.fullName}.`); } else say("Didn't catch the player."); return; }
-        if (flow.step === 'type') { const gt = parseGoalType(text) ?? 'open'; recordGoal(flow.side, flow.scorer, gt); setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer }); say(`${GOAL_TYPE_LABEL[gt]} — who assisted? (or say "no assist")`); return; }
+        if (flow.step === 'type') { const gt = parseGoalType(text) ?? 'open'; recordGoal(flow.side, flow.scorer, gt); setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer, goalType: gt, logged: true }); say(`${GOAL_TYPE_LABEL[gt]} — who assisted? (or say "no assist")`); return; }
         // assist
         if (isNoAssist(text)) { recordAssist(flow.side, null); say('Goal recorded — no assist.'); return; }
         const a = matchPlayer(text, xi(flow.side).filter((x) => x.id !== flow.scorer.id));
@@ -605,7 +608,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       if (flow.step === 'scorer') {
         return panel(`⚽ Goal — ${sideName}`, 'Who scored?', (
           <>
-            <PlayerTable players={xi(flow.side)} onPick={(p) => setFlow({ mode: 'goal', side: flow.side, step: 'type', scorer: p })} />
+            <PlayerTable players={xi(flow.side)} onPick={(p) => setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: p, goalType: 'open', logged: false })} />
             <Button label={`⚽ Team goal — no scorer${xi(flow.side).length === 0 ? ' (no players yet)' : ''}`} variant="ghost" onPress={() => recordTeamGoal(flow.side)} />
             <Button label="🥅 Own goal instead" variant="ghost" onPress={() => setFlow({ mode: 'goal', side: flow.side, step: 'og' })} />
           </>
@@ -636,12 +639,41 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           </View>
         ));
       }
-      return panel(`🅰️ Assist — ${sideName}`, `Who assisted ${flow.scorer.fullName}'s goal?`, (
-        <>
-          <PlayerTable players={xi(flow.side).filter((p) => p.id !== flow.scorer.id)} onPick={(p) => recordAssist(flow.side, p)} />
-          <Button label="No assist" variant="ghost" onPress={() => recordAssist(flow.side, null)} />
-        </>
-      ));
+      {
+        // Consolidated fast panel — the goal is open-play by default; type/header
+        // and assist are optional. `logged` is true only on the voice path (goal
+        // already scored); the button path records it here on finish.
+        const gt = flow.goalType ?? 'open';
+        const bp = flow.bodyPart;
+        const finish = (assister: Player | null) => {
+          if (!flow.logged) recordGoal(flow.side, flow.scorer, gt, bp);
+          recordAssist(flow.side, assister); // attaches to the just-scored goal, then closes
+        };
+        // A goal-type/header refinement after the goal is already logged (voice
+        // path) re-logs it with the corrected type so the score stays right.
+        const refine = (nextType: GoalType, nextBody?: BodyPart) => {
+          if (flow.logged) { dispatch({ type: 'UNDO_GOAL', side: flow.side }); recordGoal(flow.side, flow.scorer, nextType, nextBody); }
+          setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer, goalType: nextType, bodyPart: nextBody, logged: flow.logged });
+        };
+        const typeChips: { label: string; t: GoalType; b?: BodyPart }[] = [
+          { label: 'Open play', t: 'open' }, { label: 'Header', t: 'open', b: 'head' },
+          { label: 'Penalty', t: 'penalty' }, { label: 'Free kick', t: 'freekick' },
+        ];
+        return panel(`⚽ Goal — ${flow.scorer.fullName}`, 'Assist? (optional — type below)', (
+          <>
+            <PlayerTable players={xi(flow.side).filter((p) => p.id !== flow.scorer.id)} onPick={finish} />
+            <Button label="✓ No assist" variant="ghost" onPress={() => finish(null)} />
+            <Text style={ctrl.meta}>Goal type {bp === 'head' ? '· header' : ''}</Text>
+            <View style={ctrl.chips}>
+              {typeChips.map((c) => (
+                <Button key={c.label} label={c.label} variant="ghost" style={ctrl.actionBtn}
+                  color={(c.t === gt && (c.b ?? undefined) === (bp ?? undefined)) ? theme.colors.primary : undefined}
+                  onPress={() => refine(c.t, c.b)} />
+              ))}
+            </View>
+          </>
+        ));
+      }
     }
 
     if (flow.mode === 'foul') {
