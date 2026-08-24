@@ -15,17 +15,21 @@ simple raid/tackle +1; substitutions; on-mat counts; do-or-die banner; golden ra
 timeline editor (edit/remove with raid-aware replay); backfill. ✅
 
 ## Gaps — prioritised
-**Tier 2:**
-1. **Defensive / super-tackle points not attributed to a defender** — added to the
-   team score only, so a defender's tackle stats never credit their profile.
-2. **Guided raid unreachable by voice** — voice fires only the *simple* +1 raid/
-   tackle, which **bypass the out-count/revival engine**, so voice- or team-scored
-   points don't advance all-out / do-or-die state. Either route voice through the
-   guided outcome or warn that voice is simple-only.
-3. **Technical points** (line-out, technical, all-out-technical) — no event type.
+**✅ Fixed:**
+1. ✅ **Defender / super-tackle points now credit the defender** — the guided raid
+   asks "Who made the tackle?" when the raider is out, and credits that defender
+   their tackle point (2 for a super-tackle) via the `attribution2` channel. Shows
+   on the tacklePoints leaderboard.
+2. ✅ **Voice routes through the RAID_OUTCOME engine** — "raid" = a 1-touch raid,
+   "tackle" = the named side tackled the opponent's raider; both advance the
+   out-count / all-out / do-or-die state instead of the old score-only +1.
 
-**Verdict:** kabaddi is in good shape structurally (the engine is the star). The
-real fix is stat attribution for defenders + the voice/simple-raid inconsistency.
+**Deferred (Tier 3):**
+3. **Technical points** (line-out, technical, all-out-technical) — no event type; rare.
+- The in-plugin raid *editor's* remove/re-enter doesn't reverse a defender's tackle
+  stat (the global "↶ Undo" bar does, via the stashed `attribution2`). Minor.
+
+`tests/kabaddi.test.mts` covers raid / tackle / super-tackle / do-or-die scoring.
 
 ## Replay log
 _(after fixes — drive a real Pro Kabaddi match through the app.)_

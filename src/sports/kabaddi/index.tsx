@@ -219,7 +219,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   const [backfillText, setBackfillText] = useState('');
   const [backfillMin, setBackfillMin] = useState<number | null>(null);
   // Guided raid capture: who raided, how many touched, bonus, was the raider caught.
-  const [raidFlow, setRaidFlow] = useState<{ side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean } | null>(null);
+  const [raidFlow, setRaidFlow] = useState<{ side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean; tackler?: Player } | null>(null);
 
   const hm = state.halfMinutes, et = state.extraTimeMinutes;
   const halfFromMin = (m: number): 1 | 2 | 3 | 4 => (m < hm ? 1 : m < 2 * hm ? 2 : m < 2 * hm + et ? 3 : 4);
@@ -377,12 +377,37 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           </View>
           <View style={ctrl.row}>
             <SelectChip label={`Bonus point: ${raidFlow.bonus ? 'Yes' : 'No'}`} active={raidFlow.bonus} onPress={() => setRaidFlow({ ...raidFlow, bonus: !raidFlow.bonus })} />
-            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled })} />
+            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler })} />
           </View>
+          {/* Who made the tackle? Credits the defender their tackle (or super-tackle) point. */}
+          {raidFlow.tackled && (() => {
+            const defSide = raidFlow.side === 'home' ? 'away' : 'home';
+            const defenders = onField(defSide, defSide === 'home' ? homeRoster : awayRoster);
+            return defenders.length > 0 ? (
+              <>
+                <Text style={ctrl.meta}>Who made the tackle? (optional — credits the defender)</Text>
+                <View style={ctrl.chips}>
+                  {defenders.map((p) => (
+                    <SelectChip key={p.id} label={p.fullName} active={raidFlow.tackler?.id === p.id}
+                      onPress={() => setRaidFlow({ ...raidFlow, tackler: raidFlow.tackler?.id === p.id ? undefined : p })} />
+                  ))}
+                </View>
+              </>
+            ) : null;
+          })()}
           <Button
             label="✓ Record raid"
             onPress={() => {
-              fire({ type: 'RAID_OUTCOME', side: raidFlow.side, attribution: raidFlow.raider ? { playerId: raidFlow.raider.id, stat: 'raidPoints', playerName: raidFlow.raider.fullName } : undefined, payload: { touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled } });
+              const defSide = raidFlow.side === 'home' ? 'away' : 'home';
+              const amar = (state.style ?? 'sanjeevani') === 'amar';
+              const defOnMat = kTeamSize - (amar ? 0 : kOut[defSide]);
+              const superTackle = (state.proRules ?? true) && !amar && defOnMat <= 3;
+              fire({
+                type: 'RAID_OUTCOME', side: raidFlow.side,
+                attribution: raidFlow.raider ? { playerId: raidFlow.raider.id, stat: 'raidPoints', playerName: raidFlow.raider.fullName } : undefined,
+                attribution2: raidFlow.tackled && raidFlow.tackler ? { playerId: raidFlow.tackler.id, stat: 'tacklePoints', by: superTackle ? 2 : 1, playerName: raidFlow.tackler.fullName } : undefined,
+                payload: { touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled },
+              });
               setRaidFlow(null);
             }}
           />

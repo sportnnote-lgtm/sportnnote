@@ -62,13 +62,19 @@ export function volleyballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
   return pointVoice(text, ctx);
 }
 
-/** Kabaddi: "raid [player]", "tackle [player]". */
+/** Kabaddi: "raid [player]" = a 1-touch raid; "tackle [player]" = the named side
+ *  tackled the opponent's raider. Both route through the RAID_OUTCOME engine (so
+ *  they advance the out-count / all-out / do-or-die state), not the simple +1
+ *  actions that only moved the score. */
 export function kabaddiVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
   const q = deburr(text);
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
-  if (/\braid\b/.test(q)) return [{ type: 'RAID', side, attribution: attribution(player, 'raidPoints') }];
-  if (/\btackle\b/.test(q)) return [{ type: 'TACKLE', side, attribution: attribution(player, 'tacklePoints') }];
+  const opp = side === 'home' ? 'away' : 'home';
+  if (/\btackle\b/.test(q))
+    return [{ type: 'RAID_OUTCOME', side: opp, payload: { touches: 0, bonus: false, raiderOut: true }, attribution2: attribution(player, 'tacklePoints') }];
+  if (/\braid\b/.test(q))
+    return [{ type: 'RAID_OUTCOME', side, payload: { touches: 1, bonus: false, raiderOut: false }, attribution: attribution(player, 'raidPoints') }];
   return null;
 }
 

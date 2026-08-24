@@ -32,6 +32,25 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Kabaddi: defender tackle credit + voice through the engine
+
+- **Defenders now get their tackle points.** The guided raid asks "Who made the
+  tackle?" when the raider is out and credits that defender (2 for a super-tackle,
+  computed from defenders-on-mat) via the `attribution2` channel → shows on the
+  tacklePoints leaderboard.
+- **Voice routes through RAID_OUTCOME** — "raid" = a 1-touch raid, "tackle" = the
+  named side tackled the opponent's raider. Both advance the out-count / all-out /
+  do-or-die engine instead of the old score-only +1 that silently desynced the mat.
+- `tests/kabaddi.test.mts` covers raid / tackle / super-tackle / do-or-die.
+- Deferred (Tier 3): technical points; the in-plugin raid editor doesn't reverse a
+  defender's tackle stat (the global undo bar does).
+
+`tsc` clean; 170 tests. **Sport-coverage audit substantively complete** — all 10
+sports swept; basketball & cricket fully overhauled; football essentially
+ground-ready; remaining items are documented Tier-3 polish.
+
+---
+
 ### 2026-08-24 — Racket/net sweep: voice aces, volleyball blocks
 
 - **Voice → ACE** for tennis & volleyball (a spoken "ace" used to log a plain
