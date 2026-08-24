@@ -13,6 +13,42 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-24 — Venue reuse + schedule-conflict detection (tournament gap #2)
+
+**Why:** the tournament audit's #2 gap — an organizer could book one ground for
+two overlapping games, or put a team in two places at once, with nothing to warn
+them. Real fixture lists juggle a handful of grounds; a clash check is the point.
+
+**Shipped (zero migration — the vestigial `venues` table stays unused; venues are
+matched by name, which works identically in demo + live):**
+- `data/scheduleConflicts.ts` — a pure, dependency-free engine:
+  `findScheduleConflicts(candidate, others)` flags **venue** double-booking (same
+  ground name, overlapping windows) and **team** double-booking (a team already
+  playing in an overlapping game). Each sport has a nominal window
+  (`matchDurationMinutes`, football 120 / kabaddi 60 / …) since matches carry only
+  a kickoff; postponed/cancelled/completed games free their slot; a match never
+  clashes with itself. `knownVenueNames()` derives the reuse pool. 16 unit tests.
+- `components/VenueField.tsx` — venue input with one-tap "reuse" chips of grounds
+  already used (consistent naming is what makes clash-detection meaningful).
+- `components/ConflictNotice.tsx` — an amber, **non-blocking** ⚠️ banner ("Ground Z
+  already hosts Cheetahs vs Tigers at Mon 21:33 — you can still save"). Advisory
+  because organizers sometimes double-book knowingly.
+- Wired into **ScheduleMatchScreen** and **EditMatchScreen**: both pull every
+  fixture via `useMatches('all')`, offer venue reuse, and recompute conflicts
+  reactively as the time/venue/teams change.
+
+**Verified live:** reuse chip sets the venue on tap; rescheduling a second match
+onto the same ground + overlapping time surfaced the clash banner reactively
+(even mid-picker), correctly named the other fixture, and left Save enabled; the
+notice cleared when the slot was freed. `tsc` clean; 205 tests pass. (Test data
+written to the live DB during verification was reverted.)
+
+**Follow-up (optional):** promote venues to a real FK-backed entity with a
+per-tournament "manage grounds" screen (needs a migration) if organizers want to
+pre-define grounds before any match uses them.
+
+---
+
 ### 2026-08-24 — Match rescheduling & postpone (tournament gap #1)
 
 **Why:** the tournament-organization audit flagged that a fixture could be *created*

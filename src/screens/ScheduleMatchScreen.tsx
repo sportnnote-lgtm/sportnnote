@@ -2,7 +2,7 @@
  *  → kickoff time. Creates a 'scheduled' match in the demo store or Supabase.
  *  Sport is a compact picklist; teams lead with the ones you've played for and
  *  fall back to a search (type 3+ letters) so the list never sprawls. */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -12,8 +12,11 @@ import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
+import { VenueField } from '../components/VenueField';
+import { ConflictNotice } from '../components/ConflictNotice';
 import { SPORT_LIST, getSport } from '../sports/registry';
-import { useTeams } from '../data/hooks';
+import { useTeams, useMatches } from '../data/hooks';
+import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
 import { createMatch, createTeam, getMyPlayerId, setMatchScorer } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
@@ -78,6 +81,35 @@ export default function ScheduleMatchScreen() {
   // A friendly kicking off ~now jumps straight into the scorer; one set for later
   // is just filed as scheduled (it shows under Upcoming, like any planned match).
   const isImmediate = isFriendly && when.getTime() <= Date.now() + 120_000;
+
+  // Clash-detection + venue reuse draw on every other fixture. Grounds already
+  // used in this tournament (or, for a friendly, anywhere) become reuse chips so
+  // they're named consistently; the same fixtures feed conflict checks.
+  const { matches: allMatches } = useMatches('all');
+  const knownVenues = useMemo(
+    () => knownVenueNames(tournamentId ? allMatches.filter((mm) => mm.tournamentId === tournamentId) : allMatches),
+    [allMatches, tournamentId]
+  );
+  const homeTeam = teams.find((t) => t.id === home);
+  const awayTeam = teams.find((t) => t.id === away);
+  const conflicts = useMemo(
+    () =>
+      sport
+        ? findScheduleConflicts(
+            {
+              sport,
+              startsAt: when.toISOString(),
+              venueName: venue,
+              homeTeamId: home,
+              awayTeamId: away,
+              homeTeamName: homeTeam?.name,
+              awayTeamName: awayTeam?.name,
+            },
+            allMatches
+          )
+        : [],
+    [sport, when, venue, home, away, homeTeam?.name, awayTeam?.name, allMatches]
+  );
 
   function pickSport(s: SportId) {
     setSport(s);
@@ -189,17 +221,10 @@ export default function ScheduleMatchScreen() {
           </>
         )}
 
-        <TextField label="Venue / ground" value={venue} onChange={setVenue} placeholder="Main Ground" />
-        <TextField
-          label="Google Maps link (optional)"
-          value={venueUrl}
-          onChange={setVenueUrl}
-          placeholder="maps.app.goo.gl/…"
-          autoCapitalize="none"
-        />
-        <Text style={textStyles.muted}>
-          Paste a Maps link to pin the exact spot — otherwise we search Maps by the venue name.
-        </Text>
+        <VenueField venue={venue} onVenue={setVenue} venueUrl={venueUrl} onVenueUrl={setVenueUrl} knownVenues={knownVenues} />
+
+        <ConflictNotice conflicts={conflicts} />
+
         <TextField
           label="Live stream link (optional)"
           value={stream}

@@ -1,16 +1,20 @@
 /** Reschedule or postpone an existing match — change its date/time and venue, or
  *  mark it postponed / cancelled, without deleting and recreating it. Host-only;
  *  only for a match that hasn't started (scheduled / postponed / cancelled). */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, TextField, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
+import { Button, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
+import { VenueField } from '../components/VenueField';
+import { ConflictNotice } from '../components/ConflictNotice';
 import { getMatch, rescheduleMatch, setMatchStatus } from '../data/repos';
+import { useMatches } from '../data/hooks';
+import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
 import type { Match } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -39,6 +43,33 @@ export default function EditMatchScreen() {
     });
     return () => { live = false; };
   }, [params.matchId]);
+
+  // Reuse chips + clash-detection draw on every other fixture (grounds scoped to
+  // this match's tournament). Hooks run before the loading/not-found returns.
+  const { matches: allMatches } = useMatches('all');
+  const knownVenues = useMemo(
+    () => knownVenueNames(match?.tournamentId ? allMatches.filter((mm) => mm.tournamentId === match.tournamentId) : allMatches),
+    [allMatches, match?.tournamentId]
+  );
+  const conflicts = useMemo(
+    () =>
+      match
+        ? findScheduleConflicts(
+            {
+              id: match.id,
+              sport: match.sport,
+              startsAt: when.toISOString(),
+              venueName: venue,
+              homeTeamId: match.homeTeam?.id,
+              awayTeamId: match.awayTeam?.id,
+              homeTeamName: match.homeTeam?.name,
+              awayTeamName: match.awayTeam?.name,
+            },
+            allMatches
+          )
+        : [],
+    [match, when, venue, allMatches]
+  );
 
   if (match === undefined) {
     return <SafeAreaView style={st.safe} edges={['bottom']}><LoadingState label="Loading match…" /></SafeAreaView>;
@@ -94,9 +125,10 @@ export default function EditMatchScreen() {
             )}
 
             <DateTimeField label="Kickoff" value={when} onChange={setWhen} />
-            <TextField label="Venue / ground" value={venue} onChange={setVenue} placeholder="Main Ground" />
-            <TextField label="Google Maps link (optional)" value={venueUrl} onChange={setVenueUrl} placeholder="maps.app.goo.gl/…" autoCapitalize="none" />
+            <VenueField venue={venue} onVenue={setVenue} venueUrl={venueUrl} onVenueUrl={setVenueUrl} knownVenues={knownVenues} />
             <Text style={textStyles.muted}>Moving the match just updates this fixture — the rest of the schedule is untouched.</Text>
+
+            <ConflictNotice conflicts={conflicts} />
 
             <FormError message={error} />
             <Button label={busy ? 'Saving…' : 'Save new date & venue'} onPress={saveSchedule} disabled={busy} />
