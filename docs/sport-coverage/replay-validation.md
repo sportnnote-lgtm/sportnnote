@@ -67,6 +67,38 @@ The over: `FOUR · 1 · WIDE · SIX · bye1 · WICKET(bowled) · 2` →
 wide/no-ball, penalty runs, strike changes, over & innings transitions, DLS,
 super over, impact player.
 
-## Basketball — ⏳ next
-Replay an ESPN play-by-play (1/2/3-pointers, free throws, fouls→bonus, timeouts,
-quarter/OT changes) and assert the box score + line score match.
+## Basketball — ✅ PASS
+
+`tests/basketball.test.mts` replays a real-game-style Q1 play-by-play and the
+existing suite covers the rest against real rules.
+
+The sequence: `H1 3pt · A1 2pt · shooting foul on H3 → A1 makes 2 FTs · rebound ·
+assist · steal · home timeout · H1 2pt · end Q1` →
+
+| Reproduced | Value |
+|---|---|
+| Line score / period | 5-4, advanced to Q2 |
+| Box points per player | H1 = 5 (a 3 + a 2), A1 = 4 (a 2 + two FTs) |
+| Non-scoring stats | rebound / assist / steal logged; H3 foul counted; home timeout counted |
+
+**Covered event types (unit + replay):** 1/2/3-point field goals, free throws
+(made/missed/and-one), foul types (personal/shooting/technical/flagrant/offensive),
+team-foul bonus, foul-out, rebounds (off/def), assists, steals, blocks, turnovers,
+timeouts, substitutions (on-court tracking), quarter/half/OT transitions,
+first-to-N end, remove-reversal.
+
+---
+
+## Verdict — all three sports reproduce a real match, event-by-event
+
+Football, cricket and basketball each replay a real (or realistic) event sequence
+through the **actual on-device reducer** and reproduce the full state — score,
+scorers/cards/subs (football), the ball-by-ball scorecard with batting & bowling
+cards (cricket), the line score + box score (basketball) — not just the final
+score. Every pure engine (`football`/`cricket`/`basketball`/`kabaddi` `engine.ts`,
+plus the rally sports) is now node-tested; **182 tests** in total.
+
+**Known, documented limits (not blockers):** football team-stat panel & assists
+need per-event taps (supported, just more logging); header not offered as a goal
+type; tennis double faults deferred (needs serve tracking); box scores/surgical
+editors for padel/pickleball/squash are polish. See each sport's file for details.

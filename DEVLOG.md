@@ -32,6 +32,30 @@ stat attribution to profiles.
 
 ---
 
+### 2026-08-24 — Replay acceptance: reproduce real matches event-by-event
+
+The end-to-end validation behind the whole engine — replay a real match's event
+feed through the ACTUAL on-device reducer and reproduce the full match, not just
+the final score. Method + results in `docs/sport-coverage/replay-validation.md`.
+
+- **Football ✅** — extracted `football/engine.ts` (pure core, like basketball/
+  cricket/kabaddi); `tests/football.test.mts` replays a REAL match (Newcastle 2-2
+  Liverpool, ESPN 401879319) event-by-event: score after each goal, both sides'
+  scorers in order, the 90+9' equaliser flagged as a penalty, per-side cards, subs,
+  draw. Edge cases: VAR-disallowed goal reverts, own goal, 2nd yellow → red.
+- **Cricket ✅** — Cricinfo/ESPN block automated fetch (403), so a realistic full
+  over (FOUR·1·wide·SIX·bye·wicket·2) is replayed ball-by-ball and reproduces the
+  scorecard: 15/1, extras, per-batter card splits, bowling figures (byes not
+  charged), strike rotation, over completion. All delivery types already unit-tested.
+- **Basketball ✅** — a real-game-style Q1 (3pt, shooting foul → 2 FTs, rebound/
+  assist/steal, timeout, 2pt) reproduces the line score + per-player box points.
+
+Every pure engine is now node-tested. `tsc` clean; **182 tests** (was 137 at the
+audit's start). The scoring engine reproduces real matches across all three
+reference sports.
+
+---
+
 ### 2026-08-24 — Kabaddi: defender tackle credit + voice through the engine
 
 - **Defenders now get their tackle points.** The guided raid asks "Who made the

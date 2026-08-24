@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  init, reducer, teamFoulsThisQuarter, inBonus, timeoutsUsed, onCourtNames, isFouledOut,
+  init, reducer, teamFoulsThisQuarter, inBonus, timeoutsUsed, onCourtNames, isFouledOut, foulCount,
   type BasketballState,
 } from '../src/sports/basketball/engine.ts';
 import type { ScoreAction } from '../src/sports/types.ts';
@@ -117,3 +117,52 @@ describe('basketball — corrections & game end', () => {
     assert.equal(s.home, 12);
   });
 });
+
+import { pointsOf } from '../src/sports/basketball/events.ts';
+
+describe('basketball — a real-game-style sequence replayed play-by-play', () => {
+  // Q1 (home tips off):
+  //   H1 hits a 3 → 3-0 · A1 hits a 2 → 3-2 · shooting foul on H3, A1 makes both
+  //   free throws → 3-4 · H2 defensive rebound · H1 assist · A2 steal · home timeout
+  //   · H1 hits a 2 → 5-4 · end of Q1
+  const sc = (side: 'home' | 'away', pts: number, who: string): ScoreAction =>
+    ({ type: 'SCORE', side, payload: { points: pts }, attribution: { playerId: who, stat: 'points', by: pts, playerName: who } });
+  const ft = (side: 'home' | 'away', who: string): ScoreAction =>
+    ({ type: 'FREE_THROW', side, payload: { made: true }, attribution: { playerId: who, stat: 'points', by: 1, playerName: who } });
+  const stat = (type: string, side: 'home' | 'away', s: string, who: string): ScoreAction =>
+    ({ type, side, attribution: { playerId: who, stat: s, playerName: who } });
+
+  const g = run(init(),
+    { type: 'KICKOFF', payload: { at: 1 } },
+    sc('home', 3, 'H1'),
+    sc('away', 2, 'A1'),
+    { type: 'FOUL', side: 'home', payload: { foulType: 'shooting' }, attribution: { playerId: 'H3', stat: 'fouls', playerName: 'H3' } },
+    ft('away', 'A1'), ft('away', 'A1'),
+    stat('REBOUND', 'home', 'rebounds', 'H2'),
+    stat('ASSIST', 'home', 'assists', 'H1'),
+    stat('STEAL', 'away', 'steals', 'A2'),
+    { type: 'TIMEOUT', side: 'home' },
+    sc('home', 2, 'H1'),
+    { type: 'NEXT_QUARTER' },
+  );
+
+  const pts = (who: string) => g.events.filter((e) => e.playerName === who).reduce((n, e) => n + pointsOf(e), 0);
+
+  test('the line score is right and the game advanced to Q2', () => {
+    assert.deepEqual([g.home, g.away], [5, 4]);
+    assert.equal(g.quarter, 2);
+  });
+
+  test('box-score points per player include field goals AND free throws', () => {
+    assert.equal(pts('H1'), 5); // a 3 and a 2
+    assert.equal(pts('A1'), 4); // a 2 + two made free throws
+  });
+
+  test('non-scoring stats and the timeout are recorded', () => {
+    assert.equal(g.events.filter((e) => e.type === 'rebound').length, 1);
+    assert.equal(g.events.filter((e) => e.type === 'assist').length, 1);
+    assert.equal(g.events.filter((e) => e.type === 'steal').length, 1);
+    assert.equal(foulCount(g, 'H3'), 1);
+    assert.equal(timeoutsUsed(g, 'home'), 1);
+  });
+})
