@@ -15,7 +15,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { kabaddiVoice } from '../voiceParsers';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
-import { replayRaids, type RaidOutcome, type KabaddiStyle } from './rules';
+import { replayRaids, sum, decideRaidShootout, type RaidOutcome, type KabaddiStyle } from './rules';
 
 export interface KabaddiState {
   home: number;
@@ -31,6 +31,10 @@ export interface KabaddiState {
   decider: 'none' | 'extra_time' | 'golden_raid';
   /** sudden-death Golden Raid under way — the next point wins the match */
   goldenRaid: boolean;
+  /** 5-raid shootout tie-breaker (PKL) — points scored per raid per side; the
+   *  regulation score stays tied and the shootout totals decide the winner.
+   *  Undefined until a shootout starts. */
+  shootout?: { home: number[]; away: number[] };
   /** substitutions allowed per side (format: substitutes) */
   maxSubs: number;
   subsUsed: { home: number; away: number };
@@ -193,6 +197,25 @@ const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
     case 'START_GOLDEN_RAID':
       // Level after regulation or extra time → sudden-death Golden Raid.
       return s.home === s.away && !s.ended ? { ...s, goldenRaid: true, startedAt: undefined } : s;
+    case 'START_SHOOTOUT':
+      // Level after regulation/extra time → a 5-raid shootout (PKL tie-breaker).
+      return s.home === s.away && !s.ended && !s.shootout ? { ...s, shootout: { home: [], away: [] }, startedAt: undefined } : s;
+    case 'SHOOTOUT_RAID': {
+      // One shootout raid: `points` scored (0 = failed/empty). The regulation
+      // score stays tied; the shootout totals decide the winner.
+      if (!s.shootout || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
+      const p = Math.max(0, Math.floor(Number(a.payload?.points ?? 0)));
+      const sh = { ...s.shootout, [a.side]: [...s.shootout[a.side], p] };
+      const winner = decideRaidShootout(sh.home, sh.away);
+      return {
+        ...s,
+        shootout: sh,
+        ended: winner != null,
+        startedAt: undefined,
+        seq: s.seq + 1,
+        events: [...s.events, { id: s.seq + 1, stamp: 'SO', icon: '🎯', label: `Shootout raid +${p}`, detail: who, side: a.side, kind: 'raid', points: p, playerName: who, minute, half: hf }],
+      };
+    }
     case 'END':
       return { ...s, ended: true, startedAt: undefined };
     default:
@@ -331,6 +354,35 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   }
 
   const tied = state.home === state.away;
+
+  // 5-raid shootout tie-breaker: record each raid's points per side; the panel
+  // decides the winner (best-of-5, then sudden death) and ends the match.
+  if (state.shootout && !state.ended) {
+    const so = state.shootout;
+    const raidRow = (side: 'home' | 'away', label: string) => (
+      <View key={side} style={{ gap: theme.spacing(1) }}>
+        <Text style={ctrl.label}>🎯 {label} — {sum(so[side])} pts ({so[side].length}/5)</Text>
+        <View style={ctrl.row}>
+          {[0, 1, 2, 3].map((n) => (
+            <Button key={n} label={n === 0 ? 'Empty' : `+${n}`} variant={n === 0 ? 'ghost' : side} style={ctrl.flex}
+              onPress={() => fire({ type: 'SHOOTOUT_RAID', side, payload: { points: n } })} />
+          ))}
+        </View>
+      </View>
+    );
+    return (
+      <View style={{ gap: theme.spacing(4) }}>
+        <View style={ctrl.grBanner}>
+          <Text style={ctrl.grTitle}>🎯 5-RAID SHOOTOUT</Text>
+          <Text style={ctrl.grMeta}>Level {state.home}–{state.away}. Each side takes five raids — most points wins (then sudden death). Tap the points each raid scores.</Text>
+        </View>
+        {raidRow('home', homeName)}
+        {raidRow('away', awayName)}
+        <Button label="End as a tie" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {state.goldenRaid && (
@@ -487,6 +539,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           {state.decider === 'extra_time' && state.half === 2 && (
             <Button label={`Extra time (2 × ${state.extraTimeMinutes} min)`} variant="ghost" onPress={() => dispatch({ type: 'START_EXTRA_TIME' })} />
           )}
+          {state.decider !== 'none' && (
+            <Button label="🎯 5-Raid Shootout" variant="ghost" onPress={() => dispatch({ type: 'START_SHOOTOUT' })} />
+          )}
           <Button label="End as a tie" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
         </View>
       ) : (
@@ -564,7 +619,16 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
-  result: (s) => (s.ended ? { winner: s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw', home: s.home, away: s.away } : null),
+  result: (s) => {
+    if (!s.ended) return null;
+    // A shootout decides the winner while the regulation score stays tied.
+    if (s.shootout) {
+      const hs = sum(s.shootout.home), as = sum(s.shootout.away);
+      const winner = hs > as ? 'home' : as > hs ? 'away' : s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw';
+      return { winner, home: s.home, away: s.away };
+    }
+    return { winner: s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw', home: s.home, away: s.away };
+  },
   summary: (s) => ({
     homeScore: String(s.home),
     awayScore: String(s.away),

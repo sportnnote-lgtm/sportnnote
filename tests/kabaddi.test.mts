@@ -36,3 +36,19 @@ describe('kabaddi — raids & tackles', () => {
     assert.equal(d.out.home, 1); // 3rd empty raid put the raider out
   });
 });
+
+import { decideRaidShootout } from '../src/sports/kabaddi/rules.ts';
+
+describe('kabaddi — 5-raid shootout tie-breaker (Tier-2)', () => {
+  test('most points after five raids each wins', () => {
+    assert.equal(decideRaidShootout([1, 0, 2, 1, 1], [0, 1, 1, 0, 1]), 'home'); // 5 vs 3
+  });
+  test('clinches early when the lead cannot be caught', () => {
+    // home 1,2,2,1 = 6 after 4 raids; away 0,0,0 = 0 after 3 → cannot catch up
+    assert.equal(decideRaidShootout([1, 2, 2, 1], [0, 0, 0]), 'home');
+  });
+  test('level after five each → sudden death continues (null)', () => {
+    assert.equal(decideRaidShootout([1, 1, 1, 1, 1], [1, 1, 1, 1, 1]), null);
+    assert.equal(decideRaidShootout([1, 1, 1, 1, 1, 2], [1, 1, 1, 1, 1, 0]), 'home'); // sudden-death raid decides
+  });
+})

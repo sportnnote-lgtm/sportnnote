@@ -43,6 +43,21 @@ export interface KabaddiDerived {
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 
+export const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+/** Winner of a 5-raid shootout (PKL tie-breaker): best-of-5 (clinched early when a
+ *  lead can't be caught), then sudden death once both have taken five. null =
+ *  undecided. Points-based analogue of a penalty shootout. */
+export function decideRaidShootout(h: number[], a: number[]): 'home' | 'away' | null {
+  const hs = sum(h), as = sum(a);
+  const hRem = Math.max(0, 5 - h.length), aRem = Math.max(0, 5 - a.length);
+  if (h.length <= 5 && a.length <= 5) {
+    if (hs > as + aRem) return 'home';
+    if (as > hs + hRem) return 'away';
+  }
+  if (h.length === a.length && h.length >= 5 && hs !== as) return hs > as ? 'home' : 'away';
+  return null;
+}
+
 /** Fold a raid list into the full derived match state. */
 export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDerived {
   const amar = cfg.style === 'amar';

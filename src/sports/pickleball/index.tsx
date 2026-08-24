@@ -30,6 +30,9 @@ export const pickleballPlugin = makeRallyPlugin({
         { value: 'rec1', label: 'Rec quick (11 · win by 1)', set: { scoring: 'rally', pointsPerGame: 11, winBy: 1, gamesToWin: 2 } },
         { value: 'tournament', label: 'Tournament (best of 5)', set: { scoring: 'rally', pointsPerGame: 11, winBy: 2, gamesToWin: 3 } },
         { value: 'traditional', label: 'Traditional (side-out)', set: { scoring: 'sideout', pointsPerGame: 11, winBy: 2, gamesToWin: 2 } },
+        // MLP Dreambreaker: a single rally-scored tiebreaker game to 21, win by 2.
+        // (The 4-player singles serve rotation isn't tracked — the scoring is.)
+        { value: 'dreambreaker', label: 'Dreambreaker (MLP · to 21)', set: { scoring: 'rally', pointsPerGame: 21, winBy: 2, gamesToWin: 1 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
