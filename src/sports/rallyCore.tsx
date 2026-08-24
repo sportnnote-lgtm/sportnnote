@@ -16,6 +16,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, SelectChip, textStyles } from '../components/ui';
 import { LiveTimeline } from './LiveTimeline';
+import { PointBoxScore } from './PointBoxScore';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
@@ -111,7 +112,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const current = { ...s.current, [scorer]: s.current[scorer] + 1 };
     let seq = s.seq;
     const events = [...s.events];
-    events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: scorer });
+    events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: scorer, kind: 'point', playerName: who, game: gameNo, points: 1 });
 
     const winner = gameWinner(current.home, current.away, s.target, s.winBy);
     if (!winner) return { ...s, current, events, seq };
@@ -177,8 +178,9 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     );
   };
 
-  const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeColor, awayColor }) => {
+  const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster }) => {
     const s = state as RallyState;
+    const periods = Array.from({ length: Math.max(1, s.games.length + 1) }, (_, i) => i + 1);
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <Text style={ctrl.label}>Games</Text>
@@ -189,6 +191,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
             s.games.map((g, i) => <Text key={i} style={ctrl.gameChip}>G{i + 1}: {g[0]}-{g[1]}</Text>)
           )}
         </View>
+        <Text style={ctrl.label}>Box score</Text>
+        <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Game" />
         <Text style={ctrl.label}>Rally log</Text>
         <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." />
       </View>

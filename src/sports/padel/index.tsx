@@ -15,6 +15,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { SelectChip, Button, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
+import { PointBoxScore } from '../PointBoxScore';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
@@ -100,6 +101,7 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
     label: tb ? `${matchTb ? 'Match tiebreak' : 'Tiebreak'} ${pts.home}-${pts.away}` : 'Point',
     detail: who,
     side,
+    kind: 'point', playerName: who, set: setNo, points: 1,
   });
 
   if (tb) {
@@ -156,8 +158,9 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
   );
 };
 
-const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state, homeColor, awayColor }) => {
+const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster }) => {
   const s = state as PadelState;
+  const periods = Array.from({ length: Math.max(1, s.sets.length + 1) }, (_, i) => i + 1);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -168,6 +171,8 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
           s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {g[0]}-{g[1]}</Text>)
         )}
       </View>
+      <Text style={ctrl.label}>Box score</Text>
+      <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Set" />
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." />
     </View>
