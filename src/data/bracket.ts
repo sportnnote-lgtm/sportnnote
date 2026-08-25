@@ -341,3 +341,54 @@ export function stageChampionId(rounds: KnockoutRound[]): string | undefined {
   const fp = final ? roundPairings(final) : [];
   return fp.length === 1 ? pairingWinnerId(fp[0]) : undefined;
 }
+
+/* ---------------------- Double-chance playoff (IPL-style) ------------------ */
+
+/** The "second chance for the top two" playoff a lot of leagues finish with
+ *  (the IPL format). From the top 4:
+ *    • Qualifier 1  : 1 v 2      — winner → Final, loser → Qualifier 2
+ *    • Eliminator   : 3 v 4      — winner → Qualifier 2, loser is out
+ *    • Qualifier 2  : Q1 loser v Eliminator winner — winner → Final
+ *    • Final        : Q1 winner v Q2 winner
+ *  The top two get a second life; 3rd/4th must win out. Stages sit outside the
+ *  size-based KO_STAGES, so a straight knockout is unaffected. */
+export const DOUBLE_CHANCE_STAGES = ['q1', 'eliminator', 'q2', 'final'] as const;
+export type DoubleChanceStage = (typeof DOUBLE_CHANCE_STAGES)[number];
+export const DC_STAGE_LABEL: Record<DoubleChanceStage, string> = {
+  q1: 'Qualifier 1', eliminator: 'Eliminator', q2: 'Qualifier 2', final: 'Final',
+};
+/** A tournament runs a double-chance playoff once a Q1 or Eliminator exists. */
+export const isDoubleChanceStage = (s?: string | null): boolean => s === 'q1' || s === 'eliminator' || s === 'q2';
+
+/** The two opening matches from a top-4 seed list (best → worst). */
+export function doubleChanceOpeners(seedIds: string[]): { homeId: string; awayId: string; stage: DoubleChanceStage }[] {
+  if (seedIds.length < 4) return [];
+  return [
+    { homeId: seedIds[0], awayId: seedIds[1], stage: 'q1' },
+    { homeId: seedIds[2], awayId: seedIds[3], stage: 'eliminator' },
+  ];
+}
+
+/** The next match(es) a double-chance playoff is ready to create, or null. */
+export function doubleChanceNext(matches: Match[]): { homeId: string; awayId: string; stage: DoubleChanceStage }[] | null {
+  const at = (s: DoubleChanceStage) => matches.find((m) => m.stage === s);
+  const q1 = at('q1'), el = at('eliminator'), q2 = at('q2'), final = at('final');
+  if (!q1 || !el) return null;
+  // Qualifier 2: the Q1 loser meets the Eliminator winner.
+  if (!q2) {
+    const q1Loser = matchLoserId(q1), elWinner = matchWinnerId(el);
+    return q1Loser && elWinner ? [{ homeId: q1Loser, awayId: elWinner, stage: 'q2' }] : null;
+  }
+  // Final: Q1 winner meets Q2 winner.
+  if (!final) {
+    const q1Winner = matchWinnerId(q1), q2Winner = matchWinnerId(q2);
+    return q1Winner && q2Winner ? [{ homeId: q1Winner, awayId: q2Winner, stage: 'final' }] : null;
+  }
+  return null;
+}
+
+/** The champion of a decided double-chance playoff (the Final winner), else undefined. */
+export function doubleChanceChampion(matches: Match[]): string | undefined {
+  const final = matches.find((m) => m.stage === 'final');
+  return final ? matchWinnerId(final) : undefined;
+}

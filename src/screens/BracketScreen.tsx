@@ -25,6 +25,7 @@ import {
   knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn,
   knockoutStageRounds, nextRoundPairs, matchWinnerId, stageChampionId, KO_STAGE_LABEL,
   thirdPlacePair, THIRD_PLACE_STAGE, pairingWinnerId, type KnockoutPairing,
+  isDoubleChanceStage, doubleChanceNext, doubleChanceChampion, DC_STAGE_LABEL, DOUBLE_CHANCE_STAGES, type DoubleChanceStage,
 } from '../data/bracket';
 import { resolveSeries, type SeriesFormat } from '../data/series';
 import type { Match, SportId } from '../core/types';
@@ -120,6 +121,21 @@ export default function BracketScreen() {
   const sfRound = useMemo(() => koRounds.find((r) => r.stage === 'sf'), [koRounds]);
   const pendingThird = useMemo(() => (sfRound && !thirdMatch ? thirdPlacePair(sfRound) : null), [sfRound, thirdMatch]);
 
+  // Double-chance playoff (IPL-style) — detected by a Qualifier/Eliminator match.
+  // Takes over the bracket view; its Final also carries stage 'final'.
+  const dcActive = useMemo(() => sportMatches.some((m) => isDoubleChanceStage(m.stage)), [sportMatches]);
+  const dcMatches = useMemo(
+    () => DOUBLE_CHANCE_STAGES.map((s) => ({ stage: s as DoubleChanceStage, m: sportMatches.find((x) => x.stage === s) })),
+    [sportMatches],
+  );
+  const dcNext = useMemo(() => (dcActive ? doubleChanceNext(sportMatches) : null), [dcActive, sportMatches]);
+  const dcChampId = useMemo(() => (dcActive ? doubleChanceChampion(sportMatches) : undefined), [dcActive, sportMatches]);
+  const createNextDc = () => {
+    if (!dcNext) return;
+    const base = Math.max(Date.now(), ...sportMatches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
+    return createRound(dcNext, base);
+  };
+
   async function createRound(pairs: { homeId: string; awayId: string; stage: string }[], baseTimeMs: number) {
     if (!tournamentId) return;
     setError(null); setBusy(true);
@@ -178,9 +194,10 @@ export default function BracketScreen() {
   };
   const slotState = (winner: string | undefined, name: string): SlotState => (!winner ? 'neutral' : winner === name ? 'won' : 'lost');
 
-  const champName = stagedChampionId ? nameColor.get(stagedChampionId)?.name : previewChampion?.name;
-  const champColor = stagedChampionId ? nameColor.get(stagedChampionId)?.color : previewChampion?.color;
-  const subtitle = isStaged ? `${koRounds.reduce((n, r) => n + r.matches.length, 0)} knockout matches` : `${previewTeams.length} teams`;
+  const champId = dcActive ? dcChampId : stagedChampionId;
+  const champName = champId ? nameColor.get(champId)?.name : previewChampion?.name;
+  const champColor = champId ? nameColor.get(champId)?.color : previewChampion?.color;
+  const subtitle = dcActive ? 'Double-chance playoff' : isStaged ? `${koRounds.reduce((n, r) => n + r.matches.length, 0)} knockout matches` : `${previewTeams.length} teams`;
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -204,7 +221,25 @@ export default function BracketScreen() {
           </View>
         )}
 
-        {isStaged ? (
+        {dcActive ? (
+          <>
+            <Text style={textStyles.muted}>The top two get a second life: lose Qualifier 1 and you drop to Qualifier 2, not out.</Text>
+            {dcMatches.map(({ stage, m }) => (
+              <View key={stage} style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>{DC_STAGE_LABEL[stage]}</Text>
+                {m ? <StagedMatchCard m={m} /> : <Text style={textStyles.muted}>Awaiting the earlier results…</Text>}
+              </View>
+            ))}
+            {canManage && dcNext && (
+              <Button
+                label={busy ? 'Creating…' : `▶ Create ${DC_STAGE_LABEL[dcNext[0].stage]}`}
+                onPress={createNextDc}
+                disabled={busy}
+              />
+            )}
+            <FormError message={error} />
+          </>
+        ) : isStaged ? (
           <>
             {koRounds.map((round) => {
               const roundByes = [...new Set(round.matches.flatMap((m) => m.byes ?? []))];

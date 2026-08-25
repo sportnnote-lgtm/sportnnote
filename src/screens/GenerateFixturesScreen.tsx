@@ -19,7 +19,7 @@ import { structureFromFormat, mergeStructure, structureFieldFor, type StructureC
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat } from '../data/standings';
-import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL } from '../data/bracket';
+import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -78,7 +78,7 @@ export default function GenerateFixturesScreen() {
   const [playIn, setPlayIn] = useState(false);
   // Advance target when coming from the group stage: a knockout, or a Super
   // round-robin phase (Asia-Cup style). From a Super phase it's always knockout.
-  const [advanceTo, setAdvanceTo] = useState<'knockout' | 'super'>('knockout');
+  const [advanceTo, setAdvanceTo] = useState<'knockout' | 'super' | 'double_chance'>('knockout');
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -161,7 +161,7 @@ export default function GenerateFixturesScreen() {
   const sourceDone = sourceMatches.length > 0 && sourceMatches.every((m) => m.status === 'completed');
   // What the advance produces: a knockout bracket, or (from the group stage only)
   // a Super round-robin phase. Advancing from a Super phase always goes to knockout.
-  const target: 'knockout' | 'super' = advanceFromSuper ? 'knockout' : advanceTo;
+  const target: 'knockout' | 'super' | 'double_chance' = advanceFromSuper && advanceTo === 'super' ? 'knockout' : advanceTo;
   const qualifiers = useMemo(
     () => (sourceTables.length ? advancement(sourceTables, Math.max(1, parseInt(topK, 10) || 1), Math.max(0, parseInt(bestPlaced, 10) || 0), stCfg) : []),
     [sourceTables, topK, bestPlaced, stCfg],
@@ -206,6 +206,14 @@ export default function GenerateFixturesScreen() {
         // Advance the qualifiers into a second round-robin phase (Super Four/Six).
         const rr = roundRobin(effectiveQualifiers.map((q) => q.teamId), doubleRound);
         setDrafts(rr.map((p, i) => ({ ...p, stage: 'super', when: at(i) })));
+        return;
+      }
+      if (target === 'double_chance') {
+        // IPL-style top-4 playoff: Qualifier 1 (1v2) + Eliminator (3v4). Q2 and the
+        // Final are created from the tournament page as results come in.
+        if (effectiveQualifiers.length < 4) return setError('A double-chance playoff needs the top 4.');
+        const openers = doubleChanceOpeners(effectiveQualifiers.slice(0, 4).map((q) => q.teamId));
+        setDrafts(openers.map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, when: at(i) })));
         return;
       }
       if (playIn && !koPlan.clean) {
@@ -365,6 +373,14 @@ export default function GenerateFixturesScreen() {
               <View style={st.chips}>
                 <SelectChip label="🏆 To knockout" active={advanceTo === 'knockout'} onPress={() => { setAdvanceTo('knockout'); invalidate(); }} />
                 <SelectChip label="🔁 To Super round-robin" active={advanceTo === 'super'} onPress={() => { setAdvanceTo('super'); invalidate(); }} />
+              </View>
+            )}
+            {/* Second-chance playoff for the top 4 (IPL format) — offered whenever
+                exactly four teams advance. */}
+            {effectiveQualifiers.length === 4 && (
+              <View style={{ gap: theme.spacing(1) }}>
+                <SelectChip label="🎯 Double-chance playoff (top 4)" active={advanceTo === 'double_chance'} onPress={() => { setAdvanceTo('double_chance'); invalidate(); }} />
+                {advanceTo === 'double_chance' && <Text style={textStyles.muted}>Qualifier 1 (1v2) + Eliminator (3v4) now; Qualifier 2 and the Final follow from the tournament page. The top two get a second life.</Text>}
               </View>
             )}
 

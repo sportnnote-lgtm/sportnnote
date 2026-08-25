@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   knockoutStageRounds, nextRoundPairs, matchWinnerId, matchLoserId, thirdPlacePair,
   stageForTeams, stageChampionId, isKoStage, koStageRank, planKnockout, seedPlayIn, type KnockoutRound,
+  doubleChanceOpeners, doubleChanceNext, doubleChanceChampion,
 } from '../src/data/bracket.ts';
 import { seriesLegFormat } from '../src/data/series.ts';
 import type { Match } from '../src/core/types.ts';
@@ -228,5 +229,53 @@ describe('series-aware bracket (gap #3)', () => {
       sLeg('f2', 'final', 'F', 'A', 'B', 'A', 2, 1, 3), // A wins 4-1 agg
     ]);
     assert.equal(stageChampionId(rounds), 'A');
+  });
+});
+
+describe('double-chance playoff (IPL-style)', () => {
+  test('openers seed 1v2 (Q1) and 3v4 (Eliminator)', () => {
+    const o = doubleChanceOpeners(['s1', 's2', 's3', 's4']);
+    assert.deepEqual(o, [
+      { homeId: 's1', awayId: 's2', stage: 'q1' },
+      { homeId: 's3', awayId: 's4', stage: 'eliminator' },
+    ]);
+    assert.deepEqual(doubleChanceOpeners(['s1', 's2', 's3']), []); // needs 4
+  });
+
+  test('Q2 pairs the Q1 loser with the Eliminator winner', () => {
+    const ms = [km('q1', 'q1', 'A', 'B', 2, 1), km('el', 'eliminator', 'C', 'D', 0, 3)]; // A beats B, D beats C
+    const next = doubleChanceNext(ms);
+    assert.deepEqual(next, [{ homeId: 'B', awayId: 'D', stage: 'q2' }]); // Q1 loser B v Elim winner D
+  });
+
+  test('not ready until both openers are decided', () => {
+    const ms = [km('q1', 'q1', 'A', 'B', 2, 1), km('el', 'eliminator', 'C', 'D')]; // eliminator unplayed
+    assert.equal(doubleChanceNext(ms), null);
+  });
+
+  test('Final pairs the Q1 winner with the Q2 winner; champion resolves', () => {
+    const ms = [
+      km('q1', 'q1', 'A', 'B', 2, 1),          // A wins Q1
+      km('el', 'eliminator', 'C', 'D', 0, 3),  // D wins Eliminator
+      km('q2', 'q2', 'B', 'D', 4, 0),          // B wins Q2 (Q1 loser back through)
+    ];
+    assert.deepEqual(doubleChanceNext(ms), [{ homeId: 'A', awayId: 'B', stage: 'final' }]);
+    assert.equal(doubleChanceChampion(ms), undefined); // final not created yet
+    ms.push(km('f', 'final', 'A', 'B', 3, 2)); // A wins the final
+    assert.equal(doubleChanceNext(ms), null);
+    assert.equal(doubleChanceChampion(ms), 'A');
+  });
+
+  test('a beaten top-2 team can still win the title (second chance)', () => {
+    // B loses Q1 but wins Q2 and the Final.
+    const ms = [
+      km('q1', 'q1', 'A', 'B', 0, 1),          // B... wait: home A away B, 0-1 → B wins. Make A win instead:
+    ];
+    ms.length = 0;
+    ms.push(km('q1', 'q1', 'A', 'B', 3, 1));    // A wins Q1, B drops to Q2
+    ms.push(km('el', 'eliminator', 'C', 'D', 2, 0)); // C wins Eliminator
+    ms.push(km('q2', 'q2', 'B', 'C', 2, 1));    // B wins Q2
+    ms.push(km('f', 'final', 'A', 'B', 0, 1));  // B wins the Final
+    assert.equal(doubleChanceChampion(ms), 'B');
   });
 });

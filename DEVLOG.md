@@ -13,6 +13,33 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Double-chance playoff (gap #6, part B)
+
+**Why:** the audit wanted double-elimination / the IPL "double-chance" playoff — a
+second life for the top two. Full arbitrary double-elimination (a losers bracket
++ grand final) is a large engine rework; the concretely-named IPL format (top 4,
+Q1/Eliminator/Q2/Final) is the common, bounded case, so that's what shipped. Full
+double-elim is noted as a follow-up.
+
+**Shipped:**
+- `data/bracket.ts`: `doubleChanceOpeners` (Q1 = 1v2, Eliminator = 3v4),
+  `doubleChanceNext` (Q2 = Q1-loser v Eliminator-winner, then Final = Q1-winner v
+  Q2-winner), `doubleChanceChampion`. Stages `q1`/`eliminator`/`q2` sit outside
+  the size-based KO_STAGES, so a straight knockout is untouched. 5 unit tests
+  (incl. a beaten top-2 team winning the title via the second chance).
+- **GenerateFixtures**: a "🎯 Double-chance playoff (top 4)" advance option,
+  offered when exactly four teams qualify; generates the two openers.
+- **BracketScreen**: a dedicated double-chance view (Qualifier 1 / Eliminator /
+  Qualifier 2 / Final) that takes over when a Q1/Eliminator exists, with a
+  "Create Qualifier 2 / Final" button as results come in, and the Final winner
+  as champion.
+
+**Verified:** engine unit-tested end-to-end; the normal bracket is unaffected
+(the double-chance branch is gated on a Q1/Eliminator match). `tsc` clean; **261
+tests pass**. (No migration needed — it rides on the existing `stage` column.)
+
+---
+
 ### 2026-08-25 — Registration controls (gap #6, part A)
 
 **Why:** the audit flagged open registration as all-or-nothing — no deadline, no
