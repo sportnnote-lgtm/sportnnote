@@ -2,14 +2,14 @@
  *  knockout format, and per-sport formats. Host/co-hosts, divisions and reminders
  *  are managed on the tournament page; those aren't repeated here. */
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
-import { DateField } from '../components/DateTimeField';
+import { DateField, DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
 import { PointsEditor } from '../components/PointsEditor';
 import { StructureEditor } from '../components/StructureEditor';
@@ -55,6 +55,9 @@ export default function EditTournamentScreen() {
   const [etSubs, setEtSubs] = useState(1);
   const [formats, setFormats] = useState<FormatMap>({});
   const [isOpen, setIsOpen] = useState(false);
+  const [regDeadline, setRegDeadline] = useState<Date | null>(null);
+  const [minTeams, setMinTeams] = useState(0); // 0 = unset
+  const [maxTeams, setMaxTeams] = useState(0); // 0 = no cap
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hasKnockout = structure !== 'league';
@@ -72,6 +75,9 @@ export default function EditTournamentScreen() {
     setEtSubs(tournament.knockoutFormat?.extraTimeSubs ?? 1);
     setFormats((tournament.formats ?? {}) as FormatMap);
     setIsOpen(!!tournament.isOpen);
+    setRegDeadline(tournament.registrationDeadline ? new Date(tournament.registrationDeadline) : null);
+    setMinTeams(tournament.minTeams ?? 0);
+    setMaxTeams(tournament.maxTeams ?? 0);
     setLoaded(true);
   }, [tournament, loaded]);
 
@@ -107,6 +113,9 @@ export default function EditTournamentScreen() {
           : undefined,
         formats,
         isOpen,
+        registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : null,
+        minTeams: minTeams > 0 ? minTeams : null,
+        maxTeams: maxTeams > 0 ? maxTeams : null,
       });
       nav.goBack();
     } catch (err) {
@@ -192,10 +201,46 @@ export default function EditTournamentScreen() {
           <SelectChip label="🔒 Invite only" active={!isOpen} onPress={() => setIsOpen(false)} />
         </View>
 
+        {isOpen && (
+          <View style={{ gap: theme.spacing(3) }}>
+            {regDeadline ? (
+              <View style={{ gap: theme.spacing(2) }}>
+                <DateTimeField label="Registration deadline" value={regDeadline} onChange={setRegDeadline} />
+                <Text style={st.linkText} onPress={() => setRegDeadline(null)}>Remove deadline</Text>
+              </View>
+            ) : (
+              <SelectChip label="＋ Add a registration deadline" active={false} onPress={() => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); setRegDeadline(d); }} />
+            )}
+            <View style={st.capRow}>
+              <View style={st.capCell}>
+                <FieldLabel>Min teams</FieldLabel>
+                <NumberStepper value={minTeams} min={0} max={128} onChange={setMinTeams} zeroLabel="—" />
+              </View>
+              <View style={st.capCell}>
+                <FieldLabel>Max teams (cap)</FieldLabel>
+                <NumberStepper value={maxTeams} min={0} max={128} onChange={setMaxTeams} zeroLabel="∞" />
+              </View>
+            </View>
+            <Text style={textStyles.muted}>Below the minimum is just a heads-up; the maximum caps public sign-ups (you can still add teams yourself).</Text>
+          </View>
+        )}
+
         <FormError message={error} />
         <Button label={busy ? 'Saving…' : 'Save changes'} onPress={save} disabled={busy} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** A small −/+ counter; `zeroLabel` renders when the value is 0 (e.g. "∞", "—"). */
+function NumberStepper({ value, min, max, onChange, zeroLabel }: { value: number; min: number; max: number; onChange: (v: number) => void; zeroLabel?: string }) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  return (
+    <View style={st.stepper}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Fewer" style={st.stepBtn} onPress={() => onChange(clamp(value - 1))}><Text style={st.stepTxt}>−</Text></TouchableOpacity>
+      <Text style={st.stepVal}>{value === 0 && zeroLabel ? zeroLabel : value}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="More" style={st.stepBtn} onPress={() => onChange(clamp(value + 1))}><Text style={st.stepTxt}>+</Text></TouchableOpacity>
+    </View>
   );
 }
 
@@ -208,4 +253,11 @@ const st = StyleSheet.create({
   hint: { color: theme.colors.textMuted, fontSize: theme.font.small },
   warn: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '600' },
   fmtCard: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
+  linkText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  capRow: { flexDirection: 'row', gap: theme.spacing(4) },
+  capCell: { gap: theme.spacing(2) },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  stepBtn: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3) },
+  stepTxt: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.body },
+  stepVal: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.h3, minWidth: 28, textAlign: 'center' },
 });

@@ -18,6 +18,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
+import { RegistrationBanner } from '../components/RegistrationBanner';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
@@ -56,6 +57,9 @@ export default function TournamentTeamsScreen() {
   const pending = entries.filter((e) => e.status === 'pending' && inScope(e));
   const invited = entries.filter((e) => e.status === 'invited' && inScope(e));
   const confirmedInScope = entries.filter((e) => e.status === 'confirmed' && inScope(e));
+  const withdrawn = entries.filter((e) => e.status === 'withdrawn' && inScope(e));
+  // Teams occupying a real spot (confirmed + invited) — drives the capacity banner.
+  const enteredCount = confirmedInScope.length + invited.length;
   // A team enters exactly one division: hide teams entered elsewhere (another
   // division, or awaiting a decision); confirmed teams in THIS division stay as
   // selectable chips.
@@ -184,6 +188,28 @@ export default function TournamentTeamsScreen() {
     } finally { setBusy(false); }
   }
 
+  // Soft lifecycle change (withdraw a confirmed team, or reinstate a withdrawn one)
+  // — keeps the entry + its history, unlike a hard remove.
+  async function changeStatus(entry: TournamentEntry, status: 'confirmed' | 'withdrawn') {
+    setError(null); setBusy(true);
+    try {
+      await setTournamentTeamStatus(params.tournamentId, entry.team.id, status);
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the entry');
+    } finally { setBusy(false); }
+  }
+  // Hard-remove an entry (used on a withdrawn team the organizer wants gone).
+  async function removeEntry(entry: TournamentEntry) {
+    setError(null); setBusy(true);
+    try {
+      await removeTournamentTeam(params.tournamentId, entry.team.id);
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove the entry');
+    } finally { setBusy(false); }
+  }
+
   async function save() {
     setError(null); setBusy(true);
     try {
@@ -238,9 +264,12 @@ export default function TournamentTeamsScreen() {
           </>
         )}
 
-        {/* Lifecycle gate: requests to join (approve/decline) and pending invites
-            (confirm/cancel). Only confirmed teams count toward the format. */}
-        {(pending.length > 0 || invited.length > 0) && (
+        {tournament && <RegistrationBanner tournament={tournament} enteredCount={enteredCount} />}
+
+        {/* Lifecycle gate: requests to join (approve/decline), pending invites
+            (confirm/cancel), and withdrawals (reinstate/remove). Only confirmed
+            teams count toward the format. */}
+        {(pending.length > 0 || invited.length > 0 || withdrawn.length > 0) && (
           <Card style={{ gap: theme.spacing(3) }}>
             {pending.length > 0 && (
               <View style={{ gap: theme.spacing(2) }}>
@@ -267,6 +296,33 @@ export default function TournamentTeamsScreen() {
                 ))}
               </View>
             )}
+            {withdrawn.length > 0 && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>Withdrawn · {withdrawn.length}</Text>
+                <Text style={textStyles.muted}>Pulled out — kept for the record, and out of the fixtures. Reinstate to bring a team back.</Text>
+                {withdrawn.map((e) => (
+                  <View key={e.team.id} style={st.entryRow}>
+                    <Text style={[textStyles.body, st.flex1, st.dim]} numberOfLines={1}>{e.team.name}</Text>
+                    <Button label="Reinstate" onPress={() => changeStatus(e, 'confirmed')} disabled={busy} />
+                    <Button label="Remove" variant="ghost" onPress={() => removeEntry(e)} disabled={busy} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        )}
+
+        {/* Confirmed teams — each can be withdrawn (soft, keeps history) without
+            losing its place in past results. */}
+        {confirmedInScope.length > 0 && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.h3}>In the tournament · {confirmedInScope.length}</Text>
+            {confirmedInScope.map((e) => (
+              <View key={e.team.id} style={st.entryRow}>
+                <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                <Button label="Withdraw" variant="ghost" onPress={() => changeStatus(e, 'withdrawn')} disabled={busy} />
+              </View>
+            ))}
           </Card>
         )}
 
@@ -376,6 +432,7 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  dim: { color: theme.colors.textMuted, textDecorationLine: 'line-through' },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },

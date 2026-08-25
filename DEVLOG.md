@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Registration controls (gap #6, part A)
+
+**Why:** the audit flagged open registration as all-or-nothing — no deadline, no
+field-size bounds, and no way for a team to *withdraw* (only a hard remove that
+erased its history).
+
+**Shipped:**
+- `core/registration.ts` — pure `registrationState` / `joinBlockReason` /
+  `activeEntries` (confirmed + invited occupy a spot; pending/withdrawn don't).
+  12 unit tests.
+- New entry status **`withdrawn`** + tournament fields `registrationDeadline`,
+  `minTeams`, `maxTeams`. `requestJoinTournament` now enforces the gate
+  (closed / past deadline / full) — organizer adds still bypass it.
+- **EditTournament**: registration deadline + min/max (cap) steppers, shown when
+  Open. **TournamentTeams**: a `RegistrationBanner` (open / full / deadline /
+  below-min) + per-team **Withdraw**, and a **Withdrawn** section
+  (Reinstate / Remove). Withdrawn teams drop out of fixtures automatically
+  (`getTournamentTeams` already filters to confirmed).
+- Migration `20260828120000_registration_controls.sql`: widen the
+  tournament_teams status check to allow 'withdrawn', add the three tournament
+  columns. **Reads and writes degrade gracefully before it's applied** — the
+  tournament select retries without the new columns, create omits them when
+  unset, and update retries core-only — so nothing breaks pre-migration.
+
+**Verified live:** the registration editor + banner + withdraw UI render;
+tournament reads and an EditTournament save both work against the pre-0014 DB
+(graceful fallback). `tsc` clean; **256 tests pass**. **User runs migration 0014**
+for the controls to persist live.
+
+---
+
 ### 2026-08-25 — Persistent tournament structure config (gap #5)
 
 **Why:** the real structure (group count, how many advance, single/double

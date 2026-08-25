@@ -37,6 +37,7 @@ import {
 } from './demoStore';
 import { emptyFormation } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
+import { joinBlockReason } from '../core/registration';
 import { getSport } from '../sports/registry';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
@@ -165,12 +166,8 @@ const MATCH_SELECT =
 
 export async function getTournament(): Promise<Tournament> {
   if (!isSupabaseConfigured || !supabase) return demo.tournaments[0];
-  const { data, error } = await supabase
-    .from('tournaments')
-    .select(TOURNAMENT_SELECT)
-    .order('start_date', { ascending: true })
-    .limit(1)
-    .single();
+  const { data, error } = await withTournamentCols((cols) =>
+    supabase!.from('tournaments').select(cols).order('start_date', { ascending: true }).limit(1).single());
   if (error || !data) return demo.tournaments[0];
   return toTournament(data);
 }
@@ -184,6 +181,9 @@ const toTournament = (data: any): Tournament => ({
   // prefer the multi-host array; fall back to the legacy single organizer_id
   hostIds: data.host_ids ?? (data.organizer_id ? [data.organizer_id] : undefined),
   isOpen: data.is_open ?? undefined,
+  registrationDeadline: data.registration_deadline ?? undefined,
+  minTeams: data.min_teams ?? undefined,
+  maxTeams: data.max_teams ?? undefined,
   sports: (data.sports ?? []) as SportId[],
   startDate: data.start_date,
   endDate: data.end_date,
@@ -193,12 +193,25 @@ const toTournament = (data: any): Tournament => ({
   reminderLeadMinutes: data.reminder_lead_minutes ?? undefined,
 });
 
-const TOURNAMENT_SELECT = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
+// The registration columns (registration_deadline / min_teams / max_teams) need
+// migration 0014. Keep a base column set so every tournament read still works
+// before it's applied, and a full set that includes them.
+const TOURNAMENT_COLS_BASE = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
+const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams`;
+
+/** Run a tournaments query with the full column set; if the registration columns
+ *  aren't in the live DB yet, transparently retry with the base set. */
+async function withTournamentCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  const full = await build(TOURNAMENT_SELECT);
+  if (!full.error) return full;
+  return build(TOURNAMENT_COLS_BASE);
+}
 
 /** Every tournament, newest first. */
 export async function getTournaments(): Promise<Tournament[]> {
   if (!isSupabaseConfigured || !supabase) return demo.tournaments;
-  const { data, error } = await supabase.from('tournaments').select(TOURNAMENT_SELECT).order('start_date', { ascending: false });
+  const { data, error } = await withTournamentCols<any[]>((cols) =>
+    supabase!.from('tournaments').select(cols).order('start_date', { ascending: false }));
   if (error || !data) return [];
   return data.map(toTournament);
 }
@@ -212,9 +225,9 @@ export async function getMyTournaments(profileId?: string, followedIds: string[]
   // the signed-in player first.
   const myPlayerId = await getMyPlayerId(profileId);
   const { data } = myPlayerId
-    ? await supabase.from('tournaments').select(TOURNAMENT_SELECT).contains('host_ids', [myPlayerId])
+    ? await withTournamentCols<any[]>((cols) => supabase!.from('tournaments').select(cols).contains('host_ids', [myPlayerId]))
     : { data: [] as unknown[] };
-  const mine = (data ?? []).map(toTournament);
+  const mine = ((data as any[]) ?? []).map(toTournament);
   const ids = new Set([...mine.map((t) => t.id), ...followedIds]);
   const scoped = all.filter((t) => ids.has(t.id));
   return scoped.length ? scoped : all;
@@ -1727,6 +1740,10 @@ export interface NewTournament {
   hostOrgId?: string;
   /** open for registration (discoverable) */
   isOpen?: boolean;
+  /** registration deadline (ISO) + field-size bounds */
+  registrationDeadline?: string;
+  minTeams?: number;
+  maxTeams?: number;
   sports: SportId[];
   startDate: string;
   endDate: string;
@@ -1770,8 +1787,13 @@ export async function createTournament(input: NewTournament): Promise<Tournament
       host_ids: [...new Set([...(input.hostOrgId ? [] : myPlayerId ? [myPlayerId] : []), ...(input.coHostIds ?? [])])],
       is_open: input.isOpen ?? false,
       reminder_lead_minutes: input.reminderLeadMinutes ?? null,
+      // Registration columns need migration 0014 — include only when actually set,
+      // so creating a tournament still works before the migration is applied.
+      ...(input.registrationDeadline != null ? { registration_deadline: input.registrationDeadline } : {}),
+      ...(input.minTeams != null ? { min_teams: input.minTeams } : {}),
+      ...(input.maxTeams != null ? { max_teams: input.maxTeams } : {}),
     })
-    .select(TOURNAMENT_SELECT)
+    .select(TOURNAMENT_COLS_BASE) // reg columns (0014) aren't set at creation
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create tournament');
   const tournament = toTournament(data);
@@ -1794,6 +1816,9 @@ export interface TournamentPatch {
   knockoutFormat?: Tournament['knockoutFormat'];
   formats?: Tournament['formats'];
   isOpen?: boolean;
+  registrationDeadline?: string | null;
+  minTeams?: number | null;
+  maxTeams?: number | null;
 }
 
 /** Update a tournament in place (RLS: only its organizer/hosts). Only the fields
@@ -1813,7 +1838,19 @@ export async function updateTournament(id: string, patch: TournamentPatch): Prom
   if (patch.knockoutFormat !== undefined) row.knockout_format = patch.knockoutFormat ?? null;
   if (patch.formats !== undefined) row.formats = patch.formats ?? {};
   if (patch.isOpen !== undefined) row.is_open = patch.isOpen;
-  if (Object.keys(row).length) await supabase.from('tournaments').update(row).eq('id', id);
+  // Registration columns need migration 0014; keep the rest of the save working
+  // before it's applied by retrying without them if they aren't there yet.
+  const regRow: Record<string, unknown> = {};
+  if (patch.registrationDeadline !== undefined) regRow.registration_deadline = patch.registrationDeadline;
+  if (patch.minTeams !== undefined) regRow.min_teams = patch.minTeams;
+  if (patch.maxTeams !== undefined) regRow.max_teams = patch.maxTeams;
+  const full = { ...row, ...regRow };
+  if (Object.keys(full).length) {
+    const { error } = await supabase.from('tournaments').update(full).eq('id', id);
+    if (error && Object.keys(regRow).length && Object.keys(row).length) {
+      await supabase.from('tournaments').update(row).eq('id', id); // pre-0014 fallback
+    }
+  }
 }
 
 /* ------------------------------ Organizations ------------------------------ */
@@ -2150,6 +2187,14 @@ export async function setTournamentTeamCategory(tournamentId: string, teamId: st
 /** A captain self-registers one of their teams — creates a 'pending' entry the
  *  organizer approves. Idempotent; a team already in stays as it is. */
 export async function requestJoinTournament(tournamentId: string, teamId: string): Promise<void> {
+  // Gate self-registration on the organizer's controls (open / deadline / cap).
+  // Organizer-added teams (addTournamentTeams) bypass this — they can override.
+  const [tours, entries] = await Promise.all([getTournaments(), getTournamentEntries(tournamentId)]);
+  const tour = tours.find((t) => t.id === tournamentId);
+  if (tour) {
+    const reason = joinBlockReason(tour, entries, Date.now());
+    if (reason) throw new Error(reason);
+  }
   await addTournamentTeams(tournamentId, [teamId], 'pending');
 }
 

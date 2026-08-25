@@ -288,7 +288,7 @@ export interface Team {
  *  'confirmed' = in (only these count toward format/fixtures); 'invited' = the
  *  organizer invited the team, awaiting the captain's acceptance; 'pending' =
  *  the captain requested to join, awaiting organizer approval. See migration 0007. */
-export type TournamentEntryStatus = 'confirmed' | 'invited' | 'pending';
+export type TournamentEntryStatus = 'confirmed' | 'invited' | 'pending' | 'withdrawn';
 export interface TournamentEntry {
   team: Team;
   status: TournamentEntryStatus;
@@ -396,6 +396,12 @@ export interface Tournament {
   hostIds?: UUID[];
   /** open for registration — listed in Discover so teams can request to join */
   isOpen?: boolean;
+  /** registration closes at this instant — after it, new requests are blocked */
+  registrationDeadline?: string;
+  /** minimum teams for a viable field (organizer heads-up when below it) */
+  minTeams?: number;
+  /** capacity — once this many teams are entered, registration is full */
+  maxTeams?: number;
   sports: SportId[];
   startDate: string;
   endDate: string;
