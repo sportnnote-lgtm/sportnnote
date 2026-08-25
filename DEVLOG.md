@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Persistent tournament structure config (gap #5)
+
+**Why:** the real structure (group count, how many advance, single/double
+round-robin, Super phase) lived only in the transient auto-generate tool. The
+tournament stored just a coarse `structure` label (league / knockout /
+league_knockout) that could silently diverge from the fixtures — and the profile
+dumped raw format values ("Football custom/none/rolling/20/3/0/5/0").
+
+**Shipped (zero migration — config on `formats[sport]`):**
+- `data/structureConfig.ts` — pure: `StructureConfig` (shape + groupCount +
+  advanceTopN + advanceBest + doubleRound + superPhase), read/write helpers,
+  `structureFieldFor`/`shapeForStructure` (keep the coarse label in step), and
+  `describeStructure` → a plain-English one-liner. 10 unit tests.
+- **GenerateFixtures**: pre-fills its form from the saved config (once per sport),
+  and on generate **persists** the config back to the tournament + updates the
+  coarse `structure` (never downgrading it in a multi-sport meet). So the tool
+  remembers the shape and the tournament reflects reality.
+- **StructureEditor** on Edit Tournament — group count, advance N, best-placed,
+  double round-robin, Super phase, with a live summary. Its shape follows the
+  tournament's Structure picker (no duplicate control); writes `structShape` in
+  step so the saved config stays complete.
+- **TournamentProfile**: replaced the raw format-value dump with the clean
+  per-sport structure description (falls back to the coarse label when unset).
+
+**Verified live:** edited Inter-School to "top 2 + 2 best-placed", saved → profile
+shows *"4 groups (round-robin) → top 2 + the 2 best 3rd-placed advance to the
+knockout"*; reopening the generator pre-filled Group stage / 4 groups / single
+round-robin. `tsc` clean; **244 tests pass**.
+
+---
+
 ### 2026-08-25 — League tie-breakers: configurable points, head-to-head, NRR (gap #4)
 
 **Why:** the audit flagged the standings as too blunt — win was hardcoded to 2

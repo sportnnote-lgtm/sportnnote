@@ -2,7 +2,7 @@
  *  match" flow. The organizer picks teams + a structure, we generate the pairings
  *  (round-robin or knockout round 1), they review/adjust times, then we create
  *  every match at once. Manual scheduling is untouched; this is an extra path. */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -14,7 +14,8 @@ import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivisions } from '../data/hooks';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { createMatch, getMyPlayerId } from '../data/repos';
+import { createMatch, getMyPlayerId, updateTournament } from '../data/repos';
+import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat } from '../data/standings';
@@ -93,6 +94,23 @@ export default function GenerateFixturesScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
+
+  // Pre-fill the form from the tournament's saved structure config (set last time
+  // fixtures were generated, or in the structure editor) — once per sport, so the
+  // organizer's live edits are never clobbered by a background refetch.
+  const hydratedFor = useRef<string | null>(null);
+  const savedStruct = structureFromFormat(tournament?.formats?.[sport]);
+  useEffect(() => {
+    if (!savedStruct || hydratedFor.current === sport) return;
+    hydratedFor.current = sport;
+    setStructure(savedStruct.shape);
+    setNumGroups(String(savedStruct.groupCount));
+    setTopK(String(savedStruct.advanceTopN));
+    setBestPlaced(String(savedStruct.advanceBest));
+    setDoubleRound(savedStruct.doubleRound);
+    setAdvanceTo(savedStruct.superPhase ? 'super' : 'knockout');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedStruct, sport]);
 
   // Default the team picker to the registered participants of the active division
   // — the organizer sets "who's in" once, then generates without re-picking.
@@ -244,6 +262,23 @@ export default function GenerateFixturesScreen() {
           venueName: venue.trim() || undefined,
           hostIds: myId ? [myId] : [],
           format,
+        });
+      }
+      // Persist the intended structure so the generator remembers it and the
+      // tournament page shows the real shape. 'advance' acts on an already-defined
+      // structure, so it doesn't redefine it.
+      if (structure !== 'advance' && params.tournamentId) {
+        const cfg: StructureConfig = {
+          shape: structure === 'groups' ? 'groups' : structure === 'knockout' ? 'knockout' : 'league',
+          groupCount, advanceTopN: Math.max(1, parseInt(topK, 10) || 1), advanceBest: Math.max(0, parseInt(bestPlaced, 10) || 0),
+          doubleRound, superPhase: advanceTo === 'super',
+        };
+        const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
+        const field = structureFieldFor(cfg.shape);
+        await updateTournament(params.tournamentId, {
+          formats: { ...(tournament?.formats ?? {}), [sport]: mergeStructure(tournament?.formats?.[sport], cfg) },
+          // Keep the coarse label representative in a multi-sport meet (never downgrade).
+          structure: rank(field) >= rank(tournament?.structure) ? field : tournament?.structure,
         });
       }
       nav.goBack();

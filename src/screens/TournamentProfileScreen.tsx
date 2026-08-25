@@ -26,6 +26,7 @@ import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
+import { structureFromFormat, describeStructure } from '../data/structureConfig';
 import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -257,13 +258,17 @@ export default function TournamentProfileScreen() {
           />
         )}
         {tournament.structure && (
-          <Text style={textStyles.muted}>
-            Format: {tournament.structure.replace('_', ' + ')}
+          <View style={{ gap: theme.spacing(1) }}>
             {sports.map((s) => {
-              const f = tournament.formats?.[s];
-              return f ? ` · ${getSport(s).name} ${Object.values(f).join('/')}` : '';
-            }).join('')}
-          </Text>
+              const cfg = structureFromFormat(tournament.formats?.[s]);
+              return (
+                <Text key={s} style={textStyles.muted}>
+                  {sports.length > 1 ? `${getSport(s).icon} ${getSport(s).name}: ` : 'Format: '}
+                  {cfg ? describeStructure(cfg) : tournament.structure!.replace('_', ' + ')}
+                </Text>
+              );
+            })}
+          </View>
         )}
 
         {hostOrg ? (
