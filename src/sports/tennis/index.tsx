@@ -295,7 +295,7 @@ export const tennisPlugin: SportPlugin<TennisState> = {
       ],
     },
     {
-      key: 'noAd', label: 'At deuce', type: 'choice', default: false, advanced: true,
+      key: 'noAd', label: 'At deuce', type: 'choice', default: false,
       options: [
         { value: false, label: 'Advantage (classic)' },
         { value: true, label: 'No-ad (deciding point)' },

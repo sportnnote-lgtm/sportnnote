@@ -11,9 +11,18 @@ import type { SportId } from '../core/types';
 
 export type FormatVal = number | string | boolean;
 
-/** Default values for a field set, e.g. to seed a fresh format map. */
-export const defaultsFor = (fields: FormatField[]): Record<string, FormatVal> =>
-  Object.fromEntries(fields.map((f) => [f.key, f.default]));
+/** Default values for a field set, e.g. to seed a fresh format map. Applies the
+ *  DEFAULT preset's `set{}` on top of the per-field defaults, so a fresh format
+ *  actually matches the preset shown as selected (otherwise a sport whose preset
+ *  default names non-default siblings — e.g. padel "Premier" ⇒ golden point —
+ *  would silently seed the wrong rules). */
+export const defaultsFor = (fields: FormatField[]): Record<string, FormatVal> => {
+  const out: Record<string, FormatVal> = Object.fromEntries(fields.map((f) => [f.key, f.default]));
+  const preset = fields.find((f) => f.type === 'preset');
+  const chosen = preset?.options?.find((o) => o.value === preset.default);
+  if (chosen?.set) Object.assign(out, chosen.set);
+  return out;
+};
 
 export function FormatFieldEditor({ field, value, onChange }: { field: FormatField; value: FormatVal; onChange: (v: FormatVal) => void }) {
   if (field.type === 'choice' || field.type === 'preset') {

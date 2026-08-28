@@ -632,14 +632,14 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     },
     { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 5, min: 1, max: 11, hint: '5 standard · 3 for 3×3' },
     {
-      key: 'regPeriods', label: 'Period structure', type: 'choice', default: 4, advanced: true,
+      key: 'regPeriods', label: 'Period structure', type: 'choice', default: 4,
       options: [
         { value: 4, label: '4 quarters' },
         { value: 2, label: '2 halves' },
         { value: 1, label: 'Single period (3×3)' },
       ],
     },
-    { key: 'periodMinutes', label: 'Minutes per period', type: 'number', default: 10, min: 1, max: 24, advanced: true },
+    { key: 'periodMinutes', label: 'Minutes per period', type: 'number', default: 10, min: 1, max: 24 },
     { key: 'targetPoints', label: 'First-to-N points', type: 'number', default: 0, min: 0, max: 50, advanced: true, hint: '0 = timed game · 21 for 3×3/streetball' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
     { key: 'foulsToFoulOut', label: 'Fouls to foul out', type: 'number', default: 5, min: 0, max: 10, advanced: true, hint: '0 = no foul-out (3×3)' },

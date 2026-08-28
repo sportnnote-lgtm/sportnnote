@@ -229,17 +229,17 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
     { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 6, min: 1, max: 11, hint: '6 indoor · 2 beach' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 6, min: 0, max: 11, advanced: true },
     {
-      key: 'setsToWin', label: 'Match length', type: 'choice', default: 3, advanced: true,
+      key: 'setsToWin', label: 'Match length', type: 'choice', default: 3,
       options: [
         { value: 3, label: 'Best of 5' },
         { value: 2, label: 'Best of 3' },
         { value: 1, label: 'Single set' },
       ],
     },
-    { key: 'pointsPerSet', label: 'Points per set', type: 'number', default: 25, min: 10, max: 30, advanced: true },
-    { key: 'deciderPoints', label: 'Deciding-set points', type: 'number', default: 15, min: 10, max: 25, advanced: true, hint: 'the final set is a shorter race' },
+    { key: 'pointsPerSet', label: 'Points per set', type: 'number', default: 25, min: 10, max: 30 },
+    { key: 'deciderPoints', label: 'Deciding-set points', type: 'number', default: 15, min: 10, max: 25, hint: 'the final set is a shorter race' },
     {
-      key: 'winByTwo', label: 'Set ending', type: 'choice', default: true, advanced: true,
+      key: 'winByTwo', label: 'Set ending', type: 'choice', default: true,
       options: [
         { value: true, label: 'Win by 2 (standard)' },
         { value: false, label: 'First to target (win by 1)' },

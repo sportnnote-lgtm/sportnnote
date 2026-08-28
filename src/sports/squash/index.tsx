@@ -70,7 +70,7 @@ export const squashPlugin = makeRallyPlugin({
       ],
     },
     {
-      key: 'gamesToWin', label: 'Match length', type: 'choice', default: 3, advanced: true,
+      key: 'gamesToWin', label: 'Match length', type: 'choice', default: 3,
       options: [
         { value: 3, label: 'Best of 5' },
         { value: 2, label: 'Best of 3' },

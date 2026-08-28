@@ -670,9 +670,9 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
         { value: 'golden_raid', label: 'Golden Raid straightaway' },
       ],
     },
-    { key: 'proRules', label: 'Pro rules (do-or-die, super tackle, bonus)', type: 'toggle', default: true, advanced: true },
+    { key: 'proRules', label: 'Pro rules (do-or-die, super tackle, bonus)', type: 'toggle', default: true },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
-    { key: 'halfMinutes', label: 'Minutes per half', type: 'number', default: 20, min: 5, max: 30, advanced: true },
+    { key: 'halfMinutes', label: 'Minutes per half', type: 'number', default: 20, min: 5, max: 30 },
     { key: 'extraTimeMinutes', label: 'Extra-time half (min)', type: 'number', default: 5, min: 1, max: 15, advanced: true, hint: 'used only for the “extra time” decider' },
   ],
 };

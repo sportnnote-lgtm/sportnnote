@@ -220,7 +220,7 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
       ],
     },
     {
-      key: 'gamesToWin', label: 'Match length', type: 'choice', default: 2, advanced: true,
+      key: 'gamesToWin', label: 'Match length', type: 'choice', default: 2,
       options: [
         { value: 2, label: 'Best of 3' },
         { value: 3, label: 'Best of 5' },

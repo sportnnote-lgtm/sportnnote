@@ -13,6 +13,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Sport-settings audit (10 expert agents) + Tier 1 fixes
+
+Ran 10 parallel sport-expert agents (one per sport) auditing every sport's
+settings for three gap classes: hidden-but-important, exists-but-not-wired, and
+genuinely-missing (with downstream linkages). Two cross-cutting root causes fixed
+in Tier 1:
+
+- **Visibility** — game-defining settings were flagged `advanced:true` (hidden
+  behind "⚙ Customize") across every sport. Surfaced the ones the experts flagged:
+  football `halfMinutes`/`substitutes`/`subType`; basketball `regPeriods`/
+  `periodMinutes`; cricket `overs`/`impactPlayer`; kabaddi `proRules`/`halfMinutes`;
+  volleyball `setsToWin`/`pointsPerSet`/`deciderPoints`/`winByTwo`; badminton
+  `gamesToWin`; tennis `noAd`; padel `deuce` (golden point); squash `gamesToWin`;
+  pickleball `scoring`. (Directly resolves the two user-flagged gaps — football
+  half length and cricket Impact Player, which was already fully wired, just
+  hidden + off-by-default.)
+- **Preset-seeding bug** — `defaultsFor` seeded each field's own default and
+  ignored the selected preset's `set{}`, so e.g. a padel match labeled "Premier
+  (golden point)" silently seeded *advantage*. Now applies the default preset's
+  `set{}` on seed; deduped the 3 screen-local copies onto the one exported fn.
+
+Tier 2 (bugs) and Tier 3 (missing settings + scoring wiring) follow. `tsc` clean;
+268 tests pass.
+
+---
+
 ### 2026-08-25 — Per-sport settings pages (fix sport-specific bifurcation)
 
 **Why:** tournament settings weren't cleanly split by sport — the football

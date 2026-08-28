@@ -44,7 +44,7 @@ export const pickleballPlugin = makeRallyPlugin({
       ],
     },
     {
-      key: 'scoring', label: 'Scoring', type: 'choice', default: 'rally', advanced: true,
+      key: 'scoring', label: 'Scoring', type: 'choice', default: 'rally',
       hint: 'how points are won',
       options: [
         { value: 'rally', label: 'Rally (recreational)' },

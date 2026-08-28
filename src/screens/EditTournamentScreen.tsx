@@ -13,6 +13,7 @@ import { DateField, DateTimeField } from '../components/DateTimeField';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
+import { defaultsFor } from '../components/FormatEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { updateTournament } from '../data/repos';
 import { useTournamentById } from '../data/hooks';
@@ -24,7 +25,6 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FormatVal = number | string | boolean;
 type FormatMap = Partial<Record<SportId, Record<string, FormatVal>>>;
 
-const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 const isValidISODate = (s: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const d = new Date(`${s}T00:00:00`);

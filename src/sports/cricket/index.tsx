@@ -1190,7 +1190,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
         { value: 'shared', label: 'Tie stands / shared' },
       ],
     },
-    { key: 'overs', label: 'Overs per innings', type: 'number', default: 20, min: 1, max: 999, advanced: true },
+    { key: 'overs', label: 'Overs per innings', type: 'number', default: 20, min: 1, max: 999 },
     {
       key: 'ballsPerOver', label: 'Balls per over', type: 'choice', default: 6, advanced: true,
       options: [
@@ -1201,7 +1201,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     { key: 'powerplayOvers', label: 'Powerplay overs', type: 'number', default: 0, min: 0, max: 10, advanced: true, hint: '0 = none' },
     { key: 'dls', label: 'DLS (rain-revised targets)', type: 'toggle', default: false, advanced: true, hint: 'reduce overs on a rain break; the chase target auto-revises' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 0, min: 0, max: 5, advanced: true, hint: '12th man, etc.' },
-    { key: 'impactPlayer', label: 'Impact Player (IPL-style)', type: 'toggle', default: false, advanced: true, hint: 'one named sub can come in to bat or bowl mid-match' },
+    { key: 'impactPlayer', label: 'Impact Player (IPL-style)', type: 'toggle', default: false, hint: 'one named sub can come in to bat or bowl mid-match' },
   ],
 };
 

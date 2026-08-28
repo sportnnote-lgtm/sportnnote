@@ -13,6 +13,7 @@ import { DateField } from '../components/DateTimeField';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SportSettingsButtons, coarseStructureFrom } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
+import { defaultsFor } from '../components/FormatEditor';
 import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
 import { DivisionsEditor } from '../components/DivisionsEditor';
 import type { NewTournamentCategory } from '../core/types';
@@ -30,8 +31,6 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FormatVal = number | string | boolean;
 type FormatMap = Partial<Record<SportId, Record<string, FormatVal>>>;
 
-const defaultsFor = (fields: FormatField[]) =>
-  Object.fromEntries(fields.map((f) => [f.key, f.default]));
 
 // Dates are plain YYYY-MM-DD strings; these keep defaults future-relative and
 // validate what the organizer types (order + real calendar dates).

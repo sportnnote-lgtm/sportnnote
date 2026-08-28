@@ -1276,10 +1276,10 @@ export const footballPlugin: SportPlugin<FootballState> = {
       ],
     },
     { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 11, min: 1, max: 11, advanced: true },
-    { key: 'halfMinutes', label: 'Minutes per half', type: 'number', default: 45, min: 1, max: 60, advanced: true },
-    { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
+    { key: 'halfMinutes', label: 'Minutes per half', type: 'number', default: 45, min: 1, max: 60 },
+    { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11 },
     {
-      key: 'subType', label: 'Substitutions', type: 'choice', default: 'rolling', advanced: true,
+      key: 'subType', label: 'Substitutions', type: 'choice', default: 'rolling',
       options: [
         { value: 'rolling', label: 'Rolling (can return)' },
         { value: 'fixed', label: 'Fixed (no return)' },

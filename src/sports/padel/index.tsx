@@ -221,7 +221,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
       ],
     },
     {
-      key: 'deuce', label: 'At deuce', type: 'choice', default: 'advantage', advanced: true,
+      key: 'deuce', label: 'At deuce', type: 'choice', default: 'advantage',
       hint: 'how 40-40 is decided',
       options: [
         { value: 'advantage', label: 'Advantage (classic)' },

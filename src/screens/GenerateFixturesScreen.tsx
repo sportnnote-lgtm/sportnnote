@@ -16,6 +16,7 @@ import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivi
 import { DivisionTabs } from '../components/DivisionTabs';
 import { createMatch, getMyPlayerId, updateTournament } from '../data/repos';
 import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
+import { defaultsFor } from '../components/FormatEditor';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat } from '../data/standings';
@@ -28,7 +29,6 @@ import type { RootStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Structure = 'league' | 'knockout' | 'groups' | 'advance';
 
-const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 
 interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[] }
 
