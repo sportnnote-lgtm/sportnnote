@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Per-sport settings pages (fix sport-specific bifurcation)
+
+**Why:** tournament settings weren't cleanly split by sport — the football
+knockout decider ("Extra time + Penalties") showed tournament-wide, so a cricket
+(or any non-football) meet saw options that don't apply to it. Structure was one
+tournament-wide picker too, even though a meet may run football as groups→knockout
+and badminton as a straight knockout.
+
+**Shipped:**
+- New **SportSettingsScreen** — one page per sport, showing ONLY that sport's
+  Structure (league/knockout/groups), its format (cricket: overs/players/
+  powerplay; football: halves/players/subs), the football-only tie-decider (extra
+  time / penalties — cricket carries its own `tieBreak` in its format), and its
+  points & tie-breakers. Reached from Create/Edit via one "⚙️ {sport} settings ›"
+  button per chosen sport (`SportSettingsButtons`).
+- A small **`tournamentDraft`** store carries the per-sport format map between the
+  form and the per-sport pages (no callback-through-params).
+- Removed the tournament-wide **Structure** picker and **"Format for knockouts"**
+  section from Create/Edit. The coarse `tournament.structure` is now *derived*
+  from the per-sport shapes on save; the football decider lives in
+  `formats.football`. Old tournaments are migrated on open (`migrateFormatsForSettings`).
+- **Regression guard:** football derives `knockout` from `decider !== 'none'`, so
+  the decider must reach only knockout-stage football — `GenerateFixtures` strips
+  it from league/group/super football (draws stand) and keeps it for knockouts
+  (falling back to a pre-per-sport tournament's old `knockoutFormat`).
+
+**Verified:** `tsc` clean; **268 tests pass**; bundle compiles, app loads with no
+console errors. Live click-through pending a signed-in session (can't sign in).
+Not yet rebuilt into an APK.
+
+---
+
 ### 2026-08-25 — Multi-sport medal tournaments (Olympics / sports-day)
 
 **Why:** organizers want an inter-school / Olympics-style meet — the same set of

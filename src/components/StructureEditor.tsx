@@ -1,10 +1,9 @@
-/** The details of a sport's competition structure — how many groups, how many
- *  advance, single/double round-robin, and whether a Super phase precedes the
- *  knockout. The overall shape (league / knockout / groups→knockout) comes from
- *  the tournament's Structure picker; this fills in the specifics and persists
- *  them on the sport's format, so the auto-generate tool and the tournament page
- *  read one source of truth. Renders only what the shape needs. */
-import React, { useEffect } from 'react';
+/** A sport's competition structure, on its own — the shape (league / knockout /
+ *  groups→knockout) and its specifics (group count, how many advance, single or
+ *  double round-robin, a Super phase). Per sport, so a meet can run football as
+ *  groups→knockout and badminton as a straight knockout. Persists on the sport's
+ *  format; the tournament's coarse `structure` label is derived from these. */
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
@@ -13,34 +12,30 @@ import { structureFromFormat, describeStructure, type StructureShape } from '../
 type Val = number | string | boolean;
 const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false };
 
-export function StructureEditor({ shape, value, onChange }: {
-  shape: StructureShape;
+export function StructureEditor({ value, onChange }: {
   value: Record<string, Val>;
   onChange: (key: string, val: Val) => void;
 }) {
-  // Keep the persisted shape in step with the tournament's Structure picker, so
-  // the saved config is always complete (drives the tournament-page summary).
-  useEffect(() => {
-    if (value.structShape !== shape) onChange('structShape', shape);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shape]);
-
-  const cfg = structureFromFormat({ ...value, structShape: shape }) ?? { shape, ...DEFAULT };
+  const cfg = structureFromFormat(value) ?? { shape: 'league' as StructureShape, ...DEFAULT };
+  const shape = cfg.shape;
   const isGroups = shape === 'groups';
-
-  // A straight knockout has nothing extra to configure here.
-  if (shape === 'knockout') {
-    return <Text style={textStyles.muted}>{describeStructure(cfg)}.</Text>;
-  }
 
   return (
     <View style={st.wrap}>
-      <FieldLabel>{isGroups ? 'Group stage' : 'League details'}</FieldLabel>
-      <SelectChip
-        label={cfg.doubleRound ? '✓ Home & away (double round-robin)' : 'Home & away (double round-robin)'}
-        active={cfg.doubleRound}
-        onPress={() => onChange('structDouble', !cfg.doubleRound)}
-      />
+      <FieldLabel>Structure</FieldLabel>
+      <View style={st.chips}>
+        <SelectChip label="🔁 League" active={shape === 'league'} onPress={() => onChange('structShape', 'league')} />
+        <SelectChip label="🏆 Knockout" active={shape === 'knockout'} onPress={() => onChange('structShape', 'knockout')} />
+        <SelectChip label="👥 Groups → knockout" active={isGroups} onPress={() => onChange('structShape', 'groups')} />
+      </View>
+
+      {shape !== 'knockout' && (
+        <SelectChip
+          label={cfg.doubleRound ? '✓ Home & away (double round-robin)' : 'Home & away (double round-robin)'}
+          active={cfg.doubleRound}
+          onPress={() => onChange('structDouble', !cfg.doubleRound)}
+        />
+      )}
 
       {isGroups && (
         <View style={st.block}>
@@ -82,6 +77,7 @@ function Stepper({ value, min, max, onChange }: { value: number; min: number; ma
 
 const st = StyleSheet.create({
   wrap: { gap: theme.spacing(2) },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   block: { gap: theme.spacing(2), paddingLeft: theme.spacing(2), borderLeftWidth: 2, borderLeftColor: theme.colors.border },
   line: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '600', minWidth: 120 },

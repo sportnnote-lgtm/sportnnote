@@ -1,36 +1,28 @@
 /** Edit an existing tournament: name, dates, sports (add/remove), structure,
  *  knockout format, and per-sport formats. Host/co-hosts, divisions and reminders
  *  are managed on the tournament page; those aren't repeated here. */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
 import { DateField, DateTimeField } from '../components/DateTimeField';
-import { SportFormatEditor } from '../components/FormatEditor';
-import { PointsEditor } from '../components/PointsEditor';
-import { StructureEditor } from '../components/StructureEditor';
-import { shapeForStructure } from '../data/structureConfig';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
+import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } from '../components/SportSettingsButtons';
+import { tournamentDraft } from '../data/tournamentDraft';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { updateTournament } from '../data/repos';
 import { useTournamentById } from '../data/hooks';
-import type { SportId, TournamentStructure, TournamentScoring } from '../core/types';
+import type { SportId, TournamentScoring } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FormatVal = number | string | boolean;
 type FormatMap = Partial<Record<SportId, Record<string, FormatVal>>>;
-
-const STRUCTURES: { value: TournamentStructure; label: string; hint: string }[] = [
-  { value: 'league', label: 'League', hint: 'everyone plays everyone' },
-  { value: 'knockout', label: 'Knockout', hint: 'single elimination (byes for odd counts)' },
-  { value: 'league_knockout', label: 'League + Knockout', hint: 'group stage then knockouts' },
-];
 
 const defaultsFor = (fields: FormatField[]) => Object.fromEntries(fields.map((f) => [f.key, f.default]));
 const isValidISODate = (s: string) => {
@@ -50,10 +42,6 @@ export default function EditTournamentScreen() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [sports, setSports] = useState<SportId[]>([]);
-  const [structure, setStructure] = useState<TournamentStructure>('league_knockout');
-  const [koDecider, setKoDecider] = useState<'extra_time' | 'penalties'>('extra_time');
-  const [etMinutes, setEtMinutes] = useState(15);
-  const [etSubs, setEtSubs] = useState(1);
   const [formats, setFormats] = useState<FormatMap>({});
   const [isOpen, setIsOpen] = useState(false);
   const [regDeadline, setRegDeadline] = useState<Date | null>(null);
@@ -62,20 +50,19 @@ export default function EditTournamentScreen() {
   const [scoring, setScoring] = useState<TournamentScoring | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const hasKnockout = structure !== 'league';
 
   // Seed the form from the tournament once it loads (then leave edits alone).
+  // Per-sport settings live on their own screens via the shared draft, seeded here
+  // with the old tournament-wide structure/decider folded into each sport.
   useEffect(() => {
     if (!tournament || loaded) return;
     setName(tournament.name);
     setStart(tournament.startDate);
     setEnd(tournament.endDate);
     setSports(tournament.sports);
-    setStructure(tournament.structure ?? 'league_knockout');
-    setKoDecider(tournament.knockoutFormat?.decider ?? 'extra_time');
-    setEtMinutes(tournament.knockoutFormat?.extraTimeMinutes ?? 15);
-    setEtSubs(tournament.knockoutFormat?.extraTimeSubs ?? 1);
-    setFormats((tournament.formats ?? {}) as FormatMap);
+    const migrated = migrateFormatsForSettings(tournament);
+    setFormats(migrated as FormatMap);
+    tournamentDraft.seed(migrated);
     setIsOpen(!!tournament.isOpen);
     setRegDeadline(tournament.registrationDeadline ? new Date(tournament.registrationDeadline) : null);
     setMinTeams(tournament.minTeams ?? 0);
@@ -86,15 +73,18 @@ export default function EditTournamentScreen() {
 
   useEffect(() => { nav.setOptions({ title: 'Edit Tournament' }); }, [nav]);
 
+  // Returning from a sport's settings page — pull the edited formats back in.
+  useFocusEffect(useCallback(() => { if (loaded) setFormats(tournamentDraft.all() as FormatMap); }, [loaded]));
+
   const toggleSport = (s: SportId) =>
     setSports((prev) => {
       if (prev.includes(s)) return prev.filter((x) => x !== s);
       const fields = getSport(s).formatFields ?? [];
-      if (fields.length) setFormats((f) => ({ ...f, [s]: f[s] ?? defaultsFor(fields) }));
+      const seeded = fields.length ? defaultsFor(fields) : {};
+      setFormats((f) => (f[s] ? f : { ...f, [s]: seeded }));
+      if (!tournamentDraft.get(s) || Object.keys(tournamentDraft.get(s)).length === 0) tournamentDraft.setFormat(s, seeded);
       return [...prev, s];
     });
-  const setField = (sport: SportId, key: string, value: FormatVal) =>
-    setFormats((f) => ({ ...f, [sport]: { ...(f[sport] ?? {}), [key]: value } }));
 
   async function save() {
     if (!name.trim()) return setError('Give the tournament a name.');
@@ -105,16 +95,16 @@ export default function EditTournamentScreen() {
     if (e < s) return setError('End date can’t be before the start date.');
     setBusy(true); setError(null);
     try {
+      // Per-sport formats are the source of truth now; the coarse structure label
+      // is derived from them (and the football tie-decider lives in formats.football).
+      const finalFormats = { ...tournamentDraft.all() } as FormatMap;
       await updateTournament(params.tournamentId, {
         name: name.trim(),
         sports,
         startDate: s,
         endDate: e,
-        structure,
-        knockoutFormat: hasKnockout
-          ? { decider: koDecider, ...(koDecider === 'extra_time' ? { extraTimeMinutes: etMinutes, extraTimeSubs: etSubs } : {}) }
-          : undefined,
-        formats,
+        structure: coarseStructureFrom(finalFormats, sports),
+        formats: finalFormats,
         isOpen,
         registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : null,
         minTeams: minTeams > 0 ? minTeams : null,
@@ -157,49 +147,9 @@ export default function EditTournamentScreen() {
           <Text style={st.warn}>Removing {removed.map((sp) => getSport(sp).name).join(', ')} hides it here — games already scheduled in it are kept, not deleted.</Text>
         )}
 
-        <FieldLabel>Structure</FieldLabel>
-        <View style={st.chips}>
-          {STRUCTURES.map((x) => (
-            <SelectChip key={x.value} label={x.label} active={structure === x.value} onPress={() => setStructure(x.value)} />
-          ))}
-        </View>
-        <Text style={st.hint}>{STRUCTURES.find((x) => x.value === structure)?.hint}</Text>
-
-        {hasKnockout && (
-          <>
-            <FieldLabel>Format for knockouts</FieldLabel>
-            <View style={st.chips}>
-              <SelectChip label="Extra time + Penalties" active={koDecider === 'extra_time'} onPress={() => setKoDecider('extra_time')} />
-              <SelectChip label="Direct Penalties" active={koDecider === 'penalties'} onPress={() => setKoDecider('penalties')} />
-            </View>
-            {koDecider === 'extra_time' && (
-              <View style={st.fmtCard}>
-                <FieldLabel>Extra-time half length</FieldLabel>
-                <View style={st.chips}>
-                  {[5, 7, 10, 15].map((m) => (
-                    <SelectChip key={m} label={`${m} min`} active={etMinutes === m} onPress={() => setEtMinutes(m)} />
-                  ))}
-                </View>
-                <FieldLabel>Extra-time substitutions</FieldLabel>
-                <View style={st.chips}>
-                  {[0, 1, 2, 3].map((n) => (
-                    <SelectChip key={n} label={String(n)} active={etSubs === n} onPress={() => setEtSubs(n)} />
-                  ))}
-                </View>
-              </View>
-            )}
-          </>
-        )}
-
         {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
-        {sports.map((sp) => (
-          <View key={sp} style={{ gap: theme.spacing(3) }}>
-            <SportFormatEditor sport={sp} heading="format" value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
-            <StructureEditor shape={shapeForStructure(structure)} value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
-            <PointsEditor sport={sp} value={formats[sp] ?? {}} onChange={(k, v) => setField(sp, k, v)} />
-          </View>
-        ))}
+        <SportSettingsButtons sports={sports} />
 
         <FieldLabel>Registration</FieldLabel>
         <View style={st.chips}>

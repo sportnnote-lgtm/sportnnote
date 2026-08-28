@@ -247,19 +247,25 @@ export default function GenerateFixturesScreen() {
     setError(null); setBusy(true);
     try {
       const myId = await getMyPlayerId(profile?.id);
-      let format = tournament?.formats?.[sport] ?? defaultsFor(getSport(sport).formatFields ?? []);
-      // Knockout fixtures inherit the tournament's tie-breaker (football only —
-      // the decider is football's). League/group/super fixtures keep the default
-      // (draws allowed) — only real knockout ties carry a stage that isn't group/super.
-      const kf = tournament?.knockoutFormat;
+      let format: Record<string, unknown> = tournament?.formats?.[sport] ?? defaultsFor(getSport(sport).formatFields ?? []);
+      // The football knockout decider (extra time / penalties) must apply ONLY to
+      // real knockout ties — a football match with a decider is treated as a
+      // knockout (draws can't stand). So league/group/super football strips it,
+      // and knockout football keeps it (falling back to a pre-per-sport
+      // tournament's old tournament-wide knockoutFormat).
       const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super');
-      if (koLike && sport === 'football' && kf) {
-        format = {
-          ...format,
-          decider: kf.decider, // 'extra_time' | 'penalties'
-          ...(kf.extraTimeMinutes != null ? { extraTimeMinutes: kf.extraTimeMinutes } : {}),
-          ...(kf.extraTimeSubs != null ? { extraTimeSubs: kf.extraTimeSubs } : {}),
-        };
+      if (sport === 'football') {
+        if (koLike) {
+          const kf = tournament?.knockoutFormat;
+          if (format.decider == null && kf) {
+            format = { ...format, decider: kf.decider,
+              ...(kf.extraTimeMinutes != null ? { extraTimeMinutes: kf.extraTimeMinutes } : {}),
+              ...(kf.extraTimeSubs != null ? { extraTimeSubs: kf.extraTimeSubs } : {}) };
+          }
+        } else {
+          const { decider, extraTimeMinutes, extraTimeSubs, ...rest } = format;
+          format = rest;
+        }
       }
       for (const d of drafts) {
         await createMatch({
@@ -269,7 +275,7 @@ export default function GenerateFixturesScreen() {
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
           hostIds: myId ? [myId] : [],
-          format,
+          format: format as Record<string, number | string | boolean>,
         });
       }
       // Persist the intended structure so the generator remembers it and the
