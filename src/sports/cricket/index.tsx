@@ -145,9 +145,34 @@ function SetupPanel({
     </View>
     );
   };
+  // Who bats first is the toss's job. Defaults to home batting until a toss is
+  // recorded; settable only before the first ball (the reducer enforces that).
+  const toss = state.toss;
+  const battingFirstName = state.battingSide === 'home' ? homeName : awayName;
+  const setToss = (winner: 'home' | 'away', decision: 'bat' | 'bowl') =>
+    dispatch({ type: 'SET_TOSS', payload: { winner, decision } });
+
   return (
     <View style={ctrl.wktPanel}>
-      <Text style={ctrl.label}>🧢 Match setup</Text>
+      <Text style={ctrl.label}>🪙 Toss</Text>
+      <Text style={ctrl.meta}>Who won the toss, and what did they choose? This sets who bats first.</Text>
+      <View style={ctrl.chips}>
+        <SelectChip label={`${homeName} won`} active={toss?.winner === 'home'} onPress={() => setToss('home', toss?.decision ?? 'bat')} />
+        <SelectChip label={`${awayName} won`} active={toss?.winner === 'away'} onPress={() => setToss('away', toss?.decision ?? 'bat')} />
+      </View>
+      {toss && (
+        <>
+          <View style={ctrl.chips}>
+            <SelectChip label="⏏ Chose to bat" active={toss.decision === 'bat'} onPress={() => setToss(toss.winner, 'bat')} />
+            <SelectChip label="◎ Chose to bowl" active={toss.decision === 'bowl'} onPress={() => setToss(toss.winner, 'bowl')} />
+          </View>
+          <Text style={ctrl.meta}>
+            {(toss.winner === 'home' ? homeName : awayName)} chose to {toss.decision} — {battingFirstName} bat first.
+          </Text>
+        </>
+      )}
+
+      <Text style={[ctrl.label, { marginTop: theme.spacing(3) }]}>🧢 Match setup</Text>
       <Text style={ctrl.meta}>Tap a player to make them captain (c) or wicket-keeper (†). Both are needed per side to begin.</Text>
       {roster0(homeRoster) ? side('home', homeName, homeRoster) : <Text style={ctrl.meta}>No {homeName} squad set.</Text>}
       {roster0(awayRoster) ? side('away', awayName, awayRoster) : <Text style={ctrl.meta}>No {awayName} squad set.</Text>}
@@ -1145,14 +1170,17 @@ export const cricketPlugin: SportPlugin<CricketState> = {
       : s.pendingTie
         ? so ? `🔥 Super Over ${so.round}` : '🔥 Scores level — Super Over?'
         : `Innings ${s.innings}`;
+    const base =
+      s.innings === 2 && s.target !== undefined && !s.ended && !s.pendingTie
+        ? `Target ${s.target}`
+        : `${s.oversLimit} overs · RR ${runRate(s.scores[s.battingSide].runs, s.scores[s.battingSide].balls, s.ballsPerOver)}`;
+    // Carry the toss through onto the card, the way a real scorecard notes it.
+    const tossNote = s.toss ? ` · 🪙 ${(s.toss.winner === 'home' ? 'Home' : 'Away')} chose to ${s.toss.decision}` : '';
     return {
       homeScore: `${s.scores.home.runs}/${s.scores.home.wickets}${soTag('home')}`,
       awayScore: `${s.scores.away.runs}/${s.scores.away.wickets}${soTag('away')}`,
       statusLine: status,
-      detailLine:
-        s.innings === 2 && s.target !== undefined && !s.ended && !s.pendingTie
-          ? `Target ${s.target}`
-          : `${s.oversLimit} overs · RR ${runRate(s.scores[s.battingSide].runs, s.scores[s.battingSide].balls, s.ballsPerOver)}`,
+      detailLine: `${base}${tossNote}`,
     };
   },
   ScoringControls,

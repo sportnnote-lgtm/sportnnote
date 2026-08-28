@@ -164,3 +164,29 @@ describe('cricket — concussion substitute (Tier-1 gap fix)', () => {
     assert.ok(ev && /Sub replaces B/.test(ev.detail ?? ''));
   });
 })
+
+describe('cricket — toss decides who bats first (Tier-3 gap)', () => {
+  test('default (no toss) has home batting first', () => {
+    assert.equal(init({ overs: 5, playersPerSide: 11 }).battingSide, 'home');
+  });
+
+  test('winner electing to bat puts them in first', () => {
+    const s = reducer(init({ overs: 5 }), { type: 'SET_TOSS', payload: { winner: 'away', decision: 'bat' } });
+    assert.equal(s.battingSide, 'away');
+    assert.deepEqual(s.toss, { winner: 'away', decision: 'bat' });
+  });
+
+  test('winner electing to bowl puts the other side in', () => {
+    const s = reducer(init({ overs: 5 }), { type: 'SET_TOSS', payload: { winner: 'away', decision: 'bowl' } });
+    assert.equal(s.battingSide, 'home'); // away bowls ⇒ home bats
+  });
+
+  test('the toss is locked once the first ball is bowled', () => {
+    let s = opened(); // striker/bowler set, still 0 balls
+    s = reducer(s, { type: 'SET_TOSS', payload: { winner: 'away', decision: 'bat' } });
+    assert.equal(s.battingSide, 'away');
+    s = ball(s, 'RUNS', { runs: 1 }); // play starts
+    const after = reducer(s, { type: 'SET_TOSS', payload: { winner: 'home', decision: 'bat' } });
+    assert.equal(after.battingSide, 'away'); // unchanged — toss is locked
+  });
+})

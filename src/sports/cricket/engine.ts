@@ -78,6 +78,9 @@ export interface CricketState {
   /** captain & wicket-keeper per side, assigned before the game starts */
   captains: Partial<Record<'home' | 'away', { id: string; name: string }>>;
   keepers: Partial<Record<'home' | 'away', { id: string; name: string }>>;
+  /** the toss: who won it and what they chose. Drives who bats first (innings 1).
+   *  Settable only before the first delivery; unset = home bats first by default. */
+  toss?: { winner: 'home' | 'away'; decision: 'bat' | 'bowl' };
   /** every dismissal in the match — drives the post-match ratings */
   dismissals: DismissalRecord[];
   /** IPL-style Impact Player is allowed this match (format toggle) */
@@ -617,6 +620,17 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const card: BowlCard = { name, side: other(bat), runs: 0, balls: 0, wickets: 0, dots: 0, extras: 0 };
       const bowling = s.bowling[id] ? s.bowling : { ...s.bowling, [id]: card };
       return { ...s, bowlerId: id, bowlerName: name, bowling };
+    }
+    case 'SET_TOSS': {
+      // The toss decides who bats first — only before ball one (innings 1, no
+      // deliveries yet), so it can be corrected during setup but not mid-match.
+      const played = s.innings > 1 || s.scores.home.balls > 0 || s.scores.away.balls > 0;
+      if (played) return s;
+      const winner = a.payload?.winner as 'home' | 'away';
+      const decision = (a.payload?.decision as 'bat' | 'bowl') ?? 'bat';
+      if (winner !== 'home' && winner !== 'away') return s;
+      const battingSide = decision === 'bat' ? winner : other(winner);
+      return { ...s, toss: { winner, decision }, battingSide };
     }
     case 'SET_CAPTAIN': {
       const side = a.payload?.side as 'home' | 'away';
