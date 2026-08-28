@@ -422,6 +422,20 @@ export interface Tournament {
    *  players in its matches. Overrides each player's own default; absent ⇒ every
    *  player uses their personal reminder settings. */
   reminderLeadMinutes?: number[];
+  /** Medal/position scoring for a multi-sport meet. When `mode` is 'position',
+   *  the overall table sums points earned by each contingent's finishing position
+   *  in every sport (Olympics / inter-school style) instead of match points. */
+  scoring?: TournamentScoring;
+}
+
+export interface TournamentScoring {
+  /** 'match' = overall table sums league points (default); 'position' = medal meet. */
+  mode: 'match' | 'position';
+  /** points for finishing 1st, 2nd, 3rd, … (index 0 = 1st). Position beyond the
+   *  list scores 0. */
+  positionPoints?: number[];
+  /** optional per-sport multiplier on the position points (default 1 each). */
+  sportWeights?: Partial<Record<SportId, number>>;
 }
 
 export interface AppNotification {
@@ -524,6 +538,9 @@ export interface Match {
   awayTeam: Team;
   /** result of a completed match — drives standings */
   winner?: 'home' | 'away' | 'draw';
+  /** decided without being played — a walkover (the absent side forfeits). Counts
+   *  as a normal win/loss in the tables, but is shown as "w/o" not a score. */
+  walkover?: boolean;
   /** format override for a one-off/friendly game (else inherits the tournament) */
   format?: SportFormat;
   /** Who created/owns this match (player ids). Any match host — and any host of

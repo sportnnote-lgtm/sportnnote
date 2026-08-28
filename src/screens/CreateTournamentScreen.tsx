@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SportFormatEditor } from '../components/FormatEditor';
+import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
 import { DivisionsEditor } from '../components/DivisionsEditor';
 import type { NewTournamentCategory } from '../core/types';
@@ -20,7 +21,7 @@ import { createTournament, getMyPlayerId, getPlayer } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
 import { organizableOrgsForPlayer } from '../core/org';
-import type { SportId, TournamentStructure } from '../core/types';
+import type { SportId, TournamentStructure, TournamentScoring } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -78,6 +79,7 @@ export default function CreateTournamentScreen() {
   const [end, setEnd] = useState(() => toISODate(addDays(new Date(), 5)));
   const [sports, setSports] = useState<SportId[]>(initialSport ? [initialSport] : []);
   const [structure, setStructure] = useState<TournamentStructure>('league_knockout');
+  const [scoring, setScoring] = useState<TournamentScoring | undefined>(undefined);
   // Shown only when the structure has knockouts.
   const [koDecider, setKoDecider] = useState<'extra_time' | 'penalties'>('extra_time');
   const [etMinutes, setEtMinutes] = useState(15);
@@ -125,6 +127,7 @@ export default function CreateTournamentScreen() {
         isOpen,
         sports,
         startDate: s, endDate: e, formats, structure,
+        scoring: sports.length > 1 ? scoring : undefined,
         knockoutFormat: hasKnockout
           ? { decider: koDecider, ...(koDecider === 'extra_time' ? { extraTimeMinutes: etMinutes, extraTimeSubs: etSubs } : {}) }
           : undefined,
@@ -217,6 +220,8 @@ export default function CreateTournamentScreen() {
             )}
           </>
         )}
+
+        {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
         {sports.map((sp) => (
           <SportFormatEditor

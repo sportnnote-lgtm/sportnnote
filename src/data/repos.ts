@@ -146,6 +146,7 @@ function toMatch(r: MatchRow): Match {
     // it's always derived from state, so for/against works in standings.
     winner: res?.winner ?? r.winner ?? undefined,
     score: res ? { home: res.home, away: res.away } : undefined,
+    walkover: (r.format as Record<string, unknown> | null)?.__walkover === true,
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
     scorerId: r.scorer_id ?? undefined,
@@ -184,6 +185,7 @@ const toTournament = (data: any): Tournament => ({
   registrationDeadline: data.registration_deadline ?? undefined,
   minTeams: data.min_teams ?? undefined,
   maxTeams: data.max_teams ?? undefined,
+  scoring: data.scoring ?? undefined,
   sports: (data.sports ?? []) as SportId[],
   startDate: data.start_date,
   endDate: data.end_date,
@@ -197,7 +199,7 @@ const toTournament = (data: any): Tournament => ({
 // migration 0014. Keep a base column set so every tournament read still works
 // before it's applied, and a full set that includes them.
 const TOURNAMENT_COLS_BASE = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
-const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams`;
+const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring`;
 
 /** Run a tournaments query with the full column set; if the registration columns
  *  aren't in the live DB yet, transparently retry with the base set. */
@@ -1744,6 +1746,8 @@ export interface NewTournament {
   registrationDeadline?: string;
   minTeams?: number;
   maxTeams?: number;
+  /** medal/position scoring for a multi-sport meet */
+  scoring?: Tournament['scoring'];
   sports: SportId[];
   startDate: string;
   endDate: string;
@@ -1792,6 +1796,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
       ...(input.registrationDeadline != null ? { registration_deadline: input.registrationDeadline } : {}),
       ...(input.minTeams != null ? { min_teams: input.minTeams } : {}),
       ...(input.maxTeams != null ? { max_teams: input.maxTeams } : {}),
+      ...(input.scoring != null ? { scoring: input.scoring } : {}),
     })
     .select(TOURNAMENT_COLS_BASE) // reg columns (0014) aren't set at creation
     .single();
@@ -1819,6 +1824,7 @@ export interface TournamentPatch {
   registrationDeadline?: string | null;
   minTeams?: number | null;
   maxTeams?: number | null;
+  scoring?: Tournament['scoring'] | null;
 }
 
 /** Update a tournament in place (RLS: only its organizer/hosts). Only the fields
@@ -1844,6 +1850,7 @@ export async function updateTournament(id: string, patch: TournamentPatch): Prom
   if (patch.registrationDeadline !== undefined) regRow.registration_deadline = patch.registrationDeadline;
   if (patch.minTeams !== undefined) regRow.min_teams = patch.minTeams;
   if (patch.maxTeams !== undefined) regRow.max_teams = patch.maxTeams;
+  if (patch.scoring !== undefined) regRow.scoring = patch.scoring; // migration 0015
   const full = { ...row, ...regRow };
   if (Object.keys(full).length) {
     const { error } = await supabase.from('tournaments').update(full).eq('id', id);
@@ -2215,6 +2222,76 @@ export async function removeTournamentTeam(tournamentId: string, teamId: string)
     return;
   }
   await supabase.from('tournament_teams').delete().eq('tournament_id', tournamentId).eq('team_id', teamId);
+}
+
+/* ------------------------- Multi-sport contingents ------------------------ */
+
+/** A contingent (team / house / nation) in a multi-sport meet — one identity that
+ *  competes across every sport, with the sports it's in and any it sits out. */
+export interface Contingent { name: string; colorHex?: string; sports: SportId[]; absentSports: SportId[]; }
+
+const contingentShort = (name: string): string => {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.map((w) => w[0]).join('').toUpperCase();
+  return ((initials.length >= 2 ? initials : name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()) || 'TM').slice(0, 4);
+};
+
+/** Add a contingent to a multi-sport meet: entered into every listed sport,
+ *  reusing an existing same-named team per sport or creating one — all sharing
+ *  the name + colour, so the medal table merges them into one row. */
+export async function addContingent(tournamentId: string, name: string, colorHex: string, sports: SportId[]): Promise<void> {
+  const key = name.trim().toLowerCase();
+  for (const sport of sports) {
+    const existing = (await getTeams(sport)).find((t) => t.name.trim().toLowerCase() === key);
+    const teamId = existing?.id ?? (await createTeam({ name: name.trim(), shortName: contingentShort(name), sport, colorHex, adhoc: true })).id;
+    await addTournamentTeams(tournamentId, [teamId], 'confirmed');
+  }
+}
+
+/** Every contingent in a meet, with the sports it plays and the ones it sits out. */
+export async function getContingents(tournamentId: string, sports: SportId[]): Promise<Contingent[]> {
+  const byName = new Map<string, Contingent>();
+  for (const sport of sports) {
+    const entries = await getTournamentEntries(tournamentId, sport);
+    for (const e of entries) {
+      const k = e.team.name.trim().toLowerCase();
+      const c = byName.get(k) ?? { name: e.team.name, colorHex: e.team.colorHex, sports: [], absentSports: [] };
+      if (e.status === 'withdrawn') c.absentSports.push(sport);
+      else c.sports.push(sport);
+      byName.set(k, c);
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Mark a contingent present/absent in a sport (absent ⇒ its team for that sport
+ *  is withdrawn, so opponents can be given walkovers and it ranks last). */
+export async function setContingentParticipation(tournamentId: string, name: string, sport: SportId, present: boolean): Promise<void> {
+  const entry = (await getTournamentEntries(tournamentId, sport)).find((e) => e.team.name.trim().toLowerCase() === name.trim().toLowerCase());
+  if (!entry) return;
+  await setTournamentTeamStatus(tournamentId, entry.team.id, present ? 'confirmed' : 'withdrawn');
+  if (!present) {
+    // A team pulling out of a sport hands any not-yet-played fixture to its
+    // opponent as a walkover (its future draw is handled by being withdrawn).
+    const mine = (await getMatches(sport)).filter(
+      (m) => m.tournamentId === tournamentId && m.status !== 'completed' && m.status !== 'live' &&
+        (m.homeTeam.id === entry.team.id || m.awayTeam.id === entry.team.id),
+    );
+    for (const m of mine) await walkoverMatch(m.id, m.homeTeam.id === entry.team.id ? 'away' : 'home');
+  }
+}
+
+/** Complete a match as a walkover — `winner` takes it without play (the other side
+ *  didn't participate). The flag rides on the match format (zero-migration). */
+export async function walkoverMatch(matchId: string, winner: 'home' | 'away'): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const mm = demo.matches.find((x) => x.id === matchId);
+    if (mm) { mm.status = 'completed'; mm.winner = winner; mm.walkover = true; mm.format = { ...(mm.format ?? {}), __walkover: true }; }
+    return;
+  }
+  const { data } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
+  const format = { ...((data?.format as Record<string, unknown>) ?? {}), __walkover: true };
+  await supabase.from('matches').update({ status: 'completed', winner, format }).eq('id', matchId);
 }
 
 export interface NewMatch {

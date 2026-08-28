@@ -41,7 +41,8 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
   const done = match.status === 'completed';
   const postponed = match.status === 'postponed';
   const cancelled = match.status === 'cancelled';
-  const showScore = (live || done) && !!match.score;
+  const walkover = done && match.walkover;
+  const showScore = (live || done) && !!match.score && !walkover;
 
   return (
     <TouchableOpacity
@@ -83,6 +84,8 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
             <Text style={s.scoreSep}>–</Text>
             <Text style={[s.score, live && s.scoreLive]}>{match.score!.away}</Text>
           </View>
+        ) : walkover ? (
+          <Text style={s.walkover}>W/O</Text>
         ) : (
           <Text style={s.vs}>vs</Text>
         )}
@@ -98,7 +101,7 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
         {live ? (
           <Text style={s.cta}>tap to score ›</Text>
         ) : done ? (
-          'Full time'
+          walkover ? 'Walkover' : 'Full time'
         ) : (
           time
         )}
@@ -164,6 +167,7 @@ const s = StyleSheet.create({
   scoreLive: { color: theme.colors.primary },
   scoreSep: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '700' },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', paddingHorizontal: theme.spacing(2) },
+  walkover: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5, paddingHorizontal: theme.spacing(2) },
 
   foot: { color: theme.colors.textMuted, fontSize: theme.font.small },
   cta: { color: theme.colors.primary, fontWeight: '700' },

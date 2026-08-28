@@ -14,10 +14,11 @@ import { SportFormatEditor } from '../components/FormatEditor';
 import { PointsEditor } from '../components/PointsEditor';
 import { StructureEditor } from '../components/StructureEditor';
 import { shapeForStructure } from '../data/structureConfig';
+import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { updateTournament } from '../data/repos';
 import { useTournamentById } from '../data/hooks';
-import type { SportId, TournamentStructure } from '../core/types';
+import type { SportId, TournamentStructure, TournamentScoring } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -58,6 +59,7 @@ export default function EditTournamentScreen() {
   const [regDeadline, setRegDeadline] = useState<Date | null>(null);
   const [minTeams, setMinTeams] = useState(0); // 0 = unset
   const [maxTeams, setMaxTeams] = useState(0); // 0 = no cap
+  const [scoring, setScoring] = useState<TournamentScoring | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hasKnockout = structure !== 'league';
@@ -78,6 +80,7 @@ export default function EditTournamentScreen() {
     setRegDeadline(tournament.registrationDeadline ? new Date(tournament.registrationDeadline) : null);
     setMinTeams(tournament.minTeams ?? 0);
     setMaxTeams(tournament.maxTeams ?? 0);
+    setScoring(tournament.scoring);
     setLoaded(true);
   }, [tournament, loaded]);
 
@@ -116,6 +119,7 @@ export default function EditTournamentScreen() {
         registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : null,
         minTeams: minTeams > 0 ? minTeams : null,
         maxTeams: maxTeams > 0 ? maxTeams : null,
+        scoring: sports.length > 1 ? scoring ?? null : null,
       });
       nav.goBack();
     } catch (err) {
@@ -186,6 +190,8 @@ export default function EditTournamentScreen() {
             )}
           </>
         )}
+
+        {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
         {sports.map((sp) => (
           <View key={sp} style={{ gap: theme.spacing(3) }}>

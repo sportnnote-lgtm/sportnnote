@@ -22,7 +22,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -122,6 +122,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // is already underway. (Timer sports then expose their clock-start control.)
   const [localStarted, setLocalStarted] = useState(false);
   const [retireOpen, setRetireOpen] = useState(false);
+  const [woOpen, setWoOpen] = useState(false); // walkover: pick the winning side
   const [retiredLocally, setRetiredLocally] = useState<'home' | 'away' | null>(null);
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
@@ -827,6 +828,24 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reschedule or postpone this match" onPress={() => navigation.navigate('EditMatch', { matchId })}>
             <Text style={[st.editLink, { marginTop: theme.spacing(2) }]}>🗓 Reschedule / postpone</Text>
           </TouchableOpacity>
+        )}
+        {/* Walkover — a team didn't turn up / doesn't field this sport, so the
+            other side takes the win without playing. Host-only, pre-match. */}
+        {canManage && matchId && meta.status !== 'live' && meta.status !== 'completed' && (
+          !woOpen ? (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Record a walkover" onPress={() => setWoOpen(true)}>
+              <Text style={[st.editLink, { marginTop: theme.spacing(2) }]}>🏳 Award a walkover</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
+              <Text style={textStyles.muted}>Who takes the walkover win?</Text>
+              <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
+                <Button label={homeName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'home'); navigation.goBack(); }} />
+                <Button label={awayName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'away'); navigation.goBack(); }} />
+              </View>
+              <Text style={st.editLink} onPress={() => setWoOpen(false)}>Cancel</Text>
+            </View>
+          )
         )}
       </View>
     );

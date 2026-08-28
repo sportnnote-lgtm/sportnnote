@@ -27,6 +27,8 @@ import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, stan
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
+import { medalStandings } from '../data/medalStandings';
+import { MedalTable } from '../components/MedalTable';
 import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -153,6 +155,12 @@ export default function TournamentProfileScreen() {
 
   const stCfg = useMemo(() => (activeSport ? standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]) : undefined), [activeSport, tournament]);
   const overall = useMemo(() => overallStandings(matches, sports), [matches, sports]);
+  // A medal meet ranks the overall table by position points, not match points.
+  const isMedal = tournament?.scoring?.mode === 'position';
+  const medal = useMemo(
+    () => (isMedal ? medalStandings(matches, sports, tournament?.scoring, tournament?.formats) : []),
+    [isMedal, matches, sports, tournament?.scoring, tournament?.formats],
+  );
   const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
   // Grouped tournaments show a table per group instead of one flat league table.
   const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
@@ -316,6 +324,9 @@ export default function TournamentProfileScreen() {
               variant="ghost"
               onPress={() => nav.navigate('TournamentTeams', { tournamentId: tournament.id })}
             />
+            {isMedal && (
+              <Button label="🏅 Contingents (all sports)" variant="ghost" onPress={() => nav.navigate('Contingents', { tournamentId: tournament.id })} />
+            )}
             <Button label="📅 Schedule a match" variant="ghost" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
             <Button label="⚡ Auto-generate fixtures" variant="ghost" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
             <Button label="✎ Edit tournament" variant="ghost" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
@@ -410,8 +421,17 @@ export default function TournamentProfileScreen() {
           })()
         )}
 
-        {/* Overall (cross-sport) house table — only when there's >1 sport. */}
-        {!singleSport && overall.length > 0 && (
+        {/* Medal meet — overall ranked by position points across every sport. */}
+        {!singleSport && isMedal && (
+          <>
+            <SectionHeader title="🏅 Medal table" count={medal.length} />
+            <Text style={textStyles.muted}>Position points from every sport, added up.</Text>
+            <MedalTable rows={medal} emptyLabel="No sport has a final table yet." />
+          </>
+        )}
+
+        {/* Overall (cross-sport) house table — match-points sum, when not a medal meet. */}
+        {!singleSport && !isMedal && overall.length > 0 && (
           <>
             <SectionHeader
               title="🏆 Overall standings"

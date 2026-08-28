@@ -13,6 +13,41 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-25 — Multi-sport medal tournaments (Olympics / sports-day)
+
+**Why:** organizers want an inter-school / Olympics-style meet — the same set of
+teams competes across several sports, each sport awards points by finishing
+position, and those sum into one overall ranking (with per-sport top tables too).
+
+**Shipped:**
+- `data/medalStandings.ts` — pure engine: each sport's league table gives a
+  finishing position → configurable position points (optionally weighted per
+  sport), merged by contingent name into one overall medal table (total +
+  🥇/🥈/🥉 + per-sport placement breakdown). Reuses the sport's own tie-breakers.
+  7 unit tests.
+- `Tournament.scoring` config (`mode: 'match' | 'position'`, `positionPoints[]`,
+  `sportWeights`) — migration `20260829120000_medal_scoring.sql` adds one `scoring`
+  jsonb column (graceful pre-migration fallback like the registration columns).
+- **Contingents** — `addContingent` enters a team into *every* sport at once
+  (per-sport rows sharing name/colour); `getContingents` / `setContingentParticipation`.
+  New **ContingentsScreen** (add once → all sports; per-sport in/out toggle).
+- **Walkovers** (zero-migration, `__walkover` on match format): `walkoverMatch`;
+  a host-only "🏳 Award a walkover" control on the match screen; and marking a
+  contingent *out* of a sport auto-walkovers its scheduled fixtures there (the
+  opponents take the win). MatchCard shows "W/O".
+- `MedalScoringEditor` (Create + Edit Tournament, multi-sport only) — mode,
+  ranked-position points table, per-sport weights. TournamentProfile shows the
+  **🏅 Medal table** for a position-scored meet (per-sport tables unchanged).
+  Player stats overall/per-sport are unchanged and keep working via the name-merge.
+
+**Verified:** engine unit-tested end-to-end; `tsc` clean; **268 tests pass**; app
+bundles clean (786 modules). Live UI click-through pending a signed-in session
+(the shared live DB logged out on server restart; I can't sign in). **User runs
+migration 0015.** Follow-up: auto-walkover at fixture-*generation* time for
+teams already marked out before fixtures exist.
+
+---
+
 ### 2026-08-25 — Double-chance playoff (gap #6, part B)
 
 **Why:** the audit wanted double-elimination / the IPL "double-chance" playoff — a
