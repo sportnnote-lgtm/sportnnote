@@ -13,6 +13,45 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-29 — Sport-aware setup + verification backends + settings Tiers 2–3
+
+**Sport-settings Tier 2 (correctness bugs)** — from the 10-agent audit: kabaddi
+bonus counts only with ≥6 defenders on the mat; basketball half-court games
+(3×3/2v2/1v1) score 1s & 2s (no +3 button); football red-carded players leave the
+XI and can't be subbed on; football rolling subs are unlimited (only fixed subs
+cap); squash Club English (to 9) is win-by-1. (+5 tests.)
+
+**Sport-settings Tier 3 (missing settings) — cricket toss.** Who bats first was
+hardcoded to home; added `toss {winner, decision}` + `SET_TOSS` (bat ⇒ winner in,
+bowl ⇒ other side), settable only before ball one, surfaced in match setup and on
+the scorecard. (+4 tests.)
+
+**Sport-aware match setup** (the big one). The app modelled every match as
+team-vs-team, so Tennis Singles asked for two "Teams". Added `participantKind`
+('team' | 'individual' | 'both') to SportPlugin — the 5 racket sports declare
+'both' — and `participantMode(sport, format)` resolving a format to team /
+individual (Singles) / pairs (Doubles). ScheduleMatchScreen now picks structure
+first for racket sports, then shows Player 1/Player 2 (+ a "(me)" quick-pick) for
+Singles or Pair 1/Pair 2 for Doubles — never "Team". All resolve to the existing
+ad-hoc-team plumbing, so no Match-schema change. Verified in demo across Tennis
+(Singles+Doubles) and Football (unchanged). Doubles serve-rotation *scoring* and
+individual tournament draws are the next slices.
+
+**Verification backends made real** (migration 0016 + edge fn `verification-submit`).
+Age/ID: private `verification-docs` bucket + real file upload; Storage RLS
+(own-folder write, owner/support read); players UPDATE policy for support (the
+reviewer write, previously RLS-blocked); Resend email of a signed doc link to
+sportnnote@gmail.com; a "View document" button in the review console. Phone OTP:
+WhatsApp path is code-complete (Meta Cloud API) — only provisioning (token +
+template + 2 secrets) is left, so the fallback copy now says "WhatsApp isn't set
+up on this server yet" instead of "SMS coming soon". Needs: run migration 0016,
+deploy the edge fn, set RESEND/SUPPORT secrets, grant one account the support role.
+
+Preceded by 4 parallel read-only audits (game-creation flow, per-sport participant
+structures, ID verification, phone/WhatsApp). `tsc` clean; 277 tests pass.
+
+---
+
 ### 2026-08-25 — Sport-settings audit (10 expert agents) + Tier 1 fixes
 
 Ran 10 parallel sport-expert agents (one per sport) auditing every sport's
