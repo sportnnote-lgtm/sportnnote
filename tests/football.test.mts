@@ -128,3 +128,22 @@ describe('football — in-play stoppage marker (Tier-1 gap fix)', () => {
     assert.equal(s.events.filter((e) => e.type === 'stoppage').length, 1);
   });
 })
+
+describe('football — substitution caps by type (Tier-2 fix)', () => {
+  const subsMade = (s: FootballState, side: Side) => s.events.filter((e) => e.type === 'sub' && e.side === side).length;
+
+  test('fixed subs stop at maxSubs; further changes are rejected', () => {
+    let s = init({ subType: 'fixed', substitutes: 3 });
+    s = run(s, { type: 'KICKOFF', payload: { at: 1 } });
+    for (let i = 0; i < 5; i++) s = reducer(s, sub('home', 60 + i, `Off${i}`, `On${i}`));
+    assert.equal(s.subsUsed.home, 3); // capped
+    assert.equal(subsMade(s, 'home'), 3); // the 4th and 5th were no-ops
+  });
+
+  test('rolling subs are unlimited — a player can keep coming on', () => {
+    let s = init({ subType: 'rolling', substitutes: 3 });
+    s = run(s, { type: 'KICKOFF', payload: { at: 1 } });
+    for (let i = 0; i < 6; i++) s = reducer(s, sub('home', 20 + i, `Off${i}`, `On${i}`));
+    assert.equal(subsMade(s, 'home'), 6); // all six changes stuck, past the bench size
+  });
+})

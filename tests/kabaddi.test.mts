@@ -52,3 +52,25 @@ describe('kabaddi — 5-raid shootout tie-breaker (Tier-2)', () => {
     assert.equal(decideRaidShootout([1, 1, 1, 1, 1, 2], [1, 1, 1, 1, 1, 0]), 'home'); // sudden-death raid decides
   });
 })
+
+describe('bonus-point eligibility (≥6 defenders on the mat)', () => {
+  const c: KabaddiCfg = { teamSize: 7, style: 'sanjeevani', proRules: true };
+  test('bonus counts when the defence is at full/near strength', () => {
+    // First raid: all 7 defenders on the mat → bonus is valid.
+    const d = replayRaids([raid('home', 0, true, false)], c);
+    assert.equal(d.home, 1);
+  });
+  test('bonus is void once the defence drops below 6', () => {
+    // Home sends 2 away defenders out (7→5 on the mat), then raids for a bonus.
+    // With only 5 defenders, the bonus should NOT count → just the 2 touches earlier.
+    const raids: RaidOutcome[] = [raid('home', 2, false, false), raid('home', 0, true, false)];
+    const d = replayRaids(raids, c);
+    // raid1: 2 touches (away 2 out). raid2: bonus attempted with 5 defenders → 0.
+    assert.equal(d.home, 2);
+  });
+  test('bonus valid at exactly 6 defenders (1 out)', () => {
+    const raids: RaidOutcome[] = [raid('home', 1, false, false), raid('home', 0, true, false)];
+    const d = replayRaids(raids, c);
+    assert.equal(d.home, 2); // 1 touch + valid bonus (6 defenders remain)
+  });
+});

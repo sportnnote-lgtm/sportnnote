@@ -282,7 +282,10 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
     case 'RED':
       return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name, secondYellow: a.payload?.secondYellow as boolean | undefined }) : s;
     case 'SUB': {
-      if (!a.side || s.subsUsed[a.side] >= s.maxSubs) return s;
+      // Rolling subs (futsal / small-sided / friendlies) let a player return, so
+      // the substitution count is unlimited — `maxSubs` there is just bench size.
+      // Fixed subs cap the number of changes.
+      if (!a.side || (s.subType === 'fixed' && s.subsUsed[a.side] >= s.maxSubs)) return s;
       const offName = String(a.payload?.offName ?? '');
       const withEvent = push(s, { minute, half: evHalf, type: 'sub', side: a.side, playerName: offName, secondName: String(a.payload?.onName ?? '') });
       return {

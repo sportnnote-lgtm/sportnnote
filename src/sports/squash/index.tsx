@@ -32,7 +32,7 @@ export const squashPlugin = makeRallyPlugin({
       options: [
         { value: 'psa', label: 'PSA (PAR 11 · best of 5)', set: { scoring: 'par', pointsPerGame: 11, winBy: 2, gamesToWin: 3 } },
         { value: 'american', label: 'American (PARS 15)', set: { scoring: 'par', pointsPerGame: 15, winBy: 2, gamesToWin: 3 } },
-        { value: 'english', label: 'Club English (to 9)', set: { scoring: 'english', pointsPerGame: 9, winBy: 2, gamesToWin: 3 } },
+        { value: 'english', label: 'Club English (to 9)', set: { scoring: 'english', pointsPerGame: 9, winBy: 1, gamesToWin: 3 } },
         { value: 'short', label: 'Short (PAR 11 · best of 3)', set: { scoring: 'par', pointsPerGame: 11, winBy: 2, gamesToWin: 2 } },
         { value: 'custom', label: 'Custom' },
       ],

@@ -228,14 +228,27 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         names = names.map((n) => (n === e.playerName ? e.secondName! : n));
       }
     }
-    return names.map((n) => byName.get(n)).filter((p): p is Player => !!p);
+    const off = sentOff(side);
+    return names
+      .filter((n) => !off.has(n))
+      .map((n) => byName.get(n))
+      .filter((p): p is Player => !!p);
+  };
+  // Players shown a red card — off the pitch for good (can't score, can't be
+  // subbed on; a sending-off leaves the side a player down).
+  const sentOff = (side: 'home' | 'away'): Set<string> => {
+    const names = new Set<string>();
+    for (const e of state.events) if (e.type === 'red' && e.side === side && e.playerName) names.add(e.playerName);
+    return names;
   };
   // The bench = squad members not currently on the pitch (and, for fixed subs,
-  // not already withdrawn).
+  // not already withdrawn), never a player who's been sent off.
   const benchOf = (side: 'home' | 'away'): Player[] => {
     const onIds = new Set(xi(side).map((p) => p.id));
+    const off = sentOff(side);
     return rosterOf(side)
       .filter((p) => !onIds.has(p.id))
+      .filter((p) => !off.has(p.fullName))
       .filter((p) => state.subType !== 'fixed' || !state.subbedOff[side].includes(p.fullName));
   };
 
@@ -496,17 +509,22 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   );
 
   // Substitution UI — shared between the live controls and the half-time break.
+  // Rolling subs are unlimited (players can return); only fixed subs hit a cap.
+  const subsCapped = state.subType === 'fixed';
+  const atCap = (side: 'home' | 'away') => subsCapped && state.subsUsed[side] >= state.maxSubs;
+  const subsTally = (side: 'home' | 'away') =>
+    subsCapped ? ` ${state.maxSubs - state.subsUsed[side]}/${state.maxSubs}` : ` ${state.subsUsed[side]} (rolling)`;
   const subSection = (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={ctrl.label}>
-        🔄 Substitution · {state.subType} · {state.maxSubs - state.subsUsed.home}/{state.maxSubs} {homeName}{state.subsUsed.home >= state.maxSubs ? ' (none left)' : ''}, {state.maxSubs - state.subsUsed.away}/{state.maxSubs} {awayName}{state.subsUsed.away >= state.maxSubs ? ' (none left)' : ''}
+        🔄 Substitution · {state.subType} ·{subsTally('home')} {homeName}{atCap('home') ? ' (none left)' : ''},{subsTally('away')} {awayName}{atCap('away') ? ' (none left)' : ''}
       </Text>
       <View style={ctrl.row}>
-        <Button label={state.subsUsed.home >= state.maxSubs ? `${homeName} · no subs left` : `Sub — ${homeName}`} variant="ghost" style={ctrl.flex}
-          disabled={state.subsUsed.home >= state.maxSubs}
+        <Button label={atCap('home') ? `${homeName} · no subs left` : `Sub — ${homeName}`} variant="ghost" style={ctrl.flex}
+          disabled={atCap('home')}
           onPress={() => setSub(sub?.side === 'home' ? null : { side: 'home' })} />
-        <Button label={state.subsUsed.away >= state.maxSubs ? `${awayName} · no subs left` : `Sub — ${awayName}`} variant="ghost" style={ctrl.flex}
-          disabled={state.subsUsed.away >= state.maxSubs}
+        <Button label={atCap('away') ? `${awayName} · no subs left` : `Sub — ${awayName}`} variant="ghost" style={ctrl.flex}
+          disabled={atCap('away')}
           onPress={() => setSub(sub?.side === 'away' ? null : { side: 'away' })} />
       </View>
       {sub && (

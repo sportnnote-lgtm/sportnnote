@@ -69,7 +69,13 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
   for (const r of raids) {
     if (allOutEnded) break;
     const opp = other(r.side);
-    const raidPts = r.touches + (r.bonus ? 1 : 0);
+    // A bonus point only counts when the defending side has ≥6 defenders on the
+    // mat (the standard "bonus line" eligibility) — `out[opp]` here is the count
+    // BEFORE this raid's touches are applied. Below teamSize 6 the concept doesn't
+    // apply, so it's always allowed.
+    const defendersBefore = amar ? cfg.teamSize : cfg.teamSize - out[opp];
+    const bonusCounts = r.bonus && (cfg.teamSize < 6 || defendersBefore >= 6);
+    const raidPts = r.touches + (bonusCounts ? 1 : 0);
 
     // Do-or-die: a 3rd straight empty raid that fails ⇒ the raider is out.
     const isDoOrDie = cfg.proRules && emptyRaids[r.side] >= 2;

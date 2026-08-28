@@ -69,6 +69,11 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const [flow, setFlow] = useState<Flow>(null);
   const [showSubs, setShowSubs] = useState(false);
 
+  // Half-court small-sided ball (3×3 / 2v2 / 1v1 — all first-to-N) scores 1s and
+  // 2s only: a made shot is 1, from behind the arc it's 2. Full-court games keep
+  // the 1/2/3 buttons.
+  const pointValues = state.targetPoints > 0 ? [1, 2] : [1, 2, 3];
+
   // While editing, stamp the re-entered play at the original moment; while
   // backfilling, at the chosen quarter; otherwise live.
   const stampFor = () =>
@@ -351,7 +356,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
         </View>
         {edit.type === 'score' && editSel && (
           <View style={ctrl.row}>
-            {[1, 2, 3].map((n) => (
+            {pointValues.map((n) => (
               <Button key={n} label={`+${n}`} variant={edit.side} style={ctrl.flex} onPress={() => commitEdit(editSel, n)} />
             ))}
           </View>
@@ -386,7 +391,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
           </View>
         )}
         <View style={ctrl.row}>
-          {[1, 2, 3].map((n) => (
+          {pointValues.map((n) => (
             <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
           ))}
         </View>
