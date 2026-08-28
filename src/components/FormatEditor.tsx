@@ -77,16 +77,19 @@ export function FormatFieldEditor({ field, value, onChange }: { field: FormatFie
  *  If the sport has a `preset` field, it leads; the granular (advanced) fields are
  *  hidden until the preset is "Custom" or the organizer taps "Customize". */
 export function SportFormatEditor({
-  sport, value, onChange, heading,
+  sport, value, onChange, heading, omitKeys,
 }: {
   sport: SportId;
   value: Record<string, FormatVal>;
   onChange: (key: string, v: FormatVal) => void;
   /** word after the sport name — "rules" (default) or "format". */
   heading?: string;
+  /** field keys to hide — used when a field (e.g. Singles/Doubles) is already
+   *  surfaced elsewhere in the flow, so it isn't shown twice. */
+  omitKeys?: string[];
 }) {
   const plugin = getSport(sport);
-  const fields = plugin.formatFields ?? [];
+  const fields = (plugin.formatFields ?? []).filter((f) => !omitKeys?.includes(f.key));
   const [showAll, setShowAll] = useState(false);
   if (!fields.length) return null;
 

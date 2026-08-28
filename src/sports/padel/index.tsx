@@ -184,6 +184,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
   name: 'Padel',
   icon: '🟡',
   archetype: 'set-game-point',
+  participantKind: 'both', // doubles-primary, but singles is possible
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,

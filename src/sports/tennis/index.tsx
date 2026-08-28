@@ -240,6 +240,7 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   name: 'Tennis',
   icon: '🎾',
   archetype: 'set-game-point',
+  participantKind: 'both', // Singles = individual, Doubles = a pair
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,

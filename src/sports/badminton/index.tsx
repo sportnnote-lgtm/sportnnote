@@ -176,6 +176,7 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   name: 'Badminton',
   icon: '🏸',
   archetype: 'set-game-point',
+  participantKind: 'both', // Singles = individual, Doubles = a pair
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,

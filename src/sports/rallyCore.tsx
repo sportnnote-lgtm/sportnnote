@@ -204,6 +204,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     name: opts.name,
     icon: opts.icon,
     archetype: 'set-game-point',
+    participantKind: 'both', // Singles = individual, Doubles = a pair
     createInitialState: init,
     reducer,
     isComplete: (s) => s.ended,

@@ -31,6 +31,18 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
 
 export const SPORT_LIST = Object.values(SPORTS);
 
+/** How the two sides of a match are picked, resolved for a concrete format.
+ *  'team' = pick two teams; 'individual' = pick two people; 'pairs' = pick two
+ *  pairs (doubles). A 'both' sport is decided by its `playersPerSide` value. */
+export type ParticipantMode = 'team' | 'individual' | 'pairs';
+export function participantMode(sport: SportId, format?: Record<string, unknown>): ParticipantMode {
+  const kind = SPORTS[sport].participantKind ?? 'team';
+  if (kind === 'team') return 'team';
+  if (kind === 'individual') return 'individual';
+  // 'both' → Singles (1 player a side) is individual, Doubles (2) is a pair.
+  return Number(format?.playersPerSide ?? 1) >= 2 ? 'pairs' : 'individual';
+}
+
 // Let the (RN-free) standings engine compute NRR without importing this registry
 // — it can't, or the pure test runner would pull in React Native. We inject the
 // rate lookup lazily on first use (not at module load, which is fragile under

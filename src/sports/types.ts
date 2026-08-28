@@ -197,6 +197,18 @@ export interface SportPlugin<S = unknown> {
   /** emoji placeholder until real icons are added */
   icon: string;
   archetype: ScoringArchetype;
+  /**
+   * The structure of a competing side, which drives how a match/tournament is set
+   * up (who you pick as the two sides):
+   *   - 'team' (default): two teams with rosters — football, cricket, basketball…
+   *   - 'individual': each side is one person — an individual sport with no team
+   *     concept in setup.
+   *   - 'both': a sport that is individual in Singles and a pair in Doubles (the
+   *     racket sports). Which one applies at setup time is read from the
+   *     `playersPerSide` format value (1 = Singles/individual, ≥2 = Doubles/pair).
+   * Omitted = 'team' (backward compatible).
+   */
+  participantKind?: 'team' | 'individual' | 'both';
   /** Fresh match state. `config` lets a tournament tweak rules (e.g. sets to win). */
   createInitialState: (config?: Record<string, unknown>) => S;
   /** PURE scoring logic. Never mutate `state`; return a new object. */
