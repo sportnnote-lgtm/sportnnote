@@ -140,7 +140,7 @@ export function ContactCard({
           ) : sent ? (
             <Text style={st.hint}>
               {channel === 'phone'
-                ? `📱 SMS codes are coming soon — for now, use this code: ${sent}`
+                ? `📱 WhatsApp isn’t set up on this server yet — for now, use this code: ${sent}`
                 : `Couldn’t email a code just now — use this one: ${sent}`}
             </Text>
           ) : null}

@@ -4,6 +4,7 @@
  * domain shapes whether the data came from Postgres or the local mock.
  */
 import { supabase, isSupabaseConfigured } from '../core/supabase';
+import type { PickedDoc } from '../core/document';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { MATCHES } from '../core/mockData';
 import {
@@ -1589,20 +1590,65 @@ export async function verifyGuardianContact(id: string, channel: 'phone' | 'emai
 }
 
 /** Submit a document (image/PDF) proving age & guardian relationship for the
- *  support team to review. Marks the profile "pending"; a real build emails the
- *  file to SUPPORT_EMAIL, where support approves or rejects it. */
-export async function submitVerificationDoc(id: string, docName: string): Promise<void> {
+ *  support team to review. In live mode the actual file is uploaded to the
+ *  private `verification-docs` bucket and a signed link is emailed to
+ *  SUPPORT_EMAIL (via the verification-submit edge function); the profile is
+ *  marked "pending" either way. In demo mode only the metadata is recorded. */
+export async function submitVerificationDoc(id: string, doc: PickedDoc): Promise<void> {
   const p = await getPlayer(id);
   const at = Date.now();
+  let docPath: string | undefined;
+
+  // Live mode: upload the real bytes, keyed by the uploader's auth id so Storage
+  // RLS only lets them write into their own folder.
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (uid) {
+        const ext = (doc.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+        const path = `${uid}/${id}/${at}.${ext}`;
+        const blob = await (await fetch(doc.uri)).blob();
+        const { error } = await supabase.storage.from('verification-docs').upload(path, blob, {
+          contentType: doc.mimeType || blob.type || 'application/octet-stream',
+          upsert: true,
+        });
+        if (error) console.warn('verification upload failed:', error.message);
+        else docPath = path;
+      }
+    } catch (e) {
+      console.warn('verification upload error:', e);
+    }
+  }
+
   // Fresh pending cycle, but the full history is carried forward (append-only).
   await updatePlayer(id, {
     verification: {
       status: 'pending',
-      docName,
+      docName: doc.name,
+      docPath,
       submittedAt: at,
-      history: [...(p?.verification?.history ?? []), { action: 'submitted', at, docName }],
+      history: [...(p?.verification?.history ?? []), { action: 'submitted', at, docName: doc.name }],
     },
   });
+
+  // Email the reviewer a signed link (best-effort — the row is already pending,
+  // and the in-app review queue works regardless of whether email is wired up).
+  if (isSupabaseConfigured && supabase && docPath) {
+    try {
+      await supabase.functions.invoke('verification-submit', { body: { playerId: id } });
+    } catch (e) {
+      console.warn('verification-submit invoke failed:', e);
+    }
+  }
+}
+
+/** A short-lived (1-hour) signed URL to a submitted verification document, for
+ *  the reviewer console to open. Null in demo mode or when no file was stored. */
+export async function verificationDocUrl(docPath?: string): Promise<string | null> {
+  if (!docPath || !isSupabaseConfigured || !supabase) return null;
+  const { data } = await supabase.storage.from('verification-docs').createSignedUrl(docPath, 60 * 60);
+  return data?.signedUrl ?? null;
 }
 
 /** Profiles awaiting verification review (support console). */

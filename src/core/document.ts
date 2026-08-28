@@ -10,6 +10,8 @@ import { pickPhoto } from './photo';
 export interface PickedDoc {
   name: string;
   uri: string;
+  /** MIME type when known (web file input); undefined for a native photo pick. */
+  mimeType?: string;
 }
 
 export async function pickDocument(): Promise<PickedDoc | null> {
@@ -23,7 +25,7 @@ export async function pickDocument(): Promise<PickedDoc | null> {
       input.style.display = 'none';
       input.onchange = () => {
         const file = input.files && input.files[0];
-        resolve(file ? { name: file.name, uri: URL.createObjectURL(file) } : null);
+        resolve(file ? { name: file.name, uri: URL.createObjectURL(file), mimeType: file.type || undefined } : null);
         input.remove();
       };
       // if the dialog is dismissed without a file, clean up after a while

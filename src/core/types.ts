@@ -126,8 +126,11 @@ export interface VerificationEvent {
 
 export interface IdVerification {
   status: 'pending' | 'approved' | 'rejected';
-  /** the submitted document (image/PDF) name or URI */
+  /** the submitted document (image/PDF) file name */
   docName?: string;
+  /** storage path of the uploaded document in the private `verification-docs`
+   *  bucket (live mode) — the reviewer signs it to view. Absent in demo mode. */
+  docPath?: string;
   /** ms epoch when submitted */
   submittedAt?: number;
   /** support note on rejection */

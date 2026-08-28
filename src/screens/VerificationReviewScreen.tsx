@@ -3,13 +3,13 @@
  *  build the document image/PDF arrives by email (see SUPPORT_EMAIL) and only
  *  the support team can open this; here it's reachable in the demo for review. */
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
 import { Button, Card, Pill, TextField, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
-import { getPendingVerifications, reviewVerification, SUPPORT_EMAIL } from '../data/repos';
+import { getPendingVerifications, reviewVerification, verificationDocUrl, SUPPORT_EMAIL } from '../data/repos';
 import { notify } from '../core/notifications';
 import { ageFromDob } from '../core/age';
 import { isSupport } from '../core/roles';
@@ -29,6 +29,19 @@ export default function VerificationReviewScreen() {
     getPendingVerifications().then(setPending);
   }, [support]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Open the submitted document via a short-lived signed URL. Only present in
+  // live mode (demo has no uploaded file); the same doc is also emailed out.
+  const [opening, setOpening] = useState<string | null>(null);
+  const viewDoc = async (p: Player) => {
+    setOpening(p.id);
+    try {
+      const url = await verificationDocUrl(p.verification?.docPath);
+      if (url) await Linking.openURL(url);
+    } finally {
+      setOpening(null);
+    }
+  };
 
   const review = async (p: Player, status: 'approved' | 'rejected') => {
     setBusy(p.id);
@@ -61,7 +74,7 @@ export default function VerificationReviewScreen() {
         ) : (
         <>
         <Text style={textStyles.muted}>
-          Submitted documents are routed to {SUPPORT_EMAIL}. Open each one, confirm the date of birth (and, for under-18 players, the parent/guardian), then approve or reject.
+          Submitted documents are emailed to {SUPPORT_EMAIL} and can be opened right here. View each one, confirm the date of birth (and, for under-18 players, the parent/guardian), then approve or reject.
         </Text>
 
         {pending.length > 0 && (
@@ -83,6 +96,11 @@ export default function VerificationReviewScreen() {
                   <Row label="Parent / Guardian" value={`${p.guardian.name}${p.guardian.phone ? `  ·  ${p.guardian.phone}` : ''}`} />
                 ) : null}
                 <Row label="Document" value={p.verification?.docName ?? '—'} />
+                {p.verification?.docPath ? (
+                  <Button label={opening === p.id ? 'Opening…' : '📄 View document'} variant="ghost" onPress={() => viewDoc(p)} disabled={opening === p.id} />
+                ) : (
+                  <Text style={textStyles.muted}>No document file on record (demo, or submitted before file upload was enabled) — check the copy emailed to {SUPPORT_EMAIL}.</Text>
+                )}
                 {p.verification?.submittedAt ? (
                   <Row label="Submitted" value={new Date(p.verification.submittedAt).toLocaleString()} />
                 ) : null}

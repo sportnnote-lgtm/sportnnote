@@ -343,7 +343,7 @@ function VerificationCard({ player, owner }: { player: Player; owner: boolean })
     const doc = await pickDocument();
     if (!doc) return;
     setBusy(true);
-    await submitVerificationDoc(player.id, doc.name);
+    await submitVerificationDoc(player.id, doc);
     const at = Date.now();
     setV((prev) => ({
       status: 'pending', docName: doc.name, submittedAt: at,
