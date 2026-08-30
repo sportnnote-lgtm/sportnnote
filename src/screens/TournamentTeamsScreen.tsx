@@ -19,7 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { RegistrationBanner } from '../components/RegistrationBanner';
-import { getSport } from '../sports/registry';
+import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
 import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders } from '../data/repos';
@@ -234,11 +234,18 @@ export default function TournamentTeamsScreen() {
   }
 
   const sportName = getSport(sport).name;
+  // Individual sports register individual entrants (a tennis draw is players, not
+  // teams), doubles register pairs. Derived from the *currently selected* sport +
+  // its format, so a multi-sport meet adapts per sport. Entries ride the same
+  // ad-hoc-team plumbing under the hood — only the wording changes.
+  const pMode = participantMode(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
+  const noun = pMode === 'individual' ? 'player' : pMode === 'pairs' ? 'pair' : 'team';
+  const nounPl = `${noun}s`;
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title="Participating teams" subtitle={tournament?.name ?? 'Register who’s in'} />
+        <ScreenTitle title={`Participating ${nounPl}`} subtitle={tournament?.name ?? 'Register who’s in'} />
 
         {tourSports.length > 1 && (
           <>
@@ -327,7 +334,7 @@ export default function TournamentTeamsScreen() {
         )}
 
         <View style={st.rowBetween}>
-          <Text style={textStyles.h3}>{selected.length} team{selected.length === 1 ? '' : 's'} in</Text>
+          <Text style={textStyles.h3}>{selected.length} {selected.length === 1 ? noun : nounPl} in</Text>
           {pickable.length > 0 && (
             <Text style={st.link} onPress={() => { setDirty(true); setSelected(selected.length === pickable.length ? [] : pickable.map((t) => t.id)); }}>
               {selected.length === pickable.length ? 'Clear all' : 'Select all'}
@@ -337,7 +344,7 @@ export default function TournamentTeamsScreen() {
 
         {unregisteredInFixtures.length > 0 && (
           <Text style={st.hint} onPress={() => { setDirty(true); setSelected((p) => [...new Set([...p, ...inFixtures])]); }}>
-            ＋ {unregisteredInFixtures.length} team{unregisteredInFixtures.length === 1 ? '' : 's'} already playing here aren’t registered — tap to add them.
+            ＋ {unregisteredInFixtures.length} {unregisteredInFixtures.length === 1 ? noun : nounPl} already playing here aren’t registered — tap to add them.
           </Text>
         )}
 
@@ -349,7 +356,7 @@ export default function TournamentTeamsScreen() {
         )}
 
         {pickable.length === 0 ? (
-          <Text style={textStyles.muted}>No {sportName} teams to add yet. Add one below.</Text>
+          <Text style={textStyles.muted}>No {sportName} {nounPl} to add yet. Add one below.</Text>
         ) : (
           <View style={st.chips}>
             {pickable.map((t) => (
@@ -361,10 +368,10 @@ export default function TournamentTeamsScreen() {
         {/* Inline add-a-team so an organizer can build the roster without leaving. */}
         {adding ? (
           <Card style={{ gap: theme.spacing(3) }}>
-            <Text style={textStyles.h3}>Add a {sportName} team</Text>
+            <Text style={textStyles.h3}>Add a {sportName} {noun}</Text>
             <View style={st.row}>
-              <View style={st.flex2}><TextField label="Name" value={name} onChange={setName} placeholder="Red House" /></View>
-              <View style={st.flex1}><TextField label="Short" value={short} onChange={setShort} placeholder="RED" autoCapitalize="characters" /></View>
+              <View style={st.flex2}><TextField label="Name" value={name} onChange={setName} placeholder={pMode === 'individual' ? 'Rafael Nadal' : pMode === 'pairs' ? 'Nadal / Alcaraz' : 'Red House'} /></View>
+              <View style={st.flex1}><TextField label="Short" value={short} onChange={setShort} placeholder={pMode === 'team' ? 'RED' : 'RN'} autoCapitalize="characters" /></View>
             </View>
             <Text style={textStyles.muted}>Colour</Text>
             <View style={st.chips}>
@@ -373,20 +380,23 @@ export default function TournamentTeamsScreen() {
               ))}
             </View>
 
-            {/* Optional team manager: makes the team a real, contactable entity and
-                invites that person to claim it & manage the squad. */}
-            {mgrOpen ? (
+            {/* Optional contact: for a team it's the manager/captain (invited to
+                claim the team & set its squad); for a pair, whoever to reach. An
+                individual entrant is their own contact, so this is hidden there. */}
+            {pMode !== 'individual' && (mgrOpen ? (
               <View style={{ gap: theme.spacing(2) }}>
-                <Text style={textStyles.muted}>Team manager / captain — they’ll be invited to claim the team and set its squad.</Text>
-                <TextField label="Manager name" value={mgrName} onChange={setMgrName} placeholder="Who runs this team?" />
+                <Text style={textStyles.muted}>
+                  {pMode === 'pairs' ? 'Pair contact — invited to claim the entry and set both players.' : 'Team manager / captain — they’ll be invited to claim the team and set its squad.'}
+                </Text>
+                <TextField label={pMode === 'pairs' ? 'Contact name' : 'Manager name'} value={mgrName} onChange={setMgrName} placeholder={pMode === 'pairs' ? 'Who to reach for this pair?' : 'Who runs this team?'} />
                 <View style={st.row}>
                   <View style={st.flex1}><TextField label="Phone" value={mgrPhone} onChange={setMgrPhone} placeholder="+91…" autoCapitalize="none" /></View>
                   <View style={st.flex1}><TextField label="Email" value={mgrEmail} onChange={setMgrEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
                 </View>
               </View>
             ) : (
-              <Text style={st.link} onPress={() => setMgrOpen(true)}>＋ Add a team manager (optional)</Text>
-            )}
+              <Text style={st.link} onPress={() => setMgrOpen(true)}>＋ Add a {pMode === 'pairs' ? 'pair' : 'team'} contact (optional)</Text>
+            ))}
 
             <View style={st.row}>
               <View style={st.flex1}><Button label="Cancel" variant="ghost" onPress={() => { setAdding(false); setError(null); }} /></View>
@@ -394,7 +404,7 @@ export default function TournamentTeamsScreen() {
             </View>
           </Card>
         ) : (
-          <Button label="＋ New team" variant="ghost" onPress={() => setAdding(true)} />
+          <Button label={`＋ New ${noun}`} variant="ghost" onPress={() => setAdding(true)} />
         )}
 
         {added && (
