@@ -157,7 +157,16 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
       );
     }
 
-    // Rally scoring: every rally is a point — pick who won it.
+    // Rally scoring: every rally is a point — pick who won it. Serve still passes
+    // to the rally winner, so show who's serving (the last rally winner, or the
+    // opening server before the first point). Doubles names the side; singles the
+    // player. No service-court shown here — that rule differs by sport.
+    let serverSide: 'home' | 'away' = s.serving;
+    for (let i = s.events.length - 1; i >= 0; i--) {
+      if (s.events[i].kind === 'point') { serverSide = s.events[i].side as 'home' | 'away'; break; }
+    }
+    const serverSideName = serverSide === 'home' ? homeName : awayName;
+    const serverName = s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;
     const Row = ({ label, roster, side, name }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string }) => (
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>{label}</Text>
@@ -172,6 +181,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     );
     return (
       <View style={{ gap: theme.spacing(4) }}>
+        <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>
         <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
         <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} />
       </View>
