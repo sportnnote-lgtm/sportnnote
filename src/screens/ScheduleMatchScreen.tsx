@@ -17,7 +17,7 @@ import { ConflictNotice } from '../components/ConflictNotice';
 import { SPORT_LIST, getSport, participantMode, type ParticipantMode } from '../sports/registry';
 import { useTeams, useMatches } from '../data/hooks';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
-import { createMatch, createTeam, getMyPlayerId, setMatchScorer } from '../data/repos';
+import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMatchScorer } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
 import type { SportId, Team } from '../core/types';
@@ -134,6 +134,32 @@ export default function ScheduleMatchScreen() {
     }
   };
 
+  // Doubles: create a pair as a team of the two named partners (real player rows
+  // in roster order), so the scorer can see and rotate each server by name.
+  const makePairCreateHandler = (side: 'home' | 'away') => async (a: string, b: string): Promise<boolean> => {
+    if (!sport) return false;
+    try {
+      // Both partners carry the pair name as their "house" so the scoring roster
+      // resolves them (getRoster matches by house name, in demo and live alike).
+      const name = `${a.trim()} / ${b.trim()}`;
+      const [pa, pb] = await Promise.all([
+        createReplacementPlayer(a.trim(), sport, name),
+        createReplacementPlayer(b.trim(), sport, name),
+      ]);
+      const team = await createTeam({
+        name, shortName: shortFrom(`${a} ${b}`), sport,
+        colorHex: TEAM_PALETTE[teams.length % TEAM_PALETTE.length], adhoc: true,
+        roster: [pa.id, pb.id],
+      });
+      setTeamNonce((n) => n + 1);
+      (side === 'home' ? setHome : setAway)(team.id);
+      return true;
+    } catch {
+      setError('Could not create the pair.');
+      return false;
+    }
+  };
+
   // "Me" quick-pick for individual sports: reuse an existing side named after the
   // signed-in user if one exists, else create it. So a player scoring their own
   // match taps once instead of typing their name.
@@ -240,9 +266,9 @@ export default function ScheduleMatchScreen() {
               </>
             ) : (
               <>
-                <Text style={textStyles.muted}>A doubles side is a pair of two players. Pick or name each pair.</Text>
-                <TeamPicker noun="pair" label="Pair 1" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} />
-                <TeamPicker noun="pair" label="Pair 2" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} />
+                <Text style={textStyles.muted}>A doubles side is a pair of two players. Pick an existing pair, or name both partners.</Text>
+                <TeamPicker noun="pair" label="Pair 1" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} onCreatePair={makePairCreateHandler('home')} />
+                <TeamPicker noun="pair" label="Pair 2" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} onCreatePair={makePairCreateHandler('away')} />
               </>
             )}
 
@@ -353,6 +379,7 @@ function TeamPicker({
   onSelect,
   onClear,
   onCreate,
+  onCreatePair,
   onPickMe,
   meName,
 }: {
@@ -364,12 +391,15 @@ function TeamPicker({
   onClear: () => void;
   /** create a brand-new side from a typed name; returns true if it succeeded */
   onCreate: (name: string) => Promise<boolean>;
+  /** doubles pairs: create from two partner names (as a 2-player roster) */
+  onCreatePair?: (a: string, b: string) => Promise<boolean>;
   /** individual sports only: one-tap select the signed-in user */
   onPickMe?: () => void;
   meName?: string;
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [nameB, setNameB] = useState('');
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -388,6 +418,13 @@ function TeamPicker({
     const ok = await onCreate(name.trim());
     setBusy(false);
     if (ok) { setName(''); setCreating(false); setQuery(''); }
+  };
+  const createPair = async () => {
+    if (!name.trim() || !nameB.trim() || busy || !onCreatePair) return;
+    setBusy(true);
+    const ok = await onCreatePair(name.trim(), nameB.trim());
+    setBusy(false);
+    if (ok) { setName(''); setNameB(''); setCreating(false); setQuery(''); }
   };
 
   return (
@@ -422,12 +459,18 @@ function TeamPicker({
           )}
 
           <SelectChip label={`＋ New ${noun}`} active={creating} onPress={() => setCreating((c) => !c)} />
-          {creating && (
+          {creating && (onCreatePair ? (
+            <View style={{ gap: theme.spacing(2) }}>
+              <TextField label="Player 1" value={name} onChange={setName} placeholder="e.g. Rafael Nadal" />
+              <TextField label="Player 2" value={nameB} onChange={setNameB} placeholder="e.g. Carlos Alcaraz" />
+              <Button label={busy ? 'Creating…' : '＋ Create pair'} onPress={createPair} disabled={busy || !name.trim() || !nameB.trim()} />
+            </View>
+          ) : (
             <View style={{ gap: theme.spacing(2) }}>
               <TextField label={`New ${noun} name`} value={name} onChange={setName} placeholder={createPlaceholder} />
               <Button label={busy ? 'Creating…' : '＋ Create & select'} onPress={create} disabled={busy || !name.trim()} />
             </View>
-          )}
+          ))}
         </>
       )}
     </View>
