@@ -49,6 +49,19 @@ registers players, not teams; the team-only manager capture is hidden for
 individuals). Bracket/fixture generation already pairs entry ids, so an
 individual draw works with no schema change.
 
+**Doubles two-name capture.** Creating a doubles pair now takes both partner
+names and builds the side as a real two-player roster (serve order = roster
+order), each carrying the pair name as their house so getRoster resolves them.
+The serve banner then names the actual server — for *verified* players; the
+safeguarding eligibility gate still filters unverified ad-hoc players, so casual
+friendly pairs read "Server 1/2" until verified (gate working as designed).
+
+**Serve for padel + badminton.** Extracted the game/set serve derivation into a
+shared `src/sports/serve.ts` (tennis now uses it). Padel mirrors tennis (games/
+sets) with a first-server chooser + "🟡 Serving: <name>" banner. Badminton, being
+rally-scored, gets its own `serve()` — the rally winner serves next, service court
+by score parity — with a "🏸 Serving: <side> · <court>" banner.
+
 **Verification backends made real** (migration 0016 + edge fn `verification-submit`).
 Age/ID: private `verification-docs` bucket + real file upload; Storage RLS
 (own-folder write, owner/support read); players UPDATE policy for support (the
