@@ -21,6 +21,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
+import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve';
 
 const SETS_TO_WIN = 2;
 
@@ -37,6 +38,10 @@ export interface PadelState {
   goldenPoint: boolean;
   /** decider: play the last set as a normal set, or a match tiebreak to 10 */
   matchTbDecider: boolean;
+  /** doubles (2 a side, padel's norm) vs singles — drives the serve display */
+  doubles: boolean;
+  /** which side served game 1; serve alternates every game after that */
+  firstServer: 'home' | 'away';
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -51,6 +56,8 @@ const init = (config?: Record<string, unknown>): PadelState => ({
   gamesPerSet: Number(config?.gamesPerSet ?? 6),
   goldenPoint: (config?.deuce ?? 'advantage') === 'golden',
   matchTbDecider: (config?.decider ?? 'set') === 'match10',
+  doubles: Number(config?.playersPerSide ?? 2) >= 2,
+  firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
   events: [],
   seq: 0,
   ended: false,
@@ -64,6 +71,10 @@ const matchTbActive = (s: PadelState) => s.matchTbDecider && isDecider(s);
 /** In a tiebreak: the deciding match-tiebreak, or a normal set's games-all tiebreak. */
 const inTiebreak = (s: PadelState) => matchTbActive(s) || (s.games.home === s.gamesPerSet && s.games.away === s.gamesPerSet);
 const tbTarget = (s: PadelState) => (matchTbActive(s) ? 10 : 7);
+/** Completed games so far — the current game's 0-based index. (Shared serve.ts.) */
+const gamesPlayed = (s: PadelState) => gamesPlayedOf(s);
+/** Who is serving right now: side + (doubles) which of the pair (slot 0/1). */
+const serveInfo = (s: PadelState) => serveInfoOf(s, inTiebreak(s));
 
 /** Point display: 0/15/30/40 with Ad, or raw points in a tiebreak. */
 function disp(s: PadelState, side: 'home' | 'away'): string {
@@ -127,6 +138,14 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
 }
 
 const reducer = (s: PadelState, a: ScoreAction): PadelState => {
+  // Who serves first — settable only before the first point; serve alternates
+  // from there. No `side` on this action.
+  if (a.type === 'SET_FIRST_SERVER') {
+    const played = s.games.home || s.games.away || s.pts.home || s.pts.away || s.sets.length;
+    const side = a.payload?.side as 'home' | 'away' | undefined;
+    if (played || (side !== 'home' && side !== 'away')) return s;
+    return { ...s, firstServer: side };
+  }
   if (s.ended || !a.side) return s;
   if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName);
   return s;
@@ -148,8 +167,29 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
   const act = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
   const deucePoint = s.goldenPoint && !inTiebreak(s) && s.pts.home >= 3 && s.pts.away >= 3;
+  // Serve: who serves first is set before the first point, then alternates each
+  // game (and, in doubles, rotates through the pair).
+  const serve = serveInfo(s);
+  const serverSideName = serve.side === 'home' ? homeName : awayName;
+  const serverRoster = serve.side === 'home' ? homeRoster : awayRoster;
+  const serverName = s.doubles
+    ? serverRoster[serve.slot]?.fullName ?? `Server ${serve.slot + 1}`
+    : serverRoster[0]?.fullName ?? serverSideName;
+  const noPlayYet = gamesPlayed(s) === 0 && s.pts.home === 0 && s.pts.away === 0;
+  const setFirstServer = (side: 'home' | 'away') => dispatch({ type: 'SET_FIRST_SERVER', payload: { side } });
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {noPlayYet ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.label}>🟡 Who serves first?</Text>
+          <View style={ctrl.chips}>
+            <SelectChip label={homeName} active={s.firstServer === 'home'} onPress={() => setFirstServer('home')} />
+            <SelectChip label={awayName} active={s.firstServer === 'away'} onPress={() => setFirstServer('away')} />
+          </View>
+        </View>
+      ) : (
+        <Text style={ctrl.serve}>🟡 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>
+      )}
       {matchTbActive(s) && <Text style={ctrl.serve}>🟡 Match tiebreak — first to 10 (win by 2).</Text>}
       {deucePoint && <Text style={ctrl.serve}>⚡ Golden point — next point wins the game.</Text>}
       <Row label={`🟡 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('home', p)} fallback={`Point ${homeName}`} />

@@ -34,6 +34,10 @@ export interface BadmintonState {
   goldenPoint: boolean;
   /** games a side must win to take the match (format: gamesToWin) */
   gamesToWin: number;
+  /** doubles (2 a side) vs singles — drives the serve display */
+  doubles: boolean;
+  /** who serves the very first rally; after that the rally winner serves */
+  firstServer: 'home' | 'away';
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -49,11 +53,26 @@ const init = (config?: Record<string, unknown>): BadmintonState => {
     cap: Number(config?.cap ?? target + (CAP - TARGET)), // 21→30 by default; presets can override (5×11 caps at 15)
     goldenPoint: config?.goldenPoint !== false, // default on (BWF 29-29 golden point)
     gamesToWin: Number(config?.gamesToWin ?? GAMES_TO_WIN),
+    doubles: Number(config?.playersPerSide ?? 1) >= 2,
+    firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
     events: [],
     seq: 0,
     ended: false,
   };
 };
+
+/** Who serves the next rally: the last rally winner (badminton rally scoring),
+ *  or the chosen first server before any point. The serving side's current-game
+ *  score parity sets the service court (even = right, odd = left). Derived from
+ *  the point log, so undo/replay stay correct. */
+export function serve(s: BadmintonState): { side: 'home' | 'away'; court: 'right' | 'left' } {
+  let last: 'home' | 'away' | undefined;
+  for (let i = s.events.length - 1; i >= 0; i--) {
+    if (s.events[i].kind === 'point') { last = s.events[i].side as 'home' | 'away'; break; }
+  }
+  const side = last ?? s.firstServer;
+  return { side, court: s.current[side] % 2 === 0 ? 'right' : 'left' };
+}
 
 function gameWinner(h: number, a: number, target: number, cap: number, goldenPoint: boolean): 'home' | 'away' | null {
   // Golden point: at the cap the next point wins outright (skip when disabled).
@@ -75,6 +94,14 @@ const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
   // effect); EDIT_LOG replays a corrected point list so the games re-derive.
   if (a.type === 'STAT_ADJUST') return s;
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  // Who serves the first rally — settable only before any point; after that the
+  // rally winner serves. No `side` on this action.
+  if (a.type === 'SET_FIRST_SERVER') {
+    const played = s.current.home || s.current.away || s.games.length;
+    const side = a.payload?.side as 'home' | 'away' | undefined;
+    if (played || (side !== 'home' && side !== 'away')) return s;
+    return { ...s, firstServer: side };
+  }
   if (a.type !== 'POINT' || !a.side || s.ended) return s;
   const who = a.attribution?.playerName;
   const current = { ...s.current, [a.side]: s.current[a.side] + 1 };
@@ -113,8 +140,28 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
   const s = state as BadmintonState;
   const point = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
+  // Serve: chosen first server before any point, then the rally winner serves.
+  const sv = serve(s);
+  const serverSideName = sv.side === 'home' ? homeName : awayName;
+  const serverRoster = sv.side === 'home' ? homeRoster : awayRoster;
+  // Doubles server depends on the service court + who's there, so name the side;
+  // singles has one player, so name them.
+  const serverName = s.doubles ? serverSideName : serverRoster[0]?.fullName ?? serverSideName;
+  const noPlayYet = s.current.home === 0 && s.current.away === 0 && s.games.length === 0;
+  const setFirstServer = (side: 'home' | 'away') => dispatch({ type: 'SET_FIRST_SERVER', payload: { side } });
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {noPlayYet ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.label}>🏸 Who serves first?</Text>
+          <View style={ctrl.chips}>
+            <SelectChip label={homeName} active={s.firstServer === 'home'} onPress={() => setFirstServer('home')} />
+            <SelectChip label={awayName} active={s.firstServer === 'away'} onPress={() => setFirstServer('away')} />
+          </View>
+        </View>
+      ) : (
+        <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>
+      )}
       <PointRow label={`🏸 Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} onPoint={point} />
       <PointRow label={`🏸 Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} onPoint={point} />
       <RallyPointEditor
@@ -234,6 +281,11 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
 const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  serveBanner: {
+    color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800',
+    backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill,
+    paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start',
+  },
   gamesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   gameChip: {
     color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700',

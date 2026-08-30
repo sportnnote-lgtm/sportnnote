@@ -7,6 +7,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
 
 export const SETS_TO_WIN = 2;
 
@@ -72,30 +73,10 @@ const isMatchTB = (s: TennisState) => isDeciderSet(s) && s.finalSetTiebreak > 0;
 export const inTiebreak = (s: TennisState) => isMatchTB(s) || (s.setTiebreak && s.games.home === s.tiebreakAt && s.games.away === s.tiebreakAt);
 const tbTarget = (s: TennisState) => (isMatchTB(s) ? s.finalSetTiebreak : s.tiebreakPoints);
 
-/** Completed games in the match so far (both sides, all sets + the current set)
- *  — i.e. the current game's 0-based index. Serve alternates every game, and
- *  this parity also gets the side right across set boundaries and after
- *  tiebreaks (a tiebreak counts as one game). */
-export const gamesPlayed = (s: TennisState) => s.sets.reduce((n, g) => n + g[0] + g[1], 0) + s.games.home + s.games.away;
-/** Which side serves the current game, before in-tiebreak point rotation. */
-const gameServer = (s: TennisState): 'home' | 'away' => (gamesPlayed(s) % 2 === 0 ? s.firstServer : other(s.firstServer));
-
-/** Who is serving right now: the side, plus (doubles) which of the pair — slot
- *  0/1 in roster order. In a set tiebreak the side rotates every two points
- *  after the first. Pure & derived, so undo and replay stay correct. */
-export function serveInfo(s: TennisState): { side: 'home' | 'away'; slot: 0 | 1 } {
-  let side = gameServer(s);
-  if (inTiebreak(s)) {
-    const p = s.pts.home + s.pts.away; // points played in the breaker so far
-    if (Math.floor((p + 1) / 2) % 2 === 1) side = other(side); // passes after pts 1,3,5…
-  }
-  // Doubles: each pair's two players alternate their service games. The slot is
-  // how many games this side has already served, mod 2 (roster order = slots).
-  const G = gamesPlayed(s);
-  const seed = gameServer(s) === s.firstServer ? G / 2 : (G - 1) / 2;
-  const slot = (Math.floor(Math.max(0, seed)) % 2) as 0 | 1;
-  return { side, slot };
-}
+/** Completed games so far — the current game's 0-based index. (Shared serve.ts.) */
+export const gamesPlayed = (s: TennisState) => gamesPlayedOf(s);
+/** Who is serving right now: side + (doubles) which of the pair (slot 0/1). */
+export const serveInfo = (s: TennisState) => serveInfoOf(s, inTiebreak(s));
 
 /** Tennis point display: 0/15/30/40 with Deuce/Ad, or raw points in a tiebreak. */
 export function disp(s: TennisState, side: 'home' | 'away'): string {
