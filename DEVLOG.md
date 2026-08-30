@@ -34,8 +34,20 @@ individual (Singles) / pairs (Doubles). ScheduleMatchScreen now picks structure
 first for racket sports, then shows Player 1/Player 2 (+ a "(me)" quick-pick) for
 Singles or Pair 1/Pair 2 for Doubles — never "Team". All resolve to the existing
 ad-hoc-team plumbing, so no Match-schema change. Verified in demo across Tennis
-(Singles+Doubles) and Football (unchanged). Doubles serve-rotation *scoring* and
-individual tournament draws are the next slices.
+(Singles+Doubles) and Football (unchanged).
+
+**Tennis serve tracking + doubles rotation.** Extracted tennis' pure logic into
+`tennis/engine.ts` (RN-free, testable) and added serve: a `firstServer` +
+`SET_FIRST_SERVER` "who serves first?" choice, and `serveInfo()` deriving the
+serving side per game (tiebreak-aware) + which of a doubles pair serves. Scoring
+controls show a serve banner; the scoreboard shows 🎾 next to the server. Verified
+in demo (individual match, serve dot on the server). (+5 tests.)
+
+**Individual tournament draws.** The participants screen now labels entries
+players / pairs / teams by the selected sport's participantMode (a tennis draw
+registers players, not teams; the team-only manager capture is hidden for
+individuals). Bracket/fixture generation already pairs entry ids, so an
+individual draw works with no schema change.
 
 **Verification backends made real** (migration 0016 + edge fn `verification-submit`).
 Age/ID: private `verification-docs` bucket + real file upload; Storage RLS
