@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-08-31 — Verification review UX + pickleball/squash doubles
+
+**Verification review from the profile + a discoverable queue.** In real use the
+reviewer found the notification was the only way to a submission, and the profile
+it opened had no actions. Now: a support reviewer viewing any profile gets 📄 View
+document + a reason field + Approve/Reject inline on the verification card (records
+the decision, notifies the submitter, updates their status/eligibility); and the
+reviewer's own profile shows a "🛡️ Verification review · N pending" card that opens
+the queue. Verified in demo (own profile "2 pending" → console; approving on
+another player's profile flips them to Verified with history).
+
+**Pickleball/squash doubles in rally/PAR.** Doubles was only visible in side-out /
+English scoring (server 1/2 + hand-out from the roster); rally/PAR showed no serve
+at all. Added a "Serving: <name>" banner there (rally winner serves next, from the
+point log). No service court shown — that rule differs by sport. With the doubles
+two-name capture, a pair now carries two real players and side-out names them.
+
+---
+
 ### 2026-08-29 — Sport-aware setup + verification backends + settings Tiers 2–3
 
 **Sport-settings Tier 2 (correctness bugs)** — from the 10-agent audit: kabaddi
