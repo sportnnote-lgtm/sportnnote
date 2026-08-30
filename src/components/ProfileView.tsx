@@ -7,12 +7,16 @@ import { theme } from '../core/theme';
 import { Card, Pill, Button, SelectChip, EmptyState, textStyles, plural } from './ui';
 import { SectionHeader, SECTION_CAP } from './SectionHeader';
 import { ContactCard } from './ContactCard';
+import { Linking } from 'react-native';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
-import { updatePlayer, verifyGuardianContact, submitVerificationDoc, SUPPORT_EMAIL } from '../data/repos';
+import { updatePlayer, verifyGuardianContact, submitVerificationDoc, reviewVerification, verificationDocUrl, getPendingVerifications, SUPPORT_EMAIL } from '../data/repos';
 import { pickPhoto } from '../core/photo';
 import { pickDocument } from '../core/document';
 import { ageFromDob, isMinor } from '../core/age';
 import { notify } from '../core/notifications';
+import { useAuth } from '../core/auth';
+import { isSupport } from '../core/roles';
+import { TextField } from './ui';
 import { activeOrgsForPlayer, pastOrgsForPlayer, roleInOrg, memberEntry, membershipPeriod, isAcademicCommunity, currentStandard } from '../core/org';
 import { teamsByRecency, teamPeriod, type TeamAffiliation } from '../core/teams';
 import { getSport } from '../sports/registry';
@@ -26,6 +30,7 @@ export function ProfileView({
   onEditProfile,
   onOpenOrg,
   onOpenSettings,
+  onOpenVerificationReview,
   onCreateProfile,
   creating,
   onSignOut,
@@ -40,6 +45,8 @@ export function ProfileView({
   onOpenOrg?: (orgId: string) => void;
   /** own profile: open the Settings home (preferences, account, sign out) */
   onOpenSettings?: () => void;
+  /** own profile + support role: open the verification review queue */
+  onOpenVerificationReview?: () => void;
   /** own profile with no player yet: create it (first-time setup) */
   onCreateProfile?: () => void;
   /** true while the player profile is being created */
@@ -49,6 +56,18 @@ export function ProfileView({
 }) {
   const { player, stats: allStats, official, friendly } = usePlayerProfile(playerId);
   const orgs = useOrganizations();
+  const { profile: viewer } = useAuth();
+  const ownProfile = !!onEditProfile;
+  const viewerIsSupport = isSupport(viewer?.role);
+  // Support reviewers get a "pending approvals" entry on their own profile, so the
+  // queue is reachable without hunting through notifications.
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!(ownProfile && viewerIsSupport)) return;
+    let on = true;
+    getPendingVerifications().then((list) => on && setPendingCount(list.length));
+    return () => { on = false; };
+  }, [ownProfile, viewerIsSupport]);
   const [scope, setScope] = useState<'all' | 'official' | 'friendly'>('all');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   // Inline "See all" toggles — each record-list section shows 5, then expands.
@@ -151,6 +170,26 @@ export function ProfileView({
         />
       )}
 
+      {/* Support reviewer's own profile: a discoverable entry to the approvals
+          queue (so notifications aren't the only way in). */}
+      {ownProfile && viewerIsSupport && onOpenVerificationReview && (
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={onOpenVerificationReview}>
+          <Card style={st.reviewCard}>
+            <View style={st.reviewCardRow}>
+              <Text style={textStyles.h3}>🛡️ Verification review</Text>
+              {pendingCount != null && pendingCount > 0 && (
+                <Pill label={`${pendingCount} pending`} color={theme.colors.surfaceAlt} textColor={theme.colors.accent} />
+              )}
+            </View>
+            <Text style={textStyles.muted}>
+              {pendingCount == null ? 'Age & ID proofs awaiting review.'
+                : pendingCount === 0 ? 'No submissions waiting — you’re all caught up.'
+                : `${pendingCount} age/ID ${pendingCount === 1 ? 'proof is' : 'proofs are'} waiting for your review. Tap to open the queue.`}
+            </Text>
+          </Card>
+        </TouchableOpacity>
+      )}
+
       {hasSplit && (
         <View style={st.tagRow}>
           <SelectChip label={`All · ${allStats.matches}`} active={scope === 'all'} onPress={() => setScope('all')} />
@@ -199,7 +238,12 @@ export function ProfileView({
       )}
 
       {(onEditProfile || player.verification) && (
-        <VerificationCard player={player} owner={!!onEditProfile} />
+        <VerificationCard
+          player={player}
+          owner={!!onEditProfile}
+          // A support reviewer viewing someone else's profile can act right here.
+          reviewer={!onEditProfile && isSupport(viewer?.role) ? { id: viewer?.id, name: viewer?.fullName } : undefined}
+        />
       )}
 
       {stats.bySport.length > 0 && (
@@ -333,11 +377,56 @@ function TeamRow({ team }: { team: TeamAffiliation }) {
   );
 }
 
-/** Age & guardian verification — upload a document for the support team to review. */
-function VerificationCard({ player, owner }: { player: Player; owner: boolean }) {
+/** Age & guardian verification — the owner uploads a proof document; a support
+ *  reviewer (viewing this profile) can open it and approve/reject right here. */
+function VerificationCard({ player, owner, reviewer }: { player: Player; owner: boolean; reviewer?: { id?: string; name?: string } }) {
   const [v, setV] = useState(player.verification);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const [opening, setOpening] = useState(false);
   useEffect(() => setV(player.verification), [player.verification]);
+
+  // Reviewer: open the submitted document via a short-lived signed URL.
+  const viewDoc = async () => {
+    setOpening(true);
+    try {
+      const url = await verificationDocUrl(v?.docPath);
+      if (url) await Linking.openURL(url);
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  // Reviewer: approve/reject, record the decision, and notify the submitter so
+  // the update lands back on their profile (status + eligibility).
+  const review = async (decision: 'approved' | 'rejected') => {
+    setBusy(true);
+    const reason = decision === 'rejected' ? note.trim() || undefined : undefined;
+    await reviewVerification(player.id, decision, reason, reviewer);
+    const at = Date.now();
+    setV((prev) => ({
+      ...(prev ?? {}),
+      status: decision,
+      note: reason,
+      reviewedAt: at,
+      reviewedById: reviewer?.id,
+      reviewedByName: reviewer?.name,
+      history: [...(prev?.history ?? []), { action: decision, at, byId: reviewer?.id, byName: reviewer?.name, note: reason }],
+    }));
+    const minor = (ageFromDob(player.dob) ?? 99) < 18;
+    const guardianDone = !!(player.guardian?.phoneVerified && player.guardian?.emailVerified);
+    void notify({
+      title: decision === 'approved' ? '☑️ Verification approved' : '✗ Verification needs attention',
+      body: decision === 'approved'
+        ? (minor && !guardianDone
+            ? "Your age & guardian are approved. Next: verify your guardian's mobile & email on your profile — then you can join teams, tournaments & matches."
+            : 'Verified ✓ You can now be added to teams, tournaments and matches.')
+        : `Rejected${reason ? `: ${reason}` : ''}. Please re-submit a clearer proof of date of birth on your profile.`,
+      playerId: player.id,
+    });
+    setNote('');
+    setBusy(false);
+  };
 
   const upload = async () => {
     const doc = await pickDocument();
@@ -383,8 +472,31 @@ function VerificationCard({ player, owner }: { player: Player; owner: boolean })
           onPress={upload}
         />
       )}
-      {status === 'pending' && (
+      {status === 'pending' && !reviewer && (
         <Text style={textStyles.muted}>Submitted — sent to our support team ({SUPPORT_EMAIL}) for review. You&apos;ll be notified once it&apos;s checked.</Text>
+      )}
+
+      {/* Support reviewer, viewing this profile: open the doc + approve/reject. */}
+      {reviewer && (
+        <View style={{ gap: theme.spacing(2) }}>
+          {v?.docPath ? (
+            <Button label={opening ? 'Opening…' : '📄 View document'} variant="ghost" onPress={viewDoc} disabled={opening} />
+          ) : (
+            <Text style={textStyles.muted}>No document file on record (submitted before uploads were enabled, or in demo) — check the copy emailed to {SUPPORT_EMAIL}.</Text>
+          )}
+          {status === 'pending' && (
+            <>
+              <TextField label="Reason (if rejecting)" value={note} onChange={setNote} placeholder="e.g. Document unclear / DOB doesn’t match" />
+              <View style={st.reviewRow}>
+                <Button label="✗ Reject" variant="danger" style={st.reviewBtn} onPress={() => review('rejected')} disabled={busy} />
+                <Button label={busy ? '…' : '☑️ Approve'} style={st.reviewBtn} onPress={() => review('approved')} disabled={busy} />
+              </View>
+            </>
+          )}
+          {status !== 'pending' && (
+            <Text style={textStyles.muted}>{status === 'approved' ? '☑️ Approved' : '✗ Rejected'}{v?.reviewedByName ? ` by ${v.reviewedByName}` : ''}.</Text>
+          )}
+        </View>
       )}
       {status === 'rejected' && v?.note ? <Text style={st.rejectNote}>Support note: {v.note}</Text> : null}
       {/* Immutable, append-only history (compliance trail). */}
@@ -418,6 +530,10 @@ const st = StyleSheet.create({
   headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
   verifiedTick: { fontSize: theme.font.body },
   verifyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2) },
+  reviewRow: { flexDirection: 'row', gap: theme.spacing(3), marginTop: theme.spacing(1) },
+  reviewBtn: { flex: 1 },
+  reviewCard: { gap: theme.spacing(2), borderColor: theme.colors.accent },
+  reviewCardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2) },
   rejectNote: { color: theme.colors.danger, fontSize: theme.font.small },
   historyBox: { marginTop: theme.spacing(1), paddingTop: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border, gap: theme.spacing(1) },
   historyTitle: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },

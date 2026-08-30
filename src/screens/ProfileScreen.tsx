@@ -49,6 +49,7 @@ export default function ProfileScreen() {
         onEditProfile={playerId ? () => nav.navigate('EditProfile', { playerId }) : undefined}
         onOpenOrg={(orgId) => nav.navigate('Organization', { orgId })}
         onOpenSettings={() => nav.navigate('Settings')}
+        onOpenVerificationReview={() => nav.navigate('VerificationReview')}
         onCreateProfile={createProfile}
         creating={creating}
         onSignOut={signOut}
