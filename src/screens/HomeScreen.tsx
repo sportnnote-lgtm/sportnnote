@@ -17,6 +17,7 @@ import { VoiceNav } from '../components/VoiceNav';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { isSupabaseConfigured } from '../core/supabase';
+import { matchEligibility } from '../core/eligibility';
 import { useMyTournaments, useScopedMatches, useNotifications, usePlayerProfile } from '../data/hooks';
 import { getMyPlayerId } from '../data/repos';
 import { useAuth } from '../core/auth';
@@ -66,6 +67,21 @@ export default function HomeScreen() {
     }, [profile?.id])
   );
   const { player } = usePlayerProfile(playerId);
+  // Post-login nudge: prompt the user to finish verifying so they can be added to
+  // matches (the eligibility gate needs a verified mobile + email; guardian for
+  // minors). Email auto-verifies from the confirmed login; mobile is the usual
+  // one left. Dismissible for the session; reappears until they're eligible.
+  const [verifyDismissed, setVerifyDismissed] = useState(false);
+  const elig = player ? matchEligibility(player) : { ok: true };
+  const showVerify = isSupabaseConfigured && !!player && !elig.ok && !verifyDismissed;
+  const verifyPrompt = (reason?: string): string => {
+    const r = reason ?? '';
+    if (r.includes('Mobile')) return 'Verify your mobile number to join matches & tournaments.';
+    if (r.includes('Email')) return 'Verify your email to join matches & tournaments.';
+    if (r.includes('Date of birth')) return 'Add your date of birth to join matches.';
+    if (/guardian|Guardian|proof/.test(r)) return 'Complete parent/guardian verification to join matches.';
+    return 'Finish verifying your account to join matches.';
+  };
   const allSports = SPORT_LIST.map((s) => s.id);
   const mySports = (player?.sports ?? []).filter((s): s is SportId => allSports.includes(s as SportId));
   const newSports = allSports.filter((s) => !mySports.includes(s));
@@ -161,6 +177,20 @@ export default function HomeScreen() {
               Running on local sample data. Tap any match to open the live scorer — it works fully offline.
             </Text>
           </Card>
+        )}
+
+        {showVerify && (
+          <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => nav.navigate('Tabs', { screen: 'Profile' })}>
+            <Card style={st.verifyCard}>
+              <View style={st.verifyRow}>
+                <Text style={st.verifyTitle}>🔐 Finish setting up your account</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={(e) => { e.stopPropagation?.(); setVerifyDismissed(true); }}>
+                  <Text style={st.verifyClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={textStyles.muted}>{verifyPrompt(elig.reason)} Tap to verify →</Text>
+            </Card>
+          </TouchableOpacity>
         )}
 
         {/* Tournament switcher */}
@@ -289,6 +319,10 @@ const st = StyleSheet.create({
   },
   badgeText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '800' },
   demo: { backgroundColor: theme.colors.surfaceAlt, gap: theme.spacing(1) },
+  verifyCard: { gap: theme.spacing(1), borderColor: theme.colors.accent, borderWidth: 1 },
+  verifyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2) },
+  verifyTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800', flex: 1 },
+  verifyClose: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   eyebrow: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   tourCard: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },

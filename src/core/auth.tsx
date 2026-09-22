@@ -30,6 +30,31 @@ export function friendlyAuthError(raw?: string): string {
 /** Is this error the "email not yet confirmed" case? Drives the resend prompt. */
 const isUnconfirmed = (raw?: string) => (raw ?? '').toLowerCase().includes('email not confirmed');
 
+/** Bridge the auth login email → the player's contact email. A confirmed sign-in
+ *  email is already proven, so it counts as a verified contact email — no need to
+ *  re-verify it in the profile, and the eligibility gate credits the channel the
+ *  user logged in with. Runs on login; idempotent; never overwrites a different,
+ *  user-set contact email. */
+async function syncConfirmedEmailToPlayer(profileId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const email = authData.user?.email;
+    if (!email || !authData.user?.email_confirmed_at) return;
+    const { data: pl } = await supabase
+      .from('players')
+      .select('id, email, email_verified')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    if (!pl) return; // player row not created yet — createMyPlayer seeds it there
+    if (!pl.email || (pl.email === email && !pl.email_verified)) {
+      await supabase.from('players').update({ email, email_verified: true }).eq('id', pl.id);
+    }
+  } catch {
+    /* non-fatal — verification still works from the profile */
+  }
+}
+
 interface AuthState {
   loading: boolean;
   /** true when signed in OR in demo mode */
@@ -124,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         schoolId: data.school_id ?? undefined,
       });
       void setReminderPrefsUser(data.id); // pull this user's reminder timers across devices
+      void syncConfirmedEmailToPlayer(data.id); // confirmed login email ⇒ verified contact email
     }
     setLoading(false);
   }

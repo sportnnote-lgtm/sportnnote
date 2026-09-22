@@ -1770,9 +1770,14 @@ export async function createMyPlayer(profileId: string): Promise<string> {
   const existing = await getMyPlayerId(profileId);
   if (existing) return existing;
   const { data: prof } = await supabase.from('profiles').select('full_name, phone, dob, guardian').eq('id', profileId).single();
+  // The sign-in email is already proven (confirmation link), so seed it as the
+  // player's contact email + mark it verified — no need to re-verify it later.
+  const { data: authData } = await supabase.auth.getUser();
+  const authEmail = authData.user?.email ?? null;
+  const emailVerified = !!(authEmail && authData.user?.email_confirmed_at);
   const { data, error } = await supabase
     .from('players')
-    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ?? null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null })
+    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ?? null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null, email: authEmail, email_verified: emailVerified })
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create your profile');
