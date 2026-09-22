@@ -94,7 +94,8 @@ export default function AuthScreen() {
       (res) => {
         if (res.needsEmailConfirm) {
           switchMode('in'); // switch to the sign-in tab (also clears the note)…
-          setNote(`Account created — check ${email.trim()} for a confirmation link, then sign in.`); // …so set it after
+          // …then set a clear, actionable confirm-your-email message.
+          setNote(`📧 Account created! We've sent a confirmation link to ${email.trim()}. Open it to activate your account (check spam too), then sign in here.`);
         }
         // Otherwise a session fired and onAuthStateChange signs you straight in.
       }
@@ -206,7 +207,11 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {note ? <Text style={st.note}>{note}</Text> : null}
+          {note ? (
+            <View style={st.noteBox}>
+              <Text style={st.noteText}>{note}</Text>
+            </View>
+          ) : null}
           <FormError message={error} />
 
           {/* Primary action + flow switches */}
@@ -304,7 +309,12 @@ const st = StyleSheet.create({
   checkbox: { fontSize: 20, color: theme.colors.textMuted, lineHeight: 22 },
   checkboxOn: { color: theme.colors.primary },
   consentText: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, lineHeight: 18 },
-  note: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
+  noteBox: {
+    backgroundColor: theme.colors.primary + '1A', // ~10% tint
+    borderWidth: 1, borderColor: theme.colors.primary + '55',
+    borderRadius: theme.radius.md, padding: theme.spacing(3),
+  },
+  noteText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', lineHeight: 20 },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.spacing(2) },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
 });
