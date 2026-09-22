@@ -32,7 +32,7 @@ type Mode = 'in' | 'up';
 type Flow = 'password' | 'otp' | 'reset';
 
 export default function AuthScreen() {
-  const { signIn, signUp, sendSignInOtp, verifySignInOtp, sendPhoneOtp, verifyPhoneOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
+  const { signIn, signUp, resendConfirmation, sendSignInOtp, verifySignInOtp, sendPhoneOtp, verifyPhoneOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
   const [mode, setMode] = useState<Mode>('in');
   const [flow, setFlow] = useState<Flow>('password'); // sign-in sub-flow
   const [sent, setSent] = useState(false);             // OTP/reset: has the code been requested?
@@ -48,16 +48,18 @@ export default function AuthScreen() {
   const [gName, setGName] = useState('');
   const [gPhone, setGPhone] = useState('');
   const [gEmail, setGEmail] = useState('');
-  const [role, setRole] = useState<Role>('parent');
+  const [role, setRole] = useState<Role>('player');
   const [consent, setConsent] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Sign-in blocked only because the email isn't confirmed → offer a resend link.
+  const [showResend, setShowResend] = useState(false);
 
   const age = ageFromDob(dob.trim());
   const minor = age !== undefined && age < 18;
 
-  const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); setOtpChannel('email'); };
+  const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); setOtpChannel('email'); setShowResend(false); };
   const switchMode = (m: Mode) => { setMode(m); setFlow('password'); clearFlow(); };
   const switchFlow = (f: Flow) => { setFlow(f); clearFlow(); };
 
@@ -85,7 +87,14 @@ export default function AuthScreen() {
     const guardian = minor && gName.trim()
       ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
       : undefined;
-    if (mode === 'in') return void run(() => signIn(email.trim(), password));
+    if (mode === 'in') {
+      setShowResend(false);
+      return void run(
+        () => signIn(email.trim(), password),
+        undefined,
+        (res) => { if (res.needsConfirm) setShowResend(true); } // offer the resend link
+      );
+    }
     // On sign-up: if email confirmation is on, there's no session yet — tell the
     // user to check their inbox instead of leaving them on a silent screen.
     void run(
@@ -101,6 +110,16 @@ export default function AuthScreen() {
       }
     );
   }
+
+  // Re-send the confirmation email when it never arrived / expired.
+  const doResend = () => {
+    if (!email.trim()) return setError('Enter your email first, then resend.');
+    void run(
+      () => resendConfirmation(email.trim()),
+      `📧 Confirmation email re-sent to ${email.trim()}. Open the link (check spam), then sign in.`,
+      () => setShowResend(false)
+    );
+  };
 
   // Passwordless OTP sign-in — email or SMS code.
   const otpRequest = () => {
@@ -215,11 +234,14 @@ export default function AuthScreen() {
           <FormError message={error} />
 
           {/* Primary action + flow switches */}
-          {mode === 'up' && <Button label={busy ? 'Please wait…' : 'Create account'} onPress={submitPassword} />}
+          {mode === 'up' && <Button label={busy ? 'Please wait…' : 'Create account'} onPress={submitPassword} disabled={busy} />}
 
           {mode === 'in' && flow === 'password' && (
             <>
-              <Button label={busy ? 'Please wait…' : 'Sign in'} onPress={submitPassword} />
+              <Button label={busy ? 'Please wait…' : 'Sign in'} onPress={submitPassword} disabled={busy} />
+              {showResend && (
+                <Text style={st.link} accessibilityRole="button" onPress={doResend}>📧 Resend confirmation email</Text>
+              )}
               <View style={st.linkRow}>
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('otp')}>Sign in with a code</Text>
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('reset')}>Forgot password?</Text>
@@ -229,7 +251,7 @@ export default function AuthScreen() {
 
           {mode === 'in' && flow === 'otp' && (
             <>
-              <Button label={busy ? 'Please wait…' : sent ? 'Verify & sign in' : otpChannel === 'phone' ? 'Text me a code' : 'Email me a code'} onPress={sent ? otpVerify : otpRequest} />
+              <Button label={busy ? 'Please wait…' : sent ? 'Verify & sign in' : otpChannel === 'phone' ? 'Text me a code' : 'Email me a code'} onPress={sent ? otpVerify : otpRequest} disabled={busy} />
               <View style={st.linkRow}>
                 {sent && <Text style={st.link} accessibilityRole="button" onPress={otpRequest}>Resend code</Text>}
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('password')}>Use password instead</Text>
@@ -239,7 +261,7 @@ export default function AuthScreen() {
 
           {mode === 'in' && flow === 'reset' && (
             <>
-              <Button label={busy ? 'Please wait…' : sent ? 'Reset password & sign in' : 'Send reset code'} onPress={sent ? resetConfirm : resetRequest} />
+              <Button label={busy ? 'Please wait…' : sent ? 'Reset password & sign in' : 'Send reset code'} onPress={sent ? resetConfirm : resetRequest} disabled={busy} />
               <View style={st.linkRow}>
                 {sent && <Text style={st.link} accessibilityRole="button" onPress={resetRequest}>Resend code</Text>}
                 <Text style={st.link} accessibilityRole="button" onPress={() => switchFlow('password')}>Back to sign in</Text>

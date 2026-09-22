@@ -9,13 +9,38 @@ import { setReminderPrefsUser } from '../data/reminderPrefs';
 import { normalizePhone } from './phone';
 import type { GuardianContact, Profile, Role } from './types';
 
+/** Turn a raw Supabase/network error into a plain, actionable message. Users
+ *  should never see a stack trace or an internal error string. */
+export function friendlyAuthError(raw?: string): string {
+  const m = (raw ?? '').toLowerCase();
+  if (!m) return 'Something went wrong. Please try again.';
+  if (/(fetch|network|resolve host|failed to fetch|timeout|timed out|connection|econn|unreachable|offline)/.test(m))
+    return "Can't reach the server. Check your internet connection and try again.";
+  if (m.includes('email not confirmed')) return 'Please confirm your email first — open the link we sent to your inbox (check spam), then sign in.';
+  if (/(invalid login|invalid credentials|invalid password)/.test(m)) return 'Wrong email or password. Try again, or reset your password.';
+  if (/(already registered|already exists|user already)/.test(m)) return 'An account with this email already exists — try signing in instead.';
+  if (/(rate limit|too many|429)/.test(m)) return 'Too many attempts. Please wait a minute and try again.';
+  if (m.includes('password') && (m.includes('6') || m.includes('short') || m.includes('at least'))) return 'Password must be at least 6 characters.';
+  if (/(expired|invalid token|otp|incorrect code|token has)/.test(m)) return 'That code is incorrect or has expired. Request a new one.';
+  if (/(invalid email|unable to validate email|valid email)/.test(m)) return 'Enter a valid email address.';
+  if (m.includes('signups not allowed') || m.includes('signup is disabled')) return 'Sign-ups are currently disabled. Please contact support.';
+  return 'Something went wrong. Please try again.';
+}
+
+/** Is this error the "email not yet confirmed" case? Drives the resend prompt. */
+const isUnconfirmed = (raw?: string) => (raw ?? '').toLowerCase().includes('email not confirmed');
+
 interface AuthState {
   loading: boolean;
   /** true when signed in OR in demo mode */
   authed: boolean;
   demo: boolean;
   profile: Profile | null;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  /** needsConfirm: sign-in failed only because the email isn't confirmed yet —
+   *  the UI offers a "resend confirmation" action. */
+  signIn: (email: string, password: string) => Promise<{ error?: string; needsConfirm?: boolean }>;
+  /** Re-send the sign-up confirmation email (when it never arrived / expired). */
+  resendConfirmation: (email: string) => Promise<{ error?: string }>;
   signUp: (
     email: string,
     password: string,
@@ -110,39 +135,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     signIn: async (email, password) => {
       if (!supabase) return {};
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return error ? { error: error.message } : {};
+      try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (!error) return {};
+        return { error: friendlyAuthError(error.message), needsConfirm: isUnconfirmed(error.message) };
+      } catch (e) {
+        return { error: friendlyAuthError(e instanceof Error ? e.message : String(e)) };
+      }
+    },
+    resendConfirmation: async (email) => {
+      if (!supabase) return {};
+      try {
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        return error ? { error: friendlyAuthError(error.message) } : {};
+      } catch (e) {
+        return { error: friendlyAuthError(e instanceof Error ? e.message : String(e)) };
+      }
     },
     signUp: async (email, password, fullName, role, dob, guardian, phone) => {
       if (!supabase) return {};
-      const normPhone = phone ? normalizePhone(phone) : null;
-      // Pass the profile fields as user metadata so the DB trigger (migration
-      // 0011) can create the profile row — this works with OR without a session,
-      // so it's correct whether or not "Confirm email" is on. (dob is mandatory;
-      // phone is the primary identity key; guardian carries under-18 consent.)
-      const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}) };
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } });
-      if (error) return { error: error.message };
+      try {
+        const normPhone = phone ? normalizePhone(phone) : null;
+        // Pass the profile fields as user metadata so the DB trigger (migration
+        // 0011) can create the profile row — this works with OR without a session,
+        // so it's correct whether or not "Confirm email" is on. (dob is mandatory;
+        // phone is the primary identity key; guardian carries under-18 consent.)
+        const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}) };
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } });
+        if (error) return { error: friendlyAuthError(error.message) };
 
-      if (data.session && data.user) {
-        // We have a session (Confirm email OFF, or the trigger isn't deployed):
-        // ensure the profile row exists. Idempotent — a harmless no-op when the
-        // trigger already created it. This is the fallback that keeps sign-up
-        // working on deployments where 0011 hasn't been applied yet.
-        const handle = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
-        const { error: pErr } = await supabase
-          .from('profiles')
-          .upsert(
-            { id: data.user.id, full_name: fullName, handle, role, dob, phone: normPhone, guardian: guardian ?? null },
-            { onConflict: 'id', ignoreDuplicates: true }
-          );
-        if (pErr) return { error: pErr.message };
-        return {}; // session fires onAuthStateChange → loadProfile → signed in
+        if (data.session && data.user) {
+          // We have a session (Confirm email OFF, or the trigger isn't deployed):
+          // ensure the profile row exists. Idempotent — a harmless no-op when the
+          // trigger already created it. This is the fallback that keeps sign-up
+          // working on deployments where 0011 hasn't been applied yet.
+          const handle = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
+          const { error: pErr } = await supabase
+            .from('profiles')
+            .upsert(
+              { id: data.user.id, full_name: fullName, handle, role, dob, phone: normPhone, guardian: guardian ?? null },
+              { onConflict: 'id', ignoreDuplicates: true }
+            );
+          if (pErr) return { error: friendlyAuthError(pErr.message) };
+          return {}; // session fires onAuthStateChange → loadProfile → signed in
+        }
+
+        // No session → Confirm email is ON. The DB trigger has already created the
+        // profile; the user must confirm via the emailed link before signing in.
+        return { needsEmailConfirm: true };
+      } catch (e) {
+        return { error: friendlyAuthError(e instanceof Error ? e.message : String(e)) };
       }
-
-      // No session → Confirm email is ON. The DB trigger has already created the
-      // profile; the user must confirm via the emailed link/code before signing in.
-      return { needsEmailConfirm: true };
     },
     signOut: async () => {
       if (supabase) await supabase.auth.signOut();
@@ -153,13 +196,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendSignInOtp: async (email) => {
       if (!supabase) return {};
       const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-      return error ? { error: error.message } : {};
+      return error ? { error: friendlyAuthError(error.message) } : {};
     },
     verifySignInOtp: async (email, token) => {
       if (!supabase) return {};
       // On success the session fires onAuthStateChange → loadProfile → signed in.
       const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
-      return error ? { error: error.message } : {};
+      return error ? { error: friendlyAuthError(error.message) } : {};
     },
     // Phone/SMS variant — mobile is the app's primary identity key, so a texted
     // code is the most natural passwordless path. Normalize so it matches the
@@ -167,26 +210,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendPhoneOtp: async (phone) => {
       if (!supabase) return {};
       const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone), options: { shouldCreateUser: false } });
-      return error ? { error: error.message } : {};
+      return error ? { error: friendlyAuthError(error.message) } : {};
     },
     verifyPhoneOtp: async (phone, token) => {
       if (!supabase) return {};
       const { error } = await supabase.auth.verifyOtp({ phone: normalizePhone(phone), token, type: 'sms' });
-      return error ? { error: error.message } : {};
+      return error ? { error: friendlyAuthError(error.message) } : {};
     },
     // Password reset via the recovery-OTP code flow: email a code, verify it to
     // get a recovery session, then set the new password on that session.
     sendPasswordReset: async (email) => {
       if (!supabase) return {};
       const { error } = await supabase.auth.resetPasswordForEmail(email);
-      return error ? { error: error.message } : {};
+      return error ? { error: friendlyAuthError(error.message) } : {};
     },
     confirmPasswordReset: async (email, token, newPassword) => {
       if (!supabase) return {};
       const { error: vErr } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
-      if (vErr) return { error: vErr.message };
+      if (vErr) return { error: friendlyAuthError(vErr.message) };
       const { error: uErr } = await supabase.auth.updateUser({ password: newPassword });
-      return uErr ? { error: uErr.message } : {};
+      return uErr ? { error: friendlyAuthError(uErr.message) } : {};
     },
   };
 
