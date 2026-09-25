@@ -174,7 +174,8 @@ create table if not exists matches (
   winner        text check (winner in ('home','away','draw')),
   home_team_id  uuid references teams(id),
   away_team_id  uuid references teams(id),
-  scorer_id     uuid references profiles(id),
+  scorer_id     uuid references players(id) on delete set null,  -- PRIMARY scorer (a PLAYER id; kept = scorer_ids[0] for reminders)
+  scorer_ids    uuid[] not null default '{}',   -- everyone allowed to score (player ids); see 20260927120000_multi_scorer.sql
   host_ids      uuid[] not null default '{}',   -- per-match hosts (in addition to the tournament's)
   logo_url      text,
   stream_url    text,                            -- optional live-stream link shown on the match page

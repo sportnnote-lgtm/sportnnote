@@ -10,7 +10,7 @@
  * replay the same events to authoritative state.
  */
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -22,7 +22,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -73,7 +73,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       on = false;
     };
   }, [profile?.id]);
-  const [scorerId, setScorerId] = useState<string | undefined>(undefined);
+  const [scorerIds, setScorerIds] = useState<string[]>([]);
   const [matchHostIds, setMatchHostIds] = useState<string[]>([]);
   const [homeLeaders, setHomeLeaders] = useState<TeamLeadership>({});
   const [awayLeaders, setAwayLeaders] = useState<TeamLeadership>({});
@@ -99,7 +99,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           // friendly per-match format overrides the tournament's format for the sport
           const config = (m.format ?? tour?.formats?.[sport]) as Record<string, unknown> | undefined;
           if (on) {
-            setScorerId(m.scorerId);
+            setScorerIds(m.scorerIds && m.scorerIds.length ? m.scorerIds : (m.scorerId ? [m.scorerId] : []));
             setMatchHostIds(m.hostIds ?? []);
             setHomeLeaders(hl);
             setAwayLeaders(al);
@@ -122,7 +122,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Only the designated scorer's device can score a real match. Ad-hoc local
   // games (no matchId) fall back to the caller's role-based capability.
   const hasMatch = !!matchId;
-  const canScore = hasMatch ? !!myPlayerId && scorerId === myPlayerId : routeCanScore;
+  const canScore = hasMatch ? !!myPlayerId && scorerIds.includes(myPlayerId) : routeCanScore;
   // The scorer taps "Start the match" before scoring begins; a match with events
   // is already underway. (Timer sports then expose their clock-start control.)
   const [localStarted, setLocalStarted] = useState(false);
@@ -309,8 +309,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   }, [homeRoster, awayRoster]);
   const nameOf = (id?: string) =>
     id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers, ...extraPeople].find((p) => p.id === id)?.fullName : undefined;
-  const scorerName = nameOf(scorerId);
-  const iAmScorer = !!myPlayerId && scorerId === myPlayerId;
+  const scorerNames = scorerIds.map((id) => nameOf(id) ?? 'Scorer');
+  const scorerName = scorerNames[0];
+  const iAmScorer = !!myPlayerId && scorerIds.includes(myPlayerId);
 
   // Per-team captain/squad helpers for the matchday-squad reminders.
   const leadersFor = (sd: 'home' | 'away') => (sd === 'home' ? homeLeaders : awayLeaders);
@@ -331,42 +332,67 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [pickScorer, setPickScorer] = useState(false);
   const [newScorerName, setNewScorerName] = useState('');
   const [newScorerPhone, setNewScorerPhone] = useState('');
-  const assignScorer = useCallback(
-    async (id: string | null) => {
+  // Persist a new scorer list; revert + surface the error if the write is rejected
+  // (e.g. RLS) instead of silently looking saved and reverting on reload.
+  const saveScorers = useCallback(
+    async (next: string[], notifyId?: string) => {
       if (!matchId) return;
-      setScorerId(id ?? undefined);
-      setPickScorer(false);
-      await setMatchScorer(matchId, id);
-      // Tell the new scorer they're on — prep reminders follow before kickoff.
-      if (id) {
-        const label = `${homeName} vs ${awayName}`;
+      const prev = scorerIds;
+      setScorerIds(next);
+      try {
+        await setMatchScorers(matchId, next);
+      } catch (e) {
+        setScorerIds(prev);
+        Alert.alert('Couldn’t save scorer', e instanceof Error ? e.message : 'Please try again.');
+        return;
+      }
+      // Tell a newly-added scorer they're on — prep reminders follow before kickoff.
+      if (notifyId) {
         void notify({
-          title: `🎯 You're the scorer — ${label}`,
-          body: 'You\'ll run the live score from your device. We\'ll remind you before kickoff.',
-          playerId: id,
+          title: `🎯 You're scoring — ${homeName} vs ${awayName}`,
+          body: 'You can run the live score from your device. We\'ll remind you before kickoff.',
+          playerId: notifyId,
           matchId,
         });
       }
     },
-    [matchId, homeName, awayName]
+    [matchId, scorerIds, homeName, awayName]
+  );
+  const addScorer = useCallback(
+    async (id: string) => {
+      if (scorerIds.includes(id)) { setPickScorer(false); return; }
+      await saveScorers([...scorerIds, id], id !== myPlayerId ? id : undefined);
+      setPickScorer(false);
+    },
+    [scorerIds, saveScorers, myPlayerId]
+  );
+  const removeScorer = useCallback(
+    async (id: string) => saveScorers(scorerIds.filter((x) => x !== id)),
+    [scorerIds, saveScorers]
   );
 
-  // One-tap for a host who lands on a scorer-less match: become the scorer and jump
-  // straight to the scoring controls. This is the discoverable path that answers
-  // "how do I actually score this?" without hunting through the Info tab.
+  // One-tap for a host who lands on a scorer-less match: add themselves as a scorer
+  // and jump straight to the controls — the discoverable answer to "how do I score
+  // this?" without hunting through the Info tab.
   const scoreThisMatch = useCallback(async () => {
     if (!myPlayerId) return;
-    await assignScorer(myPlayerId);
+    await saveScorers(Array.from(new Set([...scorerIds, myPlayerId])));
     setTab('scoring');
-  }, [myPlayerId, assignScorer]);
+  }, [myPlayerId, scorerIds, saveScorers]);
 
   const setHosts = useCallback(
     async (ids: string[]) => {
       if (!matchId) return;
+      const prev = matchHostIds;
       setMatchHostIds(ids);
-      await setMatchHosts(matchId, ids);
+      try {
+        await setMatchHosts(matchId, ids);
+      } catch (e) {
+        setMatchHostIds(prev);
+        Alert.alert('Couldn’t save hosts', e instanceof Error ? e.message : 'Please try again.');
+      }
     },
-    [matchId]
+    [matchId, matchHostIds]
   );
 
   // Inline-editable match details (date/time · venue · format) for hosts.
@@ -494,8 +520,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         <Text style={[textStyles.h3, { textAlign: 'center' }]}>✅ Match complete — final score saved</Text>
       ) : !canScore ? (
         <View style={{ gap: theme.spacing(2), alignItems: 'center' }}>
-          {scorerId ? (
-            <Text style={[textStyles.muted, { textAlign: 'center' }]}>👀 Viewing live — {scorerName ?? 'the assigned scorer'} is scoring this match from their device.</Text>
+          {scorerIds.length > 0 ? (
+            <Text style={[textStyles.muted, { textAlign: 'center' }]}>👀 Viewing live — {scorerNames.join(', ')} {scorerIds.length > 1 ? 'are' : 'is'} scoring this match.</Text>
           ) : (
             <Text style={[textStyles.muted, { textAlign: 'center' }]}>
               👀 Viewing live — no scorer assigned yet.{canManage ? ' Assign one from the Info tab.' : ''}
@@ -801,62 +827,75 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     };
 
     const myName = nameOf(myPlayerId ?? undefined) ?? profile?.fullName ?? 'this device';
+    // Roster/known people who aren't already scorers — the "add" candidates.
+    const addableScorers = scorerCandidates.filter((p) => !scorerIds.includes(p.id));
     const scorerCard = (
       <View style={st.infoCard}>
-        <Text style={textStyles.h3}>Match scorer</Text>
+        <Text style={textStyles.h3}>Match scorers</Text>
         <Text style={textStyles.muted}>
-          One device updates the score live; everyone else follows along. The organizer sets this before kickoff.
+          Anyone here can update the score live from their own device; everyone else follows along. You can add more than one and change them anytime — even mid-match.
         </Text>
-        <View style={st.scorerRow}>
-          {scorerId ? (
-            <View style={[st.scorerAvatar, iAmScorer && { backgroundColor: theme.colors.primary }]}>
-              <Text style={[st.scorerAvatarText, iAmScorer && { color: '#0B0F14' }]}>{scorerInitials(scorerName)}</Text>
-            </View>
-          ) : (
+
+        {/* Current scorers — each removable by a manager. */}
+        {scorerIds.length === 0 ? (
+          <View style={st.scorerRow}>
             <View style={st.scorerAvatar}><Text style={st.scorerIcon}>➕</Text></View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>
-              {scorerId ? (scorerName ?? 'Assigned scorer') : 'Not assigned yet'}
-            </Text>
-            <Text style={textStyles.muted} numberOfLines={1}>
-              {!scorerId ? 'Set before kickoff' : iAmScorer ? '📱 Scoring from this device' : matchLive ? 'Scoring from their device' : 'Assigned scorer'}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[textStyles.body, { fontWeight: '700' }]}>No scorer yet</Text>
+              <Text style={textStyles.muted} numberOfLines={1}>
+                {canManage ? 'Add yourself or someone else below.' : 'Waiting for the organizer to assign a scorer.'}
+              </Text>
+            </View>
           </View>
-          {scorerId && matchLive ? (
-            <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>LIVE</Text></View>
-          ) : null}
-          {canManage && (
-            <Text
-              style={st.editLink}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: pickScorer }}
-              onPress={() => setPickScorer((v) => !v)}
-            >
-              {pickScorer ? 'Close' : scorerId ? 'Change' : 'Assign'}
-            </Text>
-          )}
-        </View>
-        {!canManage && !scorerId && (
-          <Text style={textStyles.muted}>Waiting for the organizer to assign a scorer.</Text>
+        ) : (
+          scorerIds.map((id) => {
+            const mine = id === myPlayerId;
+            return (
+              <View key={id} style={st.scorerRow}>
+                <View style={[st.scorerAvatar, mine && { backgroundColor: theme.colors.primary }]}>
+                  <Text style={[st.scorerAvatarText, mine && { color: '#0B0F14' }]}>{scorerInitials(nameOf(id) ?? '')}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>{nameOf(id) ?? 'Scorer'}{mine ? ' · you' : ''}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{mine ? '📱 Scoring from this device' : matchLive ? 'Scoring from their device' : 'Can score this match'}</Text>
+                </View>
+                {matchLive ? (
+                  <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>LIVE</Text></View>
+                ) : null}
+                {canManage && (
+                  <Text style={[st.editLink, { color: theme.colors.danger }]} accessibilityRole="button" accessibilityLabel={`Remove ${nameOf(id) ?? 'scorer'}`} onPress={() => removeScorer(id)}>Remove</Text>
+                )}
+              </View>
+            );
+          })
         )}
+
+        {canManage && (
+          <Text
+            style={st.editLink}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: pickScorer }}
+            onPress={() => setPickScorer((v) => !v)}
+          >
+            {pickScorer ? 'Close' : '＋ Add scorer'}
+          </Text>
+        )}
+
         {canManage && pickScorer && (
           <View style={st.scorerPicker}>
             {myPlayerId && !iAmScorer && (
-              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Score from this device as ${myName}`} onPress={() => assignScorer(myPlayerId)}>
+              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Score from this device as ${myName}`} onPress={() => addScorer(myPlayerId)}>
                 <Text style={st.scorerOptText}>📱 This device — {myName}</Text>
               </TouchableOpacity>
             )}
-            {scorerCandidates.map((p) => (
-              <TouchableOpacity key={p.id} style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Make ${p.fullName} the scorer`} accessibilityState={{ selected: p.id === scorerId }} onPress={() => assignScorer(p.id)}>
-                <Text style={[st.scorerOptText, p.id === scorerId && { color: theme.colors.primary, fontWeight: '800' }]}>
-                  {p.id === scorerId ? '✓ ' : ''}{p.fullName}
-                </Text>
+            {addableScorers.map((p) => (
+              <TouchableOpacity key={p.id} style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Add ${p.fullName} as a scorer`} onPress={() => addScorer(p.id)}>
+                <Text style={st.scorerOptText}>＋ {p.fullName}</Text>
               </TouchableOpacity>
             ))}
             {/* Add anyone by mobile number — not limited to the squads. */}
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(1) }}>
-              <Text style={textStyles.muted}>Or assign someone by mobile number:</Text>
+              <Text style={textStyles.muted}>Or add someone by mobile number:</Text>
               <TextField label="" value={newScorerPhone} onChange={setNewScorerPhone} placeholder="+91 98765 43210" autoCapitalize="none" />
               <TextField label="" value={newScorerName} onChange={setNewScorerName} placeholder="Their name" />
               <Button
@@ -864,15 +903,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 disabled={!isValidPhone(newScorerPhone) || !newScorerName.trim()}
                 onPress={async () => {
                   const p = await addPersonByPhone(newScorerName, newScorerPhone);
-                  if (p) { setNewScorerName(''); setNewScorerPhone(''); await assignScorer(p.id); }
+                  if (p) { setNewScorerName(''); setNewScorerPhone(''); await addScorer(p.id); }
                 }}
               />
             </View>
-            {scorerId && (
-              <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Clear scorer" onPress={() => assignScorer(null)}>
-                <Text style={[st.scorerOptText, { color: theme.colors.danger }]}>✕ Clear scorer</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
         {/* Part-of-a-series banner — links back to the tie's standing. */}
@@ -1189,7 +1223,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {/* No scorer yet + I can manage → surface the primary action up front so a
               host isn't left wondering how to score their own match. One tap makes me
               the scorer and opens the controls; the scorer is still changeable in Info. */}
-          {canManage && !complete && !scorerId && !!myPlayerId && (
+          {canManage && !complete && scorerIds.length === 0 && !!myPlayerId && (
             <TouchableOpacity style={st.scoreCta} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Score this match from this device" onPress={scoreThisMatch}>
               <Text style={st.scoreCtaText}>▶ Score this match</Text>
               <Text style={st.scoreCtaHint}>No scorer assigned yet. Tap to score from this device — you can hand off to someone else anytime from Info.</Text>

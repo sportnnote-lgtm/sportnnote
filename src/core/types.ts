@@ -555,10 +555,13 @@ export interface Match {
   /** optional team managers/coaches — shown in the lineups view. Fully optional
    *  (local games often have none); set per side. */
   managers?: { home?: string; away?: string };
-  /** The one device/person the organizer designates to score this match. Only
-   *  that player's device shows the scoring controls; everyone else views.
-   *  A player id; maps to `scorer_id` on the backend. */
+  /** The PRIMARY scorer's player id (kept for reminders/notifications). Maps to
+   *  `scorer_id` on the backend. Prefer `scorerIds` for "can this player score". */
   scorerId?: UUID;
+  /** Everyone allowed to score this match from their device (player ids). More than
+   *  one person can share scoring duties. Maps to `scorer_ids` on the backend;
+   *  `scorerId` is the first of these. */
+  scorerIds?: UUID[];
   /** Sport-specific live state — shape defined by the sport's plugin. */
   state: unknown;
 }

@@ -13,6 +13,42 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Scorer persistence bug (FK mismatch) + multiple scorers/hosts · SHIPPED
+
+**Root-cause bug (live only): assigning a scorer never persisted.** A tester assigned
+themselves, reopened, and the scorer was gone. Cause: the app stores/compares a
+**PLAYER** id for the scorer (`canScore = scorer == my player id`; scorer picked from
+the roster), but `matches.scorer_id` had a **FK to profiles(id)** and
+`can_manage_match()` compared it to `auth.uid()` (a profile id). Writing a player id
+violated the FK, and `setMatchScorer` never checked `error`, so the UPDATE was
+**silently rejected** → column stayed null → "no scorer" on reload. Hosts persisted
+because `host_ids` is a plain array with no FK. (Demo has no FK, so it "worked" there —
+which masked it.)
+
+**Fix + multi-scorer (migration `20260927120000_multi_scorer.sql`):**
+- Repoint `matches.scorer_id` FK → `players(id) on delete set null` (it holds the
+  PRIMARY scorer's player id, kept in sync for reminders/notifications).
+- New `matches.scorer_ids uuid[]` (player ids) — **more than one person can score**.
+  `can_manage_match()` now also grants any listed scorer (`scorer_ids && auth_player_ids()`).
+- Backfill array from the old column; null out any stale non-player scorer_id first so
+  the new FK validates. GIN index on scorer_ids. `schema.sql` updated to match.
+
+**App:**
+- `repos`: `Match.scorerIds`; `getMatch` selects/maps `scorer_ids`; new
+  `setMatchScorers()` writes both columns and **throws on error**; `setMatchScorer`
+  delegates; `setMatchHosts` now throws on error too (no more silent failures).
+- `LiveScoringScreen`: `scorerId`→`scorerIds[]`; `canScore`/`iAmScorer` use `.includes`;
+  the "Match scorer" card is now **"Match scorers"** — a removable list + "＋ Add
+  scorer" (roster pick or by phone), editable **anytime, even mid-match**; write
+  failures now surface an Alert and revert instead of looking saved. Hosts already
+  supported multiple (`HostsCard`); verified add-by-phone → "Hosts · 2".
+
+Verified in demo: two scorers added (Aarav + Rahul, each Removable), second host added
+(Priya → Hosts · 2), Scoring tab present for a scorer. **Requires the user to run the
+migration + install the new build (versionCode 20)** for the live persistence fix.
+
+---
+
 ### 2026-09-26 — Match Info overhaul + size-aware lineups (7-a-side pitch) · SHIPPED + VERIFIED
 
 Three fixes from live use, all verified in a demo 7-a-side friendly. Build: EAS

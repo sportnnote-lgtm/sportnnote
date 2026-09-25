@@ -98,6 +98,7 @@ interface MatchRow {
   host_ids: string[] | null;
   logo_url: string | null;
   scorer_id: string | null;
+  scorer_ids: string[] | null;
   format: SportFormat | null;
   state: unknown;
   home_team: TeamRow | TeamRow[] | null;
@@ -151,6 +152,7 @@ function toMatch(r: MatchRow): Match {
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
     scorerId: r.scorer_id ?? undefined,
+    scorerIds: (r.scorer_ids && r.scorer_ids.length ? r.scorer_ids : (r.scorer_id ? [r.scorer_id] : [])) as string[],
     // Empty `{}` counts as "no per-match format" so the tournament's format is
     // still inherited (the DB defaults the column to {}). A non-empty format —
     // a friendly's rules, or series metadata — is kept.
@@ -162,7 +164,7 @@ function toMatch(r: MatchRow): Match {
 }
 
 const MATCH_SELECT =
-  'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, format, state,' +
+  'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, scorer_ids, format, state,' +
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
 
@@ -312,7 +314,7 @@ export async function getScopedMatches(profileId?: string): Promise<{ mine: Matc
   const myTours = new Set(tournaments.filter((t) => myPlayerId && t.hostIds?.includes(myPlayerId)).map((t) => t.id));
 
   const isMine = (m: Match) =>
-    !!(myPlayerId && (m.hostIds?.includes(myPlayerId) || m.scorerId === myPlayerId)) ||
+    !!(myPlayerId && (m.hostIds?.includes(myPlayerId) || m.scorerId === myPlayerId || m.scorerIds?.includes(myPlayerId))) ||
     (!!m.homeTeam && myTeams.has(m.homeTeam.id)) || (!!m.awayTeam && myTeams.has(m.awayTeam.id)) ||
     (!!m.tournamentId && myTours.has(m.tournamentId));
   const isFollowed = (m: Match) =>
@@ -676,23 +678,40 @@ export async function popMatchEvent(matchId: string): Promise<MatchEventRecord |
 /** Snapshot the latest reduced state on the match row for fast list reads. */
 /** Designate (or clear) the single device/person allowed to score this match.
  *  Set by the organizer before kickoff. */
-export async function setMatchScorer(matchId: string, scorerId: string | null): Promise<void> {
+/** Set the full list of scorers (player ids) allowed to score this match. The first
+ *  is kept as the primary `scorer_id` for reminders/notifications. Throws on a failed
+ *  write so the caller can surface it — a silent failure here is what made assigning a
+ *  scorer look like it "didn't save". */
+export async function setMatchScorers(matchId: string, playerIds: string[]): Promise<void> {
+  const ids = Array.from(new Set(playerIds.filter(Boolean)));
   if (!isSupabaseConfigured || !supabase) {
     const m = demo.matches.find((x) => x.id === matchId);
-    if (m) m.scorerId = scorerId ?? undefined;
+    if (m) { m.scorerIds = ids; m.scorerId = ids[0] ?? undefined; }
     return;
   }
-  await supabase.from('matches').update({ scorer_id: scorerId }).eq('id', matchId);
+  const { error } = await supabase
+    .from('matches')
+    .update({ scorer_ids: ids, scorer_id: ids[0] ?? null })
+    .eq('id', matchId);
+  if (error) throw new Error(error.message);
 }
 
-/** Replace the set of hosts for a match (any current host can add/remove). */
+/** Back-compat single-scorer setter (used by the create-match flow). */
+export async function setMatchScorer(matchId: string, scorerId: string | null): Promise<void> {
+  return setMatchScorers(matchId, scorerId ? [scorerId] : []);
+}
+
+/** Replace the set of hosts for a match (any current host can add/remove). Throws on
+ *  a failed write so the caller can surface it rather than silently reverting. */
 export async function setMatchHosts(matchId: string, hostIds: string[]): Promise<void> {
+  const ids = Array.from(new Set(hostIds.filter(Boolean)));
   if (!isSupabaseConfigured || !supabase) {
     const m = demo.matches.find((x) => x.id === matchId);
-    if (m) m.hostIds = hostIds;
+    if (m) m.hostIds = ids;
     return;
   }
-  await supabase.from('matches').update({ host_ids: hostIds }).eq('id', matchId);
+  const { error } = await supabase.from('matches').update({ host_ids: ids }).eq('id', matchId);
+  if (error) throw new Error(error.message);
 }
 
 /** Replace the set of hosts for a tournament. */
