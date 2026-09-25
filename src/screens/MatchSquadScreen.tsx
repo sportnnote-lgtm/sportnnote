@@ -16,7 +16,7 @@ import { EmptyState, Button, ScreenTitle, textStyles, plural } from '../componen
 import { getSport } from '../sports/registry';
 import { getRoster, getMatchSquads, setMatchSquad, getLineup, setLineup, getLastSquadForTeam } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
-import { matchEligibility } from '../core/eligibility';
+import { matchEligibility, canFieldPlayer, TESTING_ALLOW_UNVERIFIED } from '../core/eligibility';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -86,7 +86,7 @@ export default function MatchSquadScreen() {
 
   // The last XI is only copyable for players still in this squad and eligible.
   const lastEligibleCount = lastSquad
-    ? [...lastSquad.starters, ...lastSquad.subs].filter((id) => roster.some((p) => p.id === id && matchEligibility(p).ok)).length
+    ? [...lastSquad.starters, ...lastSquad.subs].filter((id) => roster.some((p) => p.id === id && canFieldPlayer(p))).length
     : 0;
   const copyLastXI = () => {
     if (!lastSquad) return;
@@ -96,17 +96,17 @@ export default function MatchSquadScreen() {
       let starts = 0;
       for (const id of lastSquad.starters) {
         const p = roster.find((x) => x.id === id);
-        if (p && matchEligibility(p).ok && starts < playersPerSide) { next[id] = 'start'; starts++; }
+        if (p && canFieldPlayer(p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
       }
       for (const id of lastSquad.subs) {
         const p = roster.find((x) => x.id === id);
-        if (p && matchEligibility(p).ok && next[id] !== 'start') next[id] = 'sub';
+        if (p && canFieldPlayer(p) && next[id] !== 'start') next[id] = 'sub';
       }
       return next;
     });
   };
 
-  const eligible = roster.filter((p) => matchEligibility(p).ok);
+  const eligible = roster.filter((p) => canFieldPlayer(p));
   const startCount = Object.values(roles).filter((r) => r === 'start').length;
   const subCount = Object.values(roles).filter((r) => r === 'sub').length;
   const xiFull = startCount >= playersPerSide;
@@ -114,7 +114,7 @@ export default function MatchSquadScreen() {
   const setRole = (id: string, role: Role) =>
     setRoles((r) => {
       const p = roster.find((x) => x.id === id);
-      if (p && !matchEligibility(p).ok) return r; // unverified players can't be fielded
+      if (p && !canFieldPlayer(p)) return r; // unverified players can't be fielded (unless the testing override is on)
       if (role === 'start' && r[id] !== 'start' && startCount >= playersPerSide) return r; // XI full
       return { ...r, [id]: r[id] === role ? 'out' : role };
     });
@@ -199,22 +199,35 @@ export default function MatchSquadScreen() {
       </View>
 
       <ScrollView contentContainerStyle={st.content}>
+        {TESTING_ALLOW_UNVERIFIED && (
+          <View style={st.testBanner}>
+            <Text style={st.testBannerText}>
+              ⚠️ Testing mode: eligibility checks are off — unverified players can be fielded. This will be re-enabled before go-live.
+            </Text>
+          </View>
+        )}
         {roster.length === 0 ? (
           <EmptyState icon="👥" title="No players in this team’s squad yet" hint="Add them from the match Info tab (＋ Add players to this team)." compact />
         ) : (
           roster.map((p) => {
             const role = roles[p.id] ?? 'out';
             const elig = matchEligibility(p);
-            const disableStart = !elig.ok || (role !== 'start' && xiFull);
+            const canField = canFieldPlayer(p); // eligible, OR the testing override is on
+            const overridden = !elig.ok && canField; // fieldable only because of the override
+            const disableStart = !canField || (role !== 'start' && xiFull);
             return (
-              <View key={p.id} style={[st.row, !elig.ok && st.rowLocked, role !== 'out' && st.rowActive]}>
+              <View key={p.id} style={[st.row, !canField && st.rowLocked, role !== 'out' && st.rowActive]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[textStyles.body, !elig.ok && st.lockedName]}>
+                  <Text style={[textStyles.body, !canField && st.lockedName]}>
                     {p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}
                   </Text>
-                  {!elig.ok ? <Text style={st.lockReason}>🔒 {elig.reason}</Text> : null}
+                  {!elig.ok ? (
+                    <Text style={overridden ? st.overrideReason : st.lockReason}>
+                      {overridden ? '⚠️' : '🔒'} {elig.reason}{overridden ? ' · allowed (testing)' : ''}
+                    </Text>
+                  ) : null}
                 </View>
-                {elig.ok ? (
+                {canField ? (
                   <View style={st.toggles}>
                     <Toggle label="Start" active={role === 'start'} disabled={disableStart} color={theme.colors.primary} onPress={() => setRole(p.id, 'start')} />
                     <Toggle label="Bench" active={role === 'sub'} color={theme.colors.accent} onPress={() => setRole(p.id, 'sub')} />
@@ -285,7 +298,10 @@ const st = StyleSheet.create({
   rowLocked: { opacity: 0.7, borderStyle: 'dashed' },
   lockedName: { color: theme.colors.textMuted },
   lockReason: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
+  overrideReason: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
   lockTag: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  testBanner: { backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, padding: theme.spacing(3) },
+  testBannerText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
   toggles: { flexDirection: 'row', gap: theme.spacing(2) },
   toggle: {
     paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3), borderRadius: theme.radius.pill,

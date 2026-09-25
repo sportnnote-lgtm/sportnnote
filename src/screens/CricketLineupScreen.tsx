@@ -15,7 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
-import { matchEligibility } from '../core/eligibility';
+import { canFieldPlayer } from '../core/eligibility';
 import { splitBattingOrder } from '../sports/cricket/lineup';
 import type { Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -67,7 +67,7 @@ export default function CricketLineupScreen() {
   // a picked player can always be removed (e.g. the Remove link passes a bare id).
   const toggle = (id: string, player?: Player) => {
     const isPicked = picked.includes(id);
-    if (!isPicked && player && !matchEligibility(player).ok) return; // can't add an unverified player
+    if (!isPicked && player && !canFieldPlayer(player)) return; // can't add an unverified player (unless the testing override is on)
     setOrder((o) => {
       const cur = o[side];
       return { ...o, [side]: isPicked ? cur.filter((x) => x !== id) : [...cur, id] };
@@ -138,13 +138,13 @@ export default function CricketLineupScreen() {
         <View style={st.chips}>
           {roster.length === 0 && <EmptyState icon="👥" title="No squad for this team yet" compact />}
           {roster.map((p) => {
-            const elig = matchEligibility(p);
+            const canField = canFieldPlayer(p);
             const no = battingNo(p.id);
             const label = no >= 0 ? `${no < playersPerSide ? no + 1 : 'S'}. ${p.fullName}` : p.fullName;
             return (
               <SelectChip
                 key={p.id}
-                label={elig.ok ? label : `🔒 ${p.fullName}`}
+                label={canField ? label : `🔒 ${p.fullName}`}
                 active={no >= 0}
                 onPress={() => toggle(p.id, p)}
               />

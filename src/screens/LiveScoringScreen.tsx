@@ -34,7 +34,7 @@ import { tournamentHostPlayerIds } from '../core/org';
 import { seriesMetaFromFormat } from '../data/series';
 import { invitePerson } from '../data/repos';
 import { isValidPhone } from '../core/phone';
-import { matchEligibility } from '../core/eligibility';
+import { canFieldPlayer } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
 import { formatDateTime, useUserTimeZone } from '../core/time';
@@ -224,8 +224,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Only verified players can take part in scoring (under-18 → verified guardian;
   // 18+ → own verified mobile & email). Ineligible players are kept out of the
   // scoring roster & lineups so they can't be fielded or credited stats.
-  const homeScoreRoster = useMemo(() => homeRoster.filter((p) => matchEligibility(p).ok), [homeRoster]);
-  const awayScoreRoster = useMemo(() => awayRoster.filter((p) => matchEligibility(p).ok), [awayRoster]);
+  const homeScoreRoster = useMemo(() => homeRoster.filter((p) => canFieldPlayer(p)), [homeRoster]);
+  const awayScoreRoster = useMemo(() => awayRoster.filter((p) => canFieldPlayer(p)), [awayRoster]);
   const excludedCount = (homeRoster.length - homeScoreRoster.length) + (awayRoster.length - awayScoreRoster.length);
 
   // Lineup (for LiveExtras + clean sheets). Refetch on focus so edits show up.

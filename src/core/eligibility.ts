@@ -31,3 +31,21 @@ export function matchEligibility(p: Player): Eligibility {
   if (!p.emailVerified) return { ok: false, reason: 'Email not verified' };
   return { ok: true };
 }
+
+// ⚠️ TESTING ONLY — MUST be set back to `false` before go-live. ⚠️
+// While true, unverified players (no verified mobile / no DOB / guardian not verified)
+// may still be picked into a squad and placed on the pitch, so the squad / lineup /
+// formation flows can be tested without every tester completing verification. This
+// DELIBERATELY relaxes the child-safeguarding gate — it must NOT ship to production.
+// `matchEligibility()` still returns the true assessment (screens show the real
+// reason as a warning); only the *enforcement* is relaxed, via `canFieldPlayer()`.
+// Flip this one constant to false to fully re-arm the gate everywhere.
+export const TESTING_ALLOW_UNVERIFIED = true;
+
+/** Whether a player may be fielded (picked into a squad / placed on the pitch).
+ *  In production this is exactly `matchEligibility(p).ok`; during the testing phase
+ *  the override above lets unverified players through. Enforcement points call this;
+ *  informational labels keep calling `matchEligibility` so the real reason still shows. */
+export function canFieldPlayer(p: Player): boolean {
+  return TESTING_ALLOW_UNVERIFIED || matchEligibility(p).ok;
+}
