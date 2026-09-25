@@ -351,6 +351,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     [matchId, homeName, awayName]
   );
 
+  // One-tap for a host who lands on a scorer-less match: become the scorer and jump
+  // straight to the scoring controls. This is the discoverable path that answers
+  // "how do I actually score this?" without hunting through the Info tab.
+  const scoreThisMatch = useCallback(async () => {
+    if (!myPlayerId) return;
+    await assignScorer(myPlayerId);
+    setTab('scoring');
+  }, [myPlayerId, assignScorer]);
+
   const setHosts = useCallback(
     async (ids: string[]) => {
       if (!matchId) return;
@@ -1177,6 +1186,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               tab a compact MiniScore replaces it (rendered by the controls), so
               the score sits next to the buttons instead of being duplicated. */}
           {showFinalOnly ? finalScoreNode : (activeTab === 'scoring' && started && !complete ? null : scoreboardNode)}
+          {/* No scorer yet + I can manage → surface the primary action up front so a
+              host isn't left wondering how to score their own match. One tap makes me
+              the scorer and opens the controls; the scorer is still changeable in Info. */}
+          {canManage && !complete && !scorerId && !!myPlayerId && (
+            <TouchableOpacity style={st.scoreCta} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Score this match from this device" onPress={scoreThisMatch}>
+              <Text style={st.scoreCtaText}>▶ Score this match</Text>
+              <Text style={st.scoreCtaHint}>No scorer assigned yet. Tap to score from this device — you can hand off to someone else anytime from Info.</Text>
+            </TouchableOpacity>
+          )}
           {scrollTabs ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabScroll}>
               {TABS.map((t) => (
@@ -1582,6 +1600,9 @@ const st = StyleSheet.create({
   scorerOptText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
   assignBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(5) },
   assignBtnText: { color: '#06120D', fontSize: theme.font.body, fontWeight: '800' },
+  scoreCta: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4), gap: theme.spacing(1), ...theme.shadow.card },
+  scoreCtaText: { color: '#06120D', fontSize: theme.font.body, fontWeight: '800' },
+  scoreCtaHint: { color: '#06120D', opacity: 0.8, fontSize: theme.font.small, fontWeight: '600' },
   remindBtn: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   remindText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   remindDone: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), flexWrap: 'wrap' },

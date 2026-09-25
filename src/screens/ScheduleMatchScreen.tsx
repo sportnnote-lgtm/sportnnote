@@ -203,12 +203,16 @@ export default function ScheduleMatchScreen() {
         format,
         streamUrl: stream.trim() || undefined,
       });
+      // For a friendly, the creator is the scorer by default — whether they score
+      // it now or scheduled it for later. Without this, a scheduled friendly opened
+      // later has no scorer, so the Scoring tab (scorer-only) never appears and the
+      // creator can't work out how to score their own match. They can hand off from
+      // the Info tab anytime. (Tournament matches are left unassigned — the organizer
+      // schedules many they won't personally score.)
+      if (isFriendly && myId) await setMatchScorer(created.id, myId);
       // A "now" friendly jumps straight into scoring (replace so Back skips the
       // form); a friendly set for later just files as scheduled → Upcoming.
       if (isImmediate) {
-        // "Score now" means the creator scores it — assign them so the scoring
-        // controls are available immediately.
-        if (myId) await setMatchScorer(created.id, myId);
         nav.replace('LiveScoring', {
           matchId: created.id, sport,
           homeName: created.homeTeam.shortName, awayName: created.awayTeam.shortName,
