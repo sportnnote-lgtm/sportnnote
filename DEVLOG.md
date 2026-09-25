@@ -41,6 +41,20 @@ seeded before `meta.config` loaded (perSide undefined → 11 slots); added `perS
 to the deps. Verified: Lineups tab renders 7v7 with 2-3-1; editor offers the four
 7-a-side formations and re-lays slots on switch (3-2-1 → GK,CB,CB,CB,CM,CM,ST).
 
+**4. Scorer discoverability (found in live use).** A friendly *scheduled for later*
+never got a scorer — only "Create & score now" assigned one — so reopening it showed
+no **Scoring** tab (it's scorer-only: `canScore = myPlayerId === scorerId`) and the
+creator had no obvious way to score their own match (tabs ended at Summary). Fixed
+two ways: (a) `ScheduleMatchScreen` now assigns the creator as scorer for *all*
+friendlies, not just immediate ones (changeable from Info; tournament matches stay
+unassigned so organizers aren't force-assigned to games they won't score); (b) a
+prominent "▶ Score this match" banner shows above the tabs whenever a host opens a
+scorer-less match — one tap makes them the scorer and opens the controls. Verified in
+demo by clearing the scorer (Scoring tab vanishes, banner appears) then tapping it
+(Scoring tab returns, lands on "▶ Start the match"). Files: `ScheduleMatchScreen`,
+`LiveScoringScreen` (`scoreThisMatch`, banner + styles). Rolled into build
+versionCode 19 (`30778493`).
+
 ---
 
 ### 2026-08-31 — Verification review UX + pickleball/squash doubles
