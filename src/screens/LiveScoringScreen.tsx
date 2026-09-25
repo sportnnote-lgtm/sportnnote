@@ -22,13 +22,18 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorer, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
+import { DateTimeField } from '../components/DateTimeField';
+import { VenueField } from '../components/VenueField';
+import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { tournamentHostPlayerIds } from '../core/org';
 import { seriesMetaFromFormat } from '../data/series';
+import { invitePerson } from '../data/repos';
+import { isValidPhone } from '../core/phone';
 import { matchEligibility } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
@@ -152,6 +157,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // hosts, the scorer or a manager can be an organizer/referee who isn't a
   // squad member (otherwise their card would read a bare "Host").
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  // People added by phone as scorer/host who aren't in either squad — kept so
+  // their name resolves in the scorer/host rows.
+  const [extraPeople, setExtraPeople] = useState<Player[]>([]);
   useEffect(() => {
     let on = true;
     getPlayers().then((p) => on && setAllPlayers(p));
@@ -296,7 +304,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     return [...homeRoster, ...awayRoster].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
   }, [homeRoster, awayRoster]);
   const nameOf = (id?: string) =>
-    id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers].find((p) => p.id === id)?.fullName : undefined;
+    id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers, ...extraPeople].find((p) => p.id === id)?.fullName : undefined;
   const scorerName = nameOf(scorerId);
   const iAmScorer = !!myPlayerId && scorerId === myPlayerId;
 
@@ -317,6 +325,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   };
 
   const [pickScorer, setPickScorer] = useState(false);
+  const [newScorerName, setNewScorerName] = useState('');
+  const [newScorerPhone, setNewScorerPhone] = useState('');
   const assignScorer = useCallback(
     async (id: string | null) => {
       if (!matchId) return;
@@ -345,6 +355,41 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     },
     [matchId]
   );
+
+  // Inline-editable match details (date/time · venue · format) for hosts.
+  const [editInfo, setEditInfo] = useState(false);
+  const [editWhen, setEditWhen] = useState<Date>(new Date());
+  const [editVenue, setEditVenue] = useState('');
+  const [editVenueUrl, setEditVenueUrl] = useState('');
+  const [editFmt, setEditFmt] = useState<Record<string, FormatVal>>({});
+  const openEditInfo = () => {
+    setEditWhen(meta.startsAt ? new Date(meta.startsAt) : new Date());
+    setEditVenue(meta.venueName ?? '');
+    setEditVenueUrl(meta.venueMapsUrl ?? '');
+    setEditFmt({ ...defaultsFor(getSport(sport).formatFields ?? []), ...((meta.config as Record<string, FormatVal>) ?? {}) });
+    setEditInfo(true);
+  };
+  const saveInfo = async () => {
+    if (!matchId) return;
+    await rescheduleMatch(matchId, { startsAt: editWhen.toISOString(), venueName: editVenue.trim() || null, venueMapsUrl: editVenueUrl.trim() || null });
+    await setMatchFormat(matchId, editFmt as Record<string, number | string | boolean>);
+    setMeta((m) => ({ ...m, startsAt: editWhen.toISOString(), venueName: editVenue.trim() || undefined, venueMapsUrl: editVenueUrl.trim() || undefined, config: editFmt as Record<string, unknown> }));
+    setEditInfo(false);
+  };
+
+  // Add any platform user (existing or brand-new) by phone — used to assign a
+  // scorer or host who isn't in either squad. Mirrors the player-add identity
+  // model: one number ⇒ one person.
+  const addPersonByPhone = useCallback(async (name: string, phone: string): Promise<Player | null> => {
+    if (!isValidPhone(phone) || !name.trim()) return null;
+    try {
+      const res = await invitePerson({ name: name.trim(), phone });
+      setExtraPeople((prev) => (prev.some((p) => p.id === res.player.id) ? prev : [...prev, res.player]));
+      return res.player;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Match stat lines feed the generic Summary (sports without their own). Refetch
   // on focus and whenever the score changes so the ratings stay current.
@@ -796,9 +841,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-            {scorerCandidates.length === 0 && (
-              <Text style={textStyles.muted}>Set the matchday squads first to pick a scorer from the players.</Text>
-            )}
+            {/* Add anyone by mobile number — not limited to the squads. */}
+            <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(1) }}>
+              <Text style={textStyles.muted}>Or assign someone by mobile number:</Text>
+              <TextField label="" value={newScorerPhone} onChange={setNewScorerPhone} placeholder="+91 98765 43210" autoCapitalize="none" />
+              <TextField label="" value={newScorerName} onChange={setNewScorerName} placeholder="Their name" />
+              <Button
+                label="＋ Add as scorer"
+                disabled={!isValidPhone(newScorerPhone) || !newScorerName.trim()}
+                onPress={async () => {
+                  const p = await addPersonByPhone(newScorerName, newScorerPhone);
+                  if (p) { setNewScorerName(''); setNewScorerPhone(''); await assignScorer(p.id); }
+                }}
+              />
+            </View>
             {scorerId && (
               <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Clear scorer" onPress={() => assignScorer(null)}>
                 <Text style={[st.scorerOptText, { color: theme.colors.danger }]}>✕ Clear scorer</Text>
@@ -1202,26 +1258,52 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
                   onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
                 />
-                <InfoRow icon="📋" label="Format" value={formatLine(sport, fmt)} />
-                <InfoRow icon="📅" label="Date" value={dateStr} />
-                <InfoRow
-                  icon="📍" label="Venue"
-                  value={meta.venueName ?? '—'}
-                  onPress={meta.venueName ? () => openVenue(meta.venueName, meta.venueMapsUrl) : undefined}
-                  accessibilityLabel={meta.venueName ? `Open ${meta.venueName} in maps` : undefined}
-                />
-                {meta.tournamentName && meta.tournamentId && (
-                  <InfoRow
-                    icon="🏆" label="Tournament"
-                    value={`${meta.tournamentName} ›`}
-                    onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}
-                    accessibilityLabel={`Open ${meta.tournamentName}`}
-                  />
-                )}
-                {meta.startsAt && !started && !complete && (
-                  <View style={{ marginTop: theme.spacing(2), gap: theme.spacing(2) }}>
-                    {startsIn ? <Text style={st.kickoffHint}>⏱ Starts {startsIn}</Text> : null}
-                    <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} />
+                {!editInfo ? (
+                  <>
+                    <InfoRow icon="📋" label="Format" value={formatLine(sport, fmt)} />
+                    <InfoRow icon="📅" label="Date" value={dateStr} />
+                    <InfoRow
+                      icon="📍" label="Venue"
+                      value={meta.venueName ?? '—'}
+                      onPress={meta.venueName ? () => openVenue(meta.venueName, meta.venueMapsUrl) : undefined}
+                      accessibilityLabel={meta.venueName ? `Open ${meta.venueName} in maps` : undefined}
+                    />
+                    {meta.tournamentName && meta.tournamentId && (
+                      <InfoRow
+                        icon="🏆" label="Tournament"
+                        value={`${meta.tournamentName} ›`}
+                        onPress={() => navigation.navigate('Tournament', { tournamentId: meta.tournamentId! })}
+                        accessibilityLabel={`Open ${meta.tournamentName}`}
+                      />
+                    )}
+                    {canManage && !complete && matchId && (
+                      <Text style={[st.editLink, { marginTop: theme.spacing(2) }]} accessibilityRole="button" onPress={openEditInfo}>✏️ Edit date, venue &amp; format</Text>
+                    )}
+                    {meta.startsAt && !started && !complete && (
+                      <View style={{ marginTop: theme.spacing(2), gap: theme.spacing(2) }}>
+                        {startsIn ? <Text style={st.kickoffHint}>⏱ Starts {startsIn}</Text> : null}
+                        <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} />
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={{ gap: theme.spacing(3), marginTop: theme.spacing(1) }}>
+                    <DateTimeField label="Date & time" value={editWhen} onChange={setEditWhen} />
+                    <VenueField venue={editVenue} onVenue={setEditVenue} venueUrl={editVenueUrl} onVenueUrl={setEditVenueUrl} knownVenues={[]} />
+                    {(getSport(sport).formatFields ?? []).length > 0 && !matchLive && (
+                      <SportFormatEditor
+                        sport={sport}
+                        value={editFmt}
+                        onChange={(k, v) => setEditFmt((f) => ({ ...f, [k]: v }))}
+                        heading="format"
+                        omitKeys={getSport(sport).participantKind === 'both' ? ['playersPerSide'] : undefined}
+                      />
+                    )}
+                    {matchLive && <Text style={textStyles.muted}>Format is locked once the match is live.</Text>}
+                    <View style={{ flexDirection: 'row', gap: theme.spacing(3) }}>
+                      <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setEditInfo(false)} />
+                      <Button label="Save changes" style={{ flex: 1 }} onPress={saveInfo} />
+                    </View>
                   </View>
                 )}
               </View>
@@ -1236,6 +1318,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   candidates={scorerCandidates.map((p) => ({ id: p.id, name: p.fullName }))}
                   canManage={canManage}
                   onChange={setHosts}
+                  onAddByPhone={async (name, phone) => (await addPersonByPhone(name, phone))?.id ?? null}
                   meId={myPlayerId ?? undefined}
                   subtitle="Hosts for this game (in addition to the tournament's hosts). Reminders to assign a scorer go to all of them."
                 />
