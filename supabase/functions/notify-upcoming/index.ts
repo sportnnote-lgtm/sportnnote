@@ -59,7 +59,7 @@ Deno.serve(async () => {
   // 1) Scheduled matches close enough that some lead window is (or just became) due.
   const { data: matches } = await supabase
     .from('matches')
-    .select('id, starts_at, scorer_id, home_team_id, away_team_id')
+    .select('id, starts_at, scorer_id, scorer_ids, home_team_id, away_team_id')
     .eq('status', 'scheduled')
     .gt('starts_at', nowISO)
     .lte('starts_at', horizonISO);
@@ -99,12 +99,18 @@ Deno.serve(async () => {
     return teamId ? rosterByTeam.get(teamId) ?? [] : [];
   };
 
+  // Scorers are stored as PLAYER ids (scorer_ids, or the legacy single scorer_id).
+  const scorerIdsOf = (m: Record<string, unknown>): string[] =>
+    ((m.scorer_ids as string[] | null)?.length ? (m.scorer_ids as string[]) : (m.scorer_id ? [m.scorer_id as string] : []));
+
   // 3) Build the desired notifications (player + scorer + follower) per due (match, lead).
   const allPlayerIds = new Set<string>();
   const perMatch = dueMatches.map(({ m, leads }) => {
     const home = playersInSide(m.id as string, m.home_team_id as string | null, 'home');
     const away = playersInSide(m.id as string, m.away_team_id as string | null, 'away');
     [...home, ...away].forEach((p) => allPlayerIds.add(p));
+    // Scorers need a profile lookup too (to push to their account).
+    scorerIdsOf(m).forEach((sid) => allPlayerIds.add(sid));
     return { m, leads, playing: new Set([...home, ...away]) };
   });
 
@@ -136,9 +142,14 @@ Deno.serve(async () => {
           targets.push({ profileId: followerId, kind: 'follower', leadKey: lead.key, matchId: m.id as string, playerId: pid, title: `⭐ ${player.full_name} plays ${lead.label}`, body: `${player.full_name} is in ${label}.` });
         }
       }
-      // the assigned scorer (skip the 15m lead — matches the client's 1d/1h scorer windows)
-      if (m.scorer_id && lead.key !== '15m') {
-        targets.push({ profileId: m.scorer_id as string, kind: 'scorer', leadKey: lead.key, matchId: m.id as string, playerId: '', title: `🎯 You're scoring ${label}`, body: `Get ready to score — starts ${lead.label}.` });
+      // the assigned scorer(s) (skip the 15m lead — matches the client's 1d/1h scorer
+      // windows). scorer_ids hold PLAYER ids → map each to its profile to push.
+      if (lead.key !== '15m') {
+        for (const sid of scorerIdsOf(m)) {
+          const sp = playerById.get(sid);
+          if (!sp?.profile_id) continue;
+          targets.push({ profileId: sp.profile_id as string, kind: 'scorer', leadKey: lead.key, matchId: m.id as string, playerId: sid, title: `🎯 You're scoring ${label}`, body: `Get ready to score — starts ${lead.label}.` });
+        }
       }
     }
   }
