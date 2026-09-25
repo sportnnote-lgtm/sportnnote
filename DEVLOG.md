@@ -13,6 +13,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — TESTING override: field unverified players · SHIPPED + VERIFIED  ⚠️ revert before go-live
+
+Testers can't finish mobile/DOB verification yet, so the safeguarding gate blocked
+picking any of them into a squad/onto the pitch — the lineup/formation flows couldn't be
+exercised. The account owner deliberately relaxed the gate **for the testing phase only**
+(reverses the earlier "even friendlies shouldn't bypass" rule). One switch:
+`TESTING_ALLOW_UNVERIFIED = true` in `core/eligibility.ts` + `canFieldPlayer(p)` (=
+override OR `matchEligibility(p).ok`). `matchEligibility()` is unchanged (screens still
+show the true reason); only enforcement is relaxed — MatchSquad / LiveScoring /
+CricketLineup now call `canFieldPlayer`. MatchSquad shows a persistent "⚠️ Testing mode:
+eligibility checks are off" banner and marks each overridden player "· allowed (testing)".
+Verified in demo (DOB-less player becomes Start/Bench-toggleable). **⚠️ Set
+`TESTING_ALLOW_UNVERIFIED = false` before go-live** to re-arm the child-safeguarding gate;
+tracked in [[sportfolio-golive-readiness]]. Build versionCode 23.
+
+---
+
 ### 2026-09-26 — Edit formation & positions from the Lineups tab · SHIPPED + VERIFIED
 
 Testers couldn't find how to set a team's formation / who-plays-where: the only path
