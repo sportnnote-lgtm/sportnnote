@@ -13,6 +13,36 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Match Info overhaul + size-aware lineups (7-a-side pitch) · SHIPPED + VERIFIED
+
+Three fixes from live use, all verified in a demo 7-a-side friendly. Build: EAS
+preview **versionCode 18** (`e92a8831`), live Supabase env.
+
+**1. Editable Match Info + assign scorer/hosts by phone** (`LiveScoringScreen`,
+`HostsCard`, new `DateTimeField`/`VenueField`/`SportFormatEditor` use). The Info tab
+now shows "✏️ Edit date, venue & format" (canManage, pre-complete): date/time picker,
+venue name + Maps URL, and the sport's own format editor (hidden once live). The
+Match Scorer "+Assign" now works — pick any platform user or **add someone by mobile
+number** (creates/invites them, then assigns); multiple scorers/hosts supported;
+Hosts card gained an add-by-phone form. Format shows as e.g. "7-a-side · 5 subs".
+
+**2. Add-players + captain** (carried from 2026-09-25): first player added to a
+captain-less team auto-becomes captain and is notified; live roster now persists.
+Verified: "Invited Rahul Sharma **as captain**".
+
+**3. Size-aware pitch & formations** (`football/formation.ts`, `sports/types.ts`,
+`repos.getLineup`, `MatchSquad`→`LineupEditor` param threading). A 7-a-side (or
+5-a-side) match no longer shows an 11-slot 4-3-3. Added small-sided templates
+(7: 2-3-1/3-2-1/3-1-2/2-2-2; 5: 1-2-1/2-2/2-1-1) + `perSide`-keyed helpers;
+`getLineup(matchId, sport, perSide)` seeds the blank at the right size; captain/coach
+edit formation + positions in the editor. **Bug found & fixed in verification:**
+LiveScoring's lineup `useFocusEffect` was keyed only on `[matchId, sport]`, so it
+seeded before `meta.config` loaded (perSide undefined → 11 slots); added `perSide`
+to the deps. Verified: Lineups tab renders 7v7 with 2-3-1; editor offers the four
+7-a-side formations and re-lays slots on switch (3-2-1 → GK,CB,CB,CB,CM,CM,ST).
+
+---
+
 ### 2026-08-31 — Verification review UX + pickleball/squash doubles
 
 **Verification review from the profile + a discoverable queue.** In real use the
