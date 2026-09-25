@@ -27,6 +27,16 @@ scorers via `canEditSquad`) that opens the squad → pitch editor for that side.
 Arrange on pitch → assign GK → save → pitch shows the player at GK in 2-3-1. Build
 versionCode 21.
 
+**Per-side permissions (versionCode 22).** A captain/vice-captain may edit ONLY their
+own team's squad/lineup/formation — never the opponent's; match runners (host/organizer
+or scorer) keep both sides. `canEditHome`/`canEditAway` = run-match OR that side's
+captain; `editSquad(side)` guards the wrong side; the Info-tab per-team entries, the
+court "Edit" links and the Lineups-tab buttons all gate on the specific side; `MatchSquad`
++ `LineupEditor` take `editableSides` and the pitch editor hides and only-saves the
+permitted side(s) (closes the home/away toggle leak). Coaches are names with no account
+link, so per-side rights key off captaincy (a coach who needs edit is added as host or
+captain). Verified: a match runner still sees both teams' buttons.
+
 ---
 
 ### 2026-09-26 — Scorer persistence bug (FK mismatch) + multiple scorers/hosts · SHIPPED
