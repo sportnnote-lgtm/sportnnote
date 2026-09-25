@@ -1197,6 +1197,8 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   awayManager,
   homeFormation,
   awayFormation,
+  canEdit,
+  onEditLineup,
   view = 'lineups',
 }) => {
   const s = state as FootballState;
@@ -1214,6 +1216,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
       events={s.events} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac}
       homeManager={homeManager} awayManager={awayManager}
       homeFormation={homeFormation} awayFormation={awayFormation}
+      canEdit={canEdit} onEditLineup={onEditLineup}
     />
   );
 };

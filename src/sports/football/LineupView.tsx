@@ -8,7 +8,7 @@
  * bench + jersey numbers) and the timeline events (for cards & substitutions).
  */
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import type { LineupSlot, Player } from '../../core/types';
@@ -107,11 +107,12 @@ function PlayerDot({
 export function LineupView({
   homeLineup = [], awayLineup = [], homeRoster = [], awayRoster = [], events = [],
   homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, homeManager, awayManager,
-  homeFormation, awayFormation,
+  homeFormation, awayFormation, canEdit, onEditLineup,
 }: {
   homeLineup?: LineupSlot[]; awayLineup?: LineupSlot[]; homeRoster?: Player[]; awayRoster?: Player[];
   events?: FootballEvent[]; homeName: string; awayName: string; homeColor?: string; awayColor?: string;
   homeManager?: string; awayManager?: string; homeFormation?: string; awayFormation?: string;
+  canEdit?: boolean; onEditLineup?: (side: 'home' | 'away') => void;
 }) {
   const marks = deriveMarks(events);
   const cameOn = subsIn(events);
@@ -127,7 +128,8 @@ export function LineupView({
     return roster.filter((p) => !starters.has(p.id));
   };
 
-  const TeamHeader = ({ name, color, lineup, manager, formation }: { name: string; color: string; lineup: LineupSlot[]; manager?: string; formation?: string }) => (
+  const placed = (lineup: LineupSlot[]) => lineup.filter((l) => l.playerId).length;
+  const TeamHeader = ({ name, color, lineup, manager, formation, side }: { name: string; color: string; lineup: LineupSlot[]; manager?: string; formation?: string; side: 'home' | 'away' }) => (
     <View style={{ gap: 2 }}>
       <View style={s.teamHead}>
         <View style={[s.teamDot, { backgroundColor: color }]} />
@@ -135,6 +137,17 @@ export function LineupView({
         <View style={s.formPill}><Text style={s.formText}>{formation || formationLabel(lineup)}</Text></View>
       </View>
       {manager ? <Text style={s.manager}>🧑‍💼 {manager}</Text> : null}
+      {canEdit && onEditLineup && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${name} lineup and formation`}
+          style={s.editBtn}
+          activeOpacity={0.85}
+          onPress={() => onEditLineup(side)}
+        >
+          <Text style={s.editBtnText}>✎ {placed(lineup) > 0 ? 'Edit' : 'Set'} lineup &amp; formation ›</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -168,7 +181,7 @@ export function LineupView({
 
   return (
     <View style={{ gap: theme.spacing(3) }}>
-      <TeamHeader name={homeName} color={homeColor} lineup={homeLineup} manager={homeManager} formation={homeFormation} />
+      <TeamHeader name={homeName} color={homeColor} lineup={homeLineup} manager={homeManager} formation={homeFormation} side="home" />
       <View style={s.pitch}>
         <View style={s.halfway} />
         <View style={s.centre} />
@@ -189,7 +202,7 @@ export function LineupView({
             top={`${(1 - (slot.y * 0.46 + 0.05)) * 100}%`} left={`${slot.x * 100}%`} />
         ))}
       </View>
-      <TeamHeader name={awayName} color={awayColor} lineup={awayLineup} manager={awayManager} formation={awayFormation} />
+      <TeamHeader name={awayName} color={awayColor} lineup={awayLineup} manager={awayManager} formation={awayFormation} side="away" />
 
       <Text style={s.benchTitle}>Bench</Text>
       <View style={s.benchWrap}>
@@ -214,6 +227,8 @@ const s = StyleSheet.create({
   formPill: { backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, paddingVertical: 2, paddingHorizontal: 10 },
   formText: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   manager: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '600', marginLeft: theme.spacing(4) },
+  editBtn: { alignSelf: 'flex-start', marginLeft: theme.spacing(4), marginTop: 2, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.primary, borderRadius: theme.radius.pill, paddingVertical: 4, paddingHorizontal: 10 },
+  editBtnText: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '800' },
   pitch: { width: '100%', aspectRatio: 0.62, backgroundColor: '#143d2b', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
   halfway: { position: 'absolute', top: '50%', left: 0, right: 0, height: 1, backgroundColor: line },
   centre: { position: 'absolute', top: '50%', left: '50%', width: 64, height: 64, borderRadius: 32, borderWidth: 1, borderColor: line, marginLeft: -32, marginTop: -32 },

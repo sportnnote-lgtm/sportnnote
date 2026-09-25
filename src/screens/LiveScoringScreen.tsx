@@ -598,6 +598,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       homeRoster={homeScoreRoster} awayRoster={awayScoreRoster} homeLineup={homeLineup} awayLineup={awayLineup}
       homeManager={meta.managers?.home} awayManager={meta.managers?.away} view={view}
       homeFormation={homeFormation} awayFormation={awayFormation}
+      canEdit={canEditSquad} onEditLineup={editSquad}
     />
   ) : null;
   const liveExtrasNode = renderLiveExtras();
