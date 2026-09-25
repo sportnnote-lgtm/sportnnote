@@ -36,7 +36,7 @@ import {
   removeTournamentCategoryDemo,
   setTournamentTeamCategoryDemo,
 } from './demoStore';
-import { emptyFormation } from '../sports/football/formation';
+import { emptyFormation, defaultFormationFor } from '../sports/football/formation';
 import { isSoleActiveAdmin } from '../core/org';
 import { joinBlockReason } from '../core/registration';
 import { getSport } from '../sports/registry';
@@ -1261,10 +1261,12 @@ export async function deleteSeries(seriesId: string): Promise<void> {
 
 /* ----------------------------- Lineups (football) -------------------------- */
 
-export async function getLineup(matchId: string, sport?: SportId): Promise<MatchLineup> {
-  // Blank formation comes from the sport's plugin (football's pitch by default).
-  const fresh = () => (sport ? getSport(sport).formation?.() ?? emptyFormation() : emptyFormation());
-  const blank: MatchLineup = { home: fresh(), away: fresh(), homeFormation: '4-3-3', awayFormation: '4-3-3' };
+export async function getLineup(matchId: string, sport?: SportId, perSide?: number): Promise<MatchLineup> {
+  // Blank formation comes from the sport's plugin (football's pitch by default),
+  // sized to the team's players-per-side (7-a-side → 7 slots, etc.).
+  const fresh = () => (sport ? getSport(sport).formation?.(perSide) ?? emptyFormation(perSide) : emptyFormation(perSide));
+  const def = defaultFormationFor(perSide);
+  const blank: MatchLineup = { home: fresh(), away: fresh(), homeFormation: def, awayFormation: def };
   if (!isSupabaseConfigured || !supabase) return demo.lineups[matchId] ?? blank;
   const { data } = await supabase
     .from('match_lineups')

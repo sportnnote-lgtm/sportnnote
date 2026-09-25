@@ -64,7 +64,7 @@ export default function MatchSquadScreen() {
     useCallback(() => {
       let on = true;
       Promise.all([
-        getRoster(teamName, sport), getMatchSquads(matchId), getLineup(matchId, sport), getLastSquadForTeam(teamName, sport, matchId),
+        getRoster(teamName, sport), getMatchSquads(matchId), getLineup(matchId, sport, playersPerSide), getLastSquadForTeam(teamName, sport, matchId),
       ]).then(([rs, squads, lu, last]) => {
         if (!on) return;
         setRoster(rs);
@@ -139,7 +139,7 @@ export default function MatchSquadScreen() {
     // For pitch sports, keep a positional lineup in sync so the Lineups tab is
     // populated even if the user never opens the pitch.
     if (hasPitch && lineup) {
-      const fresh = plugin.formation?.() ?? [];
+      const fresh = plugin.formation?.(playersPerSide) ?? [];
       const nameOf = (id: string) => roster.find((p) => p.id === id)?.fullName;
       const nextSide = reconcilePositions(starters, lineup[side], fresh, nameOf);
       const nextLineup = { ...lineup, [side]: nextSide };
@@ -161,7 +161,7 @@ export default function MatchSquadScreen() {
     await persist(); // save first so the pitch opens with these starters placed
     setBusy(false);
     nav.replace('LineupEditor', {
-      matchId, sport,
+      matchId, sport, playersPerSide,
       homeTeamName: homeTeamName ?? teamName, awayTeamName: awayTeamName ?? teamName,
       homeColor, awayColor,
     });

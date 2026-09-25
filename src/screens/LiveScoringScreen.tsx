@@ -233,11 +233,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [awayLineup, setAwayLineup] = useState<LineupSlot[]>([]);
   const [homeFormation, setHomeFormation] = useState<string | undefined>();
   const [awayFormation, setAwayFormation] = useState<string | undefined>();
+  // Team size drives how many slots the blank lineup seeds (7-a-side → 7, etc.).
+  // meta.config loads async, so keep it in the deps: the first focus runs before
+  // the format arrives (perSide undefined → 11 slots); once it lands, re-seed.
+  const lineupPerSide = meta.config?.playersPerSide ? Number(meta.config.playersPerSide) : undefined;
   useFocusEffect(
     useCallback(() => {
       let on = true;
       if (matchId) {
-        getLineup(matchId, sport).then((l) => {
+        getLineup(matchId, sport, lineupPerSide).then((l) => {
           if (on) {
             setHomeLineup(l.home);
             setAwayLineup(l.away);
@@ -249,7 +253,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       return () => {
         on = false;
       };
-    }, [matchId, sport])
+    }, [matchId, sport, lineupPerSide])
   );
 
   const summary = useMemo(() => plugin.summary(state), [plugin, state]);

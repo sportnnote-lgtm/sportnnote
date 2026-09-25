@@ -270,10 +270,11 @@ export interface SportPlugin<S = unknown> {
     parse: (text: string, ctx: VoiceContext) => ScoreAction[] | null;
   };
   /**
-   * Optional positional layout. `formation()` is a fresh, unfilled one-side
-   * template (x/y normalised); `Court` renders the sport's court/field with both
-   * teams' lineups. Sports that set these get a visual lineup editor + map.
+   * Optional positional layout. `formation(perSide?)` is a fresh, unfilled
+   * one-side template (x/y normalised), sized to the team's players-per-side when
+   * given; `Court` renders the sport's court/field with both teams' lineups.
+   * Sports that set these get a visual lineup editor + map.
    */
-  formation?: () => LineupSlot[];
+  formation?: (perSide?: number) => LineupSlot[];
   Court?: React.FC<CourtProps>;
 }

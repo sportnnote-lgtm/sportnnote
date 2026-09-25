@@ -61,6 +61,8 @@ export type RootStackParamList = {
   LineupEditor: {
     matchId: string;
     sport: SportId;
+    /** team size — sizes the pitch + which formations are offered (7-a-side etc.) */
+    playersPerSide?: number;
     homeTeamName: string;
     awayTeamName: string;
     homeColor?: string;

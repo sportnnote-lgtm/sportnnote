@@ -145,7 +145,7 @@ const F_4132: Slot[] = [
   { position: 'ST', x: 0.6, y: 0.88 },
 ];
 
-/** All selectable formations, keyed by their conventional label. */
+/** All selectable 11-a-side formations, keyed by their conventional label. */
 export const FORMATIONS: Record<string, Slot[]> = {
   '4-3-3': F_433,
   '4-1-2-3': F_4123,
@@ -158,6 +158,76 @@ export const FORMATIONS: Record<string, Slot[]> = {
   '3-4-2-1': F_3421,
   '5-3-2': F_532,
 };
+
+// ---- Small-sided formations ------------------------------------------------
+// 7-a-side (GK + 6). Labels are outfield lines back→front.
+const F7_231: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.34, y: 0.26 }, { position: 'CB', x: 0.66, y: 0.26 },
+  { position: 'LM', x: 0.2, y: 0.52 }, { position: 'CM', x: 0.5, y: 0.5 }, { position: 'RM', x: 0.8, y: 0.52 },
+  { position: 'ST', x: 0.5, y: 0.86 },
+];
+const F7_321: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.25, y: 0.26 }, { position: 'CB', x: 0.5, y: 0.24 }, { position: 'CB', x: 0.75, y: 0.26 },
+  { position: 'CM', x: 0.35, y: 0.54 }, { position: 'CM', x: 0.65, y: 0.54 },
+  { position: 'ST', x: 0.5, y: 0.86 },
+];
+const F7_312: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.25, y: 0.26 }, { position: 'CB', x: 0.5, y: 0.24 }, { position: 'CB', x: 0.75, y: 0.26 },
+  { position: 'CM', x: 0.5, y: 0.52 },
+  { position: 'ST', x: 0.38, y: 0.85 }, { position: 'ST', x: 0.62, y: 0.85 },
+];
+const F7_222: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.35, y: 0.26 }, { position: 'CB', x: 0.65, y: 0.26 },
+  { position: 'CM', x: 0.35, y: 0.52 }, { position: 'CM', x: 0.65, y: 0.52 },
+  { position: 'ST', x: 0.38, y: 0.85 }, { position: 'ST', x: 0.62, y: 0.85 },
+];
+// 5-a-side / futsal (GK + 4).
+const F5_121: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.5, y: 0.28 },
+  { position: 'CM', x: 0.3, y: 0.54 }, { position: 'CM', x: 0.7, y: 0.54 },
+  { position: 'ST', x: 0.5, y: 0.85 },
+];
+const F5_22: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.35, y: 0.3 }, { position: 'CB', x: 0.65, y: 0.3 },
+  { position: 'ST', x: 0.35, y: 0.8 }, { position: 'ST', x: 0.65, y: 0.8 },
+];
+const F5_211: Slot[] = [
+  { position: 'GK', x: 0.5, y: 0.06 },
+  { position: 'CB', x: 0.35, y: 0.28 }, { position: 'CB', x: 0.65, y: 0.28 },
+  { position: 'CM', x: 0.5, y: 0.55 },
+  { position: 'ST', x: 0.5, y: 0.85 },
+];
+
+const FORMATIONS_7: Record<string, Slot[]> = { '2-3-1': F7_231, '3-2-1': F7_321, '3-1-2': F7_312, '2-2-2': F7_222 };
+const FORMATIONS_5: Record<string, Slot[]> = { '1-2-1': F5_121, '2-2': F5_22, '2-1-1': F5_211 };
+
+/** Which formation set applies for a given players-per-side (5-a-side, 7-a-side,
+ *  or full 11). Non-standard sizes snap to the nearest supported set. */
+function sizeKey(perSide?: number): 5 | 7 | 11 {
+  const n = Number(perSide ?? 11);
+  if (n <= 5) return 5;
+  if (n <= 8) return 7;
+  return 11;
+}
+export function formationsForSize(perSide?: number): Record<string, Slot[]> {
+  const k = sizeKey(perSide);
+  return k === 5 ? FORMATIONS_5 : k === 7 ? FORMATIONS_7 : FORMATIONS;
+}
+/** Selectable formation labels for this team size. */
+export function formationNamesFor(perSide?: number): string[] {
+  return Object.keys(formationsForSize(perSide));
+}
+/** The sensible default formation for this team size. */
+export function defaultFormationFor(perSide?: number): string {
+  const k = sizeKey(perSide);
+  return k === 5 ? '1-2-1' : k === 7 ? '2-3-1' : DEFAULT_FORMATION;
+}
 
 export const FORMATION_NAMES = Object.keys(FORMATIONS);
 export const DEFAULT_FORMATION = '4-3-3';
@@ -172,11 +242,14 @@ export const ALL_POSITIONS = [
   'GK', 'LB', 'CB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST',
 ];
 
-/** Fresh, unfilled slots for a named formation (defaults to 4-3-3). */
-export function formationSlots(name?: string): LineupSlot[] {
-  return (FORMATIONS[name ?? DEFAULT_FORMATION] ?? FORMATIONS[DEFAULT_FORMATION]).map((s) => ({ ...s }));
+/** Fresh, unfilled slots for a named formation, sized to the team's per-side
+ *  count (5 / 7 / 11). Falls back to that size's default formation. */
+export function formationSlots(name?: string, perSide?: number): LineupSlot[] {
+  const group = formationsForSize(perSide);
+  const def = defaultFormationFor(perSide);
+  return (group[name ?? def] ?? group[def]).map((s) => ({ ...s }));
 }
 
-export function emptyFormation(): LineupSlot[] {
-  return formationSlots(DEFAULT_FORMATION);
+export function emptyFormation(perSide?: number): LineupSlot[] {
+  return formationSlots(defaultFormationFor(perSide), perSide);
 }

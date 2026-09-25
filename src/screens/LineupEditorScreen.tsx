@@ -14,7 +14,7 @@ import { theme } from '../core/theme';
 import { EmptyState, Button, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
-import { formationSlots, FORMATION_NAMES } from '../sports/football/formation';
+import { formationSlots, formationNamesFor, defaultFormationFor } from '../sports/football/formation';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -23,7 +23,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function LineupEditorScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'LineupEditor'>>();
-  const { matchId, sport, homeTeamName, awayTeamName, homeColor, awayColor } = params;
+  const { matchId, sport, playersPerSide, homeTeamName, awayTeamName, homeColor, awayColor } = params;
   const Court = getSport(sport).Court;
   // Only football has multiple selectable formations; other court sports have a
   // fixed position set (from their court layout), so we hide the formation chips.
@@ -40,7 +40,7 @@ export default function LineupEditorScreen() {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      getLineup(matchId, sport).then((l) => on && setLocal(l));
+      getLineup(matchId, sport, playersPerSide).then((l) => on && setLocal(l));
       getRoster(homeTeamName, sport).then((r) => on && setHomeRoster(r));
       getRoster(awayTeamName, sport).then((r) => on && setAwayRoster(r));
       getMatchSquads(matchId).then((sq) => on && setSubs({ home: sq.home.subs, away: sq.away.subs }));
@@ -66,11 +66,11 @@ export default function LineupEditorScreen() {
   const updateSlots = (next: LineupSlot[]) => setLocal({ ...lineup, [side]: next });
 
   const formationKey = side === 'home' ? 'homeFormation' : 'awayFormation';
-  const formationName = (side === 'home' ? lineup.homeFormation : lineup.awayFormation) ?? '4-3-3';
+  const formationName = (side === 'home' ? lineup.homeFormation : lineup.awayFormation) ?? defaultFormationFor(playersPerSide);
   // Switch formation: re-lay the slots, carrying each placed player across by
   // index so the XI is preserved (only their position labels/coords change).
   const changeFormation = (name: string) => {
-    const fresh = formationSlots(name);
+    const fresh = formationSlots(name, playersPerSide);
     const next = fresh.map((slot, i) =>
       slots[i]?.playerId ? { ...slot, playerId: slots[i].playerId, playerName: slots[i].playerName } : slot
     );
@@ -123,7 +123,7 @@ export default function LineupEditorScreen() {
           <>
             <FieldLabel>Formation</FieldLabel>
             <View style={st.chips}>
-              {FORMATION_NAMES.map((f) => (
+              {formationNamesFor(playersPerSide).map((f) => (
                 <SelectChip key={f} label={f} active={formationName === f} onPress={() => changeFormation(f)} />
               ))}
             </View>
