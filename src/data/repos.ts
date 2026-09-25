@@ -913,7 +913,7 @@ export async function lookupPeople(query: string): Promise<Player[]> {
   return [...results.values()].slice(0, 8);
 }
 
-export interface InvitePlayerResult { player: Player; status: 'existing' | 'invited'; }
+export interface InvitePlayerResult { player: Player; status: 'existing' | 'invited'; /** true when this add made them the team's captain (first player on a captain-less team) */ madeCaptain?: boolean; }
 
 /** Find a person by phone/email, or create a PENDING player for them (not tied
  *  to any team) so they can be added as a co-host and invited to install. Mirrors
@@ -957,8 +957,26 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
       t.roster = [...new Set([...base, playerId])];
       return;
     }
-    // Live getRoster is houseName-based; a new invited player already carries
-    // house_name = the team name, so they're picked up without a roster write.
+    // Live: persist an explicit roster on the team so BOTH new invitees AND
+    // existing players are actually linked (house_name alone doesn't cover an
+    // existing player added to an ad-hoc team). Materialize the current squad
+    // first so house-derived members aren't dropped.
+    const { data: teamRow } = await supabase.from('teams').select('roster').eq('id', args.teamId).maybeSingle();
+    let base = (teamRow?.roster ?? null) as string[] | null;
+    if (!base || base.length === 0) {
+      const { data: house } = await supabase.from('players').select('id').eq('house_name', args.teamName).contains('sports', [args.sport]);
+      base = (house as { id: string }[] | null)?.map((r) => r.id) ?? [];
+    }
+    await supabase.from('teams').update({ roster: [...new Set([...base, playerId])] }).eq('id', args.teamId);
+  };
+
+  // First player on a captain-less team becomes the captain, so they can build the
+  // rest of the squad themselves (and get reminded to set the matchday XI).
+  const maybeSetCaptain = async (playerId: string): Promise<boolean> => {
+    const leaders = await getTeamLeaders(args.teamId);
+    if (leaders.captainId || leaders.viceCaptainId) return false;
+    await setTeamLeaders(args.teamId, { captainId: playerId });
+    return true;
   };
 
   // One number ⇒ one identity: reuse whoever already owns this number (their name
@@ -967,13 +985,15 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   const existing = await findPlayerByPhone(args.phone);
   if (existing) {
     await appendRoster(existing.id);
-    return { player: existing, status: existing.invited ? 'invited' : 'existing' };
+    const madeCaptain = await maybeSetCaptain(existing.id);
+    return { player: existing, status: existing.invited ? 'invited' : 'existing', madeCaptain };
   }
   // New number → create a pending invited player (phone stored normalised).
   if (!isSupabaseConfigured || !supabase) {
     const player = addPlayer({ fullName: args.name.trim(), sports: [args.sport], houseName: args.teamName, phone: normalizePhone(args.phone), phoneVerified: false, invited: true });
     await appendRoster(player.id);
-    return { player, status: 'invited' };
+    const madeCaptain = await maybeSetCaptain(player.id);
+    return { player, status: 'invited', madeCaptain };
   }
   const { data, error } = await supabase.from('players')
     .insert({ full_name: args.name.trim(), sports: [args.sport], house_name: args.teamName, phone: normalizePhone(args.phone), phone_verified: false })
@@ -981,7 +1001,8 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   if (error || !data) throw new Error(error?.message ?? 'Could not add player');
   const p = toPlayer(data as PlayerRow);
   await appendRoster(p.id);
-  return { player: p, status: 'invited' };
+  const madeCaptain = await maybeSetCaptain(p.id);
+  return { player: p, status: 'invited', madeCaptain };
 }
 
 /** DEMO helper: simulate an invited player completing install + registration —
@@ -1386,6 +1407,20 @@ export async function getRoster(teamName: string, sport: SportId): Promise<Playe
       return demo.players.filter((p) => ids.has(p.id));
     }
     return demo.players.filter((p) => p.houseName === teamName && p.sports.includes(sport));
+  }
+  // Live: an explicit team roster (ad-hoc friendly teams, or existing players
+  // added by phone) takes precedence over the house-name-derived squad — mirrors
+  // demo. Fall back to house-name only when no explicit roster is set (house teams).
+  const { data: teamRows } = await supabase
+    .from('teams')
+    .select('id, roster')
+    .eq('name', teamName)
+    .eq('sport', sport)
+    .limit(1);
+  const explicit = (teamRows?.[0]?.roster ?? null) as string[] | null;
+  if (explicit && explicit.length) {
+    const { data } = await supabase.from('players').select(PLAYER_SELECT).in('id', explicit);
+    return (data as PlayerRow[] | null)?.map(toPlayer) ?? [];
   }
   const { data, error } = await supabase
     .from('players')

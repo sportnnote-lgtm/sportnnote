@@ -9,6 +9,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { SelectChip, TextField, Button, textStyles } from './ui';
 import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds } from '../data/repos';
+import { notify } from '../core/notifications';
 import { openWhatsApp } from '../core/connect';
 import { joinLink, reportLink } from '../core/invite';
 import { isValidPhone } from '../core/phone';
@@ -72,13 +73,26 @@ export function AddInvitePlayer({
     setBusy(true); setNote(null);
     try {
       const res = await invitePlayer({ teamId, teamName, name: (matched?.fullName ?? name).trim(), phone, sport });
+      const cap = res.madeCaptain;
+      // First player on a captain-less team becomes captain — tell them in-app so
+      // they can build the rest of the squad themselves.
+      if (cap) {
+        void notify({
+          title: `🧢 You're captain of ${teamName}`,
+          body: `You've been made captain of ${teamName} on SportnNote — add your teammates and set the matchday squad.`,
+          playerId: res.player.id,
+        });
+      }
       if (res.status === 'existing') {
-        setNote(`✓ Added ${res.player.fullName} — already on SportnNote.`);
+        setNote(`✓ Added ${res.player.fullName}${cap ? ' as captain' : ''} — already on SportnNote.`);
       } else {
         const link = joinLink(res.player.id);
         const report = reportLink(res.player.id);
-        openWhatsApp(phone, `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`);
-        setNote(`⏳ Invited ${res.player.fullName} — WhatsApp opened. They're confirmed once they register.`);
+        const msg = cap
+          ? `Hi ${res.player.fullName}! You're the captain of ${teamName} on SportnNote 🧢 Install the app and register with this number to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
+          : `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
+        openWhatsApp(phone, msg);
+        setNote(`⏳ Invited ${res.player.fullName}${cap ? ' as captain' : ''} — WhatsApp opened. They're confirmed once they register.`);
       }
       setPhone(''); setName(''); setMatched(null);
       onChanged();

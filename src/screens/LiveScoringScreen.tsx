@@ -163,10 +163,14 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     let on = true;
     if (homeTeamName) getRoster(homeTeamName, sport).then((r) => on && setHomeFull(r));
     if (awayTeamName) getRoster(awayTeamName, sport).then((r) => on && setAwayFull(r));
+    // Adding the first player auto-assigns a captain, so refresh leaders here too
+    // — otherwise the card keeps showing "No captain set" until a reload.
+    if (meta.homeTeamId) getTeamLeaders(meta.homeTeamId).then((l) => on && setHomeLeaders(l));
+    if (meta.awayTeamId) getTeamLeaders(meta.awayTeamId).then((l) => on && setAwayLeaders(l));
     return () => {
       on = false;
     };
-  }, [homeTeamName, awayTeamName, sport, rosterNonce]);
+  }, [homeTeamName, awayTeamName, sport, rosterNonce, meta.homeTeamId, meta.awayTeamId]);
   // Organizer-invited players still pending registration (shown as "invited").
   const invitedPlayers = useMemo(() => [...homeFull, ...awayFull].filter((p) => p.invited), [homeFull, awayFull]);
 
