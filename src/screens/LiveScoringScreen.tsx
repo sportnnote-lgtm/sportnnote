@@ -295,7 +295,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // A team's captain / vice-captain can set their own matchday squad.
   const iLeadHome = !!myPlayerId && (homeLeaders.captainId === myPlayerId || homeLeaders.viceCaptainId === myPlayerId);
   const iLeadAway = !!myPlayerId && (awayLeaders.captainId === myPlayerId || awayLeaders.viceCaptainId === myPlayerId);
-  const canEditSquad = (canScore || canManage || iLeadHome || iLeadAway) && !complete;
+  // Who may edit a team's squad/lineup/formation. Match runners (host/organizer or
+  // the scorer) can edit BOTH sides. A team's captain/vice-captain can edit ONLY
+  // their own side — never the opponent's. (Coaches are stored as names with no
+  // account link, so they can't be identified here; a coach who needs edit rights
+  // is added as a host or made captain.)
+  const canRunMatch = (canScore || canManage) && !complete;
+  const canEditHome = (canRunMatch || iLeadHome) && !complete;
+  const canEditAway = (canRunMatch || iLeadAway) && !complete;
+  const canEditSide = (sd: 'home' | 'away') => (sd === 'home' ? canEditHome : canEditAway);
+  const editableSides: ('home' | 'away')[] = [...(canEditHome ? ['home' as const] : []), ...(canEditAway ? ['away' as const] : [])];
+  const canEditSquad = canEditHome || canEditAway;
   // Disputes can be reviewed/resolved by hosts, the scorer or either captain —
   // and unlike squad edits, even after full time (that's the whole point).
   const canResolveDisputes = !!myPlayerId && (isHost || canScore || iLeadHome || iLeadAway);
@@ -449,6 +459,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [infoOpen, setInfoOpen] = useState<'home' | 'away' | null>(null);
 
   const editSquad = (sd: 'home' | 'away') => {
+    // A captain of one side must not be able to open the other side's editor.
+    if (!canEditSide(sd)) return;
     const perSide = meta.config?.playersPerSide ? Number(meta.config.playersPerSide) : undefined;
     if (sport === 'cricket') {
       // Cricket's lineup is an ordered XI + wicket-keeper, not a positional court.
@@ -465,6 +477,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       matchId: matchId!, side: sd, teamName: sd === 'home' ? homeTeamName ?? homeName : awayTeamName ?? awayName,
       sport, playersPerSide: perSide, teamId: sd === 'home' ? meta.homeTeamId : meta.awayTeamId,
       homeTeamName: homeTeamName ?? homeName, awayTeamName: awayTeamName ?? awayName, homeColor, awayColor,
+      editableSides,
     });
   };
 
@@ -598,7 +611,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       homeRoster={homeScoreRoster} awayRoster={awayScoreRoster} homeLineup={homeLineup} awayLineup={awayLineup}
       homeManager={meta.managers?.home} awayManager={meta.managers?.away} view={view}
       homeFormation={homeFormation} awayFormation={awayFormation}
-      canEdit={canEditSquad} onEditLineup={editSquad}
+      canEditHome={canEditHome} canEditAway={canEditAway} onEditLineup={editSquad}
     />
   ) : null;
   const liveExtrasNode = renderLiveExtras();
@@ -611,8 +624,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         <Text style={textStyles.h3}>Lineups</Text>
         <View style={st.lineupHeadRight}>
           <Text style={st.lineupCount}>{homePlaced} v {awayPlaced} placed</Text>
-          {canEditSquad && matchId && (
-            <Text style={st.editLink} onPress={() => editSquad('home')}>Edit ›</Text>
+          {canEditHome && matchId && (
+            <Text style={st.editLink} onPress={() => editSquad('home')}>Edit {homeName} ›</Text>
+          )}
+          {canEditAway && matchId && (
+            <Text style={st.editLink} onPress={() => editSquad('away')}>Edit {awayName} ›</Text>
           )}
         </View>
       </View>
@@ -801,7 +817,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 }
                 return null;
               })()}
-              {canEditSquad && matchId && (
+              {canEditSide(sd) && matchId && (
                 <TouchableOpacity style={st.editSquadBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={set ? 'Edit matchday squad' : 'Set matchday squad'} onPress={() => editSquad(sd)}>
                   <Text style={st.editSquadIcon}>{set ? '✎' : '＋'}</Text>
                   <Text style={st.editSquadLabel}>{set ? 'Edit matchday squad' : 'Set matchday squad'}</Text>
@@ -810,7 +826,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               )}
               {/* Populate this team right here — the natural place to look. Locked to
                   this side, so there's no Home/Away toggle to get wrong. */}
-              {canEditSquad && matchId && meta.homeTeamId && meta.awayTeamId && (
+              {canEditSide(sd) && matchId && meta.homeTeamId && meta.awayTeamId && (
                 <AddInvitePlayer
                   fixedSide={sd}
                   title={roster.length === 0 ? '＋ Add players to this team' : '＋ Add another player'}

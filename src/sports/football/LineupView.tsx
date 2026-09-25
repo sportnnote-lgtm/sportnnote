@@ -107,12 +107,12 @@ function PlayerDot({
 export function LineupView({
   homeLineup = [], awayLineup = [], homeRoster = [], awayRoster = [], events = [],
   homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, homeManager, awayManager,
-  homeFormation, awayFormation, canEdit, onEditLineup,
+  homeFormation, awayFormation, canEditHome, canEditAway, onEditLineup,
 }: {
   homeLineup?: LineupSlot[]; awayLineup?: LineupSlot[]; homeRoster?: Player[]; awayRoster?: Player[];
   events?: FootballEvent[]; homeName: string; awayName: string; homeColor?: string; awayColor?: string;
   homeManager?: string; awayManager?: string; homeFormation?: string; awayFormation?: string;
-  canEdit?: boolean; onEditLineup?: (side: 'home' | 'away') => void;
+  canEditHome?: boolean; canEditAway?: boolean; onEditLineup?: (side: 'home' | 'away') => void;
 }) {
   const marks = deriveMarks(events);
   const cameOn = subsIn(events);
@@ -137,7 +137,7 @@ export function LineupView({
         <View style={s.formPill}><Text style={s.formText}>{formation || formationLabel(lineup)}</Text></View>
       </View>
       {manager ? <Text style={s.manager}>🧑‍💼 {manager}</Text> : null}
-      {canEdit && onEditLineup && (
+      {(side === 'home' ? canEditHome : canEditAway) && onEditLineup && (
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel={`Edit ${name} lineup and formation`}

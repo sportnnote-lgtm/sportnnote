@@ -126,8 +126,10 @@ export interface LiveExtrasProps {
   /** the formation each side lines up in, e.g. "4-2-3-1" */
   homeFormation?: string;
   awayFormation?: string;
-  /** a manager/captain/scorer may edit the lineup + formation (any time pre-complete) */
-  canEdit?: boolean;
+  /** Per-side edit rights: a match runner (host/scorer) may edit both; a captain
+   *  may edit only their own side. Drives which team's "edit lineup" button shows. */
+  canEditHome?: boolean;
+  canEditAway?: boolean;
   onEditLineup?: (side: 'home' | 'away') => void;
   /** dispatch + write permission, for post-match actions like Player of the Match */
   dispatch?: (action: ScoreAction) => void;

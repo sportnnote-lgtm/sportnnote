@@ -23,7 +23,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function LineupEditorScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'LineupEditor'>>();
-  const { matchId, sport, playersPerSide, homeTeamName, awayTeamName, homeColor, awayColor } = params;
+  const { matchId, sport, playersPerSide, homeTeamName, awayTeamName, homeColor, awayColor, editableSides } = params;
+  // A captain may only edit their own side — show just the side(s) they're allowed to.
+  const allowedSides: ('home' | 'away')[] = editableSides && editableSides.length ? editableSides : ['home', 'away'];
   const Court = getSport(sport).Court;
   // Only football has multiple selectable formations; other court sports have a
   // fixed position set (from their court layout), so we hide the formation chips.
@@ -33,7 +35,7 @@ export default function LineupEditorScreen() {
   const [homeRoster, setHomeRoster] = useState<Player[]>([]);
   const [awayRoster, setAwayRoster] = useState<Player[]>([]);
   const [subs, setSubs] = useState<{ home: string[]; away: string[] }>({ home: [], away: [] });
-  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [side, setSide] = useState<'home' | 'away'>(allowedSides[0]);
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -101,7 +103,8 @@ export default function LineupEditorScreen() {
     setBusy(true);
     await setLineup(matchId, lineup);
     // Starters = whoever is placed in a position; persist the matchday squad too.
-    for (const sd of ['home', 'away'] as const) {
+    // Only touch the side(s) the viewer may edit — a captain never writes the opponent's.
+    for (const sd of allowedSides) {
       const starters = lineup[sd].map((s) => s.playerId).filter((x): x is string => !!x);
       await setMatchSquad(matchId, sd, { starters, subs: subs[sd] });
     }
@@ -114,9 +117,14 @@ export default function LineupEditorScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Edit lineup" subtitle="Assign players to positions" />
 
+        {/* Only the side(s) the viewer may edit — a captain sees only their own team. */}
         <View style={st.tabs}>
-          <SelectChip label={homeTeamName} active={side === 'home'} onPress={() => { setSide('home'); setSelected(null); }} dotColor={homeColor} />
-          <SelectChip label={awayTeamName} active={side === 'away'} onPress={() => { setSide('away'); setSelected(null); }} dotColor={awayColor} />
+          {allowedSides.includes('home') && (
+            <SelectChip label={homeTeamName} active={side === 'home'} onPress={() => { setSide('home'); setSelected(null); }} dotColor={homeColor} />
+          )}
+          {allowedSides.includes('away') && (
+            <SelectChip label={awayTeamName} active={side === 'away'} onPress={() => { setSide('away'); setSelected(null); }} dotColor={awayColor} />
+          )}
         </View>
 
         {isFootball && (

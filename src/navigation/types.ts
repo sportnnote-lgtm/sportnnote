@@ -24,6 +24,8 @@ export type RootStackParamList = {
     teamId?: string;
     // Carried so the picker can hand off to the optional positional editor.
     homeTeamName?: string; awayTeamName?: string; homeColor?: string; awayColor?: string;
+    // Which sides the viewer may edit (a captain = own side only); forwarded to the pitch editor.
+    editableSides?: ('home' | 'away')[];
   };
   CreateTournament: { sport?: SportId; orgId?: string } | undefined;
   CreateCommunity: undefined;
@@ -67,6 +69,9 @@ export type RootStackParamList = {
     awayTeamName: string;
     homeColor?: string;
     awayColor?: string;
+    /** Sides the viewer may edit. A captain gets only their own side (no opponent
+     *  tab); omitted/both for match runners. */
+    editableSides?: ('home' | 'away')[];
   };
   CricketLineup: {
     matchId: string;

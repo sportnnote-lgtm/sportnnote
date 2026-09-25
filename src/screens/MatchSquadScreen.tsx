@@ -49,7 +49,7 @@ function reconcilePositions(
 export default function MatchSquadScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'MatchSquad'>>();
-  const { matchId, side, teamName, sport, playersPerSide = 11, teamId, homeTeamName, awayTeamName, homeColor, awayColor } = params;
+  const { matchId, side, teamName, sport, playersPerSide = 11, teamId, homeTeamName, awayTeamName, homeColor, awayColor, editableSides } = params;
   const plugin = getSport(sport);
   const hasPitch = !!plugin.Court; // football + the court sports can arrange positions
 
@@ -164,6 +164,9 @@ export default function MatchSquadScreen() {
       matchId, sport, playersPerSide,
       homeTeamName: homeTeamName ?? teamName, awayTeamName: awayTeamName ?? teamName,
       homeColor, awayColor,
+      // A captain reaching the pitch may only touch their own side — never toggle to
+      // the opponent. Default to just the side they opened if no explicit set is given.
+      editableSides: editableSides ?? [side],
     });
   }
 
