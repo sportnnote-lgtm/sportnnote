@@ -13,6 +13,22 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Edit formation & positions from the Lineups tab · SHIPPED + VERIFIED
+
+Testers couldn't find how to set a team's formation / who-plays-where: the only path
+was Info → Set matchday squad → Arrange on pitch, and the football **Lineups tab**
+(`LineupView`) was read-only. Wired the long-declared-but-unused
+`LiveExtrasProps.canEdit` / `onEditLineup(side)`: each team header on the Lineups tab
+now shows a **"✎ Set/Edit lineup & formation ›"** button (managers / captains /
+scorers via `canEditSquad`) that opens the squad → pitch editor for that side. Files:
+`sports/types.ts` (signature now carries side), `LiveScoringScreen` (passes
+`canEdit`/`onEditLineup` into LiveExtras), `football/index.tsx` (forwards),
+`football/LineupView.tsx` (per-team button). Verified in demo: Lineups → Edit →
+Arrange on pitch → assign GK → save → pitch shows the player at GK in 2-3-1. Build
+versionCode 21.
+
+---
+
 ### 2026-09-26 — Scorer persistence bug (FK mismatch) + multiple scorers/hosts · SHIPPED
 
 **Root-cause bug (live only): assigning a scorer never persisted.** A tester assigned
