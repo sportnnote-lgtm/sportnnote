@@ -13,6 +13,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Restart a match started by mistake (first 5 min) · SHIPPED + VERIFIED
+
+A scorer/host who starts or scores a game by accident can now wipe it back to "not
+started" — but only while nothing is scored yet, or within 5 minutes of the first
+event; after that it's committed (use End early / play on). `useLiveMatch.reset()`
+clears unsynced taps (`matchOutbox.clear`), deletes the backend event log, blanks stat
+lines (no delete policy → `stats:{}`), resets the match row to scheduled
+(`repos.resetMatch`), then rebuilds. Window gated by `getMatchKickoffAt()` (first
+event's `created_at`; `getMatchEvents` now selects it, demo stamps it). UI: a
+"Restart match" bar with an inline confirm (matching End early) + a lighter "Not
+started? Cancel" at 0 events; a 20s tick closes the window; cached `meta.status`
+reset so the header drops LIVE. Verified in demo both paths. Build versionCode 25.
+
+---
+
 ### 2026-09-26 — Background / remote push for app events · SHIPPED (needs ops to deliver)
 
 Notifications only appeared when the app was open. Root causes: (1) no FCM credentials
