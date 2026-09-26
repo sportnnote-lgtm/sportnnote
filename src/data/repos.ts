@@ -996,7 +996,34 @@ export async function invitePerson(args: { name: string; phone?: string; email?:
  *  Otherwise a PENDING player is created + added to the team sheet as "invited" —
  *  confirmed only once they install & register. The caller sends the WhatsApp
  *  invite (see openWhatsApp) and refetches the roster. */
-export async function invitePlayer(args: { teamId: string; teamName: string; name: string; phone: string; sport: SportId }): Promise<InvitePlayerResult> {
+/** The team(s) a player may NOT already be on when being added to `targetTeamId`:
+ *  the opponent in this match, plus every other team in the same tournament for this
+ *  sport. One person can't play for two teams in the same game/tournament. */
+async function conflictTeamsForAdd(targetTeamId: string, sport: SportId, matchId?: string): Promise<{ id: string; name: string }[]> {
+  if (!matchId) return [];
+  const out = new Map<string, string>();
+  // The match gives us the opponent + (if any) the tournament this game belongs to.
+  let homeId: string | undefined, awayId: string | undefined, tournamentId: string | undefined;
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    homeId = m?.homeTeam?.id; awayId = m?.awayTeam?.id; tournamentId = m?.tournamentId;
+  } else {
+    const { data } = await supabase.from('matches').select('home_team_id, away_team_id, tournament_id').eq('id', matchId).maybeSingle();
+    homeId = (data?.home_team_id as string) ?? undefined; awayId = (data?.away_team_id as string) ?? undefined; tournamentId = (data?.tournament_id as string) ?? undefined;
+  }
+  const opponent = targetTeamId === homeId ? awayId : targetTeamId === awayId ? homeId : undefined;
+  if (opponent) out.set(opponent, '');
+  if (tournamentId) {
+    for (const t of await getTournamentTeams(tournamentId, sport)) if (t.id !== targetTeamId) out.set(t.id, t.name);
+  }
+  out.delete(targetTeamId);
+  // Fill any missing names (e.g. the opponent) from a summary lookup.
+  const result: { id: string; name: string }[] = [];
+  for (const [id, name] of out) result.push({ id, name: name || (await getTeamSummary(id))?.name || 'the other team' });
+  return result;
+}
+
+export async function invitePlayer(args: { teamId: string; teamName: string; name: string; phone: string; sport: SportId; matchId?: string }): Promise<InvitePlayerResult> {
   const appendRoster = async (playerId: string) => {
     if (!isSupabaseConfigured || !supabase) {
       const t = demo.teams.find((x) => x.id === args.teamId);
@@ -1036,7 +1063,19 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   // is pulled up, never duplicated). A confirmed account → 'existing'; a still-
   // pending invite → re-added as 'invited'.
   const existing = await findPlayerByPhone(args.phone);
+  // One person, one team per game/tournament: block adding someone already rostered
+  // on the opponent or another team in the same tournament+sport. (A brand-new number
+  // can't clash — they're on no team yet — so we only check a known person.)
   if (existing) {
+    const conflicts = await conflictTeamsForAdd(args.teamId, args.sport, args.matchId);
+    if (conflicts.length) {
+      const rosters = await getTeamRosters(conflicts.map((c) => c.id));
+      const clash = conflicts.find((c) => (rosters.get(c.id) ?? []).includes(existing.id));
+      if (clash) {
+        const where = args.matchId ? 'this match' : 'this game';
+        throw new Error(`${existing.fullName} is already playing for ${clash.name} in ${where}. One person can’t play for two teams in the same ${args.sport} game or tournament.`);
+      }
+    }
     await appendRoster(existing.id);
     const madeCaptain = await maybeSetCaptain(existing.id);
     return { player: existing, status: existing.invited ? 'invited' : 'existing', madeCaptain };
@@ -1056,6 +1095,53 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   await appendRoster(p.id);
   const madeCaptain = await maybeSetCaptain(p.id);
   return { player: p, status: 'invited', madeCaptain };
+}
+
+/** Remove a player from a team — added by mistake, left the team, etc. Drops them
+ *  from the team's roster (so they stop appearing in the squad picker / scoring
+ *  roster) and clears their captaincy if they held it. Optionally also strips them
+ *  from a specific match's saved matchday squad + positional lineup. Does not delete
+ *  the person's account/player record — only their membership of THIS team. */
+export async function removePlayerFromTeam(teamId: string, playerId: string, matchId?: string): Promise<void> {
+  const clearLeadIfNeeded = async () => {
+    const leaders = await getTeamLeaders(teamId);
+    const patch: TeamLeadership = { captainId: leaders.captainId, viceCaptainId: leaders.viceCaptainId };
+    let changed = false;
+    if (patch.captainId === playerId) { patch.captainId = undefined; changed = true; }
+    if (patch.viceCaptainId === playerId) { patch.viceCaptainId = undefined; changed = true; }
+    if (changed) await setTeamLeaders(teamId, patch);
+  };
+  const stripFromMatch = async () => {
+    if (!matchId) return;
+    const squads = await getMatchSquads(matchId);
+    for (const sd of ['home', 'away'] as const) {
+      const s = squads[sd];
+      if (s.starters.includes(playerId) || s.subs.includes(playerId)) {
+        await setMatchSquad(matchId, sd, { starters: s.starters.filter((x) => x !== playerId), subs: s.subs.filter((x) => x !== playerId) });
+      }
+    }
+    // Clear them from the positional lineup too (both sides, harmless if absent).
+    const lu = await getLineup(matchId);
+    const scrub = (slots: typeof lu.home) => slots.map((sl) => (sl.playerId === playerId ? { ...sl, playerId: undefined, playerName: undefined } : sl));
+    await setLineup(matchId, { ...lu, home: scrub(lu.home), away: scrub(lu.away) });
+  };
+
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.teams.find((x) => x.id === teamId);
+    if (t) {
+      const base = (t.roster && t.roster.length > 0) ? t.roster : demo.players.filter((pl) => pl.houseName === t.name).map((pl) => pl.id);
+      t.roster = base.filter((id) => id !== playerId);
+    }
+    await clearLeadIfNeeded();
+    await stripFromMatch();
+    return;
+  }
+  const { data: teamRow } = await supabase.from('teams').select('roster').eq('id', teamId).maybeSingle();
+  const roster = ((teamRow?.roster ?? []) as string[]).filter((id) => id !== playerId);
+  await supabase.from('teams').update({ roster }).eq('id', teamId);
+  await supabase.from('team_members').delete().eq('team_id', teamId).eq('player_id', playerId);
+  await clearLeadIfNeeded();
+  await stripFromMatch();
 }
 
 /** DEMO helper: simulate an invited player completing install + registration —

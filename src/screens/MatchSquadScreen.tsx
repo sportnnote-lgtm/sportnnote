@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getRoster, getMatchSquads, setMatchSquad, getLineup, setLineup, getLastSquadForTeam } from '../data/repos';
+import { getRoster, getMatchSquads, setMatchSquad, getLineup, setLineup, getLastSquadForTeam, removePlayerFromTeam } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { matchEligibility, canFieldPlayer, TESTING_ALLOW_UNVERIFIED } from '../core/eligibility';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
@@ -235,6 +235,16 @@ export default function MatchSquadScreen() {
                 ) : (
                   <Text style={st.lockTag}>Not eligible</Text>
                 )}
+                {teamId ? (
+                  <Text
+                    style={st.removeLink}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${p.fullName} from ${teamName}`}
+                    onPress={async () => { await removePlayerFromTeam(teamId, p.id, matchId); setRosterNonce((n) => n + 1); }}
+                  >
+                    ✕
+                  </Text>
+                ) : null}
               </View>
             );
           })
@@ -247,7 +257,7 @@ export default function MatchSquadScreen() {
             title={roster.length === 0 ? '＋ Add players to this squad' : '＋ Add another player'}
             homeTeamId={teamId} awayTeamId={teamId}
             homeTeamName={teamName} awayTeamName={teamName}
-            sport={sport}
+            sport={sport} matchId={matchId}
             invited={roster.filter((p) => p.invited)}
             onChanged={() => setRosterNonce((n) => n + 1)}
           />
@@ -300,6 +310,7 @@ const st = StyleSheet.create({
   lockReason: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
   overrideReason: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
   lockTag: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  removeLink: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '900', paddingHorizontal: theme.spacing(1) },
   testBanner: { backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   testBannerText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
   toggles: { flexDirection: 'row', gap: theme.spacing(2) },

@@ -890,7 +890,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   title={roster.length === 0 ? '＋ Add players to this team' : '＋ Add another player'}
                   homeTeamId={meta.homeTeamId} awayTeamId={meta.awayTeamId}
                   homeTeamName={homeTeamName} awayTeamName={awayTeamName}
-                  sport={sport}
+                  sport={sport} matchId={matchId}
                   invited={(sd === 'home' ? homeFull : awayFull).filter((p) => p.invited)}
                   onChanged={() => setRosterNonce((n) => n + 1)}
                 />
@@ -1371,7 +1371,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 <AddInvitePlayer
                   homeTeamId={meta.homeTeamId} awayTeamId={meta.awayTeamId}
                   homeTeamName={homeTeamName} awayTeamName={awayTeamName}
-                  sport={sport} invited={invitedPlayers}
+                  sport={sport} matchId={matchId} invited={invitedPlayers}
                   onChanged={() => setRosterNonce((n) => n + 1)}
                 />
               )}

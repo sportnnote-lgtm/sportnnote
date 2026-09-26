@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { SelectChip, TextField, Button, textStyles } from './ui';
-import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds } from '../data/repos';
+import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds, removePlayerFromTeam } from '../data/repos';
 import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
 import { joinLink, reportLink } from '../core/invite';
@@ -20,13 +20,15 @@ const initials = (name?: string): string =>
   (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 export function AddInvitePlayer({
-  homeTeamId, awayTeamId, homeTeamName, awayTeamName, sport, invited, onChanged, fixedSide, title,
+  homeTeamId, awayTeamId, homeTeamName, awayTeamName, sport, invited, onChanged, fixedSide, title, matchId,
 }: {
   homeTeamId: string; awayTeamId: string;
   homeTeamName?: string; awayTeamName?: string;
   sport: SportId; invited: Player[]; onChanged: () => void;
   // When embedded on a single team's squad card, lock to that side (no toggle).
   fixedSide?: 'home' | 'away'; title?: string;
+  // The match this add happens in — enables the "one person, one team" conflict check.
+  matchId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [side, setSide] = useState<'home' | 'away'>(fixedSide ?? 'home');
@@ -44,6 +46,14 @@ export function AddInvitePlayer({
   const teamId = side === 'home' ? homeTeamId : awayTeamId;
   const teamName = (side === 'home' ? homeTeamName : awayTeamName) ?? 'the team';
   const valid = isValidPhone(phone);
+
+  // Which team an invited player actually belongs to (by the team they were added
+  // under), so Remove targets the right side even when this form's toggle is on the
+  // other team. Falls back to the selected side.
+  const teamIdForPlayer = (p: Player) =>
+    p.houseName && p.houseName === homeTeamName ? homeTeamId
+    : p.houseName && p.houseName === awayTeamName ? awayTeamId
+    : teamId;
 
   // Invite text for a pending player (used for the initial send + any resend).
   const inviteMsg = (playerId: string, playerName: string, captain: boolean) => {
@@ -83,7 +93,7 @@ export function AddInvitePlayer({
     if (!matched && !name.trim()) { setNote('Enter the player’s name.'); return; }
     setBusy(true); setNote(null);
     try {
-      const res = await invitePlayer({ teamId, teamName, name: (matched?.fullName ?? name).trim(), phone, sport });
+      const res = await invitePlayer({ teamId, teamName, name: (matched?.fullName ?? name).trim(), phone, sport, matchId });
       const cap = res.madeCaptain;
       // First player on a captain-less team becomes captain — tell them in-app so
       // they can build the rest of the squad themselves.
@@ -105,8 +115,9 @@ export function AddInvitePlayer({
       }
       setPhone(''); setName(''); setMatched(null);
       onChanged();
-    } catch {
-      setNote('Could not add the player. Check the number and try again.');
+    } catch (e) {
+      // Surfaces the "already on another team" conflict message, or a generic fallback.
+      setNote(e instanceof Error && e.message ? `⚠ ${e.message}` : 'Could not add the player. Check the number and try again.');
     } finally {
       setBusy(false);
     }
@@ -187,6 +198,7 @@ export function AddInvitePlayer({
                         </>
                       ) : null}
                       <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
+                      <Text style={st.removeLink} accessibilityRole="button" accessibilityLabel={`Remove ${p.fullName}`} onPress={async () => { await removePlayerFromTeam(teamIdForPlayer(p), p.id, matchId); onChanged(); }}>Remove</Text>
                     </>
                   )}
                 </View>
@@ -227,4 +239,5 @@ const st = StyleSheet.create({
   pendingTag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.accent },
   pendingTagText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
   registeredLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+  removeLink: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
 });
