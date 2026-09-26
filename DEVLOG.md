@@ -13,6 +13,19 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — SMS fallback for player invites · SHIPPED + VERIFIED
+
+Inviting a not-yet-on-app player only opened a WhatsApp click-to-chat (`wa.me`), which
+is useless if they don't use WhatsApp — and it's unrelated to the blocked WABA/OTP
+(that's automated verification, not invites). Added SMS as an equal channel via the
+existing `openSms`/`Linking` (device messaging app; no gateway/WABA): after adding, a
+"Send invite via: WhatsApp / SMS" row; each pending invitee row gets WA / SMS resend
+links (invite text rebuilt from join+report links); button/copy made channel-neutral.
+Verified in demo. Build versionCode 26. (Fully automated system-sent invites would
+still need an SMS gateway or the production WABA — not set up.)
+
+---
+
 ### 2026-09-26 — Restart a match started by mistake (first 5 min) · SHIPPED + VERIFIED
 
 A scorer/host who starts or scores a game by accident can now wipe it back to "not
