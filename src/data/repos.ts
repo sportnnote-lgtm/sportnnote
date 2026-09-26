@@ -1884,9 +1884,45 @@ export async function createMyPlayer(profileId: string): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   const authEmail = authData.user?.email ?? null;
   const emailVerified = !!(authEmail && authData.user?.email_confirmed_at);
+
+  // If someone already added this person by phone (a provisional/invited player —
+  // e.g. an invited captain), CLAIM that exact row instead of creating a fresh,
+  // unlinked one. This is what puts an invitee straight into the team/captain slot
+  // they were invited to, and it prevents two player rows sharing one number. RLS
+  // ("players update scoped") permits setting profile_id on an unclaimed row.
+  const phone = prof?.phone ? normalizePhone(prof.phone) : null;
+  if (phone) {
+    const { data: pending } = await supabase
+      .from('players')
+      .select('id')
+      .eq('phone', phone)
+      .is('profile_id', null)
+      .is('reported_at', null) // never claim a row the person flagged as "not me"
+      .limit(1);
+    const claimId = (pending as { id: string }[] | null)?.[0]?.id;
+    if (claimId) {
+      const { data: claimed, error: claimErr } = await supabase
+        .from('players')
+        .update({
+          profile_id: profileId,
+          full_name: prof?.full_name ?? undefined,
+          dob: prof?.dob ?? undefined,
+          guardian: prof?.guardian ?? undefined,
+          email: authEmail,
+          email_verified: emailVerified,
+        })
+        .eq('id', claimId)
+        .is('profile_id', null) // guard against a race — only claim if still unclaimed
+        .select('id')
+        .maybeSingle();
+      if (!claimErr && claimed) return claimed.id as string;
+      // else fall through and create a fresh player
+    }
+  }
+
   const { data, error } = await supabase
     .from('players')
-    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ?? null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null, email: authEmail, email_verified: emailVerified })
+    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ? normalizePhone(prof.phone) : null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null, email: authEmail, email_verified: emailVerified })
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create your profile');

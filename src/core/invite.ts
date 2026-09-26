@@ -5,11 +5,19 @@
 import { Linking } from 'react-native';
 import { supabase } from './supabase';
 
-/** Where invites point people to install + register. The deep-link
- *  `https://sportnnote.in/join/:token` (and `sportnnote://join/:token`) resolves
- *  to the Join screen — see RootNavigator linking config. */
+/** Marketing site (used only as a demo fallback for invite links). */
 export const APP_INSTALL_URL = 'https://sportnnote.in';
-export const joinLink = (id: string) => `${APP_INSTALL_URL}/join/${id}`;
+
+/** The public invite/accept link for a provisional player. Served by the `join`
+ *  edge function (a browser page that needs no app/account, on the reachable
+ *  *.supabase.co domain) — NOT sportnnote.in/join, which is the GoDaddy marketing
+ *  site and 404s. Association happens when the invitee installs + registers with the
+ *  invited phone number (createMyPlayer claims the provisional row). Falls back to a
+ *  deep link if the backend URL isn't configured (demo). */
+export const joinLink = (id: string) => {
+  const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  return base ? `${base}/functions/v1/join?p=${id}` : `${APP_INSTALL_URL}/join/${id}`;
+};
 
 /** The public "this isn't me" link for a provisional player — a browser page that
  *  needs no app/account (served by the `report-invite` edge function). Falls back
