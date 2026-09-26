@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Always-available "remind to install" (WhatsApp/SMS) · SHIPPED (build pending EAS quota)
+
+Re-sharing the install invite is now one tap wherever a not-yet-registered player
+shows. Extracted `provisionalInviteMessage()` into core/invite (single source for the
+invite wording + join/report links); new reusable `<RemindInstall>` (WhatsApp + SMS
+quick-send, renders nothing without a phone); Team **Squad** screen shows it on each
+invited/pending row with an "Invited · not registered yet" status; `AddInvitePlayer`
+now uses the shared builder. Ships with the next build (see quota note below).
+
 ### 2026-09-26 — One-person-one-team guard + remove player · SHIPPED (build pending EAS quota)
 
 Two squad basics. (1) One person can't play for two teams in the same game/tournament:
