@@ -13,6 +13,7 @@ import { EmptyState, Card, Button, Pill, TextField, ScreenTitle, textStyles, plu
 import { getSport } from '../sports/registry';
 import { getTeamSummary, getPlayers, createPlayer, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
 import { useCaptainships } from '../data/hooks';
+import { RemindInstall } from '../components/RemindInstall';
 import type { Player, TeamLeadership, TeamSummary } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -133,8 +134,8 @@ export default function SquadScreen() {
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}</Text>
-                    <Text style={textStyles.muted}>{p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
+                    <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}</Text>
+                    <Text style={textStyles.muted}>{p.invited ? 'Invited · not registered yet' : p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
                   </View>
                   {isCap ? (
                     <Pill label="★ C" color={theme.colors.primary + '22'} textColor={theme.colors.primary} />
@@ -142,6 +143,11 @@ export default function SquadScreen() {
                     <Pill label="VC" color={theme.colors.surfaceAlt} textColor={theme.colors.accent} />
                   ) : null}
                 </View>
+                {/* Always-available re-share so a captain/coach can remind anyone who
+                    hasn't installed yet — WhatsApp or SMS, from the team squad. */}
+                {p.invited ? (
+                  <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={team.name} captain={isCap} />
+                ) : null}
                 <View style={st.leaderBtns}>
                   <Text
                     accessibilityRole="button"

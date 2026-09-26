@@ -27,6 +27,18 @@ export const reportLink = (playerId: string) => {
   return base ? `${base}/functions/v1/report-invite?p=${playerId}` : `${APP_INSTALL_URL}/report/${playerId}`;
 };
 
+/** The install/join message for a provisional (added-by-phone) player — shared by
+ *  every "invite / remind to install" affordance so the wording + links stay
+ *  identical across the app (match add screen, team squad, etc.). */
+export function provisionalInviteMessage(opts: { name: string; playerId: string; teamName: string; captain?: boolean }): string {
+  const who = opts.name.trim() || 'there';
+  const link = joinLink(opts.playerId);
+  const report = reportLink(opts.playerId);
+  return opts.captain
+    ? `Hi ${who}! You're the captain of ${opts.teamName} on SportnNote 🧢 Install the app and register with this number to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
+    : `Hi ${who}! You've been added to ${opts.teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
+}
+
 /** What someone is being invited to do — co-host an event (default) or manage a
  *  team's squad. Keeps the co-host wording untouched for existing callers. */
 export type InviteRole = 'co-host' | 'manage';

@@ -11,7 +11,7 @@ import { SelectChip, TextField, Button, textStyles } from './ui';
 import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds, removePlayerFromTeam } from '../data/repos';
 import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
-import { joinLink, reportLink } from '../core/invite';
+import { provisionalInviteMessage } from '../core/invite';
 import { isValidPhone } from '../core/phone';
 import type { Player, SportId } from '../core/types';
 
@@ -56,13 +56,8 @@ export function AddInvitePlayer({
     : teamId;
 
   // Invite text for a pending player (used for the initial send + any resend).
-  const inviteMsg = (playerId: string, playerName: string, captain: boolean) => {
-    const link = joinLink(playerId);
-    const report = reportLink(playerId);
-    return captain
-      ? `Hi ${playerName}! You're the captain of ${teamName} on SportnNote 🧢 Install the app and register with this number to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
-      : `Hi ${playerName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
-  };
+  const inviteMsg = (playerId: string, playerName: string, captain: boolean) =>
+    provisionalInviteMessage({ name: playerName, playerId, teamName, captain });
 
   // The number is the identity — recognise it first and pull up the known name.
   useEffect(() => {
