@@ -13,6 +13,36 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Background / remote push for app events · SHIPPED (needs ops to deliver)
+
+Notifications only appeared when the app was open. Root causes: (1) no FCM credentials
+in EAS → Expo can't deliver to a closed Android app; (2) no `expo-notifications` plugin
+/ Android notification channel → background notifications don't display; (3) `notify()`
+only fired on the *actor's* device — app events (scorer assigned, captain invited, squad
+needed, tournament invite, verification decision) never pushed to the target user.
+
+Code (this build, versionCode 24):
+- `notify()` now routes a message addressed to another user → remote Expo push via the
+  new `push-send` edge function; messages for me / untargeted stay local. RootNavigator
+  sets the current player id on login (`setCurrentPlayerId`) so the two are distinguished.
+- `push-send` edge fn: auth-required; player ids → profiles → push_tokens (service role,
+  RLS hides others' tokens) → Expo `/push/send`. `repos.pushToPlayers()` invokes it.
+- Android channel `default` (HIGH) created on register + before local notifications.
+- `app.json`: `expo-notifications` plugin (icon/color + POST_NOTIFICATIONS for Android 13).
+- `notify-upcoming` scorer targeting already fixed earlier (player→profile).
+
+**Ops to actually deliver (user):** (a) upload **FCM V1** credentials to EAS (Firebase
+project → service-account JSON → `eas credentials` → Android → FCM V1) — one-time, no
+rebuild; without it `getExpoPushTokenAsync` returns null and nothing delivers on Android.
+(b) `supabase functions deploy push-send` (and redeploy `notify-upcoming`). (c) Enable
+the schedules: **notify-upcoming** cron (pg_cron / scheduled function) + **notify-followers**
+DB webhook on `stat_lines`. (d) On device, grant the notification permission.
+Push can only be tested on a real device after FCM; tsc clean + demo boots clean here.
+Pilot note: `push-send` lets any authed user notify any player — tighten to a
+match/team relationship check before scaling. See [[sportfolio-scorer-model]].
+
+---
+
 ### 2026-09-26 — TESTING override: field unverified players · SHIPPED + VERIFIED  ⚠️ revert before go-live
 
 Testers can't finish mobile/DOB verification yet, so the safeguarding gate blocked
