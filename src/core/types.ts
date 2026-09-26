@@ -510,6 +510,8 @@ export interface MatchEventRecord {
   side?: 'home' | 'away' | null;
   payload?: Record<string, unknown> | null;
   attribution?: { playerId: string; stat: string; by?: number; playerName?: string; extra?: Record<string, number>; tracked?: string[] } | null;
+  /** server insert time; present when read back (used to find kickoff). */
+  created_at?: string;
 }
 
 export type MatchStatus = 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';

@@ -638,11 +638,45 @@ export async function getMatchEvents(matchId: string): Promise<MatchEventRecord[
   if (!isSupabaseConfigured || !supabase) return demo.matchEvents[matchId] ?? [];
   const { data, error } = await supabase
     .from('match_events')
-    .select('seq, type, side, payload, attribution')
+    .select('seq, type, side, payload, attribution, created_at')
     .eq('match_id', matchId)
     .order('seq', { ascending: true });
   if (error || !data) return [];
   return data as MatchEventRecord[];
+}
+
+/** Server timestamp of a match's first event = when scoring actually began (kickoff).
+ *  Null if nothing scored yet. Used to gate the "restart within N minutes" window. */
+export async function getMatchKickoffAt(matchId: string): Promise<number | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    const first = (demo.matchEvents[matchId] ?? [])[0] as (MatchEventRecord & { created_at?: string }) | undefined;
+    return first?.created_at ? new Date(first.created_at).getTime() : null;
+  }
+  const { data } = await supabase
+    .from('match_events')
+    .select('created_at')
+    .eq('match_id', matchId)
+    .order('seq', { ascending: true })
+    .limit(1);
+  const first = (data ?? [])[0] as { created_at?: string } | undefined;
+  return first?.created_at ? new Date(first.created_at).getTime() : null;
+}
+
+/** Wipe a match back to "not started": delete its event log, blank its stat lines
+ *  (no delete policy on stat_lines — an empty stats map contributes nothing), and
+ *  reset the match row to scheduled. For the "started by mistake" restart; callers
+ *  gate WHO may do it and the time window. */
+export async function resetMatch(matchId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.matchEvents[matchId] = [];
+    demo.statLines = demo.statLines.filter((l) => l.matchId !== matchId);
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (m) { m.state = {}; m.status = 'scheduled'; m.winner = undefined; m.score = undefined; }
+    return;
+  }
+  await supabase.from('match_events').delete().eq('match_id', matchId);
+  await supabase.from('stat_lines').update({ stats: {}, won: false }).eq('match_id', matchId);
+  await supabase.from('matches').update({ state: {}, status: 'scheduled', winner: null, updated_at: new Date().toISOString() }).eq('id', matchId);
 }
 
 export async function appendMatchEvent(matchId: string, rec: MatchEventRecord): Promise<void> {

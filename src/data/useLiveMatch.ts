@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
-import { recordStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot } from './repos';
+import { recordStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch } from './repos';
 import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
@@ -46,6 +46,8 @@ export interface UseLiveMatch {
   dispatch: (action: ScoreAction) => void;
   /** Undo the last recorded event (ball/setup step) — re-derives from the log. */
   undo: () => void;
+  /** Wipe the match back to "not started" (started-by-mistake restart). */
+  reset: () => Promise<void>;
   /** how many events are in the log (0 = nothing to undo) */
   eventCount: number;
   /** true = changes are broadcast over realtime (Supabase); false = local-only */
@@ -274,5 +276,15 @@ export function useLiveMatch(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, canScore, plugin, sport, rebuildFromLog]);
 
-  return { state, dispatch, undo, eventCount, live, syncing };
+  // Wipe the match back to "not started" — for a game started/scored by mistake.
+  // Drops unsynced taps, deletes the backend log + blanks stat lines, then rebuilds
+  // to the initial state. The SCREEN gates who may do this and the time window.
+  const reset = useCallback(async () => {
+    if (!matchId || !canScore) return;
+    matchOutbox.clear(matchId);
+    await resetMatch(matchId);
+    await rebuildFromLog();
+  }, [matchId, canScore, rebuildFromLog]);
+
+  return { state, dispatch, undo, reset, eventCount, live, syncing };
 }

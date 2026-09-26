@@ -101,6 +101,14 @@ export const matchOutbox = {
     return removed;
   },
 
+  /** Drop all queued (unsynced) events for a match — used when resetting a match
+   *  that was started by mistake, so nothing pending re-appears on rebuild. */
+  clear(matchId: string) {
+    queues.set(matchId, []);
+    void persist(matchId);
+    emit();
+  },
+
   /** Try to sync a match's queue to the backend, oldest first. */
   async flush(matchId: string, force = false): Promise<void> {
     if (flushing.has(matchId)) return;

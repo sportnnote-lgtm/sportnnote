@@ -1284,7 +1284,9 @@ export function setFootballProfile(playerId: string, profile: FootballProfile) {
 }
 
 export function appendDemoMatchEvent(matchId: string, rec: MatchEventRecord) {
-  (demo.matchEvents[matchId] ??= []).push(rec);
+  // Stamp a creation time like the backend does — the restart window reads the
+  // first event's created_at as kickoff.
+  (demo.matchEvents[matchId] ??= []).push({ created_at: new Date().toISOString(), ...rec });
 }
 
 /** Remove & return the most recent event for a match (undo). */

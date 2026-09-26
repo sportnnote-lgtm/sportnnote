@@ -22,7 +22,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -126,7 +126,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // The scorer taps "Start the match" before scoring begins; a match with events
   // is already underway. (Timer sports then expose their clock-start control.)
   const [localStarted, setLocalStarted] = useState(false);
+  // Kickoff = first event's server time; drives the "started by mistake → restart"
+  // window (allowed for the first RESTART_WINDOW_MS, then the game is committed).
+  const [kickoffAt, setKickoffAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState<number>(Date.now());
   const [retireOpen, setRetireOpen] = useState(false);
+  const [restartOpen, setRestartOpen] = useState(false);
   const [woOpen, setWoOpen] = useState(false); // walkover: pick the winning side
   const [retiredLocally, setRetiredLocally] = useState<'home' | 'away' | null>(null);
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
@@ -138,7 +143,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Per-dispute "add a new name" inputs (reassign to someone not in the system).
   const [newName, setNewName] = useState<Record<string, string>>({});
 
-  const { state, dispatch, undo, eventCount, live, syncing } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -440,6 +445,25 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     }
   }, []);
 
+  // When did scoring actually begin? (first event's server time). Refetch when the
+  // log changes so a fresh first-tap sets the kickoff for the restart window.
+  useEffect(() => {
+    let on = true;
+    if (matchId && eventCount > 0) getMatchKickoffAt(matchId).then((t) => on && setKickoffAt(t));
+    else setKickoffAt(null);
+    return () => { on = false; };
+  }, [matchId, eventCount]);
+  // Tick while a live match is scoreable so the restart window closes on its own
+  // even if nothing else re-renders.
+  useEffect(() => {
+    if (complete || !canScore) return;
+    const id = setInterval(() => setNowTick(Date.now()), 20_000);
+    return () => clearInterval(id);
+  }, [complete, canScore]);
+  const RESTART_WINDOW_MS = 5 * 60 * 1000;
+  // Restart allowed while nothing is scored yet, or within 5 min of the first score.
+  const canRestart = canScore && !complete && (eventCount === 0 || (kickoffAt != null && nowTick - kickoffAt < RESTART_WINDOW_MS));
+
   // Match stat lines feed the generic Summary (sports without their own). Refetch
   // on focus and whenever the score changes so the ratings stay current.
   const [matchStats, setMatchStats] = useState<StatLine[]>([]);
@@ -503,6 +527,40 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setRetiredLocally(winner);
     setRetireOpen(false);
   };
+  // Restart a match started/scored by mistake — only while nothing is scored yet, or
+  // within the first 5 minutes of the first score. After that it's committed.
+  const wipeMatch = async () => {
+    await reset();
+    setLocalStarted(false);
+    setRestartOpen(false);
+    setKickoffAt(null);
+    // reset() clears the log + backend status to 'scheduled'; mirror it in the
+    // screen's cached meta so the header stops showing LIVE.
+    setMeta((m) => ({ ...m, status: 'scheduled' }));
+  };
+  const restartBar = started && canRestart && retiredLocally == null ? (
+    eventCount === 0 ? (
+      // Nothing scored yet — a plain "cancel the start", no confirmation needed.
+      <TouchableOpacity style={st.restartBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Cancel — match not started" onPress={() => void wipeMatch()}>
+        <Text style={st.restartText}>↺ Not started? Cancel</Text>
+        <Text style={st.restartHint}>nothing scored yet</Text>
+      </TouchableOpacity>
+    ) : !restartOpen ? (
+      <TouchableOpacity style={st.restartBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Restart match — started by mistake" onPress={() => setRestartOpen(true)}>
+        <Text style={st.restartText}>↺ Restart match</Text>
+        <Text style={st.restartHint}>started by mistake · first 5 min only</Text>
+      </TouchableOpacity>
+    ) : (
+      <View style={st.retirePanel}>
+        <Text style={st.retirePrompt}>Clear the score and everything recorded so far, back to “not started”? This can’t be undone.</Text>
+        <View style={st.retireRow}>
+          <Button label="Yes, restart" variant="danger" style={{ flex: 1 }} onPress={() => void wipeMatch()} />
+          <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setRestartOpen(false)} />
+        </View>
+      </View>
+    )
+  ) : null;
+
   const retireBar = canScore && !complete && retiredLocally == null ? (
     !retireOpen ? (
       <TouchableOpacity style={st.retireBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => setRetireOpen(true)}>
@@ -1307,6 +1365,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               )}
               {retiredBanner}
               {undoBar}
+              {restartBar}
               {retireBar}
               {canScore && !retiredLocally && meta.homeTeamId && meta.awayTeamId && (
                 <AddInvitePlayer
@@ -1618,6 +1677,14 @@ const st = StyleSheet.create({
   },
   undoText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   undoHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  restartBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2),
+    backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.danger,
+    paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4),
+  },
+  restartText: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '800' },
+  restartHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   retireBtn: { alignItems: 'center', paddingVertical: theme.spacing(2) },
   retireText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   retirePanel: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
