@@ -13,6 +13,23 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — One-person-one-team guard + remove player · SHIPPED (build pending EAS quota)
+
+Two squad basics. (1) One person can't play for two teams in the same game/tournament:
+`invitePlayer` now takes `matchId`; `conflictTeamsForAdd()` derives the opponent (from
+the match) + every other team in the same tournament+sport, and adding a known person
+(by phone) already rostered on one is rejected with a clear message (a brand-new number
+can't clash). matchId wired through `AddInvitePlayer` everywhere; the message surfaces in
+the add form. (2) `removePlayerFromTeam(teamId, playerId, matchId?)` drops a
+mistakenly-added player from the roster (leaves squad picker + scoring roster), clears
+their captaincy, and strips them from that match's saved squad + lineup — exposed as
+"Remove" on each pending invitee (targets the player's real team even with the toggle)
+and "✕" on each MatchSquad roster row. Verified in demo (opponent add blocked; remove
+drops the row). **Not yet in an APK** — EAS free Android build quota exhausted for the
+month (resets 2026-10-01); last built APK is versionCode 27. Ships in the next build.
+
+---
+
 ### 2026-09-26 — Fix broken invite/join flow (404 link + no claim on register) · SHIPPED
 
 A tester invited a captain; the recipient's link 404'd. Two bugs: (1) `joinLink` pointed
