@@ -10,7 +10,7 @@ import { theme } from '../core/theme';
 import { SelectChip, TextField, Button, textStyles } from './ui';
 import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds } from '../data/repos';
 import { notify } from '../core/notifications';
-import { openWhatsApp } from '../core/connect';
+import { openWhatsApp, openSms } from '../core/connect';
 import { joinLink, reportLink } from '../core/invite';
 import { isValidPhone } from '../core/phone';
 import type { Player, SportId } from '../core/types';
@@ -38,10 +38,21 @@ export function AddInvitePlayer({
   const [looking, setLooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // The last new-player invite, so it can be re-sent via WhatsApp OR SMS.
+  const [lastInvite, setLastInvite] = useState<{ phone: string; msg: string } | null>(null);
 
   const teamId = side === 'home' ? homeTeamId : awayTeamId;
   const teamName = (side === 'home' ? homeTeamName : awayTeamName) ?? 'the team';
   const valid = isValidPhone(phone);
+
+  // Invite text for a pending player (used for the initial send + any resend).
+  const inviteMsg = (playerId: string, playerName: string, captain: boolean) => {
+    const link = joinLink(playerId);
+    const report = reportLink(playerId);
+    return captain
+      ? `Hi ${playerName}! You're the captain of ${teamName} on SportnNote 🧢 Install the app and register with this number to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
+      : `Hi ${playerName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
+  };
 
   // The number is the identity — recognise it first and pull up the known name.
   useEffect(() => {
@@ -85,14 +96,12 @@ export function AddInvitePlayer({
       }
       if (res.status === 'existing') {
         setNote(`✓ Added ${res.player.fullName}${cap ? ' as captain' : ''} — already on SportnNote.`);
+        setLastInvite(null);
       } else {
-        const link = joinLink(res.player.id);
-        const report = reportLink(res.player.id);
-        const msg = cap
-          ? `Hi ${res.player.fullName}! You're the captain of ${teamName} on SportnNote 🧢 Install the app and register with this number to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
-          : `Hi ${res.player.fullName}! You've been added to ${teamName} on SportnNote 🏆 Install the app and register with this number to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
+        const msg = inviteMsg(res.player.id, res.player.fullName, !!cap);
         openWhatsApp(phone, msg);
-        setNote(`⏳ Invited ${res.player.fullName}${cap ? ' as captain' : ''} — WhatsApp opened. They're confirmed once they register.`);
+        setLastInvite({ phone, msg }); // keep it so they can also send by SMS
+        setNote(`⏳ Invited ${res.player.fullName}${cap ? ' as captain' : ''} — WhatsApp opened. If they don’t use WhatsApp, send by SMS below. They’re confirmed once they register.`);
       }
       setPhone(''); setName(''); setMatched(null);
       onChanged();
@@ -137,16 +146,23 @@ export function AddInvitePlayer({
           ) : (
             <>
               <TextField label="Player name" value={name} onChange={setName} placeholder="e.g. Rahul Sharma" />
-              <Text style={textStyles.muted}>New number → we open a WhatsApp invite so they install &amp; register. They show as “invited” until they do.</Text>
+              <Text style={textStyles.muted}>New number → we open an invite to install &amp; register (WhatsApp, or send by SMS if they don’t use WhatsApp). They show as “invited” until they do.</Text>
             </>
           )}
 
           <Button
-            label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName}` : '＋ Add & send WhatsApp invite'}
+            label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName}` : '＋ Add & invite (WhatsApp / SMS)'}
             onPress={submit}
             disabled={busy || !valid || matchedReported || (!matched && !name.trim())}
           />
           {note && <Text style={st.inviteNote}>{note}</Text>}
+          {lastInvite && (
+            <View style={st.sendRow}>
+              <Text style={st.sendVia}>Send invite via:</Text>
+              <Text style={st.sendLink} accessibilityRole="button" onPress={() => openWhatsApp(lastInvite.phone, lastInvite.msg)}>WhatsApp</Text>
+              <Text style={st.sendLink} accessibilityRole="button" onPress={() => openSms(lastInvite.phone, lastInvite.msg)}>SMS</Text>
+            </View>
+          )}
 
           {invited.length > 0 && (
             <View style={{ gap: theme.spacing(2) }}>
@@ -164,7 +180,12 @@ export function AddInvitePlayer({
                     <View style={st.reportedTag}><Text style={st.reportedTagText}>REPORTED</Text></View>
                   ) : (
                     <>
-                      <View style={st.pendingTag}><Text style={st.pendingTagText}>PENDING</Text></View>
+                      {p.phone ? (
+                        <>
+                          <Text style={st.resendLink} accessibilityRole="button" accessibilityLabel={`Resend WhatsApp invite to ${p.fullName}`} onPress={() => openWhatsApp(p.phone, inviteMsg(p.id, p.fullName, false))}>WA</Text>
+                          <Text style={st.resendLink} accessibilityRole="button" accessibilityLabel={`Send SMS invite to ${p.fullName}`} onPress={() => openSms(p.phone, inviteMsg(p.id, p.fullName, false))}>SMS</Text>
+                        </>
+                      ) : null}
                       <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
                     </>
                   )}
@@ -188,6 +209,10 @@ const st = StyleSheet.create({
   caretMuted: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   sideRow: { flexDirection: 'row', gap: theme.spacing(2) },
   inviteNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
+  sendRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  sendVia: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  sendLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
+  resendLink: { color: theme.colors.primary, fontSize: theme.font.tiny, fontWeight: '800' },
   matchedNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   reportedNote: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   reportedRowNote: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
