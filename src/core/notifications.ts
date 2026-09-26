@@ -18,11 +18,35 @@ async function getNotif() {
   return notifModule;
 }
 
+// The signed-in account's own player id, set on login (see RootNavigator). Lets
+// notify() tell "a message for me" (show locally) from "a message for someone
+// else" (deliver as a REMOTE push to their device, so it lands even when their
+// app is closed). Null until known.
+let currentPlayerId: string | null = null;
+export function setCurrentPlayerId(id: string | null) {
+  currentPlayerId = id;
+}
+
 export async function notify(input: { title: string; body: string; playerId?: string; matchId?: string }) {
+  // Addressed to another user → send a remote push to their devices (works when
+  // their app is closed / phone locked). It must NOT show on this (the sender's)
+  // device or land in this device's in-app feed.
+  if (input.playerId && currentPlayerId && input.playerId !== currentPlayerId) {
+    try {
+      const { pushToPlayers } = await import('../data/repos');
+      await pushToPlayers([input.playerId], { title: input.title, body: input.body, matchId: input.matchId });
+    } catch {
+      // best-effort — a failed remote push shouldn't break the calling action
+    }
+    return;
+  }
+
+  // For me (or no specific target): in-app feed + an immediate local banner.
   notifyStore.push({ ...input, at: Date.now() });
   const N = await getNotif();
   if (!N) return;
   try {
+    await ensureAndroidChannel(N);
     await N.scheduleNotificationAsync({
       content: { title: input.title, body: input.body },
       trigger: null, // deliver immediately
@@ -30,6 +54,24 @@ export async function notify(input: { title: string; body: string; playerId?: st
   } catch {
     // notifications not available (e.g. simulator without entitlement) — ignore
   }
+}
+
+/** Android 8+ requires a channel or notifications silently don't show. Idempotent. */
+let channelReady = false;
+async function ensureAndroidChannel(N: NonNullable<typeof notifModule>) {
+  if (channelReady || Platform.OS !== 'android') { channelReady = true; return; }
+  try {
+    await N.setNotificationChannelAsync('default', {
+      name: 'Match alerts',
+      importance: N.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#1DB954',
+    });
+  } catch {
+    // ignore — channel API unavailable
+  }
+  channelReady = true;
 }
 
 /** Prefixes of notification identifiers this app owns (so we only ever cancel
@@ -86,6 +128,7 @@ export async function registerForPush(): Promise<string | null> {
         shouldSetBadge: true,
       }),
     });
+    await ensureAndroidChannel(N); // remote pushes need a channel to display in
     const Device = await import('expo-device');
     if (!Device.isDevice) return null; // simulators can't get a push token
     const existing = await N.getPermissionsAsync();

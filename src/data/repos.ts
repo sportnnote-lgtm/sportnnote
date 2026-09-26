@@ -1417,6 +1417,25 @@ export async function savePushToken(token: string, profileId?: string): Promise<
   await supabase.from('push_tokens').upsert({ profile_id: profileId, token });
 }
 
+/** Deliver a REMOTE push to other users (by player id) so it lands even when their
+ *  app is closed / phone locked. RLS hides other users' push tokens from the client,
+ *  so the actual token lookup + Expo send happens server-side in the `push-send`
+ *  edge function (service role). Best-effort & demo-safe: no-ops without Supabase. */
+export async function pushToPlayers(
+  playerIds: string[],
+  msg: { title: string; body: string; matchId?: string }
+): Promise<void> {
+  const ids = Array.from(new Set(playerIds.filter(Boolean)));
+  if (!isSupabaseConfigured || !supabase || ids.length === 0) return;
+  try {
+    await supabase.functions.invoke('push-send', {
+      body: { playerIds: ids, title: msg.title, body: msg.body, matchId: msg.matchId ?? null },
+    });
+  } catch {
+    // best-effort — never let a failed push break the calling action
+  }
+}
+
 /** Players eligible to play a given sport for a given house/team. A team with an
  *  explicit roster (created within a community) uses that; otherwise the roster
  *  is derived from players whose house matches the team name. */

@@ -5,9 +5,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../core/theme';
 import { useAuth } from '../core/auth';
-import { registerForPush } from '../core/notifications';
+import { registerForPush, setCurrentPlayerId } from '../core/notifications';
 import { followStore } from '../data/followStore';
-import { getFollows, savePushToken, getCaptainTeams } from '../data/repos';
+import { getFollows, savePushToken, getCaptainTeams, getMyPlayerId } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
@@ -115,9 +115,12 @@ export default function RootNavigator() {
 
   // On sign-in: load existing follows into the store and register for push.
   useEffect(() => {
-    if (!authed) return;
+    if (!authed) { setCurrentPlayerId(null); return; }
     getFollows(profile?.id).then((keys) => followStore.hydrate(keys));
     getCaptainTeams(profile?.id).then((ids) => captainStore.hydrate(ids));
+    // Know my own player id so notify() can tell "for me" (show locally) from "for
+    // someone else" (deliver as a remote push to their device).
+    getMyPlayerId(profile?.id).then((id) => setCurrentPlayerId(id));
     registerForPush().then((token) => {
       if (token) void savePushToken(token, profile?.id);
     });
