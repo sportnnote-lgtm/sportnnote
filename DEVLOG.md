@@ -13,6 +13,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-26 — Fix broken invite/join flow (404 link + no claim on register) · SHIPPED
+
+A tester invited a captain; the recipient's link 404'd. Two bugs: (1) `joinLink` pointed
+at `https://sportnnote.in/join/<id>` — the GoDaddy marketing site, no such route; (2)
+even reaching the app, registering ran `createMyPlayer` which always INSERTED a new
+player, never claiming the provisional row they were invited as (and the JoinTeam
+screen's `claimInvite` uses `team_invites` tokens, unrelated to the add-by-phone
+player-id links). Net: invitees could never actually take their slot.
+
+Fixes:
+- `createMyPlayer` now CLAIMS an unclaimed, unreported provisional player whose phone
+  matches the registrant (UPDATE profile_id on that row) before falling back to INSERT.
+  So installing + registering with the invited number drops them into the exact
+  team/captain slot, and no two players share a number. RLS "players update scoped"
+  already allows claiming (`profile_id is null` -> `= auth.uid()`).
+- `joinLink` now targets the `join` edge function on `*.supabase.co` (like
+  report-invite), not sportnnote.in. New `join` function: public, text/plain (the
+  functions domain forbids HTML), personalized with the team name, detects
+  already-claimed. Deploy: `npx supabase functions deploy join --no-verify-jwt`.
+
+Proper universal-link-opens-app (App Links on a hosted web build) is a launch-time
+follow-up; phone-claim makes the pilot flow work now. Build versionCode 27.
+
+---
+
 ### 2026-09-26 — SMS fallback for player invites · SHIPPED + VERIFIED
 
 Inviting a not-yet-on-app player only opened a WhatsApp click-to-chat (`wa.me`), which
