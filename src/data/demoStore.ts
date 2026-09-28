@@ -24,6 +24,7 @@ import type {
   MatchDispute,
   MatchEventRecord,
   Organization,
+  OrgMember,
   OrgRequest,
   MatchLineup,
   LineupSlot,
@@ -759,6 +760,18 @@ const SEED_ORGS: Organization[] = [
   },
 ];
 
+// Guarantee every seeded org has an Owner (mirrors migration 0020): promote the
+// earliest-joined active Admin — or the earliest active member — to Owner.
+function withSeedOwners(orgs: Organization[]): Organization[] {
+  return orgs.map((o) => {
+    const active = o.members.filter((m) => !m.until);
+    if (active.some((m) => m.role === 'Owner') || active.length === 0) return o;
+    const rank = (m: OrgMember) => (m.role === 'Admin' ? 0 : 1);
+    const pick = [...active].sort((a, b) => rank(a) - rank(b) || (a.since ?? '').localeCompare(b.since ?? ''))[0];
+    return { ...o, members: o.members.map((m) => (m.playerId === pick.playerId && !m.until ? { ...m, role: 'Owner' as const } : m)) };
+  });
+}
+
 const ALL_MATCHES = [...MATCHES, WC_MATCH, BN_MATCH, PE_MATCH, AE_MATCH];
 
 // ---- Anchor the seed to "now" --------------------------------------------
@@ -786,7 +799,7 @@ function anchorDate(iso: string): string {
 
 export const demo = {
   tournaments: [...TOURNAMENTS, WC_TOURNAMENT].map((t) => ({ ...t, startDate: anchorDate(t.startDate), endDate: anchorDate(t.endDate) })) as Tournament[],
-  organizations: SEED_ORGS,
+  organizations: withSeedOwners(SEED_ORGS),
   /** org membership requests — invites + join-requests (see migration 0020). */
   orgRequests: [] as OrgRequest[],
   matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],

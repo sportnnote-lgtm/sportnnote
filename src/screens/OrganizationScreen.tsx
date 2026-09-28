@@ -22,16 +22,17 @@ import { usePlayers } from '../data/hooks';
 import {
   getOrganization, getMyPlayerId, setOrgMembers, setOrgLogo, getTournaments, joinOrg,
   updateOrganization, getTeamsForOrg, createTeam, setTeamRoster,
+  getOrgRequests, respondToOrgRequest, cancelOrgRequest,
 } from '../data/repos';
 import {
   ORG_ROLES, ORG_ROLE_BLURB, COMMUNITY_TYPES, canManageOrg, canOrganizeEvents, membershipPeriod,
   isAcademicCommunity, currentStandard, gradePeriod, promoteGrade, nextStandard,
-  graduatingStandardOf, isGraduatingStandard, memberEntry, isSoleActiveAdmin,
+  graduatingStandardOf, isGraduatingStandard, memberEntry, isSoleActiveAdmin, isSoleActiveOwner, canManageOwners, activeOwners,
   currentAcademicYear, firstAcademicYear, latestAcademicYear, nextAcademicYearDates,
   academicYearEnded, academicYearLabel, academicYearsOf,
 } from '../core/org';
 import { notify } from '../core/notifications';
-import type { Organization, OrgMember, OrgRole, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
+import type { Organization, OrgMember, OrgRole, OrgRequest, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -49,6 +50,7 @@ export default function OrganizationScreen() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [events, setEvents] = useState<Tournament[]>([]);
+  const [requests, setRequests] = useState<OrgRequest[]>([]); // pending join-requests + invites
   const [adding, setAdding] = useState(false);
   const [role, setRole] = useState<OrgRole>('Member');
   const [editingRole, setEditingRole] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export default function OrganizationScreen() {
       getMyPlayerId(profile?.id).then((id) => on && setMyId(id));
       // Tournaments this community hosts — the basis of its event hierarchy.
       getTournaments().then((ts) => on && setEvents(ts.filter((t) => t.hostOrgId === params.orgId)));
+      getOrgRequests(params.orgId, 'pending').then((rs) => on && setRequests(rs));
       return () => {
         on = false;
       };
@@ -121,7 +124,12 @@ export default function OrganizationScreen() {
   // to fix their class. The admins & organizers who'd action it:
   const myMember = org && myId ? memberEntry(org, myId) : undefined;
   const canRequestClass = academic && !!myMember && !myMember.until && !canOrganize;
-  const gradeApprovers = org ? org.members.filter((m) => !m.until && (m.role === 'Admin' || m.role === 'Organizer')).map((m) => m.playerId) : [];
+  const gradeApprovers = org ? org.members.filter((m) => !m.until && (m.role === 'Owner' || m.role === 'Admin' || m.role === 'Organizer')).map((m) => m.playerId) : [];
+  const amOwner = canManageOwners(org ?? undefined, myId);
+  // When an org somehow has no owner (legacy data), any manager may appoint the
+  // first one — otherwise ownership could never be bootstrapped.
+  const hasOwner = activeOwners(org ?? undefined).length > 0;
+  const canGrantOwner = amOwner || !hasOwner;
   // Only players who aren't *active* members can be added (past members can rejoin).
   const addable = useMemo(
     () => (org ? players.filter((p) => !org.members.some((m) => m.playerId === p.id && !m.until)) : []),
@@ -167,9 +175,17 @@ export default function OrganizationScreen() {
   };
   const setMemberRole = (playerId: string, newRole: OrgRole) => {
     if (!org) return;
-    // A community must always keep an admin: block demoting the only one.
-    if (newRole !== 'Admin' && isSoleActiveAdmin(org, playerId)) {
-      setActionError('This is the only admin — appoint another admin before changing this role.');
+    const target = org.members.find((m) => m.playerId === playerId);
+    const targetIsOwner = !!target && !target.until && target.role === 'Owner';
+    // Only Owners may touch Owners or grant Owner — except bootstrapping the first
+    // Owner when the org has none.
+    if ((targetIsOwner || newRole === 'Owner') && !canGrantOwner) {
+      setActionError('Only owners can add, remove or change owners.');
+      return;
+    }
+    // An org must always keep at least one owner.
+    if (targetIsOwner && newRole !== 'Owner' && isSoleActiveOwner(org, playerId)) {
+      setActionError('This is the only owner — make someone else an owner first.');
       return;
     }
     setActionError(null);
@@ -178,12 +194,35 @@ export default function OrganizationScreen() {
   };
   const removeMember = (playerId: string) => {
     if (!org) return;
-    if (isSoleActiveAdmin(org, playerId)) {
-      setActionError('This is the only admin — appoint another admin before removing them.');
+    const target = org.members.find((m) => m.playerId === playerId);
+    const targetIsOwner = !!target && !target.until && target.role === 'Owner';
+    if (targetIsOwner && !amOwner) {
+      setActionError('Only owners can remove an owner.');
+      return;
+    }
+    if (isSoleActiveOwner(org, playerId)) {
+      setActionError('This is the only owner — make someone else an owner before removing them.');
       return;
     }
     setActionError(null);
     save(org.members.filter((x) => x.playerId !== playerId));
+  };
+  // Accept / decline a pending join-request or invite.
+  const decideRequest = async (req: OrgRequest, accept: boolean) => {
+    setActionError(null);
+    try {
+      await respondToOrgRequest(req.id, accept, myId ?? undefined);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not update the request.');
+      return;
+    }
+    const [fresh, reqs] = await Promise.all([getOrganization(params.orgId), getOrgRequests(params.orgId, 'pending')]);
+    if (fresh) setOrg(fresh);
+    setRequests(reqs);
+  };
+  const withdrawRequest = async (req: OrgRequest) => {
+    await cancelOrgRequest(req.id);
+    setRequests(await getOrgRequests(params.orgId, 'pending'));
   };
   const saveLogo = (uri: string) => {
     if (!org) return;
@@ -240,20 +279,20 @@ export default function OrganizationScreen() {
           {academic && currentStandard(m) ? (
             <Text style={st.standardLine}>🎓 {currentStandard(m)}</Text>
           ) : null}
-          {academic && !m.until && m.role === 'Admin' && currentStandard(m) ? (
-            <Text style={st.warn}>⚠ Student admin — usually a staff role</Text>
+          {academic && !m.until && (m.role === 'Owner' || m.role === 'Admin') && currentStandard(m) ? (
+            <Text style={st.warn}>⚠ Student {m.role.toLowerCase()} — usually a staff role</Text>
           ) : null}
         </TouchableOpacity>
         {canManage ? (
           <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => setEditingRole((v) => (v === m.playerId ? null : m.playerId))}>
-            <Pill label={`${m.role} ▾`} color={theme.colors.surfaceAlt} textColor={m.role === 'Admin' ? theme.colors.accent : theme.colors.text} />
+            <Pill label={`${m.role} ▾`} color={theme.colors.surfaceAlt} textColor={m.role === 'Owner' ? theme.colors.primary : m.role === 'Admin' ? theme.colors.accent : theme.colors.text} />
           </TouchableOpacity>
         ) : (
-          <Pill label={m.role} color={theme.colors.surfaceAlt} textColor={m.role === 'Admin' ? theme.colors.accent : theme.colors.textMuted} />
+          <Pill label={m.role} color={theme.colors.surfaceAlt} textColor={m.role === 'Owner' ? theme.colors.primary : m.role === 'Admin' ? theme.colors.accent : theme.colors.textMuted} />
         )}
         {canManage && (org.members.length > 1) && (
-          isSoleActiveAdmin(org, m.playerId)
-            ? <Text style={st.onlyAdmin}>Only admin</Text>
+          isSoleActiveOwner(org, m.playerId)
+            ? <Text style={st.onlyAdmin}>Only owner</Text>
             : <Text style={st.remove} onPress={() => removeMember(m.playerId)}>Remove</Text>
         )}
       </Card>
@@ -265,14 +304,20 @@ export default function OrganizationScreen() {
                 key={r}
                 label={r}
                 active={m.role === r}
-                disabled={r !== 'Admin' && isSoleActiveAdmin(org, m.playerId)}
+                disabled={
+                  (isSoleActiveOwner(org, m.playerId) && r !== 'Owner') ||   // can't demote the last owner
+                  ((r === 'Owner' || m.role === 'Owner') && !canGrantOwner)  // only owners manage owners (unless bootstrapping the first)
+                }
                 onPress={() => setMemberRole(m.playerId, r)}
               />
             ))}
           </View>
           <Text style={st.roleBlurb}>{ORG_ROLE_BLURB[m.role]}</Text>
-          {isSoleActiveAdmin(org, m.playerId) ? (
-            <Text style={st.warn}>This is the community's only admin — appoint another admin before changing this role.</Text>
+          {m.role === 'Owner' && !canGrantOwner ? (
+            <Text style={st.warn}>Only owners can change an owner's role.</Text>
+          ) : null}
+          {isSoleActiveOwner(org, m.playerId) ? (
+            <Text style={st.warn}>This is the community's only owner — make someone else an owner before changing this role.</Text>
           ) : null}
           {currentStandard(m) ? (
             <Text style={st.warn}>⚠ {nameOf(m.playerId)} is a student ({currentStandard(m)}). Admin is normally a staff/management role; their rights are revoked automatically on graduation.</Text>
@@ -294,9 +339,11 @@ export default function OrganizationScreen() {
   const active = org.members.filter((m) => !m.until);
   const past = org.members.filter((m) => m.until);
   const ROLE_SECTIONS: { role: OrgRole; label: string }[] = [
+    { role: 'Owner', label: 'Owners' },
     { role: 'Admin', label: 'Admins' },
     { role: 'Organizer', label: 'Organizers' },
     { role: 'Scorer', label: 'Scorers' },
+    { role: 'Referee', label: 'Referees' },
     { role: 'Member', label: academic ? 'Students & members' : 'Members' },
   ];
 
@@ -426,6 +473,40 @@ export default function OrganizationScreen() {
             {actionError ? (
               <Card style={st.errorCard}><Text style={st.warnStrong}>⚠ {actionError}</Text></Card>
             ) : null}
+
+            {/* Pending membership requests & invites (managers act on them here). */}
+            {canManage && requests.length > 0 && (() => {
+              const joinReqs = requests.filter((r) => r.direction === 'request');
+              const invites = requests.filter((r) => r.direction === 'invite');
+              return (
+                <Card style={{ gap: theme.spacing(2) }}>
+                  {joinReqs.length > 0 && (
+                    <>
+                      <Text style={textStyles.h3}>Requests to join · {joinReqs.length}</Text>
+                      {joinReqs.map((r) => (
+                        <View key={r.id} style={st.reqRow}>
+                          <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(r.playerId)}</Text>
+                          <Text style={st.link} onPress={() => void decideRequest(r, true)}>Accept</Text>
+                          <Text style={st.remove} onPress={() => void decideRequest(r, false)}>Decline</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                  {invites.length > 0 && (
+                    <>
+                      <Text style={textStyles.h3}>Invites sent · {invites.length}</Text>
+                      {invites.map((r) => (
+                        <View key={r.id} style={st.reqRow}>
+                          <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(r.playerId)} · {r.role}</Text>
+                          <Text style={textStyles.muted}>awaiting reply</Text>
+                          <Text style={st.remove} onPress={() => void withdrawRequest(r)}>Cancel</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </Card>
+              );
+            })()}
 
             {/* The running year ended — set up the new one (then promote). */}
             {academic && canManage && yearEnded && nextAY && (
@@ -1009,6 +1090,7 @@ const st = StyleSheet.create({
   rosterNames: { color: theme.colors.textMuted, fontSize: theme.font.small, paddingHorizontal: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   headLinks: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },
+  reqRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   rollRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   rollTarget: { width: 130 },
   nudge: { gap: theme.spacing(2), borderWidth: 1, borderColor: theme.colors.primary },
