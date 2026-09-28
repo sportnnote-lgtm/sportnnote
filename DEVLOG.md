@@ -39,6 +39,20 @@ month (resets 2026-10-01); last built APK is versionCode 27. Ships in the next b
 
 ---
 
+### 2026-09-29 — Tournament organize: audit polish + Singles/Doubles up front · SHIPPED + VERIFIED
+
+Closed the tournament-organize audit items. **Create screen**: registration deadline +
+Min/Max teams now live on Create (shown when Open), not only Edit; racket sports get a
+prominent **Singles / Doubles (pairs)** chooser up front (writes playersPerSide to the
+draft) so participant structure isn't buried in per-sport settings. **PointsEditor**:
+draw points, loss points, and a "break ties first by" picker are now editable (was
+points-per-win only). **SportSettings**: football tie-decider no longer rendered twice —
+the format-field copy is omitted, leaving only the dedicated "If a knockout tie is level"
+card. **TournamentProfile**: added a "🔁 New series / tie" manager action (previously
+unreachable from a tournament). Verified in demo (Tennis Singles/Doubles; Open →
+deadline + min/max; football knockout single decider; points/draw/loss/tie-break
+editable). Ships in the Oct 1 build.
+
 ### 2026-09-29 — Tournament format: Americano (padel/pickleball) · SHIPPED + VERIFIED
 
 Full individual Americano: entrants rotate partners each round; every point you win is
