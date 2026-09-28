@@ -13,6 +13,42 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-29 — Individuals · Orgs · Membership · Roles · Ownership (M1) · SHIPPED
+
+Foundational refactor of the person↔organization↔role model (a big multi-stage spec).
+Approach: **extend, don't duplicate** — a person is already one identity (Profile=login +
+Player=sport); org ownership was already first-class (hostOrgId vs hostIds). What was
+missing: a real membership store, an Owner role + safeguards, a Referee role, and an
+invite/join-request lifecycle. Chosen model: **full join-table refactor** at the DB layer
+while the data layer re-assembles `Organization.members` on read, so `org.ts` (~30 helpers),
+the academic grade timeline and the 49KB org console keep working unchanged.
+
+**M1a — data + roles** (migration **0020**): `org_members` join table (role/since/until/
+grades) + `org_requests` (invite|request; pending/accepted/rejected/cancelled/expired).
+One-time copy of the JSONB `organizations.members` → rows; guarantees ≥1 Owner per org.
+Roles gain **Owner** (top; never zero — enforced in `setOrgMembers` so no path can violate
+it) and **Referee** (assignable eligibility). `org.ts`: isOrgOwner/canManageOwners/
+activeOwners/isSoleActiveOwner; canManageOrg, canOrganizeEvents, tournamentHostPlayerIds
+include Owner; creator becomes Owner. repos: getOrganization(s) assemble members from the
+table; setOrgMembers upserts+deletes rows; lifecycle fns inviteToOrg / requestToJoinOrg /
+getOrgRequests / getMyOrgRequests / respondToOrgRequest / cancelOrgRequest. Demo seed
+promotes an Owner per org (withSeedOwners).
+
+**M1b — org console**: Owner/Referee member sections; role editor with guards (only Owners
+manage Owners; last Owner can't be demoted/removed; any manager can bootstrap the first
+Owner when none exists); pending requests (Accept/Decline) + sent invites (Cancel).
+
+**M1c — user side**: `DiscoverOrgsScreen` (search discoverable orgs → Request to join;
+"Requested" once pending) + Organize entry "🔎 Find a community"; Organize Invitations card
+(accept/decline invites to you) + outgoing-request status. Joining is never automatic.
+
+Verified in demo end-to-end (promote → Owner + "Only owner" guard; request to BPL Football
+→ "Requested" + awaiting-approval surface). Clean tsc; 292 tests pass. **Migration 0020
+must be run for live.** Next: M2 context switcher, M3 ownership/transfer, M4 school
+structure, M5 audit.
+
+---
+
 ### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
 
 Building the Team Creation & Management system: one real-world team that plays MANY
