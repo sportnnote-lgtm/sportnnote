@@ -74,10 +74,27 @@ cricket profile (Aarav → Captain + Wicketkeeper/Batter), sport independence (f
 empty, GK/DEF/MID/FWD catalogue), §16 "Your teams" quick-pick fills the match Home slot,
 invite QR renders + code JOIN-1001, logo "Add logo" affordance present. All screens clean.
 
-**Still to do**: a real https join redirect for club codes (extend the `join` edge
-function — until then the in-app deep link + code is the path); an in-app QR *scanner*
-(currently generate-only; scanning uses the phone camera → deep link). **Migrations 0018 +
-0019 must be run before the live app uses clubs** (done by user 2026-09-29).
+**Club QR scanner + https redirect (shipped)**: new **`join-club` edge function**
+(public, browser landing page for `?c=<code>` showing the team name + redeem steps);
+`clubJoinLink` now targets it when a backend URL is set, and the invite QR encodes that
+https link so any phone camera opens it. In-app **QR scanner** (`ScanQRScreen`,
+expo-camera) reads a team QR → `parseClubToken` (deep link / https / bare code) → JoinClub;
+web + no-permission fallbacks; reached from "📷 Scan a team QR"; app.json camera permission
+added. **Deploy step for user**: `npx supabase functions deploy join-club --no-verify-jwt`.
+
+**Migrations 0018 + 0019 run by user 2026-09-29.** New native deps for the Oct 1 build:
+react-native-svg, react-native-qrcode-svg (QR), expo-camera (scanner).
+
+### 2026-09-29 — Tournament page split into tabs · SHIPPED
+
+The tournament profile had become one very long scroll. Split into a persistent header
+(logo, name, dates, status) + a tab bar: **Info · Settings · Matches · Stats · Teams**
+(Settings hidden for non-managers). Info = enter-a-team / sport links / follow / format /
+hosts / classes; Settings = participating teams / schedule / auto-fixtures / series / edit
+/ reminders; Matches = upcoming|completed + per-sport filter; Stats = standings & bracket
+links + medal/overall tables + by-sport tables & leaders; Teams = participating list.
+Content scroll resets to top on tab switch. `TournamentProfileScreen.tsx`; verified in demo
+across Info/Settings/Matches/Stats. Clean tsc.
 
 ---
 
