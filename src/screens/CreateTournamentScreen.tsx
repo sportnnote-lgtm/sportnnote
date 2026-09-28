@@ -9,7 +9,8 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
-import { DateField } from '../components/DateTimeField';
+import { DateField, DateTimeField } from '../components/DateTimeField';
+import { TouchableOpacity } from 'react-native';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SportSettingsButtons, coarseStructureFrom } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
@@ -57,6 +58,9 @@ export default function CreateTournamentScreen() {
   const [coHosts, setCoHosts] = useState<CoHost[]>([]);
   const [divisions, setDivisions] = useState<NewTournamentCategory[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [regDeadline, setRegDeadline] = useState<Date | null>(null);
+  const [minTeams, setMinTeams] = useState(0);
+  const [maxTeams, setMaxTeams] = useState(0);
   React.useEffect(() => {
     let on = true;
     getMyPlayerId(profile?.id).then(async (id) => {
@@ -117,6 +121,9 @@ export default function CreateTournamentScreen() {
         hostName: chosenOrg ? chosenOrg.name : myName,
         hostOrgId: chosenOrg?.id,
         isOpen,
+        registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : undefined,
+        minTeams: isOpen && minTeams > 0 ? minTeams : undefined,
+        maxTeams: isOpen && maxTeams > 0 ? maxTeams : undefined,
         sports,
         startDate: s, endDate: e,
         formats: finalFormats,
@@ -179,6 +186,23 @@ export default function CreateTournamentScreen() {
 
         {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
+        {/* Singles vs Doubles up front for racket sports — the first thing that
+            shapes the whole competition (individuals vs pairs), so it's not buried
+            in per-sport settings. */}
+        {sports.filter((s) => getSport(s).participantKind === 'both').map((s) => {
+          const pps = Number((formats[s] as Record<string, unknown> | undefined)?.playersPerSide ?? 1);
+          const setPps = (n: number) => { tournamentDraft.setField(s, 'playersPerSide', n); setFormats(tournamentDraft.all() as FormatMap); };
+          return (
+            <View key={s} style={{ gap: theme.spacing(2) }}>
+              <FieldLabel>{getSport(s).icon} {getSport(s).name} — format</FieldLabel>
+              <View style={st.chips}>
+                <SelectChip label="👤 Singles" active={pps < 2} onPress={() => setPps(1)} />
+                <SelectChip label="👥 Doubles (pairs)" active={pps >= 2} onPress={() => setPps(2)} />
+              </View>
+            </View>
+          );
+        })}
+
         <SportSettingsButtons sports={sports} />
 
         <FieldLabel>Player reminders</FieldLabel>
@@ -211,10 +235,46 @@ export default function CreateTournamentScreen() {
         </View>
         <Text style={st.hint}>Open tournaments appear in Discover for teams to register.</Text>
 
+        {isOpen && (
+          <View style={{ gap: theme.spacing(3) }}>
+            {regDeadline ? (
+              <View style={{ gap: theme.spacing(2) }}>
+                <DateTimeField label="Registration deadline" value={regDeadline} onChange={setRegDeadline} />
+                <Text style={st.linkText} onPress={() => setRegDeadline(null)}>Remove deadline</Text>
+              </View>
+            ) : (
+              <SelectChip label="＋ Add a registration deadline" active={false} onPress={() => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); setRegDeadline(d); }} />
+            )}
+            <View style={st.capRow}>
+              <View style={st.capCell}>
+                <FieldLabel>Min teams</FieldLabel>
+                <NumStepper value={minTeams} min={0} max={128} onChange={setMinTeams} zeroLabel="—" />
+              </View>
+              <View style={st.capCell}>
+                <FieldLabel>Max teams (cap)</FieldLabel>
+                <NumStepper value={maxTeams} min={0} max={128} onChange={setMaxTeams} zeroLabel="∞" />
+              </View>
+            </View>
+            <Text style={textStyles.muted}>Below the minimum is just a heads-up; the maximum caps public sign-ups (you can still add teams yourself).</Text>
+          </View>
+        )}
+
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create tournament'} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** Small +/− stepper for team caps (0 shows a placeholder like — or ∞). */
+function NumStepper({ value, min, max, onChange, zeroLabel }: { value: number; min: number; max: number; onChange: (v: number) => void; zeroLabel?: string }) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  return (
+    <View style={st.stepper}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Fewer" style={st.stepBtn} onPress={() => onChange(clamp(value - 1))}><Text style={st.stepTxt}>−</Text></TouchableOpacity>
+      <Text style={st.stepVal}>{value === 0 && zeroLabel ? zeroLabel : value}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="More" style={st.stepBtn} onPress={() => onChange(clamp(value + 1))}><Text style={st.stepTxt}>+</Text></TouchableOpacity>
+    </View>
   );
 }
 
@@ -226,4 +286,11 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   hint: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   fmtCard: { gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
+  linkText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  capRow: { flexDirection: 'row', gap: theme.spacing(3) },
+  capCell: { flex: 1, gap: theme.spacing(1) },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  stepBtn: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3) },
+  stepTxt: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.body },
+  stepVal: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.h3, minWidth: 30, textAlign: 'center' },
 });

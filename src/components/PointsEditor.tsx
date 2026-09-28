@@ -25,17 +25,42 @@ export function PointsEditor({ sport, value, onChange }: {
   onChange: (key: string, val: Val) => void;
 }) {
   const cfg = standingsConfigFromFormat(sport, value);
+  // The tie-breakers that apply to this sport (cricket ranks ties by NRR, others by
+  // points/goal difference). The organizer picks which one applies FIRST; the rest
+  // keep their default order behind it.
+  const available: TieBreaker[] = sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
+  const primary = cfg.order[0] ?? available[0];
+  const setPrimary = (p: TieBreaker) => onChange('tieBreak', [p, ...available.filter((x) => x !== p)].join(','));
+
   return (
     <View style={st.wrap}>
       <FieldLabel>Points &amp; tie-breakers</FieldLabel>
       <View style={st.row}>
         <Text style={st.label}>Points per win</Text>
-        {[2, 3].map((n) => (
+        {[1, 2, 3].map((n) => (
           <SelectChip key={n} label={`${n}`} active={cfg.win === n} onPress={() => onChange('winPoints', n)} />
         ))}
       </View>
+      <View style={st.row}>
+        <Text style={st.label}>Points per draw</Text>
+        {[0, 1, 2].map((n) => (
+          <SelectChip key={n} label={`${n}`} active={cfg.draw === n} onPress={() => onChange('drawPoints', n)} />
+        ))}
+      </View>
+      <View style={st.row}>
+        <Text style={st.label}>Points per loss</Text>
+        {[0, 1].map((n) => (
+          <SelectChip key={n} label={`${n}`} active={cfg.loss === n} onPress={() => onChange('lossPoints', n)} />
+        ))}
+      </View>
+      <View style={st.row}>
+        <Text style={st.label}>Break ties first by</Text>
+        {available.map((t) => (
+          <SelectChip key={t} label={TB_LABEL[t]} active={primary === t} onPress={() => setPrimary(t)} />
+        ))}
+      </View>
       <Text style={textStyles.muted}>
-        A draw is worth {cfg.draw} point{cfg.draw === 1 ? '' : 's'}. Ties are broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}.
+        {cfg.win} for a win, {cfg.draw} for a draw, {cfg.loss} for a loss. Ties broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}.
       </Text>
     </View>
   );
@@ -43,6 +68,6 @@ export function PointsEditor({ sport, value, onChange }: {
 
 const st = StyleSheet.create({
   wrap: { gap: theme.spacing(2) },
-  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
-  label: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
+  label: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '600', minWidth: 120 },
 });

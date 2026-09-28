@@ -339,6 +339,7 @@ export default function TournamentProfileScreen() {
                   </>
                 );
             })()}
+            <Button label="🔁 New series / tie" variant="ghost" onPress={() => nav.navigate('CreateSeries', { tournamentId: tournament.id, sport: tournament.sports[0] })} />
             <Button label="✎ Edit tournament" variant="ghost" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
           </View>
         )}

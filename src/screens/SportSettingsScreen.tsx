@@ -49,7 +49,10 @@ export default function SportSettingsScreen() {
         <StructureEditor value={value} onChange={set} sport={sport} />
 
         {(plugin.formatFields ?? []).length > 0 && (
-          <SportFormatEditor sport={sport} heading="format" value={value} onChange={set} />
+          // Football's tie-decider is shown by the dedicated knockout card below, so
+          // don't render it a second time (with a different option set) here.
+          <SportFormatEditor sport={sport} heading="format" value={value} onChange={set}
+            omitKeys={isFootball ? ['decider', 'extraTimeMinutes', 'extraTimeSubs'] : undefined} />
         )}
 
         {/* Football's knockout tie-decider — extra time or straight penalties. Only
