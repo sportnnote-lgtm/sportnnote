@@ -62,9 +62,22 @@ dashboard "🔗 Invite" opens the native Share sheet with a code + message; Team
 Also fixed a pre-existing structureConfig test (missing manualStandings/swissRounds in
 the expected). All 292 pure-engine tests pass; clean tsc.
 
-**Still to do**: logo image upload; a real https join redirect for club codes (extend the
-`join` edge function — until then the in-app deep link + code is the path); optional
-graphical QR. **Migrations 0018 + 0019 must be run before the live app uses clubs.**
+**Logo + QR (this commit)**: team logo upload via the existing `LogoPicker`/`pickPhoto`
+— on the create form (72px) and the dashboard header (admins tap to change → updateClub),
+shown in the Teams list too. Real scannable **QR code** in the invite card
+(`react-native-qrcode-svg` + `react-native-svg`, added via `expo install` for SDK-56
+compatibility) encoding `sportnnote://join-club/<token>`, with the code + Share link.
+
+**Verified end-to-end in demo mode (2026-09-29)**: created "Hyderabad Warriors"
+(cricket+basketball+football), dashboard counts, add-member search (Rohan Nair → member),
+cricket profile (Aarav → Captain + Wicketkeeper/Batter), sport independence (football
+empty, GK/DEF/MID/FWD catalogue), §16 "Your teams" quick-pick fills the match Home slot,
+invite QR renders + code JOIN-1001, logo "Add logo" affordance present. All screens clean.
+
+**Still to do**: a real https join redirect for club codes (extend the `join` edge
+function — until then the in-app deep link + code is the path); an in-app QR *scanner*
+(currently generate-only; scanning uses the phone camera → deep link). **Migrations 0018 +
+0019 must be run before the live app uses clubs** (done by user 2026-09-29).
 
 ---
 

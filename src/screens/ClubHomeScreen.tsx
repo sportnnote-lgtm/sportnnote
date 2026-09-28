@@ -15,9 +15,11 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import {
   getClub, getClubMembers, getClubSports, getMyPlayerId, getPlayers,
-  addClubSport, removeClubSport, addClubMember, removeClubMember, setClubMemberRole, invitePerson, createClubInvite,
+  addClubSport, removeClubSport, addClubMember, removeClubMember, setClubMemberRole, invitePerson, createClubInvite, updateClub,
 } from '../data/repos';
-import { clubInviteMessage } from '../core/invite';
+import { LogoPicker } from '../components/LogoPicker';
+import QRCode from 'react-native-qrcode-svg';
+import { clubInviteMessage, clubJoinDeepLink } from '../core/invite';
 import type { Club, ClubMemberView, Player, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -124,9 +126,20 @@ export default function ClubHomeScreen() {
       <ScrollView contentContainerStyle={st.content}>
         {/* Header */}
         <Card style={st.header}>
-          <View style={[st.badge, { backgroundColor: club.colorHex ?? theme.colors.primary }]}>
-            <Text style={st.badgeText}>{club.shortName?.slice(0, 3) || club.name.slice(0, 2).toUpperCase()}</Text>
-          </View>
+          {club.logoUrl || amAdmin ? (
+            <LogoPicker
+              logoUrl={club.logoUrl}
+              canManage={amAdmin}
+              size={56}
+              placeholder={club.shortName?.slice(0, 3) || '🛡️'}
+              label="Add logo"
+              onPick={async (uri) => { await updateClub(clubId, { logoUrl: uri }); setClub((c) => (c ? { ...c, logoUrl: uri } : c)); }}
+            />
+          ) : (
+            <View style={[st.badge, { backgroundColor: club.colorHex ?? theme.colors.primary }]}>
+              <Text style={st.badgeText}>{club.shortName?.slice(0, 3) || club.name.slice(0, 2).toUpperCase()}</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={textStyles.h2}>{club.name}</Text>
             {!!club.city && <Text style={textStyles.muted}>{club.city}</Text>}
@@ -189,11 +202,15 @@ export default function ClubHomeScreen() {
         </View>
 
         {inviteCode && (
-          <Card style={{ gap: theme.spacing(1) }}>
-            <Text style={textStyles.muted}>Share this invite — they install SportnNote, open “Join a team”, and enter:</Text>
+          <Card style={{ gap: theme.spacing(2), alignItems: 'center' }}>
+            <Text style={[textStyles.muted, { textAlign: 'center' }]}>Scan to join, or share the code below.</Text>
+            <View style={st.qrBox}>
+              <QRCode value={clubJoinDeepLink(inviteCode)} size={168} backgroundColor="#ffffff" color="#04150F" />
+            </View>
             <Text style={st.code}>{inviteCode}</Text>
+            <Text style={[textStyles.muted, { textAlign: 'center', fontSize: theme.font.small }]}>They install SportnNote, open “Join a team”, and enter this code.</Text>
             <View style={st.memberActions}>
-              <TouchableOpacity onPress={invite} accessibilityRole="button"><Text style={st.link}>Share again</Text></TouchableOpacity>
+              <TouchableOpacity onPress={invite} accessibilityRole="button"><Text style={st.link}>🔗 Share link</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => setInviteCode(null)} accessibilityRole="button"><Text style={textStyles.muted}>Hide</Text></TouchableOpacity>
             </View>
           </Card>
@@ -285,6 +302,7 @@ const st = StyleSheet.create({
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   pending: { color: '#FFB454', fontSize: theme.font.small, fontWeight: '600' },
   code: { color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.h3, letterSpacing: 1 },
+  qrBox: { backgroundColor: '#ffffff', padding: theme.spacing(3), borderRadius: theme.radius.md },
   roleTag: { paddingHorizontal: theme.spacing(2), paddingVertical: 2, borderRadius: 10, backgroundColor: theme.colors.surfaceAlt },
   roleTagAdmin: { backgroundColor: theme.colors.primary },
   roleText: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.textMuted },

@@ -2,7 +2,7 @@
  *  row shows the team, its city and the sports it plays; tapping opens the team
  *  dashboard. This is the home of the Team Creation & Management system (spec §12). */
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -49,9 +49,13 @@ export default function ClubsScreen() {
               <TouchableOpacity key={c.id} accessibilityRole="button" accessibilityLabel={`Open ${c.name}`}
                 onPress={() => nav.navigate('ClubHome', { clubId: c.id })}>
                 <Card style={st.row}>
-                  <View style={[st.badge, { backgroundColor: c.colorHex ?? theme.colors.primary }]}>
-                    <Text style={st.badgeText}>{c.shortName?.slice(0, 3) || c.name.slice(0, 2).toUpperCase()}</Text>
-                  </View>
+                  {c.logoUrl ? (
+                    <Image source={{ uri: c.logoUrl }} style={st.badgeImg} resizeMode="cover" />
+                  ) : (
+                    <View style={[st.badge, { backgroundColor: c.colorHex ?? theme.colors.primary }]}>
+                      <Text style={st.badgeText}>{c.shortName?.slice(0, 3) || c.name.slice(0, 2).toUpperCase()}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>{c.name}</Text>
                     <Text style={textStyles.muted}>
@@ -74,6 +78,7 @@ const st = StyleSheet.create({
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   badge: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  badgeImg: { width: 44, height: 44, borderRadius: 10 },
   badgeText: { color: '#fff', fontWeight: '900', fontSize: 15 },
   chev: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '800' },
 });

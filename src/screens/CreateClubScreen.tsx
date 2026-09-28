@@ -11,6 +11,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
+import { LogoPicker } from '../components/LogoPicker';
 import { SPORT_LIST } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { createClub, getMyPlayerId } from '../data/repos';
@@ -31,6 +32,7 @@ export default function CreateClubScreen() {
   const [name, setName] = useState('');
   const [short, setShort] = useState('');
   const [city, setCity] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [color, setColor] = useState(PALETTE[0]);
   const [sports, setSports] = useState<SportId[]>([]);
   const [addMe, setAddMe] = useState(true);
@@ -50,6 +52,7 @@ export default function CreateClubScreen() {
         shortName: short.trim().toUpperCase(),
         city: city.trim() || undefined,
         colorHex: color,
+        logoUrl,
         orgId: params?.orgId,
         createdBy: profile?.id,
         firstMemberPlayerId: addMe && myId ? myId : undefined,
@@ -70,6 +73,9 @@ export default function CreateClubScreen() {
         <ScreenTitle title="Create your team" subtitle="One team, many sports — add the rest later" />
 
         <Card style={{ gap: theme.spacing(3) }}>
+          <View style={{ alignItems: 'center' }}>
+            <LogoPicker logoUrl={logoUrl} canManage onPick={setLogoUrl} size={72} placeholder="🛡️" label="Add team logo" />
+          </View>
           <View style={st.row}>
             <View style={st.flex2}>
               <TextField label="Team name" value={name} onChange={setName} placeholder="Hyderabad Warriors" />
