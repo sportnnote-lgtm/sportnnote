@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { RegistrationBanner } from '../components/RegistrationBanner';
+import { ClubQuickPick } from '../components/ClubQuickPick';
 import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
@@ -353,6 +354,17 @@ export default function TournamentTeamsScreen() {
             <SelectChip label="Add directly" active={entryMode === 'confirmed'} onPress={() => setEntryMode('confirmed')} />
             <SelectChip label="Invite (captain accepts)" active={entryMode === 'invited'} onPress={() => setEntryMode('invited')} />
           </View>
+        )}
+
+        {/* Pick one of your own multi-sport teams — its captain + squad come with
+            it (spec §16). Picking a club that doesn't play this sport yet mints its
+            profile on the fly. Individual/pairs entries don't use clubs. */}
+        {pMode === 'team' && (
+          <ClubQuickPick
+            sport={sport}
+            selectedTeamIds={selected}
+            onPicked={(team) => { setDirty(true); setSelected((p) => [...new Set([...p, team.id])]); setTick((n) => n + 1); }}
+          />
         )}
 
         {pickable.length === 0 ? (

@@ -2466,6 +2466,23 @@ export async function getClub(clubId: string): Promise<Club | null> {
   return toClub(data as ClubRow);
 }
 
+/** The clubs a person belongs to (any role) — their "my teams" set, used to let
+ *  them enter one of their teams into a game or tournament. */
+export async function getClubsForPlayer(playerId: string): Promise<Club[]> {
+  if (!playerId) return [];
+  if (!isSupabaseConfigured || !supabase) {
+    const ids = new Set(demo.clubMembers.filter((m) => m.playerId === playerId).map((m) => m.clubId));
+    return demo.clubs.filter((c) => ids.has(c.id));
+  }
+  const { data, error } = await supabase.from('club_members').select('club_id').eq('player_id', playerId);
+  if (error || !data) return [];
+  const ids = [...new Set((data as { club_id: string }[]).map((r) => r.club_id))];
+  if (!ids.length) return [];
+  const res = await supabase.from('clubs').select(CLUB_COLS).in('id', ids).order('name');
+  if (res.error || !res.data) return [];
+  return (res.data as ClubRow[]).map(toClub);
+}
+
 /** Clubs owned by a community. */
 export async function getClubsForOrg(orgId: string): Promise<Club[]> {
   if (!isSupabaseConfigured || !supabase) return demo.clubs.filter((c) => c.orgId === orgId);

@@ -14,6 +14,7 @@ import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { VenueField } from '../components/VenueField';
 import { ConflictNotice } from '../components/ConflictNotice';
+import { ClubQuickPick } from '../components/ClubQuickPick';
 import { SPORT_LIST, getSport, participantMode, type ParticipantMode } from '../sports/registry';
 import { useTeams, useMatches } from '../data/hooks';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
@@ -260,6 +261,18 @@ export default function ScheduleMatchScreen() {
 
             {mode === 'team' ? (
               <>
+                {sport && (
+                  <ClubQuickPick
+                    sport={sport}
+                    selectedTeamIds={[home, away].filter(Boolean) as string[]}
+                    onPicked={(team) => {
+                      // Fill the first empty side; ignore a duplicate of the other side.
+                      if (!home) setHome(team.id);
+                      else if (!away && team.id !== home) setAway(team.id);
+                      setTeamNonce((n) => n + 1);
+                    }}
+                  />
+                )}
                 <TeamPicker noun="team" label="Home team" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} />
                 <TeamPicker noun="team" label="Away team" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} />
               </>
