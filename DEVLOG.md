@@ -39,6 +39,33 @@ month (resets 2026-10-01); last built APK is versionCode 27. Ships in the next b
 
 ---
 
+### 2026-09-28 — Tournament formats: Manual standings / Scorecard + Swiss · SHIPPED + VERIFIED
+
+New tournament format work (keep the existing flow, add options), demo-verified.
+
+**Manual standings + Scorecard.** New per-sport structure "📋 Scorecard (manual table)":
+the organizer maintains the standings by hand instead of auto-computing from results —
+for sports we don't auto-score or quick offline meets. `structureConfig.manualStandings`
+(reserved `structManual`, zero-migration on formats JSONB; `structureFromFormat` treats
+manual-only as a valid config). Rows stored JSON-encoded in `formats[sport].manualRows`
+keyed by division (`manualStandings.ts`). `StandingsScreen`: managers get an editable
+grid (name + P/W/D/L/Pts, add/remove/Save via `updateTournament`), others see it ranked
+read-only. Verified: Scorecard tournament → add/save a row.
+
+**Swiss system.** New "🇨🇭 Swiss" structure: fixed rounds, no elimination, table-ranked
+(coarse 'league' → no bracket). `swiss.ts` (pure, unit-tested): `swissRound1` (seeded
+top-vs-bottom), `swissNextRound` (pairs on live standings, avoids rematches, fair byes).
+`structureConfig` adds shape + `swissRounds`; StructureEditor Swiss chip + Rounds
+stepper; `GenerateFixtures` generates round 1 then each next round from standings
+(matches tagged swiss1/2/…; football decider stripped, draws allowed). Verified: 6 teams
+→ round 1 seeded pairings created, standings shown, no bracket. `tests/swiss.test.mts`.
+
+Chore: gitignore the Firebase service-account key + env backups. Both ship in the next
+build (EAS quota resets 2026-10-01). Next: Americano; then the Singles/Doubles-up-front
+polish + earlier audit batch.
+
+---
+
 ### 2026-09-26 — Fix broken invite/join flow (404 link + no claim on register) · SHIPPED
 
 A tester invited a captain; the recipient's link 404'd. Two bugs: (1) `joinLink` pointed
