@@ -45,6 +45,10 @@ import TryNewSportScreen from '../screens/TryNewSportScreen';
 import BracketScreen from '../screens/BracketScreen';
 import TeamProfileScreen from '../screens/TeamProfileScreen';
 import SquadScreen from '../screens/SquadScreen';
+import ClubsScreen from '../screens/ClubsScreen';
+import CreateClubScreen from '../screens/CreateClubScreen';
+import ClubHomeScreen from '../screens/ClubHomeScreen';
+import ClubSportScreen from '../screens/ClubSportScreen';
 import JoinTeamScreen from '../screens/JoinTeamScreen';
 import TournamentProfileScreen from '../screens/TournamentProfileScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
@@ -282,6 +286,26 @@ export default function RootNavigator() {
               name="Squad"
               component={SquadScreen}
               options={{ ...stackScreenOpts, title: 'Squad' }}
+            />
+            <Stack.Screen
+              name="Clubs"
+              component={ClubsScreen}
+              options={{ ...stackScreenOpts, title: 'Teams' }}
+            />
+            <Stack.Screen
+              name="CreateClub"
+              component={CreateClubScreen}
+              options={{ ...stackScreenOpts, title: 'Create Team' }}
+            />
+            <Stack.Screen
+              name="ClubHome"
+              component={ClubHomeScreen}
+              options={{ ...stackScreenOpts, title: 'Team' }}
+            />
+            <Stack.Screen
+              name="ClubSport"
+              component={ClubSportScreen}
+              options={{ ...stackScreenOpts, title: 'Sport profile' }}
             />
             <Stack.Screen
               name="JoinTeam"

@@ -13,6 +13,47 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
+
+Building the Team Creation & Management system: one real-world team that plays MANY
+sports, each sport with its own captain, squad and player roles — the interface stays
+simple (create → pick sports → add teammates → manage), complexity hidden behind it.
+
+**Architecture** — a new parent entity **Club** (shown in the UI as "Team") sits *above*
+the existing per-sport `teams` rows rather than replacing them. Each per-sport `teams`
+row becomes that sport's "profile" (it already carried captain_id / vice_captain_id /
+roster), linked back by `teams.club_id`. So every existing match/tournament FK to
+`teams` stays intact; the Club is a grouping + membership layer on top. (Option B —
+ripping `sport` out of Team — was rejected: it would break every match/tournament FK.)
+
+Mapping to the spec: Club = the team; `club_members.role` (admin|member, first member
+auto-admin) = team administration; the per-sport `teams` row = sport profile; its
+captain/VC + roster = sport leadership + squad; new `team_player_roles` = sport-specific
+player roles (cricket WK/Bat/Bowl/AR, football GK/DEF/MID/FWD, etc — no universal list).
+
+**Phase 1 (data, SHIPPED commit)**: types (Club/NewClub/ClubMember(+View)/ClubMemberRole/
+TeamPlayerRoles + Team.clubId); migration **0018** + schema.sql (clubs, club_members,
+teams.club_id, team_player_roles; public-read/authed-write RLS); `data/teamRoles.ts`
+(per-sport role catalogue); repos.ts full data layer (createClub/get/list/update; member
+add/remove/role with first-member-auto-admin; club sports add/remove + per-sport team
+resolution; team player roles get/set) across demo + live.
+
+**Phase 2 (screens, this commit)**: `ClubsScreen` (my teams + create), `CreateClubScreen`
+(name/short/city/colour + multi-select sports + "add myself" → admin), `ClubHomeScreen`
+(dashboard: member/admin/sport counts, sports add/remove, members list with promote/
+demote/remove + add-by-phone), `ClubSportScreen` (one sport's captain/VC, squad pick,
+per-player roles — all independent per sport). Routes Clubs/CreateClub/ClubHome/ClubSport
+registered; Organize screen gains a "🛡️ My teams" entry (the old per-sport admin is now
+"Manage houses"). Clean `tsc`; demo bundle healthy (authed UI drive deferred — preview
+was on the live-env build and the checkout is shared with a concurrent session).
+
+**Still to do**: invite via link / QR / add-existing-player search (§10); logo image
+upload; wire Club selection into game + tournament creation so picking a team auto-loads
+that sport's captain + squad (§16). **Migration 0018 must be run before the live app
+uses clubs** (createClub etc. need the new tables).
+
+---
+
 ### 2026-09-26 — Always-available "remind to install" (WhatsApp/SMS) · SHIPPED (build pending EAS quota)
 
 Re-sharing the install invite is now one tap wherever a not-yet-registered player

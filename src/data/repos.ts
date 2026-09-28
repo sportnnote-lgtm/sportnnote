@@ -2441,8 +2441,10 @@ export async function createClub(input: NewClub): Promise<Club> {
     if (error || !data) throw new Error(error?.message ?? 'Could not create team');
     club = toClub(data as ClubRow);
   }
-  // First member (the creator, if they added themselves) becomes an admin.
-  if (input.createdBy) await addClubMember(club.id, input.createdBy, 'admin');
+  // Add the creator as the first member — an admin — when they choose to join. This
+  // takes a PLAYER id (club_members.player_id), distinct from created_by (a profile
+  // id), so the caller passes it explicitly rather than reusing createdBy.
+  if (input.firstMemberPlayerId) await addClubMember(club.id, input.firstMemberPlayerId, 'admin');
   // Mint a per-sport team row for each sport the club plays.
   for (const sport of input.sports ?? []) await addClubSport(club.id, sport);
   return club;

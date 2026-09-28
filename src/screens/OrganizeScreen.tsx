@@ -132,10 +132,14 @@ export default function OrganizeScreen() {
         )}
 
         <Button
-          label="👥 Manage teams"
+          label="🛡️ My teams"
+          onPress={() => nav.navigate('Clubs')}
+          style={{ marginTop: theme.spacing(2) }}
+        />
+        <Button
+          label="👥 Manage houses"
           variant="ghost"
           onPress={() => nav.navigate('Teams')}
-          style={{ marginTop: theme.spacing(2) }}
         />
 
         <SectionHeader title="Communities" count={myCommunities.length} onSeeAll={myCommunities.length > SECTION_CAP ? () => setShowCommunities((v) => !v) : undefined} expanded={showCommunities} />

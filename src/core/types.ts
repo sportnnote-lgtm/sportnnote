@@ -327,7 +327,11 @@ export interface NewClub {
   contactPhone?: string;
   contactEmail?: string;
   orgId?: UUID;
+  /** profile id of the creator (stored on the club row). */
   createdBy?: UUID;
+  /** player id of the creator when they add themselves — becomes the first member
+   *  and thus an admin. Distinct from createdBy, which is a profile id. */
+  firstMemberPlayerId?: UUID;
   /** sports the club plays at creation (a per-sport Team row is minted for each). */
   sports?: SportId[];
 }

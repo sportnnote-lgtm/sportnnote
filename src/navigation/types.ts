@@ -56,6 +56,13 @@ export type RootStackParamList = {
   Team: { teamId: string };
   Squad: { teamId: string };
   JoinTeam: { token?: string } | undefined;
+  /** The multi-sport "Team" (Club) system. Clubs = my teams list; CreateClub =
+   *  the simple create flow; ClubHome = the team dashboard; ClubSport = one sport's
+   *  profile (captain/VC, squad, roles). See migration 0018. */
+  Clubs: undefined;
+  CreateClub: { orgId?: string } | undefined;
+  ClubHome: { clubId: string };
+  ClubSport: { clubId: string; sport: SportId };
   Tournament: { tournamentId: string };
   EditTournament: { tournamentId: string };
   Organization: { orgId: string };
