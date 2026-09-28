@@ -12,15 +12,19 @@ import { structureFromFormat, describeStructure, type StructureShape } from '../
 type Val = number | string | boolean;
 const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false, swissRounds: 5 };
 
-export function StructureEditor({ value, onChange }: {
+export function StructureEditor({ value, onChange, sport }: {
   value: Record<string, Val>;
   onChange: (key: string, val: Val) => void;
+  sport?: string;
 }) {
   const cfg = structureFromFormat(value) ?? { shape: 'league' as StructureShape, ...DEFAULT };
   const manual = cfg.manualStandings;
   const shape = cfg.shape;
   const isGroups = shape === 'groups' && !manual;
   const isSwiss = shape === 'swiss' && !manual;
+  const isAmericano = shape === 'americano' && !manual;
+  // Americano (rotate partners, individual points) fits padel & pickleball.
+  const allowAmericano = sport === 'padel' || sport === 'pickleball';
   // Picking a real shape turns manual/scorecard mode off; picking Scorecard turns it on.
   const pickShape = (s: StructureShape) => { onChange('structShape', s); onChange('structManual', false); };
 
@@ -32,8 +36,13 @@ export function StructureEditor({ value, onChange }: {
         <SelectChip label="🏆 Knockout" active={!manual && shape === 'knockout'} onPress={() => pickShape('knockout')} />
         <SelectChip label="👥 Groups → knockout" active={isGroups} onPress={() => pickShape('groups')} />
         <SelectChip label="🇨🇭 Swiss" active={isSwiss} onPress={() => pickShape('swiss')} />
+        {allowAmericano && <SelectChip label="🎾 Americano" active={isAmericano} onPress={() => pickShape('americano')} />}
         <SelectChip label="📋 Scorecard (manual table)" active={manual} onPress={() => onChange('structManual', true)} />
       </View>
+
+      {isAmericano && (
+        <Text style={textStyles.muted}>Individuals rotate partners each round; everyone builds a personal points total. Add players and run rounds from the tournament’s “Americano” screen.</Text>
+      )}
 
       {isSwiss && (
         <View style={st.line}>
@@ -42,7 +51,7 @@ export function StructureEditor({ value, onChange }: {
         </View>
       )}
 
-      {!manual && shape !== 'knockout' && shape !== 'swiss' && (
+      {!manual && shape !== 'knockout' && shape !== 'swiss' && shape !== 'americano' && (
         <SelectChip
           label={cfg.doubleRound ? '✓ Home & away (double round-robin)' : 'Home & away (double round-robin)'}
           active={cfg.doubleRound}

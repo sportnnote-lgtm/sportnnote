@@ -46,7 +46,7 @@ export default function SportSettingsScreen() {
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title={`${plugin.name} settings`} subtitle="Just this sport — nothing that doesn’t apply to it" />
 
-        <StructureEditor value={value} onChange={set} />
+        <StructureEditor value={value} onChange={set} sport={sport} />
 
         {(plugin.formatFields ?? []).length > 0 && (
           <SportFormatEditor sport={sport} heading="format" value={value} onChange={set} />

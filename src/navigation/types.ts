@@ -37,6 +37,7 @@ export type RootStackParamList = {
   GenerateFixtures: { tournamentId: string; sport?: SportId };
   TournamentTeams: { tournamentId: string; sport?: SportId };
   Contingents: { tournamentId: string };
+  Americano: { tournamentId: string; sport: SportId };
   SportSettings: { sport: SportId };
   OrganizerDashboard: undefined;
   NotificationPrefs: undefined;

@@ -29,6 +29,7 @@ import EditMatchScreen from '../screens/EditMatchScreen';
 import GenerateFixturesScreen from '../screens/GenerateFixturesScreen';
 import TournamentTeamsScreen from '../screens/TournamentTeamsScreen';
 import ContingentsScreen from '../screens/ContingentsScreen';
+import AmericanoScreen from '../screens/AmericanoScreen';
 import SportSettingsScreen from '../screens/SportSettingsScreen';
 import OrganizerDashboardScreen from '../screens/OrganizerDashboardScreen';
 import NotificationPrefsScreen from '../screens/NotificationPrefsScreen';
@@ -191,6 +192,11 @@ export default function RootNavigator() {
               name="Contingents"
               component={ContingentsScreen}
               options={{ ...stackScreenOpts, title: 'Contingents' }}
+            />
+            <Stack.Screen
+              name="Americano"
+              component={AmericanoScreen}
+              options={{ ...stackScreenOpts, title: 'Americano' }}
             />
             <Stack.Screen
               name="SportSettings"

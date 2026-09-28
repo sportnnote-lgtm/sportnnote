@@ -104,7 +104,8 @@ export default function GenerateFixturesScreen() {
   useEffect(() => {
     if (!savedStruct || hydratedFor.current === sport) return;
     hydratedFor.current = sport;
-    setStructure(savedStruct.shape);
+    // Americano isn't a fixtures shape (it has its own screen) — don't hydrate it here.
+    if (savedStruct.shape !== 'americano') setStructure(savedStruct.shape);
     setNumGroups(String(savedStruct.groupCount));
     setTopK(String(savedStruct.advanceTopN));
     setBestPlaced(String(savedStruct.advanceBest));
