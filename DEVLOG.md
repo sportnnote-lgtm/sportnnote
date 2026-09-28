@@ -47,6 +47,19 @@ Verified in demo end-to-end (promote → Owner + "Only owner" guard; request to 
 must be run for live.** Next: M2 context switcher, M3 ownership/transfer, M4 school
 structure, M5 audit.
 
+### 2026-09-29 — Context switcher (M2) · SHIPPED
+
+"Acting as" context (spec §17–18): one identity, acting as Personal or as one org you
+belong to. New `OrgContextProvider` (src/core/orgContext.tsx) holds the active org id,
+persisted per device via AsyncStorage, self-healing to Personal if you no longer belong to
+the stored org; `useActiveOrg()` resolves it against your active memberships. New
+`ContextSwitcher` component (header chip → sheet listing Personal + your orgs; hidden when
+you have none), added to the Organize hub. Organize is now context-aware: Personal shows
+what you personally host (excludes org-owned), an org context shows that org's tournaments +
+a "🏛️ Manage <org>" shortcut, and "New tournament" defaults to organizing as that org
+(CreateTournament already reads the orgId param). App root wraps with OrgContextProvider.
+Clean tsc; 292 tests. (Visual walk pending — Browser pane was hidden at build time.)
+
 ---
 
 ### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
