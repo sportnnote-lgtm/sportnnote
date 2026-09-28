@@ -10,8 +10,9 @@ import { Card, Button, Pill, ScreenTitle, EmptyState, textStyles } from '../comp
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
-import { getMyPlayerId, getTournament, getTournaments, getOrganizations } from '../data/repos';
+import { getMyPlayerId, getTournament, getTournaments, getOrganizations, getMyOrgRequests, respondToOrgRequest } from '../data/repos';
 import { canManageTournament, orgsForPlayer } from '../core/org';
+import type { OrgRequest } from '../core/types';
 import { getSport } from '../sports/registry';
 import { formatDayShort } from '../core/dates';
 import type { RootStackParamList } from '../navigation/types';
@@ -43,6 +44,14 @@ export default function OrganizeScreen() {
   const [showCommunities, setShowCommunities] = useState(false);
   const orgs = useOrganizations();
   const myCommunities = orgsForPlayer(orgs, myId);
+  const [myReqs, setMyReqs] = useState<OrgRequest[]>([]); // my pending invites + join-requests
+  const orgName = (id: string) => orgs.find((o) => o.id === id)?.name ?? 'a community';
+  const myInvites = myReqs.filter((r) => r.direction === 'invite');
+  const myRequests = myReqs.filter((r) => r.direction === 'request');
+  const decideMyInvite = async (req: OrgRequest, accept: boolean) => {
+    await respondToOrgRequest(req.id, accept, myId ?? undefined);
+    if (myId) setMyReqs(await getMyOrgRequests(myId, 'pending'));
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +60,7 @@ export default function OrganizeScreen() {
         ([myId, all, current, orgs]) => {
           if (!on) return;
           setMyId(myId);
+          if (myId) getMyOrgRequests(myId, 'pending').then((rs) => on && setMyReqs(rs));
           // Tournaments this user runs (personally or via a hosting org) that
           // haven't finished yet. Live first, then upcoming, by start date.
           const order: Record<Status, number> = { live: 0, upcoming: 1, completed: 2 };
@@ -142,9 +152,27 @@ export default function OrganizeScreen() {
           onPress={() => nav.navigate('Teams')}
         />
 
+        {/* Invitations to join a community, awaiting your decision. */}
+        {myInvites.length > 0 && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.h3}>Invitations · {myInvites.length}</Text>
+            {myInvites.map((r) => (
+              <View key={r.id} style={st.inviteRow}>
+                <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{orgName(r.orgId)} · as {r.role}</Text>
+                <Text style={st.accept} onPress={() => void decideMyInvite(r, true)}>Accept</Text>
+                <Text style={st.decline} onPress={() => void decideMyInvite(r, false)}>Decline</Text>
+              </View>
+            ))}
+          </Card>
+        )}
+
         <SectionHeader title="Communities" count={myCommunities.length} onSeeAll={myCommunities.length > SECTION_CAP ? () => setShowCommunities((v) => !v) : undefined} expanded={showCommunities} />
         <Text style={textStyles.muted}>A school, club, company… that runs recurring events.</Text>
         <Button label="🏛️ New community" variant="ghost" onPress={() => nav.navigate('CreateCommunity')} />
+        <Button label="🔎 Find a community" variant="ghost" onPress={() => nav.navigate('DiscoverOrgs')} />
+        {myRequests.length > 0 && (
+          <Text style={textStyles.muted}>Requested to join: {myRequests.map((r) => orgName(r.orgId)).join(', ')} — awaiting approval.</Text>
+        )}
         {(showCommunities ? myCommunities : myCommunities.slice(0, SECTION_CAP)).map((o) => (
           <TouchableOpacity accessibilityRole="button" key={o.id} activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: o.id })}>
             <Card style={st.cardHead}>
@@ -163,6 +191,9 @@ export default function OrganizeScreen() {
 }
 
 const st = StyleSheet.create({
+  inviteRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  accept: { color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.small },
+  decline: { color: theme.colors.danger, fontWeight: '700', fontSize: theme.font.small },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },

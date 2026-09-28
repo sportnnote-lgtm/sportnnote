@@ -51,6 +51,7 @@ import ClubHomeScreen from '../screens/ClubHomeScreen';
 import ClubSportScreen from '../screens/ClubSportScreen';
 import JoinClubScreen from '../screens/JoinClubScreen';
 import ScanQRScreen from '../screens/ScanQRScreen';
+import DiscoverOrgsScreen from '../screens/DiscoverOrgsScreen';
 import JoinTeamScreen from '../screens/JoinTeamScreen';
 import TournamentProfileScreen from '../screens/TournamentProfileScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
@@ -343,6 +344,11 @@ export default function RootNavigator() {
               name="CreateCommunity"
               component={CreateCommunityScreen}
               options={{ ...stackScreenOpts, title: 'New Community' }}
+            />
+            <Stack.Screen
+              name="DiscoverOrgs"
+              component={DiscoverOrgsScreen}
+              options={{ ...stackScreenOpts, title: 'Find a Community' }}
             />
             <Stack.Screen
               name="Notifications"
