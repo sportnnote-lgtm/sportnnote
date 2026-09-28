@@ -36,6 +36,12 @@
           "icon": "./assets/android-icon-monochrome.png",
           "color": "#1DB954"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SportnNote to use the camera to scan a team invite QR code."
+        }
       ]
     ],
     "extra": {

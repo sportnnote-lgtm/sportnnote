@@ -58,6 +58,7 @@ export default function JoinClubScreen() {
         <TextField label="Invite code" value={code} onChange={setCode} placeholder="JOIN-1001" autoCapitalize="characters" />
         <FormError message={error} />
         <Button label={busy ? 'Checking…' : 'Find team'} onPress={() => find()} disabled={busy} />
+        <Button label="📷 Scan a team QR" variant="ghost" onPress={() => nav.navigate('ScanQR')} />
 
         {invite && (
           <Card style={{ gap: theme.spacing(2) }}>

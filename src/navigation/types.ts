@@ -64,6 +64,7 @@ export type RootStackParamList = {
   ClubHome: { clubId: string };
   ClubSport: { clubId: string; sport: SportId };
   JoinClub: { token?: string } | undefined;
+  ScanQR: undefined;
   Tournament: { tournamentId: string };
   EditTournament: { tournamentId: string };
   Organization: { orgId: string };

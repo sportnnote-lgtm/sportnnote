@@ -50,6 +50,7 @@ import CreateClubScreen from '../screens/CreateClubScreen';
 import ClubHomeScreen from '../screens/ClubHomeScreen';
 import ClubSportScreen from '../screens/ClubSportScreen';
 import JoinClubScreen from '../screens/JoinClubScreen';
+import ScanQRScreen from '../screens/ScanQRScreen';
 import JoinTeamScreen from '../screens/JoinTeamScreen';
 import TournamentProfileScreen from '../screens/TournamentProfileScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
@@ -312,6 +313,11 @@ export default function RootNavigator() {
               name="JoinClub"
               component={JoinClubScreen}
               options={{ ...stackScreenOpts, title: 'Join a Team' }}
+            />
+            <Stack.Screen
+              name="ScanQR"
+              component={ScanQRScreen}
+              options={{ ...stackScreenOpts, title: 'Scan QR' }}
             />
             <Stack.Screen
               name="JoinTeam"

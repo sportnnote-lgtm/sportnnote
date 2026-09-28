@@ -19,17 +19,36 @@ export const joinLink = (id: string) => {
   return base ? `${base}/functions/v1/join?p=${id}` : `${APP_INSTALL_URL}/join/${id}`;
 };
 
-/** A club join link. The code is what a member enters (or deep-links with) on the
- *  Join a team screen — `sportnnote://join-club/<token>` opens the app straight
- *  there. We share the app-install URL + the code, since the token join needs the
- *  recipient signed in. (A browser redirect for the https form would need the `join`
- *  edge function extended for clubs — until then the in-app deep link is the path.) */
-export const clubJoinLink = (token: string) => `${APP_INSTALL_URL}/join-club/${token}`;
+/** The public browser landing page for a CLUB invite — served by the `join-club`
+ *  edge function (reachable *.supabase.co domain), which shows the team name +
+ *  redeem instructions. Falls back to the marketing URL only in demo (no backend). */
+export const clubJoinLink = (token: string) => {
+  const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  return base ? `${base}/functions/v1/join-club?c=${encodeURIComponent(token)}` : `${APP_INSTALL_URL}/join-club/${token}`;
+};
+/** The in-app deep link that opens the redeem screen straight away once installed. */
 export const clubJoinDeepLink = (token: string) => `sportnnote://join-club/${token}`;
+
+/** Extract a club invite code from a scanned/typed value — accepts the deep link
+ *  (sportnnote://join-club/CODE), the https landing link (…/join-club?c=CODE or
+ *  …/join-club/CODE), or a bare code. Returns the upper-cased code, or null. */
+export function parseClubToken(scanned: string): string | null {
+  const s = scanned.trim();
+  if (!s) return null;
+  // ?c=CODE query form
+  const q = s.match(/[?&]c=([A-Za-z0-9-]{3,40})/);
+  if (q) return q[1].toUpperCase();
+  // …/join-club/CODE path form (deep link or https)
+  const p = s.match(/join-club\/([A-Za-z0-9-]{3,40})/i);
+  if (p) return p[1].toUpperCase();
+  // a bare code
+  if (/^[A-Za-z0-9-]{3,40}$/.test(s)) return s.toUpperCase();
+  return null;
+}
 
 /** The message shared to invite someone to a club (team). Carries the code + links. */
 export function clubInviteMessage(opts: { clubName: string; inviterName: string; token: string }): string {
-  return `Join ${opts.clubName} on SportnNote! ${opts.inviterName} invited you 🛡️\n\nInstall the app: ${APP_INSTALL_URL}\nThen open Join a team and enter code: ${opts.token}\n(or tap on the app: ${clubJoinDeepLink(opts.token)})`;
+  return `Join ${opts.clubName} on SportnNote! ${opts.inviterName} invited you 🛡️\n\nOpen this to join: ${clubJoinLink(opts.token)}\n\nOr in the app, go to Join a team and enter code: ${opts.token}`;
 }
 
 /** The public "this isn't me" link for a provisional player — a browser page that

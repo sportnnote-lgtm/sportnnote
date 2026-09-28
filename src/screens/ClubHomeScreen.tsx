@@ -19,7 +19,7 @@ import {
 } from '../data/repos';
 import { LogoPicker } from '../components/LogoPicker';
 import QRCode from 'react-native-qrcode-svg';
-import { clubInviteMessage, clubJoinDeepLink } from '../core/invite';
+import { clubInviteMessage, clubJoinLink } from '../core/invite';
 import type { Club, ClubMemberView, Player, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -205,7 +205,7 @@ export default function ClubHomeScreen() {
           <Card style={{ gap: theme.spacing(2), alignItems: 'center' }}>
             <Text style={[textStyles.muted, { textAlign: 'center' }]}>Scan to join, or share the code below.</Text>
             <View style={st.qrBox}>
-              <QRCode value={clubJoinDeepLink(inviteCode)} size={168} backgroundColor="#ffffff" color="#04150F" />
+              <QRCode value={clubJoinLink(inviteCode)} size={168} backgroundColor="#ffffff" color="#04150F" />
             </View>
             <Text style={st.code}>{inviteCode}</Text>
             <Text style={[textStyles.muted, { textAlign: 'center', fontSize: theme.font.small }]}>They install SportnNote, open “Join a team”, and enter this code.</Text>
