@@ -42,3 +42,7 @@ yarn-error.*
 
 # Supabase CLI local link state
 supabase/.temp/
+
+# Secrets — never commit
+*firebase-adminsdk*.json
+.env.local.bak

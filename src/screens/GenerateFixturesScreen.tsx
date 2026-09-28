@@ -18,6 +18,7 @@ import { createMatch, getMyPlayerId, updateTournament } from '../data/repos';
 import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
 import { defaultsFor } from '../components/FormatEditor';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
+import { swissRound1, swissNextRound, pairKey, suggestedSwissRounds } from '../data/swiss';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
@@ -27,7 +28,7 @@ import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Structure = 'league' | 'knockout' | 'groups' | 'advance';
+type Structure = 'league' | 'knockout' | 'groups' | 'swiss' | 'advance';
 
 
 interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[] }
@@ -196,6 +197,30 @@ export default function GenerateFixturesScreen() {
   const koPlan = useMemo(() => planKnockout(koFieldIds.length), [koFieldIds.length]);
   const byeNames = (ids: string[]) => ids.map((id) => teamName[id] ?? id).join(', ');
 
+  // ── Swiss: rounds already played, current ranking, pairs already met. Round 1
+  //    seeds from the picked entrants; later rounds pair on the live standings.
+  const swissMatches = useMemo(
+    () => scopedTourMatches.filter((m) => m.sport === sport && typeof m.stage === 'string' && m.stage.startsWith('swiss')),
+    [scopedTourMatches, sport],
+  );
+  const swissRoundNo = (stage?: string) => parseInt(String(stage).replace('swiss', ''), 10) || 0;
+  const swissRoundsPlayed = swissMatches.length ? Math.max(...swissMatches.map((m) => swissRoundNo(m.stage))) : 0;
+  const swissAllDone = swissMatches.length > 0 && swissMatches.every((m) => m.status === 'completed');
+  const swissPlayedPairs = useMemo(() => new Set(swissMatches.map((m) => pairKey(m.homeTeam.id, m.awayTeam.id))), [swissMatches]);
+  const swissEntrants = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of swissMatches) { s.add(m.homeTeam.id); s.add(m.awayTeam.id); (m.byes ?? []).forEach((b) => s.add(b)); }
+    return s;
+  }, [swissMatches]);
+  const swissOrder = useMemo(() => {
+    const ranked = teamStandings(swissMatches, sport, stCfg).map((r) => r.teamId);
+    const missing = [...swissEntrants].filter((id) => !ranked.includes(id)); // bye-only entrants with no result yet
+    return [...ranked, ...missing];
+  }, [swissMatches, sport, stCfg, swissEntrants]);
+  const swissTargetRounds = savedStruct?.swissRounds ?? suggestedSwissRounds(selected.length || swissEntrants.size);
+  const swissNextNo = swissRoundsPlayed + 1;
+  const swissDone = swissRoundsPlayed >= swissTargetRounds;
+
   function generate() {
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
     const at = (i: number) => new Date(start.getTime() + i * gap0 * 60000);
@@ -223,6 +248,23 @@ export default function GenerateFixturesScreen() {
       }
       const stage = knockoutRoundLabel(effectiveQualifiers.length);
       setDrafts(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: at(i) })));
+      return;
+    }
+    if (structure === 'swiss') {
+      if (swissMatches.length === 0) {
+        if (selected.length < 2) return setError('Pick at least two entrants.');
+        setError(null);
+        const { pairings, byeId } = swissRound1(selected);
+        setDrafts(pairings.map((p, i) => ({ ...p, stage: 'swiss1', byes: byeId ? [byeId] : undefined, when: at(i) })));
+        return;
+      }
+      if (!swissAllDone) return setError('Finish the current Swiss round before generating the next.');
+      if (swissDone) return setError(`All ${swissTargetRounds} Swiss rounds are done.`);
+      setError(null);
+      const priorByes = new Set(swissMatches.flatMap((m) => m.byes ?? []));
+      const { pairings, byeId } = swissNextRound(swissOrder, swissPlayedPairs, swissNextNo, priorByes);
+      if (!pairings.length) return setError('Couldn’t pair a further round.');
+      setDrafts(pairings.map((p, i) => ({ ...p, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, when: at(i) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
@@ -253,7 +295,7 @@ export default function GenerateFixturesScreen() {
       // knockout (draws can't stand). So league/group/super football strips it,
       // and knockout football keeps it (falling back to a pre-per-sport
       // tournament's old tournament-wide knockoutFormat).
-      const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super');
+      const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super' && !String(d.stage).startsWith('swiss'));
       if (sport === 'football') {
         if (koLike) {
           const kf = tournament?.knockoutFormat;
@@ -283,9 +325,9 @@ export default function GenerateFixturesScreen() {
       // structure, so it doesn't redefine it.
       if (structure !== 'advance' && params.tournamentId) {
         const cfg: StructureConfig = {
-          shape: structure === 'groups' ? 'groups' : structure === 'knockout' ? 'knockout' : 'league',
+          shape: structure === 'groups' ? 'groups' : structure === 'knockout' ? 'knockout' : structure === 'swiss' ? 'swiss' : 'league',
           groupCount, advanceTopN: Math.max(1, parseInt(topK, 10) || 1), advanceBest: Math.max(0, parseInt(bestPlaced, 10) || 0),
-          doubleRound, superPhase: advanceTo === 'super', manualStandings: false,
+          doubleRound, superPhase: advanceTo === 'super', manualStandings: false, swissRounds: swissTargetRounds,
         };
         const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
         const field = structureFieldFor(cfg.shape);
@@ -348,10 +390,22 @@ export default function GenerateFixturesScreen() {
           <SelectChip label="🔁 Round-robin (league)" active={structure === 'league'} onPress={() => { setStructure('league'); invalidate(); }} />
           <SelectChip label="👥 Group stage" active={structure === 'groups'} onPress={() => { setStructure('groups'); invalidate(); }} />
           <SelectChip label="🏆 Knockout (round 1)" active={structure === 'knockout'} onPress={() => { setStructure('knockout'); invalidate(); }} />
+          <SelectChip label="🇨🇭 Swiss" active={structure === 'swiss'} onPress={() => { setStructure('swiss'); invalidate(); }} />
           {(hasGroups || hasSuper) && (
             <SelectChip label={advanceFromSuper ? '🏅 Advance Super phase' : '🏅 Advance groups'} active={structure === 'advance'} onPress={() => { setStructure('advance'); invalidate(); }} />
           )}
         </View>
+        {structure === 'swiss' && (
+          <Text style={textStyles.muted}>
+            {swissMatches.length === 0
+              ? `Round 1 of ${swissTargetRounds} — entrants are seeded top-half vs bottom-half. Generate each next round from the standings after the current one finishes.`
+              : swissDone
+                ? `All ${swissTargetRounds} Swiss rounds have been generated.`
+                : swissAllDone
+                  ? `Round ${swissNextNo} of ${swissTargetRounds} — paired from the current standings, avoiding rematches.`
+                  : `Finish round ${swissRoundsPlayed} before generating round ${swissNextNo}.`}
+          </Text>
+        )}
         {(structure === 'league' || structure === 'groups') && (
           <View style={st.chips}>
             <SelectChip label="Single — each pair once" active={!doubleRound} onPress={() => { setDoubleRound(false); invalidate(); }} />

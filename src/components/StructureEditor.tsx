@@ -10,7 +10,7 @@ import { FieldLabel, SelectChip, textStyles } from './ui';
 import { structureFromFormat, describeStructure, type StructureShape } from '../data/structureConfig';
 
 type Val = number | string | boolean;
-const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false };
+const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false, swissRounds: 5 };
 
 export function StructureEditor({ value, onChange }: {
   value: Record<string, Val>;
@@ -20,6 +20,7 @@ export function StructureEditor({ value, onChange }: {
   const manual = cfg.manualStandings;
   const shape = cfg.shape;
   const isGroups = shape === 'groups' && !manual;
+  const isSwiss = shape === 'swiss' && !manual;
   // Picking a real shape turns manual/scorecard mode off; picking Scorecard turns it on.
   const pickShape = (s: StructureShape) => { onChange('structShape', s); onChange('structManual', false); };
 
@@ -30,10 +31,18 @@ export function StructureEditor({ value, onChange }: {
         <SelectChip label="🔁 League" active={!manual && shape === 'league'} onPress={() => pickShape('league')} />
         <SelectChip label="🏆 Knockout" active={!manual && shape === 'knockout'} onPress={() => pickShape('knockout')} />
         <SelectChip label="👥 Groups → knockout" active={isGroups} onPress={() => pickShape('groups')} />
+        <SelectChip label="🇨🇭 Swiss" active={isSwiss} onPress={() => pickShape('swiss')} />
         <SelectChip label="📋 Scorecard (manual table)" active={manual} onPress={() => onChange('structManual', true)} />
       </View>
 
-      {!manual && shape !== 'knockout' && (
+      {isSwiss && (
+        <View style={st.line}>
+          <Text style={st.label}>Rounds</Text>
+          <Stepper value={cfg.swissRounds} min={3} max={12} onChange={(v) => onChange('structRounds', v)} />
+        </View>
+      )}
+
+      {!manual && shape !== 'knockout' && shape !== 'swiss' && (
         <SelectChip
           label={cfg.doubleRound ? '✓ Home & away (double round-robin)' : 'Home & away (double round-robin)'}
           active={cfg.doubleRound}
