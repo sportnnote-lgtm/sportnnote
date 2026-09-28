@@ -39,6 +39,21 @@ month (resets 2026-10-01); last built APK is versionCode 27. Ships in the next b
 
 ---
 
+### 2026-09-29 — Tournament format: Americano (padel/pickleball) · SHIPPED + VERIFIED
+
+Full individual Americano: entrants rotate partners each round; every point you win is
+added to your personal total; ranked on an individual leaderboard (no bracket). Padel &
+pickleball only. `americano.ts` (pure + unit-tested): circle-method partner rotation →
+2-v-2 games (byes/rests for non-4-multiples), per-player points standings,
+suggestedAmericanoRounds; state (players/target/schedule/scores) JSON-encoded in
+formats[sport] (zero-migration). 'americano' StructureShape → coarse 'league'.
+StructureEditor Americano chip (padel/pickleball only). New AmericanoScreen (add
+players, set points/rounds, generate rotation, enter scores, live leaderboard;
+manager-gated) + route; TournamentProfile shows "Americano — manage" instead of
+schedule/auto-generate; GenerateFixtures skips it. Verified in demo (4 players/3 rounds
+→ correct rotation; 24–18 → winners 24/losers 18). `tests/americano.test.mts`. Ships in
+the Oct 1 build.
+
 ### 2026-09-28 — Tournament formats: Manual standings / Scorecard + Swiss · SHIPPED + VERIFIED
 
 New tournament format work (keep the existing flow, add options), demo-verified.
