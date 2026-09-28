@@ -8,14 +8,19 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, SelectChip, ScreenTitle, EmptyState, textStyles } from '../components/ui';
+import { Card, SelectChip, ScreenTitle, EmptyState, TextField, Button, textStyles } from '../components/ui';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { getSport } from '../sports/registry';
-import { useTournament, useTournamentById, useStandings, useDivisions } from '../data/hooks';
+import { useAuth } from '../core/auth';
+import { canManageTournament } from '../core/org';
+import { useTournament, useTournamentById, useStandings, useDivisions, useOrganizations } from '../data/hooks';
 import { leaderStat, teamStandings, standingsConfigFromFormat } from '../data/standings';
 import { matchesInDivision } from '../data/groups';
+import { structureFromFormat } from '../data/structureConfig';
+import { manualRows, withManualRows, blankManualRow, rankManualRows, type ManualStandingRow } from '../data/manualStandings';
+import { getMyPlayerId, updateTournament } from '../data/repos';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -50,6 +55,45 @@ export default function StandingsScreen() {
   // column for basketball/tennis/etc. where every result has a winner.
   const hasDraws = table.some((t) => t.drawn > 0);
 
+  // ── Scorecard / manual-standings mode ─────────────────────────────────────
+  // When the sport's structure is manual, the organizer maintains the table by
+  // hand (no auto-compute). Managers get an editable grid; everyone else sees it
+  // ranked read-only.
+  const manual = structureFromFormat(tournament?.formats?.[activeSport])?.manualStandings ?? false;
+  const divisionKey = activeCat ?? '';
+  const { profile } = useAuth();
+  const orgs = useOrganizations();
+  const [myId, setMyId] = useState<string | null>(null);
+  useEffect(() => { let on = true; getMyPlayerId(profile?.id).then((id) => on && setMyId(id)); return () => { on = false; }; }, [profile?.id]);
+  const canManage = !!tournament && canManageTournament(tournament, orgs, myId);
+  const [rows, setRows] = useState<ManualStandingRow[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // (Re)load rows from the tournament whenever the scope changes and there are no
+  // unsaved edits (so a background refresh can't clobber in-progress typing).
+  useEffect(() => {
+    if (!dirty) setRows(manualRows(tournament?.formats?.[activeSport], divisionKey));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament?.id, activeSport, divisionKey, tournament?.formats]);
+  const editRow = (id: string, patch: Partial<ManualStandingRow>) => {
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setDirty(true);
+  };
+  const addRow = () => { setRows((rs) => [...rs, blankManualRow()]); setDirty(true); };
+  const removeRow = (id: string) => { setRows((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
+  const saveRows = async () => {
+    if (!tournament?.id) return;
+    setSaving(true);
+    const clean = rows.filter((r) => r.name.trim()).map((r) => ({ ...r, name: r.name.trim() }));
+    await updateTournament(tournament.id, {
+      formats: { ...(tournament.formats ?? {}), [activeSport]: withManualRows(tournament.formats?.[activeSport], divisionKey, clean) },
+    });
+    setSaving(false);
+    setDirty(false);
+  };
+  const numField = (v: number) => (v === 0 ? '' : String(v));
+  const toNum = (t: string) => Math.max(0, parseInt(t.replace(/[^0-9]/g, ''), 10) || 0);
+
   // Breadcrumb: name the nav bar after the tournament; the in-content title is "Standings".
   useEffect(() => {
     if (tournament) nav.setOptions({ title: tournament.name });
@@ -70,6 +114,61 @@ export default function StandingsScreen() {
 
         <DivisionTabs categories={divisions} activeCat={activeCat} onChange={setActiveCat} />
 
+        {manual && (
+          <>
+            <SectionHeader title={`${getSport(activeSport).icon} Scorecard`} count={rows.length} />
+            {canManage ? (
+              <Card style={{ gap: theme.spacing(3) }}>
+                <Text style={textStyles.muted}>You maintain this table by hand. Add each team/player and their record.</Text>
+                {rows.map((r) => (
+                  <View key={r.id} style={st.editRow}>
+                    <TextField label="" value={r.name} onChange={(t) => editRow(r.id, { name: t })} placeholder="Team / player name" />
+                    <View style={st.numRow}>
+                      {([['P', 'played'], ['W', 'won'], ['D', 'drawn'], ['L', 'lost'], ['Pts', 'points']] as const).map(([lbl, key]) => (
+                        <View key={key} style={st.numField}>
+                          <Text style={st.numLbl}>{lbl}</Text>
+                          <TextField label="" value={numField(r[key])} onChange={(t) => editRow(r.id, { [key]: toNum(t) })} placeholder="0" autoCapitalize="none" />
+                        </View>
+                      ))}
+                      <Text style={st.removeX} accessibilityRole="button" accessibilityLabel={`Remove ${r.name || 'row'}`} onPress={() => removeRow(r.id)}>✕</Text>
+                    </View>
+                  </View>
+                ))}
+                <Text style={st.addRow} accessibilityRole="button" onPress={addRow}>＋ Add row</Text>
+                {dirty && <Button label={saving ? 'Saving…' : 'Save table'} onPress={saveRows} />}
+              </Card>
+            ) : (
+              <Card style={{ gap: theme.spacing(1) }}>
+                <View style={[st.row, st.head]}>
+                  <View style={st.posCell}><Text style={st.headText}>#</Text></View>
+                  <Text style={[st.teamCol, st.headText]}>Team</Text>
+                  <Text style={[st.num, st.headText]}>P</Text>
+                  <Text style={[st.num, st.headText]}>W</Text>
+                  <Text style={[st.num, st.headText]}>D</Text>
+                  <Text style={[st.num, st.headText]}>L</Text>
+                  <Text style={[st.num, st.headText]}>Pts</Text>
+                </View>
+                {rows.length === 0 ? (
+                  <EmptyState icon="📋" title="No standings entered yet" hint="The organizer maintains this table." compact />
+                ) : (
+                  rankManualRows(rows).map((r, i) => (
+                    <View key={r.id} style={[st.row, i > 0 && st.rowDivider]}>
+                      <RankBadge index={i} />
+                      <Text style={[st.teamCol, textStyles.body]} numberOfLines={1}>{r.name}</Text>
+                      <Text style={st.num}>{r.played}</Text>
+                      <Text style={st.num}>{r.won}</Text>
+                      <Text style={st.num}>{r.drawn}</Text>
+                      <Text style={st.num}>{r.lost}</Text>
+                      <Text style={[st.num, st.pts]}>{r.points}</Text>
+                    </View>
+                  ))
+                )}
+              </Card>
+            )}
+          </>
+        )}
+
+        {!manual && (<>
         <SectionHeader
           title={`${getSport(activeSport).icon} Team standings`}
           count={table.length}
@@ -149,6 +248,7 @@ export default function StandingsScreen() {
             );
           })
         )}
+        </>)}
       </ScrollView>
     </SafeAreaView>
   );
@@ -171,4 +271,10 @@ const st = StyleSheet.create({
   pts: { fontWeight: '900', color: theme.colors.primary },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },
+  editRow: { gap: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing(3) },
+  numRow: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing(2) },
+  numField: { flex: 1 },
+  numLbl: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textAlign: 'center' },
+  removeX: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '900', paddingHorizontal: theme.spacing(1), paddingBottom: theme.spacing(2) },
+  addRow: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
 });

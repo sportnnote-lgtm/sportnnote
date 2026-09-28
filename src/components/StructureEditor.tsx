@@ -10,26 +10,30 @@ import { FieldLabel, SelectChip, textStyles } from './ui';
 import { structureFromFormat, describeStructure, type StructureShape } from '../data/structureConfig';
 
 type Val = number | string | boolean;
-const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false };
+const DEFAULT = { groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false };
 
 export function StructureEditor({ value, onChange }: {
   value: Record<string, Val>;
   onChange: (key: string, val: Val) => void;
 }) {
   const cfg = structureFromFormat(value) ?? { shape: 'league' as StructureShape, ...DEFAULT };
+  const manual = cfg.manualStandings;
   const shape = cfg.shape;
-  const isGroups = shape === 'groups';
+  const isGroups = shape === 'groups' && !manual;
+  // Picking a real shape turns manual/scorecard mode off; picking Scorecard turns it on.
+  const pickShape = (s: StructureShape) => { onChange('structShape', s); onChange('structManual', false); };
 
   return (
     <View style={st.wrap}>
       <FieldLabel>Structure</FieldLabel>
       <View style={st.chips}>
-        <SelectChip label="🔁 League" active={shape === 'league'} onPress={() => onChange('structShape', 'league')} />
-        <SelectChip label="🏆 Knockout" active={shape === 'knockout'} onPress={() => onChange('structShape', 'knockout')} />
-        <SelectChip label="👥 Groups → knockout" active={isGroups} onPress={() => onChange('structShape', 'groups')} />
+        <SelectChip label="🔁 League" active={!manual && shape === 'league'} onPress={() => pickShape('league')} />
+        <SelectChip label="🏆 Knockout" active={!manual && shape === 'knockout'} onPress={() => pickShape('knockout')} />
+        <SelectChip label="👥 Groups → knockout" active={isGroups} onPress={() => pickShape('groups')} />
+        <SelectChip label="📋 Scorecard (manual table)" active={manual} onPress={() => onChange('structManual', true)} />
       </View>
 
-      {shape !== 'knockout' && (
+      {!manual && shape !== 'knockout' && (
         <SelectChip
           label={cfg.doubleRound ? '✓ Home & away (double round-robin)' : 'Home & away (double round-robin)'}
           active={cfg.doubleRound}

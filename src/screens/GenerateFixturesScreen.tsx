@@ -285,7 +285,7 @@ export default function GenerateFixturesScreen() {
         const cfg: StructureConfig = {
           shape: structure === 'groups' ? 'groups' : structure === 'knockout' ? 'knockout' : 'league',
           groupCount, advanceTopN: Math.max(1, parseInt(topK, 10) || 1), advanceBest: Math.max(0, parseInt(bestPlaced, 10) || 0),
-          doubleRound, superPhase: advanceTo === 'super',
+          doubleRound, superPhase: advanceTo === 'super', manualStandings: false,
         };
         const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
         const field = structureFieldFor(cfg.shape);
