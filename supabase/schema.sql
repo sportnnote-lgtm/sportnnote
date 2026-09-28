@@ -79,10 +79,38 @@ create table if not exists organizations (
   email               text,
   phone               text,
   bio                 text,
-  members             jsonb not null default '[]'::jsonb,
+  members             jsonb not null default '[]'::jsonb,  -- LEGACY: membership now lives in org_members (migration 0020); kept vestigial for transition
   academic_years      jsonb,                         -- schools/colleges only
   graduating_standard text,                          -- class after which students graduate
   created_at          timestamptz not null default now()
+);
+
+-- Organization membership (migration 0020): one row per person per org. Carries
+-- role, the active window (until = left), and the academic grade timeline. The
+-- data layer re-assembles Organization.members from these rows.
+create table if not exists org_members (
+  org_id     uuid not null references organizations(id) on delete cascade,
+  player_id  uuid not null references players(id) on delete cascade,
+  role       text not null default 'Member' check (role in ('Owner','Admin','Organizer','Scorer','Referee','Member')),
+  since      date,
+  until      date,
+  grades     jsonb not null default '[]',
+  primary key (org_id, player_id)
+);
+
+-- Membership requests: invites (org -> person) and join-requests (person -> org).
+create table if not exists org_requests (
+  id          uuid primary key default uuid_generate_v4(),
+  org_id      uuid not null references organizations(id) on delete cascade,
+  player_id   uuid not null references players(id) on delete cascade,
+  direction   text not null check (direction in ('invite','request')),
+  role        text not null default 'Member' check (role in ('Owner','Admin','Organizer','Scorer','Referee','Member')),
+  status      text not null default 'pending' check (status in ('pending','accepted','rejected','cancelled','expired')),
+  created_by  uuid references players(id) on delete set null,
+  message     text,
+  created_at  timestamptz not null default now(),
+  decided_at  timestamptz,
+  decided_by  uuid references players(id) on delete set null
 );
 
 create table if not exists teams (

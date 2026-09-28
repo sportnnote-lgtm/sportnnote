@@ -2,13 +2,15 @@
  *  tournament (an individual's ids, or every member of the hosting org). */
 import type { AcademicYear, GradeStint, Organization, OrgMember, OrgRole, Tournament } from './types';
 
-export const ORG_ROLES: OrgRole[] = ['Admin', 'Organizer', 'Scorer', 'Member'];
+export const ORG_ROLES: OrgRole[] = ['Owner', 'Admin', 'Organizer', 'Scorer', 'Referee', 'Member'];
 
 /** One-line description of what each org role can do (shown in the role picker). */
 export const ORG_ROLE_BLURB: Record<OrgRole, string> = {
-  Admin: 'Manage everything — members, teams, tournaments & settings',
+  Owner: 'Full control — everything an Admin can do, plus manage Owners & transfer ownership',
+  Admin: 'Manage members, teams, tournaments & settings (but not Owners)',
   Organizer: 'Create & schedule tournaments and matches; manage teams in them',
-  Scorer: 'Score the matches they are assigned to',
+  Scorer: 'Eligible to be assigned to score matches',
+  Referee: 'Eligible to be assigned to officiate matches',
   Member: 'View the community’s tournaments and their own matches',
 };
 
@@ -127,7 +129,11 @@ export const isOrgMember = (org: Organization | undefined, playerId?: string | n
   !!org && !!playerId && org.members.some((m) => m.playerId === playerId);
 
 export const isOrgAdmin = (org: Organization | undefined, playerId?: string | null): boolean =>
-  hasOrgRole(org, playerId, ['Admin']);
+  hasOrgRole(org, playerId, ['Owner', 'Admin']);
+
+/** An Owner — the top role; only Owners may manage other Owners. */
+export const isOrgOwner = (org: Organization | undefined, playerId?: string | null): boolean =>
+  hasOrgRole(org, playerId, ['Owner']);
 
 export const roleInOrg = (org: Organization, playerId: string): OrgRole | undefined =>
   org.members.find((m) => m.playerId === playerId)?.role;
@@ -142,24 +148,42 @@ export const hasOrgRole = (
   !!org && !!playerId &&
   org.members.some((m) => m.playerId === playerId && !m.until && roles.includes(m.role));
 
-/** Admin: can change anything about the community & its events. */
+/** Owner/Admin: can change anything about the community & its events (an Admin can
+ *  do everything except manage Owners — see canManageOwners). */
 export const canManageOrg = (org: Organization | undefined, playerId?: string | null): boolean =>
-  hasOrgRole(org, playerId, ['Admin']);
+  hasOrgRole(org, playerId, ['Owner', 'Admin']);
 
-/** Active admins of an org. Every community must keep at least one. */
+/** Only Owners may add/remove/demote Owners or transfer ownership. */
+export const canManageOwners = (org: Organization | undefined, playerId?: string | null): boolean =>
+  isOrgOwner(org, playerId);
+
+/** Active owners of an org. Every community must always keep at least one. */
+export const activeOwners = (org: Organization | undefined) =>
+  org ? org.members.filter((m) => !m.until && m.role === 'Owner') : [];
+
+/** Active admins of an org (Owners are administrators too). */
 export const activeAdmins = (org: Organization | undefined) =>
-  org ? org.members.filter((m) => !m.until && m.role === 'Admin') : [];
+  org ? org.members.filter((m) => !m.until && (m.role === 'Admin' || m.role === 'Owner')) : [];
 
 /** Whether removing/demoting/ending this player would leave the org with no
- *  admin — i.e. they are the one and only active admin. */
+ *  Owner — i.e. they are the one and only active Owner. The hard safeguard: an
+ *  org must never have zero Owners. */
+export const isSoleActiveOwner = (org: Organization | undefined, playerId?: string | null): boolean => {
+  const owners = activeOwners(org);
+  return !!playerId && owners.length === 1 && owners[0].playerId === playerId;
+};
+
+/** Whether this player is the org's only remaining administrator (Owner or Admin).
+ *  Retained for existing console guards; the true never-zero invariant is on
+ *  Owners (isSoleActiveOwner). */
 export const isSoleActiveAdmin = (org: Organization | undefined, playerId?: string | null): boolean => {
   const admins = activeAdmins(org);
   return !!playerId && admins.length === 1 && admins[0].playerId === playerId;
 };
 
-/** Admin or Organizer: can create & schedule the community's tournaments/matches. */
+/** Owner/Admin/Organizer: can create & schedule the community's tournaments/matches. */
 export const canOrganizeEvents = (org: Organization | undefined, playerId?: string | null): boolean =>
-  hasOrgRole(org, playerId, ['Admin', 'Organizer']);
+  hasOrgRole(org, playerId, ['Owner', 'Admin', 'Organizer']);
 
 /** Orgs where the player can create/host events (Admin or Organizer). */
 export const organizableOrgsForPlayer = (orgs: Organization[], playerId?: string | null): Organization[] =>
@@ -216,7 +240,7 @@ export function tournamentHostPlayerIds(t: Tournament, orgs: Organization[]): st
     const org = orgs.find((o) => o.id === t.hostOrgId);
     return org
       ? org.members
-          .filter((m) => !m.until && (m.role === 'Admin' || m.role === 'Organizer'))
+          .filter((m) => !m.until && (m.role === 'Owner' || m.role === 'Admin' || m.role === 'Organizer'))
           .map((m) => m.playerId)
       : [];
   }

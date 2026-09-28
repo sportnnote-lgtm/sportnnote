@@ -37,7 +37,7 @@ import {
   setTournamentTeamCategoryDemo,
 } from './demoStore';
 import { emptyFormation, defaultFormationFor } from '../sports/football/formation';
-import { isSoleActiveAdmin } from '../core/org';
+import { isSoleActiveOwner } from '../core/org';
 import { joinBlockReason } from '../core/registration';
 import { getSport } from '../sports/registry';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
@@ -54,6 +54,9 @@ import type {
   MatchEventRecord,
   Organization,
   OrgRole,
+  OrgMember,
+  OrgRequest,
+  GradeStint,
   MatchDispute,
   DisputeEvent,
   MatchLineup,
@@ -2153,7 +2156,9 @@ export async function updateTournament(id: string, patch: TournamentPatch): Prom
 
 /* ------------------------------ Organizations ------------------------------ */
 
-const toOrganization = (r: any): Organization => ({
+// Membership now lives in the org_members join table (migration 0020); we assemble
+// Organization.members from it so app code that reads org.members is unchanged.
+const toOrganization = (r: any, members: OrgMember[]): Organization => ({
   id: r.id,
   name: r.name,
   type: r.type ?? undefined,
@@ -2162,11 +2167,48 @@ const toOrganization = (r: any): Organization => ({
   email: r.email ?? undefined,
   phone: r.phone ?? undefined,
   bio: r.bio ?? undefined,
-  members: r.members ?? [],
+  members,
   academicYears: r.academic_years ?? undefined,
   graduatingStandard: r.graduating_standard ?? undefined,
 });
-const ORG_SELECT = 'id, name, type, logo_url, city, email, phone, bio, members, academic_years, graduating_standard';
+const ORG_SELECT = 'id, name, type, logo_url, city, email, phone, bio, academic_years, graduating_standard';
+
+const toOrgMember = (r: any): OrgMember => ({
+  playerId: r.player_id,
+  role: r.role,
+  since: r.since ?? undefined,
+  until: r.until ?? undefined,
+  grades: (r.grades as GradeStint[] | null) ?? undefined,
+});
+
+/** Load org_members rows, grouped by org id (optionally for specific orgs). */
+async function loadOrgMembers(orgIds?: string[]): Promise<Map<string, OrgMember[]>> {
+  const map = new Map<string, OrgMember[]>();
+  if (!isSupabaseConfigured || !supabase) return map;
+  let q = supabase.from('org_members').select('org_id, player_id, role, since, until, grades');
+  if (orgIds && orgIds.length) q = q.in('org_id', orgIds);
+  const { data } = await q;
+  for (const r of (data ?? []) as any[]) {
+    const arr = map.get(r.org_id) ?? [];
+    arr.push(toOrgMember(r));
+    map.set(r.org_id, arr);
+  }
+  return map;
+}
+
+const toOrgRequest = (r: any): OrgRequest => ({
+  id: r.id,
+  orgId: r.org_id,
+  playerId: r.player_id,
+  direction: r.direction,
+  role: r.role,
+  status: r.status,
+  by: r.created_by ?? undefined,
+  message: r.message ?? undefined,
+  createdAt: r.created_at,
+  decidedAt: r.decided_at ?? undefined,
+  decidedBy: r.decided_by ?? undefined,
+});
 
 export interface NewOrganization {
   name: string;
@@ -2180,8 +2222,9 @@ export interface NewOrganization {
  *  creator joins via joinOrg so the one-active-community-per-category rule is
  *  enforced (any prior active community of the same category is ended). */
 export async function createOrganization(input: NewOrganization, creatorPlayerId?: string): Promise<Organization> {
+  // The creator becomes the first OWNER (an org must always keep ≥1 Owner).
   const members: Organization['members'] = creatorPlayerId
-    ? [{ playerId: creatorPlayerId, role: 'Admin', since: todayISO() }]
+    ? [{ playerId: creatorPlayerId, role: 'Owner', since: todayISO() }]
     : [];
   let org: Organization;
   if (!isSupabaseConfigured || !supabase) {
@@ -2189,13 +2232,13 @@ export async function createOrganization(input: NewOrganization, creatorPlayerId
   } else {
     const { data, error } = await supabase
       .from('organizations')
-      .insert({ name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: input.phone ?? null, members })
+      .insert({ name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: input.phone ?? null, members: [] })
       .select(ORG_SELECT)
       .single();
     if (error || !data) throw new Error(error?.message ?? 'Could not create community');
-    org = toOrganization(data);
+    org = toOrganization(data, []);
   }
-  if (creatorPlayerId) await joinOrg(org.id, creatorPlayerId, 'Admin');
+  if (creatorPlayerId) await joinOrg(org.id, creatorPlayerId, 'Owner');
   return (await getOrganization(org.id)) ?? org;
 }
 
@@ -2203,22 +2246,44 @@ export async function getOrganizations(): Promise<Organization[]> {
   if (!isSupabaseConfigured || !supabase) return demo.organizations;
   const { data, error } = await supabase.from('organizations').select(ORG_SELECT).order('name');
   if (error || !data) return [];
-  return data.map(toOrganization);
+  const byOrg = await loadOrgMembers();
+  return data.map((r: any) => toOrganization(r, byOrg.get(r.id) ?? []));
 }
 
 export async function getOrganization(id: string): Promise<Organization | null> {
   if (!isSupabaseConfigured || !supabase) return demo.organizations.find((o) => o.id === id) ?? null;
   const { data } = await supabase.from('organizations').select(ORG_SELECT).eq('id', id).maybeSingle();
-  return data ? toOrganization(data) : null;
+  if (!data) return null;
+  const byOrg = await loadOrgMembers([id]);
+  return toOrganization(data, byOrg.get(id) ?? []);
 }
 
-/** Replace an org's member list (add/remove/role changes) — admins only. */
+/** Replace an org's member list (add/remove/role changes). Writes to the
+ *  org_members join table: upsert the given rows, then delete any rows for this
+ *  org no longer present. Preserves the "set the whole list" semantics callers use. */
 export async function setOrgMembers(orgId: string, members: Organization['members']): Promise<void> {
+  // Invariant (enforced here so NO caller/UI can violate it): an org that already
+  // has an Owner must never be reduced to zero active Owners.
+  const nextOwners = members.filter((m) => !m.until && m.role === 'Owner').length;
+  if (nextOwners === 0) {
+    const current = await getOrganization(orgId);
+    if (current?.members.some((m) => !m.until && m.role === 'Owner')) {
+      throw new Error('An organization must always have at least one owner. Make someone else an owner first.');
+    }
+  }
   if (!isSupabaseConfigured || !supabase) {
     demoSetOrgMembers(orgId, members);
     return;
   }
-  await supabase.from('organizations').update({ members }).eq('id', orgId);
+  const rows = members.map((m) => ({
+    org_id: orgId, player_id: m.playerId, role: m.role,
+    since: m.since ?? null, until: m.until ?? null, grades: m.grades ?? [],
+  }));
+  if (rows.length) await supabase.from('org_members').upsert(rows, { onConflict: 'org_id,player_id' });
+  const keep = members.map((m) => m.playerId);
+  let del = supabase.from('org_members').delete().eq('org_id', orgId);
+  if (keep.length) del = del.not('player_id', 'in', `(${keep.join(',')})`);
+  await del;
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -2241,9 +2306,9 @@ export async function joinOrg(orgId: string, playerId: string, role: OrgRole = '
     const sameCat = orgs.filter(
       (o) => o.id !== orgId && o.type === category && o.members.some((m) => m.playerId === playerId && !m.until)
     );
-    const orphaned = sameCat.find((o) => isSoleActiveAdmin(o, playerId));
+    const orphaned = sameCat.find((o) => isSoleActiveOwner(o, playerId));
     if (orphaned) {
-      throw new Error(`You're the only admin of ${orphaned.name}. Add another admin there before joining a new ${category}.`);
+      throw new Error(`You're the only owner of ${orphaned.name}. Add another owner there before joining a new ${category}.`);
     }
     for (const o of sameCat) {
       await setOrgMembers(
@@ -2267,13 +2332,104 @@ export async function joinOrg(orgId: string, playerId: string, role: OrgRole = '
 export async function leaveOrg(orgId: string, playerId: string): Promise<void> {
   const org = await getOrganization(orgId);
   if (!org) return;
-  if (isSoleActiveAdmin(org, playerId)) {
-    throw new Error(`You're the only admin of ${org.name}. Add another admin before leaving.`);
+  if (isSoleActiveOwner(org, playerId)) {
+    throw new Error(`You're the only owner of ${org.name}. Add another owner before leaving.`);
   }
   await setOrgMembers(
     orgId,
     org.members.map((m) => (m.playerId === playerId && !m.until ? { ...m, until: todayISO() } : m))
   );
+}
+
+/* --------------------- Organization membership requests -------------------- */
+// Invites (org → person) and join-requests (person → org). Membership is created
+// only when a request is accepted (via joinOrg). Mirrors the club-invite pattern.
+
+/** Invite a person to join an org with a given role (pending until they accept). */
+export async function inviteToOrg(orgId: string, playerId: string, role: OrgRole = 'Member', byPlayerId?: string, message?: string): Promise<OrgRequest> {
+  return createOrgRequest({ orgId, playerId, direction: 'invite', role, by: byPlayerId, message });
+}
+
+/** A person requests to join a discoverable org (pending until an admin accepts).
+ *  Requests always ask for plain membership; admins set a higher role on accept. */
+export async function requestToJoinOrg(orgId: string, playerId: string, message?: string): Promise<OrgRequest> {
+  return createOrgRequest({ orgId, playerId, direction: 'request', role: 'Member', by: playerId, message });
+}
+
+async function createOrgRequest(args: { orgId: string; playerId: string; direction: 'invite' | 'request'; role: OrgRole; by?: string; message?: string }): Promise<OrgRequest> {
+  const now = new Date().toISOString();
+  if (!isSupabaseConfigured || !supabase) {
+    // Reuse an existing pending row for the same (org, person, direction).
+    const existing = demo.orgRequests.find((r) => r.orgId === args.orgId && r.playerId === args.playerId && r.direction === args.direction && r.status === 'pending');
+    if (existing) { existing.role = args.role; existing.message = args.message; return existing; }
+    const req: OrgRequest = { id: genId('oreq'), orgId: args.orgId, playerId: args.playerId, direction: args.direction, role: args.role, status: 'pending', by: args.by, message: args.message, createdAt: now };
+    demo.orgRequests.push(req);
+    return req;
+  }
+  const { data, error } = await supabase
+    .from('org_requests')
+    .upsert(
+      { org_id: args.orgId, player_id: args.playerId, direction: args.direction, role: args.role, status: 'pending', created_by: args.by ?? null, message: args.message ?? null },
+      { onConflict: 'org_id,player_id,direction', ignoreDuplicates: false },
+    )
+    .select('*')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Could not create the request');
+  return toOrgRequest(data);
+}
+
+/** An org's requests (default: pending only) — the admin review queue. */
+export async function getOrgRequests(orgId: string, status: OrgRequest['status'] | 'all' = 'pending'): Promise<OrgRequest[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    return demo.orgRequests.filter((r) => r.orgId === orgId && (status === 'all' || r.status === status));
+  }
+  let q = supabase.from('org_requests').select('*').eq('org_id', orgId).order('created_at', { ascending: false });
+  if (status !== 'all') q = q.eq('status', status);
+  const { data } = await q;
+  return (data ?? []).map(toOrgRequest);
+}
+
+/** A person's own requests — pending invites TO them + their pending join-requests. */
+export async function getMyOrgRequests(playerId: string, status: OrgRequest['status'] | 'all' = 'pending'): Promise<OrgRequest[]> {
+  if (!playerId) return [];
+  if (!isSupabaseConfigured || !supabase) {
+    return demo.orgRequests.filter((r) => r.playerId === playerId && (status === 'all' || r.status === status));
+  }
+  let q = supabase.from('org_requests').select('*').eq('player_id', playerId).order('created_at', { ascending: false });
+  if (status !== 'all') q = q.eq('status', status);
+  const { data } = await q;
+  return (data ?? []).map(toOrgRequest);
+}
+
+/** Accept or decline a request/invite. On accept, the membership is created via
+ *  joinOrg with the request's role; either way the row is marked decided. */
+export async function respondToOrgRequest(requestId: string, accept: boolean, byPlayerId?: string): Promise<void> {
+  const now = new Date().toISOString();
+  let req: OrgRequest | undefined;
+  if (!isSupabaseConfigured || !supabase) {
+    req = demo.orgRequests.find((r) => r.id === requestId);
+  } else {
+    const { data } = await supabase.from('org_requests').select('*').eq('id', requestId).maybeSingle();
+    req = data ? toOrgRequest(data) : undefined;
+  }
+  if (!req || req.status !== 'pending') return;
+  if (accept) await joinOrg(req.orgId, req.playerId, req.role);
+  const status: OrgRequest['status'] = accept ? 'accepted' : 'rejected';
+  if (!isSupabaseConfigured || !supabase) {
+    req.status = status; req.decidedAt = now; req.decidedBy = byPlayerId;
+    return;
+  }
+  await supabase.from('org_requests').update({ status, decided_at: now, decided_by: byPlayerId ?? null }).eq('id', requestId);
+}
+
+/** Cancel a still-pending request/invite (the creator withdraws it). */
+export async function cancelOrgRequest(requestId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const req = demo.orgRequests.find((r) => r.id === requestId);
+    if (req && req.status === 'pending') req.status = 'cancelled';
+    return;
+  }
+  await supabase.from('org_requests').update({ status: 'cancelled' }).eq('id', requestId).eq('status', 'pending');
 }
 
 /** Set an organization's logo image — admins only. */

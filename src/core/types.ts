@@ -188,7 +188,35 @@ export interface Listing {
  *  - Organizer: create & schedule tournaments and matches; add/remove teams.
  *  - Scorer: score only the matches they are assigned to.
  *  - Member: view the community's tournaments and their own matches. */
-export type OrgRole = 'Admin' | 'Organizer' | 'Scorer' | 'Member';
+/**  - Owner: full control incl. managing other Owners & transferring ownership;
+ *     an org must always keep at least one Owner.
+ *  - Admin: manage everything EXCEPT Owners (can't add/remove/demote an Owner).
+ *  - Organizer: create & run tournaments; no org-wide administration.
+ *  - Scorer / Referee: eligible to be ASSIGNED to score/officiate specific events
+ *     (org role = eligibility; the actual duty is a per-tournament assignment).
+ *  - Member: a participating member — view the community & their own matches. */
+export type OrgRole = 'Owner' | 'Admin' | 'Organizer' | 'Scorer' | 'Referee' | 'Member';
+
+/** An organization membership request — either an invite the org sent a person, or
+ *  a join-request a person sent the org. Membership is only created on accept. */
+export type OrgRequestDirection = 'invite' | 'request';
+export type OrgRequestStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
+export interface OrgRequest {
+  id: UUID;
+  orgId: UUID;
+  /** the person being invited / requesting to join (player id) */
+  playerId: UUID;
+  direction: OrgRequestDirection;
+  /** the role granted on accept (for an invite the org chose it; a request defaults to Member) */
+  role: OrgRole;
+  status: OrgRequestStatus;
+  /** who created it (player id): the inviter for an invite, the requester for a request */
+  by?: UUID;
+  message?: string;
+  createdAt: string;
+  decidedAt?: string;
+  decidedBy?: UUID;
+}
 
 export interface OrgMember {
   playerId: UUID;

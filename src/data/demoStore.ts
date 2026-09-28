@@ -24,6 +24,7 @@ import type {
   MatchDispute,
   MatchEventRecord,
   Organization,
+  OrgRequest,
   MatchLineup,
   LineupSlot,
   MatchSquad,
@@ -786,6 +787,8 @@ function anchorDate(iso: string): string {
 export const demo = {
   tournaments: [...TOURNAMENTS, WC_TOURNAMENT].map((t) => ({ ...t, startDate: anchorDate(t.startDate), endDate: anchorDate(t.endDate) })) as Tournament[],
   organizations: SEED_ORGS,
+  /** org membership requests — invites + join-requests (see migration 0020). */
+  orgRequests: [] as OrgRequest[],
   matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],
