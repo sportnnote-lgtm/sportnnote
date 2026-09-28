@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/core/auth';
+import { OrgContextProvider } from './src/core/orgContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { isSupabaseConfigured } from './src/core/supabase';
 import { hydrateDemo, startDemoAutosave } from './src/data/demoStore';
@@ -30,7 +31,9 @@ export default function App() {
       <StatusBar style="light" />
       {ready && (
         <AuthProvider>
-          <RootNavigator />
+          <OrgContextProvider>
+            <RootNavigator />
+          </OrgContextProvider>
         </AuthProvider>
       )}
     </SafeAreaProvider>

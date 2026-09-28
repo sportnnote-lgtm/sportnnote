@@ -12,6 +12,8 @@ import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
 import { getMyPlayerId, getTournament, getTournaments, getOrganizations, getMyOrgRequests, respondToOrgRequest } from '../data/repos';
 import { canManageTournament, orgsForPlayer } from '../core/org';
+import { useActiveOrg } from '../core/orgContext';
+import { ContextSwitcher } from '../components/ContextSwitcher';
 import type { OrgRequest } from '../core/types';
 import { getSport } from '../sports/registry';
 import { formatDayShort } from '../core/dates';
@@ -44,6 +46,11 @@ export default function OrganizeScreen() {
   const [showCommunities, setShowCommunities] = useState(false);
   const orgs = useOrganizations();
   const myCommunities = orgsForPlayer(orgs, myId);
+  const { activeOrg } = useActiveOrg(); // the "acting as" context (null = Personal)
+  // Personal context shows what you personally run; an org context shows that org's.
+  const hostedInContext = activeOrg
+    ? hosted.filter((t) => t.hostOrgId === activeOrg.id)
+    : hosted.filter((t) => !t.hostOrgId);
   const [myReqs, setMyReqs] = useState<OrgRequest[]>([]); // my pending invites + join-requests
   const orgName = (id: string) => orgs.find((o) => o.id === id)?.name ?? 'a community';
   const myInvites = myReqs.filter((r) => r.direction === 'invite');
@@ -86,8 +93,14 @@ export default function OrganizeScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Organize" subtitle="Run your sports meet" />
 
+        {/* Acting-as context: Personal, or one of your organizations. */}
+        <ContextSwitcher />
+        {activeOrg && (
+          <Text style={textStyles.muted}>Acting as {activeOrg.name}. New tournaments are organized by it.</Text>
+        )}
+
         {/* Primary create action leads; supporting actions follow. */}
-        <Button label="🏆 New tournament" onPress={() => nav.navigate('CreateTournament')} />
+        <Button label="🏆 New tournament" onPress={() => nav.navigate('CreateTournament', activeOrg ? { orgId: activeOrg.id } : undefined)} />
         <Button
           label="🤝 Start a friendly"
           variant="ghost"
@@ -103,18 +116,22 @@ export default function OrganizeScreen() {
           Open a tournament to schedule its matches or auto-generate fixtures. A friendly is a one-off game — no tournament needed.
         </Text>
 
-        <SectionHeader title="Tournaments you're hosting" count={hosted.length} onSeeAll={hosted.length > SECTION_CAP ? () => setShowHosted((v) => !v) : undefined} expanded={showHosted} />
-        {hosted.length === 0 ? (
+        {activeOrg && (
+          <Button label={`🏛️ Manage ${activeOrg.name}`} variant="ghost" onPress={() => nav.navigate('Organization', { orgId: activeOrg.id })} />
+        )}
+
+        <SectionHeader title={activeOrg ? `${activeOrg.name} tournaments` : 'Tournaments you’re hosting'} count={hostedInContext.length} onSeeAll={hostedInContext.length > SECTION_CAP ? () => setShowHosted((v) => !v) : undefined} expanded={showHosted} />
+        {hostedInContext.length === 0 ? (
           <Card>
             <EmptyState
               icon="🏆"
-              title="You're not hosting any tournaments"
+              title={activeOrg ? `${activeOrg.name} isn't hosting any tournaments` : "You're not hosting any tournaments"}
               hint="Tap “New tournament” above to start one."
               compact
             />
           </Card>
         ) : (
-          (showHosted ? hosted : hosted.slice(0, SECTION_CAP)).map((t) => {
+          (showHosted ? hostedInContext : hostedInContext.slice(0, SECTION_CAP)).map((t) => {
             const meta = STATUS_META[statusOf(t)];
             return (
               <TouchableOpacity accessibilityRole="button"
