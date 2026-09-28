@@ -96,6 +96,7 @@ create table if not exists teams (
   roster      jsonb,                                                  -- explicit player-id list (community teams); null ⇒ derive from team_members
   captain_id      uuid references players(id) on delete set null,
   vice_captain_id uuid references players(id) on delete set null,
+  club_id     uuid,                                                   -- the multi-sport club this row is a sport profile of (FK added after clubs; migration 0018)
   -- created on the fly for a friendly (de-emphasised in Manage teams)
   adhoc       boolean not null default false,
   created_at  timestamptz not null default now()
@@ -105,10 +106,52 @@ create table if not exists teams (
 --   alter table teams add column if not exists roster jsonb;
 --   alter table teams add column if not exists captain_id uuid references players(id) on delete set null;
 --   alter table teams add column if not exists vice_captain_id uuid references players(id) on delete set null;
+--   alter table teams add column if not exists club_id uuid references clubs(id) on delete set null;
+
+-- A club is one real-world "team" that can play many sports; each per-sport `teams`
+-- row above is its sport profile (linked via teams.club_id). See migration 0018.
+create table if not exists clubs (
+  id            uuid primary key default uuid_generate_v4(),
+  name          text not null,
+  short_name    text not null,
+  logo_url      text,
+  color_hex     text,
+  city          text,
+  about         text,
+  contact_phone text,
+  contact_email text,
+  org_id        uuid references organizations(id) on delete set null,
+  created_by    uuid references profiles(id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+
+-- teams.club_id FK, added now that clubs exists (the column is declared above so
+-- the teams table can be created before clubs).
+do $$ begin
+  alter table teams add constraint teams_club_id_fkey
+    foreign key (club_id) references clubs(id) on delete set null;
+exception when duplicate_object then null; end $$;
+
+-- Team-level membership (sport-agnostic): admin | member. First member = admin.
+create table if not exists club_members (
+  club_id     uuid references clubs(id) on delete cascade,
+  player_id   uuid references players(id) on delete cascade,
+  role        text not null default 'member' check (role in ('admin','member')),
+  joined_at   timestamptz not null default now(),
+  primary key (club_id, player_id)
+);
 
 create table if not exists team_members (
   team_id     uuid references teams(id) on delete cascade,
   player_id   uuid references players(id) on delete cascade,
+  primary key (team_id, player_id)
+);
+
+-- Sport-specific player roles, keyed to a per-sport team row (migration 0018).
+create table if not exists team_player_roles (
+  team_id     uuid references teams(id) on delete cascade,
+  player_id   uuid references players(id) on delete cascade,
+  roles       text[] not null default '{}',
   primary key (team_id, player_id)
 );
 

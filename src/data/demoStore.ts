@@ -14,6 +14,9 @@ import { CRICKET_MATCH_EVENTS, CRICKET_LIVE_EVENTS, CRICKET_LIVE_SQUADS } from '
 import { emptyFormation } from '../sports/football/formation';
 import { courtFormation } from '../sports/courts';
 import type {
+  Club,
+  ClubMember,
+  ClubMemberRole,
   FootballProfile,
   Listing,
   Match,
@@ -29,6 +32,7 @@ import type {
   Team,
   TeamInvite,
   TeamLeadership,
+  TeamPlayerRoles,
   Tournament,
   TournamentCategory,
   TournamentEntryStatus,
@@ -808,6 +812,12 @@ export const demo = {
   tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus; categoryId?: string }[],
   /** divisions (age × gender) a tournament defines — see migration 0008. */
   tournamentCategories: [] as TournamentCategory[],
+  /** multi-sport clubs ("teams" in the UI) and their membership / sport roles —
+   *  see migration 0018. Empty by default; the demo seeds houses as per-sport
+   *  Team rows (no club parent), so clubs start empty until the user creates one. */
+  clubs: [] as Club[],
+  clubMembers: [] as ClubMember[],
+  teamPlayerRoles: [] as TeamPlayerRoles[],
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },

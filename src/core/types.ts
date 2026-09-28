@@ -279,12 +279,84 @@ export interface Team {
   colorHex?: string;
   /** the community/organization that owns this team, if created within one */
   orgId?: UUID;
+  /** the multi-sport Club this row is the sport profile of, if any. A Club owns one
+   *  Team row per sport it plays; this back-reference ties them together. Absent for
+   *  standalone / legacy / ad-hoc teams. See Club. */
+  clubId?: UUID;
   /** explicit roster (player ids). When set, it overrides the implicit
    *  house-name roster derivation; absent ⇒ roster derived from houseName. */
   roster?: UUID[];
   /** created on the fly (e.g. a one-off side for a friendly). De-emphasised in
    *  "Manage teams" so ad-hoc teams don't clutter the real houses/clubs. */
   adhoc?: boolean;
+}
+
+/* ------------------------------- Clubs (teams) ---------------------------- */
+// A Club is one real-world team entity that can play MANY sports — what the UI
+// simply calls a "Team". It is the PARENT of the per-sport `Team` rows above:
+// each sport a club plays has its own Team row (its "sport profile"), carrying
+// that sport's captain/vice-captain (TeamLeadership), squad (roster) and player
+// roles (TeamPlayerRoles). So one club → one identity, many independent sport
+// configurations. Team-level administration (admins/members) is separate from
+// sport-specific leadership. See migration 0018.
+
+export interface Club {
+  id: UUID;
+  name: string;
+  shortName: string;
+  logoUrl?: string;
+  colorHex?: string;
+  city?: string;
+  about?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  /** the community/organization the club was created within, if any */
+  orgId?: UUID;
+  /** profile id of whoever created the club */
+  createdBy?: UUID;
+}
+
+/** A new club to create (id assigned on insert). */
+export interface NewClub {
+  name: string;
+  shortName: string;
+  logoUrl?: string;
+  colorHex?: string;
+  city?: string;
+  about?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  orgId?: UUID;
+  createdBy?: UUID;
+  /** sports the club plays at creation (a per-sport Team row is minted for each). */
+  sports?: SportId[];
+}
+
+/** Team-level role, sport-agnostic. 'admin' can manage the club, its members,
+ *  sports and settings; 'member' just belongs. The first member added to a new
+ *  club becomes an admin automatically. Distinct from sport captaincy. */
+export type ClubMemberRole = 'admin' | 'member';
+
+export interface ClubMember {
+  clubId: UUID;
+  playerId: UUID;
+  role: ClubMemberRole;
+  joinedAt?: string;
+}
+
+/** A club membership joined to the person's player record — for display lists. */
+export interface ClubMemberView extends ClubMember {
+  player: Player;
+}
+
+/** Sport-specific roles a player holds within one team's sport profile, e.g.
+ *  cricket ['Wicketkeeper','Batter'] or football ['Defender']. Keyed to the
+ *  per-sport Team row, so a player's role in one sport never affects another
+ *  sport's role. The catalogue of valid roles per sport lives in data/teamRoles. */
+export interface TeamPlayerRoles {
+  teamId: UUID;
+  playerId: UUID;
+  roles: string[];
 }
 
 /** A team's participation in a tournament is a lifecycle, not a boolean:

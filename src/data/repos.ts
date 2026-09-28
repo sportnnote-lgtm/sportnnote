@@ -43,6 +43,10 @@ import { getSport } from '../sports/registry';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
   AcademicYear,
+  Club,
+  ClubMember,
+  ClubMemberRole,
+  ClubMemberView,
   FootballProfile,
   Listing,
   Match,
@@ -62,7 +66,9 @@ import type {
   Team,
   TeamInvite,
   TeamLeadership,
+  TeamPlayerRoles,
   TeamSummary,
+  NewClub,
   Tournament,
   TournamentCategory,
   TournamentEntry,
@@ -78,6 +84,7 @@ interface TeamRow {
   sport: string;
   color_hex: string | null;
   org_id?: string | null;
+  club_id?: string | null;
   roster?: string[] | null;
   adhoc?: boolean | null;
 }
@@ -114,6 +121,7 @@ const toTeam = (r: TeamRow): Team => ({
   sport: r.sport as SportId,
   colorHex: r.color_hex ?? undefined,
   orgId: r.org_id ?? undefined,
+  clubId: r.club_id ?? undefined,
   roster: r.roster ?? undefined,
   adhoc: r.adhoc ?? undefined,
 });
@@ -2314,6 +2322,8 @@ export interface NewTeam {
   colorHex: string;
   /** the community that owns the team, when created inside one */
   orgId?: string;
+  /** the multi-sport club this row is a sport profile of (see Club) */
+  clubId?: string;
   /** initial roster (player ids) */
   roster?: string[];
   /** created on the fly (a one-off side for a friendly) — de-emphasised in Manage teams */
@@ -2322,13 +2332,22 @@ export interface NewTeam {
 
 export async function createTeam(input: NewTeam): Promise<Team> {
   if (!isSupabaseConfigured || !supabase) return addTeam(input);
+  // Only include club_id when set, so existing ad-hoc/friendly creates keep working
+  // on a DB that hasn't run migration 0018 yet (the column is club-feature only).
+  const row: Record<string, unknown> = {
+    name: input.name, short_name: input.shortName, sport: input.sport,
+    color_hex: input.colorHex, org_id: input.orgId ?? null,
+    roster: input.roster ?? null, adhoc: input.adhoc ?? false,
+  };
+  if (input.clubId) row.club_id = input.clubId;
   const { data, error } = await supabase
     .from('teams')
-    .insert({ name: input.name, short_name: input.shortName, sport: input.sport, color_hex: input.colorHex, org_id: input.orgId ?? null, roster: input.roster ?? null, adhoc: input.adhoc ?? false })
+    .insert(row)
     .select('id,name,short_name,sport,color_hex,org_id,roster,adhoc')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create team');
-  return toTeam(data as TeamRow);
+  // club_id isn't in the select (kept narrow for pre-migration safety) — merge it back.
+  return { ...toTeam(data as TeamRow), clubId: input.clubId ?? undefined };
 }
 
 /** Teams owned by a community. */
@@ -2351,6 +2370,271 @@ export async function setTeamRoster(teamId: string, roster: string[]): Promise<v
     return;
   }
   await supabase.from('teams').update({ roster }).eq('id', teamId);
+}
+
+/* -------------------------------- Clubs ("teams") -------------------------- */
+// A club is one real-world team that plays many sports (the UI calls it a "Team").
+// It parents the per-sport `teams` rows: each sport it plays has its own team row
+// (its sport profile) linked by teams.club_id, carrying that sport's captain/VC,
+// squad (roster) and player roles. Team-level membership (admin/member) lives in
+// club_members; the FIRST member added becomes an admin. See migration 0018.
+
+interface ClubRow {
+  id: string;
+  name: string;
+  short_name: string;
+  logo_url?: string | null;
+  color_hex?: string | null;
+  city?: string | null;
+  about?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  org_id?: string | null;
+  created_by?: string | null;
+}
+const CLUB_COLS = 'id,name,short_name,logo_url,color_hex,city,about,contact_phone,contact_email,org_id,created_by';
+const toClub = (r: ClubRow): Club => ({
+  id: r.id,
+  name: r.name,
+  shortName: r.short_name,
+  logoUrl: r.logo_url ?? undefined,
+  colorHex: r.color_hex ?? undefined,
+  city: r.city ?? undefined,
+  about: r.about ?? undefined,
+  contactPhone: r.contact_phone ?? undefined,
+  contactEmail: r.contact_email ?? undefined,
+  orgId: r.org_id ?? undefined,
+  createdBy: r.created_by ?? undefined,
+});
+
+/** A four-letter code from a club name, e.g. "Hyderabad Warriors" → "HW" / "HYDE". */
+const clubShort = (name: string): string => {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.map((w) => w[0]).join('').toUpperCase();
+  return ((initials.length >= 2 ? initials : name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()) || 'TM').slice(0, 4);
+};
+
+/** Create a club, optionally seeding its first member (who becomes an admin) and
+ *  the sports it plays (a per-sport team row is minted for each). Returns the club. */
+export async function createClub(input: NewClub): Promise<Club> {
+  const shortName = (input.shortName || clubShort(input.name)).slice(0, 6);
+  let club: Club;
+  if (!isSupabaseConfigured || !supabase) {
+    club = {
+      id: genId('club'), name: input.name.trim(), shortName,
+      logoUrl: input.logoUrl, colorHex: input.colorHex, city: input.city,
+      about: input.about, contactPhone: input.contactPhone, contactEmail: input.contactEmail,
+      orgId: input.orgId, createdBy: input.createdBy,
+    };
+    demo.clubs.push(club);
+  } else {
+    const { data, error } = await supabase
+      .from('clubs')
+      .insert({
+        name: input.name.trim(), short_name: shortName, logo_url: input.logoUrl ?? null,
+        color_hex: input.colorHex ?? null, city: input.city ?? null, about: input.about ?? null,
+        contact_phone: input.contactPhone ?? null, contact_email: input.contactEmail ?? null,
+        org_id: input.orgId ?? null, created_by: input.createdBy ?? null,
+      })
+      .select(CLUB_COLS)
+      .single();
+    if (error || !data) throw new Error(error?.message ?? 'Could not create team');
+    club = toClub(data as ClubRow);
+  }
+  // First member (the creator, if they added themselves) becomes an admin.
+  if (input.createdBy) await addClubMember(club.id, input.createdBy, 'admin');
+  // Mint a per-sport team row for each sport the club plays.
+  for (const sport of input.sports ?? []) await addClubSport(club.id, sport);
+  return club;
+}
+
+/** All clubs (multi-sport teams). */
+export async function getClubs(): Promise<Club[]> {
+  if (!isSupabaseConfigured || !supabase) return [...demo.clubs];
+  const { data, error } = await supabase.from('clubs').select(CLUB_COLS).order('name');
+  if (error || !data) return [];
+  return (data as ClubRow[]).map(toClub);
+}
+
+/** One club by id, or null. */
+export async function getClub(clubId: string): Promise<Club | null> {
+  if (!isSupabaseConfigured || !supabase) return demo.clubs.find((c) => c.id === clubId) ?? null;
+  const { data, error } = await supabase.from('clubs').select(CLUB_COLS).eq('id', clubId).single();
+  if (error || !data) return null;
+  return toClub(data as ClubRow);
+}
+
+/** Clubs owned by a community. */
+export async function getClubsForOrg(orgId: string): Promise<Club[]> {
+  if (!isSupabaseConfigured || !supabase) return demo.clubs.filter((c) => c.orgId === orgId);
+  const { data, error } = await supabase.from('clubs').select(CLUB_COLS).eq('org_id', orgId).order('name');
+  if (error || !data) return [];
+  return (data as ClubRow[]).map(toClub);
+}
+
+/** Patch a club's editable fields (name, logo, city, about, contact). */
+export async function updateClub(clubId: string, patch: Partial<Omit<Club, 'id' | 'createdBy'>>): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const c = demo.clubs.find((x) => x.id === clubId);
+    if (c) Object.assign(c, patch);
+    return;
+  }
+  await supabase.from('clubs').update({
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.shortName !== undefined ? { short_name: patch.shortName } : {}),
+    ...(patch.logoUrl !== undefined ? { logo_url: patch.logoUrl } : {}),
+    ...(patch.colorHex !== undefined ? { color_hex: patch.colorHex } : {}),
+    ...(patch.city !== undefined ? { city: patch.city } : {}),
+    ...(patch.about !== undefined ? { about: patch.about } : {}),
+    ...(patch.contactPhone !== undefined ? { contact_phone: patch.contactPhone } : {}),
+    ...(patch.contactEmail !== undefined ? { contact_email: patch.contactEmail } : {}),
+  }).eq('id', clubId);
+}
+
+/* --------------------------- Club membership ------------------------------ */
+
+/** A club's members, joined to their player records (admins first, then by name). */
+export async function getClubMembers(clubId: string): Promise<ClubMemberView[]> {
+  const players = await getPlayers();
+  const byId = new Map(players.map((p) => [p.id, p] as const));
+  let rows: ClubMember[];
+  if (!isSupabaseConfigured || !supabase) {
+    rows = demo.clubMembers.filter((m) => m.clubId === clubId);
+  } else {
+    const { data, error } = await supabase
+      .from('club_members').select('club_id, player_id, role, joined_at').eq('club_id', clubId);
+    if (error || !data) return [];
+    rows = (data as { club_id: string; player_id: string; role: ClubMemberRole; joined_at?: string }[])
+      .map((r) => ({ clubId: r.club_id, playerId: r.player_id, role: r.role, joinedAt: r.joined_at ?? undefined }));
+  }
+  return rows
+    .map((m) => ({ ...m, player: byId.get(m.playerId) }))
+    .filter((m): m is ClubMemberView => !!m.player)
+    .sort((a, b) => (a.role === b.role ? a.player.fullName.localeCompare(b.player.fullName) : a.role === 'admin' ? -1 : 1));
+}
+
+/** Add a person to a club. The first member of a club always becomes an admin,
+ *  regardless of the requested role; later members default to 'member'. Idempotent
+ *  (re-adding an existing member leaves their role unchanged unless overridden). */
+export async function addClubMember(clubId: string, playerId: string, role?: ClubMemberRole): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const existing = demo.clubMembers.find((m) => m.clubId === clubId && m.playerId === playerId);
+    const isFirst = !demo.clubMembers.some((m) => m.clubId === clubId);
+    const finalRole: ClubMemberRole = isFirst ? 'admin' : role ?? 'member';
+    if (existing) { if (role) existing.role = role; return; }
+    demo.clubMembers.push({ clubId, playerId, role: finalRole, joinedAt: new Date().toISOString() });
+    return;
+  }
+  const { count } = await supabase.from('club_members').select('player_id', { count: 'exact', head: true }).eq('club_id', clubId);
+  const isFirst = (count ?? 0) === 0;
+  const finalRole: ClubMemberRole = isFirst ? 'admin' : role ?? 'member';
+  await supabase.from('club_members').upsert(
+    { club_id: clubId, player_id: playerId, role: finalRole },
+    { onConflict: 'club_id,player_id', ignoreDuplicates: !role },
+  );
+}
+
+/** Remove a member from a club. Does not touch any sport-squad membership — a
+ *  person can still be in a sport's squad if re-added — but sport captaincy that
+ *  named them is the caller's concern. */
+export async function removeClubMember(clubId: string, playerId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.clubMembers = demo.clubMembers.filter((m) => !(m.clubId === clubId && m.playerId === playerId));
+    return;
+  }
+  await supabase.from('club_members').delete().eq('club_id', clubId).eq('player_id', playerId);
+}
+
+/** Promote/demote a member (admin ↔ member). */
+export async function setClubMemberRole(clubId: string, playerId: string, role: ClubMemberRole): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.clubMembers.find((x) => x.clubId === clubId && x.playerId === playerId);
+    if (m) m.role = role;
+    return;
+  }
+  await supabase.from('club_members').update({ role }).eq('club_id', clubId).eq('player_id', playerId);
+}
+
+/* --------------------------- Club sports & profiles ----------------------- */
+
+/** The per-sport team rows that make up a club's sport profiles. */
+export async function getClubTeams(clubId: string): Promise<Team[]> {
+  if (!isSupabaseConfigured || !supabase) return demo.teams.filter((t) => t.clubId === clubId);
+  const { data, error } = await supabase
+    .from('teams').select('id,name,short_name,sport,color_hex,org_id,club_id,roster,adhoc').eq('club_id', clubId);
+  if (error || !data) return [];
+  return (data as TeamRow[]).map(toTeam);
+}
+
+/** The sports a club plays (derived from its per-sport team rows). */
+export async function getClubSports(clubId: string): Promise<SportId[]> {
+  const teams = await getClubTeams(clubId);
+  return [...new Set(teams.map((t) => t.sport))];
+}
+
+/** A club's team row for one sport, or null if it doesn't play that sport yet. */
+export async function getClubTeam(clubId: string, sport: SportId): Promise<Team | null> {
+  return (await getClubTeams(clubId)).find((t) => t.sport === sport) ?? null;
+}
+
+/** Add a sport to a club: mint its per-sport team row (sharing the club's name /
+ *  short code / colour) if one doesn't already exist. Returns that team row —
+ *  the club's sport profile for this sport. Idempotent. */
+export async function addClubSport(clubId: string, sport: SportId): Promise<Team> {
+  const existing = await getClubTeam(clubId, sport);
+  if (existing) return existing;
+  const club = await getClub(clubId);
+  if (!club) throw new Error('Club not found');
+  return createTeam({
+    name: club.name, shortName: club.shortName, sport,
+    colorHex: club.colorHex ?? '#2E7D6B', orgId: club.orgId, clubId,
+  });
+}
+
+/** Remove a sport from a club. The per-sport team row is UNLINKED (club_id → null)
+ *  rather than deleted, so any match history that references it survives. */
+export async function removeClubSport(clubId: string, sport: SportId): Promise<void> {
+  const team = await getClubTeam(clubId, sport);
+  if (!team) return;
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.teams.find((x) => x.id === team.id);
+    if (t) t.clubId = undefined;
+    return;
+  }
+  await supabase.from('teams').update({ club_id: null }).eq('id', team.id);
+}
+
+/* --------------------------- Sport-specific player roles ------------------- */
+
+/** A team (sport profile)'s player roles, as { playerId → roles[] }. */
+export async function getTeamPlayerRoles(teamId: string): Promise<Record<string, string[]>> {
+  let rows: TeamPlayerRoles[];
+  if (!isSupabaseConfigured || !supabase) {
+    rows = demo.teamPlayerRoles.filter((r) => r.teamId === teamId);
+  } else {
+    const { data, error } = await supabase.from('team_player_roles').select('team_id, player_id, roles').eq('team_id', teamId);
+    if (error || !data) return {};
+    rows = (data as { team_id: string; player_id: string; roles: string[] | null }[])
+      .map((r) => ({ teamId: r.team_id, playerId: r.player_id, roles: r.roles ?? [] }));
+  }
+  const out: Record<string, string[]> = {};
+  for (const r of rows) out[r.playerId] = r.roles;
+  return out;
+}
+
+/** Set a player's roles within one team's sport profile (replaces the set; an
+ *  empty array clears the row). */
+export async function setTeamPlayerRoles(teamId: string, playerId: string, roles: string[]): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.teamPlayerRoles = demo.teamPlayerRoles.filter((r) => !(r.teamId === teamId && r.playerId === playerId));
+    if (roles.length) demo.teamPlayerRoles.push({ teamId, playerId, roles });
+    return;
+  }
+  if (!roles.length) {
+    await supabase.from('team_player_roles').delete().eq('team_id', teamId).eq('player_id', playerId);
+    return;
+  }
+  await supabase.from('team_player_roles').upsert({ team_id: teamId, player_id: playerId, roles }, { onConflict: 'team_id,player_id' });
 }
 
 /* -------------------------- Tournament participants ------------------------ */
