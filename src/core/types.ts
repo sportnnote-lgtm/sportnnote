@@ -353,6 +353,13 @@ export interface ClubMemberView extends ClubMember {
   player: Player;
 }
 
+/** A shareable invite to JOIN a club as a member — redeemed via a link/code. */
+export interface ClubInvite {
+  token: string;
+  clubId: UUID;
+  clubName?: string;
+}
+
 /** Sport-specific roles a player holds within one team's sport profile, e.g.
  *  cricket ['Wicketkeeper','Batter'] or football ['Defender']. Keyed to the
  *  per-sport Team row, so a player's role in one sport never affects another

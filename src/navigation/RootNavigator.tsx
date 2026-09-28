@@ -49,6 +49,7 @@ import ClubsScreen from '../screens/ClubsScreen';
 import CreateClubScreen from '../screens/CreateClubScreen';
 import ClubHomeScreen from '../screens/ClubHomeScreen';
 import ClubSportScreen from '../screens/ClubSportScreen';
+import JoinClubScreen from '../screens/JoinClubScreen';
 import JoinTeamScreen from '../screens/JoinTeamScreen';
 import TournamentProfileScreen from '../screens/TournamentProfileScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
@@ -69,7 +70,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 const linking = {
   prefixes: ['sportnnote://', 'https://sportnnote.in'],
-  config: { screens: { JoinTeam: 'join/:token' } },
+  config: { screens: { JoinTeam: 'join/:token', JoinClub: 'join-club/:token' } },
 };
 
 const navTheme = {
@@ -306,6 +307,11 @@ export default function RootNavigator() {
               name="ClubSport"
               component={ClubSportScreen}
               options={{ ...stackScreenOpts, title: 'Sport profile' }}
+            />
+            <Stack.Screen
+              name="JoinClub"
+              component={JoinClubScreen}
+              options={{ ...stackScreenOpts, title: 'Join a Team' }}
             />
             <Stack.Screen
               name="JoinTeam"

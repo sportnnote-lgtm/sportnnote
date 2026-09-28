@@ -4,7 +4,7 @@
  *  MEMBERS with their team-level role (admin | member). Team administration lives
  *  here; sport-specific leadership (captains) lives inside each sport's profile. */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -14,10 +14,11 @@ import { Card, Button, TextField, SelectChip, ScreenTitle, LoadingState, textSty
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import {
-  getClub, getClubMembers, getClubSports, getMyPlayerId,
-  addClubSport, removeClubSport, addClubMember, removeClubMember, setClubMemberRole, invitePerson,
+  getClub, getClubMembers, getClubSports, getMyPlayerId, getPlayers,
+  addClubSport, removeClubSport, addClubMember, removeClubMember, setClubMemberRole, invitePerson, createClubInvite,
 } from '../data/repos';
-import type { Club, ClubMemberView, SportId } from '../core/types';
+import { clubInviteMessage } from '../core/invite';
+import type { Club, ClubMemberView, Player, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -34,18 +35,22 @@ export default function ClubHomeScreen() {
   const [myId, setMyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [editSports, setEditSports] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
+  const [addMode, setAddMode] = useState<'search' | 'phone'>('search');
+  const [query, setQuery] = useState('');
   const [mName, setMName] = useState('');
   const [mPhone, setMPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [c, m, s, id] = await Promise.all([
-      getClub(clubId), getClubMembers(clubId), getClubSports(clubId), getMyPlayerId(profile?.id),
+    const [c, m, s, id, ps] = await Promise.all([
+      getClub(clubId), getClubMembers(clubId), getClubSports(clubId), getMyPlayerId(profile?.id), getPlayers(),
     ]);
-    setClub(c); setMembers(m); setSports(s); setMyId(id); setLoading(false);
+    setClub(c); setMembers(m); setSports(s); setMyId(id); setAllPlayers(ps); setLoading(false);
   }, [clubId, profile?.id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -62,7 +67,7 @@ export default function ClubHomeScreen() {
     } finally { setBusy(false); }
   }
 
-  async function addMember() {
+  async function addByPhone() {
     if (!mName.trim()) return;
     setBusy(true);
     try {
@@ -73,10 +78,34 @@ export default function ClubHomeScreen() {
     } finally { setBusy(false); }
   }
 
+  async function addExisting(playerId: string) {
+    setBusy(true);
+    try { await addClubMember(clubId, playerId); setQuery(''); await load(); }
+    finally { setBusy(false); }
+  }
+
+  // Existing players not already in the club, matched by name / phone.
+  const memberIds = new Set(members.map((m) => m.playerId));
+  const q = query.trim().toLowerCase();
+  const searchResults = q.length < 2 ? [] : allPlayers
+    .filter((p) => !memberIds.has(p.id) && (p.fullName.toLowerCase().includes(q) || (p.phone ?? '').includes(q)))
+    .slice(0, 8);
+
   async function removeMember(playerId: string) {
     setBusy(true);
     try { await removeClubMember(clubId, playerId); setConfirmRemove(null); await load(); }
     finally { setBusy(false); }
+  }
+
+  async function invite() {
+    if (!club) return;
+    setBusy(true);
+    try {
+      const inv = await createClubInvite(clubId);
+      setInviteCode(inv.token);
+      const message = clubInviteMessage({ clubName: club.name, inviterName: profile?.fullName ?? 'A teammate', token: inv.token });
+      try { await Share.share({ message }); } catch { /* user dismissed the share sheet */ }
+    } finally { setBusy(false); }
   }
 
   async function setRole(playerId: string, role: 'admin' | 'member') {
@@ -148,17 +177,57 @@ export default function ClubHomeScreen() {
         <View style={st.sectionHead}>
           <Text style={textStyles.h3}>Members</Text>
           {amAdmin && (
-            <TouchableOpacity onPress={() => setAddingMember((v) => !v)} accessibilityRole="button">
-              <Text style={st.link}>{addingMember ? 'Close' : '+ Add'}</Text>
-            </TouchableOpacity>
+            <View style={st.memberActions}>
+              <TouchableOpacity onPress={invite} accessibilityRole="button" disabled={busy}>
+                <Text style={st.link}>🔗 Invite</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setAddingMember((v) => !v)} accessibilityRole="button">
+                <Text style={st.link}>{addingMember ? 'Close' : '+ Add'}</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
+        {inviteCode && (
+          <Card style={{ gap: theme.spacing(1) }}>
+            <Text style={textStyles.muted}>Share this invite — they install SportnNote, open “Join a team”, and enter:</Text>
+            <Text style={st.code}>{inviteCode}</Text>
+            <View style={st.memberActions}>
+              <TouchableOpacity onPress={invite} accessibilityRole="button"><Text style={st.link}>Share again</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setInviteCode(null)} accessibilityRole="button"><Text style={textStyles.muted}>Hide</Text></TouchableOpacity>
+            </View>
+          </Card>
+        )}
+
         {addingMember && (
           <Card style={{ gap: theme.spacing(2) }}>
-            <TextField label="Name" value={mName} onChange={setMName} placeholder="Player name" />
-            <TextField label="Phone (optional)" value={mPhone} onChange={setMPhone} placeholder="+91…" autoCapitalize="none" />
-            <Button label={busy ? 'Adding…' : 'Add member'} onPress={addMember} />
+            <View style={st.chips}>
+              <SelectChip label="Search existing" active={addMode === 'search'} onPress={() => setAddMode('search')} />
+              <SelectChip label="New by phone" active={addMode === 'phone'} onPress={() => setAddMode('phone')} />
+            </View>
+            {addMode === 'search' ? (
+              <>
+                <TextField label="Find a player" value={query} onChange={setQuery} placeholder="Name or phone" autoCapitalize="none" />
+                {q.length >= 2 && searchResults.length === 0 && (
+                  <Text style={textStyles.muted}>No matches. Try “New by phone” to invite someone not on the app.</Text>
+                )}
+                {searchResults.map((p) => (
+                  <TouchableOpacity key={p.id} disabled={busy} onPress={() => addExisting(p.id)} accessibilityRole="button" style={st.resultRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={textStyles.body}>{p.fullName}</Text>
+                      {!!p.phone && <Text style={textStyles.muted}>{p.phone}</Text>}
+                    </View>
+                    <Text style={st.link}>Add</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <>
+                <TextField label="Name" value={mName} onChange={setMName} placeholder="Player name" />
+                <TextField label="Phone (optional)" value={mPhone} onChange={setMPhone} placeholder="+91…" autoCapitalize="none" />
+                <Button label={busy ? 'Adding…' : 'Add & invite'} onPress={addByPhone} />
+              </>
+            )}
           </Card>
         )}
 
@@ -210,10 +279,12 @@ const st = StyleSheet.create({
   sportRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   sportIcon: { fontSize: 22 },
   chev: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '800' },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   memberActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   pending: { color: '#FFB454', fontSize: theme.font.small, fontWeight: '600' },
+  code: { color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.h3, letterSpacing: 1 },
   roleTag: { paddingHorizontal: theme.spacing(2), paddingVertical: 2, borderRadius: 10, backgroundColor: theme.colors.surfaceAlt },
   roleTagAdmin: { backgroundColor: theme.colors.primary },
   roleText: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.textMuted },

@@ -36,6 +36,7 @@ export default function ClubsScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Teams" subtitle="One team, many sports" />
         <Button label="+ Create a team" onPress={() => nav.navigate('CreateClub')} />
+        <Button label="Have an invite code? Join a team" variant="ghost" onPress={() => nav.navigate('JoinClub')} />
 
         {loading ? (
           <LoadingState />

@@ -155,6 +155,14 @@ create table if not exists team_player_roles (
   primary key (team_id, player_id)
 );
 
+-- Shareable invite to JOIN a club as a member (migration 0019).
+create table if not exists club_invites (
+  token       text primary key,
+  club_id     uuid references clubs(id) on delete cascade,
+  created_by  uuid references profiles(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
 -- Captains/coaches who have claimed a team (via an invite link).
 create table if not exists team_staff (
   team_id     uuid references teams(id) on delete cascade,

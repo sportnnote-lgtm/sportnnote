@@ -44,6 +44,7 @@ import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
   AcademicYear,
   Club,
+  ClubInvite,
   ClubMember,
   ClubMemberRole,
   ClubMemberView,
@@ -2572,6 +2573,37 @@ export async function setClubMemberRole(clubId: string, playerId: string, role: 
     return;
   }
   await supabase.from('club_members').update({ role }).eq('club_id', clubId).eq('player_id', playerId);
+}
+
+/* --------------------------- Club invites (join link) --------------------- */
+
+/** Create a shareable invite token that lets someone join this club as a member. */
+export async function createClubInvite(clubId: string): Promise<ClubInvite> {
+  const token = nextInviteToken();
+  const club = await getClub(clubId);
+  const invite: ClubInvite = { token, clubId, clubName: club?.name };
+  if (!isSupabaseConfigured || !supabase) { demo.clubInvites[token] = invite; return invite; }
+  await supabase.from('club_invites').insert({ token, club_id: clubId });
+  return invite;
+}
+
+/** Resolve a club invite token (or null if invalid). */
+export async function getClubInvite(token: string): Promise<ClubInvite | null> {
+  const t = token.trim().toUpperCase();
+  if (!isSupabaseConfigured || !supabase) return demo.clubInvites[t] ?? null;
+  const { data } = await supabase.from('club_invites').select('token, club_id').eq('token', t).maybeSingle();
+  if (!data) return null;
+  const club = await getClub(data.club_id as string);
+  return { token: t, clubId: data.club_id as string, clubName: club?.name };
+}
+
+/** Redeem a club invite: add the given player to the club as a member. Returns the
+ *  club id joined, or null if the code was invalid. */
+export async function claimClubInvite(token: string, playerId: string): Promise<string | null> {
+  const invite = await getClubInvite(token);
+  if (!invite || !playerId) return null;
+  await addClubMember(invite.clubId, playerId);
+  return invite.clubId;
 }
 
 /* --------------------------- Club sports & profiles ----------------------- */

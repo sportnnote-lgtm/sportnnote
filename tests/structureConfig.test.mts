@@ -10,7 +10,7 @@ import {
   type StructureConfig,
 } from '../src/data/structureConfig.ts';
 
-const groups: StructureConfig = { shape: 'groups', groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false };
+const groups: StructureConfig = { shape: 'groups', groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false, swissRounds: 5 };
 
 describe('round-trips through a format', () => {
   test('toFormat → fromFormat preserves the config', () => {
@@ -31,7 +31,7 @@ describe('round-trips through a format', () => {
   });
   test('reads with sane clamps/defaults for partial data', () => {
     const cfg = structureFromFormat({ structShape: 'groups' });
-    assert.deepEqual(cfg, { shape: 'groups', groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false });
+    assert.deepEqual(cfg, { shape: 'groups', groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false, swissRounds: 5 });
   });
 });
 

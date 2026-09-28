@@ -47,10 +47,24 @@ registered; Organize screen gains a "🛡️ My teams" entry (the old per-sport 
 "Manage houses"). Clean `tsc`; demo bundle healthy (authed UI drive deferred — preview
 was on the live-env build and the checkout is shared with a concurrent session).
 
-**Still to do**: invite via link / QR / add-existing-player search (§10); logo image
-upload; wire Club selection into game + tournament creation so picking a team auto-loads
-that sport's captain + squad (§16). **Migration 0018 must be run before the live app
-uses clubs** (createClub etc. need the new tables).
+**Phase 5 (game/tournament integration, §16)**: `getClubsForPlayer`; new
+`ClubQuickPick` "Your teams" chip row in TournamentTeamsScreen + ScheduleMatchScreen —
+picking a club resolves its per-sport team (minting the sport profile on the fly if the
+club doesn't play it yet); its captain + squad come with it, so scoring/squad/lineup wire
+up downstream for free (the row already carries roster + leaders).
+
+**Phase 3 (invite/add members, §10)**: (A) dashboard "Add member" now has **search
+existing players** (name/phone) + add-by-phone, both fully working demo + live. (B) club
+join links: migration **0019** `club_invites` + `createClubInvite`/`getClubInvite`/
+`claimClubInvite`; `JoinClubScreen` + route + deep link `sportnnote://join-club/:token`;
+dashboard "🔗 Invite" opens the native Share sheet with a code + message; Teams list has
+"Have an invite code? Join a team". Graphical QR deferred (needs a QR dep — offered).
+Also fixed a pre-existing structureConfig test (missing manualStandings/swissRounds in
+the expected). All 292 pure-engine tests pass; clean tsc.
+
+**Still to do**: logo image upload; a real https join redirect for club codes (extend the
+`join` edge function — until then the in-app deep link + code is the path); optional
+graphical QR. **Migrations 0018 + 0019 must be run before the live app uses clubs.**
 
 ---
 

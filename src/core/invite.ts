@@ -19,6 +19,19 @@ export const joinLink = (id: string) => {
   return base ? `${base}/functions/v1/join?p=${id}` : `${APP_INSTALL_URL}/join/${id}`;
 };
 
+/** A club join link. The code is what a member enters (or deep-links with) on the
+ *  Join a team screen — `sportnnote://join-club/<token>` opens the app straight
+ *  there. We share the app-install URL + the code, since the token join needs the
+ *  recipient signed in. (A browser redirect for the https form would need the `join`
+ *  edge function extended for clubs — until then the in-app deep link is the path.) */
+export const clubJoinLink = (token: string) => `${APP_INSTALL_URL}/join-club/${token}`;
+export const clubJoinDeepLink = (token: string) => `sportnnote://join-club/${token}`;
+
+/** The message shared to invite someone to a club (team). Carries the code + links. */
+export function clubInviteMessage(opts: { clubName: string; inviterName: string; token: string }): string {
+  return `Join ${opts.clubName} on SportnNote! ${opts.inviterName} invited you 🛡️\n\nInstall the app: ${APP_INSTALL_URL}\nThen open Join a team and enter code: ${opts.token}\n(or tap on the app: ${clubJoinDeepLink(opts.token)})`;
+}
+
 /** The public "this isn't me" link for a provisional player — a browser page that
  *  needs no app/account (served by the `report-invite` edge function). Falls back
  *  to a deep link if the backend URL isn't configured (demo). */

@@ -15,6 +15,7 @@ import { emptyFormation } from '../sports/football/formation';
 import { courtFormation } from '../sports/courts';
 import type {
   Club,
+  ClubInvite,
   ClubMember,
   ClubMemberRole,
   FootballProfile,
@@ -818,6 +819,8 @@ export const demo = {
   clubs: [] as Club[],
   clubMembers: [] as ClubMember[],
   teamPlayerRoles: [] as TeamPlayerRoles[],
+  /** club join invites keyed by token (see migration 0019). */
+  clubInvites: {} as Record<string, ClubInvite>,
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },
