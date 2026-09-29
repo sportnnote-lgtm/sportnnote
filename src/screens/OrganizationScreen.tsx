@@ -22,7 +22,7 @@ import { usePlayers } from '../data/hooks';
 import {
   getOrganization, getMyPlayerId, setOrgMembers, setOrgLogo, getTournaments, joinOrg,
   updateOrganization, getTeamsForOrg, createTeam, setTeamRoster,
-  getOrgRequests, respondToOrgRequest, cancelOrgRequest,
+  getOrgRequests, respondToOrgRequest, cancelOrgRequest, setOrgHouses,
 } from '../data/repos';
 import {
   ORG_ROLES, ORG_ROLE_BLURB, COMMUNITY_TYPES, canManageOrg, canOrganizeEvents, membershipPeriod,
@@ -30,9 +30,10 @@ import {
   graduatingStandardOf, isGraduatingStandard, memberEntry, isSoleActiveAdmin, isSoleActiveOwner, canManageOwners, activeOwners,
   currentAcademicYear, firstAcademicYear, latestAcademicYear, nextAcademicYearDates,
   academicYearEnded, academicYearLabel, academicYearsOf,
+  housesOf, currentHouse, assignHouse, houseColorOf,
 } from '../core/org';
 import { notify } from '../core/notifications';
-import type { Organization, OrgMember, OrgRole, OrgRequest, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
+import type { Organization, OrgMember, OrgRole, OrgRequest, House, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -64,6 +65,9 @@ export default function OrganizationScreen() {
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [expandedRoleSections, setExpandedRoleSections] = useState<Record<string, boolean>>({});
   const [showPastMembers, setShowPastMembers] = useState(false);
+  const [editingHouse, setEditingHouse] = useState<string | null>(null); // member whose House picker is open
+  const [housesOpen, setHousesOpen] = useState(false); // the school's House-list editor
+  const [newHouse, setNewHouse] = useState('');
 
   const loadOrg = useCallback(() => {
     getOrganization(params.orgId).then((o) => setOrg(o));
@@ -173,6 +177,26 @@ export default function OrganizationScreen() {
     if (!org) return;
     save(org.members.map((m) => (m.playerId === playerId ? { ...m, grades } : m)));
   };
+  // Assign a student to a House (timeline-preserving; today's date opens a new stint).
+  const setMemberHouse = (playerId: string, house: string) => {
+    if (!org) return;
+    save(org.members.map((m) => (m.playerId === playerId ? { ...m, houses: assignHouse(m.houses, house, today) } : m)));
+    setEditingHouse(null);
+  };
+  // The school's House list (define/remove Houses).
+  const saveHouses = (houses: House[]) => {
+    if (!org) return;
+    setOrg({ ...org, houses });
+    void setOrgHouses(org.id, houses);
+  };
+  const addHouse = () => {
+    const name = newHouse.trim();
+    if (!org || !name || housesOf(org).some((h) => h.name.toLowerCase() === name.toLowerCase())) { setNewHouse(''); return; }
+    const palette = ['#FF5C5C', '#4DA3FF', '#3DDC97', '#FFB454', '#B98AFF', '#FF8AC4'];
+    saveHouses([...housesOf(org), { name, colorHex: palette[housesOf(org).length % palette.length] }]);
+    setNewHouse('');
+  };
+  const removeHouse = (name: string) => { if (org) saveHouses(housesOf(org).filter((h) => h.name !== name)); };
   const setMemberRole = (playerId: string, newRole: OrgRole) => {
     if (!org) return;
     const target = org.members.find((m) => m.playerId === playerId);
@@ -277,7 +301,9 @@ export default function OrganizationScreen() {
             <Text style={textStyles.muted}>{m.until ? '⏳ Past member' : 'Member'} · {membershipPeriod(m)}</Text>
           ) : null}
           {academic && currentStandard(m) ? (
-            <Text style={st.standardLine}>🎓 {currentStandard(m)}</Text>
+            <Text style={st.standardLine}>🎓 {currentStandard(m)}{currentHouse(m) ? `  ·  🏠 ${currentHouse(m)}` : ''}</Text>
+          ) : academic && currentHouse(m) ? (
+            <Text style={st.standardLine}>🏠 {currentHouse(m)}</Text>
           ) : null}
           {academic && !m.until && (m.role === 'Owner' || m.role === 'Admin') && currentStandard(m) ? (
             <Text style={st.warn}>⚠ Student {m.role.toLowerCase()} — usually a staff role</Text>
@@ -331,6 +357,18 @@ export default function OrganizationScreen() {
       )}
       {academic && canOrganize && editingGrades === m.playerId && (
         <GradeEditor member={m} onSave={(grades) => setMemberGrades(m.playerId, grades)} />
+      )}
+      {academic && canManage && !m.until && housesOf(org).length > 0 && (
+        <Text style={st.classLink} onPress={() => setEditingHouse((v) => (v === m.playerId ? null : m.playerId))}>
+          {currentHouse(m) ? `🏠 ${currentHouse(m)}` : '🏠 Assign House'} {editingHouse === m.playerId ? '▲' : '▾'}
+        </Text>
+      )}
+      {academic && canManage && editingHouse === m.playerId && (
+        <View style={st.chips}>
+          {housesOf(org).map((h) => (
+            <SelectChip key={h.name} label={h.name} dotColor={h.colorHex} active={currentHouse(m) === h.name} onPress={() => setMemberHouse(m.playerId, h.name)} />
+          ))}
+        </View>
       )}
     </View>
   );
@@ -575,6 +613,33 @@ export default function OrganizationScreen() {
                     <Text style={st.addText}>+ {p.fullName}</Text>
                   </TouchableOpacity>
                 ))}
+              </Card>
+            )}
+
+            {/* Houses (schools): a managed list students are assigned to. */}
+            {academic && canManage && (
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={st.link} onPress={() => setHousesOpen((v) => !v)}>
+                  🏠 Houses{housesOf(org).length ? ` · ${housesOf(org).length}` : ''} {housesOpen ? '▲' : '▼'}
+                </Text>
+                {housesOpen && (
+                  <>
+                    <Text style={textStyles.muted}>Define your school's Houses. Students are assigned to a House independently of their class or teams.</Text>
+                    <View style={st.chips}>
+                      {housesOf(org).map((h) => (
+                        <View key={h.name} style={st.houseChip}>
+                          <View style={[st.houseDot, { backgroundColor: h.colorHex ?? theme.colors.textMuted }]} />
+                          <Text style={textStyles.body}>{h.name}</Text>
+                          <Text style={st.remove} onPress={() => removeHouse(h.name)}> ✕</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={st.row}>
+                      <View style={{ flex: 1 }}><TextField label="" value={newHouse} onChange={setNewHouse} placeholder="Add a House (e.g. Red House)" /></View>
+                      <Button label="Add" onPress={addHouse} />
+                    </View>
+                  </>
+                )}
               </Card>
             )}
 
@@ -1070,6 +1135,8 @@ const st = StyleSheet.create({
   membersHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: theme.spacing(1) },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  houseChip: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(2) },
+  houseDot: { width: 10, height: 10, borderRadius: 5 },
   roleBlurb: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   addRow: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   addText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },

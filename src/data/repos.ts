@@ -57,6 +57,7 @@ import type {
   OrgMember,
   OrgRequest,
   GradeStint,
+  House,
   MatchDispute,
   DisputeEvent,
   MatchLineup,
@@ -2266,10 +2267,18 @@ const toOrganization = (r: any, members: OrgMember[]): Organization => ({
   phone: r.phone ?? undefined,
   bio: r.bio ?? undefined,
   members,
+  houses: r.houses ?? undefined,
   academicYears: r.academic_years ?? undefined,
   graduatingStandard: r.graduating_standard ?? undefined,
 });
+// houses (migration 0022) is optional in the select so reads still work pre-migration.
 const ORG_SELECT = 'id, name, type, logo_url, city, email, phone, bio, academic_years, graduating_standard';
+const ORG_SELECT_FULL = `${ORG_SELECT}, houses`;
+async function withOrgCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  const full = await build(ORG_SELECT_FULL);
+  if (!full.error) return full;
+  return build(ORG_SELECT);
+}
 
 const toOrgMember = (r: any): OrgMember => ({
   playerId: r.player_id,
@@ -2277,16 +2286,24 @@ const toOrgMember = (r: any): OrgMember => ({
   since: r.since ?? undefined,
   until: r.until ?? undefined,
   grades: (r.grades as GradeStint[] | null) ?? undefined,
+  houses: (r.houses as any[] | null) ?? undefined,
 });
+
+const MEMBER_COLS = 'org_id, player_id, role, since, until, grades';
+const MEMBER_COLS_FULL = `${MEMBER_COLS}, houses`;
 
 /** Load org_members rows, grouped by org id (optionally for specific orgs). */
 async function loadOrgMembers(orgIds?: string[]): Promise<Map<string, OrgMember[]>> {
   const map = new Map<string, OrgMember[]>();
   if (!isSupabaseConfigured || !supabase) return map;
-  let q = supabase.from('org_members').select('org_id, player_id, role, since, until, grades');
-  if (orgIds && orgIds.length) q = q.in('org_id', orgIds);
-  const { data } = await q;
-  for (const r of (data ?? []) as any[]) {
+  const run = (cols: string) => {
+    let q = supabase!.from('org_members').select(cols);
+    if (orgIds && orgIds.length) q = q.in('org_id', orgIds);
+    return q;
+  };
+  let res = await run(MEMBER_COLS_FULL); // houses needs migration 0022
+  if (res.error) res = await run(MEMBER_COLS);
+  for (const r of (res.data ?? []) as any[]) {
     const arr = map.get(r.org_id) ?? [];
     arr.push(toOrgMember(r));
     map.set(r.org_id, arr);
@@ -2342,7 +2359,7 @@ export async function createOrganization(input: NewOrganization, creatorPlayerId
 
 export async function getOrganizations(): Promise<Organization[]> {
   if (!isSupabaseConfigured || !supabase) return demo.organizations;
-  const { data, error } = await supabase.from('organizations').select(ORG_SELECT).order('name');
+  const { data, error } = await withOrgCols<any[]>((cols) => supabase!.from('organizations').select(cols).order('name'));
   if (error || !data) return [];
   const byOrg = await loadOrgMembers();
   return data.map((r: any) => toOrganization(r, byOrg.get(r.id) ?? []));
@@ -2350,10 +2367,10 @@ export async function getOrganizations(): Promise<Organization[]> {
 
 export async function getOrganization(id: string): Promise<Organization | null> {
   if (!isSupabaseConfigured || !supabase) return demo.organizations.find((o) => o.id === id) ?? null;
-  const { data } = await supabase.from('organizations').select(ORG_SELECT).eq('id', id).maybeSingle();
+  const { data } = await withOrgCols<any>((cols) => supabase!.from('organizations').select(cols).eq('id', id).maybeSingle());
   if (!data) return null;
   const byOrg = await loadOrgMembers([id]);
-  return toOrganization(data, byOrg.get(id) ?? []);
+  return toOrganization(data as any, byOrg.get(id) ?? []);
 }
 
 /** Replace an org's member list (add/remove/role changes). Writes to the
@@ -2375,9 +2392,13 @@ export async function setOrgMembers(orgId: string, members: Organization['member
   }
   const rows = members.map((m) => ({
     org_id: orgId, player_id: m.playerId, role: m.role,
-    since: m.since ?? null, until: m.until ?? null, grades: m.grades ?? [],
+    since: m.since ?? null, until: m.until ?? null, grades: m.grades ?? [], houses: m.houses ?? [],
   }));
-  if (rows.length) await supabase.from('org_members').upsert(rows, { onConflict: 'org_id,player_id' });
+  if (rows.length) {
+    // houses needs migration 0022 — retry without it if the column isn't there yet.
+    const up = await supabase.from('org_members').upsert(rows, { onConflict: 'org_id,player_id' });
+    if (up.error) await supabase.from('org_members').upsert(rows.map(({ houses, ...r }) => r), { onConflict: 'org_id,player_id' });
+  }
   const keep = members.map((m) => m.playerId);
   let del = supabase.from('org_members').delete().eq('org_id', orgId);
   if (keep.length) del = del.not('player_id', 'in', `(${keep.join(',')})`);
@@ -2528,6 +2549,17 @@ export async function cancelOrgRequest(requestId: string): Promise<void> {
     return;
   }
   await supabase.from('org_requests').update({ status: 'cancelled' }).eq('id', requestId).eq('status', 'pending');
+}
+
+/** Set a school's House list (define/rename/recolour Houses) — admins only. Needs
+ *  migration 0022; a pre-migration DB silently no-ops (the feature is unavailable). */
+export async function setOrgHouses(orgId: string, houses: House[]): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const o = demo.organizations.find((x) => x.id === orgId);
+    if (o) o.houses = houses;
+    return;
+  }
+  await supabase.from('organizations').update({ houses }).eq('id', orgId);
 }
 
 /** Set an organization's logo image — admins only. */

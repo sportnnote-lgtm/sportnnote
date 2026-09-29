@@ -1,6 +1,6 @@
 /** Organization helpers: roles, membership checks, and resolving who hosts a
  *  tournament (an individual's ids, or every member of the hosting org). */
-import type { AcademicYear, GradeStint, Organization, OrgMember, OrgRole, Tournament } from './types';
+import type { AcademicYear, GradeStint, House, HouseStint, Organization, OrgMember, OrgRole, Tournament } from './types';
 
 export const ORG_ROLES: OrgRole[] = ['Owner', 'Admin', 'Organizer', 'Scorer', 'Referee', 'Member'];
 
@@ -109,6 +109,40 @@ export const promoteGrade = (grades: GradeStint[] | undefined, standard: string,
   const list = (grades ?? []).map((g) => (!g.until ? { ...g, until: since } : g));
   return [...list, { standard, since }].sort((a, b) => a.since.localeCompare(b.since));
 };
+
+/* ─────────────────────────────── Houses (schools) ────────────────────────── */
+
+/** The Houses a school has defined (empty if none). */
+export const housesOf = (org: Organization | undefined): House[] => org?.houses ?? [];
+
+/** The House a student was in on a given date (defaults to now). Half-open stints,
+ *  same resolution rule as classes — so a past tournament shows the House at the time. */
+export const houseAt = (m: OrgMember | undefined, date?: string): string | undefined => {
+  if (!m?.houses?.length) return undefined;
+  const d = date ?? '9999-12-31';
+  const hit = m.houses.find((h) => h.since <= d && (!h.until || d < h.until));
+  if (hit) return hit.house;
+  const sorted = [...m.houses].sort((a, b) => a.since.localeCompare(b.since));
+  return d < sorted[0].since ? sorted[0].house : sorted[sorted.length - 1].house;
+};
+
+/** The student's current House. */
+export const currentHouse = (m: OrgMember | undefined): string | undefined => houseAt(m, undefined);
+
+/** Assign a student to a House as of `since`, closing the previously-open House
+ *  stint at that date so the timeline stays non-overlapping (mirrors promoteGrade).
+ *  Re-assigning to the same current House is a no-op. */
+export const assignHouse = (houses: HouseStint[] | undefined, house: string, since: string): HouseStint[] => {
+  const list = houses ?? [];
+  const open = list.find((h) => !h.until);
+  if (open && open.house === house) return list; // already in this House
+  const closed = list.map((h) => (!h.until ? { ...h, until: since } : h));
+  return [...closed, { house, since }].sort((a, b) => a.since.localeCompare(b.since));
+};
+
+/** The color a school assigned to a House (for chips/dots), if any. */
+export const houseColorOf = (org: Organization | undefined, house?: string): string | undefined =>
+  house ? housesOf(org).find((h) => h.name === house)?.colorHex : undefined;
 
 /** Members who belonged to the org on a given date (membership covered it). */
 export const membersOnDate = (org: Organization, date: string): OrgMember[] =>

@@ -80,6 +80,7 @@ create table if not exists organizations (
   phone               text,
   bio                 text,
   members             jsonb not null default '[]'::jsonb,  -- LEGACY: membership now lives in org_members (migration 0020); kept vestigial for transition
+  houses              jsonb not null default '[]',   -- schools: managed House list [{name, colorHex}] (migration 0022)
   academic_years      jsonb,                         -- schools/colleges only
   graduating_standard text,                          -- class after which students graduate
   created_at          timestamptz not null default now()
@@ -95,6 +96,7 @@ create table if not exists org_members (
   since      date,
   until      date,
   grades     jsonb not null default '[]',
+  houses     jsonb not null default '[]',   -- student's House timeline (migration 0022)
   primary key (org_id, player_id)
 );
 

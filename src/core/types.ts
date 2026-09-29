@@ -231,6 +231,9 @@ export interface OrgMember {
    *  over time. Each promotion adds a new stint, so we can resolve which class
    *  a student was in on any given date (e.g. during a past tournament). */
   grades?: GradeStint[];
+  /** The student's House over time (schools). Independent of class & teams; a
+   *  timeline so a past tournament shows the House they were in at that date. */
+  houses?: HouseStint[];
 }
 
 /** A span of time a student spent in one class/standard. Half-open: the stint
@@ -240,6 +243,22 @@ export interface GradeStint {
   standard: string;
   since: string; // YYYY-MM-DD
   until?: string; // YYYY-MM-DD; absent ⇒ current class
+}
+
+/** A House a school defines (Red/Blue/…). Houses are a school-level list; a student
+ *  belongs to a House independently of their class and their teams (a team may mix
+ *  students from different Houses — see spec §20–21). */
+export interface House {
+  name: string;
+  colorHex?: string;
+}
+
+/** A span of time a student belonged to one House. Mirrors GradeStint so a past
+ *  tournament shows the House the student was in AT THE TIME (history preserved). */
+export interface HouseStint {
+  house: string;
+  since: string; // YYYY-MM-DD
+  until?: string; // YYYY-MM-DD; absent ⇒ current House
 }
 
 /**
@@ -258,6 +277,9 @@ export interface Organization {
   phone?: string;
   bio?: string;
   members: OrgMember[];
+  /** For schools: the Houses the school has (Red/Blue/…). A managed list; students
+   *  are assigned to one of these (independently of class & teams). */
+  houses?: House[];
   /** For schools/colleges: the academic years the community has run, each with
    *  real dates. Used to know the *current* running year, when the school
    *  started (earliest), and to drive the class rollover off the right dates. */
