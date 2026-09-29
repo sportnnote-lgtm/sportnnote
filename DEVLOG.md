@@ -60,6 +60,19 @@ a "🏛️ Manage <org>" shortcut, and "New tournament" defaults to organizing a
 (CreateTournament already reads the orgId param). App root wraps with OrgContextProvider.
 Clean tsc; 292 tests. (Visual walk pending — Browser pane was hidden at build time.)
 
+### 2026-09-29 — Tournament ownership: creator + transfer + audit (M3) · SHIPPED
+
+Spec §12–13, §27. Ownership (individual `host_ids` vs org `host_org_id`) was already
+first-class; added: **createdBy** retained separately (Tournament.createdBy, player id,
+set at create, backfilled from organizer_id; shown as "Created by"); **transfer**
+individual⇄org via `transferTournamentOwnership()` (flips host_org_id/host_ids + host_name,
+so an org-owned event survives the creator leaving; permissions recompute from the new
+owner); **audit** `tournament_ownership_events` (created/transferred, snapshotted names) +
+`getOwnershipEvents()`. Migration **0021** (+ schema.sql). UI: Info shows "Organized by … ·
+Created by …"; Settings has a 🔑 Ownership card (transfer to yourself or an org you organize
+for + history). Demo mirrors via demo.ownershipEvents. Clean tsc; 292 tests. **Migration
+0021 needed for live.** (Visual walk pending pane visibility.) Next: M4 school structure, M5 audit.
+
 ---
 
 ### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
