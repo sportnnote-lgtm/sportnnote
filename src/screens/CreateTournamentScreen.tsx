@@ -24,7 +24,14 @@ import { createTournament, getMyPlayerId, getPlayer } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { useOrganizations } from '../data/hooks';
 import { organizableOrgsForPlayer } from '../core/org';
-import type { SportId, TournamentStructure, TournamentScoring } from '../core/types';
+import type { SportId, TournamentStructure, TournamentScoring, TournamentParticipation } from '../core/types';
+
+const PARTICIPATION_OPTS: { key: TournamentParticipation; label: string; hint: string }[] = [
+  { key: 'open', label: '🏳️ Open teams', hint: 'Any teams you register compete.' },
+  { key: 'inter_house', label: '🏠 Inter-house', hint: 'A school’s Houses compete; players play for their House.' },
+  { key: 'school_team', label: '🏫 School team', hint: 'The school’s own team represents it.' },
+  { key: 'individual', label: '👤 Individuals', hint: 'Players enter individually (no teams).' },
+];
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -55,6 +62,7 @@ export default function CreateTournamentScreen() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myName, setMyName] = useState('You');
   const [hostChoice, setHostChoice] = useState<'self' | string>(params?.orgId ?? 'self');
+  const [participation, setParticipation] = useState<TournamentParticipation>('open');
   const [coHosts, setCoHosts] = useState<CoHost[]>([]);
   const [divisions, setDivisions] = useState<NewTournamentCategory[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -129,6 +137,7 @@ export default function CreateTournamentScreen() {
         formats: finalFormats,
         structure: coarseStructureFrom(finalFormats, sports),
         scoring: sports.length > 1 ? scoring : undefined,
+        participation: participation !== 'open' ? participation : undefined,
         reminderLeadMinutes: customReminders ? reminderMins : undefined,
         coHostIds: coHosts.map((c) => c.id),
         categories: divisions.length ? divisions : undefined,
@@ -159,6 +168,14 @@ export default function CreateTournamentScreen() {
             ? 'You host this tournament personally.'
             : 'Everyone in this organization can manage it and gets host reminders.'}
         </Text>
+
+        <FieldLabel>Contested by</FieldLabel>
+        <View style={st.chips}>
+          {PARTICIPATION_OPTS.map((o) => (
+            <SelectChip key={o.key} label={o.label} active={participation === o.key} onPress={() => setParticipation(o.key)} />
+          ))}
+        </View>
+        <Text style={st.hint}>{PARTICIPATION_OPTS.find((o) => o.key === participation)?.hint}</Text>
 
         {/* Add other people as co-hosts — look them up, or invite them to install. */}
         <CoHostPicker

@@ -197,6 +197,7 @@ const toTournament = (data: any): Tournament => ({
   hostName: data.host_name,
   hostOrgId: data.host_org_id ?? undefined,
   createdBy: data.created_by ?? undefined,
+  participation: data.participation ?? undefined,
   logoUrl: data.logo_url ?? undefined,
   // prefer the multi-host array; fall back to the legacy single organizer_id
   hostIds: data.host_ids ?? (data.organizer_id ? [data.organizer_id] : undefined),
@@ -218,7 +219,7 @@ const toTournament = (data: any): Tournament => ({
 // migration 0014. Keep a base column set so every tournament read still works
 // before it's applied, and a full set that includes them.
 const TOURNAMENT_COLS_BASE = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
-const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring, created_by`;
+const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring, created_by, participation`;
 
 /** Run a tournaments query with the full column set; if the registration columns
  *  aren't in the live DB yet, transparently retry with the base set. */
@@ -2046,6 +2047,8 @@ export interface NewTournament {
   maxTeams?: number;
   /** medal/position scoring for a multi-sport meet */
   scoring?: Tournament['scoring'];
+  /** who the tournament is contested by (spec §25); defaults to 'open' */
+  participation?: Tournament['participation'];
   sports: SportId[];
   startDate: string;
   endDate: string;
@@ -2097,6 +2100,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
       ...(input.minTeams != null ? { min_teams: input.minTeams } : {}),
       ...(input.maxTeams != null ? { max_teams: input.maxTeams } : {}),
       ...(input.scoring != null ? { scoring: input.scoring } : {}),
+      ...(input.participation != null ? { participation: input.participation } : {}),
     })
     .select(TOURNAMENT_COLS_BASE) // reg columns (0014) aren't set at creation
     .single();
@@ -3142,6 +3146,24 @@ const contingentShort = (name: string): string => {
 /** Add a contingent to a multi-sport meet: entered into every listed sport,
  *  reusing an existing same-named team per sport or creating one — all sharing
  *  the name + colour, so the medal table merges them into one row. */
+/** Enter a school's Houses as the participating teams of a sport in a tournament —
+ *  the connective tissue for an inter-house event (spec §21, §25). Each House becomes
+ *  (or reuses) a team of that sport, coloured to match, and is confirmed in. Returns
+ *  how many Houses were entered. */
+export async function enterOrgHousesAsTeams(tournamentId: string, orgId: string, sport: SportId): Promise<number> {
+  const org = await getOrganization(orgId);
+  const houses = org?.houses ?? [];
+  if (!houses.length) return 0;
+  const existingTeams = await getTeams(sport);
+  for (const h of houses) {
+    const key = h.name.trim().toLowerCase();
+    const existing = existingTeams.find((t) => t.name.trim().toLowerCase() === key);
+    const teamId = existing?.id ?? (await createTeam({ name: h.name.trim(), shortName: contingentShort(h.name), sport, colorHex: h.colorHex ?? '#4DA3FF', orgId, adhoc: true })).id;
+    await addTournamentTeams(tournamentId, [teamId], 'confirmed');
+  }
+  return houses.length;
+}
+
 export async function addContingent(tournamentId: string, name: string, colorHex: string, sports: SportId[]): Promise<void> {
   const key = name.trim().toLowerCase();
   for (const sport of sports) {

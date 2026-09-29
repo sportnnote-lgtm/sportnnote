@@ -23,7 +23,7 @@ import { ClubQuickPick } from '../components/ClubQuickPick';
 import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
-import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders } from '../data/repos';
+import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders, enterOrgHousesAsTeams } from '../data/repos';
 import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
 import { notify } from '../core/notifications';
@@ -354,6 +354,23 @@ export default function TournamentTeamsScreen() {
             <SelectChip label="Add directly" active={entryMode === 'confirmed'} onPress={() => setEntryMode('confirmed')} />
             <SelectChip label="Invite (captain accepts)" active={entryMode === 'invited'} onPress={() => setEntryMode('invited')} />
           </View>
+        )}
+
+        {/* Inter-house tournament hosted by a school → one tap enters its Houses. */}
+        {pMode === 'team' && tournament?.participation === 'inter_house' && tournament?.hostOrgId && (
+          <Button
+            label={busy ? 'Adding…' : '🏠 Enter the school’s Houses'}
+            variant="ghost"
+            disabled={busy}
+            onPress={async () => {
+              setBusy(true);
+              try {
+                const n = await enterOrgHousesAsTeams(params.tournamentId, tournament.hostOrgId!, sport);
+                if (n === 0) setError('This school hasn’t set up any Houses yet — add them in the school’s Members tab.');
+                setTick((x) => x + 1);
+              } finally { setBusy(false); }
+            }}
+          />
         )}
 
         {/* Pick one of your own multi-sport teams — its captain + squad come with

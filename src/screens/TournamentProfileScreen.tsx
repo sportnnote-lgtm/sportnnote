@@ -36,6 +36,13 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+const PARTICIPATION_LABEL: Record<string, string> = {
+  inter_house: '🏠 Inter-house (Houses compete)',
+  school_team: '🏫 School team',
+  individual: '👤 Individuals',
+  open: 'Open teams',
+};
+
 export default function TournamentProfileScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Tournament'>>();
@@ -306,6 +313,9 @@ export default function TournamentProfileScreen() {
             <Text style={textStyles.muted}>
               Organized by {currentOwnerLabel}{creatorName ? ` · Created by ${creatorName}` : ''}
             </Text>
+            {tournament.participation && tournament.participation !== 'open' && (
+              <Text style={textStyles.muted}>Contested by: {PARTICIPATION_LABEL[tournament.participation]}</Text>
+            )}
 
             {tournament.structure && (
               <View style={{ gap: theme.spacing(1) }}>

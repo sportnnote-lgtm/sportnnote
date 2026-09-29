@@ -517,6 +517,9 @@ export type SportFormat = Record<string, number | string | boolean>;
 /** How a tournament is decided based on team count. */
 export type TournamentStructure = 'league' | 'knockout' | 'league_knockout';
 
+/** Who a tournament is contested by (see Tournament.participation). */
+export type TournamentParticipation = 'open' | 'inter_house' | 'school_team' | 'individual';
+
 /** A tournament's ownership at a point in time — either an individual (the host
  *  player ids) or an organization. Ownership can be transferred between the two;
  *  the creator is retained separately (Tournament.createdBy). */
@@ -544,6 +547,11 @@ export interface Tournament {
   /** the player who originally created this tournament — retained even after the
    *  tournament is transferred to an organization or another owner ("Created by"). */
   createdBy?: UUID;
+  /** How this tournament is contested (spec §25) — the tournament defines its own
+   *  participation, independent of the underlying team/house/student structure:
+   *  'open' teams (default), 'inter_house' (a school's Houses compete), 'school_team'
+   *  (the school's own team), or 'individual' (players enter individually). */
+  participation?: TournamentParticipation;
   /** when an organization hosts, its id — management & reminders span all its
    *  members. Absent for individually-hosted tournaments (see hostIds). */
   hostOrgId?: UUID;

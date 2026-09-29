@@ -232,6 +232,7 @@ create table if not exists tournaments (
   organizer_id uuid references profiles(id),
   host_ids    uuid[] not null default '{}',   -- multi-host: player ids that can manage this tournament
   created_by  uuid references players(id) on delete set null,  -- original creator, retained across ownership transfers (migration 0021)
+  participation text check (participation in ('open','inter_house','school_team','individual')),  -- who it's contested by (migration 0023)
   is_open     boolean not null default false, -- open for registration / discoverable
   reminder_lead_minutes int[],                -- organizer's per-tournament reminder lead times; null ⇒ players use their own
   created_at  timestamptz not null default now()
