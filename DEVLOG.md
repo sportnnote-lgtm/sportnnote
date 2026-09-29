@@ -95,6 +95,23 @@ Clean tsc; 292 tests. **Migrations 0022 + 0023 needed for live.** (Visual walk p
 pane.) Remaining: M5 audit/history + end-to-end; §9 per-tournament Scorer/Referee
 assignment still open.
 
+### 2026-09-29 — Officials assignment + audit trail (M5, + §9) · SHIPPED — EPIC COMPLETE
+
+**§9 per-tournament officials**: org Scorer/Referee role is eligibility; a new
+`tournament_officials` table records the actual per-event assignment. repos
+get/assign/unassignTournamentOfficial (audited). Tournament Settings → 🎽 "Scorers &
+referees" card assigns from the host org's eligible members (role Scorer/Referee), or the
+hosts for an individual tournament.
+
+**§27 audit trail**: `activity_log` + `logActivity`/`getActivity`. Membership joins, leaves
+and role changes are recorded (joinOrg/leaveOrg + new `changeOrgMemberRole`, all now
+carrying the actor), plus official assign/unassign. Org console shows a 🕓 History section.
+migration **0024** (tournament_officials + activity_log). Demo mirrors.
+
+**Epic complete**: M1 roles+membership lifecycle · M2 context switcher · M3 ownership+transfer
+· M4 school structure · M5 officials+audit. **Live migrations to run: 0020–0024.** Clean
+tsc; 292 tests. (M2–M5 visual walk still pending Browser-pane visibility.)
+
 ---
 
 ### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
