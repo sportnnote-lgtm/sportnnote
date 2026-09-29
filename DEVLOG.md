@@ -73,6 +73,28 @@ Created by …"; Settings has a 🔑 Ownership card (transfer to yourself or an 
 for + history). Demo mirrors via demo.ownershipEvents. Clean tsc; 292 tests. **Migration
 0021 needed for live.** (Visual walk pending pane visibility.) Next: M4 school structure, M5 audit.
 
+### 2026-09-29 — School structure: Houses + participation rules (M4) · SHIPPED
+
+**M4a — Houses first-class** (spec §20–21, §24): schools now manage their own House
+list (was only global `Player.houseName` strings). types: House{name,colorHex},
+HouseStint (timeline like GradeStint), Organization.houses, OrgMember.houses. org.ts:
+housesOf/houseAt/currentHouse/assignHouse/houseColorOf — independent of class & teams,
+history-preserving (a past tournament shows the House at that date). migration **0022**
+(organizations.houses + org_members.houses jsonb) with graceful pre-migration fallback
+(withOrgCols + member-cols retry); repos setOrgHouses. Console: 🏠 Houses manager (add/
+remove) + per-student House picker; current House on the member row.
+
+**M4b — participation rules** (spec §25): Tournament.participation (open | inter_house |
+school_team | individual). migration **0023** (tournaments.participation). Create screen
+"Contested by" chooser; shown on the tournament page. `enterOrgHousesAsTeams()` — for an
+inter-house event hosted by a school, one tap enters each House as a team of that sport
+(bridges first-class Houses → the existing house-team/medal mechanics). Team flexibility
+(§22) already covered: a Club with zero sports is a general (non-sport) team.
+
+Clean tsc; 292 tests. **Migrations 0022 + 0023 needed for live.** (Visual walk pending
+pane.) Remaining: M5 audit/history + end-to-end; §9 per-tournament Scorer/Referee
+assignment still open.
+
 ---
 
 ### 2026-09-29 — Multi-sport Teams (Clubs): data model + create/manage flow · IN PROGRESS
