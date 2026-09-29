@@ -229,9 +229,24 @@ create table if not exists tournaments (
   structure   text,
   organizer_id uuid references profiles(id),
   host_ids    uuid[] not null default '{}',   -- multi-host: player ids that can manage this tournament
+  created_by  uuid references players(id) on delete set null,  -- original creator, retained across ownership transfers (migration 0021)
   is_open     boolean not null default false, -- open for registration / discoverable
   reminder_lead_minutes int[],                -- organizer's per-tournament reminder lead times; null ⇒ players use their own
   created_at  timestamptz not null default now()
+);
+
+-- Ownership audit trail: created / transferred, with snapshotted names (migration 0021).
+create table if not exists tournament_ownership_events (
+  id            uuid primary key default uuid_generate_v4(),
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  action        text not null check (action in ('created','transferred')),
+  from_kind     text check (from_kind in ('individual','org')),
+  from_name     text,
+  to_kind       text check (to_kind in ('individual','org')),
+  to_name       text,
+  by_player_id  uuid references players(id) on delete set null,
+  by_name       text,
+  at            timestamptz not null default now()
 );
 -- Migration for existing deployments (these columns were used by the app before the DDL caught up):
 --   alter table tournaments add column if not exists host_org_id uuid references organizations(id) on delete set null;

@@ -74,6 +74,8 @@ import type {
   TeamSummary,
   NewClub,
   Tournament,
+  OwnershipEvent,
+  OwnerRef,
   TournamentCategory,
   TournamentEntry,
   TournamentEntryStatus,
@@ -193,6 +195,7 @@ const toTournament = (data: any): Tournament => ({
   name: data.name,
   hostName: data.host_name,
   hostOrgId: data.host_org_id ?? undefined,
+  createdBy: data.created_by ?? undefined,
   logoUrl: data.logo_url ?? undefined,
   // prefer the multi-host array; fall back to the legacy single organizer_id
   hostIds: data.host_ids ?? (data.organizer_id ? [data.organizer_id] : undefined),
@@ -214,7 +217,7 @@ const toTournament = (data: any): Tournament => ({
 // migration 0014. Keep a base column set so every tournament read still works
 // before it's applied, and a full set that includes them.
 const TOURNAMENT_COLS_BASE = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
-const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring`;
+const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring, created_by`;
 
 /** Run a tournaments query with the full column set; if the registration columns
  *  aren't in the live DB yet, transparently retry with the base set. */
@@ -2061,8 +2064,9 @@ export async function createTournament(input: NewTournament): Promise<Tournament
   // Org-hosted → no individual hostIds (the org's members are the hosts);
   // otherwise the creator is the sole individual host.
   if (!isSupabaseConfigured || !supabase) {
-    const t = addTournament({ ...input, isOpen: input.isOpen, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
+    const t = addTournament({ ...input, isOpen: input.isOpen, createdBy: me, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
     if (input.categories?.length) addTournamentCategoriesDemo(t.id, input.categories);
+    await recordOwnershipCreated(t, me);
     return t;
   }
   const { data: auth } = await supabase.auth.getUser();
@@ -2082,6 +2086,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
       structure: input.structure ?? null,
       knockout_format: input.knockoutFormat ?? null,
       organizer_id: auth.user?.id ?? null,
+      ...(myPlayerId ? { created_by: myPlayerId } : {}),
       host_ids: [...new Set([...(input.hostOrgId ? [] : myPlayerId ? [myPlayerId] : []), ...(input.coHostIds ?? [])])],
       is_open: input.isOpen ?? false,
       reminder_lead_minutes: input.reminderLeadMinutes ?? null,
@@ -2095,13 +2100,106 @@ export async function createTournament(input: NewTournament): Promise<Tournament
     .select(TOURNAMENT_COLS_BASE) // reg columns (0014) aren't set at creation
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create tournament');
-  const tournament = toTournament(data);
+  // created_by isn't in the base select (kept narrow for pre-0021 safety) — merge it.
+  const tournament = { ...toTournament(data), createdBy: myPlayerId ?? undefined };
   // Attach divisions, if any (best-effort — needs migration 0008; a tournament
   // without categories is valid, so don't fail creation if this can't be stored).
   if (input.categories?.length) {
     try { await addTournamentCategories(tournament.id, input.categories); } catch { /* pre-0008 or transient */ }
   }
+  await recordOwnershipCreated(tournament, myPlayerId);
   return tournament;
+}
+
+/* ------------------------- Tournament ownership & transfer ----------------- */
+// Ownership is individual (host_ids) or org (host_org_id). Transfers move between
+// the two and are recorded in tournament_ownership_events with snapshotted names,
+// so the audit trail survives renames/deletes. The creator (created_by) is retained.
+
+const toOwnershipEvent = (r: any): OwnershipEvent => ({
+  id: r.id,
+  tournamentId: r.tournament_id,
+  action: r.action,
+  fromKind: r.from_kind ?? undefined,
+  fromName: r.from_name ?? undefined,
+  toKind: r.to_kind,
+  toName: r.to_name ?? undefined,
+  byPlayerId: r.by_player_id ?? undefined,
+  byName: r.by_name ?? undefined,
+  at: r.at,
+});
+
+/** A readable label + kind for a tournament's CURRENT owner. */
+async function ownerLabelOf(t: Tournament): Promise<{ kind: 'individual' | 'org'; name: string }> {
+  if (t.hostOrgId) return { kind: 'org', name: (await getOrganization(t.hostOrgId))?.name ?? 'Organization' };
+  const pid = t.hostIds?.[0] ?? t.createdBy;
+  const name = pid ? (await getPlayer(pid))?.fullName ?? 'Individual' : 'Individual';
+  return { kind: 'individual', name };
+}
+
+/** A readable label + kind for a transfer target. */
+async function ownerLabelForTarget(target: OwnerRef): Promise<{ kind: 'individual' | 'org'; name: string }> {
+  if (target.kind === 'org') return { kind: 'org', name: (await getOrganization(target.orgId))?.name ?? 'Organization' };
+  const pid = target.playerIds[0];
+  const name = pid ? (await getPlayer(pid))?.fullName ?? 'Individual' : 'Individual';
+  return { kind: 'individual', name };
+}
+
+async function insertOwnershipEvent(e: Omit<OwnershipEvent, 'id' | 'at'>): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.ownershipEvents.push({ ...e, id: genId('own'), at: new Date().toISOString() });
+    return;
+  }
+  await supabase.from('tournament_ownership_events').insert({
+    tournament_id: e.tournamentId, action: e.action,
+    from_kind: e.fromKind ?? null, from_name: e.fromName ?? null,
+    to_kind: e.toKind, to_name: e.toName ?? null,
+    by_player_id: e.byPlayerId ?? null, by_name: e.byName ?? null,
+  });
+}
+
+/** Best-effort 'created' audit entry at tournament creation (never fails creation). */
+async function recordOwnershipCreated(t: Tournament, byPlayerId?: string | null): Promise<void> {
+  try {
+    const to = await ownerLabelOf(t);
+    const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+    await insertOwnershipEvent({ tournamentId: t.id, action: 'created', toKind: to.kind, toName: to.name, byPlayerId: byPlayerId ?? undefined, byName });
+  } catch { /* pre-0021 or transient — audit is non-critical */ }
+}
+
+/** Transfer a tournament's ownership between an individual and an organization
+ *  (either direction). Records the transfer in the audit trail. The creator
+ *  (created_by) is never changed. */
+export async function transferTournamentOwnership(tournamentId: string, target: OwnerRef, byPlayerId?: string): Promise<void> {
+  const t = (await getTournaments()).find((x) => x.id === tournamentId);
+  if (!t) return;
+  const from = await ownerLabelOf(t);
+  const to = await ownerLabelForTarget(target);
+  if (!isSupabaseConfigured || !supabase) {
+    const d = demo.tournaments.find((x) => x.id === tournamentId);
+    if (d) {
+      d.hostOrgId = target.kind === 'org' ? target.orgId : undefined;
+      d.hostIds = target.kind === 'individual' ? target.playerIds : [];
+      d.hostName = to.name;
+    }
+  } else {
+    await supabase.from('tournaments').update({
+      host_org_id: target.kind === 'org' ? target.orgId : null,
+      host_ids: target.kind === 'individual' ? target.playerIds : [],
+      host_name: to.name,
+    }).eq('id', tournamentId);
+  }
+  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+  await insertOwnershipEvent({ tournamentId, action: 'transferred', fromKind: from.kind, fromName: from.name, toKind: to.kind, toName: to.name, byPlayerId, byName });
+}
+
+/** A tournament's ownership audit trail (oldest first). */
+export async function getOwnershipEvents(tournamentId: string): Promise<OwnershipEvent[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    return demo.ownershipEvents.filter((e) => e.tournamentId === tournamentId).sort((a, b) => a.at.localeCompare(b.at));
+  }
+  const { data } = await supabase.from('tournament_ownership_events').select('*').eq('tournament_id', tournamentId).order('at', { ascending: true });
+  return (data ?? []).map(toOwnershipEvent);
 }
 
 /** Editable tournament fields (host/organizer are fixed at creation; co-hosts and

@@ -21,9 +21,10 @@ import { getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus } from '../data/repos';
+import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents } from '../data/repos';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
-import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate } from '../core/org';
+import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer } from '../core/org';
+import type { OwnershipEvent, OwnerRef } from '../core/types';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
@@ -128,6 +129,11 @@ export default function TournamentProfileScreen() {
   const [showClasses, setShowClasses] = useState(false);
   const [showOverall, setShowOverall] = useState(false);
   const [showTeams, setShowTeams] = useState(false);
+  // Ownership: the audit trail + the transfer panel.
+  const [ownershipEvents, setOwnershipEvents] = useState<OwnershipEvent[]>([]);
+  const [ownTick, setOwnTick] = useState(0);
+  const [showTransfer, setShowTransfer] = useState(false);
+  useEffect(() => { getOwnershipEvents(params.tournamentId).then(setOwnershipEvents); }, [params.tournamentId, ownTick]);
   const bySportFilter = (list: typeof matches) =>
     matchSport === 'all' ? list : list.filter((m) => m.sport === matchSport);
   const upcomingMatches = useMemo(
@@ -196,6 +202,20 @@ export default function TournamentProfileScreen() {
   // Teams in this tournament (house ids appear in its matches).
   const teamIds = new Set(matches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id]));
   const tourneyTeams = teams.filter((t) => teamIds.has(t.id));
+
+  // Ownership: creator (retained), current owner, and where it can be transferred.
+  const creatorName = tournament.createdBy ? (playerName(tournament.createdBy) ?? 'Someone') : undefined;
+  const currentOwnerLabel = hostOrg ? hostOrg.name : (canManageHosts ? 'You (individual)' : 'Individual');
+  const myOrgs = organizableOrgsForPlayer(orgs, myId);
+  // Transfer targets: to an individual (you), or to any org you can organize for —
+  // excluding the current owner.
+  const transferToIndividual: OwnerRef | null = tournament.hostOrgId && myId ? { kind: 'individual', playerIds: [myId] } : null;
+  const transferOrgs = myOrgs.filter((o) => o.id !== tournament.hostOrgId);
+  async function transferOwnership(target: OwnerRef) {
+    await transferTournamentOwnership(tournament!.id, target, myId ?? undefined);
+    setShowTransfer(false);
+    setOwnTick((n) => n + 1);
+  }
 
   const TABS: Tab[] = canManageHosts ? ['Info', 'Settings', 'Matches', 'Stats', 'Teams'] : ['Info', 'Matches', 'Stats', 'Teams'];
   const activeTab: Tab = TABS.includes(tab) ? tab : 'Info';
@@ -282,6 +302,10 @@ export default function TournamentProfileScreen() {
               variant={following ? 'ghost' : 'primary'}
               onPress={() => toggle('tournament', tournament.id)}
             />
+
+            <Text style={textStyles.muted}>
+              Organized by {currentOwnerLabel}{creatorName ? ` · Created by ${creatorName}` : ''}
+            </Text>
 
             {tournament.structure && (
               <View style={{ gap: theme.spacing(1) }}>
@@ -409,6 +433,44 @@ export default function TournamentProfileScreen() {
                   ? 'Everyone playing in this tournament is reminded before kickoff on these times.'
                   : 'Each player is reminded using their own settings from Profile.'}
               </Text>
+            </Card>
+
+            {/* Ownership: who owns/created it, transfer, and the audit trail. */}
+            <Card style={{ gap: theme.spacing(2) }}>
+              <Text style={textStyles.h3}>🔑 Ownership</Text>
+              <Text style={textStyles.muted}>Organized by <Text style={textStyles.body}>{currentOwnerLabel}</Text>{creatorName ? ` · Created by ${creatorName}` : ''}</Text>
+
+              {(transferToIndividual || transferOrgs.length > 0) && (
+                showTransfer ? (
+                  <View style={{ gap: theme.spacing(2) }}>
+                    <Text style={textStyles.muted}>Transfer ownership to:</Text>
+                    {transferToIndividual && (
+                      <Button label="🙋 Me (individual)" variant="ghost" onPress={() => void transferOwnership(transferToIndividual)} />
+                    )}
+                    {transferOrgs.map((o) => (
+                      <Button key={o.id} label={`🏛️ ${o.name}`} variant="ghost" onPress={() => void transferOwnership({ kind: 'org', orgId: o.id })} />
+                    ))}
+                    <Text style={st.link} onPress={() => setShowTransfer(false)}>Cancel</Text>
+                    <Text style={textStyles.muted}>The creator stays on record; the tournament moves to the new owner and stays accessible if you leave.</Text>
+                  </View>
+                ) : (
+                  <Text style={st.link} onPress={() => setShowTransfer(true)}>Transfer ownership →</Text>
+                )
+              )}
+
+              {ownershipEvents.length > 0 && (
+                <View style={{ gap: theme.spacing(1), marginTop: theme.spacing(1) }}>
+                  <Text style={textStyles.muted}>History</Text>
+                  {ownershipEvents.map((e) => (
+                    <Text key={e.id} style={st.histLine}>
+                      {e.action === 'created'
+                        ? `Created${e.toName ? ` under ${e.toName}` : ''}${e.byName ? ` by ${e.byName}` : ''}`
+                        : `Transferred ${e.fromName ?? ''} → ${e.toName ?? ''}${e.byName ? ` by ${e.byName}` : ''}`}
+                      {` · ${e.at.slice(0, 10)}`}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </Card>
           </>
         )}
@@ -603,6 +665,8 @@ const st = StyleSheet.create({
   hostOrgIcon: { fontSize: 24 },
   tags: { flexDirection: 'row', gap: theme.spacing(2), flexWrap: 'wrap' },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
+  link: { color: theme.colors.primary, fontWeight: '700' },
+  histLine: { color: theme.colors.textMuted, fontSize: theme.font.small },
   section: { marginTop: theme.spacing(2) },
   groupHead: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(2) },
   oRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(1) },

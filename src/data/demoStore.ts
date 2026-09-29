@@ -26,6 +26,7 @@ import type {
   Organization,
   OrgMember,
   OrgRequest,
+  OwnershipEvent,
   MatchLineup,
   LineupSlot,
   MatchSquad,
@@ -802,6 +803,8 @@ export const demo = {
   organizations: withSeedOwners(SEED_ORGS),
   /** org membership requests — invites + join-requests (see migration 0020). */
   orgRequests: [] as OrgRequest[],
+  /** tournament ownership audit trail — created / transferred (see migration 0021). */
+  ownershipEvents: [] as OwnershipEvent[],
   matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],

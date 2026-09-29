@@ -495,10 +495,33 @@ export type SportFormat = Record<string, number | string | boolean>;
 /** How a tournament is decided based on team count. */
 export type TournamentStructure = 'league' | 'knockout' | 'league_knockout';
 
+/** A tournament's ownership at a point in time — either an individual (the host
+ *  player ids) or an organization. Ownership can be transferred between the two;
+ *  the creator is retained separately (Tournament.createdBy). */
+export type OwnerRef = { kind: 'individual'; playerIds: UUID[] } | { kind: 'org'; orgId: UUID };
+
+/** One entry in a tournament's ownership audit trail (created / transferred). Names
+ *  are snapshotted so history stays readable even if an org is later renamed/removed. */
+export interface OwnershipEvent {
+  id: UUID;
+  tournamentId: UUID;
+  action: 'created' | 'transferred';
+  fromKind?: 'individual' | 'org';
+  fromName?: string;
+  toKind: 'individual' | 'org';
+  toName?: string;
+  byPlayerId?: UUID;
+  byName?: string;
+  at: string;
+}
+
 export interface Tournament {
   id: UUID;
   name: string;
   hostName: string; // display name of the host (a person or an organization)
+  /** the player who originally created this tournament — retained even after the
+   *  tournament is transferred to an organization or another owner ("Created by"). */
+  createdBy?: UUID;
   /** when an organization hosts, its id — management & reminders span all its
    *  members. Absent for individually-hosted tournaments (see hostIds). */
   hostOrgId?: UUID;
