@@ -520,6 +520,17 @@ export type TournamentStructure = 'league' | 'knockout' | 'league_knockout';
 /** Who a tournament is contested by (see Tournament.participation). */
 export type TournamentParticipation = 'open' | 'inter_house' | 'school_team' | 'individual';
 
+/** A person explicitly assigned to officiate a specific tournament. The org-level
+ *  Scorer/Referee role is only ELIGIBILITY; this is the actual per-event duty (§9). */
+export type OfficialRole = 'scorer' | 'referee';
+export interface TournamentOfficial {
+  tournamentId: UUID;
+  playerId: UUID;
+  role: OfficialRole;
+  assignedBy?: UUID;
+  at?: string;
+}
+
 /** A tournament's ownership at a point in time — either an individual (the host
  *  player ids) or an organization. Ownership can be transferred between the two;
  *  the creator is retained separately (Tournament.createdBy). */
@@ -535,6 +546,20 @@ export interface OwnershipEvent {
   fromName?: string;
   toKind: 'individual' | 'org';
   toName?: string;
+  byPlayerId?: UUID;
+  byName?: string;
+  at: string;
+}
+
+/** A single entry in the activity/audit trail (spec §27) — a traceable record of a
+ *  meaningful change to an org or tournament (member joined/left/role-changed,
+ *  official assigned, ownership transferred…). Names are snapshotted for readability. */
+export interface ActivityEvent {
+  id: UUID;
+  scope: 'org' | 'tournament';
+  refId: UUID; // the org id or tournament id this is about
+  action: string; // e.g. 'member.joined' | 'member.left' | 'member.role' | 'official.assigned' | 'official.unassigned'
+  detail?: string; // human-readable summary
   byPlayerId?: UUID;
   byName?: string;
   at: string;

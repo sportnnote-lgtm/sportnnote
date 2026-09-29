@@ -23,6 +23,7 @@ import {
   getOrganization, getMyPlayerId, setOrgMembers, setOrgLogo, getTournaments, joinOrg,
   updateOrganization, getTeamsForOrg, createTeam, setTeamRoster,
   getOrgRequests, respondToOrgRequest, cancelOrgRequest, setOrgHouses,
+  changeOrgMemberRole, getActivity,
 } from '../data/repos';
 import {
   ORG_ROLES, ORG_ROLE_BLURB, COMMUNITY_TYPES, canManageOrg, canOrganizeEvents, membershipPeriod,
@@ -33,7 +34,7 @@ import {
   housesOf, currentHouse, assignHouse, houseColorOf,
 } from '../core/org';
 import { notify } from '../core/notifications';
-import type { Organization, OrgMember, OrgRole, OrgRequest, House, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
+import type { Organization, OrgMember, OrgRole, OrgRequest, House, ActivityEvent, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -52,6 +53,8 @@ export default function OrganizationScreen() {
   const [myId, setMyId] = useState<string | null>(null);
   const [events, setEvents] = useState<Tournament[]>([]);
   const [requests, setRequests] = useState<OrgRequest[]>([]); // pending join-requests + invites
+  const [activity, setActivity] = useState<ActivityEvent[]>([]); // audit trail
+  const [showHistory, setShowHistory] = useState(false);
   const [adding, setAdding] = useState(false);
   const [role, setRole] = useState<OrgRole>('Member');
   const [editingRole, setEditingRole] = useState<string | null>(null);
@@ -81,6 +84,7 @@ export default function OrganizationScreen() {
       // Tournaments this community hosts — the basis of its event hierarchy.
       getTournaments().then((ts) => on && setEvents(ts.filter((t) => t.hostOrgId === params.orgId)));
       getOrgRequests(params.orgId, 'pending').then((rs) => on && setRequests(rs));
+      getActivity('org', params.orgId).then((a) => on && setActivity(a));
       return () => {
         on = false;
       };
@@ -151,7 +155,7 @@ export default function OrganizationScreen() {
     if (!org) return;
     setActionError(null);
     try {
-      await joinOrg(org.id, playerId, role);
+      await joinOrg(org.id, playerId, role, myId ?? undefined);
     } catch (e) {
       // e.g. the player is the sole admin of another community of this category.
       setActionError(e instanceof Error ? e.message : 'Could not add member.');
@@ -213,7 +217,11 @@ export default function OrganizationScreen() {
       return;
     }
     setActionError(null);
-    save(org.members.map((m) => (m.playerId === playerId ? { ...m, role: newRole } : m)));
+    // Optimistic local update; persistence + audit via changeOrgMemberRole.
+    setOrg({ ...org, members: org.members.map((m) => (m.playerId === playerId ? { ...m, role: newRole } : m)) });
+    void changeOrgMemberRole(org.id, playerId, newRole, myId ?? undefined).then(() => {
+      void getActivity('org', org.id).then(setActivity);
+    });
     setEditingRole(null);
   };
   const removeMember = (playerId: string) => {
@@ -670,6 +678,18 @@ export default function OrganizationScreen() {
                 />
                 {(showPastMembers ? past : past.slice(0, SECTION_CAP)).map(renderMember)}
               </View>
+            )}
+
+            {/* Activity / audit trail (spec §27) — who changed what, when. */}
+            {canManage && activity.length > 0 && (
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={st.link} onPress={() => setShowHistory((v) => !v)}>🕓 History · {activity.length} {showHistory ? '▲' : '▼'}</Text>
+                {showHistory && (showHistory ? activity : activity.slice(0, 8)).map((a) => (
+                  <Text key={a.id} style={st.histLine}>
+                    {a.detail ?? a.action}{a.byName ? ` · by ${a.byName}` : ''} · {a.at.slice(0, 10)}
+                  </Text>
+                ))}
+              </Card>
             )}
           </>
         )}
@@ -1137,6 +1157,7 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   houseChip: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(2) },
   houseDot: { width: 10, height: 10, borderRadius: 5 },
+  histLine: { color: theme.colors.textMuted, fontSize: theme.font.small },
   roleBlurb: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   addRow: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   addText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },

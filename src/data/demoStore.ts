@@ -27,6 +27,8 @@ import type {
   OrgMember,
   OrgRequest,
   OwnershipEvent,
+  TournamentOfficial,
+  ActivityEvent,
   MatchLineup,
   LineupSlot,
   MatchSquad,
@@ -805,6 +807,10 @@ export const demo = {
   orgRequests: [] as OrgRequest[],
   /** tournament ownership audit trail — created / transferred (see migration 0021). */
   ownershipEvents: [] as OwnershipEvent[],
+  /** per-tournament scorer/referee assignments (see migration 0024). */
+  tournamentOfficials: [] as TournamentOfficial[],
+  /** general activity/audit trail for orgs & tournaments (see migration 0024). */
+  activityLog: [] as ActivityEvent[],
   matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],

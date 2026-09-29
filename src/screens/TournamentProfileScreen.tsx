@@ -21,10 +21,10 @@ import { getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents } from '../data/repos';
+import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial } from '../data/repos';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
-import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer } from '../core/org';
-import type { OwnershipEvent, OwnerRef } from '../core/types';
+import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
+import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole } from '../core/types';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
@@ -141,6 +141,10 @@ export default function TournamentProfileScreen() {
   const [ownTick, setOwnTick] = useState(0);
   const [showTransfer, setShowTransfer] = useState(false);
   useEffect(() => { getOwnershipEvents(params.tournamentId).then(setOwnershipEvents); }, [params.tournamentId, ownTick]);
+  // Officials (scorers/referees) assigned to this tournament.
+  const [officials, setOfficials] = useState<TournamentOfficial[]>([]);
+  const [offTick, setOffTick] = useState(0);
+  useEffect(() => { getTournamentOfficials(params.tournamentId).then(setOfficials); }, [params.tournamentId, offTick]);
   const bySportFilter = (list: typeof matches) =>
     matchSport === 'all' ? list : list.filter((m) => m.sport === matchSport);
   const upcomingMatches = useMemo(
@@ -222,6 +226,23 @@ export default function TournamentProfileScreen() {
     await transferTournamentOwnership(tournament!.id, target, myId ?? undefined);
     setShowTransfer(false);
     setOwnTick((n) => n + 1);
+  }
+
+  // Officials: who's assigned, and who's eligible to be assigned. Org role
+  // Scorer/Referee = eligibility; assignment here is the actual per-event duty (§9).
+  const assignedIds = (role: OfficialRole) => officials.filter((o) => o.role === role).map((o) => o.playerId);
+  const eligibleFor = (role: OfficialRole): string[] => {
+    const orgRole = role === 'scorer' ? 'Scorer' : 'Referee';
+    if (hostOrg) return hostOrg.members.filter((m) => !m.until && m.role === orgRole).map((m) => m.playerId);
+    return tournament!.hostIds ?? []; // individual host: the hosts can officiate
+  };
+  async function assignOfficial(pid: string, role: OfficialRole) {
+    await assignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
+    setOffTick((n) => n + 1);
+  }
+  async function removeOfficial(pid: string, role: OfficialRole) {
+    await unassignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
+    setOffTick((n) => n + 1);
   }
 
   const TABS: Tab[] = canManageHosts ? ['Info', 'Settings', 'Matches', 'Stats', 'Teams'] : ['Info', 'Matches', 'Stats', 'Teams'];
@@ -481,6 +502,42 @@ export default function TournamentProfileScreen() {
                   ))}
                 </View>
               )}
+            </Card>
+
+            {/* Scorers & referees assigned to this tournament (§9). */}
+            <Card style={{ gap: theme.spacing(3) }}>
+              <Text style={textStyles.h3}>🎽 Scorers & referees</Text>
+              <Text style={textStyles.muted}>
+                {hostOrg ? 'Assign from this organization’s eligible scorers & referees.' : 'Assign from the tournament’s hosts.'} They can then be given specific matches to score.
+              </Text>
+              {(['scorer', 'referee'] as OfficialRole[]).map((role) => {
+                const assigned = assignedIds(role);
+                const eligible = eligibleFor(role).filter((id) => !assigned.includes(id));
+                return (
+                  <View key={role} style={{ gap: theme.spacing(1) }}>
+                    <Text style={st.groupHead}>{role === 'scorer' ? 'Scorers' : 'Referees'}</Text>
+                    {assigned.length === 0 && <Text style={textStyles.muted}>None assigned yet.</Text>}
+                    {assigned.map((id) => (
+                      <View key={id} style={st.entryRow}>
+                        <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{playerName(id) ?? 'Player'}</Text>
+                        <Text style={st.link} onPress={() => void removeOfficial(id, role)}>Remove</Text>
+                      </View>
+                    ))}
+                    {eligible.length > 0 && (
+                      <View style={st.chips}>
+                        {eligible.map((id) => (
+                          <SelectChip key={id} label={`+ ${playerName(id) ?? 'Player'}`} active={false} onPress={() => void assignOfficial(id, role)} />
+                        ))}
+                      </View>
+                    )}
+                    {eligible.length === 0 && assigned.length === 0 && (
+                      <Text style={textStyles.muted}>
+                        {hostOrg ? `No one has the ${role === 'scorer' ? 'Scorer' : 'Referee'} role in ${hostOrg.name} yet — set it in the community’s Members tab.` : 'Add hosts to assign them.'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
             </Card>
           </>
         )}

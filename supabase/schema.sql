@@ -238,6 +238,28 @@ create table if not exists tournaments (
   created_at  timestamptz not null default now()
 );
 
+-- Per-tournament officials (§9) — actual scorer/referee assignments (migration 0024).
+create table if not exists tournament_officials (
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  player_id     uuid not null references players(id) on delete cascade,
+  role          text not null check (role in ('scorer','referee')),
+  assigned_by   uuid references players(id) on delete set null,
+  at            timestamptz not null default now(),
+  primary key (tournament_id, player_id, role)
+);
+
+-- General activity/audit trail for org & tournament changes (migration 0024).
+create table if not exists activity_log (
+  id           uuid primary key default uuid_generate_v4(),
+  scope        text not null check (scope in ('org','tournament')),
+  ref_id       uuid not null,
+  action       text not null,
+  detail       text,
+  by_player_id uuid references players(id) on delete set null,
+  by_name      text,
+  at           timestamptz not null default now()
+);
+
 -- Ownership audit trail: created / transferred, with snapshotted names (migration 0021).
 create table if not exists tournament_ownership_events (
   id            uuid primary key default uuid_generate_v4(),

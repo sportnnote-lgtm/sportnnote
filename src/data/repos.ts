@@ -77,6 +77,9 @@ import type {
   Tournament,
   OwnershipEvent,
   OwnerRef,
+  TournamentOfficial,
+  OfficialRole,
+  ActivityEvent,
   TournamentCategory,
   TournamentEntry,
   TournamentEntryStatus,
@@ -2207,6 +2210,66 @@ export async function getOwnershipEvents(tournamentId: string): Promise<Ownershi
   return (data ?? []).map(toOwnershipEvent);
 }
 
+/* ---------------- Activity log (audit) + tournament officials --------------- */
+
+/** Append an entry to the activity/audit trail (best-effort — never throws). */
+export async function logActivity(e: { scope: 'org' | 'tournament'; refId: string; action: string; detail?: string; byPlayerId?: string; byName?: string }): Promise<void> {
+  try {
+    if (!isSupabaseConfigured || !supabase) {
+      demo.activityLog.push({ ...e, id: genId('act'), at: new Date().toISOString() });
+      return;
+    }
+    await supabase.from('activity_log').insert({
+      scope: e.scope, ref_id: e.refId, action: e.action, detail: e.detail ?? null,
+      by_player_id: e.byPlayerId ?? null, by_name: e.byName ?? null,
+    });
+  } catch { /* audit is non-critical */ }
+}
+
+/** The activity trail for an org or tournament (newest first). */
+export async function getActivity(scope: 'org' | 'tournament', refId: string): Promise<ActivityEvent[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    return demo.activityLog.filter((a) => a.scope === scope && a.refId === refId).sort((a, b) => b.at.localeCompare(a.at));
+  }
+  const { data } = await supabase.from('activity_log').select('*').eq('scope', scope).eq('ref_id', refId).order('at', { ascending: false });
+  return (data ?? []).map((r: any) => ({ id: r.id, scope: r.scope, refId: r.ref_id, action: r.action, detail: r.detail ?? undefined, byPlayerId: r.by_player_id ?? undefined, byName: r.by_name ?? undefined, at: r.at }));
+}
+
+const toOfficial = (r: any): TournamentOfficial => ({ tournamentId: r.tournament_id, playerId: r.player_id, role: r.role, assignedBy: r.assigned_by ?? undefined, at: r.at ?? undefined });
+
+/** The scorers & referees assigned to a tournament. */
+export async function getTournamentOfficials(tournamentId: string): Promise<TournamentOfficial[]> {
+  if (!isSupabaseConfigured || !supabase) return demo.tournamentOfficials.filter((o) => o.tournamentId === tournamentId);
+  const { data } = await supabase.from('tournament_officials').select('*').eq('tournament_id', tournamentId);
+  return (data ?? []).map(toOfficial);
+}
+
+/** Assign a person to officiate a tournament (scorer/referee). Idempotent + audited. */
+export async function assignTournamentOfficial(tournamentId: string, playerId: string, role: OfficialRole, byPlayerId?: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    if (!demo.tournamentOfficials.some((o) => o.tournamentId === tournamentId && o.playerId === playerId && o.role === role)) {
+      demo.tournamentOfficials.push({ tournamentId, playerId, role, assignedBy: byPlayerId, at: new Date().toISOString() });
+    }
+  } else {
+    await supabase.from('tournament_officials').upsert({ tournament_id: tournamentId, player_id: playerId, role, assigned_by: byPlayerId ?? null }, { onConflict: 'tournament_id,player_id,role' });
+  }
+  const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
+  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+  await logActivity({ scope: 'tournament', refId: tournamentId, action: 'official.assigned', detail: `${who} assigned as ${role}`, byPlayerId, byName });
+}
+
+/** Remove a tournament official assignment. Audited. */
+export async function unassignTournamentOfficial(tournamentId: string, playerId: string, role: OfficialRole, byPlayerId?: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.tournamentOfficials = demo.tournamentOfficials.filter((o) => !(o.tournamentId === tournamentId && o.playerId === playerId && o.role === role));
+  } else {
+    await supabase.from('tournament_officials').delete().eq('tournament_id', tournamentId).eq('player_id', playerId).eq('role', role);
+  }
+  const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
+  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+  await logActivity({ scope: 'tournament', refId: tournamentId, action: 'official.unassigned', detail: `${who} removed as ${role}`, byPlayerId, byName });
+}
+
 /** Editable tournament fields (host/organizer are fixed at creation; co-hosts and
  *  divisions are managed on the tournament page). */
 export interface TournamentPatch {
@@ -2416,7 +2479,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
  *  community ends any other *active* membership of the same category (sets its
  *  `until` to today, moving it to the player's "past communities"). Memberships
  *  in communities of *different* categories are left untouched. */
-export async function joinOrg(orgId: string, playerId: string, role: OrgRole = 'Member'): Promise<void> {
+export async function joinOrg(orgId: string, playerId: string, role: OrgRole = 'Member', byPlayerId?: string): Promise<void> {
   const orgs = await getOrganizations();
   const target = orgs.find((o) => o.id === orgId);
   if (!target) return;
@@ -2448,11 +2511,14 @@ export async function joinOrg(orgId: string, playerId: string, role: OrgRole = '
       )
     : [...target.members, { playerId, role, since: today }];
   await setOrgMembers(orgId, next);
+  const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
+  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+  await logActivity({ scope: 'org', refId: orgId, action: exists ? 'member.role' : 'member.joined', detail: exists ? `${who} → ${role}` : `${who} joined as ${role}`, byPlayerId, byName });
 }
 
 /** End a player's active membership in a community (moves it to "past"). A sole
  *  admin can't leave until another admin is appointed. */
-export async function leaveOrg(orgId: string, playerId: string): Promise<void> {
+export async function leaveOrg(orgId: string, playerId: string, byPlayerId?: string): Promise<void> {
   const org = await getOrganization(orgId);
   if (!org) return;
   if (isSoleActiveOwner(org, playerId)) {
@@ -2462,6 +2528,21 @@ export async function leaveOrg(orgId: string, playerId: string): Promise<void> {
     orgId,
     org.members.map((m) => (m.playerId === playerId && !m.until ? { ...m, until: todayISO() } : m))
   );
+  const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
+  await logActivity({ scope: 'org', refId: orgId, action: 'member.left', detail: `${who} left`, byPlayerId: byPlayerId ?? playerId });
+}
+
+/** Change a member's role (audited). Owner-invariant is still enforced in
+ *  setOrgMembers; callers should apply their own UI guards first. */
+export async function changeOrgMemberRole(orgId: string, playerId: string, role: OrgRole, byPlayerId?: string): Promise<void> {
+  const org = await getOrganization(orgId);
+  if (!org) return;
+  const prev = org.members.find((m) => m.playerId === playerId)?.role;
+  if (prev === role) return;
+  await setOrgMembers(orgId, org.members.map((m) => (m.playerId === playerId ? { ...m, role } : m)));
+  const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
+  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+  await logActivity({ scope: 'org', refId: orgId, action: 'member.role', detail: `${who}: ${prev ?? '—'} → ${role}`, byPlayerId, byName });
 }
 
 /* --------------------- Organization membership requests -------------------- */
@@ -2536,7 +2617,7 @@ export async function respondToOrgRequest(requestId: string, accept: boolean, by
     req = data ? toOrgRequest(data) : undefined;
   }
   if (!req || req.status !== 'pending') return;
-  if (accept) await joinOrg(req.orgId, req.playerId, req.role);
+  if (accept) await joinOrg(req.orgId, req.playerId, req.role, byPlayerId);
   const status: OrgRequest['status'] = accept ? 'accepted' : 'rejected';
   if (!isSupabaseConfigured || !supabase) {
     req.status = status; req.decidedAt = now; req.decidedBy = byPlayerId;
