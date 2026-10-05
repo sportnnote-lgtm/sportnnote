@@ -13,11 +13,16 @@
  *   POST { question: string, context: string, appVersion?: string }
  *     → 200 { answer: string, resolved: boolean }
  *
+ * Abuse guards (migration 0025): signed-in users only (the anon key ships in
+ * the app, so anyone could otherwise spend the API budget), 20 questions per user
+ * per hour, and length caps on question/context.
+ *
  * Deploy:  supabase functions deploy support-assistant
  * Secret:  supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
  *   (SUPABASE_URL / SUPABASE_ANON_KEY are injected automatically.)
  */
 import Anthropic from 'npm:@anthropic-ai/sdk@0.68.0';
+import { rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
 
 // Support answering is a short, grounded task — Opus 4.8 is the default; swap to
 // 'claude-haiku-4-5' here if you prefer lower latency/cost for the support bot.
@@ -55,6 +60,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
+  const caller = await requireUser(req);
+  if (caller instanceof Response) return caller;
+  if (!(await rateLimit('support-assistant', caller.user.id, 20, 3600))) return tooMany();
+
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 503);
 
@@ -64,8 +73,8 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: 'invalid JSON' }, 400);
   }
-  const question = typeof body.question === 'string' ? body.question.trim() : '';
-  const context = typeof body.context === 'string' ? body.context : '';
+  const question = typeof body.question === 'string' ? body.question.trim().slice(0, 1000) : '';
+  const context = typeof body.context === 'string' ? body.context.slice(0, 12000) : '';
   if (!question) return json({ error: 'question is required' }, 400);
 
   const client = new Anthropic({ apiKey });

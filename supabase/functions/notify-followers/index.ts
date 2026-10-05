@@ -14,10 +14,19 @@
  *   3. collects their push tokens,
  *   4. sends a batch to https://exp.host/--/api/v2/push/send.
  *
+ * Only the database webhook may call this (migration 0025): it must send the
+ * header `x-webhook-secret: <WEBHOOK_SECRET>` (add it under the webhook's HTTP
+ * Headers). Without the secret configured the function refuses every call, so a
+ * stranger can't push fake "stat" alerts to a player's followers.
+ *
  * Deploy:  supabase functions deploy notify-followers
- * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are injected automatically.
+ * Secrets: WEBHOOK_SECRET (set it: supabase secrets set WEBHOOK_SECRET=<random>);
+ *          SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are injected automatically.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { safeEqual } from '../_shared/guard.ts';
+
+const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET') ?? '';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -32,6 +41,10 @@ interface StatLineRecord {
 }
 
 Deno.serve(async (req) => {
+  if (!WEBHOOK_SECRET) return new Response('WEBHOOK_SECRET not configured', { status: 503 });
+  if (!safeEqual(req.headers.get('x-webhook-secret') ?? '', WEBHOOK_SECRET)) {
+    return new Response('forbidden', { status: 403 });
+  }
   const { record } = (await req.json()) as { record: StatLineRecord };
   if (!record?.player_id) return new Response('no record', { status: 200 });
 

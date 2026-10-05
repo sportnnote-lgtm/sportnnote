@@ -30,7 +30,9 @@ export default function JoinClubScreen() {
     setError(null); setInvite(null);
     if (!c) return setError('Enter an invite code.');
     setBusy(true);
-    const inv = await getClubInvite(c);
+    let inv: Awaited<ReturnType<typeof getClubInvite>> = null;
+    try { inv = await getClubInvite(c); }
+    catch (e) { setBusy(false); return setError((e as Error).message); }
     setBusy(false);
     if (!inv) return setError('That code isn’t valid.');
     setInvite(inv);
@@ -48,6 +50,8 @@ export default function JoinClubScreen() {
       const clubId = await claimClubInvite(invite.token, myId);
       if (!clubId) { setError('Could not join — try again.'); return; }
       nav.navigate('ClubHome', { clubId });
+    } catch (e) {
+      setError((e as Error).message);
     } finally { setBusy(false); }
   }
 

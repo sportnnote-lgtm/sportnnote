@@ -2,7 +2,7 @@
  *  league table + statistics rail, and participating teams. For a single-sport
  *  tournament the sport selector is skipped and its table shown directly. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -223,7 +223,12 @@ export default function TournamentProfileScreen() {
   const transferToIndividual: OwnerRef | null = tournament.hostOrgId && myId ? { kind: 'individual', playerIds: [myId] } : null;
   const transferOrgs = myOrgs.filter((o) => o.id !== tournament.hostOrgId);
   async function transferOwnership(target: OwnerRef) {
-    await transferTournamentOwnership(tournament!.id, target, myId ?? undefined);
+    try {
+      await transferTournamentOwnership(tournament!.id, target, myId ?? undefined);
+    } catch (e) {
+      Alert.alert('Couldn’t transfer ownership', e instanceof Error ? e.message : 'Please try again.');
+      return;
+    }
     setShowTransfer(false);
     setOwnTick((n) => n + 1);
   }

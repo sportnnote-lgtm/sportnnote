@@ -146,8 +146,14 @@ export default function OrganizationScreen() {
 
   const save = (members: Organization['members']) => {
     if (!org) return;
+    const prev = org;
     setOrg({ ...org, members });
-    void setOrgMembers(org.id, members);
+    setActionError(null);
+    // Optimistic; roll back + explain if the server refuses (e.g. no permission).
+    setOrgMembers(org.id, members).catch((e) => {
+      setOrg(prev);
+      setActionError(e instanceof Error ? e.message : 'Could not save the change.');
+    });
   };
   // Adding goes through joinOrg so the one-active-community-per-category rule is
   // enforced; then we re-read the org to reflect the change.

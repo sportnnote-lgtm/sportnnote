@@ -13,6 +13,60 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-05 — Security hardening: scoped writes + edge-function guards (migration 0025) · CODE DONE (needs migration + deploy)
+
+The security review found that, because the anon key ships in the APK, "any signed-in user"
+policies were open to anyone. Sections 2 (blanket writes) and 3 (edge functions) are now
+fixed. Section 1 (personal-data visibility) is still pending a design decision.
+
+**Database** (`supabase/migrations/20261006120000_security_hardening.sql`):
+- **Privilege escalation closed.** Clients can no longer get `support`/`admin`, either via
+  sign-up metadata or by updating their own profile.
+- **Player verification flags are server/reviewer-only.** A DOB or guardian change voids an
+  approval. Claiming a provisional player needs a matching phone number or confirmed email,
+  and only the creator can edit an unclaimed provisional player.
+- **New authority helpers:** `has_org_role`, `can_manage_tournament` (now includes
+  org-hosted events — previously broken), `can_manage_team/club/match_side`,
+  `can_edit_player`.
+- **Every catalog/org/club/tournament table's policies were rewritten.** BEFORE triggers
+  handle the column-transition rules: org membership lifecycle (Owner never zero), entry
+  accept-only, dispute sides, lineup sides, team roster-only edits by scorers.
+- **Invites:** random server-minted tokens, rate-limited `get_*`/`claim_*` RPCs, and
+  captain invites are single-use.
+- **Audit trails** are insert-only with the actor stamped server-side. Ownership transfer
+  is an atomic RPC that also clears the old owner's `organizer_id` control.
+- **Other:** `rate_limit_hit()` ledger; `push_allowed_targets()` relationship check.
+
+**Edge functions** (`_shared/guard.ts` added):
+- `push-send`: sign-in required, relationship-checked recipients, caps and link-stripping.
+- `support-assistant`, `support-escalate`, `verification-submit`: sign-in required and
+  rate-limited. `verification-submit` also checks ownership.
+- `send-invite`: the server composes the email and only SportnNote links are allowed.
+- `notify-followers`: requires `x-webhook-secret`. `notify-upcoming`: cron auth only.
+
+**App:**
+- Invite create/resolve/claim now use the RPCs, and the join screens surface server errors.
+- `setOrgMembers` writes only the changed rows; the org console rolls back and explains a
+  refused change.
+- Ownership transfer uses the RPC.
+- `sendInviteEmail` sends structured fields.
+- Fixed a pre-existing bug: `createOrgRequest` upserted against a partial unique index,
+  which Postgres rejects. Verified, so every org invite and join request would have failed
+  on live.
+
+**Verified:**
+- Schema + all 25 migrations load into a real Postgres (PGlite).
+- 102 attacker/legitimate scenarios pass.
+- The migration is idempotent.
+- `tsc` is clean and 292/292 tests pass.
+- The changed edge functions pass `deno check`.
+
+Deploy steps are in `docs/security-hardening.md`.
+**Pending:** run 0025 on live (after 0012–0024), set `WEBHOOK_SECRET`, deploy 7 functions,
+ship the APK.
+
+---
+
 ### 2026-09-29 — Individuals · Orgs · Membership · Roles · Ownership (M1) · SHIPPED
 
 Foundational refactor of the person↔organization↔role model (a big multi-stage spec).

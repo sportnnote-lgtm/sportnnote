@@ -98,7 +98,11 @@ export async function sendInviteEmail(to: string, opts: { name: string; inviterN
   const text = inviteMessage(opts);
   if (supabase) {
     try {
-      const { data, error } = await supabase.functions.invoke('send-invite', { body: { to, subject, text } });
+      // The server composes the email from a fixed template (so the function can't
+      // be used to send arbitrary text from our domain); we send only the parts.
+      const { data, error } = await supabase.functions.invoke('send-invite', {
+        body: { to, name: opts.name, link: opts.link, context: opts.context ?? '', role: opts.role ?? 'co-host' },
+      });
       if (!error && (data as { delivered?: boolean } | null)?.delivered) return true;
     } catch {
       // fall through to mailto

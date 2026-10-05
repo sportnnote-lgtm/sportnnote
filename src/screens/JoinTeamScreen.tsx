@@ -31,7 +31,9 @@ export default function JoinTeamScreen() {
     setInvite(null);
     if (!code.trim()) return setError('Enter an invite code.');
     setBusy(true);
-    const inv = await getInvite(code);
+    let inv: TeamInvite | null = null;
+    try { inv = await getInvite(code); }
+    catch (e) { setBusy(false); return setError((e as Error).message); }
     setBusy(false);
     if (!inv) return setError('That code isn’t valid.');
     setInvite(inv);
@@ -40,9 +42,11 @@ export default function JoinTeamScreen() {
   async function claim() {
     if (!invite) return;
     setBusy(true);
-    const ok = await claimInvite(invite.token, profile?.id);
+    let ok: TeamInvite | null = null;
+    try { ok = await claimInvite(invite.token, profile?.id); }
+    catch (e) { setBusy(false); return setError((e as Error).message); }
     setBusy(false);
-    if (!ok) return setError('Could not claim — try again.');
+    if (!ok) return setError('That code was already used or isn’t valid any more — ask for a new one.');
     captainStore.add(invite.teamId);
     nav.navigate('Squad', { teamId: invite.teamId });
   }

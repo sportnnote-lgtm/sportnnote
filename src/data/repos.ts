@@ -609,38 +609,48 @@ export async function getAllStatLines(): Promise<StatLine[]> {
 
 /** Create a shareable invite token for a captain/coach to claim a team. */
 export async function createInvite(teamId: string, teamName: string, role: 'captain' | 'coach' = 'captain'): Promise<TeamInvite> {
-  const token = nextInviteToken();
-  const invite: TeamInvite = { token, teamId, teamName, role };
   if (!isSupabaseConfigured || !supabase) {
+    const invite: TeamInvite = { token: nextInviteToken(), teamId, teamName, role };
     addDemoInvite(invite);
     return invite;
   }
-  await supabase.from('team_invites').insert({ token, team_id: teamId, role });
-  return invite;
+  // Live: the server mints a random, unguessable token and checks the caller
+  // manages the team (migration 0025).
+  const { data, error } = await supabase.rpc('create_team_invite', { p_team: teamId, p_role: role });
+  if (error || !data) throw new Error(error?.message ?? 'Could not create the invite');
+  return { token: data as string, teamId, teamName, role };
 }
 
-/** Resolve an invite token to its team (or null if the code is invalid). */
+/** Resolve an invite token to its team (or null if the code is invalid). Live
+ *  lookups are rate-limited server-side, so this throws once a user hits the cap. */
 export async function getInvite(token: string): Promise<TeamInvite | null> {
   const t = token.trim().toUpperCase();
   if (!isSupabaseConfigured || !supabase) return demo.invites[t] ?? null;
-  const { data } = await supabase.from('team_invites').select('token, team_id, role').eq('token', t).maybeSingle();
-  if (!data) return null;
-  const team = await getTeamSummary(data.team_id as string);
-  return { token: t, teamId: data.team_id as string, teamName: team?.name ?? 'Team', role: data.role as 'captain' | 'coach' };
+  const { data, error } = await supabase.rpc('get_team_invite', { p_token: t });
+  if (error) throw new Error(error.message);
+  const row = (data as { team_id: string; role: 'captain' | 'coach' }[] | null)?.[0];
+  if (!row) return null;
+  const team = await getTeamSummary(row.team_id);
+  return { token: t, teamId: row.team_id, teamName: team?.name ?? 'Team', role: row.role };
 }
 
-/** Claim an invite: record the signed-in user as captain of the team. */
+/** Claim an invite: record the signed-in user as captain/coach of the team. Live
+ *  invites are single-use — the server consumes the token as it records the claim. */
 export async function claimInvite(token: string, profileId?: string): Promise<TeamInvite | null> {
-  const invite = await getInvite(token);
-  if (!invite) return null;
   if (!isSupabaseConfigured || !supabase) {
+    const invite = await getInvite(token);
+    if (!invite) return null;
     addDemoCaptainTeam(invite.teamId);
     return invite;
   }
-  if (profileId) {
-    await supabase.from('team_staff').upsert({ team_id: invite.teamId, profile_id: profileId, role: invite.role });
-  }
-  return invite;
+  if (!profileId) return null;
+  const t = token.trim().toUpperCase();
+  const { data, error } = await supabase.rpc('claim_team_invite', { p_token: t });
+  if (error) throw new Error(error.message);
+  const row = (data as { team_id: string; role: 'captain' | 'coach' }[] | null)?.[0];
+  if (!row) return null;
+  const team = await getTeamSummary(row.team_id);
+  return { token: t, teamId: row.team_id, teamName: team?.name ?? 'Team', role: row.role };
 }
 
 /** Teams the signed-in user captains. */
@@ -2190,15 +2200,22 @@ export async function transferTournamentOwnership(tournamentId: string, target: 
       d.hostIds = target.kind === 'individual' ? target.playerIds : [];
       d.hostName = to.name;
     }
-  } else {
-    await supabase.from('tournaments').update({
-      host_org_id: target.kind === 'org' ? target.orgId : null,
-      host_ids: target.kind === 'individual' ? target.playerIds : [],
-      host_name: to.name,
-    }).eq('id', tournamentId);
+    const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
+    await insertOwnershipEvent({ tournamentId, action: 'transferred', fromKind: from.kind, fromName: from.name, toKind: to.kind, toName: to.name, byPlayerId, byName });
+    return;
   }
-  const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
-  await insertOwnershipEvent({ tournamentId, action: 'transferred', fromKind: from.kind, fromName: from.name, toKind: to.kind, toName: to.name, byPlayerId, byName });
+  // Live: one atomic server call moves ownership AND writes the audit row (the
+  // actor is stamped server-side). It also clears the previous owner's implicit
+  // organizer control, so a transfer really hands the tournament over.
+  const { error } = await supabase.rpc('transfer_tournament_ownership', {
+    p_tid: tournamentId,
+    p_org: target.kind === 'org' ? target.orgId : null,
+    p_player_ids: target.kind === 'individual' ? target.playerIds : [],
+    p_host_name: to.name,
+    p_from_kind: from.kind,
+    p_from_name: from.name,
+  });
+  if (error) throw new Error(error.message);
 }
 
 /** A tournament's ownership audit trail (oldest first). */
@@ -2440,36 +2457,46 @@ export async function getOrganization(id: string): Promise<Organization | null> 
   return toOrganization(data as any, byOrg.get(id) ?? []);
 }
 
-/** Replace an org's member list (add/remove/role changes). Writes to the
- *  org_members join table: upsert the given rows, then delete any rows for this
- *  org no longer present. Preserves the "set the whole list" semantics callers use. */
+/** Replace an org's member list (add/remove/role changes). Keeps the "set the
+ *  whole list" semantics callers use, but only WRITES the rows that actually
+ *  changed (plus deletes for removed members): the server authorises each row
+ *  change separately (migration 0025), so e.g. a member leaving may end their own
+ *  row without touching anyone else's. Throws if the server rejects a change. */
 export async function setOrgMembers(orgId: string, members: Organization['members']): Promise<void> {
+  const current = (await getOrganization(orgId))?.members ?? [];
   // Invariant (enforced here so NO caller/UI can violate it): an org that already
   // has an Owner must never be reduced to zero active Owners.
-  const nextOwners = members.filter((m) => !m.until && m.role === 'Owner').length;
-  if (nextOwners === 0) {
-    const current = await getOrganization(orgId);
-    if (current?.members.some((m) => !m.until && m.role === 'Owner')) {
-      throw new Error('An organization must always have at least one owner. Make someone else an owner first.');
-    }
+  const isActiveOwner = (m: Organization['members'][number]) => !m.until && m.role === 'Owner';
+  if (!members.some(isActiveOwner) && current.some(isActiveOwner)) {
+    throw new Error('An organization must always have at least one owner. Make someone else an owner first.');
   }
   if (!isSupabaseConfigured || !supabase) {
     demoSetOrgMembers(orgId, members);
     return;
   }
-  const rows = members.map((m) => ({
+  const toRow = (m: Organization['members'][number]) => ({
     org_id: orgId, player_id: m.playerId, role: m.role,
     since: m.since ?? null, until: m.until ?? null, grades: m.grades ?? [], houses: m.houses ?? [],
-  }));
+  });
+  const before = new Map(current.map((m) => [m.playerId, JSON.stringify(toRow(m))] as const));
+  const changed = members.filter((m) => before.get(m.playerId) !== JSON.stringify(toRow(m)));
+  // New Owners first, so an owner hand-over never passes through a zero-owner state.
+  changed.sort((a, b) => Number(isActiveOwner(b)) - Number(isActiveOwner(a)));
+  const rows = changed.map(toRow);
   if (rows.length) {
-    // houses needs migration 0022 — retry without it if the column isn't there yet.
     const up = await supabase.from('org_members').upsert(rows, { onConflict: 'org_id,player_id' });
-    if (up.error) await supabase.from('org_members').upsert(rows.map(({ houses, ...r }) => r), { onConflict: 'org_id,player_id' });
+    if (up.error) {
+      // houses needs migration 0022 — retry without it if the column isn't there yet.
+      const retry = await supabase.from('org_members').upsert(rows.map(({ houses, ...r }) => r), { onConflict: 'org_id,player_id' });
+      if (retry.error) throw new Error(retry.error.message);
+    }
   }
-  const keep = members.map((m) => m.playerId);
-  let del = supabase.from('org_members').delete().eq('org_id', orgId);
-  if (keep.length) del = del.not('player_id', 'in', `(${keep.join(',')})`);
-  await del;
+  const keep = new Set(members.map((m) => m.playerId));
+  const removed = current.filter((m) => !keep.has(m.playerId)).map((m) => m.playerId);
+  if (removed.length) {
+    const { error } = await supabase.from('org_members').delete().eq('org_id', orgId).in('player_id', removed);
+    if (error) throw new Error(error.message);
+  }
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -2570,14 +2597,20 @@ async function createOrgRequest(args: { orgId: string; playerId: string; directi
     demo.orgRequests.push(req);
     return req;
   }
-  const { data, error } = await supabase
-    .from('org_requests')
-    .upsert(
-      { org_id: args.orgId, player_id: args.playerId, direction: args.direction, role: args.role, status: 'pending', created_by: args.by ?? null, message: args.message ?? null },
-      { onConflict: 'org_id,player_id,direction', ignoreDuplicates: false },
-    )
-    .select('*')
-    .single();
+  // Uniqueness is a PARTIAL index (one *pending* row per org/person/direction),
+  // which Postgres can't use as an ON CONFLICT target — so refresh an existing
+  // pending row, else insert a new one.
+  const { data: existing } = await supabase
+    .from('org_requests').select('id')
+    .eq('org_id', args.orgId).eq('player_id', args.playerId).eq('direction', args.direction).eq('status', 'pending')
+    .maybeSingle();
+  const { data, error } = existing
+    ? await supabase.from('org_requests')
+        .update({ role: args.role, message: args.message ?? null })
+        .eq('id', existing.id).select('*').single()
+    : await supabase.from('org_requests')
+        .insert({ org_id: args.orgId, player_id: args.playerId, direction: args.direction, role: args.role, status: 'pending', created_by: args.by ?? null, message: args.message ?? null })
+        .select('*').single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create the request');
   return toOrgRequest(data);
 }
@@ -2950,31 +2983,42 @@ export async function setClubMemberRole(clubId: string, playerId: string, role: 
 
 /** Create a shareable invite token that lets someone join this club as a member. */
 export async function createClubInvite(clubId: string): Promise<ClubInvite> {
-  const token = nextInviteToken();
   const club = await getClub(clubId);
-  const invite: ClubInvite = { token, clubId, clubName: club?.name };
-  if (!isSupabaseConfigured || !supabase) { demo.clubInvites[token] = invite; return invite; }
-  await supabase.from('club_invites').insert({ token, club_id: clubId });
-  return invite;
+  if (!isSupabaseConfigured || !supabase) {
+    const invite: ClubInvite = { token: nextInviteToken(), clubId, clubName: club?.name };
+    demo.clubInvites[invite.token] = invite;
+    return invite;
+  }
+  // Live: server-minted random token; only the club's admins may create one.
+  const { data, error } = await supabase.rpc('create_club_invite', { p_club: clubId });
+  if (error || !data) throw new Error(error?.message ?? 'Could not create the invite');
+  return { token: data as string, clubId, clubName: club?.name };
 }
 
-/** Resolve a club invite token (or null if invalid). */
+/** Resolve a club invite token (or null if invalid). Rate-limited server-side. */
 export async function getClubInvite(token: string): Promise<ClubInvite | null> {
   const t = token.trim().toUpperCase();
   if (!isSupabaseConfigured || !supabase) return demo.clubInvites[t] ?? null;
-  const { data } = await supabase.from('club_invites').select('token, club_id').eq('token', t).maybeSingle();
+  const { data, error } = await supabase.rpc('get_club_invite', { p_token: t });
+  if (error) throw new Error(error.message);
   if (!data) return null;
-  const club = await getClub(data.club_id as string);
-  return { token: t, clubId: data.club_id as string, clubName: club?.name };
+  const club = await getClub(data as string);
+  return { token: t, clubId: data as string, clubName: club?.name };
 }
 
 /** Redeem a club invite: add the given player to the club as a member. Returns the
  *  club id joined, or null if the code was invalid. */
 export async function claimClubInvite(token: string, playerId: string): Promise<string | null> {
-  const invite = await getClubInvite(token);
-  if (!invite || !playerId) return null;
-  await addClubMember(invite.clubId, playerId);
-  return invite.clubId;
+  if (!playerId) return null;
+  if (!isSupabaseConfigured || !supabase) {
+    const invite = await getClubInvite(token);
+    if (!invite) return null;
+    await addClubMember(invite.clubId, playerId);
+    return invite.clubId;
+  }
+  const { data, error } = await supabase.rpc('claim_club_invite', { p_token: token.trim().toUpperCase(), p_player: playerId });
+  if (error) throw new Error(error.message);
+  return (data as string | null) ?? null;
 }
 
 /* --------------------------- Club sports & profiles ----------------------- */

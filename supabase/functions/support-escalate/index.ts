@@ -22,6 +22,7 @@
  *   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -56,23 +57,32 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
-  let body: { question?: unknown; tried?: unknown; handle?: unknown; appVersion?: unknown };
+  // Signed-in users only (Help & Support is behind sign-in), 5 cases per hour —
+  // otherwise anyone holding the app's anon key could flood the support inbox.
+  const caller = await requireUser(req);
+  if (caller instanceof Response) return caller;
+  if (!(await rateLimit('support-escalate', caller.user.id, 5, 3600))) return tooMany();
+
+  let body: { question?: unknown; tried?: unknown; appVersion?: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ error: 'invalid JSON' }, 400);
   }
-  const question = typeof body.question === 'string' ? body.question.trim() : '';
+  const question = typeof body.question === 'string' ? body.question.trim().slice(0, 4000) : '';
   if (!question) return json({ error: 'question is required' }, 400);
-  const tried = typeof body.tried === 'string' ? body.tried : null;
-  const handle = typeof body.handle === 'string' ? body.handle : null;
-  const appVersion = typeof body.appVersion === 'string' ? body.appVersion : null;
+  const tried = typeof body.tried === 'string' ? body.tried.slice(0, 4000) : null;
+  const appVersion = typeof body.appVersion === 'string' ? body.appVersion.slice(0, 40) : null;
 
   // 1) Record the case (service role bypasses RLS; the table is support-only).
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+  // The account handle comes from the caller's own profile, never the request
+  // body (so a case can't be filed in someone else's name).
+  const { data: prof } = await supabase.from('profiles').select('handle').eq('id', caller.user.id).maybeSingle();
+  const handle = (prof?.handle as string | undefined) ?? null;
   const { data, error } = await supabase
     .from('support_cases')
     .insert({ question, tried, handle, app_version: appVersion })

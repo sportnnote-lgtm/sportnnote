@@ -22,14 +22,20 @@
  *        ) $$
  *   );
  *
+ * Only the cron job may call this (migration 0025): it must send either
+ * `Authorization: Bearer <SERVICE_ROLE_KEY>` (as in the snippet above) or
+ * `x-cron-secret: <CRON_SECRET>`. Anything else is refused.
+ *
  * Deploy:  supabase functions deploy notify-upcoming
- * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are injected automatically.
+ * Secrets: optional CRON_SECRET; SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are
+ *          injected automatically.
  *
  * NOTE: mirrors the lead times + copy of src/data/reminders.ts. Reminder lead
  * times here are the defaults; a future enhancement can read per-user prefs and
  * Tournament.reminderLeadMinutes once those are persisted server-side.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { safeEqual } from '../_shared/guard.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -51,7 +57,19 @@ interface Target { profileId: string; kind: Kind; leadKey: string; matchId: stri
 
 const idsOf = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
-Deno.serve(async () => {
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
+
+/** Only the scheduler: the service-role bearer, or the optional cron secret. */
+function isCron(req: Request): boolean {
+  const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (SERVICE_ROLE_KEY && bearer && safeEqual(bearer, SERVICE_ROLE_KEY)) return true;
+  const cron = req.headers.get('x-cron-secret') ?? '';
+  return !!CRON_SECRET && !!cron && safeEqual(cron, CRON_SECRET);
+}
+
+Deno.serve(async (req) => {
+  if (!isCron(req)) return new Response('forbidden', { status: 403 });
   const now = Date.now();
   const nowISO = new Date(now).toISOString();
   const horizonISO = new Date(now + LEADS[0].ms + DUE_WINDOW_MS).toISOString();

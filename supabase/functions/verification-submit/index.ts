@@ -18,11 +18,15 @@
  *   POST { playerId }
  *     → 200 { delivered: boolean }
  *
+ * Abuse guards (migration 0025): signed-in callers only, and only for a player
+ * they own (or whose document they uploaded); 10 submissions per user per day.
+ *
  * Deploy:  supabase functions deploy verification-submit
  * Secrets: RESEND_API_KEY, SUPPORT_EMAIL, SUPPORT_FROM (shared with support-escalate).
  *   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -69,6 +73,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
+  const caller = await requireUser(req);
+  if (caller instanceof Response) return caller;
+  if (!(await rateLimit('verification-submit', caller.user.id, 10, 86400))) return tooMany();
+
   let body: { playerId?: unknown };
   try {
     body = await req.json();
@@ -86,7 +94,7 @@ Deno.serve(async (req) => {
   // Read the player + their pending verification (service role bypasses RLS).
   const { data: player, error } = await supabase
     .from('players')
-    .select('full_name, dob, guardian, verification')
+    .select('profile_id, full_name, dob, guardian, verification')
     .eq('id', playerId)
     .single();
   if (error || !player) {
@@ -95,6 +103,11 @@ Deno.serve(async (req) => {
   }
 
   const verification = (player.verification ?? {}) as { docPath?: string; docName?: string };
+  // Only for your own player, or one whose document you uploaded (the upload
+  // path is keyed by the uploader's auth id — see submitVerificationDoc).
+  const mine = player.profile_id === caller.user.id
+    || (verification.docPath ?? '').startsWith(`${caller.user.id}/`);
+  if (!mine) return json({ delivered: false, error: 'not your profile' }, 403);
   const guardian = (player.guardian ?? null) as { name?: string; phone?: string; email?: string } | null;
 
   // Sign the document so the reviewer can open it straight from the email.

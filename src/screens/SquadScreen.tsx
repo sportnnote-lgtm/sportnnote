@@ -2,7 +2,7 @@
  *  The invite link (to hand squad-building to a captain) is a demo stub for now;
  *  full link auth + matchday XI/subs selection for every sport come next. */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -97,9 +97,14 @@ export default function SquadScreen() {
             variant="ghost"
             onPress={async () => {
               setBusy(true);
-              const inv = await createInvite(team.id, team.name);
-              setInviteCode(inv.token);
-              setBusy(false);
+              try {
+                const inv = await createInvite(team.id, team.name);
+                setInviteCode(inv.token);
+              } catch (e) {
+                Alert.alert('Couldn’t create an invite', (e as Error).message);
+              } finally {
+                setBusy(false);
+              }
             }}
           />
           {inviteCode && (
