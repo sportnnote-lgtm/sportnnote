@@ -13,6 +13,41 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Share, guided first run, iPhone web push, organiser extras, faster web
+
+- **Share (#2):**
+  - Share buttons on match, tournament and golf screens (`core/share.ts`,
+    `core/shareText.ts`).
+  - The message carries the live score, result or upcoming time, plus a short link
+    (`app.sportnnote.in/m|t|g/<id>`; `MatchLinkScreen` resolves `/m`).
+  - Web falls back to wa.me; shares are tracked (`share_link`).
+- **Guided first run (#5):** the first-run picker in `OnboardingOverlay` (Score a match /
+  Run a tournament / Find players / Show me around) goes straight to the right screen;
+  choices tracked as `onboarding_step`.
+- **Web push (#3):**
+  - PWA set-up: `public/index.html` (manifest, apple-touch-icon, SW registration),
+    `manifest.json`, icons, `sw.js`.
+  - Migration 0031 `web_push_subscriptions` + save/remove RPCs (10 PGlite tests).
+  - `_shared/webpush.ts` (npm:web-push, VAPID secrets set; verified encryption and send
+    in Deno → 201) wired into notify-upcoming, push-send, notify-followers and
+    message-notify (all deployed).
+  - Client: `core/webPush.ts` + `WebPushCard` (Match reminders screen; Home nudge;
+    iPhone "Add to Home Screen first").
+- **Organiser extras (#6):**
+  - Share fixtures on WhatsApp (grouped by day, IST);
+  - Print fixtures / save PDF on the web (with a result column);
+  - Match-day check-in on the participants screen (migration 0032, organiser-only,
+    4 PGlite tests).
+- **Faster web (#4):** 54 non-tab screens load on demand with a background prefetch.
+  The main bundle went from 2.63 MB to 1.90 MB (−28%).
+  - Next lever: lazy sport UIs plus the demo data (~400 KB), which needs registry rework.
+- **Release:** `supabase/release/2026-10-push-checkin-0031-0032.sql` (the founder runs it),
+  then republish web and OTA.
+- 380 tests.
+- **Parked by the founder:** public no-login match/tournament pages.
+
+---
+
 ### 2026-10-07 — sportnnote.in live on Cloudflare
 
 - **The website** is served by a Cloudflare Worker (static assets, `wrangler.jsonc`,
