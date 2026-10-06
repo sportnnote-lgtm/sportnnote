@@ -1,0 +1,11 @@
+// Cloudflare Workers (static assets) config for the marketing site sportnnote.in.
+// Built by `node scripts/build-website.mjs` → website/dist (see docs/website.md).
+// The app itself is NOT deployed here (it's on EAS Hosting).
+{
+  "name": "sportnnote",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./website/dist",
+    "not_found_handling": "404-page"
+  }
+}
