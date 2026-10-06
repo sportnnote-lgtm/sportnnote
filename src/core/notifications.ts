@@ -9,6 +9,7 @@
  * supabase/functions/notify-followers). On web or a simulator it returns null.
  */
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { notifyStore } from '../data/notifyStore';
 
 let notifModule: typeof import('expo-notifications') | null = null;
@@ -135,7 +136,10 @@ export async function registerForPush(): Promise<string | null> {
     let status = existing.status;
     if (status !== 'granted') status = (await N.requestPermissionsAsync()).status;
     if (status !== 'granted') return null;
-    const token = await N.getExpoPushTokenAsync();
+    // Pass the EAS project id explicitly — required for Expo push tokens in
+    // standalone (APK / store) builds.
+    const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const token = await N.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     return token.data;
   } catch {
     return null;
