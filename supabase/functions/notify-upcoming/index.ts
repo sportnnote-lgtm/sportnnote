@@ -30,12 +30,22 @@
  * Secrets: optional CRON_SECRET; SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are
  *          injected automatically.
  *
- * NOTE: mirrors the lead times + copy of src/data/reminders.ts. Reminder lead
- * times here are the defaults; a future enhancement can read per-user prefs and
- * Tournament.reminderLeadMinutes once those are persisted server-side.
+ * EMAIL (2026-10-07): players and scorers also get ONE email per match — at the
+ * day-before window, or the hour-before window if the match was scheduled less
+ * than a day ahead. Web users (most iPhone pilot users) can't receive push, so
+ * email is their reminder. Followers get push only.
+ *
+ * PREFERENCES: `user_reminder_prefs.lead_minutes` (Settings → reminders). An
+ * empty list = reminders off (no push, no email). Otherwise push fires only for
+ * the 1d/1h/15m windows the user kept; email follows the rule above.
+ *
+ * Testing: POST { "dry": true, "now": "<ISO time>" } returns who WOULD be
+ * reminded at that moment, without sending or recording anything.
+ *
+ * NOTE: mirrors the lead times + copy of src/data/reminders.ts.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { safeEqual } from '../_shared/guard.ts';
+import { safeEqual, sendEmail } from '../_shared/guard.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -44,10 +54,12 @@ const supabase = createClient(
 
 const MIN = 60_000;
 const LEADS = [
-  { key: '1d', ms: 1440 * MIN, label: 'tomorrow' },
-  { key: '1h', ms: 60 * MIN, label: 'in 1 hour' },
-  { key: '15m', ms: 15 * MIN, label: 'in 15 min' },
+  { key: '1d', ms: 1440 * MIN, minutes: 1440, label: 'tomorrow' },
+  { key: '1h', ms: 60 * MIN, minutes: 60, label: 'in 1 hour' },
+  { key: '15m', ms: 15 * MIN, minutes: 15, label: 'in 15 min' },
 ];
+const MINUTES_BY_LEAD = new Map(LEADS.map((l) => [l.key, l.minutes]));
+const APP_URL = 'https://app.sportnnote.in';
 // Slack after a lead's exact time in which it still counts as "freshly due", so a
 // ~5-min cron never misses a window (and the ledger stops it firing twice).
 const DUE_WINDOW_MS = 10 * MIN;
@@ -70,14 +82,17 @@ function isCron(req: Request): boolean {
 
 Deno.serve(async (req) => {
   if (!isCron(req)) return new Response('forbidden', { status: 403 });
-  const now = Date.now();
+  const opts = await req.json().catch(() => ({})) as { dry?: boolean; now?: string };
+  const dry = opts.dry === true;
+  // A simulated clock is only honoured in dry runs.
+  const now = dry && opts.now && !Number.isNaN(Date.parse(opts.now)) ? Date.parse(opts.now) : Date.now();
   const nowISO = new Date(now).toISOString();
   const horizonISO = new Date(now + LEADS[0].ms + DUE_WINDOW_MS).toISOString();
 
   // 1) Scheduled matches close enough that some lead window is (or just became) due.
   const { data: matches } = await supabase
     .from('matches')
-    .select('id, starts_at, scorer_id, scorer_ids, home_team_id, away_team_id')
+    .select('id, sport, starts_at, venue_name, tournament_id, scorer_id, scorer_ids, home_team_id, away_team_id')
     .eq('status', 'scheduled')
     .gt('starts_at', nowISO)
     .lte('starts_at', horizonISO);
@@ -181,21 +196,105 @@ Deno.serve(async (req) => {
   const sentKey = (t: { match_id?: string; matchId?: string; lead_key?: string; leadKey?: string; recipient_id?: string; profileId?: string; kind: string }) =>
     `${t.match_id ?? t.matchId}:${t.lead_key ?? t.leadKey}:${t.recipient_id ?? t.profileId}:${t.kind}`;
   const alreadySet = new Set((already ?? []).map(sentKey));
-  const fresh = targets.filter((t) => !alreadySet.has(sentKey(t)));
-  if (!fresh.length) return json({ due: dueMatches.length, sent: 0 });
 
-  // 5) Record first (so a concurrent run won't re-send), then push to their tokens.
-  await supabase.from('reminder_sends').upsert(
-    fresh.map((t) => ({ match_id: t.matchId, lead_key: t.leadKey, recipient_id: t.profileId, kind: t.kind })),
-    { onConflict: 'match_id,lead_key,recipient_id,kind', ignoreDuplicates: true },
-  );
+  // Reminder preferences + display time zones of everyone involved.
+  const everyone = [...new Set(targets.map((t) => t.profileId))];
+  const [{ data: prefs }, { data: profs }] = await Promise.all([
+    supabase.from('user_reminder_prefs').select('profile_id, lead_minutes').in('profile_id', everyone),
+    supabase.from('profiles').select('id, time_zone').in('id', everyone),
+  ]);
+  const leadsByProfile = new Map((prefs ?? []).map((p) => [p.profile_id as string, (p.lead_minutes as number[] | null) ?? []]));
+  const tzByProfile = new Map((profs ?? []).map((p) => [p.id as string, (p.time_zone as string | null) || 'Asia/Kolkata']));
+  const remindersOff = (pid: string) => leadsByProfile.has(pid) && leadsByProfile.get(pid)!.length === 0;
+  const wantsLead = (pid: string, leadKey: string) =>
+    !leadsByProfile.has(pid) || leadsByProfile.get(pid)!.includes(MINUTES_BY_LEAD.get(leadKey) ?? -1);
 
-  const recipientIds = [...new Set(fresh.map((t) => t.profileId))];
-  const { data: tokens } = await supabase.from('push_tokens').select('profile_id, token').in('profile_id', recipientIds);
+  // One push per (match, lead, recipient): someone can be a player, a scorer AND a
+  // follower of a team-mate in the same match. Scorer > player > follower wins; the
+  // ledger still records every kind so none of them fires later.
+  const RANK: Record<Kind, number> = { scorer: 0, player: 1, follower: 2 };
+  const groups = new Map<string, Target[]>();
+  for (const t of targets) {
+    if (alreadySet.has(sentKey(t)) || !wantsLead(t.profileId, t.leadKey)) continue;
+    const k = `${t.matchId}:${t.leadKey}:${t.profileId}`;
+    groups.set(k, [...(groups.get(k) ?? []), t]);
+  }
+  const pushTargets = [...groups.values()].map((g) => [...g].sort((a, b) => RANK[a.kind] - RANK[b.kind])[0]);
+  const pushLedger = new Map<string, Target>();
+  for (const g of groups.values()) for (const t of g) pushLedger.set(sentKey(t), t);
+
+  // One email per (match, recipient): players/scorers, at 1d — or 1h if 1d never
+  // happened (match scheduled < a day ahead). Scorer wording wins (action needed).
+  const emailByKey = new Map<string, Target>();
+  for (const t of targets) {
+    if (t.kind === 'follower' || (t.leadKey !== '1d' && t.leadKey !== '1h') || remindersOff(t.profileId)) continue;
+    const k = `${t.matchId}:${t.profileId}`;
+    if (alreadySet.has(`${t.matchId}:email:${t.profileId}:player`) || alreadySet.has(`${t.matchId}:email:${t.profileId}:scorer`)) continue;
+    const prev = emailByKey.get(k);
+    if (!prev || (t.kind === 'scorer' && prev.kind !== 'scorer')) emailByKey.set(k, t);
+  }
+  const emailTargets = [...emailByKey.values()];
+
+  const matchById = new Map(dueMatches.map(({ m }) => [m.id as string, m]));
+  const tournamentIds = [...new Set(emailTargets.map((t) => matchById.get(t.matchId)?.tournament_id).filter(Boolean) as string[])];
+  const { data: tours } = tournamentIds.length
+    ? await supabase.from('tournaments').select('id, name').in('id', tournamentIds)
+    : { data: [] as { id: string; name: string }[] };
+  const tourName = new Map((tours ?? []).map((t) => [t.id as string, t.name as string]));
+
+  const emails = emailTargets.map((t) => {
+    const m = matchById.get(t.matchId)!;
+    const homeT = teamById.get(m.home_team_id as string);
+    const awayT = teamById.get(m.away_team_id as string);
+    const vs = `${homeT?.name ?? homeT?.short_name ?? 'Home'} vs ${awayT?.name ?? awayT?.short_name ?? 'Away'}`;
+    const when = new Intl.DateTimeFormat('en-IN', {
+      timeZone: tzByProfile.get(t.profileId) ?? 'Asia/Kolkata',
+      weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+    }).format(new Date(m.starts_at as string));
+    const tour = m.tournament_id ? tourName.get(m.tournament_id as string) : undefined;
+    const lead = LEADS.find((l) => l.key === t.leadKey)!;
+    const subject = t.kind === 'scorer' ? `🎯 You're scoring ${vs} — ${when}` : `⏰ You play ${lead.label}: ${vs} — ${when}`;
+    const text = [
+      t.kind === 'scorer' ? `You're the scorer for ${vs}.` : `You're playing in ${vs}.`,
+      '',
+      `When:  ${when}`,
+      m.venue_name ? `Where: ${m.venue_name}` : '',
+      tour ? `Event: ${tour}` : '',
+      '',
+      t.kind === 'scorer'
+        ? `Open SportnNote a few minutes early to start scoring: ${APP_URL}`
+        : `See the match in SportnNote: ${APP_URL}`,
+      '',
+      '—',
+      'You get this because you are in this match. To stop reminders: SportnNote → Settings → Match reminders → remove all timers.',
+    ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+    return { t, subject, text };
+  });
+
+  if (dry) {
+    return json({
+      dry: true, at: new Date(now).toISOString(), due: dueMatches.length,
+      push: pushTargets.map((t) => ({ match: t.matchId, lead: t.leadKey, kind: t.kind, to: t.profileId.slice(0, 8), title: t.title })),
+      email: emails.map((e) => ({ match: e.t.matchId, lead: e.t.leadKey, kind: e.t.kind, to: e.t.profileId.slice(0, 8), subject: e.subject })),
+    });
+  }
+  if (!pushTargets.length && !emails.length) return json({ due: dueMatches.length, sent: 0 });
+
+  // 5) Record first (so a concurrent run won't re-send), then deliver.
+  const ledger = [
+    ...[...pushLedger.values()].map((t) => ({ match_id: t.matchId, lead_key: t.leadKey, recipient_id: t.profileId, kind: t.kind })),
+    ...emails.map(({ t }) => ({ match_id: t.matchId, lead_key: 'email', recipient_id: t.profileId, kind: t.kind })),
+  ];
+  await supabase.from('reminder_sends').upsert(ledger, { onConflict: 'match_id,lead_key,recipient_id,kind', ignoreDuplicates: true });
+
+  const recipientIds = [...new Set(pushTargets.map((t) => t.profileId))];
+  const { data: tokens } = recipientIds.length
+    ? await supabase.from('push_tokens').select('profile_id, token').in('profile_id', recipientIds)
+    : { data: [] as { profile_id: string; token: string }[] };
   const tokensByProfile = new Map<string, string[]>();
   for (const row of tokens ?? []) tokensByProfile.set(row.profile_id as string, [...(tokensByProfile.get(row.profile_id as string) ?? []), row.token as string]);
 
-  const messages = fresh.flatMap((t) =>
+  const messages = pushTargets.flatMap((t) =>
     (tokensByProfile.get(t.profileId) ?? []).map((to) => ({
       to, sound: 'default', title: t.title, body: t.body,
       data: { matchId: t.matchId, playerId: t.playerId || undefined },
@@ -203,7 +302,17 @@ Deno.serve(async (req) => {
   );
   if (messages.length) await sendExpoPush(messages);
 
-  return json({ due: dueMatches.length, targets: targets.length, fresh: fresh.length, pushed: messages.length });
+  // Email: the login address of each recipient (auth.users).
+  let emailed = 0;
+  for (const e of emails) {
+    const { data } = await supabase.auth.admin.getUserById(e.t.profileId);
+    const user = data?.user;
+    if (!user?.email || user.deleted_at) continue;
+    const to = user.email;
+    if (await sendEmail(to, e.subject, e.text)) emailed++;
+  }
+
+  return json({ due: dueMatches.length, targets: targets.length, pushed: messages.length, emailed });
 });
 
 /** Expo caps a push request at 100 messages; batch accordingly. */

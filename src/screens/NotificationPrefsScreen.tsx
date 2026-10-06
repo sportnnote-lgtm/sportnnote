@@ -32,11 +32,11 @@ export default function NotificationPrefsScreen() {
         <Card style={{ gap: theme.spacing(3) }}>
           <Text style={textStyles.h3}>🔔 Reminder timers</Text>
           <Text style={textStyles.muted}>
-            We&apos;ll nudge you before matches you&apos;re playing in — and before players you follow take the field. Tap a timer to remove it.
+            We&apos;ll nudge you before matches you&apos;re playing in or scoring — and before players you follow take the field. You&apos;ll also get one email the day before (or an hour before, for matches set up at short notice). Tap a timer to remove it.
           </Text>
 
           {selected.length === 0 ? (
-            <Text style={st.off}>Reminders are off — you won&apos;t be notified before matches.</Text>
+            <Text style={st.off}>Reminders are off — no notifications or emails before matches.</Text>
           ) : (
             <View style={st.chips}>
               {selected.map((m) => (

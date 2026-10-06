@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Match reminders: email channel, user preferences, schedule
+
+- **`notify-upcoming`** (deployed):
+  - **Email:** players and scorers get one email per match, the day before, or the hour
+    before for matches set up at short notice. Web/iPhone users can't receive push, so
+    email is their reminder.
+    - Content: date and time in the recipient's time zone (default IST), venue, event
+      name, app link, and how to stop reminders.
+    - Sent from `no-reply@sportnnote.in`.
+  - **Preferences:** respects `user_reminder_prefs` — an empty list means off (no push,
+    no email); push only fires for the 1d/1h/15m windows the user kept.
+  - **One push per person per reminder:** priority scorer > player > follower (a dry run
+    on live data showed one person would otherwise get three pushes for one match).
+  - The ledger records every kind, plus `lead_key='email'`, so nothing re-fires.
+  - **Dry run:** `{dry:true, now:ISO}` lists the targets without sending or recording.
+    Verified on live data at three simulated times (1d, 1h, short notice).
+- The reminder settings screen explains email and "off".
+- **Schedule:** `supabase/release/2026-10-schedule-reminders.sql` (pg_cron every 5 min,
+  reuses the Vault `cron_secret`). The founder runs it.
+- **Android push** still needs FCM: a Firebase Android app + `google-services.json` in a
+  new APK + the FCM V1 key uploaded to EAS.
+
+---
+
 ### 2026-10-07 — Website (sportnnote.in) + weekly pilot report
 
 - **Website:**
