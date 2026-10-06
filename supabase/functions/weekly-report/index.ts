@@ -11,10 +11,25 @@
  *   POST { dry: true } → returns the text without emailing
  * Secrets: CRON_SECRET, RESEND_API_KEY, SUPPORT_EMAIL (recipient).
  */
-import { admin, CORS, json, safeEqual, sendEmail, SERVICE_KEY } from '../_shared/guard.ts';
+import { admin, CORS, json, safeEqual, SERVICE_KEY } from '../_shared/guard.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const TO = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
+
+/** Send via Resend, returning Resend's error text on failure (only this
+ *  authorised endpoint sees it — useful when the sender domain isn't verified). */
+async function send(subject: string, text: string): Promise<{ sent: boolean; error?: string }> {
+  const key = Deno.env.get('RESEND_API_KEY');
+  if (!key) return { sent: false, error: 'RESEND_API_KEY not set' };
+  const from = Deno.env.get('REPORT_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'SportnNote <onboarding@resend.dev>';
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [TO], subject, text }),
+  });
+  if (res.ok) return { sent: true };
+  return { sent: false, error: `${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}` };
+}
 
 function authorised(req: Request): boolean {
   const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
@@ -121,8 +136,8 @@ Deno.serve(async (req) => {
   try {
     const { subject, text } = await build();
     if (body.dry) return json({ sent: false, subject, text });
-    const sent = await sendEmail(TO, subject, text);
-    return json({ sent, subject, text });
+    const r = await send(subject, text);
+    return json({ ...r, subject, text });
   } catch (e) {
     console.error('weekly-report', e);
     return json({ error: 'report failed' }, 500);
