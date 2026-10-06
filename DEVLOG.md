@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Analytics + crash reporting (migration 0029); new APK; sharing guide
+
+- **First-party, in our own Supabase** (not PostHog/Sentry yet): ships to installed APKs
+  by OTA (no native module), no third-party processor for minors' data, free.
+  - The database records the core KPI events with triggers, so they're captured from any
+    client or outbox.
+  - The app sends only `app_open`, `screen_view` and errors.
+  - Details: `docs/analytics.md`.
+- **Files:**
+  - `supabase/migrations/20261010120000_analytics.sql`
+  - `src/core/telemetry.ts`
+  - `src/components/ErrorBoundary.tsx`
+  - `App.tsx` (startTelemetry and the boundary)
+  - `RootNavigator` (screen tracking via navRef)
+  - release bundle `supabase/release/2026-10-analytics-0029.sql`
+- **KPI views:** `kpi_weekly`, `kpi_sport_weekly`, `kpi_activation`,
+  `kpi_scorer_retention`, `kpi_crash_free`, `errors_top` (service role / SQL editor only).
+- **Verified:**
+  - 33 PGlite scenarios: triggers, allow-list, PII filtering and masking, rate limits, no
+    client reads, an analytics failure never blocks the write, KPI maths.
+  - The bundle applies on top of 0028 and re-runs cleanly.
+  - 338 app tests; tsc; the demo app loads with no console errors.
+- **Sharing:** `docs/share/HOW_TO_SHARE.md` (iPhone = web app; Android = APK or web; store
+  path after company formation); web QR `docs/share/sportnnote-web-qr.png`.
+- **APK:** preview build `d0f3aedd` (includes telemetry and all of 0026–0028's client
+  changes).
+- **Pending:**
+  - The founder runs the 0029 bundle on live.
+  - Then republish the web app (telemetry is a no-op against live until 0029 exists).
+
+---
+
 ### 2026-10-07 — LIVE: migrations 0012–0028, 12 edge functions, web app published
 
 - **Database:** the founder ran `supabase/release/2026-10-pilot-migrations-0012-0028.sql`
