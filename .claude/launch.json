@@ -21,6 +21,20 @@
         "exec env EXPO_NO_DOTENV=1 npx expo start --web --port 8093"
       ],
       "port": 8093
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server@14.1.1",
+        "website/dist",
+        "-p",
+        "8095",
+        "-c-1",
+        "-s"
+      ],
+      "port": 8095
     }
   ]
 }

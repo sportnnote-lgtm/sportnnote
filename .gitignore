@@ -47,3 +47,4 @@ supabase/.temp/
 *firebase-adminsdk*.json
 .env.local.bak
 dist-ota/
+website/dist/
