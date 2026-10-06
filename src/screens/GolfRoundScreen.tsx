@@ -13,6 +13,8 @@ import { theme } from '../core/theme';
 import { Button, Card, Pill, SelectChip, FormError, textStyles } from '../components/ui';
 import { GolfLeaderboard, type LeaderboardCard } from '../components/golf/GolfLeaderboard';
 import { useAuth } from '../core/auth';
+import { shareMessage } from '../core/share';
+import { golfShareText } from '../core/shareText';
 import { getMyPlayerId } from '../data/repos';
 import { useGolfRounds } from '../data/useGolf';
 import {
@@ -44,7 +46,6 @@ export default function GolfRoundScreen() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { getMyPlayerId(profile?.id).then(setMe); }, [profile?.id]);
-  useEffect(() => { if (ev) nav.setOptions({ title: ev.title }); }, [nav, ev?.title]);
 
   const groups = useMemo(() => [...new Set(entries.map((e) => e.groupNo))].sort((a, b) => a - b), [entries]);
   const myGroup = entries.find((e) => e.playerId === me)?.groupNo;
@@ -67,6 +68,31 @@ export default function GolfRoundScreen() {
     const merged = entries.map((e) => (local.has(e.id) ? { ...e, result: local.get(e.id) } : e));
     return buildLeaderboard([ev], merged, [course]);
   }, [ev, course, entries, local]);
+
+  // Title + a Share button that sends the current top of the leaderboard.
+  useEffect(() => {
+    if (!ev) return;
+    const stableford = golfFormatOf(ev).scoring === 'stableford';
+    const share = () => void shareMessage(golfShareText({
+      title: ev.title,
+      final: ev.status === 'completed',
+      eventId: ev.id,
+      leaders: board.slice(0, 5).map((r) => {
+        const score = stableford ? `${r.total} pts` : toParLabel(r.total);
+        const thru = ev.status !== 'completed' && r.thru > 0 && r.thru < 18 ? ` (thru ${r.thru})` : '';
+        return `${r.positionLabel}. ${nameOf(r.id)} ${score}${thru}`;
+      }),
+    }), 'golf');
+    nav.setOptions({
+      title: ev.title,
+      headerRight: () => (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share this round" onPress={share} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
+          <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>Share</Text>
+        </TouchableOpacity>
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav, ev, board]);
 
   if (loading) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, st.pad]}>Loading round…</Text></SafeAreaView>;
   if (!ev || !course || !fmt) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, st.pad]}>Round not found.</Text></SafeAreaView>;

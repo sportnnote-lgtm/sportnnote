@@ -19,6 +19,8 @@ import { LogoPicker } from '../components/LogoPicker';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
+import { shareMessage } from '../core/share';
+import { tournamentShareText } from '../core/shareText';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
@@ -68,8 +70,21 @@ export default function TournamentProfileScreen() {
   }, [profile?.id]);
   // Title the nav bar after the tournament, not a generic "Tournament".
   useEffect(() => {
-    if (tournament) nav.setOptions({ title: tournament.name });
-  }, [nav, tournament?.name]);
+    if (!tournament) return;
+    const share = () => void shareMessage(tournamentShareText({
+      name: tournament.name,
+      sportLine: tournament.sports.map((sp) => `${getSport(sp).icon} ${getSport(sp).name}`).join(' · '),
+      tournamentId: tournament.id,
+    }), 'tournament');
+    nav.setOptions({
+      title: tournament.name,
+      headerRight: () => (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share this tournament" onPress={share} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
+          <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>Share</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [nav, tournament]);
   const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName;
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.

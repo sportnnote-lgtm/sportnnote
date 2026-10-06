@@ -47,6 +47,8 @@ export type RootStackParamList = {
   /** Privacy Policy / Terms (public: /privacy, /terms). */
   Legal: { doc: 'privacy' | 'terms' };
   Feedback: undefined;
+  /** Short share link /m/<matchId> → resolves to LiveScoring. */
+  MatchLink: { matchId: string };
   DeleteAccount: undefined;
   /** In-app messaging (migration 0027). */
   Messages: undefined;

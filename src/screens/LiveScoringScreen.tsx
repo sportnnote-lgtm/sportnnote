@@ -12,6 +12,8 @@
 import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { shareMessage } from '../core/share';
+import { matchShareText } from '../core/shareText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -280,14 +282,38 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   useEffect(() => {
     const hName = homeTeamName ?? homeName;
     const aName = awayTeamName ?? awayName;
+    const share = () => {
+      const status = complete ? 'final' : matchLive ? 'live' : 'upcoming';
+      const final = showFinalOnly && meta.score;
+      void shareMessage(matchShareText({
+        sportIcon: plugin.icon,
+        status,
+        home: hName,
+        away: aName,
+        homeScore: final ? String(meta.score!.home) : summary.homeScore,
+        awayScore: final ? String(meta.score!.away) : summary.awayScore,
+        statusLine: final ? undefined : summary.statusLine,
+        detailLine: final ? undefined : summary.detailLine,
+        winner: complete ? (meta.winner ?? plugin.result?.(state)?.winner ?? undefined) : undefined,
+        tournamentName: meta.tournamentName,
+        when: meta.startsAt ? formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST') : undefined,
+        venue: meta.venueName,
+        matchId,
+      }), 'match');
+    };
     navigation.setOptions({
       title: complete
         ? `${hName} vs ${aName} · Match Details`
         : meta.status === 'live'
         ? 'Live'
         : 'Live Scoring',
+      headerRight: () => (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share this match" onPress={share} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
+          <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>Share</Text>
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, complete, meta.status, homeName, awayName, homeTeamName, awayTeamName]);
+  }, [navigation, complete, matchLive, showFinalOnly, meta, summary, state, plugin, matchId, homeName, awayName, homeTeamName, awayTeamName]);
 
   // Any host of the match — or of its tournament — manages it: designates the
   // scorer and edits the XI. Per-match ownership, not a global role, and any of

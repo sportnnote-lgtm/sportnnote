@@ -71,6 +71,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import LegalScreen from '../screens/LegalScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
+import MatchLinkScreen from '../screens/MatchLinkScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import type { RootStackParamList, TabParamList } from './types';
 import { trackScreen } from '../core/telemetry';
@@ -82,7 +83,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -98,6 +99,10 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       Tabs: { path: '', screens: { Home: '', Matches: 'Tabs/Matches', Organize: 'Tabs/Organize', Discover: 'Tabs/Discover', Profile: 'Tabs/Profile' } },
       JoinTeam: 'join/:token',
+      // Short share links (core/shareText.ts).
+      MatchLink: 'm/:matchId',
+      Tournament: 't/:tournamentId',
+      GolfRound: 'g/:eventId',
       JoinClub: 'join-club/:token',
     },
   },
@@ -289,6 +294,7 @@ export default function RootNavigator() {
               options={{ ...stackScreenOpts, title: 'Help & Support' }}
             />
             <Stack.Screen name="Legal" component={LegalScreen} options={legalOpts} />
+            <Stack.Screen name="MatchLink" component={MatchLinkScreen} options={{ ...stackScreenOpts, title: 'Match' }} />
             <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ ...stackScreenOpts, title: 'Feedback' }} />
             <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ ...stackScreenOpts, title: 'Delete account' }} />
             <Stack.Screen
