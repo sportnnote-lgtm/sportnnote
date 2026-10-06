@@ -23,7 +23,7 @@ import { ClubQuickPick } from '../components/ClubQuickPick';
 import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
-import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, getTeamLeaders, enterOrgHousesAsTeams } from '../data/repos';
+import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, setTournamentTeamCheckIn, getTeamLeaders, enterOrgHousesAsTeams } from '../data/repos';
 import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
 import { notify } from '../core/notifications';
@@ -200,6 +200,16 @@ export default function TournamentTeamsScreen() {
       setError(e instanceof Error ? e.message : 'Could not update the entry');
     } finally { setBusy(false); }
   }
+  // Match-day check-in: tap to mark a team as arrived (tap again to undo).
+  async function toggleCheckIn(entry: TournamentEntry) {
+    setError(null); setBusy(true);
+    try {
+      await setTournamentTeamCheckIn(params.tournamentId, entry.team.id, !entry.checkedInAt);
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update check-in');
+    } finally { setBusy(false); }
+  }
   // Hard-remove an entry (used on a withdrawn team the organizer wants gone).
   async function removeEntry(entry: TournamentEntry) {
     setError(null); setBusy(true);
@@ -325,9 +335,13 @@ export default function TournamentTeamsScreen() {
         {confirmedInScope.length > 0 && (
           <Card style={{ gap: theme.spacing(2) }}>
             <Text style={textStyles.h3}>In the tournament · {confirmedInScope.length}</Text>
+            <Text style={textStyles.muted}>
+              Match day: tap Check in as each {noun} arrives · {confirmedInScope.filter((e) => e.checkedInAt).length}/{confirmedInScope.length} here
+            </Text>
             {confirmedInScope.map((e) => (
               <View key={e.team.id} style={st.entryRow}>
-                <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.checkedInAt ? '✅ ' : ''}{e.team.name}</Text>
+                <SelectChip label={e.checkedInAt ? 'Checked in' : 'Check in'} active={!!e.checkedInAt} onPress={() => void toggleCheckIn(e)} />
                 <Button label="Withdraw" variant="ghost" onPress={() => changeStatus(e, 'withdrawn')} disabled={busy} />
               </View>
             ))}

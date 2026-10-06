@@ -838,7 +838,7 @@ export const demo = {
    *  by default — the seed tournaments imply their teams via matches; organizers
    *  register participants up front for new tournaments. Mirrors the live
    *  `tournament_teams` join table (migration 0003). */
-  tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus; categoryId?: string }[],
+  tournamentTeams: [] as { tournamentId: string; teamId: string; status: TournamentEntryStatus; categoryId?: string; checkedInAt?: string }[],
   /** divisions (age × gender) a tournament defines — see migration 0008. */
   tournamentCategories: [] as TournamentCategory[],
   /** multi-sport clubs ("teams" in the UI) and their membership / sport roles —
@@ -1427,6 +1427,11 @@ export function setTournamentTeamStatusDemo(tournamentId: string, teamId: string
   const row = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
   if (row) row.status = status;
   else demo.tournamentTeams.push({ tournamentId, teamId, status });
+}
+
+export function setTournamentTeamCheckInDemo(tournamentId: string, teamId: string, checkedIn: boolean): void {
+  const row = demo.tournamentTeams.find((r) => r.tournamentId === tournamentId && r.teamId === teamId);
+  if (row) row.checkedInAt = checkedIn ? new Date().toISOString() : undefined;
 }
 
 /** Drop a team from a tournament's participant list. */

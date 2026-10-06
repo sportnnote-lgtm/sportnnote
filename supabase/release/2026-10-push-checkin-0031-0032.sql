@@ -1,4 +1,4 @@
--- Release 2026-10: migration 0031 (web push subscriptions — iPhone Home Screen notifications).
+-- Release 2026-10: migrations 0031 (web push subscriptions) + 0032 (match-day team check-in).
 -- Paste the whole file into the Supabase SQL editor and Run. Safe to re-run.
 begin;
 -- 0031 — Web push subscriptions (iPhone Home Screen web app + Android/desktop web).
@@ -105,5 +105,10 @@ begin
 end $$;
 revoke all on function delete_account_data(uuid) from public, anon, authenticated;
 grant execute on function delete_account_data(uuid) to service_role;
+
+-- 0032 — Match-day check-in for tournament entries: the organizer marks a team
+-- (or player, in individual sports) as arrived at the venue. Organizer-only, via
+-- the existing tournament_teams update policy + guard_tournament_team (0025).
+alter table tournament_teams add column if not exists checked_in_at timestamptz;
 
 commit;

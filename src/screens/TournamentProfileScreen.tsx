@@ -3,7 +3,7 @@
  *  tournament the sport selector is skipped and its table shown directly. */
 import { notice } from '../core/confirm';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -20,7 +20,9 @@ import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { shareMessage } from '../core/share';
-import { tournamentShareText } from '../core/shareText';
+import { tournamentShareText, tournamentLink } from '../core/shareText';
+import { fixturesPrintHtml, fixturesShareText, type FixtureRow } from '../core/fixturesText';
+import { formatDate, formatTime, zoneAbbrev } from '../core/time';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
@@ -171,6 +173,32 @@ export default function TournamentProfileScreen() {
     () => bySportFilter(matches.filter((m) => m.status === 'completed').sort((a, b) => b.startsAt.localeCompare(a.startsAt))),
     [matches, matchSport]
   );
+
+  // Organiser: broadcast the upcoming fixtures (WhatsApp) or print them / save a PDF (web).
+  const fixtureRows = (): FixtureRow[] => upcomingMatches.map((m) => ({
+    startsAt: m.startsAt ?? '',
+    day: m.startsAt ? formatDate(m.startsAt) : '',
+    time: m.startsAt ? formatTime(m.startsAt) : '',
+    home: m.homeTeam.name,
+    away: m.awayTeam.name,
+    sportIcon: (tournament?.sports.length ?? 0) > 1 ? getSport(m.sport).icon : undefined,
+    venue: m.venueName,
+    stage: m.group ? `Group ${m.group}` : m.stage ? String(m.stage) : undefined,
+  }));
+  const zone = zoneAbbrev().replace('GMT+5:30', 'IST');
+  const shareFixtures = () => {
+    if (!tournament) return;
+    void shareMessage(fixturesShareText({ tournament: `${tournament.name} (times ${zone})`, rows: fixtureRows(), link: tournamentLink(tournament.id) }), 'tournament');
+  };
+  const printFixtures = () => {
+    if (!tournament || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(fixturesPrintHtml({ tournament: tournament.name, rows: fixtureRows(), subtitle: `Fixtures · times ${zone}` }));
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  };
 
   const openMatch = (m: (typeof matches)[number]) =>
     nav.navigate('LiveScoring', {
@@ -455,6 +483,12 @@ export default function TournamentProfileScreen() {
                     </>
                   );
               })()}
+              {upcomingMatches.length > 0 && (
+                <>
+                  <Button label="📤 Share fixtures on WhatsApp" variant="ghost" onPress={shareFixtures} />
+                  {Platform.OS === 'web' && <Button label="🖨 Print fixtures / save PDF" variant="ghost" onPress={printFixtures} />}
+                </>
+              )}
               <Button label="🔁 New series / tie" variant="ghost" onPress={() => nav.navigate('CreateSeries', { tournamentId: tournament.id, sport: tournament.sports[0] })} />
               <Button label="✎ Edit tournament" variant="ghost" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
             </View>

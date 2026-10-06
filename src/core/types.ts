@@ -451,6 +451,8 @@ export interface TournamentEntry {
   /** the division this entry belongs to (see TournamentCategory). Absent ⇒ the
    *  tournament's single/implicit division. */
   categoryId?: UUID;
+  /** match-day check-in: when the organizer marked the entry as arrived (0032) */
+  checkedInAt?: string;
 }
 
 /** A division within a tournament — the backbone of school meets: age group ×

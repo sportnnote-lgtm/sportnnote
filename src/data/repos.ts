@@ -31,6 +31,7 @@ import {
   addOrganization,
   addTournamentTeamsDemo,
   setTournamentTeamStatusDemo,
+  setTournamentTeamCheckInDemo,
   removeTournamentTeamDemo,
   getTournamentCategoriesDemo,
   addTournamentCategoriesDemo,
@@ -3220,16 +3221,16 @@ export async function getTournamentEntries(tournamentId: string, sport?: SportId
   if (!isSupabaseConfigured || !supabase) {
     const rows = demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId);
     return rows
-      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status, categoryId: r.categoryId }))
+      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status, categoryId: r.categoryId, checkedInAt: r.checkedInAt }))
       .filter((e) => !!e.team && (!sport || e.team!.sport === sport))
-      .map((e) => ({ team: e.team as Team, status: e.status, categoryId: e.categoryId }));
+      .map((e) => ({ team: e.team as Team, status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt }));
   }
   // Read with the widest column set, then degrade gracefully if a column isn't in
   // the live DB yet: category_id needs migration 0008, status needs 0007. Falling
   // back keeps the existing participants feature working before each migration
   // (missing category ⇒ no division; missing status ⇒ treated as confirmed).
   const TEAM_COLS = 'teams(id,name,short_name,sport,color_hex,org_id,roster)';
-  const attempts = [`status, category_id, ${TEAM_COLS}`, `status, ${TEAM_COLS}`, TEAM_COLS];
+  const attempts = [`status, category_id, checked_in_at, ${TEAM_COLS}`, `status, category_id, ${TEAM_COLS}`, `status, ${TEAM_COLS}`, TEAM_COLS];
   let res: { data: unknown; error: unknown } = { data: null, error: true };
   for (const cols of attempts) {
     res = await supabase.from('tournament_teams').select(cols).eq('tournament_id', tournamentId);
@@ -3239,10 +3240,10 @@ export async function getTournamentEntries(tournamentId: string, sport?: SportId
   if (error || !data) return [];
   // The joined `teams` relation may come back as an object or a single-element
   // array depending on the client's inference — normalise both to a row.
-  const entries = (data as unknown as { status?: TournamentEntryStatus; category_id?: string | null; teams: TeamRow | TeamRow[] | null }[])
-    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus, categoryId: r.category_id ?? undefined }))
+  const entries = (data as unknown as { status?: TournamentEntryStatus; category_id?: string | null; checked_in_at?: string | null; teams: TeamRow | TeamRow[] | null }[])
+    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus, categoryId: r.category_id ?? undefined, checkedInAt: r.checked_in_at ?? undefined }))
     .filter((e) => !!e.team)
-    .map((e) => ({ team: toTeam(e.team as TeamRow), status: e.status, categoryId: e.categoryId }));
+    .map((e) => ({ team: toTeam(e.team as TeamRow), status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt }));
   return sport ? entries.filter((e) => e.team.sport === sport) : entries;
 }
 
@@ -3342,6 +3343,18 @@ export async function setTournamentTeamStatus(tournamentId: string, teamId: stri
     return;
   }
   await supabase.from('tournament_teams').update({ status }).eq('tournament_id', tournamentId).eq('team_id', teamId);
+}
+
+/** Match-day check-in: mark an entry as arrived at the venue (or undo). */
+export async function setTournamentTeamCheckIn(tournamentId: string, teamId: string, checkedIn: boolean): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    setTournamentTeamCheckInDemo(tournamentId, teamId, checkedIn);
+    return;
+  }
+  const { error } = await supabase.from('tournament_teams')
+    .update({ checked_in_at: checkedIn ? new Date().toISOString() : null })
+    .eq('tournament_id', tournamentId).eq('team_id', teamId);
+  if (error) throw new Error('Couldn’t update check-in — try again.');
 }
 
 /** Drop a team from a tournament's participant list. */
