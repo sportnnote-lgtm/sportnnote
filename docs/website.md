@@ -1,5 +1,21 @@
 # Website — sportnnote.in
 
+**LIVE 2026-10-07.**
+- **Hosting:** Cloudflare Workers (static assets), Worker `sportnnote`, built from `main`
+  on every push.
+- **DNS:** moved from GoDaddy to Cloudflare (nameservers `leif` / `ollie.ns.cloudflare.com`;
+  the domain is still registered at GoDaddy).
+- **Custom domains:** `sportnnote.in` and `www.sportnnote.in`.
+- **Redirect rules:**
+  1. `app.sportnnote.in` → `concat("https://sportnnote.expo.app", path)` (301, query kept;
+     needs the proxied placeholder A record `app` 192.0.2.1);
+  2. HTTP → HTTPS.
+- **Email DNS kept** (DNS only):
+  - `send` MX → `feedback-smtp.ap-northeast-1.amazonses.com`;
+  - `send` TXT `v=spf1 include:amazonses.com ~all` (was a GoDaddy-specific macro);
+  - `resend._domainkey` DKIM;
+  - `_dmarc`.
+
 **What it is:**
 - A static site built from this repository: `website/` (styles and config) plus
   `scripts/build-website.mjs`, which outputs `website/dist/`.

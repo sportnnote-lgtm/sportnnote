@@ -13,6 +13,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — sportnnote.in live on Cloudflare
+
+- **The website** is served by a Cloudflare Worker (static assets, `wrangler.jsonc`,
+  builds from `main`), at `sportnnote.in` and `www`.
+- **DNS moved** from GoDaddy to Cloudflare.
+  - Records carried over: Resend MX/DKIM/DMARC.
+  - SPF rewritten to `include:amazonses.com`, since GoDaddy's `_spfm` macro wouldn't
+    survive the move.
+- **Redirect rules:** `app.sportnnote.in` → `sportnnote.expo.app` with path and query
+  (invite links keep working); HTTP→HTTPS.
+- **Verified with curl:** 200 for the site pages; 301s for http, app, and
+  `app/join/abc?x=1` → `sportnnote.expo.app/join/abc?x=1`.
+
+---
+
 ### 2026-10-07 — Wave-1 sports validated against real events; official tie-breaks
 
 - **Replays:** 23 tests in `tests/replay-wave1.test.mts`, all passing:
