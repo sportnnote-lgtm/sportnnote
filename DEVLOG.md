@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Website (sportnnote.in) + weekly pilot report
+
+- **Website:**
+  - `website/` + `scripts/build-website.mjs` (`npm run website:build` → `website/dist`).
+  - Plain HTML/CSS: home (hero, features, the 14 sports, organiser steps, iPhone/Android
+    install, contact), `/privacy/` and `/terms/` (rendered from `src/data/legal.ts`), 404,
+    robots and sitemap.
+  - `website/config.json` holds the APK link.
+  - Checked at 375 px and 1280 px: no horizontal overflow, no console errors.
+  - Hosting plan: `docs/website.md` (Cloudflare Pages from the private GitHub repo; the
+    founder signs up).
+- **Weekly report:** `supabase/functions/weekly-report`, deployed.
+  - Emails the founder the last week's KPIs with week-on-week deltas, sports, activation,
+    retention, crash-free %, top errors and all feedback.
+  - Auth: `CRON_SECRET` (newly set) or the service key.
+  - Live dry run OK; no secret → 403.
+  - The schedule (pg_cron Mon 09:00 IST, secret in Vault) is set up by the founder's
+    one-time SQL.
+
+---
+
 ### 2026-10-07 — First over-the-air Android update; `npm run android:ota`
 
 - **The native layer hasn't changed since the 2 Oct APK** (only the JS `firebase` dep was

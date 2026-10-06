@@ -48,6 +48,25 @@ Supabase → SQL editor (runs as an admin), for example `select * from kpi_weekl
 - matches scored per week → `kpi_weekly.matches_completed` (+ `golf_rounds_completed`);
 - 4-week scorer retention → `kpi_scorer_retention`.
 
+## Weekly report (every Monday, 09:00 IST)
+
+- **Function:** `supabase/functions/weekly-report`.
+- **Email:** sent to `SUPPORT_EMAIL`. Covers the last Mon–Sun:
+  - the pilot KPIs, compared with the week before;
+  - sign-ups and 7-day activation;
+  - completed matches per sport;
+  - crash-free sessions and the top errors;
+  - every feedback and support message received.
+- **Auth:** the `x-cron-secret` header (secret `CRON_SECRET`, also kept in Supabase Vault as
+  `cron_secret`) or the service-role key.
+- **Try it:** `POST {"dry":true}` returns the text without sending.
+- **Schedule:** pg_cron + pg_net, job `weekly-report`, cron `30 3 * * 1`. It calls the
+  function with `Authorization: Bearer <anon key>` and the `x-cron-secret` read from
+  `vault.decrypted_secrets`. The founder ran the setup SQL once; it isn't in the repository
+  because it contains the secret.
+- **Re-create it:** generate a new secret, `supabase secrets set CRON_SECRET=…`, then
+  `vault.update_secret` plus `cron.schedule` (the same name updates the job).
+
 ## Later
 
 - **Sentry** with the next native build, for native-level crashes (out-of-memory, native
