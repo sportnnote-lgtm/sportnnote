@@ -7,6 +7,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { setReminderPrefsUser } from '../data/reminderPrefs';
 import { normalizePhone } from './phone';
+import { LEGAL_VERSION } from '../data/legal';
 import type { GuardianContact, Profile, Role } from './types';
 
 /** Turn a raw Supabase/network error into a plain, actionable message. Users
@@ -186,7 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 0011) can create the profile row — this works with OR without a session,
         // so it's correct whether or not "Confirm email" is on. (dob is mandatory;
         // phone is the primary identity key; guardian carries under-18 consent.)
-        const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}) };
+        // legal_accepted: which Terms/Privacy version they agreed to, and when (consent record).
+        const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}), legal_accepted: { version: LEGAL_VERSION, at: new Date().toISOString() } };
         const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } });
         if (error) return { error: friendlyAuthError(error.message) };
 

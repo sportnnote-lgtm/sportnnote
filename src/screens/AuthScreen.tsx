@@ -10,6 +10,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { theme } from '../core/theme';
 import { Button, Card, SelectChip, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
@@ -50,6 +53,8 @@ export default function AuthScreen() {
   const [gEmail, setGEmail] = useState('');
   const [role, setRole] = useState<Role>('player');
   const [consent, setConsent] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,6 +88,7 @@ export default function AuthScreen() {
         if (!gPhone.trim() && !gEmail.trim()) return setError("Add the guardian's mobile or email — under-18 accounts need a guardian contact.");
         if (!consent) return setError('Parent/guardian consent is required for an under-18 account.');
       }
+      if (!agreed) return setError('Please agree to the Terms of Use and Privacy Policy to create an account.');
     }
     const guardian = minor && gName.trim()
       ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
@@ -226,6 +232,25 @@ export default function AuthScreen() {
             </View>
           )}
 
+          {mode === 'up' && (
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreed }}
+              activeOpacity={0.8}
+              onPress={() => setAgreed((a) => !a)}
+              style={st.consentRow}
+            >
+              <Text style={[st.checkbox, agreed && st.checkboxOn]}>{agreed ? '☑' : '☐'}</Text>
+              <Text style={st.consentText}>
+                I agree to the{' '}
+                <Text style={st.legalLink} onPress={() => nav.navigate('Legal', { doc: 'terms' })}>Terms of Use</Text>
+                {' '}and{' '}
+                <Text style={st.legalLink} onPress={() => nav.navigate('Legal', { doc: 'privacy' })}>Privacy Policy</Text>
+                {minor ? ', and my parent/guardian agrees on my behalf.' : '.'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {note ? (
             <View style={st.noteBox}>
               <Text style={st.noteText}>{note}</Text>
@@ -331,6 +356,7 @@ const st = StyleSheet.create({
   checkbox: { fontSize: 20, color: theme.colors.textMuted, lineHeight: 22 },
   checkboxOn: { color: theme.colors.primary },
   consentText: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, lineHeight: 18 },
+  legalLink: { color: theme.colors.accent, fontWeight: '700' },
   noteBox: {
     backgroundColor: theme.colors.primary + '1A', // ~10% tint
     borderWidth: 1, borderColor: theme.colors.primary + '55',

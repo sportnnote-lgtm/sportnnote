@@ -13,6 +13,50 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Pilot readiness pack: legal, feedback, account deletion, children's analytics (0030)
+
+- **Privacy Policy + Terms** (`src/data/legal.ts`, `LegalScreen`):
+  - written for DPDP (children, guardian consent, processors, retention, rights,
+    grievance);
+  - in Settings → Privacy & legal, and publicly at `/privacy` and `/terms`, signed in or
+    out;
+  - sign-up now requires ticking "I agree", and the accepted version is recorded in auth
+    metadata `legal_accepted`;
+  - needs lawyer review, and the legal name after incorporation.
+- **Send feedback** (`FeedbackScreen`, Settings → Help):
+  - kinds: bug / idea / confusing / love;
+  - attaches the last screens visited (telemetry `recentScreens`), the version and the
+    platform;
+  - reuses `support-escalate` (support_cases + email to the founder), with a mailto
+    fallback.
+- **Delete my account** (`DeleteAccountScreen`, the `delete-account` edge function,
+  migration 0030 `delete_account_data`):
+  - wipes personal data and soft-deletes the login;
+  - removes verification docs from storage;
+  - blanks the text of sent messages;
+  - keeps sporting records as "Deleted player" so standings stay correct;
+  - service-role only.
+  - Required by DPDP erasure and the App Store / Play.
+- **Children's analytics (DPDP §9):** `analytics_actor()` means under-18 (or unknown-age)
+  users are never linked in analytics or error reports — no profile, device or session ids.
+  Existing rows are detached too.
+- **Pilot guide:** `docs/share/PILOT_GUIDE.md` (forwardable message + how-tos, labels
+  checked against the UI).
+- **Not done (founder's call):** cleaning the test tournaments on live; left as is.
+- **Verified:**
+  - 21 PGlite scenarios for deletion and minors' analytics;
+  - all earlier suites still pass (102/27/70/28/33);
+  - the bundle applies on 0029 and re-runs;
+  - deno check;
+  - 338 app tests; tsc;
+  - the demo click-through: Settings rows, the Privacy/Terms pages, the `/terms` URL, the
+    Feedback and Delete screens, no console errors.
+  - `delete-account` deployed; anonymous calls → 401.
+- **Pending:** the founder runs `supabase/release/2026-10-readiness-0030.sql`, then republish
+  the web app.
+
+---
+
 ### 2026-10-07 — Analytics + crash reporting (migration 0029); new APK; sharing guide
 
 - **First-party, in our own Supabase** (not PostHog/Sentry yet): ships to installed APKs

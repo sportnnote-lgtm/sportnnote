@@ -1774,6 +1774,24 @@ export async function submitSupportCase(input: SupportCaseInput): Promise<{ deli
   }
 }
 
+/** Delete the signed-in user's account (Settings → Delete my account).
+ *  Server side: delete-account edge function → migration 0030. Returns an
+ *  error message, or null on success (the caller then signs out). */
+export async function deleteMyAccount(): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) return 'Account deletion isn’t available in demo mode.';
+  try {
+    const { data, error } = await supabase.functions.invoke('delete-account', { body: { confirm: 'DELETE' } });
+    if (error) {
+      const ctx = (error as { context?: Response }).context;
+      const body = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) : null;
+      return (body as { error?: string } | null)?.error ?? 'Couldn’t delete your account just now — check your connection and try again.';
+    }
+    return data?.deleted ? null : 'Couldn’t delete your account just now — please try again.';
+  } catch {
+    return 'Couldn’t delete your account just now — check your connection and try again.';
+  }
+}
+
 /** Update a player's own profile details. */
 export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {

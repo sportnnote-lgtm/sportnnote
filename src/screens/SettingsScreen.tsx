@@ -135,6 +135,20 @@ export default function SettingsScreen() {
           <Row icon="💬" label="Help & support" value="Guides · contact us" onPress={() => nav.navigate('Support')} />
           <View style={st.divider} />
           <Row icon="🧭" label="Replay app tour" onPress={() => { nav.navigate('Tabs', { screen: 'Home' }); onboardingStore.request(); }} />
+          <View style={st.divider} />
+          <Row icon="📣" label="Send feedback" value="Bugs · ideas" onPress={() => nav.navigate('Feedback')} />
+        </Group>
+
+        <Group title="Privacy & legal">
+          <Row icon="🔒" label="Privacy Policy" onPress={() => nav.navigate('Legal', { doc: 'privacy' })} />
+          <View style={st.divider} />
+          <Row icon="📄" label="Terms of Use" onPress={() => nav.navigate('Legal', { doc: 'terms' })} />
+          {!demo && (
+            <>
+              <View style={st.divider} />
+              <Row icon="🗑️" label="Delete my account" danger onPress={() => nav.navigate('DeleteAccount')} />
+            </>
+          )}
         </Group>
 
         <Text style={st.version}>SportnNote v{version}{demo ? ' · demo mode' : ''}</Text>

@@ -21,7 +21,7 @@ import { isSupabaseConfigured, supabase } from './supabase';
 
 type Props = Record<string, string | number | boolean>;
 type Queued = { name: string; at: string; props: Props };
-export type ClientEvent = 'app_open' | 'screen_view' | 'share_link' | 'install_prompt' | 'sign_in' | 'sign_out' | 'onboarding_step';
+export type ClientEvent = 'app_open' | 'screen_view' | 'share_link' | 'install_prompt' | 'sign_in' | 'sign_out' | 'onboarding_step' | 'feedback_sent';
 
 const ANON_KEY = 'sn.telemetry.anonId';
 const PENDING_ERRORS_KEY = 'sn.telemetry.pendingErrors';
@@ -57,6 +57,7 @@ let queue: Queued[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
 let errorsThisSession = 0;
 let currentScreen: string | undefined;
+let screenTrail: string[] = [];
 let started = false;
 
 async function loadAnonId(): Promise<string> {
@@ -83,8 +84,17 @@ export function track(name: ClientEvent, props: Props = {}): void {
 export function trackScreen(screen: string | undefined): void {
   if (!screen || screen === currentScreen) return;
   currentScreen = screen;
+  screenTrail = [...screenTrail, screen].slice(-6);
   track('screen_view', { screen });
 }
+
+/** The last few screens visited (oldest first) — attached to feedback so we
+ *  know where the user was. Route names only. */
+export function recentScreens(): string[] {
+  return screenTrail;
+}
+
+export const appVersionLabel = (): string => version;
 
 export async function flush(): Promise<void> {
   if (!enabled || !queue.length) return;

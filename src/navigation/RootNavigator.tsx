@@ -69,6 +69,9 @@ import CalendarScreen from '../screens/CalendarScreen';
 import MatchSquadScreen from '../screens/MatchSquadScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SupportScreen from '../screens/SupportScreen';
+import LegalScreen from '../screens/LegalScreen';
+import FeedbackScreen from '../screens/FeedbackScreen';
+import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import type { RootStackParamList, TabParamList } from './types';
 import { trackScreen } from '../core/telemetry';
 
@@ -79,7 +82,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'LineupEditor', 'LiveScoring', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -103,6 +106,11 @@ const linking: LinkingOptions<RootStackParamList> = {
     if (configured) return configured;
     const [pathname, query = ''] = path.replace(/^\/+/, '').split('?');
     const name = decodeURIComponent(pathname.split('/')[0] ?? '');
+    if (name === 'privacy' || name === 'terms') {
+      // Signed out the stack only has Auth (+ Legal); signed in, Tabs (+ Legal).
+      // Unregistered names are dropped when the navigator rehydrates this state.
+      return { routes: [{ name: 'Auth' }, { name: 'Tabs' }, { name: 'Legal', params: { doc: name } }] } as ReturnType<typeof getStateFromPath>;
+    }
     const params = Object.fromEntries(new URLSearchParams(query));
     if (STACK_SCREENS.has(name)) {
       return { routes: [{ name: 'Tabs' }, { name, params: Object.keys(params).length ? params : undefined }] } as ReturnType<typeof getStateFromPath>;
@@ -154,6 +162,11 @@ const stackScreenOpts = {
   headerTintColor: theme.colors.text,
 } as const;
 
+const legalOpts = ({ route }: { route: { params?: { doc?: string } } }) => ({
+  ...stackScreenOpts,
+  title: route.params?.doc === 'terms' ? 'Terms of Use' : 'Privacy Policy',
+});
+
 export default function RootNavigator() {
   const { authed, loading, profile } = useAuth();
 
@@ -188,7 +201,10 @@ export default function RootNavigator() {
     >
       <Stack.Navigator>
         {!authed ? (
-          <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
+          <>
+            <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Legal" component={LegalScreen} options={legalOpts} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
@@ -272,6 +288,9 @@ export default function RootNavigator() {
               component={SupportScreen}
               options={{ ...stackScreenOpts, title: 'Help & Support' }}
             />
+            <Stack.Screen name="Legal" component={LegalScreen} options={legalOpts} />
+            <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ ...stackScreenOpts, title: 'Feedback' }} />
+            <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ ...stackScreenOpts, title: 'Delete account' }} />
             <Stack.Screen
               name="PlayerProfile"
               component={PlayerProfileScreen}

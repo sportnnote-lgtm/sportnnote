@@ -44,6 +44,10 @@ export type RootStackParamList = {
   NotificationPrefs: undefined;
   Settings: undefined;
   Support: undefined;
+  /** Privacy Policy / Terms (public: /privacy, /terms). */
+  Legal: { doc: 'privacy' | 'terms' };
+  Feedback: undefined;
+  DeleteAccount: undefined;
   /** In-app messaging (migration 0027). */
   Messages: undefined;
   /** threadId = an existing conversation; playerId = message this player (resumes
