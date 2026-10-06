@@ -475,7 +475,16 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
-      {authed && <OnboardingOverlay />}
+      {authed && (
+        <OnboardingOverlay
+          onChoose={(c) => {
+            if (!navRef.isReady()) return;
+            if (c === 'score') navRef.navigate('ScheduleMatch', undefined);
+            else if (c === 'tournament') navRef.navigate('CreateTournament', undefined);
+            else navRef.navigate('Tabs', { screen: 'Discover' });
+          }}
+        />
+      )}
     </NavigationContainer>
   );
 }

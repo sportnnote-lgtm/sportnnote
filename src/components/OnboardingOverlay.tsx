@@ -4,12 +4,23 @@
  *  with the explainer card anchored right next to it. Deliberately brief (7 steps,
  *  under the 10-step cap). Persists a "seen" flag; replay via resetOnboarding(). */
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { Modal, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
 import { Button } from './ui';
 import { hasSeenOnboarding, markOnboardingSeen } from '../core/onboarding';
 import { onboardingStore } from '../data/onboardingStore';
+import { track } from '../core/telemetry';
+
+/** First-run choices — each goes straight to where that job starts, so a new
+ *  user's first minute ends in doing something (activation = first match scored). */
+export type FirstRunChoice = 'score' | 'tournament' | 'discover';
+const CHOICES: Array<{ id: FirstRunChoice | 'tour'; icon: string; label: string; hint: string }> = [
+  { id: 'score', icon: '🤝', label: 'Score a match now', hint: 'Any sport — pick the players and go' },
+  { id: 'tournament', icon: '🏆', label: 'Run a tournament', hint: 'League, knockout or groups, with fixtures' },
+  { id: 'discover', icon: '🔍', label: 'Find players & tournaments', hint: 'Follow them to see live scores' },
+  { id: 'tour', icon: '👀', label: 'Show me around first', hint: 'A 20-second tour' },
+];
 
 // target: a bottom-tab index (0–4), 'more' (the ••• button), or undefined (centered).
 type Step = { icon: string; title: string; body: string; target?: number | 'more' };
@@ -27,19 +38,51 @@ const TAB_BAR_H = 56;
 const PAD = theme.spacing(4);
 const BTN = 44;
 
-export function OnboardingOverlay() {
+export function OnboardingOverlay({ onChoose }: { onChoose?: (c: FirstRunChoice) => void }) {
   const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const visible = useSyncExternalStore(onboardingStore.subscribe, onboardingStore.getSnapshot, onboardingStore.getSnapshot);
   const [i, setI] = useState(0);
 
-  // Auto-open on first run; a "Replay tour" action opens it again via the store.
-  useEffect(() => { hasSeenOnboarding().then((seen) => { if (!seen) onboardingStore.request(); }); }, []);
+  // Auto-open on first run (with the choice picker); "Replay tour" opens the tour.
+  useEffect(() => { hasSeenOnboarding().then((seen) => { if (!seen) onboardingStore.requestFirstRun(); }); }, []);
   // Always start a fresh run from the first step.
   useEffect(() => { if (visible) setI(0); }, [visible]);
 
   const finish = () => { void markOnboardingSeen(); onboardingStore.done(); };
   if (!visible) return null;
+
+  if (onboardingStore.mode() === 'pick') {
+    const choose = (id: FirstRunChoice | 'tour') => {
+      track('onboarding_step', { choice: id });
+      if (id === 'tour') { setI(1); onboardingStore.startTour(); return; }
+      finish();
+      onChoose?.(id);
+    };
+    return (
+      <Modal visible transparent animationType="fade" onRequestClose={finish}>
+        <View style={[st.fill, st.dimFull, st.center]}>
+          <View style={st.card}>
+            <Text style={st.skip} onPress={finish} accessibilityRole="button">Skip</Text>
+            <Text style={st.cardIcon}>👋</Text>
+            <Text style={st.title}>Welcome to SportnNote</Text>
+            <Text style={st.body}>What would you like to do first?</Text>
+            <View style={st.choices}>
+              {CHOICES.map((c) => (
+                <TouchableOpacity key={c.id} accessibilityRole="button" accessibilityLabel={c.label} activeOpacity={0.8} onPress={() => choose(c.id)} style={[st.choice, c.id === 'score' && st.choiceMain]}>
+                  <Text style={st.choiceIcon}>{c.icon}</Text>
+                  <View style={st.flex}>
+                    <Text style={[st.choiceLabel, c.id === 'score' && st.choiceLabelMain]}>{c.label}</Text>
+                    <Text style={[st.choiceHint, c.id === 'score' && st.choiceHintMain]}>{c.hint}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
@@ -114,4 +157,12 @@ const st = StyleSheet.create({
   dotOn: { backgroundColor: theme.colors.primary, width: 20 },
   row: { flexDirection: 'row', gap: theme.spacing(2), alignSelf: 'stretch' },
   flex: { flex: 1 },
+  choices: { alignSelf: 'stretch', gap: theme.spacing(2), marginTop: theme.spacing(1) },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt },
+  choiceMain: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  choiceIcon: { fontSize: 24 },
+  choiceLabel: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  choiceLabelMain: { color: '#06120D' },
+  choiceHint: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  choiceHintMain: { color: '#0B2A1E' },
 });
