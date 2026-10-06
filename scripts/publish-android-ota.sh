@@ -29,7 +29,9 @@ rm -rf dist-ota
 EXPO_NO_DOTENV=1 npx expo export --platform android --clear --output-dir dist-ota
 
 host="${EXPO_PUBLIC_SUPABASE_URL#https://}"
-if ! strings dist-ota/_expo/static/js/android/*.hbc | grep -qF "$host"; then
+# Search the bytecode file directly (a `strings | grep -q` pipe can trip
+# pipefail with SIGPIPE and report a false "missing").
+if ! LC_ALL=C grep -qaF "$host" dist-ota/_expo/static/js/android/*.hbc; then
   echo "ABORT: the bundle doesn't contain the live Supabase URL (would run in demo mode)." >&2
   exit 1
 fi
