@@ -29,8 +29,10 @@ verified. **Maintained continuously — new work is appended here as it ships.**
     retention, crash-free %, top errors and all feedback.
   - Auth: `CRON_SECRET` (newly set) or the service key.
   - Live dry run OK; no secret → 403.
-  - The schedule (pg_cron Mon 09:00 IST, secret in Vault) is set up by the founder's
-    one-time SQL.
+  - The schedule (pg_cron Mon 09:00 IST, secret in Vault) is **active**; the founder ran
+    the one-time SQL on 2026-10-07.
+  - The Resend key was invalid (401); the founder replaced it. Mail now sends as
+    `no-reply@sportnnote.in` (verified domain), and a test report was delivered.
 
 ---
 
