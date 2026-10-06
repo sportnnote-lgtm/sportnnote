@@ -55,8 +55,8 @@ describe('chess — results', () => {
     s = chess.reducer(s, { type: 'SET_WHITE', payload: { side: 'away' } });
     assert.equal(s.white, 'home');
   });
-  test('league tables use 1 / ½ / 0', () => {
-    assert.deepEqual(defaultStandingsConfig('chess'), { win: 1, draw: 0.5, loss: 0, order: ['h2h', 'for'] });
+  test('league tables use 1 / ½ / 0 with FIDE tie-breaks', () => {
+    assert.deepEqual(defaultStandingsConfig('chess'), { win: 1, draw: 0.5, loss: 0, order: ['sb', 'wins', 'h2h'] });
   });
 });
 

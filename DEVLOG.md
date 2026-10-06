@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Wave-1 sports validated against real events; official tie-breaks
+
+- **Replays:** 23 tests in `tests/replay-wave1.test.mts`, all passing:
+  - FIDE Candidates 2024 and Tata Steel 2024 (full crosstables, SB values, official order);
+  - 2024 Masters (Scheffler hole by hole, top 5 with T3);
+  - 2023 Ryder Cup (Rahm v Scheffler, every hole);
+  - Paris 2024 table tennis finals;
+  - Carrom World Cup 2018 and 2025 game scores.
+- **Fixed:**
+  - **Chess tie-breaks:** SB → wins → direct encounter (`sb`, `wins`).
+  - **ITTF group ranking:** 2/1 match points, among-the-tied games and points ratios,
+    restart (`h2hRatio`, `h2hPoints`, `restart`, rally `standingsPoints`).
+  - **Table tennis:** a "Serves first (toss)" setting.
+  - **Carrom:** the game score caps at 25; queen toggle wording.
+  - The points editor offers ½ for a chess draw and the new tie-breakers.
+- **Refactor:** pure `src/sports/rallyEngine.ts` (rallyCore now builds on it).
+- **Details and remaining gaps:** `docs/sport-coverage/replay-validation.md`.
+- 371 tests pass.
+
+---
+
 ### 2026-10-07 — Match reminders: email channel, user preferences, schedule
 
 - **`notify-upcoming`** (deployed):

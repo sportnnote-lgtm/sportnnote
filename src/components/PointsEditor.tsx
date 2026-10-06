@@ -7,7 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
-import { standingsConfigFromFormat, type TieBreaker } from '../data/standings';
+import { availableTieBreakers, standingsConfigFromFormat, type TieBreaker } from '../data/standings';
 import type { SportId } from '../core/types';
 
 const TB_LABEL: Record<TieBreaker, string> = {
@@ -15,6 +15,10 @@ const TB_LABEL: Record<TieBreaker, string> = {
   nrr: 'net run rate',
   diff: 'points difference',
   for: 'points scored',
+  wins: 'number of wins',
+  sb: 'Sonneborn-Berger',
+  h2hRatio: 'games ratio (among tied)',
+  h2hPoints: 'points ratio (among tied)',
 };
 
 type Val = number | string | boolean;
@@ -28,7 +32,9 @@ export function PointsEditor({ sport, value, onChange }: {
   // The tie-breakers that apply to this sport (cricket ranks ties by NRR, others by
   // points/goal difference). The organizer picks which one applies FIRST; the rest
   // keep their default order behind it.
-  const available: TieBreaker[] = sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
+  const available = availableTieBreakers(sport);
+  // Chess scores a draw as half a point.
+  const drawOptions = sport === 'chess' ? [0, 0.5, 1] : [0, 1, 2];
   const primary = cfg.order[0] ?? available[0];
   const setPrimary = (p: TieBreaker) => onChange('tieBreak', [p, ...available.filter((x) => x !== p)].join(','));
 
@@ -43,8 +49,8 @@ export function PointsEditor({ sport, value, onChange }: {
       </View>
       <View style={st.row}>
         <Text style={st.label}>Points per draw</Text>
-        {[0, 1, 2].map((n) => (
-          <SelectChip key={n} label={`${n}`} active={cfg.draw === n} onPress={() => onChange('drawPoints', n)} />
+        {drawOptions.map((n) => (
+          <SelectChip key={n} label={n === 0.5 ? '½' : `${n}`} active={cfg.draw === n} onPress={() => onChange('drawPoints', n)} />
         ))}
       </View>
       <View style={st.row}>
@@ -60,7 +66,7 @@ export function PointsEditor({ sport, value, onChange }: {
         ))}
       </View>
       <Text style={textStyles.muted}>
-        {cfg.win} for a win, {cfg.draw} for a draw, {cfg.loss} for a loss. Ties broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}.
+        {cfg.win} for a win, {cfg.draw === 0.5 ? '½' : cfg.draw} for a draw, {cfg.loss} for a loss. Ties broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}{cfg.restart ? ' — restarting among any still level' : ''}.
       </Text>
     </View>
   );

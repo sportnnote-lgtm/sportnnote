@@ -64,7 +64,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
               {Array.from({ length: 10 }, (_, n) => <SelectChip key={n} label={String(n)} active={coins === n} onPress={() => setCoins(n)} />)}
             </View>
           </View>
-          <SelectChip label={`👑 Queen covered${queenCounts ? ' (+3)' : ' (no points at 22+)'}`} active={queen} onPress={() => setQueen(!queen)} />
+          <SelectChip label={`👑 Winner covered the Queen${queenCounts ? ' (+3)' : ' (no points at 22+)'}`} active={queen} onPress={() => setQueen(!queen)} />
           <Button label={`✓ Record board · +${preview}`} variant={winner} onPress={record} />
         </>
       )}

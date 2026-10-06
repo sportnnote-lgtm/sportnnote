@@ -21,31 +21,63 @@ export interface TeamStanding {
   /** rate denominators (cricket: overs faced / bowled) — drives NRR */
   forUnits: number;
   againstUnits: number;
+  /** Sonneborn-Berger (chess): Σ over games of (share of the game's points won ×
+   *  that opponent's final points) — credit for scoring against strong finishers */
+  sb?: number;
   /** net rate (cricket: net run rate) when the sport supplies rate units */
   nrr?: number;
 }
 
 /** How a league/group table awards points and breaks ties. Points default per
- *  sport (football 3-1-0, others 2-1-0); the tie-break order is applied within
- *  any cluster still level after points. */
-export type TieBreaker = 'h2h' | 'nrr' | 'diff' | 'for';
+ *  sport (football 3-1-0, chess 1-½-0, table tennis ITTF 2-1, others 2-1-0); the
+ *  tie-break order is applied within any cluster still level after points.
+ *
+ *  Tie-breakers:
+ *   • h2h       — points from matches played only among the tied teams
+ *   • nrr       — net run rate (cricket)
+ *   • diff      — overall score difference;  for — overall score for
+ *   • wins      — number of wins (FIDE)
+ *   • sb        — Sonneborn-Berger (FIDE round robin)
+ *   • h2hRatio  — score ratio (e.g. games won ÷ lost) among the tied teams only (ITTF)
+ *   • h2hPoints — rally-point ratio among the tied teams only (ITTF), from the
+ *                 sport's `standingsPoints` (points won in every game) */
+export type TieBreaker = 'h2h' | 'nrr' | 'diff' | 'for' | 'wins' | 'sb' | 'h2hRatio' | 'h2hPoints';
 export interface StandingsConfig {
   win: number;
   draw: number;
   loss: number;
   order: TieBreaker[];
+  /** ITTF-style: when a criterion separates SOME of the tied teams, the ones
+   *  still level start the whole procedure again among themselves only (so
+   *  "among the tied" criteria are recomputed for the smaller group). */
+  restart?: boolean;
 }
-const isTieBreaker = (s: string): s is TieBreaker => s === 'h2h' || s === 'nrr' || s === 'diff' || s === 'for';
+const ALL_TB: TieBreaker[] = ['h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints'];
+const isTieBreaker = (s: string): s is TieBreaker => (ALL_TB as string[]).includes(s);
 
 /** Sensible defaults: football is the modern 3 points a win; cricket ranks ties
- *  by net run rate; everything else by points difference. Head-to-head first,
- *  which is how most real competitions read a two-team tie. */
+ *  by net run rate; chess and table tennis follow FIDE / ITTF; everything else
+ *  by points difference. Head-to-head first, which is how most real
+ *  competitions read a two-team tie. */
 export function defaultStandingsConfig(sport: SportId): StandingsConfig {
-  // Chess tables count game points: 1 / ½ / 0.
-  if (sport === 'chess') return { win: 1, draw: 0.5, loss: 0, order: ['h2h', 'for'] };
+  // Chess: game points 1 / ½ / 0. FIDE (C.07) leaves the order to each event;
+  // elite round robins (Candidates 2024, Tata Steel 2024) rank ties by
+  // Sonneborn-Berger, then number of wins, then direct encounter.
+  if (sport === 'chess') return { win: 1, draw: 0.5, loss: 0, order: ['sb', 'wins', 'h2h'] };
+  // ITTF group: 2 match points a win, 1 a loss (played); ties → among the tied
+  // players only: match points, then games ratio, then points ratio — restarting
+  // among any still level.
+  if (sport === 'tabletennis') return { win: 2, draw: 0, loss: 1, order: ['h2h', 'h2hRatio', 'h2hPoints'], restart: true };
   const win = sport === 'football' ? 3 : 2;
   const order: TieBreaker[] = sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
   return { win, draw: 1, loss: 0, order };
+}
+
+/** The tie-breakers an organiser can put first for a sport (PointsEditor). */
+export function availableTieBreakers(sport: SportId): TieBreaker[] {
+  if (sport === 'chess') return ['sb', 'wins', 'h2h'];
+  if (sport === 'tabletennis') return ['h2h', 'h2hRatio', 'h2hPoints'];
+  return sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
 }
 
 /** Read a tournament's per-sport override from its `formats[sport]` (reserved
@@ -58,7 +90,7 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
   const order = typeof fmt.tieBreak === 'string'
     ? (fmt.tieBreak as string).split(',').map((s) => s.trim()).filter(isTieBreaker)
     : [];
-  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order };
+  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}) };
 }
 
 /** DI so `standings.ts` can compute NRR without importing the sport registry
@@ -68,6 +100,11 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
 type RateProvider = (sport: SportId, state: unknown) => { home: number; away: number } | null;
 let rateProvider: RateProvider | null = null;
 export function setStandingsRateProvider(fn: RateProvider | null): void { rateProvider = fn; }
+/** Rally points won by each side over the whole match (table tennis: every
+ *  game's points) — the ITTF "points ratio" tie-break. Same DI pattern. */
+type PointsProvider = (sport: SportId, state: unknown) => { home: number; away: number } | null;
+let pointsProvider: PointsProvider | null = null;
+export function setStandingsPointsProvider(fn: PointsProvider | null): void { pointsProvider = fn; }
 
 /** League table for a sport, ranked by the config's points + tie-breakers. */
 export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): TeamStanding[] {
@@ -104,6 +141,17 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
     t.diff = t.for - t.against;
     if (t.forUnits > 0 && t.againstUnits > 0) t.nrr = t.for / t.forUnits - t.against / t.againstUnits;
   }
+  // Sonneborn-Berger needs everyone's final points, so it's a second pass.
+  if (cfg.order.includes('sb')) {
+    for (const t of table.values()) t.sb = 0;
+    for (const m of played) {
+      const h = table.get(m.homeTeam.id)!;
+      const a = table.get(m.awayTeam.id)!;
+      const share = m.winner === 'draw' ? 0.5 : 1;
+      if (m.winner === 'home' || m.winner === 'draw') h.sb! += share * a.points;
+      if (m.winner === 'away' || m.winner === 'draw') a.sb! += share * h.points;
+    }
+  }
   return rankTeams([...table.values()], played, cfg);
 }
 
@@ -122,8 +170,35 @@ export function rankTeams(rows: TeamStanding[], matches: Match[], cfg: Standings
   return out;
 }
 
-function numericKey(t: TeamStanding, tb: Exclude<TieBreaker, 'h2h'>): number {
-  return tb === 'nrr' ? (t.nrr ?? 0) : tb === 'diff' ? t.diff : t.for;
+function numericKey(t: TeamStanding, tb: 'nrr' | 'diff' | 'for' | 'wins' | 'sb'): number {
+  switch (tb) {
+    case 'nrr': return t.nrr ?? 0;
+    case 'diff': return t.diff;
+    case 'wins': return t.won;
+    case 'sb': return t.sb ?? 0;
+    default: return t.for;
+  }
+}
+
+/** won ÷ lost, with nothing lost ranking above any finite ratio. */
+const ratio = (won: number, lost: number) => (lost === 0 ? (won > 0 ? Number.POSITIVE_INFINITY : 0) : won / lost);
+
+/** Score ratio (e.g. games) — or, with `rally`, rally-point ratio — counting only
+ *  matches played among the cluster (ITTF 3.7.5.2). */
+function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match[], rally: boolean): number {
+  const ids = new Set(cluster.map((c) => c.teamId));
+  let won = 0;
+  let lost = 0;
+  for (const m of matches) {
+    if (!ids.has(m.homeTeam.id) || !ids.has(m.awayTeam.id)) continue;
+    const isHome = m.homeTeam.id === teamId;
+    if (!isHome && m.awayTeam.id !== teamId) continue;
+    const sc = rally ? pointsProvider?.(m.sport, m.state) ?? null : m.score ?? null;
+    if (!sc) continue;
+    won += isHome ? sc.home : sc.away;
+    lost += isHome ? sc.away : sc.home;
+  }
+  return ratio(won, lost);
 }
 
 /** Points a team took from matches played *only among the given cluster*. */
@@ -142,20 +217,30 @@ function headToHeadPoints(teamId: string, cluster: TeamStanding[], matches: Matc
   return pts;
 }
 
+function tieKey(t: TeamStanding, tb: TieBreaker, cluster: TeamStanding[], matches: Match[], cfg: StandingsConfig): number {
+  if (tb === 'h2h') return headToHeadPoints(t.teamId, cluster, matches, cfg);
+  if (tb === 'h2hRatio') return headToHeadRatio(t.teamId, cluster, matches, false);
+  if (tb === 'h2hPoints') return headToHeadRatio(t.teamId, cluster, matches, true);
+  return numericKey(t, tb);
+}
+
 function orderCluster(cluster: TeamStanding[], tbs: TieBreaker[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
   if (cluster.length <= 1) return cluster;
   if (tbs.length === 0) return [...cluster].sort((a, b) => a.name.localeCompare(b.name));
   const [tb, ...rest] = tbs;
-  const keyed = cluster.map((t) => ({ t, k: tb === 'h2h' ? headToHeadPoints(t.teamId, cluster, matches, cfg) : numericKey(t, tb) }));
+  const keyed = cluster.map((t) => ({ t, k: tieKey(t, tb, cluster, matches, cfg) }));
   keyed.sort((a, b) => b.k - a.k);
+  // Not separated at all by this criterion → straight on to the next one.
+  if (keyed[0].k === keyed[keyed.length - 1].k) return orderCluster(cluster, rest, matches, cfg);
   const res: TeamStanding[] = [];
   for (let i = 0; i < keyed.length; ) {
     let j = i;
     while (j < keyed.length && keyed[j].k === keyed[i].k) j++;
-    // Each sub-cluster that's still tied on this criterion drops to the NEXT
-    // tie-breaker (`rest`), so recursion always makes progress and terminates.
+    // A sub-group still level: ITTF restarts the whole order among just them
+    // (it's strictly smaller, so recursion terminates); otherwise continue with
+    // the NEXT tie-breaker.
     const sub = keyed.slice(i, j).map((x) => x.t);
-    res.push(...orderCluster(sub, rest, matches, cfg));
+    res.push(...orderCluster(sub, cfg.restart ? cfg.order : rest, matches, cfg));
     i = j;
   }
   return res;

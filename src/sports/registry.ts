@@ -4,7 +4,7 @@
  */
 import type { SportId } from '../core/types';
 import type { SportPlugin } from './types';
-import { setStandingsRateProvider } from '../data/standings';
+import { setStandingsPointsProvider, setStandingsRateProvider } from '../data/standings';
 import { footballPlugin } from './football';
 import { cricketPlugin } from './cricket';
 import { basketballPlugin } from './basketball';
@@ -61,6 +61,7 @@ export function getSport(id: SportId): SportPlugin<any> {
   if (!rateWired) {
     rateWired = true;
     setStandingsRateProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsRate?.(state) ?? null));
+    setStandingsPointsProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsPoints?.(state) ?? null));
   }
   return SPORTS[id];
 }

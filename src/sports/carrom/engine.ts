@@ -2,7 +2,9 @@
  * Carrom engine (ICF rules, singles/doubles). A game is a series of BOARDS. The
  * board winner scores 1 point for each of the opponent's coins left on the board,
  * plus 3 for the Queen if they pocketed and covered it — but the Queen only counts
- * while the winner's game total is under 22. A game ends when a side reaches the
+ * while the winner's game total is under 22 (r.52-54: "3 points up to and
+ * including 21"; a Queen covered by the LOSER scores nobody anything). The most
+ * a board can be worth is 12. A game ends when a side reaches the
  * target (25), or after the board limit (8) — then the higher total wins; level
  * after the limit → an extra (tie-break) board. A match is best of 1 or 3 games.
  */
@@ -63,7 +65,10 @@ export function reducer(s: CarromState, a: { type: string; side?: Side; payload?
   // Level after the board limit: keep playing (tie-break boards) until someone leads.
 
   if (!gameWinner) return { ...s, current, boardsInGame, boards, seq: s.seq + 1 };
-  const games = [...s.games, [current.home, current.away] as [number, number]];
+  // Results are written with the winner on the target: a game "won 25-22" even if
+  // the last board took them past 25 (Laws of Carrom r.56 — a game is 25 points).
+  const final = { ...current, [gameWinner]: Math.min(current[gameWinner], s.target) };
+  const games = [...s.games, [final.home, final.away] as [number, number]];
   const gamesWon = { ...s.gamesWon, [gameWinner]: s.gamesWon[gameWinner] + 1 };
   const ended = gamesWon[gameWinner] >= s.gamesToWin;
   return { ...s, current: { home: 0, away: 0 }, boardsInGame: 0, boards, games, gamesWon, ended, seq: s.seq + 1 };

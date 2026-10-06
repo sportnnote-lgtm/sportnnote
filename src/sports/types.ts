@@ -230,6 +230,9 @@ export interface SportPlugin<S = unknown> {
    *  overs faced by each side (a side bowled out counts its full quota), which
    *  drives Net Run Rate. Sports without a rate omit this. */
   standingsRate?: (state: S) => { home: number; away: number } | null;
+  /** Rally points won by each side over the match (every game's points) — the
+   *  ITTF "points ratio" league tie-break. Rally sports supply it. */
+  standingsPoints?: (state: S) => { home: number; away: number } | null;
   /** The scorer's control panel for this sport. */
   ScoringControls: React.FC<ScoringControlsProps<S>>;
   /** Optional rich widget shown on the live page (e.g. football pitch map). */

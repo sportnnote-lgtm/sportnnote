@@ -35,6 +35,14 @@ export const tableTennisPlugin = makeRallyPlugin({
       ],
     },
     {
+      // ITTF 2.13.1: the toss winner chooses to serve or receive first.
+      key: 'firstServe', label: 'Serves first (toss)', type: 'choice', default: 'home',
+      options: [
+        { value: 'home', label: 'Home' },
+        { value: 'away', label: 'Away' },
+      ],
+    },
+    {
       key: 'playersPerSide', label: 'Players', type: 'choice', default: 1,
       options: [
         { value: 1, label: 'Singles' },
