@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Text, View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DefaultTheme, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, getStateFromPath, createNavigationContainerRef, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../core/theme';
@@ -70,6 +70,7 @@ import MatchSquadScreen from '../screens/MatchSquadScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import type { RootStackParamList, TabParamList } from './types';
+import { trackScreen } from '../core/telemetry';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -84,6 +85,9 @@ const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'Club
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
 // which crashes back to Home. So: the configured paths first; otherwise the first
 // path segment is a stack screen (opened on top of Tabs, query → params); else Home.
+// Screen views for analytics (route names only — never params).
+const navRef = createNavigationContainerRef<RootStackParamList>();
+
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['sportnnote://', 'https://sportnnote.in'],
   config: {
@@ -175,7 +179,13 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme} linking={linking}>
+    <NavigationContainer
+      theme={navTheme}
+      linking={linking}
+      ref={navRef}
+      onReady={() => trackScreen(navRef.getCurrentRoute()?.name)}
+      onStateChange={() => trackScreen(navRef.getCurrentRoute()?.name)}
+    >
       <Stack.Navigator>
         {!authed ? (
           <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />

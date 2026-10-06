@@ -8,6 +8,11 @@ import { isSupabaseConfigured } from './src/core/supabase';
 import { hydrateDemo, startDemoAutosave } from './src/data/demoStore';
 import { hydrateReminderPrefs } from './src/data/reminderPrefs';
 import { hydrateTimeZone } from './src/core/time';
+import { startTelemetry } from './src/core/telemetry';
+import ErrorBoundary from './src/components/ErrorBoundary';
+
+// Error handlers + app_open as early as possible (no-op in demo mode).
+startTelemetry();
 
 export default function App() {
   // In demo mode, wait for the persisted store to load before first render (avoids
@@ -30,11 +35,13 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       {ready && (
-        <AuthProvider>
-          <OrgContextProvider>
-            <RootNavigator />
-          </OrgContextProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <OrgContextProvider>
+              <RootNavigator />
+            </OrgContextProvider>
+          </AuthProvider>
+        </ErrorBoundary>
       )}
     </SafeAreaProvider>
   );
