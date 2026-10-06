@@ -39,9 +39,8 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   path after company formation); web QR `docs/share/sportnnote-web-qr.png`.
 - **APK:** preview build `d0f3aedd` (includes telemetry and all of 0026–0028's client
   changes).
-- **Pending:**
-  - The founder runs the 0029 bundle on live.
-  - Then republish the web app (telemetry is a no-op against live until 0029 exists).
+- **LIVE 2026-10-07:** the founder ran the 0029 bundle; anon `track_events` → 1, tables 401,
+  `kpi_weekly` 42501. Web republished; the live site's first `track_events` call → 200.
 
 ---
 
