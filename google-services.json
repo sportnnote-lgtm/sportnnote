@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "458557673593",
+    "project_id": "sportnnote-5c5e7",
+    "storage_bucket": "sportnnote-5c5e7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458557673593:android:e4935e6ee21f23d4a244a8",
+        "android_client_info": {
+          "package_name": "in.sportnnote.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJYlLwjEep9cFgi9gWt7YpMvkQWl-r9ro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
