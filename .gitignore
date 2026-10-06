@@ -46,3 +46,4 @@ supabase/.temp/
 # Secrets — never commit
 *firebase-adminsdk*.json
 .env.local.bak
+dist-ota/

@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — First over-the-air Android update; `npm run android:ota`
+
+- **The native layer hasn't changed since the 2 Oct APK** (only the JS `firebase` dep was
+  added), so an EAS Update on channel `preview`, runtime 1.0.0, reaches every installed
+  test APK. This fixes the old APK broken by 0026 and ships all the work up to `a972b9f`.
+  Update group `3721bc3f`.
+- **Gotcha:** the macOS `hermesc` binary had vanished from
+  `node_modules/hermes-compiler/hermesc/osx-bin/` (empty since 22 Aug), so Android bundling
+  failed with "Cannot find the hermesc executable". Restored from the pinned npm tarball;
+  the sha512 matched package-lock.
+- **`scripts/publish-android-ota.sh`** (`npm run android:ota -- "msg"`):
+  - loads the live keys;
+  - checks hermesc;
+  - `expo export --platform android --clear`;
+  - aborts unless the Hermes bundle contains the live Supabase host;
+  - `eas update --skip-bundler`.
+
+---
+
 ### 2026-10-07 — Pilot readiness pack: legal, feedback, account deletion, children's analytics (0030)
 
 - **Privacy Policy + Terms** (`src/data/legal.ts`, `LegalScreen`):

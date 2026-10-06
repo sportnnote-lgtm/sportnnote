@@ -9,7 +9,7 @@
 | **What they get** | The web app | The APK (full app), or the web app |
 | **Link** | **app.sportnnote.in** (or the QR `docs/share/sportnnote-web-qr.png`) | The APK link from the latest EAS build, or app.sportnnote.in |
 | **Install** | Open in **Safari** → Share → **Add to Home Screen**. It opens full-screen like an app. | Open the APK link → Download → allow "Install unknown apps" for the browser when asked → Install. |
-| **Updates** | Automatic: every `npm run web:publish` is live on next open. | Code-only changes: `eas update` reaches installed APKs on next open, no reinstall. New native features: a new APK to send. |
+| **Updates** | Automatic: every `npm run web:publish` is live on next open. | Code-only changes: `npm run android:ota -- "what changed"` reaches installed APKs (downloaded on next open, applied on the open after). New native features: a new APK to send. |
 | **Missing** | No background push notifications, no QR scanning | Nothing |
 | **Cost** | Free | Free |
 
