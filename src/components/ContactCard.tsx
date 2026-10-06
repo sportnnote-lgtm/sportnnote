@@ -1,12 +1,13 @@
-/** The owner-only contact card with per-channel OTP verification. For the
- *  player's own EMAIL this sends a real code (via the send-contact-otp edge
- *  function) and verifies it server-side. Phone (no SMS provider yet) and the
- *  guardian card fall back to a clearly-labelled on-screen code. */
+/** The owner-only contact card with per-channel OTP verification. Live: a real
+ *  code is sent (email via Resend, phone/guardian phone via WhatsApp) and checked
+ *  server-side — the server owns the verified flags, so if a code can't be sent
+ *  we say so rather than fake it. Demo: a clearly-labelled on-screen code. */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, Pill, textStyles } from './ui';
-import { verifyContact, beginContactVerification, verifyContactOtp } from '../data/repos';
+import { verifyContact, beginContactVerification, verifyContactOtp, type OtpChannel, type OtpVia } from '../data/repos';
+import { isSupabaseConfigured } from '../core/supabase';
 
 type Channel = 'phone' | 'email';
 
@@ -28,6 +29,8 @@ export function ContactCard({
   verify = verifyContact,
   emailOtp = false,
   phoneOtp = false,
+  canVerify = true,
+  phoneOtpChannel = 'phone',
 }: {
   playerId: string;
   phone?: string;
@@ -44,7 +47,14 @@ export function ContactCard({
   emailOtp?: boolean;
   /** enable REAL WhatsApp OTP for the phone row (only for the player's own card) */
   phoneOtp?: boolean;
+  /** false hides Verify on every row; or per channel (e.g. a guardian's email is
+   *  verified by them linking their account, not from this card) */
+  canVerify?: boolean | { phone?: boolean; email?: boolean };
+  /** which server OTP channel the phone row uses (the guardian card: 'guardian_phone') */
+  phoneOtpChannel?: Extract<OtpChannel, 'phone' | 'guardian_phone'>;
 }) {
+  const verifiable = (c: Channel) => (typeof canVerify === 'boolean' ? canVerify : !!canVerify[c]);
+  const otpChannel = (c: Channel): OtpChannel => (c === 'phone' ? phoneOtpChannel : 'email');
   const sessionKey = `${playerId}:${title}`;
   const saved = otpSession.get(sessionKey);
   const [verified, setVerified] = useState<Record<Channel, boolean>>({
@@ -55,8 +65,11 @@ export function ContactCard({
   const [code, setCode] = useState(saved?.code ?? '');
   const [sent, setSent] = useState(saved?.sent ?? '');   // the on-screen code (fallback modes only)
   const [real, setReal] = useState(saved?.real ?? false); // true ⇒ a code was actually emailed
+  const [via, setVia] = useState<OtpVia | null>(null); // how the real code went out
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Why a code couldn't be sent (shown under that row; live mode never fakes one).
+  const [notice, setNotice] = useState<{ channel: Channel; msg: string } | null>(null);
 
   // Persist the open verification across remounts (see otpSession above).
   useEffect(() => {
@@ -65,6 +78,7 @@ export function ContactCard({
   }, [sessionKey, active, real, sent, code]);
 
   const start = async (channel: Channel) => {
+    setNotice(null);
     setActive(channel);
     setCode('');
     setError(null);
@@ -72,12 +86,13 @@ export function ContactCard({
     setReal(false);
     // Real delivered OTP for the player's own email (Resend) or phone (WhatsApp);
     // everything else uses the on-screen code until its channel is wired up.
-    if ((emailOtp && channel === 'email') || (phoneOtp && channel === 'phone')) {
+    if (isSupabaseConfigured || (emailOtp && channel === 'email') || (phoneOtp && channel === 'phone')) {
       setBusy(true);
-      const r = await beginContactVerification(playerId, channel);
+      const r = await beginContactVerification(playerId, otpChannel(channel));
       setBusy(false);
-      if (r.sent) { setReal(true); return; }
-      setSent(r.demoCode ?? '');
+      if (r.sent) { setReal(true); setVia(r.via ?? null); return; }
+      if (!r.demoCode) { setActive(null); setNotice({ channel, msg: r.reason ?? 'Couldn’t send a code right now.' }); return; }
+      setSent(r.demoCode);
     } else {
       setSent(String(Math.floor(100000 + Math.random() * 900000)));
     }
@@ -87,9 +102,11 @@ export function ContactCard({
     setError(null);
     if (real) {
       setBusy(true);
-      const ok = await verifyContactOtp(playerId, channel, code.trim());
+      let ok = false;
+      try { ok = await verifyContactOtp(playerId, otpChannel(channel), code.trim()); }
+      catch (e) { setBusy(false); setError(e instanceof Error ? e.message : 'Couldn’t verify — try again.'); return; }
       setBusy(false);
-      if (!ok) { setError(`Incorrect or expired code — check your ${channel === 'phone' ? 'WhatsApp' : 'email'} and try again.`); return; }
+      if (!ok) { setError(`Incorrect or expired code — check your ${channel === 'phone' ? (via === 'sms' ? 'SMS' : 'WhatsApp') : 'email'} and try again.`); return; }
     } else {
       if (code.trim() !== sent) { setError('Incorrect code — try again.'); return; }
       await verify(playerId, channel);
@@ -105,16 +122,17 @@ export function ContactCard({
         <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{value}</Text>
         {verified[channel] ? (
           <Pill label="✓ Verified" color={theme.colors.surfaceAlt} textColor={theme.colors.primary} />
-        ) : active === channel ? null : (
+        ) : active === channel || !verifiable(channel) ? null : (
           <Text style={st.verifyLink} onPress={() => start(channel)}>Verify</Text>
         )}
       </View>
+      {notice?.channel === channel && active !== channel ? <Text style={st.hint}>{notice.msg}</Text> : null}
       {active === channel && !verified[channel] && (
         <View style={st.otp}>
           <Text style={textStyles.muted}>
             {busy ? 'Sending a code…'
               : real ? (channel === 'phone'
-                  ? `We sent a 6-digit code on WhatsApp to ${value}. Enter it below.`
+                  ? `We sent a 6-digit code by ${via === 'sms' ? 'SMS' : 'WhatsApp'} to ${value}. Enter it below.`
                   : `We emailed a 6-digit code to ${value}. Enter it below.`)
               : 'Enter the 6-digit code below.'}
           </Text>
@@ -165,14 +183,14 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   icon: { fontSize: 16 },
   verifyLink: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
-  otp: { gap: theme.spacing(1), paddingLeft: theme.spacing(6) },
+  otp: { gap: theme.spacing(1), paddingLeft: theme.spacing(6), alignSelf: 'stretch' },
   otpRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   input: {
-    flex: 1, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+    flex: 1, minWidth: 0, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
     borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3),
     color: theme.colors.text, fontSize: theme.font.body, letterSpacing: 4,
   },
-  confirmBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4) },
+  confirmBtn: { flexShrink: 0, backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4) },
   confirmText: { color: '#06120D', fontSize: theme.font.small, fontWeight: '800' },
   hint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   error: { color: theme.colors.danger, fontSize: theme.font.tiny },

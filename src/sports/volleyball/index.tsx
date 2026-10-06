@@ -116,38 +116,46 @@ const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Playe
   </View>
 );
 
-const ScoringControls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
-  const s = state as VolleyballState;
-  const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
-    dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
-  return (
-    <View style={{ gap: theme.spacing(4) }}>
-      <Row label={`🏐 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
-      <Row label={`🏐 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
-      <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
-      <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
-      <Row label={`🧱 Block — ${homeName}`} roster={homeRoster} onPick={(p) => act('BLOCK', 'home', 'blocks', p)} fallback={`Block ${homeName}`} />
-      <Row label={`🧱 Block — ${awayName}`} roster={awayRoster} onPick={(p) => act('BLOCK', 'away', 'blocks', p)} fallback={`Block ${awayName}`} />
-      {(() => {
-        // Timeouts this set (2 per set in indoor).
-        const setNo = s.setsWon.home + s.setsWon.away + 1;
-        const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
-        const label = (side: 'home' | 'away', nm: string) => `⏱️ Timeout — ${nm} (${Math.max(0, 2 - used(side))} left)`;
-        return (
-          <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
-            <Button label={label('home', homeName)} variant="ghost" style={{ flex: 1 }} disabled={used('home') >= 2} onPress={() => dispatch({ type: 'TIMEOUT', side: 'home' })} />
-            <Button label={label('away', awayName)} variant="ghost" style={{ flex: 1 }} disabled={used('away') >= 2} onPress={() => dispatch({ type: 'TIMEOUT', side: 'away' })} />
-          </View>
-        );
-      })()}
-      <RallyPointEditor
-        events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🏐"
-        periodLabel={(e) => `Set ${e.set ?? 1}`}
-      />
-    </View>
-  );
-};
+/** Point / ace / (block) / timeout controls — volleyball's, parameterised so a
+ *  future set-based net sport without blocks can reuse them. */
+export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet: number }): SportPlugin<VolleyballState>['ScoringControls'] {
+  const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+    const s = state as VolleyballState;
+    const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
+      dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
+    return (
+      <View style={{ gap: theme.spacing(4) }}>
+        <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
+        <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
+        <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
+        <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
+        {opts.blocks && <Row label={`🧱 Block — ${homeName}`} roster={homeRoster} onPick={(p) => act('BLOCK', 'home', 'blocks', p)} fallback={`Block ${homeName}`} />}
+        {opts.blocks && <Row label={`🧱 Block — ${awayName}`} roster={awayRoster} onPick={(p) => act('BLOCK', 'away', 'blocks', p)} fallback={`Block ${awayName}`} />}
+        {opts.timeoutsPerSet > 0 && (() => {
+          const setNo = s.setsWon.home + s.setsWon.away + 1;
+          const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
+          const left = (side: 'home' | 'away') => Math.max(0, opts.timeoutsPerSet - used(side));
+          const label = (side: 'home' | 'away', nm: string) => `⏱️ Timeout — ${nm} (${left(side)} left)`;
+          return (
+            <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
+              <Button label={label('home', homeName)} variant="ghost" style={{ flex: 1 }} disabled={left('home') === 0} onPress={() => dispatch({ type: 'TIMEOUT', side: 'home' })} />
+              <Button label={label('away', awayName)} variant="ghost" style={{ flex: 1 }} disabled={left('away') === 0} onPress={() => dispatch({ type: 'TIMEOUT', side: 'away' })} />
+            </View>
+          );
+        })()}
+        <RallyPointEditor
+          events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+          homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon={opts.icon}
+          periodLabel={(e) => `Set ${e.set ?? 1}`}
+        />
+      </View>
+    );
+  };
+  return Controls;
+}
+
+// Timeouts this set: 2 per set in indoor volleyball.
+const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, timeoutsPerSet: 2 });
 
 const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
   const s = state as VolleyballState;

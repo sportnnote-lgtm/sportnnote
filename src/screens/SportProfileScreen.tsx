@@ -115,6 +115,35 @@ export default function SportProfileScreen() {
           <EmptyState icon={plugin.icon} title={emptyMsg} compact />
         ) : (
           <>
+            {sport === 'golf' ? (() => {
+              // Golf reads in rounds, scoring average and percentages — not
+              // matches/wins or raw counters.
+              const t = bySport.totals;
+              const pct = (hit: number, n: number) => (n ? `${Math.round((hit / n) * 100)}%` : '–');
+              const avg = t.completeRounds ? (t.completeStrokes / t.completeRounds).toFixed(1) : '–';
+              const golfLines = stats.recent.filter((l) => l.sport === 'golf' && l.stats.completeRounds);
+              const best = golfLines.length ? Math.min(...golfLines.map((l) => l.stats.strokes)) : null;
+              return (
+                <>
+                  <View style={st.statGrid}>
+                    <Stat value={String(t.rounds ?? bySport.matches)} label="Rounds" />
+                    <Stat value={avg} label="Scoring avg" />
+                    <Stat value={best != null ? String(best) : '–'} label="Best round" />
+                  </View>
+                  <Text style={st.totalsLabel}>Totals · golf</Text>
+                  <View style={st.statGrid}>
+                    <Stat value={String(t.eagles ?? 0)} label="Eagles+" tone="neutral" />
+                    <Stat value={String(t.birdies ?? 0)} label="Birdies" tone="neutral" />
+                    <Stat value={String(t.pars ?? 0)} label="Pars" tone="neutral" />
+                    <Stat value={String(bySport.wins)} label="Wins" tone="neutral" />
+                    <Stat value={t.putts && t.rounds ? (t.putts / t.rounds).toFixed(1) : '–'} label="Putts/round" tone="neutral" />
+                    <Stat value={pct(t.girHit ?? 0, t.girHoles ?? 0)} label="Greens (GIR)" tone="neutral" />
+                    <Stat value={pct(t.firHit ?? 0, t.firHoles ?? 0)} label="Fairways" tone="neutral" />
+                  </View>
+                </>
+              );
+            })() : (
+            <>
             {/* Headline record — accent-coloured so the eye lands here first. */}
             <View style={st.statGrid}>
               <Stat value={String(bySport.matches)} label="Matches" />
@@ -141,6 +170,8 @@ export default function SportProfileScreen() {
                   })}
                 </View>
               </>
+            )}
+            </>
             )}
           </>
         )}
@@ -191,20 +222,29 @@ export default function SportProfileScreen() {
           <>
             <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Match history</Text>
             {history.map((l) => {
-              const openable = matchById.has(l.matchId);
+              const golfRound = !!l.eventId;
+              const openable = golfRound || matchById.has(l.matchId);
+              const golfLine = golfRound
+                ? [
+                    l.stats.strokes ? `${l.stats.strokes}${l.stats.toPar != null ? ` (${l.stats.toPar === 0 ? 'E' : l.stats.toPar > 0 ? `+${l.stats.toPar}` : l.stats.toPar})` : ''}` : '',
+                    l.stats.stableford ? `${l.stats.stableford} pts` : '',
+                    l.stats.birdies ? `${l.stats.birdies} birdie${l.stats.birdies === 1 ? '' : 's'}` : '',
+                    l.stats.putts ? `${l.stats.putts} putts` : '',
+                  ].filter(Boolean).join(' · ')
+                : '';
               const row = (
                 <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>
-                      vs {l.opponent ?? 'TBD'}
+                      {golfRound ? `⛳ ${l.opponent ?? 'Round'}` : `vs ${l.opponent ?? 'TBD'}`}
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
+                      {golfRound ? golfLine : Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
                     </Text>
                   </View>
                   <Pill
-                    label={l.won ? 'WON' : 'LOST'}
+                    label={golfRound ? (l.won ? '1ST' : 'PLAYED') : l.won ? 'WON' : 'LOST'}
                     color={l.won ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
                     textColor={l.won ? theme.colors.primary : theme.colors.textMuted}
                   />
@@ -212,7 +252,7 @@ export default function SportProfileScreen() {
                 </Card>
               );
               return openable ? (
-                <TouchableOpacity accessibilityRole="button" key={l.id} activeOpacity={0.85} onPress={() => openMatch(l.matchId)}>{row}</TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" key={l.id} activeOpacity={0.85} onPress={() => (golfRound ? nav.navigate('GolfRound', { eventId: l.eventId! }) : openMatch(l.matchId))}>{row}</TouchableOpacity>
               ) : (
                 <View key={l.id}>{row}</View>
               );

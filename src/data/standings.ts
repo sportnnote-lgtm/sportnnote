@@ -41,6 +41,8 @@ const isTieBreaker = (s: string): s is TieBreaker => s === 'h2h' || s === 'nrr' 
  *  by net run rate; everything else by points difference. Head-to-head first,
  *  which is how most real competitions read a two-team tie. */
 export function defaultStandingsConfig(sport: SportId): StandingsConfig {
+  // Chess tables count game points: 1 / ½ / 0.
+  if (sport === 'chess') return { win: 1, draw: 0.5, loss: 0, order: ['h2h', 'for'] };
   const win = sport === 'football' ? 3 : 2;
   const order: TieBreaker[] = sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
   return { win, draw: 1, loss: 0, order };
@@ -234,6 +236,10 @@ export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> 
   pickleball: [{ key: 'points', label: 'Points' }],
   padel: [{ key: 'points', label: 'Points' }],
   squash: [{ key: 'points', label: 'Points' }],
+  tabletennis: [{ key: 'points', label: 'Points' }],
+  chess: [{ key: 'wins', label: 'Wins' }, { key: 'draws', label: 'Draws' }],
+  carrom: [{ key: 'points', label: 'Points' }, { key: 'queens', label: 'Queens' }],
+  golf: [{ key: 'birdies', label: 'Birdies' }, { key: 'holesWon', label: 'Holes won' }],
 };
 
 /** The headline stat used to rank individuals in each sport. */

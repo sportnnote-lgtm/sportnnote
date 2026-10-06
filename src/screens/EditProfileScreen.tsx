@@ -3,7 +3,7 @@
  *  represented. Club & jersey aren't global: they live under each sport, since
  *  every team / tournament / game can mean a different team and number. */
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
@@ -30,6 +30,10 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   const [dob, setDob] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  // Privacy (migration 0026): contact details are hidden by default; adults may
+  // choose to show their mobile / email on their public profile.
+  const [showPhone, setShowPhone] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   // Parent/guardian — for young players without their own phone/email.
   const [gName, setGName] = useState('');
   const [gPhone, setGPhone] = useState('');
@@ -54,6 +58,8 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       setDob(p.dob ?? '');
       setPhone(p.phone ?? '');
       setEmail(p.email ?? '');
+      setShowPhone(!!p.showPhone);
+      setShowEmail(!!p.showEmail);
       setGName(p.guardian?.name ?? '');
       setGPhone(p.guardian?.phone ?? '');
       setGEmail(p.guardian?.email ?? '');
@@ -135,6 +141,9 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         email: email.trim(),
         phoneVerified,
         emailVerified,
+        // Under-18s can never make contact details public (also enforced server-side).
+        showPhone: age >= 18 && showPhone && !!phone.trim(),
+        showEmail: age >= 18 && showEmail && !!email.trim(),
         guardian,
         sports,
         sportDetails: kept,
@@ -177,7 +186,28 @@ export default function EditProfileScreen({ route, navigation }: Props) {
           <View style={st.flex}><TextField label="Contact number" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" /></View>
           <View style={st.flex}><TextField label="Email" value={email} onChange={setEmail} placeholder="you@email.com" autoCapitalize="none" /></View>
         </View>
-        <Text style={textStyles.muted}>Your contact details are visible only to you.</Text>
+        <Card style={{ gap: theme.spacing(2) }}>
+          <Text style={textStyles.h3}>🔒 Who can see your contact details</Text>
+          {guardianRequired ? (
+            <Text style={textStyles.muted}>
+              Hidden. Players under 18 can&apos;t show their contact details publicly — coaches and scouts reach you through your parent/guardian.
+            </Text>
+          ) : (
+            <>
+              <Text style={textStyles.muted}>
+                Hidden by default — only you and SportnNote support can see them. Turn one on to show it on your public profile.
+              </Text>
+              <View style={st.switchRow}>
+                <Text style={[textStyles.body, st.flex]}>Show my mobile number</Text>
+                <Switch value={showPhone && !!phone.trim()} onValueChange={setShowPhone} disabled={!phone.trim()} accessibilityLabel="Show my mobile number on my profile" />
+              </View>
+              <View style={st.switchRow}>
+                <Text style={[textStyles.body, st.flex]}>Show my email</Text>
+                <Switch value={showEmail && !!email.trim()} onValueChange={setShowEmail} disabled={!email.trim()} accessibilityLabel="Show my email on my profile" />
+              </View>
+            </>
+          )}
+        </Card>
 
         <TextField label="About you (optional)" value={bio} onChange={setBio} placeholder="A short note about you — how you play, what you're into…" multiline />
 
@@ -274,5 +304,6 @@ const st = StyleSheet.create({
   removeTxt: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800' },
   addLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   ageHint: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   requiredNote: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
 });

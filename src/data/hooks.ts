@@ -1,5 +1,6 @@
 /** Thin React hooks over the repository. Refetch on screen focus so items an
  *  organizer just created appear when returning to a list. */
+import { getFieldEvents } from './golf';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -414,14 +415,19 @@ export function usePlayerProfile(playerId: string | null) {
         setScoped(null);
         return;
       }
-      Promise.all([getPlayer(playerId), getPlayerStatLines(playerId), getMatches()]).then(([p, lines, matches]) => {
+      Promise.all([getPlayer(playerId), getPlayerStatLines(playerId), getMatches(), getFieldEvents()]).then(([p, lines, matches, events]) => {
         if (!on) return;
         setPlayer(p);
-        const friendlyIds = new Set(matches.filter((m) => !m.tournamentId).map((m) => m.id));
+        // Friendly = no tournament: a friendly match, or a casual golf round.
+        const friendlyIds = new Set([
+          ...matches.filter((m) => !m.tournamentId).map((m) => m.id),
+          ...events.filter((e) => !e.tournamentId).map((e) => e.id),
+        ]);
+        const isFriendly = (l: { matchId: string; eventId?: string }) => friendlyIds.has(l.eventId ?? l.matchId);
         setScoped({
           all: aggregate(lines),
-          official: aggregate(lines.filter((l) => !friendlyIds.has(l.matchId))),
-          friendly: aggregate(lines.filter((l) => friendlyIds.has(l.matchId))),
+          official: aggregate(lines.filter((l) => !isFriendly(l))),
+          friendly: aggregate(lines.filter(isFriendly)),
         });
       });
       return () => {

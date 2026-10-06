@@ -1,8 +1,9 @@
 /** Squad management for a team — a captain/coach adds players to the roster.
  *  The invite link (to hand squad-building to a captain) is a demo stub for now;
  *  full link auth + matchday XI/subs selection for every sport come next. */
+import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -101,7 +102,7 @@ export default function SquadScreen() {
                 const inv = await createInvite(team.id, team.name);
                 setInviteCode(inv.token);
               } catch (e) {
-                Alert.alert('Couldn’t create an invite', (e as Error).message);
+                notice('Couldn’t create an invite', (e as Error).message);
               } finally {
                 setBusy(false);
               }

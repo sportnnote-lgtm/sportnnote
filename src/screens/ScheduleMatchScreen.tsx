@@ -16,12 +16,12 @@ import { VenueField } from '../components/VenueField';
 import { ConflictNotice } from '../components/ConflictNotice';
 import { ClubQuickPick } from '../components/ClubQuickPick';
 import { SPORT_LIST, getSport, participantMode, type ParticipantMode } from '../sports/registry';
-import { useTeams, useMatches } from '../data/hooks';
+import { useTeams, useMatches, usePlayers } from '../data/hooks';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
 import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMatchScorer } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
-import type { SportId, Team } from '../core/types';
+import type { Player, SportId, Team } from '../core/types';
 
 // What phase of the tournament a match belongs to. 'league' = a plain
 // table/round-robin game (no tag); 'group' = a group-stage game (needs a group
@@ -30,7 +30,7 @@ type Phase = 'league' | 'group' | KoStage;
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type PickTeam = Pick<Team, 'id' | 'name' | 'colorHex'>;
+type PickTeam = Pick<Team, 'id' | 'name' | 'colorHex'> & { roster?: string[] };
 
 // For teams created on the fly (a friendly between two ad-hoc sides): auto-derive a
 // short code from the name and cycle a color so each new team looks distinct.
@@ -55,6 +55,9 @@ export default function ScheduleMatchScreen() {
   const [sport, setSport] = useState<SportId | null>(route.params?.sport ?? null);
   const [teamNonce, setTeamNonce] = useState(0); // bump to refetch after creating a team on the fly
   const teams = useTeams(sport ?? undefined, teamNonce);
+  // Individual sports pick PEOPLE: everyone in the app is searchable, not just
+  // those who already have an entry in this sport (a new sport has none).
+  const allPlayers = usePlayers();
   const [home, setHome] = useState<string | null>(null);
   const [away, setAway] = useState<string | null>(null);
 
@@ -125,7 +128,10 @@ export default function ScheduleMatchScreen() {
   const makeCreateHandler = (side: 'home' | 'away') => async (name: string): Promise<boolean> => {
     if (!sport) return false;
     try {
-      const team = await createTeam({ name, shortName: shortFrom(name), sport, colorHex: TEAM_PALETTE[teams.length % TEAM_PALETTE.length], adhoc: true });
+      // An individual is a real person: create the player record too and link it
+      // as the entry's roster, so results and stats land on their profile.
+      const solo = participantMode(sport, format) === 'individual' ? await createReplacementPlayer(name, sport) : null;
+      const team = await createTeam({ name, shortName: shortFrom(name), sport, colorHex: TEAM_PALETTE[teams.length % TEAM_PALETTE.length], adhoc: true, ...(solo ? { roster: [solo.id] } : {}) });
       setTeamNonce((n) => n + 1); // refetch so it shows in both pickers
       (side === 'home' ? setHome : setAway)(team.id);
       return true;
@@ -166,10 +172,35 @@ export default function ScheduleMatchScreen() {
   // match taps once instead of typing their name.
   const pickMe = (side: 'home' | 'away') => async () => {
     if (!sport || !profile?.fullName) return;
+    const myId = await getMyPlayerId(profile.id);
+    const me = myId ? allPlayers.find((p) => p.id === myId) : undefined;
+    if (me) { await pickPerson(side)(me.id); return; }
     const mine = teams.find((t) => t.name.toLowerCase() === profile.fullName.toLowerCase());
     if (mine) { (side === 'home' ? setHome : setAway)(mine.id); return; }
     await makeCreateHandler(side)(profile.fullName);
   };
+
+  // Pick an existing PERSON for an individual sport: reuse their one-person entry
+  // in this sport if they have one, else create it (roster = them), so their
+  // profile gets the result.
+  const pickPerson = (side: 'home' | 'away') => async (playerId: string) => {
+    if (!sport) return;
+    const p: Player | undefined = allPlayers.find((x) => x.id === playerId);
+    if (!p) return;
+    const existing = teams.find((t) => (t as PickTeam).roster?.length === 1 && (t as PickTeam).roster![0] === p.id);
+    if (existing) { (side === 'home' ? setHome : setAway)(existing.id); return; }
+    try {
+      const team = await createTeam({ name: p.fullName, shortName: shortFrom(p.fullName), sport, colorHex: TEAM_PALETTE[teams.length % TEAM_PALETTE.length], adhoc: true, roster: [p.id] });
+      setTeamNonce((n) => n + 1);
+      (side === 'home' ? setHome : setAway)(team.id);
+    } catch {
+      setError('Could not add that player.');
+    }
+  };
+  // People already represented by a one-person entry in this sport (shown as
+  // entries) — the people list skips them so nobody appears twice.
+  const soloIds = new Set(teams.map((t) => (t as PickTeam).roster).filter((r): r is string[] => !!r && r.length === 1).map((r) => r[0]));
+  const people = allPlayers.filter((p) => !soloIds.has(p.id) && !p.reported).map((p) => ({ id: p.id, name: p.fullName }));
 
   // Singles ⇄ Doubles for racket sports. Flipping the structure clears both sides
   // (a singles pick isn't a doubles pick) and updates playersPerSide.
@@ -234,6 +265,9 @@ export default function ScheduleMatchScreen() {
   // How the two sides are picked for this sport + format: two teams, two
   // individuals (Singles), or two pairs (Doubles).
   const mode: ParticipantMode = sport ? participantMode(sport, format) : 'team';
+  // Golf stroke play / Stableford is a FIELD event (a group on one leaderboard),
+  // set up on its own screen; match play stays head-to-head here.
+  const golfField = sport === 'golf' && String(format.competition ?? 'stroke') !== 'match';
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -245,6 +279,16 @@ export default function ScheduleMatchScreen() {
 
         <SportPicker sport={sport} onPick={pickSport} />
 
+        {golfField ? (
+          <>
+            <SportFormatEditor sport="golf" value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} omitKeys={['extraHoles']} />
+            <Text style={textStyles.muted}>
+              ⛳ Stroke play and Stableford put everyone on one leaderboard — pick the course, add your group (and Handicap Indexes), and score hole by hole. Choose “Match play” above for a head-to-head game.
+            </Text>
+            <Button label="⛳ Set up the round →" onPress={() => nav.navigate('GolfRoundSetup', { tournamentId, competition: String(format.competition ?? 'stroke'), holes: String(format.holes ?? '18') })} />
+          </>
+        ) : (
+        <>
         {sport && (
           <>
             {/* Racket sports pick their structure first — Singles (one player a
@@ -278,8 +322,8 @@ export default function ScheduleMatchScreen() {
               </>
             ) : mode === 'individual' ? (
               <>
-                <TeamPicker noun="player" label="Player 1" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} onPickMe={pickMe('home')} meName={profile?.fullName} />
-                <TeamPicker noun="player" label="Player 2" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} />
+                <TeamPicker noun="player" label="Player 1" teams={teams} selected={home} onSelect={setHome} onClear={() => setHome(null)} onCreate={makeCreateHandler('home')} onPickMe={pickMe('home')} meName={profile?.fullName} people={people} onSelectPerson={pickPerson('home')} />
+                <TeamPicker noun="player" label="Player 2" teams={teams} selected={away} onSelect={setAway} onClear={() => setAway(null)} onCreate={makeCreateHandler('away')} people={people} onSelectPerson={pickPerson('away')} />
               </>
             ) : (
               <>
@@ -348,6 +392,8 @@ export default function ScheduleMatchScreen() {
           }
           onPress={submit}
         />
+        </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -399,6 +445,8 @@ function TeamPicker({
   onCreatePair,
   onPickMe,
   meName,
+  people,
+  onSelectPerson,
 }: {
   label: string;
   noun?: 'team' | 'pair' | 'player';
@@ -413,6 +461,9 @@ function TeamPicker({
   /** individual sports only: one-tap select the signed-in user */
   onPickMe?: () => void;
   meName?: string;
+  /** individual sports: everyone in the app, searchable by name */
+  people?: { id: string; name: string }[];
+  onSelectPerson?: (playerId: string) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -424,6 +475,7 @@ function TeamPicker({
   const q = query.trim().toLowerCase();
   // Search kicks in at 3+ letters.
   const results = q.length >= 3 ? teams.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 25) : [];
+  const personResults = q.length >= 3 && people ? people.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 25 - results.length) : [];
 
   const searchPlaceholder = noun === 'player' ? 'Search players (type 3+ letters)…' : noun === 'pair' ? 'Search pairs (type 3+ letters)…' : 'Search all teams (type 3+ letters)…';
   const createPlaceholder = noun === 'player' ? 'e.g. Rafael Nadal' : noun === 'pair' ? 'e.g. Nadal / Alcaraz' : 'e.g. Sunday FC';
@@ -462,14 +514,17 @@ function TeamPicker({
             <>
               <TextField label="" value={query} onChange={setQuery} placeholder={searchPlaceholder} autoCapitalize="none" />
               {q.length > 0 && q.length < 3 && <Text style={st.tinyLabel}>Keep typing…</Text>}
-              {results.length > 0 && (
+              {(results.length > 0 || personResults.length > 0) && (
                 <View style={st.chips}>
                   {results.map((t) => (
                     <SelectChip key={t.id} label={t.name} dotColor={t.colorHex} active={false} onPress={() => onSelect(t.id)} />
                   ))}
+                  {personResults.map((p) => (
+                    <SelectChip key={`p-${p.id}`} label={`👤 ${p.name}`} active={false} onPress={() => onSelectPerson?.(p.id)} />
+                  ))}
                 </View>
               )}
-              {q.length >= 3 && results.length === 0 && (
+              {q.length >= 3 && results.length === 0 && personResults.length === 0 && (
                 <Text style={textStyles.muted}>No {noun}s match “{query.trim()}”. Create one below.</Text>
               )}
             </>

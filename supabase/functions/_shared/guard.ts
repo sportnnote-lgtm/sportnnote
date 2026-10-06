@@ -74,3 +74,49 @@ export function safeEqual(a: string, b: string): boolean {
   for (let i = 0; i < Math.max(ea.length, eb.length); i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
   return diff === 0;
 }
+
+/** Send a plain-text email via Resend from the no-reply sender (replies go to the
+ *  support inbox). Returns false when RESEND_API_KEY isn't set or the send fails. */
+export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+  const key = Deno.env.get('RESEND_API_KEY');
+  if (!key) return false;
+  const from = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'SportnNote <onboarding@resend.dev>';
+  const replyTo = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], reply_to: replyTo, subject, text }),
+    });
+    if (!res.ok) console.error('resend send failed', res.status, await res.text().catch(() => ''));
+    return res.ok;
+  } catch (e) {
+    console.error('resend error', e);
+    return false;
+  }
+}
+
+/** Push to every device of the given profiles via Expo. Returns messages sent. */
+export async function pushToProfiles(profileIds: string[], msg: { title: string; body: string; data?: Record<string, unknown> }): Promise<number> {
+  if (!profileIds.length) return 0;
+  const { data: tokens } = await admin.from('push_tokens').select('token').in('profile_id', profileIds);
+  const messages = (tokens ?? []).map((t) => ({
+    to: t.token as string, sound: 'default', title: msg.title, body: msg.body, data: msg.data ?? {}, channelId: 'default',
+  }));
+  for (let i = 0; i < messages.length; i += 100) {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(messages.slice(i, i + 100)),
+    });
+  }
+  return messages.length;
+}
+
+/** The text a parent/guardian needs to link their own account to a child. */
+export const guardianLinkSteps = (code: string) =>
+  `To read and reply in the app:\n` +
+  `1) Install SportnNote and sign in with YOUR OWN account (not your child's).\n` +
+  `2) Go to Settings -> "Link as a parent/guardian".\n` +
+  `3) Enter this code: ${code}   (valid for 7 days)\n\n` +
+  `Messages about your child then come to you, not to them. Your contact details are never shown to the sender.`;

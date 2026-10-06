@@ -9,8 +9,9 @@
  * the score update instantly. The reducer being pure means the server can
  * replay the same events to authoritative state.
  */
+import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -358,7 +359,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         await setMatchScorers(matchId, next);
       } catch (e) {
         setScorerIds(prev);
-        Alert.alert('Couldn’t save scorer', e instanceof Error ? e.message : 'Please try again.');
+        notice('Couldn’t save scorer', e instanceof Error ? e.message : 'Please try again.');
         return;
       }
       // Tell a newly-added scorer they're on — prep reminders follow before kickoff.
@@ -404,7 +405,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         await setMatchHosts(matchId, ids);
       } catch (e) {
         setMatchHostIds(prev);
-        Alert.alert('Couldn’t save hosts', e instanceof Error ? e.message : 'Please try again.');
+        notice('Couldn’t save hosts', e instanceof Error ? e.message : 'Please try again.');
       }
     },
     [matchId, matchHostIds]

@@ -12,6 +12,11 @@ export function ageFromDob(dob?: string): number | undefined {
   return age >= 0 && age < 130 ? age : undefined;
 }
 
+/** A player's age: from their DOB when we can see it, else the server-derived
+ *  age (live reads of other people don't include the private DOB). */
+export const ageOf = (p: { dob?: string; age?: number } | null | undefined): number | undefined =>
+  ageFromDob(p?.dob) ?? p?.age;
+
 /** Under-18 players surface the guardian flow more prominently. */
 export const isMinor = (dob?: string): boolean => {
   const a = ageFromDob(dob);

@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
   let body: { playerId?: unknown; channel?: unknown; code?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
   const playerId = typeof body.playerId === 'string' ? body.playerId : '';
-  const channel = body.channel === 'email' || body.channel === 'phone' ? body.channel : null;
+  const channel = body.channel === 'email' || body.channel === 'phone' || body.channel === 'guardian_phone' ? body.channel : null;
   const code = typeof body.code === 'string' ? body.code.trim() : '';
   if (!playerId || !channel || !code) return json({ error: 'playerId, channel, code required' }, 400);
 
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: 'unauthorized' }, 401);
 
   const svc = createClient(URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: player } = await svc.from('players').select('id, profile_id').eq('id', playerId).single();
+  const { data: player } = await svc.from('players').select('id, profile_id, guardian').eq('id', playerId).single();
   if (!player || player.profile_id !== user.id) return json({ error: 'forbidden' }, 403);
 
   const { data: otp } = await svc.from('contact_otps').select('code_hash, attempts, expires_at').eq('player_id', playerId).eq('channel', channel).single();
@@ -62,7 +62,13 @@ Deno.serve(async (req) => {
   }
 
   // Correct: mark verified and clear the code.
-  await svc.from('players').update(channel === 'email' ? { email_verified: true } : { phone_verified: true }).eq('id', playerId);
+  // Correct: flip the flag server-side (the app can't set these itself).
+  if (channel === 'guardian_phone') {
+    const guardian = { ...((player.guardian as Record<string, unknown> | null) ?? {}), phoneVerified: true };
+    await svc.from('players').update({ guardian }).eq('id', playerId);
+  } else {
+    await svc.from('players').update(channel === 'email' ? { email_verified: true } : { phone_verified: true }).eq('id', playerId);
+  }
   await svc.from('contact_otps').delete().eq('player_id', playerId).eq('channel', channel);
   return json({ verified: true });
 });

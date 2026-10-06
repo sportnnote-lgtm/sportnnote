@@ -20,6 +20,12 @@
  * Secrets: reuses RESEND_API_KEY (+ optional OTP_FROM / SUPPORT_FROM).
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { rateLimit } from '../_shared/guard.ts';
+
+type OtpChannel = 'email' | 'phone' | 'guardian_phone';
+
+/** A 6-digit code from the CSPRNG (not Math.random). */
+const newCode = () => String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -110,8 +116,9 @@ Deno.serve(async (req) => {
   let body: { playerId?: unknown; channel?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
   const playerId = typeof body.playerId === 'string' ? body.playerId : '';
-  const channel = body.channel === 'email' ? 'email' : body.channel === 'phone' ? 'phone' : null;
-  if (!playerId || !channel) return json({ error: 'playerId and channel (email|phone) required' }, 400);
+  const channel: OtpChannel | null =
+    body.channel === 'email' || body.channel === 'phone' || body.channel === 'guardian_phone' ? body.channel : null;
+  if (!playerId || !channel) return json({ error: 'playerId and channel (email|phone|guardian_phone) required' }, 400);
 
   const authHeader = req.headers.get('Authorization') ?? '';
   const authClient = createClient(URL, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
@@ -119,20 +126,24 @@ Deno.serve(async (req) => {
   if (!user) return json({ sent: false, reason: 'unauthorized' });
 
   const svc = createClient(URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: player } = await svc.from('players').select('id, profile_id, email, phone').eq('id', playerId).single();
+  const { data: player } = await svc.from('players').select('id, profile_id, email, phone, guardian').eq('id', playerId).single();
   if (!player || player.profile_id !== user.id) return json({ sent: false, reason: 'forbidden' });
+  if (!(await rateLimit('contact-otp', `${playerId}:${channel}`, 5, 3600))) return json({ sent: false, reason: 'too-many' });
   // Read the target from the player row — never trust a client-supplied address.
-  const target = ((channel === 'email' ? player.email : player.phone) ?? '').trim();
-  if (channel === 'email' && !target.includes('@')) return json({ sent: false, reason: 'no-email' });
-  if (channel === 'phone' && target.replace(/[^0-9]/g, '').length < 8) return json({ sent: false, reason: 'no-phone' });
+  // guardian_phone: the parent/guardian's number on the (minor's) profile.
+  const guardianPhone = (player.guardian as { phone?: string } | null)?.phone ?? '';
+  const target = (channel === 'email' ? player.email : channel === 'phone' ? player.phone : guardianPhone) ?? '';
+  const t = target.trim();
+  if (channel === 'email' && !t.includes('@')) return json({ sent: false, reason: 'no-email' });
+  if (channel !== 'email' && t.replace(/[^0-9]/g, '').length < 8) return json({ sent: false, reason: 'no-phone' });
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = newCode();
   const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   const up = await svc.from('contact_otps').upsert({
-    player_id: playerId, channel, code_hash: await sha256(code), target, attempts: 0, expires_at: expires,
+    player_id: playerId, channel, code_hash: await sha256(code), target: t, attempts: 0, expires_at: expires,
   }, { onConflict: 'player_id,channel' });
   if (up.error) { console.error('contact_otps upsert failed', up.error); return json({ sent: false, reason: 'store-failed', detail: up.error.message.slice(0, 200) }); }
 
-  const r = channel === 'email' ? await sendEmail(target, code) : await sendWhatsApp(target, code);
+  const r = channel === 'email' ? await sendEmail(t, code) : await sendWhatsApp(t, code);
   return json({ sent: r.ok, reason: r.reason, detail: r.detail });
 });

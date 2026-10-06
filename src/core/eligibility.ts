@@ -5,7 +5,7 @@
  *  • 18+      → the player's own mobile AND email must be verified.
  * A player with no date of birth can't be assessed, so they're not eligible.
  */
-import { ageFromDob } from './age';
+import { ageOf } from './age';
 import type { Player } from './types';
 
 export interface Eligibility {
@@ -14,12 +14,14 @@ export interface Eligibility {
 }
 
 export function matchEligibility(p: Player): Eligibility {
-  const age = ageFromDob(p.dob);
+  const age = ageOf(p);
   if (age === undefined) return { ok: false, reason: 'Date of birth not set' };
 
   if (age < 18) {
     const g = p.guardian;
-    if (!g?.name) return { ok: false, reason: 'No parent/guardian added' };
+    // For someone else's child the guardian's details are private — only a
+    // `present` flag comes back (players_view), which is enough to assess.
+    if (!g?.name && !g?.present) return { ok: false, reason: 'No parent/guardian added' };
     if (p.verification?.status !== 'approved') return { ok: false, reason: 'Guardian/age proof not verified' };
     if (!g.phoneVerified) return { ok: false, reason: 'Guardian mobile not verified' };
     if (!g.emailVerified) return { ok: false, reason: 'Guardian email not verified' };

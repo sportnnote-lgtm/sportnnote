@@ -44,6 +44,18 @@ export type RootStackParamList = {
   NotificationPrefs: undefined;
   Settings: undefined;
   Support: undefined;
+  /** In-app messaging (migration 0027). */
+  Messages: undefined;
+  /** threadId = an existing conversation; playerId = message this player (resumes
+   *  or starts). viaGuardian: the player is under 18, so it goes to their guardian. */
+  Conversation: { threadId?: string; playerId?: string; title?: string; viaGuardian?: boolean; readOnly?: boolean };
+  GuardianLink: undefined;
+  /** Support: reported-message queue (migration 0027). */
+  MessageReports: undefined;
+  /** Golf (field event) — a round's scorecard + leaderboard, and its setup. */
+  GolfRound: { eventId: string };
+  /** competition/holes are primitives so the web URL round-trips (no objects). */
+  GolfRoundSetup: { tournamentId?: string; nextOf?: string; competition?: string; holes?: string } | undefined;
   TryNewSport: { sports?: SportId[] } | undefined;
   PlayerProfile: { playerId: string };
   SportProfile: { playerId: string; sport: SportId };

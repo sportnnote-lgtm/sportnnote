@@ -21,6 +21,7 @@ import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/t
 import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
 import { onboardingStore } from '../data/onboardingStore';
 import { getMyPlayerId } from '../data/repos';
+import { getUnreadThreadCount } from '../data/messages';
 import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -69,11 +70,13 @@ export default function SettingsScreen() {
   const nav = useNavigation<Nav>();
   const { profile, demo, signOut } = useAuth();
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [unread, setUnread] = useState(0);
 
   useFocusEffect(
     React.useCallback(() => {
       let on = true;
       getMyPlayerId(profile?.id).then((id) => on && setPlayerId(id));
+      getUnreadThreadCount().then((n) => on && setUnread(n));
       return () => {
         on = false;
       };
@@ -111,14 +114,20 @@ export default function SettingsScreen() {
               <View style={st.divider} />
             </>
           )}
+          <Row icon="💬" label="Messages" value={unread ? `${unread} unread` : undefined} onPress={() => nav.navigate('Messages')} />
+          <View style={st.divider} />
           <Row icon="★" label="Following" onPress={() => nav.navigate('Following')} />
           <View style={st.divider} />
           <Row icon="🎟️" label="Join a team with a code" onPress={() => nav.navigate('JoinTeam')} />
+          <View style={st.divider} />
+          <Row icon="👪" label="Link as a parent/guardian" value="Get messages about your child" onPress={() => nav.navigate('GuardianLink')} />
         </Group>
 
         {isSupport(profile?.role) && (
           <Group title="Support tools">
             <Row icon="🛡️" label="Review verifications" onPress={() => nav.navigate('VerificationReview')} />
+            <View style={st.divider} />
+            <Row icon="🚩" label="Message reports" onPress={() => nav.navigate('MessageReports')} />
           </Group>
         )}
 

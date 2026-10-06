@@ -25,6 +25,10 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   pickleball: 60,
   squash: 60,
   padel: 75,
+  tabletennis: 45,
+  chess: 120, // rapid/blitz rounds are shorter; classical can run 4h+
+  carrom: 60,
+  golf: 300, // an 18-hole round + turnaround
 };
 
 /** The nominal on-ground window for a sport (minutes). Falls back to 2 hours. */

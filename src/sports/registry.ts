@@ -15,6 +15,10 @@ import { kabaddiPlugin } from './kabaddi';
 import { pickleballPlugin } from './pickleball';
 import { padelPlugin } from './padel';
 import { squashPlugin } from './squash';
+import { tableTennisPlugin } from './tabletennis';
+import { chessPlugin } from './chess';
+import { carromPlugin } from './carrom';
+import { golfPlugin } from './golf';
 
 export const SPORTS: Record<SportId, SportPlugin<any>> = {
   football: footballPlugin,
@@ -27,6 +31,10 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
   pickleball: pickleballPlugin,
   padel: padelPlugin,
   squash: squashPlugin,
+  tabletennis: tableTennisPlugin,
+  chess: chessPlugin,
+  carrom: carromPlugin,
+  golf: golfPlugin,
 };
 
 export const SPORT_LIST = Object.values(SPORTS);

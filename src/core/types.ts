@@ -16,7 +16,11 @@ export type SportId =
   | 'kabaddi'
   | 'pickleball'
   | 'padel'
-  | 'squash';
+  | 'squash'
+  | 'tabletennis'
+  | 'chess'
+  | 'carrom'
+  | 'golf';
 
 /** `support` is the internal support/admin role — it can review verification
  *  documents and has every organizer/scorer capability (a superset). */
@@ -94,6 +98,14 @@ export interface Player {
   photoUrl?: string;
   /** position & handedness per sport the player plays */
   sportDetails?: Partial<Record<SportId, SportDetail>>;
+  /** Age in years, derived server-side. Live reads of other people return this
+   *  instead of `dob` (which is private) — use ageOf(p) rather than reading either. */
+  age?: number;
+  /** Privacy opt-ins (adults only; default off): show my mobile / email publicly. */
+  showPhone?: boolean;
+  showEmail?: boolean;
+  /** a parent/guardian has linked their own account (gets messages about this player) */
+  guardianLinked?: boolean;
 }
 
 /** Parent/guardian contact for a young player. Phone & email are verified the
@@ -108,6 +120,11 @@ export interface GuardianContact {
    *  The compliance artifact for minors — captured at sign-up, carried in the
    *  guardian jsonb on profiles/players. */
   consentedAt?: string;
+  /** Live reads of SOMEONE ELSE's minor (players_view, migration 0026): the
+   *  guardian's name/phone/email are private, so only these status flags come
+   *  back — `present` says a guardian is on file. */
+  hidden?: boolean;
+  present?: boolean;
 }
 
 /** Document-backed verification of age (and that the guardian is genuine),
@@ -304,7 +321,10 @@ export interface AcademicYear {
  */
 export interface StatLine {
   id: UUID;
+  /** the match this line came from ('' for a field-event line — see eventId) */
   matchId: UUID;
+  /** field events (a golf round…): the event this line came from */
+  eventId?: UUID;
   playerId: UUID;
   sport: SportId;
   stats: Record<string, number>;
@@ -771,4 +791,55 @@ export interface TeamSummary {
   name: string;
   colorHex?: string;
   sports: SportId[];
+}
+
+/* ----------------------------- Field events ------------------------------ */
+// N participants, one leaderboard (golf stroke play / Stableford; later athletics,
+// swimming…). Lives ALONGSIDE head-to-head matches — see docs/sports/GOLF_DESIGN.md.
+
+export type FieldEventStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+
+/** One round / heat / session. A multi-round tournament = several events with
+ *  the same tournamentId (roundNo 1, 2, …). A casual round has no tournament. */
+export interface FieldEvent {
+  id: UUID;
+  tournamentId?: UUID;
+  sport: SportId;
+  title: string;
+  roundNo: number;
+  startsAt: string;
+  status: FieldEventStatus;
+  /** sport-specific format (golf: scoring, holes, allowance, courseId, tee…) */
+  format: Record<string, unknown>;
+  /** player ids who manage this event (besides the tournament's managers) */
+  hostIds?: UUID[];
+  createdBy?: UUID;
+}
+
+export type FieldEntryStatus = 'playing' | 'finished' | 'dnf' | 'wd' | 'dq';
+
+/** One participant in one event. `result` is the sport's payload (golf: the card). */
+export interface FieldEntry {
+  id: UUID;
+  eventId: UUID;
+  playerId: UUID;
+  /** playing group (golf 3/4-ball), 1-based */
+  groupNo: number;
+  teeTime?: string;
+  startHole?: number;
+  /** golf: the player's WHS Handicap Index at the time (self-entered snapshot) */
+  handicapIndex?: number;
+  result: unknown;
+  status: FieldEntryStatus;
+  updatedAt?: string;
+}
+
+/** A golf course: holes (par + stroke index) and tees (rating + slope). */
+export interface GolfCourse {
+  id: UUID;
+  name: string;
+  city?: string;
+  holes: { n: number; par: number; si: number }[];
+  tees: { name: string; courseRating?: number; slope?: number; rating9F?: number; slope9F?: number; rating9B?: number; slope9B?: number }[];
+  createdBy?: UUID;
 }

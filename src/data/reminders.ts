@@ -19,7 +19,7 @@ import { followStore } from './followStore';
 import { notify, syncScheduledLocal } from '../core/notifications';
 import { useAuth } from '../core/auth';
 import { tournamentHostPlayerIds } from '../core/org';
-import { ageFromDob } from '../core/age';
+import { ageOf } from '../core/age';
 import type { Match, MatchSquads, Organization, Player, TeamLeadership, Tournament } from '../core/types';
 
 const HOUR = 3600_000;
@@ -82,7 +82,7 @@ export interface DueReminder { key: string; playerId: string; matchId?: string; 
 export function computeContactReminders(players: Player[], sent: Set<string>): DueReminder[] {
   const due: DueReminder[] = [];
   for (const p of players) {
-    const age = ageFromDob(p.dob);
+    const age = ageOf(p);
     if (age === undefined || age < 18) continue; // minors don't need their own contacts
     if (p.phoneVerified && p.emailVerified) continue; // already done
     const key = `adultcontact:${p.id}`;

@@ -7,12 +7,14 @@ import { theme } from '../core/theme';
 import { Card, Pill, Button, SelectChip, EmptyState, textStyles, plural } from './ui';
 import { SectionHeader, SECTION_CAP } from './SectionHeader';
 import { ContactCard } from './ContactCard';
+import { inviteGuardianToLink } from '../data/messages';
+import { isSupabaseConfigured } from '../core/supabase';
 import { Linking } from 'react-native';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
 import { updatePlayer, verifyGuardianContact, submitVerificationDoc, reviewVerification, verificationDocUrl, getPendingVerifications, SUPPORT_EMAIL } from '../data/repos';
 import { pickPhoto } from '../core/photo';
 import { pickDocument } from '../core/document';
-import { ageFromDob, isMinor } from '../core/age';
+import { ageFromDob, ageOf, isMinor } from '../core/age';
 import { notify } from '../core/notifications';
 import { useAuth } from '../core/auth';
 import { isSupport } from '../core/roles';
@@ -26,6 +28,7 @@ import type { Player, SportId } from '../core/types';
 export function ProfileView({
   playerId,
   follow,
+  onMessage,
   onOpenSport,
   onEditProfile,
   onOpenOrg,
@@ -37,6 +40,8 @@ export function ProfileView({
 }: {
   playerId: string | null;
   follow?: { following: boolean; onToggle: () => void };
+  /** someone else's profile: open a conversation (routed to the guardian for under-18s) */
+  onMessage?: () => void;
   /** open the dedicated per-sport profile page */
   onOpenSport?: (sport: SportId) => void;
   /** own profile: edit your own details */
@@ -142,7 +147,7 @@ export function ProfileView({
           </Text>
           <Text style={textStyles.muted}>
             {player.houseName ?? 'Independent'}
-            {ageFromDob(player.dob) !== undefined ? ` · ${ageFromDob(player.dob)} yrs` : ''}
+            {ageOf(player) !== undefined ? ` · ${ageOf(player)} yrs` : ''}
             {player.gender ? ` · ${player.gender}` : ''}
             {player.city ? ` · ${player.city}` : ''}
             {player.jerseyNo ? ` · #${player.jerseyNo}` : ''}
@@ -167,6 +172,13 @@ export function ProfileView({
           label={follow.following ? '✓ Following' : '+ Follow player'}
           variant={follow.following ? 'ghost' : 'primary'}
           onPress={follow.onToggle}
+        />
+      )}
+      {onMessage && !ownProfile && (
+        <Button
+          label={(ageOf(player) ?? 0) >= 18 ? '💬 Message' : '💬 Message their parent/guardian'}
+          variant="ghost"
+          onPress={onMessage}
         />
       )}
 
@@ -213,6 +225,9 @@ export function ProfileView({
       {onEditProfile && (player.phone || player.email) && (
         <ContactCard
           playerId={player.id}
+          title={player.showPhone || player.showEmail
+            ? `Contact · ${[player.showPhone && 'mobile', player.showEmail && 'email'].filter(Boolean).join(' & ')} shown on your profile`
+            : 'Contact · only you can see this'}
           phone={player.phone}
           email={player.email}
           phoneVerified={player.phoneVerified}
@@ -220,6 +235,16 @@ export function ProfileView({
           emailOtp
           phoneOtp
         />
+      )}
+
+      {/* Someone else's profile: contact details arrive only when they chose to
+          show them (adults) or you run a team they were invited to (migration 0026). */}
+      {!onEditProfile && (player.phone || player.email) && (
+        <Card style={{ gap: theme.spacing(1) }}>
+          <Text style={textStyles.h3}>📇 Contact</Text>
+          {player.phone ? <Text style={textStyles.body}>📞 {player.phone}{player.phoneVerified ? '  ✓ verified' : ''}</Text> : null}
+          {player.email ? <Text style={textStyles.body}>✉️ {player.email}{player.emailVerified ? '  ✓ verified' : ''}</Text> : null}
+        </Card>
       )}
 
       {/* Parent/guardian — shown to the profile owner (young players whose
@@ -234,7 +259,15 @@ export function ProfileView({
           phoneVerified={player.guardian.phoneVerified}
           emailVerified={player.guardian.emailVerified}
           verify={verifyGuardianContact}
+          // Live: the guardian's EMAIL is verified by them linking their own
+          // account (code emailed to them); their PHONE by a WhatsApp code to
+          // their number, checked server-side (guardian_phone channel).
+          canVerify={isSupabaseConfigured ? { phone: true, email: false } : true}
+          phoneOtpChannel="guardian_phone"
         />
+      )}
+      {onEditProfile && player.guardian && (ageOf(player) ?? 0) < 18 && (
+        <GuardianLinkCard playerId={player.id} linked={!!player.guardianLinked} hasEmail={!!player.guardian.email} />
       )}
 
       {(onEditProfile || player.verification) && (
@@ -563,3 +596,36 @@ const st = StyleSheet.create({
   sportIcon: { fontSize: 26 },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h2, fontWeight: '700' },
 });
+
+/** Own profile of an under-18: get the parent/guardian onto SportnNote so messages
+ *  about this player reach THEM (the player never receives messages directly). */
+function GuardianLinkCard({ playerId, linked, hasEmail }: { playerId: string; linked: boolean; hasEmail: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const invite = async () => {
+    setBusy(true);
+    const r = await inviteGuardianToLink(playerId);
+    setBusy(false);
+    setNote(r.sent ? 'Sent! Ask your parent/guardian to check their email for the code.' : (r.reason ?? 'Could not send — try again later.'));
+  };
+  return (
+    <Card style={{ gap: 8 }}>
+      <Text style={textStyles.h3}>👪 Messages go to your parent/guardian</Text>
+      {linked ? (
+        <Text style={textStyles.muted}>Your parent/guardian has linked their account. Coaches and scouts who message about you reach them.</Text>
+      ) : (
+        <>
+          <Text style={textStyles.muted}>
+            Coaches and scouts can&apos;t message players under 18 directly. Invite your parent/guardian to link their own SportnNote account so they can read and reply.
+          </Text>
+          {hasEmail ? (
+            <Button label={busy ? 'Sending…' : '📨 Email them a link code'} variant="ghost" onPress={invite} disabled={busy} />
+          ) : (
+            <Text style={textStyles.muted}>Add your parent/guardian&apos;s email in Edit profile first.</Text>
+          )}
+          {note ? <Text style={textStyles.body}>{note}</Text> : null}
+        </>
+      )}
+    </Card>
+  );
+}

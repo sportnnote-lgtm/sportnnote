@@ -22,6 +22,7 @@ import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
+import { ttServer } from './tabletennis/serve';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -56,7 +57,7 @@ function gameWinner(h: number, a: number, target: number, winBy: number): 'home'
 }
 
 export interface RallyOpts {
-  id: 'pickleball' | 'squash';
+  id: 'pickleball' | 'squash' | 'tabletennis';
   name: string;
   icon: string;
   /** config value of `scoring` that means serve-based: 'sideout' | 'english' */
@@ -70,6 +71,10 @@ export interface RallyOpts {
   defaults: { playersPerSide: number; target: number; winBy: number; gamesToWin: number };
   hasCourt: boolean;
   formatFields: FormatField[];
+  /** rally-scoring serve order: 'winner' = the rally winner serves next
+   *  (pickleball/squash); 'tt' = table tennis (2 serves each, 1 each from 10-10,
+   *  opening server alternates by game). */
+  serveRule?: 'winner' | 'tt';
 }
 
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
@@ -162,8 +167,12 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // opening server before the first point). Doubles names the side; singles the
     // player. No service-court shown here — that rule differs by sport.
     let serverSide: 'home' | 'away' = s.serving;
-    for (let i = s.events.length - 1; i >= 0; i--) {
-      if (s.events[i].kind === 'point') { serverSide = s.events[i].side as 'home' | 'away'; break; }
+    if (opts.serveRule === 'tt') {
+      serverSide = ttServer(s.current.home, s.current.away, s.games.length, 'home');
+    } else {
+      for (let i = s.events.length - 1; i >= 0; i--) {
+        if (s.events[i].kind === 'point') { serverSide = s.events[i].side as 'home' | 'away'; break; }
+      }
     }
     const serverSideName = serverSide === 'home' ? homeName : awayName;
     const serverName = s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;

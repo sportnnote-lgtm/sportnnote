@@ -79,6 +79,8 @@ const STAT_LABEL: Record<string, string> = {
   tackles: 'tackles', interceptions: 'interceptions', saves: 'saves', passes: 'passes',
   attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
   runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
+  wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
+  rounds: 'rounds', birdies: 'birdies', eagles: 'eagles', holesWon: 'holes won',
 };
 /** Singular form for count === 1, only where it differs from the plural label.
  *  Keys absent here (mass nouns / abbreviations like "pts", "wkts", "open-play")
@@ -88,6 +90,8 @@ const STAT_LABEL_ONE: Record<string, string> = {
   cleanSheets: 'clean sheet', shots: 'shot', shotsOnTarget: 'shot on target', tackles: 'tackle',
   interceptions: 'interception', saves: 'save', passes: 'pass', attackingContributions: 'attacking play',
   defensiveContributions: 'defensive play', runs: 'run', aces: 'ace', games: 'game',
+  wins: 'win', draws: 'draw', losses: 'loss', boards: 'board', queens: 'queen',
+  rounds: 'round', birdies: 'birdie', eagles: 'eagle', holesWon: 'hole won',
 };
 /** Readable short label for a stat key, e.g. "raidPoints" → "raid pts". Pass the
  *  count to get the singular for exactly one ("1 goal" vs "2 goals"). Falls back
@@ -109,9 +113,24 @@ const HEADLINE_ORDER: Partial<Record<SportId, string[]>> = {
   pickleball: ['points'],
   padel: ['points'],
   squash: ['points'],
+  tabletennis: ['points'],
+  chess: ['wins', 'draws', 'games'],
+  carrom: ['points', 'boards', 'queens'],
+  golf: ['rounds', 'birdies', 'eagles'],
 };
 /** A compact "8 goals · 2 assists · 9 shots on target" line for one sport. */
 export function sportSummary(b: SportBreakdown): string {
+  if (b.sport === 'golf') {
+    // Golf reads in rounds + scoring average, not summed counters.
+    const t = b.totals;
+    // 18-hole-equivalent scoring average over complete rounds (see golf engine).
+    const avg = t.completeRounds ? t.completeStrokes / t.completeRounds : null;
+    return [
+      t.rounds ? `${t.rounds} ${t.rounds === 1 ? 'round' : 'rounds'}` : '',
+      avg != null ? `avg ${avg.toFixed(1)}` : '',
+      t.birdies ? `${t.birdies} ${statLabelShort('birdies', t.birdies)}` : '',
+    ].filter(Boolean).join(' · ');
+  }
   const order = HEADLINE_ORDER[b.sport] ?? Object.keys(b.totals);
   const keys = order.filter((k) => (b.totals[k] ?? 0) > 0).slice(0, 3);
   return keys.map((k) => `${b.totals[k]} ${statLabelShort(k, b.totals[k])}`).join(' · ');

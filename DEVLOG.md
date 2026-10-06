@@ -13,6 +13,284 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — LIVE: migrations 0012–0028, 12 edge functions, web app published
+
+- **Database:** the founder ran `supabase/release/2026-10-pilot-migrations-0012-0028.sql`
+  (one transaction). Verified via REST: `players_view` OK, `players.phone` → 42501
+  (private), the golf and messaging tables exist.
+- **Fixed before running:** a latent bug in 0018 `clubs.sql` (its drop-policy used
+  `%I_read` → `clubs_read_read`, so a re-run would fail). Proven: all of 12–28 re-apply
+  cleanly in Postgres.
+- **Edge functions:** deployed push-send, support-assistant, support-escalate,
+  send-invite, verification-submit, notify-followers, notify-upcoming, message-notify,
+  guardian-link, send-contact-otp, verify-contact-otp, verify-phone-firebase.
+  - `WEBHOOK_SECRET` set (value not retained; regenerate when the webhook is created).
+  - Smoke test: anonymous calls → 401, cron/webhook → 403, firebase → 503 (not
+    configured).
+  - First deployment ever of notify-* and support-assistant.
+- **Web app:** live at https://sportnnote.expo.app (forward: app.sportnnote.in, set up in
+  GoDaddy).
+  - Gotcha: Metro's cache ignores env changes, so the first prod publish shipped in demo
+    mode. `publish-web.sh` now uses `--clear` and refuses to deploy unless the live
+    Supabase URL is in the bundle.
+  - Also fixed the bash 3.2 `source <(…)` bug.
+- **Auth URLs:** Supabase Site URL + redirect `https://sportnnote.expo.app/**` set.
+- **Founder smoke test on iPhone passed** (sign-up, match, golf round, messaging).
+- **Firebase SMS:** project `sportnnote-5c5e7` web app registered, `FIREBASE_PROJECT_ID`
+  secret set (verify-phone-firebase 503 → 401 for anonymous), web republished with the config.
+- Firebase console: Phone provider enabled, Blaze billing, SMS region = India only (probe now fails only on the fake reCAPTCHA, i.e. config complete).
+- **Founder SMS test passed** (code received, number verified).
+- **iPhone fix:** Safari zoomed in when a text box under 16px got focus, pushing the
+  Confirm button off-screen. `index.ts` now forces 16px inputs on touch screens (pinch zoom
+  kept); the code row in `ContactCard` shrinks the input instead of overflowing. Republished.
+- **Pending:** new Android APK.
+
+---
+
+### 2026-10-06 — Web pilot hosting + Firebase SMS phone verification · READY (needs ops)
+
+- **Web pilot on EAS Hosting:** free; the project's dev domain is `sportnnote`, so
+  production will be https://sportnnote.expo.app. `app.json` gained `web.output: single`,
+  name and theme colours.
+  - `scripts/publish-web.sh` (`npm run web:publish`) builds against the live keys from
+    `.env.local` / `.env.local.bak` without printing them, then deploys
+    (`--preview` for a throwaway URL).
+  - A demo-data preview is live at https://sportnnote--hfy8phv5cd.expo.app. Verified there
+    that hosting serves deep pages (`/Settings` loads directly).
+- **Firebase SMS phone verification (web):**
+  - `core/firebasePhone.ts`: Firebase JS SDK 12, invisible reCAPTCHA, E.164 `+91`,
+    friendly errors; signs out of Firebase immediately.
+  - Repos route phone and guardian-phone verification through it when configured on web
+    (`via: 'sms'`); the ContactCard copy follows.
+  - New edge function `verify-phone-firebase`: verifies Google's RS256 signature (jose +
+    Google JWKS), issuer/audience = our project, `auth_time` ≤ 10 min, caller owns the
+    player, and the token's number matches the profile/guardian number. Only then does it
+    set the verified flag (service role). Rate-limited.
+  - No DLT needed (Google sends). Cost ≈ $0.07/SMS on Blaze.
+  - Setup: `docs/firebase-phone-setup.md`. Native Android keeps the WhatsApp path.
+- **Ordered launch checklist:** `docs/web-pilot-launch.md`. Blocked on the founder: Supabase
+  CLI login, running migrations 0012–0028, Auth URL config, Firebase setup.
+- **Verified:** tsc clean; 338/338 tests; `deno check` passes on the new function; web
+  export OK. **Not yet exercised:** a real SMS end to end — that needs the Firebase project.
+
+---
+
+### 2026-10-06 — Golf v1 (field-event core) + web-readiness fixes · CODE DONE (needs migration 0028)
+
+Golf is a complete sport (design: `docs/sports/GOLF_DESIGN.md`). Stroke play and Stableford
+are FIELD events — N players on one leaderboard — built as a new core alongside matches, with
+no change to existing sports. Match play reuses the match/bracket engine.
+
+- **Rules engine** (`sports/golf/engine.ts`):
+  - WHS course and playing handicap; strokes received by stroke index, including plus
+    handicaps and 9-hole play.
+  - Gross, net, to-par, Stableford and net-double-bogey adjusted gross.
+  - Ranking with ties (T3); countback on the last 9/6/3/1 (net uses handicap fractions);
+    pickup = NR.
+  - Multi-round totals; cut (top N and ties / within X).
+  - Match-play state (UP/AS/dormie/3&2/extra holes).
+  - Per-round stats and scoring average.
+- **Data** (`data/golf.ts`):
+  - Courses (quick-create from the scorecard, validated), field events and entries.
+  - An offline card outbox (latest card per player persisted; retried).
+  - Leaderboard across rounds; `completeRound` writes stat lines (`event_id`).
+  - Auto groups and tee times.
+- **Screens:**
+  - Round setup: course, tees, format, players with Handicap Index (plus allowed), groups,
+    and "next round" with a cut.
+  - Round scorecard: one hole at a time for the group, par = 1 tap, −/+, pickup, putts,
+    hole dots, sync banner. Plus a live leaderboard with expandable cards, and
+    start/finish/next round.
+  - Tournament hub (rounds + cumulative leaderboard).
+  - Home "Live now" golf cards; profile golf totals (rounds, average, best, GIR/FIR%,
+    putts/round) and golf history rows that open the round.
+  - Friendly flow routes stroke/Stableford to round setup; match play stays head-to-head.
+- **Database** (migration 0028):
+  - `golf_courses`, `field_events`, `field_entries`, `stat_lines.event_id`.
+  - Permissions: managers (creator/hosts/tournament managers) control rounds; markers in
+    the same group may only change cards; scores lock when the round finishes; event stat
+    lines are managers-only.
+  - Realtime on `field_entries`.
+- **Also:**
+  - Throwball removed under the founder's international-only rule.
+  - **Web fixes for the iPhone web pilot:**
+    - Refreshing or deep-linking any page no longer crashes to Home. React Navigation 7 with
+      a partial linking config calls `resetRoot(undefined)`; fixed with a
+      `getStateFromPath` fallback covering 51 stack screens.
+    - `Alert.alert` is a no-op on web; added `core/confirm.ts`
+      (`confirmAction` / `notice`) and used it everywhere.
+    - `formatDay` now accepts timestamps (live-mode history dates showed raw ISO).
+    - Casual golf rounds count as friendly on profiles.
+- **Verified:**
+  - 338/338 tests, including golf 30 + litmus.
+  - tsc clean.
+  - 28 golf database scenarios, plus 102/27/70 still passing.
+  - Offline demo: set up a round (HI 18 and +1.2), score holes, leaderboard −1 vs +1,
+    survives reload, appears in Home "Live now", finish → FINAL, Ishaan's golf profile
+    shows the round. `/Settings` and `/GolfRound?eventId=…` now reload in place.
+
+---
+
+### 2026-10-06 — Wave 1 sports: table tennis, chess, carrom · SHIPPED + VERIFIED
+
+> **Update, same day:** throwball was built and then **removed**. The founder's rule is
+> *international-level sports only*; throwball fails it (South Asia only; not in the
+> Olympics, Asian Games or Commonwealth Games). The volleyball controls factory stays.
+
+Part of the sports expansion (`docs/sports/SPORTS_EXPANSION.md`). The Golf design is in
+`docs/sports/GOLF_DESIGN.md` (it needs a new field-event core; not built yet).
+
+**New sports:**
+- **🏓 Table tennis:** rally core plus the ITTF service order (`tabletennis/serve.ts`: 2
+  serves each, 1 each from 10-10, opening server alternates by game). Presets: best of
+  5/7/3 to 11, legacy to 21. Singles or doubles.
+- **♟️ Chess:** new `result` scoring type (`chess/engine.ts`). Records winner or draw, how
+  (method must be consistent with the outcome), optional move count, who has White. Scores
+  1/½/0 and reads "1-0 / 0-1 / ½-½". League tables default to 1/½/0. Credits both players a
+  game plus a win/draw/loss via `attribution` + `attribution2`.
+- **🎱 Carrom:** ICF boards (`carrom/engine.ts`). Opponent's coins left, +3 for the Queen
+  while under 22; game to 25 or after 8 boards; tie-break boards; best of 3. Credits
+  points, boards and queens.
+- **🤾 Throwball:** volleyball set engine. Volleyball's controls became
+  `makeSetScoringControls` (optional blocks and timeouts); throwball has no blocks, 9-a-side,
+  1 timeout per set.
+- Futsal was already a football preset.
+
+**Profile linking in individual sports:**
+- Schedule Match player search now lists real people.
+- "Me" resolves to your own player.
+- "New player" creates a real player.
+- All of these create or reuse a one-person entry with `roster: [playerId]`, so results and
+  stats reach profiles.
+
+**Other:**
+- Chess and carrom buttons show full names instead of team codes.
+- Every per-sport table is filled in for the new sports (ratings, leaders, profile fields,
+  position hints, standings columns, schedule durations, headline stats and labels).
+- No migration needed: there's no sport whitelist in the database.
+
+**Verified:**
+- `tests/wave1-sports.test.mts` (14 tests); tsc clean; 306/306 tests.
+- Offline demo: chess friendly recorded as 0-1 · Resignation and final; carrom +8 board;
+  table-tennis serve switched to the opponent after 2 points; the new matches appear in Home
+  "Live now".
+- **Seen during testing:** a react-navigation `resetRoot` error after browser-back/URL
+  navigation in the web preview. It doesn't come from this work; to investigate.
+
+---
+
+### 2026-10-06 — In-app messaging + guardian accounts (migration 0027) · CODE DONE (needs migration + deploy + APK)
+
+People can reach a player without seeing their number. Per the user's decision, messages
+about under-18s go to their parent/guardian, never to the child.
+
+**Database** (`20261008120000_messaging.sql`):
+- **Tables:** `message_threads` (one per player + sender; the inbox is the player's or the
+  linked guardian's), `messages`, `message_blocks`, `message_reports`.
+- **Server functions only:** `send_message` (adult-only sender, routes minors to the
+  guardian, checks blocks, rate limits), `reply_message`, `mark_thread_read`,
+  `block_thread_sender`, `report_message`, `my_threads` (display names never reveal the
+  guardian) and `my_thread_for_player`.
+- **Guardian accounts:** `players.guardian_profile_id` + hashed `guardian_link_codes`.
+  `create_guardian_link_code` (service role) and `claim_guardian_link` (guardian's own
+  adult account; not the child's) link the guardian, verify their email server-side and
+  move pending threads into their inbox. A trigger stops the app from setting the guardian
+  link or verified flags; changing the guardian email drops the link.
+- **Other:** `players_view.guardian_linked`.
+- **Fix in 0025:** a guardian change now only voids a verification approval when the
+  guardian's identity changes, not the flags.
+
+**Edge functions:**
+- `message-notify`: delivers each message once (push, or the guardian email with a link
+  code).
+- `guardian-link`: the child invites their guardian.
+- `_shared/guard.ts` gained `sendEmail`, `pushToProfiles` and `guardianLinkSteps`.
+
+**App:**
+- `data/messages.ts` handles live and demo (in-memory).
+- `MessagesScreen` (inbox + unread), `ConversationScreen` (send/reply, long-press to
+  report, block) and `GuardianLinkScreen` (enter code, see linked children).
+- Profile button "💬 Message", or "💬 Message their parent/guardian" for minors.
+- Guardian link card on a minor's own profile.
+- Settings rows "Messages" (unread count) and "Link as a parent/guardian".
+- Guardian ContactCard hides the device-side Verify in live.
+- Offline demo launch config `sportfolio-offline-demo` (port 8093, `EXPO_NO_DOTENV=1`).
+
+**Verified:**
+- 51 messaging scenarios in PGlite: who may send, routing, privacy of threads, block,
+  report, guardian linking incl. a child/minor trying to link, email-change unlink and
+  rate limits. The 27 privacy and 102 security scenarios also pass.
+- `tsc` is clean, 292/292 tests pass, and `deno check` passes on the new functions.
+- UI clicked through in offline demo: minor profile → "Message their parent/guardian" →
+  sent → inbox shows "Parent/guardian of Aarav Mehta · Emailed to their parent/guardian";
+  Edit Profile privacy card for an under-18.
+
+**Follow-ups, same day, all built:**
+- **Support report review:** `MessageReportsScreen` (Settings → Support tools). Reports
+  keep a text snapshot. Support can dismiss, remove the message, or remove and turn off the
+  sender's messaging (`messaging_bans`, which can be lifted). There's a read-only
+  conversation view.
+- **Unblock:** "🚫 Blocked" section in Messages (`my_blocks` / `unblock_message_sender`).
+  Blocks are labelled as the blocker saw them; the account id is never exposed.
+- **Live updates:** `messages` is added to the realtime publication, and
+  `subscribeToThread` runs while a conversation is open.
+- **Server-side guardian phone verification:** `guardian_phone` OTP channel in
+  send/verify-contact-otp, plus CSPRNG codes and a send cap. Delivery waits on WhatsApp OTP
+  (Meta Business Verification).
+- **Fix:** live mode no longer shows fake on-screen codes, which would have shown
+  "verified" while the server ignored it.
+- **Verified:** 70 messaging + 27 privacy + 102 security scenarios, `tsc` clean, 292/292
+  tests, `deno check`, and the UI clicked through in offline demo.
+
+---
+
+### 2026-10-06 — Private contact details + privacy settings (migration 0026) · CODE DONE (needs migration + APK)
+
+Section 1 of the security review. The user's direction:
+- Keep performance public, because talent scouting needs it.
+- Hide contact details by default, and let adults opt in to show them.
+- Follow the DPDP Act 2023 for children's data.
+- In-app messaging comes next, and messages to under-18s are routed to their guardian.
+
+**Database** (`20261007120000_private_contact_details.sql`):
+- **Locked columns.** Clients can't read `phone`, `email`, `dob`, `guardian` or
+  `verification` on `players`, or `phone`, `dob`, `guardian` on `profiles`. Writes are
+  unchanged.
+- **`players_view` is the new read model.** It returns private fields only to:
+  - the person themselves, support, and the creator of a provisional player;
+  - for a provisional player's phone, whoever runs a team the player is on;
+  - anyone, for an adult's opted-in phone/email (`show_phone` / `show_email`, default off).
+
+  Everyone else gets the derived `age`, guardian present/verified flags and the
+  verification status.
+- **Rate-limited RPCs** replace the private-column filters: `find_player_by_phone` /
+  `find_player_by_email` (id + name only), `my_claimable_player` (matches on the caller's
+  own number or confirmed email) and `my_profile_private`.
+
+**App:**
+- **Reads:** player reads use the view. Phone/email dedupe and the sign-up claim use the
+  RPCs; inserts re-read through the view.
+- **Age:** eligibility, reminders and the profile header use `ageOf(p)` (DOB if visible,
+  else the server-derived age). The guardian check accepts the `present` flag.
+- **Edit Profile:** new "Who can see your contact details" card. Under-18s see that it's
+  hidden and that scouts reach them through their guardian; adults get two toggles.
+- **Other people's profiles** show a Contact card only when contact details came back.
+- **Error handling:** people search tolerates lookup rate limits, and `updatePlayer` now
+  throws on a server error instead of failing silently.
+
+**Verified:**
+- 27 privacy scenarios plus the 102 security scenarios pass in PGlite.
+- `tsc` is clean and 292/292 tests pass.
+- Not checked in the browser: the preview points at live Supabase, where 0026 isn't
+  applied.
+
+**Follow-ups found:**
+- Guardian phone/email "verified" flags are still set on the device (no server-side
+  guardian OTP).
+- Own-phone verification can't complete on live until WhatsApp OTP works.
+
+---
+
 ### 2026-10-05 — Security hardening: scoped writes + edge-function guards (migration 0025) · CODE DONE (needs migration + deploy)
 
 The security review found that, because the anon key ships in the APK, "any signed-in user"

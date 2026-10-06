@@ -8,6 +8,7 @@ import { theme } from '../core/theme';
 import { ProfileView } from '../components/ProfileView';
 import { useAuth } from '../core/auth';
 import { useFollow, usePlayerProfile } from '../data/hooks';
+import { ageOf } from '../core/age';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function PlayerProfileScreen() {
@@ -28,6 +29,14 @@ export default function PlayerProfileScreen() {
       <ProfileView
         playerId={playerId}
         follow={{ following: isFollowing('player', playerId), onToggle: () => toggle('player', playerId) }}
+        onMessage={player && player.profileId !== profile?.id ? () => {
+          const viaGuardian = (ageOf(player) ?? 0) < 18;
+          nav.navigate('Conversation', {
+            playerId,
+            viaGuardian,
+            title: viaGuardian ? `Parent/guardian of ${player.fullName}` : player.fullName,
+          });
+        } : undefined}
         onOpenSport={(sport) => nav.navigate('SportProfile', { playerId, sport })}
         onOpenOrg={(orgId) => nav.navigate('Organization', { orgId })}
       />

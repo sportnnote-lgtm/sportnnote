@@ -42,7 +42,7 @@ async function syncConfirmedEmailToPlayer(profileId: string): Promise<void> {
     const email = authData.user?.email;
     if (!email || !authData.user?.email_confirmed_at) return;
     const { data: pl } = await supabase
-      .from('players')
+      .from('players_view') // email is a private column — read our own via the view
       .select('id, email, email_verified')
       .eq('profile_id', profileId)
       .maybeSingle();

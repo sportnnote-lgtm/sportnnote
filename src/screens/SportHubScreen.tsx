@@ -14,6 +14,7 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LeagueTable } from '../components/LeagueTable';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { DivisionTabs } from '../components/DivisionTabs';
+import { GolfTournamentHub } from '../components/golf/GolfTournamentHub';
 import { getSport } from '../sports/registry';
 import { useLeagueData, useDivisions, useTournamentById } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -62,6 +63,19 @@ export default function SportHubScreen() {
       homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
       canScore,
     });
+
+  // Golf stroke play / Stableford is a field event: rounds + one leaderboard.
+  const golfFmt = sport === 'golf' ? (tournament?.formats?.golf as Record<string, unknown> | undefined) : undefined;
+  if (sport === 'golf' && String(golfFmt?.competition ?? 'stroke') !== 'match') {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <ScrollView contentContainerStyle={st.content}>
+          <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={tournamentName} />
+          <GolfTournamentHub tournamentId={tournamentId} format={golfFmt} canOrganize={canOrganize(profile?.role)} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>

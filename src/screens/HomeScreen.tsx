@@ -12,6 +12,7 @@ import { theme } from '../core/theme';
 import { EmptyState, Card, LoadingState, Pill, SelectChip, textStyles, plural } from '../components/ui';
 import { formatDayShort } from '../core/dates';
 import { MatchCard } from '../components/MatchCard';
+import { LiveGolfCards } from '../components/golf/LiveGolfCards';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { VoiceNav } from '../components/VoiceNav';
 import { SPORT_LIST, getSport } from '../sports/registry';
@@ -239,6 +240,7 @@ export default function HomeScreen() {
         ) : (
           <EmptyState icon="📡" title="No live matches right now" hint="Live games appear here the moment scoring starts." compact />
         )}
+        <LiveGolfCards tournamentId={selectedId} />
 
         {/* Up next — top 5, "See all" opens the full upcoming list */}
         <SectionHeader title="📅 Up next" count={upcoming.length} onSeeAll={upcoming.length > SECTION_CAP ? () => seeAll('upcoming') : undefined} />

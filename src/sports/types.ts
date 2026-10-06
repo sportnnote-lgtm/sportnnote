@@ -22,7 +22,8 @@ export type ScoringArchetype =
   | 'set-game-point' // badminton/tennis: best-of sets
   | 'running-points' // basketball/volleyball: points by period/set
   | 'raid' // kabaddi: raid & tackle points, timed halves
-  | 'measured'; // athletics: times/distances ranked
+  | 'measured' // athletics/golf: times/distances/strokes ranked on a leaderboard
+  | 'result'; // chess: one recorded result per game (win/draw/loss + how)
 
 /** Player stat credit carried alongside a scoring action (a side-channel the
  *  reducer ignores; the live-match layer turns it into a stat line). */

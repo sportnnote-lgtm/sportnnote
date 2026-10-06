@@ -42,6 +42,14 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   pickleball: [{ key: 'hand', label: 'Playing hand', options: ['Right', 'Left'] }],
   padel: [{ key: 'hand', label: 'Playing hand', options: ['Right', 'Left'] }],
   squash: [{ key: 'hand', label: 'Playing hand', options: ['Right', 'Left'] }],
+  tabletennis: [
+    { key: 'hand', label: 'Playing hand', options: ['Right', 'Left'] },
+    { key: 'grip', label: 'Grip', options: ['Shakehand', 'Penhold'] },
+    { key: 'style', label: 'Style', options: ['Attacker', 'Defender', 'All-round'] },
+  ],
+  chess: [],
+  carrom: [{ key: 'hand', label: 'Striking hand', options: ['Right', 'Left'] }],
+  golf: [{ key: 'hand', label: 'Plays', options: ['Right-handed', 'Left-handed'] }],
 };
 
 export const POSITION_HINT: Record<SportId, string> = {
@@ -55,4 +63,8 @@ export const POSITION_HINT: Record<SportId, string> = {
   pickleball: 'e.g. Singles, Doubles',
   padel: 'e.g. Doubles (left / right)',
   squash: 'e.g. Singles',
+  tabletennis: 'e.g. Singles, Doubles',
+  chess: 'e.g. FIDE 1650, Rapid specialist',
+  carrom: 'e.g. Singles, Doubles',
+  golf: 'e.g. Handicap index 12.4, Home club',
 };

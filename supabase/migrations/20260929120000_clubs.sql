@@ -65,7 +65,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['clubs','club_members','team_player_roles'] loop
-    execute format('drop policy if exists %I_read on %I', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_read', t);
     execute format('create policy %I on %I for select using (true)', t || '_read', t);
     execute format('drop policy if exists %I on %I', t || '_write', t);
     execute format(

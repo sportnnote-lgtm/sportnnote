@@ -352,7 +352,11 @@ begin
     raise exception 'Only SportnNote reviewers can approve or reject verification' using errcode = '42501';
   end if;
   if (old.verification->>'status') = 'approved'
-     and (new.dob is distinct from old.dob or new.guardian is distinct from old.guardian)
+     and (new.dob is distinct from old.dob
+          -- the guardian's identity, not bookkeeping flags inside the jsonb
+          or (new.guardian->>'name', phone_key(new.guardian->>'phone'), lower(new.guardian->>'email'))
+             is distinct from
+             (old.guardian->>'name', phone_key(old.guardian->>'phone'), lower(old.guardian->>'email')))
      and (new.verification->>'status') = 'approved' then
     new.verification := new.verification - 'status';
   end if;

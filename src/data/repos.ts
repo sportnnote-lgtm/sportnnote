@@ -3,6 +3,7 @@
  * demo-mode fallback lives in exactly one place. Each function returns the same
  * domain shapes whether the data came from Postgres or the local mock.
  */
+import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import type { PickedDoc } from '../core/document';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
@@ -426,6 +427,11 @@ interface PlayerRow {
   guardian?: Player['guardian'] | null;
   verification?: Player['verification'] | null;
   reported_at?: string | null;
+  /** players_view (migration 0026): derived age + privacy opt-ins */
+  age?: number | null;
+  show_phone?: boolean | null;
+  show_email?: boolean | null;
+  guardian_linked?: boolean | null;
 }
 const toPlayer = (r: PlayerRow): Player => ({
   id: r.id,
@@ -448,20 +454,31 @@ const toPlayer = (r: PlayerRow): Player => ({
   guardian: r.guardian ?? undefined,
   verification: r.verification ?? undefined,
   reported: r.reported_at ? true : undefined,
+  age: r.age ?? undefined,
+  showPhone: r.show_phone ?? undefined,
+  showEmail: r.show_email ?? undefined,
+  guardianLinked: r.guardian_linked ?? undefined,
 });
 
-const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification';
+/** Live player reads go through `players_view` (migration 0026): phone / email /
+ *  DOB / guardian contact come back only when the viewer may see them (themselves,
+ *  support, an opted-in adult's public contact, or a provisional teammate's number
+ *  for their team's managers) — otherwise null, with a derived `age` + guardian
+ *  status flags so eligibility checks still work. The base `players` table no
+ *  longer lets clients read those columns at all; WRITES still go to `players`. */
+const PLAYERS_READ = 'players_view';
+const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification, age, show_phone, show_email, guardian_linked';
 
 export async function getPlayers(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) return demo.players;
-  const { data, error } = await supabase.from('players').select(PLAYER_SELECT).order('full_name');
+  const { data, error } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).order('full_name');
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {
   if (!isSupabaseConfigured || !supabase) return demo.players.find((p) => p.id === id) ?? null;
-  const { data, error } = await supabase.from('players').select(PLAYER_SELECT).eq('id', id).single();
+  const { data, error } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).eq('id', id).single();
   if (error || !data) return null;
   return toPlayer(data as PlayerRow);
 }
@@ -469,6 +486,8 @@ export async function getPlayer(id: string): Promise<Player | null> {
 interface StatLineRow {
   id: string;
   match_id: string | null;
+  /** field events (golf rounds) — migration 0028 */
+  event_id?: string | null;
   player_id: string;
   sport: string;
   stats: Record<string, number> | null;
@@ -482,12 +501,13 @@ export async function getPlayerStatLines(playerId: string): Promise<StatLine[]> 
   }
   const { data, error } = await supabase
     .from('stat_lines')
-    .select('id, match_id, player_id, sport, stats, won, opponent, recorded_at')
+    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
     .eq('player_id', playerId);
   if (error || !data) return [];
   return (data as StatLineRow[]).map((r) => ({
     id: r.id,
     matchId: r.match_id ?? '',
+    eventId: r.event_id ?? undefined,
     playerId: r.player_id,
     sport: r.sport as SportId,
     stats: r.stats ?? {},
@@ -504,12 +524,13 @@ export async function getMatchStatLines(matchId: string): Promise<StatLine[]> {
   }
   const { data, error } = await supabase
     .from('stat_lines')
-    .select('id, match_id, player_id, sport, stats, won, opponent, recorded_at')
+    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
     .eq('match_id', matchId);
   if (error || !data) return [];
   return (data as StatLineRow[]).map((r) => ({
     id: r.id,
     matchId: r.match_id ?? '',
+    eventId: r.event_id ?? undefined,
     playerId: r.player_id,
     sport: r.sport as SportId,
     stats: r.stats ?? {},
@@ -532,7 +553,7 @@ export async function searchPlayers(opts: { query?: string; sport?: SportId; cit
         (!city || p.city === city)
     );
   }
-  let req = supabase.from('players').select(PLAYER_SELECT).order('full_name').limit(50);
+  let req = supabase.from(PLAYERS_READ).select(PLAYER_SELECT).order('full_name').limit(50);
   if (query?.trim()) req = req.ilike('full_name', `%${query.trim()}%`);
   if (sport) req = req.contains('sports', [sport]);
   if (city) req = req.eq('city', city);
@@ -560,12 +581,13 @@ export async function getStatLinesForPlayers(playerIds: string[]): Promise<StatL
   }
   const { data, error } = await supabase
     .from('stat_lines')
-    .select('id, match_id, player_id, sport, stats, won, opponent, recorded_at')
+    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
     .in('player_id', playerIds);
   if (error || !data) return [];
   return (data as StatLineRow[]).map((r) => ({
     id: r.id,
     matchId: r.match_id ?? '',
+    eventId: r.event_id ?? undefined,
     playerId: r.player_id,
     sport: r.sport as SportId,
     stats: r.stats ?? {},
@@ -587,7 +609,7 @@ export async function getAllStatLines(): Promise<StatLine[]> {
     return heldOut(demo.statLines, openKeys);
   }
   const [{ data, error }, dis] = await Promise.all([
-    supabase.from('stat_lines').select('id, match_id, player_id, sport, stats, won, opponent, recorded_at'),
+    supabase.from('stat_lines').select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at'),
     supabase.from('match_disputes').select('match_id, player_id').eq('status', 'open'),
   ]);
   if (error || !data) return [];
@@ -595,6 +617,7 @@ export async function getAllStatLines(): Promise<StatLine[]> {
   const lines = (data as StatLineRow[]).map((r) => ({
     id: r.id,
     matchId: r.match_id ?? '',
+    eventId: r.event_id ?? undefined,
     playerId: r.player_id,
     sport: r.sport as SportId,
     stats: r.stats ?? {},
@@ -952,9 +975,12 @@ export async function findPlayerByPhone(phone: string): Promise<Player | null> {
   if (!isSupabaseConfigured || !supabase) {
     return demo.players.find((p) => samePhone(p.phone, phone)) ?? null;
   }
-  const { data } = await supabase.from('players').select(PLAYER_SELECT).eq('phone', normalizePhone(phone)).limit(1);
-  const row = (data as PlayerRow[] | null)?.[0];
-  return row ? toPlayer(row) : null;
+  // Live: phone is a private column — an exact-match server lookup returns just
+  // the person's id (rate-limited), then we read their public profile.
+  const { data, error } = await supabase.rpc('find_player_by_phone', { p_phone: normalizePhone(phone) });
+  if (error) throw new Error(error.message);
+  const id = (data as { id: string }[] | null)?.[0]?.id;
+  return id ? getPlayer(id) : null;
 }
 
 /** Identity lookup by email (secondary to phone) — the one player who registered
@@ -979,9 +1005,10 @@ export async function findPlayerByEmail(email: string): Promise<Player | null> {
   const e = email.trim().toLowerCase();
   if (!e.includes('@')) return null;
   if (!isSupabaseConfigured || !supabase) return demo.players.find((p) => (p.email ?? '').toLowerCase() === e) ?? null;
-  const { data } = await supabase.from('players').select(PLAYER_SELECT).ilike('email', e).limit(1);
-  const row = (data as PlayerRow[] | null)?.[0];
-  return row ? toPlayer(row) : null;
+  const { data, error } = await supabase.rpc('find_player_by_email', { p_email: e });
+  if (error) throw new Error(error.message);
+  const id = (data as { id: string }[] | null)?.[0]?.id;
+  return id ? getPlayer(id) : null;
 }
 
 /** People search for the co-host picker: name substring + an exact phone/email
@@ -991,8 +1018,10 @@ export async function lookupPeople(query: string): Promise<Player[]> {
   if (q.length < 2) return [];
   const results = new Map<string, Player>();
   for (const p of await searchPlayers({ query: q })) results.set(p.id, p);
-  if (q.includes('@')) { const p = await findPlayerByEmail(q); if (p) results.set(p.id, p); }
-  else if (q.replace(/[^0-9]/g, '').length >= 7) { const p = await findPlayerByPhone(q); if (p) results.set(p.id, p); }
+  // Exact-identity lookups are rate-limited server-side — a search box must never
+  // break on that, so fall back to the name matches.
+  if (q.includes('@')) { const p = await findPlayerByEmail(q).catch(() => null); if (p) results.set(p.id, p); }
+  else if (q.replace(/[^0-9]/g, '').length >= 7) { const p = await findPlayerByPhone(q).catch(() => null); if (p) results.set(p.id, p); }
   return [...results.values()].slice(0, 8);
 }
 
@@ -1015,10 +1044,12 @@ export async function invitePerson(args: { name: string; phone?: string; email?:
   const { data, error } = await supabase
     .from('players')
     .insert({ full_name: name, sports: [], phone: phone ? normalizePhone(phone) : null, email: email ?? null, phone_verified: false })
-    .select(PLAYER_SELECT)
+    .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create the invite');
-  return { player: toPlayer(data as PlayerRow), status: 'invited' };
+  const created = await getPlayer(data.id as string);
+  if (!created) throw new Error('Could not create the invite');
+  return { player: created, status: 'invited' };
 }
 
 /** Add a player to a team by name + phone (the invite-to-install growth loop).
@@ -1119,9 +1150,10 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   }
   const { data, error } = await supabase.from('players')
     .insert({ full_name: args.name.trim(), sports: [args.sport], house_name: args.teamName, phone: normalizePhone(args.phone), phone_verified: false })
-    .select(PLAYER_SELECT).single();
+    .select('id').single();
   if (error || !data) throw new Error(error?.message ?? 'Could not add player');
-  const p = toPlayer(data as PlayerRow);
+  const p = await getPlayer(data.id as string);
+  if (!p) throw new Error('Could not add player');
   await appendRoster(p.id);
   const madeCaptain = await maybeSetCaptain(p.id);
   return { player: p, status: 'invited', madeCaptain };
@@ -1609,11 +1641,11 @@ export async function getRoster(teamName: string, sport: SportId): Promise<Playe
     .limit(1);
   const explicit = (teamRows?.[0]?.roster ?? null) as string[] | null;
   if (explicit && explicit.length) {
-    const { data } = await supabase.from('players').select(PLAYER_SELECT).in('id', explicit);
+    const { data } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).in('id', explicit);
     return (data as PlayerRow[] | null)?.map(toPlayer) ?? [];
   }
   const { data, error } = await supabase
-    .from('players')
+    .from(PLAYERS_READ)
     .select(PLAYER_SELECT)
     .eq('house_name', teamName)
     .contains('sports', [sport]);
@@ -1679,7 +1711,8 @@ export async function createPlayer(input: NewPlayer, profileId?: string): Promis
     const existing = await findPlayerByPhone(input.phone!);
     if (existing) {
       const merged = [...new Set([...(existing.sports ?? []), ...input.sports])];
-      if (merged.length !== (existing.sports ?? []).length) await updatePlayer(existing.id, { sports: merged });
+      // Best-effort: we may not be allowed to edit someone else's record.
+      if (merged.length !== (existing.sports ?? []).length) await updatePlayer(existing.id, { sports: merged }).catch(() => {});
       return { ...existing, sports: merged };
     }
   }
@@ -1697,14 +1730,16 @@ export async function createPlayer(input: NewPlayer, profileId?: string): Promis
       jersey_no: input.jerseyNo ?? null,
       profile_id: profileId ?? null,
     })
-    .select(PLAYER_SELECT)
+    .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create profile');
-  return toPlayer(data as PlayerRow);
+  const created = await getPlayer(data.id as string);
+  if (!created) throw new Error('Could not create profile');
+  return created;
 }
 
 export type PlayerPatch = Partial<
-  Pick<Player, 'fullName' | 'city' | 'gender' | 'bio' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification'>
+  Pick<Player, 'fullName' | 'city' | 'gender' | 'bio' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification' | 'showPhone' | 'showEmail'>
 >;
 
 /** Where verification documents and support cases are routed for the support team.
@@ -1763,7 +1798,10 @@ export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void
   if (patch.dob !== undefined) row.dob = patch.dob || null;
   if (patch.guardian !== undefined) row.guardian = patch.guardian ?? null;
   if (patch.verification !== undefined) row.verification = patch.verification ?? null;
-  await supabase.from('players').update(row).eq('id', id);
+  if (patch.showPhone !== undefined) row.show_phone = patch.showPhone;
+  if (patch.showEmail !== undefined) row.show_email = patch.showEmail;
+  const { error } = await supabase.from('players').update(row).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 /** Mark a contact channel verified (after a successful OTP check). */
@@ -1778,26 +1816,65 @@ export async function verifyContact(id: string, channel: 'phone' | 'email'): Pro
  * when the edge function isn't deployed/keyed, or demo mode — there's no real
  * delivery, so it returns a client-side `demoCode` the UI shows and checks
  * locally (clearly labelled as temporary). */
-export async function beginContactVerification(playerId: string, channel: 'phone' | 'email'): Promise<{ sent: boolean; demoCode?: string }> {
-  if (isSupabaseConfigured && supabase && (channel === 'email' || channel === 'phone')) {
+export type OtpChannel = 'phone' | 'email' | 'guardian_phone';
+
+/** How a verification code was delivered (drives the "we sent a code…" copy). */
+export type OtpVia = 'email' | 'whatsapp' | 'sms';
+
+// A phone verification currently in flight through Firebase SMS (web).
+let firebasePending: { playerId: string; channel: OtpChannel } | null = null;
+
+export async function beginContactVerification(playerId: string, channel: OtpChannel): Promise<{ sent: boolean; via?: OtpVia; demoCode?: string; reason?: string }> {
+  // Phones on the web: an SMS through Firebase (no DLT needed — Google sends it).
+  if (isSupabaseConfigured && supabase && channel !== 'email' && firebasePhoneAvailable()) {
+    const p = await getPlayer(playerId);
+    const number = channel === 'guardian_phone' ? p?.guardian?.phone : p?.phone;
+    if (!number) return { sent: false, reason: 'Add the mobile number first.' };
+    try {
+      await sendPhoneCode(number);
+      firebasePending = { playerId, channel };
+      return { sent: true, via: 'sms' };
+    } catch (e) {
+      return { sent: false, reason: e instanceof Error ? e.message : 'Couldn’t send the SMS just now.' };
+    }
+  }
+  if (isSupabaseConfigured && supabase) {
+    // Live: only a REAL delivered code can verify (the server owns the verified
+    // flags since migration 0025) — never fall back to an on-screen code here.
+    let why: string | undefined;
     try {
       const { data, error } = await supabase.functions.invoke('send-contact-otp', { body: { playerId, channel } });
       const d = data as { sent?: boolean; reason?: string; detail?: string } | null;
-      if (!error && d?.sent) return { sent: true };
-      // Not delivered — log why (unverified sender domain, etc.) for debugging; the
-      // UI just falls back to the on-screen code.
-      console.warn('send-contact-otp not delivered:', error?.message ?? d?.reason, d?.detail ?? '');
+      if (!error && d?.sent) return { sent: true, via: channel === 'email' ? 'email' : 'whatsapp' };
+      why = d?.reason ?? error?.message;
+      console.warn('send-contact-otp not delivered:', why, d?.detail ?? '');
     } catch (e) {
       console.warn('send-contact-otp failed:', e);
     }
+    const reason = why === 'too-many' ? 'Too many codes requested — try again in an hour.'
+      : why === 'no-whatsapp-config' ? 'Phone verification over WhatsApp is coming soon — it isn’t switched on yet.'
+      : channel === 'email' ? 'Couldn’t email a code just now — try again in a few minutes.'
+      : 'Couldn’t send a code to this number just now — try again later.';
+    return { sent: false, reason };
   }
   return { sent: false, demoCode: String(Math.floor(100000 + Math.random() * 900000)) };
 }
 
 /** Verify an emailed OTP server-side; on success the edge function flips the
  *  player's email_verified flag. Returns whether the code matched. */
-export async function verifyContactOtp(playerId: string, channel: 'phone' | 'email', code: string): Promise<boolean> {
+export async function verifyContactOtp(playerId: string, channel: OtpChannel, code: string): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return false;
+  // Firebase SMS: confirm the code with Firebase, then let OUR server check
+  // Google's signed token against the profile's number and set the flag.
+  // Throws (with a user-facing message) on a wrong/expired code.
+  if (firebasePending && firebasePending.playerId === playerId && firebasePending.channel === channel) {
+    const idToken = await confirmPhoneCode(code);
+    const { data, error } = await supabase.functions.invoke('verify-phone-firebase', { body: { playerId, channel, idToken } });
+    const d = data as { verified?: boolean; reason?: string } | null;
+    if (error || !d?.verified) throw new Error(d?.reason ?? 'Couldn’t verify the number — try again.');
+    firebasePending = null;
+    return true;
+  }
   try {
     const { data, error } = await supabase.functions.invoke('verify-contact-otp', { body: { playerId, channel, code } });
     return !error && !!(data as { verified?: boolean } | null)?.verified;
@@ -1881,7 +1958,7 @@ export async function getPendingVerifications(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) {
     return demo.players.filter((p) => p.verification?.status === 'pending');
   }
-  const { data } = await supabase.from('players').select(PLAYER_SELECT).eq('verification->>status', 'pending');
+  const { data } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).eq('verification->>status', 'pending');
   return (data as PlayerRow[] | null)?.map(toPlayer) ?? [];
 }
 
@@ -1994,7 +2071,14 @@ export async function createMyPlayer(profileId: string): Promise<string> {
   if (!isSupabaseConfigured || !supabase) return demo.players[0]?.id ?? addPlayer({ fullName: 'You', sports: [] }).id;
   const existing = await getMyPlayerId(profileId);
   if (existing) return existing;
-  const { data: prof } = await supabase.from('profiles').select('full_name, phone, dob, guardian').eq('id', profileId).single();
+  // phone / dob / guardian are private profile columns (migration 0026) — read
+  // our own through the RPC; the name is public.
+  const [{ data: pub }, { data: priv }] = await Promise.all([
+    supabase.from('profiles').select('full_name').eq('id', profileId).single(),
+    supabase.rpc('my_profile_private'),
+  ]);
+  const privRow = (priv as { phone: string | null; dob: string | null; guardian: Player['guardian'] | null }[] | null)?.[0];
+  const prof = { full_name: (pub?.full_name as string | undefined) ?? null, phone: privRow?.phone ?? null, dob: privRow?.dob ?? null, guardian: privRow?.guardian ?? null };
   // The sign-in email is already proven (confirmation link), so seed it as the
   // player's contact email + mark it verified — no need to re-verify it later.
   const { data: authData } = await supabase.auth.getUser();
@@ -2006,16 +2090,11 @@ export async function createMyPlayer(profileId: string): Promise<string> {
   // unlinked one. This is what puts an invitee straight into the team/captain slot
   // they were invited to, and it prevents two player rows sharing one number. RLS
   // ("players update scoped") permits setting profile_id on an unclaimed row.
-  const phone = prof?.phone ? normalizePhone(prof.phone) : null;
-  if (phone) {
-    const { data: pending } = await supabase
-      .from('players')
-      .select('id')
-      .eq('phone', phone)
-      .is('profile_id', null)
-      .is('reported_at', null) // never claim a row the person flagged as "not me"
-      .limit(1);
-    const claimId = (pending as { id: string }[] | null)?.[0]?.id;
+  // The match runs server-side on OUR OWN number / confirmed email (phone is a
+  // private column), skipping rows the person flagged as "not me".
+  {
+    const { data: claimable } = await supabase.rpc('my_claimable_player');
+    const claimId = (claimable as string | null) ?? null;
     if (claimId) {
       const { data: claimed, error: claimErr } = await supabase
         .from('players')

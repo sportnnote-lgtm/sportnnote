@@ -26,6 +26,10 @@ export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
   pickleball: { points: 1 },
   padel: { points: 1 },
   squash: { points: 1 },
+  tabletennis: { points: 1 },
+  chess: { wins: 3, draws: 1 },
+  carrom: { points: 1, boards: 1, queens: 2 },
+  golf: { holesWon: 1, birdies: 3, eagles: 6 },
 };
 
 /** Short (plural) labels for the per-player stat detail line. */
@@ -37,6 +41,8 @@ export const STAT_LABELS: Record<string, string> = {
   penaltiesWon: 'pen won', penaltiesMissed: 'pen missed',
   points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks',
   raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', games: 'games',
+  wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
+  holesWon: 'holes won', birdies: 'birdies', eagles: 'eagles', rounds: 'rounds',
 };
 
 /** Labels that read the same for one or many (mass nouns, abbreviations, adjectives). */
@@ -89,6 +95,10 @@ export const SPORT_AWARDS: Record<SportId, { icon: string; label: string; stat: 
   pickleball: [{ icon: '🥒', label: 'Top scorer', stat: 'points' }],
   padel: [{ icon: '🟡', label: 'Top scorer', stat: 'points' }],
   squash: [{ icon: '⚫', label: 'Top scorer', stat: 'points' }],
+  tabletennis: [{ icon: '🏓', label: 'Top scorer', stat: 'points' }],
+  chess: [], // one result per game — no in-game leaders
+  carrom: [{ icon: '🎱', label: 'Top scorer', stat: 'points' }, { icon: '👑', label: 'Queens', stat: 'queens' }],
+  golf: [{ icon: '🐦', label: 'Most birdies', stat: 'birdies' }],
 };
 
 export interface MatchRating {

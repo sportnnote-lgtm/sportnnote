@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Text, View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../core/theme';
@@ -39,6 +39,12 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import VerificationReviewScreen from '../screens/VerificationReviewScreen';
 import CreateListingScreen from '../screens/CreateListingScreen';
 import FollowingScreen from '../screens/FollowingScreen';
+import MessagesScreen from '../screens/MessagesScreen';
+import ConversationScreen from '../screens/ConversationScreen';
+import GuardianLinkScreen from '../screens/GuardianLinkScreen';
+import MessageReportsScreen from '../screens/MessageReportsScreen';
+import GolfRoundScreen from '../screens/GolfRoundScreen';
+import GolfRoundSetupScreen from '../screens/GolfRoundSetupScreen';
 import StandingsScreen from '../screens/StandingsScreen';
 import SportHubScreen from '../screens/SportHubScreen';
 import TryNewSportScreen from '../screens/TryNewSportScreen';
@@ -70,9 +76,35 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 // Deep links: sportnnote://join/CODE or https://sportnnote.in/join/CODE open
 // the Join screen with the code prefilled.
-const linking = {
+// Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
+// the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
+const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'LineupEditor', 'LiveScoring', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+
+// Web deep links / refresh. React Navigation 7 only recognises screens listed in
+// `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
+// which crashes back to Home. So: the configured paths first; otherwise the first
+// path segment is a stack screen (opened on top of Tabs, query → params); else Home.
+const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['sportnnote://', 'https://sportnnote.in'],
-  config: { screens: { JoinTeam: 'join/:token', JoinClub: 'join-club/:token' } },
+  config: {
+    initialRouteName: 'Tabs',
+    screens: {
+      Tabs: { path: '', screens: { Home: '', Matches: 'Tabs/Matches', Organize: 'Tabs/Organize', Discover: 'Tabs/Discover', Profile: 'Tabs/Profile' } },
+      JoinTeam: 'join/:token',
+      JoinClub: 'join-club/:token',
+    },
+  },
+  getStateFromPath: (path, options) => {
+    const configured = getStateFromPath(path, options);
+    if (configured) return configured;
+    const [pathname, query = ''] = path.replace(/^\/+/, '').split('?');
+    const name = decodeURIComponent(pathname.split('/')[0] ?? '');
+    const params = Object.fromEntries(new URLSearchParams(query));
+    if (STACK_SCREENS.has(name)) {
+      return { routes: [{ name: 'Tabs' }, { name, params: Object.keys(params).length ? params : undefined }] } as ReturnType<typeof getStateFromPath>;
+    }
+    return { routes: [{ name: 'Tabs' }] } as ReturnType<typeof getStateFromPath>;
+  },
 };
 
 const navTheme = {
@@ -254,6 +286,36 @@ export default function RootNavigator() {
               name="CreateListing"
               component={CreateListingScreen}
               options={{ ...stackScreenOpts, title: 'New Listing' }}
+            />
+            <Stack.Screen
+              name="Messages"
+              component={MessagesScreen}
+              options={{ ...stackScreenOpts, title: 'Messages' }}
+            />
+            <Stack.Screen
+              name="Conversation"
+              component={ConversationScreen}
+              options={{ ...stackScreenOpts, title: 'Message' }}
+            />
+            <Stack.Screen
+              name="GolfRound"
+              component={GolfRoundScreen}
+              options={{ ...stackScreenOpts, title: 'Golf round' }}
+            />
+            <Stack.Screen
+              name="GolfRoundSetup"
+              component={GolfRoundSetupScreen}
+              options={{ ...stackScreenOpts, title: 'Golf round' }}
+            />
+            <Stack.Screen
+              name="MessageReports"
+              component={MessageReportsScreen}
+              options={{ ...stackScreenOpts, title: 'Message reports' }}
+            />
+            <Stack.Screen
+              name="GuardianLink"
+              component={GuardianLinkScreen}
+              options={{ ...stackScreenOpts, title: 'Parent / guardian' }}
             />
             <Stack.Screen
               name="Following"

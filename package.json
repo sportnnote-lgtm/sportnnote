@@ -16,6 +16,7 @@
     "expo-notifications": "~56.0.17",
     "expo-status-bar": "~56.0.4",
     "expo-updates": "~56.0.25",
+    "firebase": "^12.19.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
@@ -37,7 +38,8 @@
     "web": "expo start --web",
     "test": "node --test tests/*.test.mts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "web:publish": "scripts/publish-web.sh"
   },
   "private": true,
   "packageManager": "yarn@4.6.0+sha512.5383cc12567a95f1d668fbe762dfe0075c595b4bfff433be478dbbe24e05251a8e8c3eb992a986667c1d53b6c3a9c85b8398c35a960587fbd9fa3a0915406728"

@@ -17,6 +17,9 @@ import type {
   Club,
   ClubInvite,
   ClubMember,
+  FieldEntry,
+  FieldEvent,
+  GolfCourse,
   ClubMemberRole,
   FootballProfile,
   Listing,
@@ -846,6 +849,21 @@ export const demo = {
   teamPlayerRoles: [] as TeamPlayerRoles[],
   /** club join invites keyed by token (see migration 0019). */
   clubInvites: {} as Record<string, ClubInvite>,
+  /** field events (golf rounds…) + their entries — docs/sports/GOLF_DESIGN.md */
+  fieldEvents: [] as FieldEvent[],
+  fieldEntries: [] as FieldEntry[],
+  golfCourses: [
+    {
+      id: 'course-demo',
+      name: 'Demo Golf Club (par 72)',
+      city: 'Hyderabad',
+      // The standard par-72 template (see sports/golf/engine standardPar72).
+      holes: [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5].map((par, i) => ({
+        n: i + 1, par, si: [7, 11, 15, 1, 5, 9, 17, 3, 13, 8, 12, 16, 2, 6, 10, 18, 4, 14][i],
+      })),
+      tees: [{ name: 'White' }, { name: 'Blue', courseRating: 72.4, slope: 131 }],
+    },
+  ] as GolfCourse[],
   captainTeams: new Set<string>(),
   footballProfiles: {
     'p-aarav': { position: 'ST', foot: 'Right', teams: ['Red House', 'City Juniors U16'], bio: 'Quick striker, strong finishing.' },
