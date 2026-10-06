@@ -22,7 +22,14 @@
   fast in India; deploys straight from the private GitHub repository; rebuilds the site on
   every push.
 
-**Steps** (once, about 15 minutes, needs your Cloudflare sign-up):
+**Cloudflare Workers flow** (what the dashboard offers now): the repository has
+`wrangler.jsonc`, which serves `website/dist` as static assets. Settings:
+- Build command: `node --experimental-strip-types scripts/build-website.mjs`.
+- Deploy command: `npx wrangler deploy`.
+- Production branch: `feat/sport-formats-and-scoring`.
+- The Worker name must be `sportnnote`, matching `wrangler.jsonc`.
+
+**Older Pages flow steps** (once, about 15 minutes, needs your Cloudflare sign-up):
 1. Create a free account at dash.cloudflare.com.
 2. **Workers & Pages → Create → Pages → Connect to Git.** Authorise GitHub and pick
    `sportnnote-lgtm/sportnnote`.
