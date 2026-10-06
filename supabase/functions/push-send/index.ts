@@ -24,6 +24,7 @@
  * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY injected.
  */
 import { admin, clip, json, rateLimit, requireUser, stripLinks, tooMany } from '../_shared/guard.ts';
+import { webPushToProfiles } from '../_shared/webpush.ts';
 
 const MAX_RECIPIENTS = 50;
 
@@ -65,6 +66,9 @@ Deno.serve(async (req) => {
   const profileIds = [...new Set((players ?? []).map((p) => p.profile_id).filter((x): x is string => !!x))];
   if (!profileIds.length) return json({ pushed: 0, skipped, reason: 'no linked accounts' });
 
+  // Web (iPhone Home Screen app, browsers) in parallel with Expo below.
+  const webSent = webPushToProfiles(profileIds, { title, body, url: matchId ? `/m/${matchId}` : '/', tag: matchId ? `m-${matchId}` : undefined });
+
   const { data: tokens } = await admin.from('push_tokens').select('token').in('profile_id', profileIds);
   const messages = (tokens ?? []).map((t) => ({
     to: t.token as string,
@@ -74,7 +78,10 @@ Deno.serve(async (req) => {
     data: { matchId: matchId ?? undefined },
     channelId: 'default',
   }));
-  if (!messages.length) return json({ pushed: 0, skipped, reason: 'no device tokens' });
+  if (!messages.length) {
+    const w = await webSent;
+    return json({ pushed: 0, web: w, skipped, reason: w ? undefined : 'no device tokens' });
+  }
 
   // 5) Send to Expo (cap 100 messages / request).
   for (let i = 0; i < messages.length; i += 100) {
@@ -84,5 +91,5 @@ Deno.serve(async (req) => {
       body: JSON.stringify(messages.slice(i, i + 100)),
     });
   }
-  return json({ pushed: messages.length, skipped });
+  return json({ pushed: messages.length, web: await webSent, skipped });
 });

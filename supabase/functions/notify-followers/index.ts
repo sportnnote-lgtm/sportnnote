@@ -25,6 +25,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeEqual } from '../_shared/guard.ts';
+import { webPushToProfiles } from '../_shared/webpush.ts';
 
 const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET') ?? '';
 
@@ -38,6 +39,8 @@ interface StatLineRecord {
   sport: string;
   stats: Record<string, number>;
   opponent: string | null;
+  /** stat_lines.match_id — opens the match on tap (web push) */
+  match_id?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -64,21 +67,26 @@ Deno.serve(async (req) => {
   const followerIds = (followers ?? []).map((f) => f.follower_id);
   if (followerIds.length === 0) return new Response('no followers', { status: 200 });
 
+  const headline = Object.entries(record.stats)
+    .map(([k, v]) => `${v} ${k}`)
+    .join(', ');
+  const pushTitle = `${player?.full_name ?? 'A player you follow'} — ${headline}`;
+  const pushBody = record.opponent ? `${record.sport} vs ${record.opponent}` : record.sport;
+  // Web push (iPhone Home Screen app, browsers).
+  const web = await webPushToProfiles(followerIds, { title: pushTitle, body: pushBody, url: record.match_id ? `/m/${record.match_id}` : '/' });
+
   const { data: tokens } = await supabase
     .from('push_tokens')
     .select('token')
     .in('profile_id', followerIds);
-  if (!tokens?.length) return new Response('no tokens', { status: 200 });
+  if (!tokens?.length) return new Response(JSON.stringify({ sent: 0, web }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
   // 4) build + send the Expo push batch
-  const headline = Object.entries(record.stats)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(', ');
   const messages = tokens.map((t) => ({
     to: t.token,
     sound: 'default',
-    title: `${player?.full_name ?? 'A player you follow'} — ${headline}`,
-    body: record.opponent ? `${record.sport} vs ${record.opponent}` : record.sport,
+    title: pushTitle,
+    body: pushBody,
     data: { playerId: record.player_id },
   }));
 
@@ -88,7 +96,7 @@ Deno.serve(async (req) => {
     body: JSON.stringify(messages),
   });
 
-  return new Response(JSON.stringify({ sent: messages.length }), {
+  return new Response(JSON.stringify({ sent: messages.length, web }), {
     headers: { 'Content-Type': 'application/json' },
   });
 });

@@ -20,6 +20,7 @@
  * Secrets:  RESEND_API_KEY, SUPPORT_EMAIL, INVITE_FROM/SUPPORT_FROM (shared).
  */
 import { admin, clip, CORS, guardianLinkSteps, json, pushToProfiles, rateLimit, requireUser, sendEmail, stripLinks } from '../_shared/guard.ts';
+import { webPushToProfiles } from '../_shared/webpush.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -51,8 +52,12 @@ Deno.serve(async (req) => {
   const to = caller.user.id === thread.sender_profile_id ? thread.recipient_profile_id : thread.sender_profile_id;
   if (to) {
     const about = thread.via_guardian && caller.user.id === thread.sender_profile_id ? ` · about ${child?.full_name ?? 'your child'}` : '';
-    const n = await pushToProfiles([to], { title: `💬 ${senderName}${about}`, body: preview, data: { threadId: msg.thread_id } });
-    return json({ delivered: n ? 'push' : 'none' });
+    const title = `💬 ${senderName}${about}`;
+    const [n, w] = await Promise.all([
+      pushToProfiles([to], { title, body: preview, data: { threadId: msg.thread_id } }),
+      webPushToProfiles([to], { title, body: preview, url: `/Conversation?threadId=${msg.thread_id}`, tag: `t-${msg.thread_id}` }),
+    ]);
+    return json({ delivered: n || w ? 'push' : 'none' });
   }
 
   // Guardian not on the app yet → email them (with a code to link their account).

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { reminderPrefsStore, LEAD_PRESETS, formatLead } from '../data/reminderPrefs';
+import { WebPushCard } from '../components/WebPushCard';
 
 type Unit = 'min' | 'hour' | 'day';
 const UNIT_MINS: Record<Unit, number> = { min: 1, hour: 60, day: 1440 };
@@ -28,6 +29,7 @@ export default function NotificationPrefsScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Match reminders" subtitle="When to remind you before your matches" />
+        <WebPushCard />
 
         <Card style={{ gap: theme.spacing(3) }}>
           <Text style={textStyles.h3}>🔔 Reminder timers</Text>

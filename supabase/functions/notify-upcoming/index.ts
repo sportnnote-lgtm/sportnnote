@@ -46,6 +46,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeEqual, sendEmail } from '../_shared/guard.ts';
+import { webPushMany } from '../_shared/webpush.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -301,6 +302,8 @@ Deno.serve(async (req) => {
     })),
   );
   if (messages.length) await sendExpoPush(messages);
+  // Web push: iPhone Home Screen app + browsers (one notification per match, replaced as it gets closer).
+  const webSent = await webPushMany(pushTargets.map((t) => ({ profileId: t.profileId, title: t.title, body: t.body, url: `/m/${t.matchId}`, tag: `m-${t.matchId}` })));
 
   // Email: the login address of each recipient (auth.users).
   let emailed = 0;
@@ -312,7 +315,7 @@ Deno.serve(async (req) => {
     if (await sendEmail(to, e.subject, e.text)) emailed++;
   }
 
-  return json({ due: dueMatches.length, targets: targets.length, pushed: messages.length, emailed });
+  return json({ due: dueMatches.length, targets: targets.length, pushed: messages.length, web: webSent, emailed });
 });
 
 /** Expo caps a push request at 100 messages; batch accordingly. */

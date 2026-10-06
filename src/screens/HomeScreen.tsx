@@ -25,6 +25,7 @@ import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import type { Match, SportId, Tournament } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { WebPushCard } from '../components/WebPushCard';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -170,6 +171,9 @@ export default function HomeScreen() {
             </View>
           </Pressable>
         </Modal>
+
+        {/* Web app: nudge to turn on notifications (iPhone: Add to Home Screen first). */}
+        <WebPushCard compact />
 
         {!isSupabaseConfigured && (
           <Card style={st.demo}>
