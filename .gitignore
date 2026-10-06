@@ -48,3 +48,4 @@ supabase/.temp/
 .env.local.bak
 dist-ota/
 website/dist/
+dist-size/

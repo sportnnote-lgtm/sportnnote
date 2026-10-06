@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Text, View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, DefaultTheme, getStateFromPath, createNavigationContainerRef, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -16,65 +16,66 @@ import HomeScreen from '../screens/HomeScreen';
 import MatchesScreen from '../screens/MatchesScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import LiveScoringScreen from '../screens/LiveScoringScreen';
+const LiveScoringScreen = lazyScreen(() => import('../screens/LiveScoringScreen'));
 import AuthScreen from '../screens/AuthScreen';
 import OrganizeScreen from '../screens/OrganizeScreen';
-import CreateTournamentScreen from '../screens/CreateTournamentScreen';
-import EditTournamentScreen from '../screens/EditTournamentScreen';
-import TeamsScreen from '../screens/TeamsScreen';
-import ScheduleMatchScreen from '../screens/ScheduleMatchScreen';
-import CreateSeriesScreen from '../screens/CreateSeriesScreen';
-import SeriesScreen from '../screens/SeriesScreen';
-import EditMatchScreen from '../screens/EditMatchScreen';
-import GenerateFixturesScreen from '../screens/GenerateFixturesScreen';
-import TournamentTeamsScreen from '../screens/TournamentTeamsScreen';
-import ContingentsScreen from '../screens/ContingentsScreen';
-import AmericanoScreen from '../screens/AmericanoScreen';
-import SportSettingsScreen from '../screens/SportSettingsScreen';
-import OrganizerDashboardScreen from '../screens/OrganizerDashboardScreen';
-import NotificationPrefsScreen from '../screens/NotificationPrefsScreen';
-import PlayerProfileScreen from '../screens/PlayerProfileScreen';
-import SportProfileScreen from '../screens/SportProfileScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import VerificationReviewScreen from '../screens/VerificationReviewScreen';
-import CreateListingScreen from '../screens/CreateListingScreen';
-import FollowingScreen from '../screens/FollowingScreen';
-import MessagesScreen from '../screens/MessagesScreen';
-import ConversationScreen from '../screens/ConversationScreen';
-import GuardianLinkScreen from '../screens/GuardianLinkScreen';
-import MessageReportsScreen from '../screens/MessageReportsScreen';
-import GolfRoundScreen from '../screens/GolfRoundScreen';
-import GolfRoundSetupScreen from '../screens/GolfRoundSetupScreen';
-import StandingsScreen from '../screens/StandingsScreen';
-import SportHubScreen from '../screens/SportHubScreen';
-import TryNewSportScreen from '../screens/TryNewSportScreen';
-import BracketScreen from '../screens/BracketScreen';
-import TeamProfileScreen from '../screens/TeamProfileScreen';
-import SquadScreen from '../screens/SquadScreen';
-import ClubsScreen from '../screens/ClubsScreen';
-import CreateClubScreen from '../screens/CreateClubScreen';
-import ClubHomeScreen from '../screens/ClubHomeScreen';
-import ClubSportScreen from '../screens/ClubSportScreen';
-import JoinClubScreen from '../screens/JoinClubScreen';
-import ScanQRScreen from '../screens/ScanQRScreen';
-import DiscoverOrgsScreen from '../screens/DiscoverOrgsScreen';
-import JoinTeamScreen from '../screens/JoinTeamScreen';
-import TournamentProfileScreen from '../screens/TournamentProfileScreen';
-import OrganizationScreen from '../screens/OrganizationScreen';
-import CreateCommunityScreen from '../screens/CreateCommunityScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import LineupEditorScreen from '../screens/LineupEditorScreen';
-import CricketLineupScreen from '../screens/CricketLineupScreen';
-import CalendarScreen from '../screens/CalendarScreen';
-import MatchSquadScreen from '../screens/MatchSquadScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import SupportScreen from '../screens/SupportScreen';
+const CreateTournamentScreen = lazyScreen(() => import('../screens/CreateTournamentScreen'));
+const EditTournamentScreen = lazyScreen(() => import('../screens/EditTournamentScreen'));
+const TeamsScreen = lazyScreen(() => import('../screens/TeamsScreen'));
+const ScheduleMatchScreen = lazyScreen(() => import('../screens/ScheduleMatchScreen'));
+const CreateSeriesScreen = lazyScreen(() => import('../screens/CreateSeriesScreen'));
+const SeriesScreen = lazyScreen(() => import('../screens/SeriesScreen'));
+const EditMatchScreen = lazyScreen(() => import('../screens/EditMatchScreen'));
+const GenerateFixturesScreen = lazyScreen(() => import('../screens/GenerateFixturesScreen'));
+const TournamentTeamsScreen = lazyScreen(() => import('../screens/TournamentTeamsScreen'));
+const ContingentsScreen = lazyScreen(() => import('../screens/ContingentsScreen'));
+const AmericanoScreen = lazyScreen(() => import('../screens/AmericanoScreen'));
+const SportSettingsScreen = lazyScreen(() => import('../screens/SportSettingsScreen'));
+const OrganizerDashboardScreen = lazyScreen(() => import('../screens/OrganizerDashboardScreen'));
+const NotificationPrefsScreen = lazyScreen(() => import('../screens/NotificationPrefsScreen'));
+const PlayerProfileScreen = lazyScreen(() => import('../screens/PlayerProfileScreen'));
+const SportProfileScreen = lazyScreen(() => import('../screens/SportProfileScreen'));
+const EditProfileScreen = lazyScreen(() => import('../screens/EditProfileScreen'));
+const VerificationReviewScreen = lazyScreen(() => import('../screens/VerificationReviewScreen'));
+const CreateListingScreen = lazyScreen(() => import('../screens/CreateListingScreen'));
+const FollowingScreen = lazyScreen(() => import('../screens/FollowingScreen'));
+const MessagesScreen = lazyScreen(() => import('../screens/MessagesScreen'));
+const ConversationScreen = lazyScreen(() => import('../screens/ConversationScreen'));
+const GuardianLinkScreen = lazyScreen(() => import('../screens/GuardianLinkScreen'));
+const MessageReportsScreen = lazyScreen(() => import('../screens/MessageReportsScreen'));
+const GolfRoundScreen = lazyScreen(() => import('../screens/GolfRoundScreen'));
+const GolfRoundSetupScreen = lazyScreen(() => import('../screens/GolfRoundSetupScreen'));
+const StandingsScreen = lazyScreen(() => import('../screens/StandingsScreen'));
+const SportHubScreen = lazyScreen(() => import('../screens/SportHubScreen'));
+const TryNewSportScreen = lazyScreen(() => import('../screens/TryNewSportScreen'));
+const BracketScreen = lazyScreen(() => import('../screens/BracketScreen'));
+const TeamProfileScreen = lazyScreen(() => import('../screens/TeamProfileScreen'));
+const SquadScreen = lazyScreen(() => import('../screens/SquadScreen'));
+const ClubsScreen = lazyScreen(() => import('../screens/ClubsScreen'));
+const CreateClubScreen = lazyScreen(() => import('../screens/CreateClubScreen'));
+const ClubHomeScreen = lazyScreen(() => import('../screens/ClubHomeScreen'));
+const ClubSportScreen = lazyScreen(() => import('../screens/ClubSportScreen'));
+const JoinClubScreen = lazyScreen(() => import('../screens/JoinClubScreen'));
+const ScanQRScreen = lazyScreen(() => import('../screens/ScanQRScreen'));
+const DiscoverOrgsScreen = lazyScreen(() => import('../screens/DiscoverOrgsScreen'));
+const JoinTeamScreen = lazyScreen(() => import('../screens/JoinTeamScreen'));
+const TournamentProfileScreen = lazyScreen(() => import('../screens/TournamentProfileScreen'));
+const OrganizationScreen = lazyScreen(() => import('../screens/OrganizationScreen'));
+const CreateCommunityScreen = lazyScreen(() => import('../screens/CreateCommunityScreen'));
+const NotificationsScreen = lazyScreen(() => import('../screens/NotificationsScreen'));
+const LineupEditorScreen = lazyScreen(() => import('../screens/LineupEditorScreen'));
+const CricketLineupScreen = lazyScreen(() => import('../screens/CricketLineupScreen'));
+const CalendarScreen = lazyScreen(() => import('../screens/CalendarScreen'));
+const MatchSquadScreen = lazyScreen(() => import('../screens/MatchSquadScreen'));
+const SettingsScreen = lazyScreen(() => import('../screens/SettingsScreen'));
+const SupportScreen = lazyScreen(() => import('../screens/SupportScreen'));
 import LegalScreen from '../screens/LegalScreen';
-import FeedbackScreen from '../screens/FeedbackScreen';
-import MatchLinkScreen from '../screens/MatchLinkScreen';
-import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+const FeedbackScreen = lazyScreen(() => import('../screens/FeedbackScreen'));
+const MatchLinkScreen = lazyScreen(() => import('../screens/MatchLinkScreen'));
+const DeleteAccountScreen = lazyScreen(() => import('../screens/DeleteAccountScreen'));
 import type { RootStackParamList, TabParamList } from './types';
 import { trackScreen } from '../core/telemetry';
+import { lazyScreen, prefetchScreens } from './lazyScreens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -188,6 +189,13 @@ export default function RootNavigator() {
     });
   }, [authed, profile?.id]);
 
+  // Warm the on-demand screens once the app has settled, so later taps are instant.
+  useEffect(() => {
+    if (loading) return;
+    const t = setTimeout(prefetchScreens, 2500);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -204,7 +212,14 @@ export default function RootNavigator() {
       onReady={() => trackScreen(navRef.getCurrentRoute()?.name)}
       onStateChange={() => trackScreen(navRef.getCurrentRoute()?.name)}
     >
-      <Stack.Navigator>
+      <Stack.Navigator
+        // Lazy screens (lazyScreens.ts) show a spinner for the moment their chunk loads.
+        screenLayout={({ children }) => (
+          <Suspense fallback={<View style={{ flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={theme.colors.primary} /></View>}>
+            {children}
+          </Suspense>
+        )}
+      >
         {!authed ? (
           <>
             <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
