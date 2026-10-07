@@ -49,6 +49,9 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   - Android OTA `59cf9d9b`.
   - New APK with FCM: build `cd76a7b6` (link on sportnnote.in and in
     `docs/share/HOW_TO_SHARE.md`).
+  - **iPhone web push verified end to end:** the founder's Home Screen app subscribed
+    (web.push.apple.com). A one-off test sender (deployed, used, deleted) returned
+    `sent: 1`.
 - 380 tests.
 - **Parked by the founder:** public no-login match/tournament pages.
 
