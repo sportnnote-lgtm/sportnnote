@@ -47,9 +47,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   - Also: **localhost dev/test copies no longer send telemetry**. My live-keyed
     previews had polluted the live errors; the old rows are left to age out.
 - 383 tests.
-- **Release:** `supabase/release/2026-10-phone-login-0035.sql` (migration + daily digest
-  schedule), then deploy phone-login, verify-phone-firebase and the functions using
-  `sendEmail`, then publish web + OTA.
+- **LIVE 2026-10-08:**
+  - The founder ran 0035 plus the daily-digest schedule (anon is refused on
+    `phone_login_lookup`).
+  - Deployed phone-login, verify-phone-firebase, send-invite, support-escalate,
+    guardian-link, verification-submit, message-notify, send-contact-otp,
+    notify-upcoming and push-send.
+  - phone-login guards: 400 without a token, 401 with a bad token.
+  - Web published; OTA `dbc4f362`.
 
 ---
 
