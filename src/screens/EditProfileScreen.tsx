@@ -34,6 +34,8 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   // choose to show their mobile / email on their public profile.
   const [showPhone, setShowPhone] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
+  // Discover: let other members find me by my exact phone/email (adults; default on).
+  const [findable, setFindable] = useState(true);
   // Parent/guardian — for young players without their own phone/email.
   const [gName, setGName] = useState('');
   const [gPhone, setGPhone] = useState('');
@@ -60,6 +62,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       setEmail(p.email ?? '');
       setShowPhone(!!p.showPhone);
       setShowEmail(!!p.showEmail);
+      setFindable(p.findableByContact !== false);
       setGName(p.guardian?.name ?? '');
       setGPhone(p.guardian?.phone ?? '');
       setGEmail(p.guardian?.email ?? '');
@@ -144,6 +147,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         // Under-18s can never make contact details public (also enforced server-side).
         showPhone: age >= 18 && showPhone && !!phone.trim(),
         showEmail: age >= 18 && showEmail && !!email.trim(),
+        findableByContact: age >= 18 && findable,
         guardian,
         sports,
         sportDetails: kept,
@@ -204,6 +208,13 @@ export default function EditProfileScreen({ route, navigation }: Props) {
               <View style={st.switchRow}>
                 <Text style={[textStyles.body, st.flex]}>Show my email</Text>
                 <Switch value={showEmail && !!email.trim()} onValueChange={setShowEmail} disabled={!email.trim()} accessibilityLabel="Show my email on my profile" />
+              </View>
+              <View style={st.switchRow}>
+                <View style={st.flex}>
+                  <Text style={textStyles.body}>Let people find me by my phone or email</Text>
+                  <Text style={textStyles.muted}>Members who already know your number or email can find your profile in Discover. They still won’t see it.</Text>
+                </View>
+                <Switch value={findable} onValueChange={setFindable} accessibilityLabel="Let people find me by my phone or email" />
               </View>
             </>
           )}

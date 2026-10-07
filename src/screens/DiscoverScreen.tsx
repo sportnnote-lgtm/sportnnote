@@ -9,6 +9,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Card, LoadingState, Pill, TextField, SelectChip, ScreenTitle, textStyles, plural } from '../components/ui';
 import { ConnectBoard } from '../components/ConnectBoard';
+import { PlayerFilters, activeFilterCount, type PlayerFilterState } from '../components/PlayerFilters';
+import { looksLikeContact } from '../data/repos';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { usePlayerSearch, useCities, useTeamSummaries, useFollow, useOpenTournaments } from '../data/hooks';
@@ -30,18 +32,21 @@ export default function DiscoverScreen() {
   const { profile } = useAuth();
   const [mode, setMode] = useState<Mode>('connect');
   const [query, setQuery] = useState('');
-  const [sport, setSport] = useState<SportId | 'all'>('all');
-  const [city, setCity] = useState<string>('all');
+  const [filters, setFilters] = useState<PlayerFilterState>({});
+  const fSports = filters.sports ?? [];
+  // The focused sport for each player's stat line: the only one picked, else their main one.
+  const sport: SportId | 'all' = fSports.length === 1 ? fSports[0] : 'all';
   const [showAllResults, setShowAllResults] = useState(false);
   const [showAllOpenTours, setShowAllOpenTours] = useState(false);
   const [showAllTeams, setShowAllTeams] = useState(false);
 
   const cities = useCities();
-  const { results, loading: searching } = usePlayerSearch({ query, sport, city });
-  const teams = useTeamSummaries().filter((t) => sport === 'all' || t.sports.includes(sport));
+  const { results, loading: searching, error: searchError } = usePlayerSearch({ query, ...filters });
+  const contactSearch = looksLikeContact(query);
+  const teams = useTeamSummaries().filter((t) => !fSports.length || t.sports.some((s) => fSports.includes(s)));
   const { isFollowing, toggle } = useFollow(profile?.id);
-  const openTournaments = useOpenTournaments().filter((t) => sport === 'all' || t.sports.includes(sport));
-  const filtering = query.trim() !== '' || sport !== 'all' || city !== 'all';
+  const openTournaments = useOpenTournaments().filter((t) => !fSports.length || t.sports.some((s) => fSports.includes(s)));
+  const filtering = query.trim() !== '' || activeFilterCount(filters) > 0;
 
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
@@ -66,21 +71,14 @@ export default function DiscoverScreen() {
           <ConnectBoard />
         ) : (
           <>
-        <TextField label="Search players" value={query} onChange={setQuery} placeholder="Search by name…" autoCapitalize="none" />
+        <TextField label="Search players" value={query} onChange={setQuery} placeholder="Name, mobile number or email…" autoCapitalize="none" />
+        {contactSearch && (
+          <Text style={textStyles.muted}>
+            Searching for an exact {contactSearch === 'phone' ? 'mobile number' : 'email'} — only adults who allow it can be found this way.
+          </Text>
+        )}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
-          <SelectChip label="All sports" active={sport === 'all'} onPress={() => setSport('all')} />
-          {SPORT_LIST.map((s) => (
-            <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={sport === s.id} onPress={() => setSport(s.id)} />
-          ))}
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
-          <SelectChip label="All cities" active={city === 'all'} onPress={() => setCity('all')} />
-          {cities.map((c) => (
-            <SelectChip key={c} label={`📍 ${c}`} active={city === c} onPress={() => setCity(c)} />
-          ))}
-        </ScrollView>
+        <PlayerFilters value={filters} onChange={setFilters} cities={cities} />
 
         <SectionHeader
           title="Players"
@@ -94,7 +92,9 @@ export default function DiscoverScreen() {
           {filtering ? ' found' : ' · ranked by activity'}
         </Text>
 
-        {searching ? <LoadingState label="Searching players…" /> : results.length === 0 ? <EmptyState icon="🔍" title="No players match" hint="Try a different name or spelling." /> : null}
+        {searching ? <LoadingState label="Searching players…" />
+          : searchError ? <EmptyState icon="⚠️" title="Search didn’t work" hint={searchError} />
+          : results.length === 0 ? <EmptyState icon="🔍" title="No players match" hint={contactSearch ? 'No one with that number or email has allowed being found by it.' : activeFilterCount(filters) ? 'Try removing a filter.' : 'Try a different name or spelling.'} /> : null}
 
         {(showAllResults ? results : results.slice(0, SECTION_CAP)).map(({ player, stats }, i) => (
           <TouchableOpacity accessibilityRole="button" key={player.id} activeOpacity={0.85} onPress={() => nav.navigate('PlayerProfile', { playerId: player.id })}>

@@ -3,6 +3,7 @@
  * demo-mode fallback lives in exactly one place. Each function returns the same
  * domain shapes whether the data came from Postgres or the local mock.
  */
+import { ageOf } from '../core/age';
 import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import type { PickedDoc } from '../core/document';
@@ -433,6 +434,7 @@ interface PlayerRow {
   age?: number | null;
   show_phone?: boolean | null;
   show_email?: boolean | null;
+  findable_by_contact?: boolean | null;
   guardian_linked?: boolean | null;
 }
 const toPlayer = (r: PlayerRow): Player => ({
@@ -459,6 +461,7 @@ const toPlayer = (r: PlayerRow): Player => ({
   age: r.age ?? undefined,
   showPhone: r.show_phone ?? undefined,
   showEmail: r.show_email ?? undefined,
+  findableByContact: r.findable_by_contact ?? undefined,
   guardianLinked: r.guardian_linked ?? undefined,
 });
 
@@ -469,7 +472,7 @@ const toPlayer = (r: PlayerRow): Player => ({
  *  status flags so eligibility checks still work. The base `players` table no
  *  longer lets clients read those columns at all; WRITES still go to `players`. */
 const PLAYERS_READ = 'players_view';
-const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification, age, show_phone, show_email, guardian_linked';
+const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification, age, show_phone, show_email, guardian_linked, findable_by_contact';
 
 export async function getPlayers(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) return demo.players;
@@ -544,34 +547,88 @@ export async function getMatchStatLines(matchId: string): Promise<StatLine[]> {
 
 /** Server-side player search: filtering happens in the DB (or the demo store),
  *  not by loading every player into the client. */
-export async function searchPlayers(opts: { query?: string; sport?: SportId; city?: string }): Promise<Player[]> {
-  const { query, sport, city } = opts;
+/** Discover filters. Every field is optional; arrays mean "any of". */
+export interface PlayerSearch {
+  query?: string;
+  sports?: SportId[];
+  cities?: string[];
+  gender?: 'male' | 'female';
+  /** age band: under 14 / 16 / 18, 18–34, 35+ */
+  age?: 'u14' | 'u16' | 'u18' | 'adult' | '35plus';
+  verifiedOnly?: boolean;
+}
+const AGE_RANGE: Record<NonNullable<PlayerSearch['age']>, [number, number]> = {
+  u14: [0, 13], u16: [0, 15], u18: [0, 17], adult: [18, 34], '35plus': [35, 200],
+};
+
+export { looksLikeContact } from '../core/contactQuery';
+import { looksLikeContact } from '../core/contactQuery';
+
+const sameCity = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export async function searchPlayers(opts: PlayerSearch): Promise<Player[]> {
+  const q = (opts.query ?? '').trim();
+  const contact = looksLikeContact(q);
+  const ageOk = (age?: number) => {
+    if (!opts.age) return true;
+    if (age === undefined) return false;
+    const [lo, hi] = AGE_RANGE[opts.age];
+    return age >= lo && age <= hi;
+  };
   if (!isSupabaseConfigured || !supabase) {
-    const q = (query ?? '').trim().toLowerCase();
-    return demo.players.filter(
-      (p) =>
-        (!q || p.fullName.toLowerCase().includes(q)) &&
-        (!sport || p.sports.includes(sport)) &&
-        (!city || p.city === city)
-    );
+    const digits = q.replace(/\D/g, '');
+    return demo.players.filter((p) => {
+      const nameHit = !q || p.fullName.toLowerCase().includes(q.toLowerCase());
+      const contactHit = contact === 'email' ? p.email?.toLowerCase() === q.toLowerCase()
+        : contact === 'phone' ? !!p.phone && p.phone.replace(/\D/g, '').endsWith(digits.slice(-10)) : false;
+      return (contact ? contactHit : nameHit)
+        && (!opts.sports?.length || opts.sports.some((s) => p.sports.includes(s)))
+        && (!opts.cities?.length || opts.cities.some((c) => sameCity(c, p.city)))
+        && (!opts.gender || p.gender === opts.gender)
+        && ageOk(ageOf(p))
+        && (!opts.verifiedOnly || p.verification?.status === 'approved');
+    });
+  }
+  let ids: string[] | null = null;
+  if (contact) {
+    const { data, error } = await supabase.rpc('discover_player_by_contact', { p_query: q });
+    if (error) throw new Error(error.message.includes('Too many') ? 'Too many contact searches — try again in an hour.' : 'Couldn’t search by contact just now.');
+    ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+    if (!ids.length) return [];
   }
   let req = supabase.from(PLAYERS_READ).select(PLAYER_SELECT).order('full_name').limit(50);
-  if (query?.trim()) req = req.ilike('full_name', `%${query.trim()}%`);
-  if (sport) req = req.contains('sports', [sport]);
-  if (city) req = req.eq('city', city);
+  if (ids) req = req.in('id', ids);
+  else if (q) req = req.ilike('full_name', `%${q}%`);
+  if (opts.sports?.length) req = req.overlaps('sports', opts.sports);
+  if (opts.cities?.length) req = req.or(opts.cities.map((c) => `city.ilike.${c.replace(/[,()]/g, ' ').trim()}`).join(','));
+  if (opts.gender) req = req.eq('gender', opts.gender);
+  if (opts.age) { const [lo, hi] = AGE_RANGE[opts.age]; req = req.gte('age', lo).lte('age', hi); }
+  if (opts.verifiedOnly) req = req.eq('verification->>status', 'approved');
   const { data, error } = await req;
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
 }
 
-/** Distinct cities for the discovery filter. */
+/** Cities for the discovery filter, most players first. Case/spacing variants
+ *  ("hyderabad", "Hyderabad ") merge into one, shown in Title Case. */
 export async function getCities(): Promise<string[]> {
-  if (!isSupabaseConfigured || !supabase) {
-    return Array.from(new Set(demo.players.map((p) => p.city).filter(Boolean))).sort() as string[];
+  let raw: (string | null | undefined)[];
+  if (!isSupabaseConfigured || !supabase) raw = demo.players.map((p) => p.city);
+  else {
+    const { data, error } = await supabase.from('players').select('city').not('city', 'is', null).limit(5000);
+    if (error || !data) return [];
+    raw = data.map((r) => r.city as string | null);
   }
-  const { data, error } = await supabase.from('players').select('city');
-  if (error || !data) return [];
-  return Array.from(new Set(data.map((r) => r.city).filter(Boolean))).sort() as string[];
+  const counts = new Map<string, { label: string; n: number }>();
+  for (const c of raw) {
+    const t = (c ?? '').trim().replace(/\s+/g, ' ');
+    if (!t) continue;
+    const key = t.toLowerCase();
+    const label = t.replace(/\b\w/g, (ch) => ch.toUpperCase());
+    const cur = counts.get(key);
+    counts.set(key, { label: cur?.label ?? label, n: (cur?.n ?? 0) + 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)).map((c) => c.label);
 }
 
 /** Stat lines for a specific set of players (one query, not all of them). */
@@ -1741,7 +1798,7 @@ export async function createPlayer(input: NewPlayer, profileId?: string): Promis
 }
 
 export type PlayerPatch = Partial<
-  Pick<Player, 'fullName' | 'city' | 'gender' | 'bio' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification' | 'showPhone' | 'showEmail'>
+  Pick<Player, 'fullName' | 'city' | 'gender' | 'bio' | 'houseName' | 'jerseyNo' | 'sports' | 'phone' | 'email' | 'phoneVerified' | 'emailVerified' | 'photoUrl' | 'sportDetails' | 'dob' | 'guardian' | 'verification' | 'showPhone' | 'showEmail' | 'findableByContact'>
 >;
 
 /** Where verification documents and support cases are routed for the support team.
@@ -1820,6 +1877,7 @@ export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void
   if (patch.verification !== undefined) row.verification = patch.verification ?? null;
   if (patch.showPhone !== undefined) row.show_phone = patch.showPhone;
   if (patch.showEmail !== undefined) row.show_email = patch.showEmail;
+  if (patch.findableByContact !== undefined) row.findable_by_contact = patch.findableByContact;
   const { error } = await supabase.from('players').update(row).eq('id', id);
   if (error) throw new Error(error.message);
 }

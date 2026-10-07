@@ -13,6 +13,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Discover: search by phone/email + a clean filter panel
+
+- **Search box:** a name, or an exact mobile number or email (`core/contactQuery.ts`,
+  tested).
+  - Contact search uses `discover_player_by_contact` (migration 0034, 10 PGlite tests).
+  - It returns only the player id, and only for **claimed adult accounts that allow
+    it**: new `players.findable_by_contact` (default on), an Edit profile switch "Let
+    people find me by my phone or email", never under-18s.
+  - Signed-in only; 60 lookups per hour.
+- **Filters** (`components/PlayerFilters.tsx`): one "⚙ Filters" button expands a panel:
+  - sports multi-select as a wrapped grid (no sideways scroll);
+  - city type-to-search over real player cities, most common first, with
+    case/spacing variants merged (`getCities`);
+  - gender; age band (U14/U16/U18/18–34/35+); verified only.
+  - Active filters appear as removable chips, with "Clear all".
+  - Search is debounced at 300 ms.
+- **Server-side filters:** `overlaps(sports)`, city `ilike` OR, age range on
+  `players_view.age`, `verification->>status`.
+- **Verified in the demo:**
+  - 345 → 45 (Kabaddi/Tennis) → 1 (+U18);
+  - city "arg" → Argentina;
+  - phone search → exact match;
+  - fixed an empty-text-node render warning.
+- **Release:** `supabase/release/2026-10-discover-contact-0034.sql`. It **must run before
+  the next publish**, because `PLAYER_SELECT` now reads `findable_by_contact`.
+
+---
+
 ### 2026-10-07 — Public share pages (no login) + shareable player profiles
 
 - **Guest mode:** match (`/m`), tournament (`/t`), golf round (`/g`) and player profile

@@ -104,6 +104,8 @@ export interface Player {
   /** Privacy opt-ins (adults only; default off): show my mobile / email publicly. */
   showPhone?: boolean;
   showEmail?: boolean;
+  /** "Let people find me by my phone or email" in Discover (adults; default on). */
+  findableByContact?: boolean;
   /** a parent/guardian has linked their own account (gets messages about this player) */
   guardianLinked?: boolean;
 }

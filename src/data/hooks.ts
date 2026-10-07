@@ -22,6 +22,7 @@ import {
   setFollow,
   getFootballProfile,
   searchPlayers,
+  type PlayerSearch,
   getCities,
   getStatLinesForPlayers,
   getTeamSummaries,
@@ -249,36 +250,49 @@ export function usePlayerSummaries() {
 
 /** Server-side player search → ranked summaries. Filtering happens in the repo
  *  (DB query live, in-memory in demo); only the matched set is hydrated. */
-export function usePlayerSearch(opts: { query: string; sport: SportId | 'all'; city: string }) {
-  const { query, sport, city } = opts;
+export function usePlayerSearch(opts: PlayerSearch) {
   const [results, setResults] = useState<PlayerSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const key = JSON.stringify(opts);
   useEffect(() => {
     let on = true;
     setLoading(true);
-    searchPlayers({ query, sport: sport === 'all' ? undefined : sport, city: city === 'all' ? undefined : city }).then(
-      async (players) => {
-        const lines = await getStatLinesForPlayers(players.map((p) => p.id));
-        if (!on) return;
-        const byPlayer = new Map<string, typeof lines>();
-        for (const l of lines) {
-          const arr = byPlayer.get(l.playerId) ?? [];
-          arr.push(l);
-          byPlayer.set(l.playerId, arr);
-        }
-        setResults(
-          players
-            .map((player) => ({ player, stats: aggregate(byPlayer.get(player.id) ?? []) }))
-            .sort((a, b) => b.stats.matches - a.stats.matches || a.player.fullName.localeCompare(b.player.fullName))
-        );
-        setLoading(false);
-      }
-    );
+    setError(null);
+    // Debounce typing so a name or number isn't searched on every keystroke.
+    const t = setTimeout(() => {
+      searchPlayers(opts).then(
+        async (players) => {
+          const lines = await getStatLinesForPlayers(players.map((p) => p.id));
+          if (!on) return;
+          const byPlayer = new Map<string, typeof lines>();
+          for (const l of lines) {
+            const arr = byPlayer.get(l.playerId) ?? [];
+            arr.push(l);
+            byPlayer.set(l.playerId, arr);
+          }
+          setResults(
+            players
+              .map((player) => ({ player, stats: aggregate(byPlayer.get(player.id) ?? []) }))
+              .sort((a, b) => b.stats.matches - a.stats.matches || a.player.fullName.localeCompare(b.player.fullName))
+          );
+          setLoading(false);
+        },
+        (e: unknown) => {
+          if (!on) return;
+          setResults([]);
+          setError(e instanceof Error ? e.message : 'Search failed');
+          setLoading(false);
+        },
+      );
+    }, 300);
     return () => {
       on = false;
+      clearTimeout(t);
     };
-  }, [query, sport, city]);
-  return { results, loading };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return { results, loading, error };
 }
 
 export function useTeamSummaries() {
