@@ -18,6 +18,7 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { isSupabaseConfigured, supabase } from './supabase';
+import { isStaleVersionError, reloadForNewVersion } from './staleVersion';
 
 type Props = Record<string, string | number | boolean>;
 type Queued = { name: string; at: string; props: Props };
@@ -27,7 +28,11 @@ const ANON_KEY = 'sn.telemetry.anonId';
 const PENDING_ERRORS_KEY = 'sn.telemetry.pendingErrors';
 const MAX_ERRORS_PER_SESSION = 20;
 
-const enabled = isSupabaseConfigured && !!supabase;
+// Local dev/test copies (localhost) can point at the live backend — keep them out
+// of the live statistics.
+const isLocalWeb = Platform.OS === 'web' && typeof window !== 'undefined'
+  && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location?.hostname ?? '');
+const enabled = isSupabaseConfigured && !!supabase && !isLocalWeb;
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web' ? Platform.OS : 'web';
 
 function uuid(): string {
@@ -191,7 +196,12 @@ export function startTelemetry(): void {
   });
   // Web.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    window.addEventListener('error', (ev) => reportError(ev.error ?? ev.message, { fatal: false }));
+    window.addEventListener('error', (ev) => {
+      const err = ev.error ?? ev.message;
+      // Old version asking for files the new publish no longer has → reload once.
+      if (isStaleVersionError(err) && reloadForNewVersion()) return;
+      reportError(err, { fatal: false });
+    });
     window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason));
     window.addEventListener('pagehide', () => { void flush(); });
   }

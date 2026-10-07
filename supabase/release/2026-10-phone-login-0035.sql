@@ -110,3 +110,19 @@ revoke all on function phone_login_lookup(text), phone_login_attach_player(uuid,
 grant execute on function phone_login_lookup(text), phone_login_attach_player(uuid, text) to service_role;
 
 commit;
+
+-- ── Daily pilot digest: every evening 21:00 IST (15:30 UTC) to SUPPORT_EMAIL. ──
+-- Same weekly-report function with period 'day'; uses the Vault 'cron_secret'.
+-- The Bearer is the PUBLIC anon key (it's in every copy of the app).
+-- Stop it later with: select cron.unschedule('daily-digest');
+select cron.schedule('daily-digest', '30 15 * * *', $job$
+  select net.http_post(
+    url := 'https://mpgbvbylmkwasjgupsbq.supabase.co/functions/v1/weekly-report',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wZ2J2YnlsbWt3YXNqZ3Vwc2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMjIxNDQsImV4cCI6MjEwMTU5ODE0NH0.NV7ryMBv-qAc7OzHZVPPxXY2J3agtlHRbvS55R6sWXw',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    body := '{"period":"day"}'::jsonb)
+$job$);
+
+select jobname, schedule, active from cron.job order by jobname;

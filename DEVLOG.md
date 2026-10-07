@@ -13,6 +13,46 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Phone sign-in, offline web app, daily digest, post-publish crash fix
+
+- **Sign in / up with a mobile number (web):** `PhoneLoginCard` on the sign-in screen.
+  - Firebase SMS code → the `phone-login` edge function (migration 0035, 13 PGlite
+    tests).
+  - It signs into the account whose own player **verified** that number. An account that
+    only typed the number is refused, with guidance (no takeover).
+  - New numbers: a short form (name, DOB, role, guardian for under-18s, terms). The
+    account gets an internal `@phone.sportnnote.in` placeholder email, which is never
+    mailed (guard `sendEmail`, `createMyPlayer` and the email sync skip it).
+  - The new account claims any organiser-added player with that number.
+  - The session comes from a one-time magic-link token hash (`verifyOtp`).
+  - Shared `_shared/firebaseToken.ts` (verify-phone-firebase refactored onto it).
+  - The native APK stays on email (Firebase JS phone auth is web-only).
+- **Opens on poor signal (`public/sw.js`):**
+  - Pages: network-first with a saved-page fallback. The main bundle and every script
+    in the HTML are saved at install and on each navigation.
+  - Hashed code: cache-first. Supabase REST GETs: network-first with the last copy as a
+    fallback. Wiped on sign-out.
+  - **Verified:** server stopped → reload → the app renders fully. (The first attempt
+    showed a blank page because the main bundle wasn't cached; fixed.)
+- **Daily digest:** `weekly-report` `{period:'day'}` — last 24 h: sign-ups, active
+  users, opens, matches by sport, rounds, tournaments, shares, top errors, feedback.
+  Scheduled 21:00 IST by the release SQL.
+- **The digest's first run found real crashes on production:**
+  - "Requiring unknown module" (12) and a burst of `Unexpected token '<'` (19). Cause:
+    lazy screen chunks plus frequent publishes (an old open app fetching files the new
+    deploy doesn't have).
+  - **Fix:** `core/staleVersion` (matcher tested) reloads once on version-mismatch
+    errors — from the lazy loader, `window.onerror` and the ErrorBoundary — never more
+    than once per 60 s. The service worker cache also keeps each version's chunks.
+  - Also: **localhost dev/test copies no longer send telemetry**. My live-keyed
+    previews had polluted the live errors; the old rows are left to age out.
+- 383 tests.
+- **Release:** `supabase/release/2026-10-phone-login-0035.sql` (migration + daily digest
+  schedule), then deploy phone-login, verify-phone-firebase and the functions using
+  `sendEmail`, then publish web + OTA.
+
+---
+
 ### 2026-10-07 — Discover: search by phone/email + a clean filter panel
 
 - **Search box:** a name, or an exact mobile number or email (`core/contactQuery.ts`,

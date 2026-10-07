@@ -5,13 +5,18 @@
  * navigation stays instant. On native everything is in one bundle anyway.
  */
 import React from 'react';
+import { isStaleVersionError, reloadForNewVersion } from '../core/staleVersion';
 
 const loaders: Array<() => Promise<unknown>> = [];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyScreen<T extends React.ComponentType<any>>(load: () => Promise<{ default: T }>): React.LazyExoticComponent<T> {
   loaders.push(load);
-  return React.lazy(load);
+  return React.lazy(() => Promise.resolve(load()).catch((e: unknown) => {
+    // Opened on an older version whose files are gone → fetch the newest app.
+    if (isStaleVersionError(e) && reloadForNewVersion()) return new Promise<never>(() => undefined);
+    throw e;
+  }));
 }
 
 let prefetched = false;

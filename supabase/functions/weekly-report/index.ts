@@ -128,13 +128,58 @@ async function build(): Promise<{ subject: string; text: string }> {
   return { subject: `SportnNote weekly — ${num(w.matches_completed)} matches, ${num(w.sign_ups)} sign-ups, ${feedback.length} feedback`, text: out.join('\n') };
 }
 
+/** Daily pilot digest (first weeks): the last 24 hours — who joined, what was
+ *  played, what broke, what people said. POST { period: 'day' }. */
+async function buildDaily(): Promise<{ subject: string; text: string }> {
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const [events, errors, cases] = await Promise.all([
+    admin.from('analytics_events').select('name, profile_id, props').gte('at', since).limit(5000),
+    admin.from('client_errors').select('message, fatal, screen, platform').gte('at', since).limit(500),
+    admin.from('support_cases').select('question, tried, handle').gte('created_at', since).order('created_at'),
+  ]);
+  const ev = (events.data ?? []) as Row[];
+  const count = (n: string) => ev.filter((e) => e.name === n).length;
+  const active = new Set(ev.filter((e) => e.profile_id).map((e) => e.profile_id)).size;
+  const sports = new Map<string, number>();
+  for (const e of ev) if (e.name === 'match_completed' || e.name === 'round_completed') {
+    const sp = String((e.props as Row | null)?.sport ?? '?');
+    sports.set(sp, (sports.get(sp) ?? 0) + 1);
+  }
+  const errs = (errors.data ?? []) as Row[];
+  const byMsg = new Map<string, { n: number; fatal: boolean; screen?: unknown }>();
+  for (const e of errs) {
+    const k = String(e.message).slice(0, 110);
+    const cur = byMsg.get(k) ?? { n: 0, fatal: false, screen: e.screen };
+    byMsg.set(k, { n: cur.n + 1, fatal: cur.fatal || !!e.fatal, screen: cur.screen });
+  }
+  const fb = (cases.data ?? []) as Row[];
+  const lines = [
+    'SportnNote — last 24 hours',
+    '',
+    `  Sign-ups                 ${count('signed_up')}`,
+    `  Active members           ${active}`,
+    `  App opens                ${count('app_open')}`,
+    `  Matches completed        ${count('match_completed')}${sports.size ? `  (${[...sports].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`,
+    `  Golf rounds completed    ${count('round_completed')}`,
+    `  Tournaments created      ${count('tournament_created')}`,
+    `  Shares                   ${count('share_link')}`,
+    '',
+    `ERRORS (${errs.length})`,
+    ...(byMsg.size ? [...byMsg].sort((a, b) => b[1].n - a[1].n).slice(0, 5).map(([m, v]) => `  • ${v.n}×${v.fatal ? ' [CRASH]' : ''} ${m}${v.screen ? ` (on ${v.screen})` : ''}`) : ['  None 🎉']),
+    '',
+    `FEEDBACK (${fb.length})`,
+    ...(fb.length ? fb.map((c) => `  • ${String(c.question).slice(0, 300)}${c.handle ? ` — @${c.handle}` : ''}`) : ['  None today.']),
+  ];
+  return { subject: `SportnNote daily — ${count('signed_up')} sign-ups, ${count('match_completed')} matches, ${errs.length} errors, ${fb.length} feedback`, text: lines.join('\n') };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   if (!authorised(req)) return json({ error: 'forbidden' }, 403);
-  const body = await req.json().catch(() => ({})) as { dry?: boolean };
+  const body = await req.json().catch(() => ({})) as { dry?: boolean; period?: string };
   try {
-    const { subject, text } = await build();
+    const { subject, text } = body.period === 'day' ? await buildDaily() : await build();
     if (body.dry) return json({ sent: false, subject, text });
     const r = await send(subject, text);
     return json({ ...r, subject, text });

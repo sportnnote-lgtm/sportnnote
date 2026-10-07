@@ -6,6 +6,7 @@ import { Component, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { reportError } from '../core/telemetry';
+import { isStaleVersionError, reloadForNewVersion } from '../core/staleVersion';
 
 type State = { failed: boolean };
 
@@ -17,6 +18,8 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
   }
 
   componentDidCatch(error: unknown, info: { componentStack?: string | null }) {
+    // Mixed old/new app files after a publish → just load the newest version.
+    if (isStaleVersionError(error) && reloadForNewVersion()) return;
     const e = error instanceof Error ? error : new Error(String(error));
     if (info.componentStack) e.stack = `${e.stack ?? ''}\nComponent stack:${info.componentStack}`;
     reportError(e, { fatal: true });
