@@ -28,6 +28,7 @@ import type { Player, SportId } from '../core/types';
 export function ProfileView({
   playerId,
   follow,
+  onShare,
   onMessage,
   onOpenSport,
   onEditProfile,
@@ -40,6 +41,8 @@ export function ProfileView({
 }: {
   playerId: string | null;
   follow?: { following: boolean; onToggle: () => void };
+  /** Share this profile (record across sports + link). */
+  onShare?: () => void;
   /** someone else's profile: open a conversation (routed to the guardian for under-18s) */
   onMessage?: () => void;
   /** open the dedicated per-sport profile page */
@@ -167,6 +170,7 @@ export function ProfileView({
       {onEditProfile && (
         <Button label="✎ Edit profile" variant="ghost" onPress={onEditProfile} />
       )}
+      {onShare && <Button label={ownProfile ? '📤 Share my profile' : '📤 Share profile'} variant="ghost" onPress={onShare} />}
       {follow && (
         <Button
           label={follow.following ? '✓ Following' : '+ Follow player'}
@@ -270,7 +274,9 @@ export function ProfileView({
         <GuardianLinkCard playerId={player.id} linked={!!player.guardianLinked} hasEmail={!!player.guardian.email} />
       )}
 
-      {(onEditProfile || player.verification) && (
+      {/* The verification workflow is the player's own business (and support's) —
+          everyone else just sees the ☑️ tick next to the name once approved. */}
+      {(onEditProfile || (player.verification && isSupport(viewer?.role))) && (
         <VerificationCard
           player={player}
           owner={!!onEditProfile}

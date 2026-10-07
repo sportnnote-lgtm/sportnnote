@@ -1,5 +1,7 @@
 /** Thin React hooks over the repository. Refetch on screen focus so items an
  *  organizer just created appear when returning to a list. */
+import { promptSignIn } from '../core/guest';
+import { isSupabaseConfigured } from '../core/supabase';
 import { getFieldEvents } from './golf';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -176,6 +178,8 @@ export function useFollow(profileId?: string) {
   const isFollowing = useCallback((type: FollowType, id: string) => keys.includes(`${type}:${id}`), [keys]);
   const toggle = useCallback(
     (type: FollowType, id: string) => {
+      // Logged-out guest on a shared page: following needs an account.
+      if (isSupabaseConfigured && !profileId) { promptSignIn('up'); return; }
       const willFollow = !followStore.has(type, id);
       followStore.toggle(type, id);
       void setFollow(type, id, willFollow, profileId);

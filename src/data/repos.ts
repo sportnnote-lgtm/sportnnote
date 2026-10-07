@@ -199,7 +199,8 @@ export async function getTournament(): Promise<Tournament> {
 const toTournament = (data: any): Tournament => ({
   id: data.id,
   name: data.name,
-  hostName: data.host_name,
+  // Early tournaments saved the placeholder "You" as host name — never show it to others.
+  hostName: data.host_name === 'You' ? 'Organiser' : data.host_name,
   hostOrgId: data.host_org_id ?? undefined,
   createdBy: data.created_by ?? undefined,
   participation: data.participation ?? undefined,

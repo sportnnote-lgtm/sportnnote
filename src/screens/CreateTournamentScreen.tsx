@@ -60,7 +60,9 @@ export default function CreateTournamentScreen() {
   const [name, setName] = useState('');
   // Host = the creator ("self") or one of the orgs they belong to.
   const [myId, setMyId] = useState<string | null>(null);
-  const [myName, setMyName] = useState('You');
+  // The creator's real name — never a placeholder like "You", which would be saved
+  // as the tournament's host name and shown to everyone.
+  const [myName, setMyName] = useState(profile?.fullName ?? '');
   const [hostChoice, setHostChoice] = useState<'self' | string>(params?.orgId ?? 'self');
   const [participation, setParticipation] = useState<TournamentParticipation>('open');
   const [coHosts, setCoHosts] = useState<CoHost[]>([]);
@@ -126,7 +128,7 @@ export default function CreateTournamentScreen() {
       const finalFormats = { ...tournamentDraft.all() } as FormatMap;
       await createTournament({
         name: name.trim(),
-        hostName: chosenOrg ? chosenOrg.name : myName,
+        hostName: chosenOrg ? chosenOrg.name : (myName || profile?.fullName || 'Organiser'),
         hostOrgId: chosenOrg?.id,
         isOpen,
         registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : undefined,
@@ -158,7 +160,7 @@ export default function CreateTournamentScreen() {
 
         <FieldLabel>Host</FieldLabel>
         <View style={st.chips}>
-          <SelectChip label={`🙋 Myself (${myName})`} active={hostChoice === 'self'} onPress={() => setHostChoice('self')} />
+          <SelectChip label={myName ? `🙋 Myself (${myName})` : '🙋 Myself'} active={hostChoice === 'self'} onPress={() => setHostChoice('self')} />
           {myOrgs.map((o) => (
             <SelectChip key={o.id} label={`🏛️ ${o.name}`} active={hostChoice === o.id} onPress={() => setHostChoice(o.id)} />
           ))}

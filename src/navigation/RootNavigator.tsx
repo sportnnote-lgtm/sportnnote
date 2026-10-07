@@ -1,6 +1,9 @@
 import React, { Suspense, useEffect } from 'react';
 import { Text, View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DefaultTheme, getStateFromPath, createNavigationContainerRef, type LinkingOptions } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
+import { navRef } from './navRef';
+import { promptSignIn, takePendingRoute } from '../core/guest';
+import { GuestBar } from '../components/GuestBar';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../core/theme';
@@ -91,7 +94,6 @@ const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'Club
 // which crashes back to Home. So: the configured paths first; otherwise the first
 // path segment is a stack screen (opened on top of Tabs, query → params); else Home.
 // Screen views for analytics (route names only — never params).
-const navRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['sportnnote://', 'https://sportnnote.in'],
@@ -104,6 +106,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       MatchLink: 'm/:matchId',
       Tournament: 't/:tournamentId',
       GolfRound: 'g/:eventId',
+      PlayerProfile: 'p/:playerId',
       JoinClub: 'join-club/:token',
     },
   },
@@ -189,6 +192,16 @@ export default function RootNavigator() {
     });
   }, [authed, profile?.id]);
 
+  // Signed in from a guest page → take them back to that page.
+  useEffect(() => {
+    if (!authed) return;
+    const t = setTimeout(() => {
+      const p = takePendingRoute();
+      if (p && navRef.isReady()) (navRef.navigate as (n: string, params?: object) => void)(p.name, p.params);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [authed]);
+
   // Warm the on-demand screens once the app has settled, so later taps are instant.
   useEffect(() => {
     if (loading) return;
@@ -204,6 +217,60 @@ export default function RootNavigator() {
     );
   }
 
+  // Read-only pages that open from shared links — for members AND logged-out
+  // guests (a guest sees a "Sign up / Sign in" bar; actions needing an account
+  // send them to sign-in and back). Under-18 profiles stay members-only.
+  const publicScreens = (
+    <>
+      <Stack.Screen name="MatchLink" component={MatchLinkScreen} options={{ ...stackScreenOpts, title: 'Match' }} />
+      <Stack.Screen
+      name="LiveScoring"
+      component={LiveScoringScreen}
+      options={{ ...stackScreenOpts, title: 'Live Scoring' }}
+        />
+      <Stack.Screen
+      name="Tournament"
+      component={TournamentProfileScreen}
+      options={{ ...stackScreenOpts, title: 'Tournament' }}
+        />
+      <Stack.Screen
+      name="GolfRound"
+      component={GolfRoundScreen}
+      options={{ ...stackScreenOpts, title: 'Golf round' }}
+        />
+      <Stack.Screen
+      name="PlayerProfile"
+      component={PlayerProfileScreen}
+      options={{ ...stackScreenOpts, title: 'Player' }}
+        />
+      <Stack.Screen
+      name="SportProfile"
+      component={SportProfileScreen}
+      options={{ ...stackScreenOpts, title: 'Sport' }}
+        />
+      <Stack.Screen
+      name="SportHub"
+      component={SportHubScreen}
+      options={{ ...stackScreenOpts, title: 'Sport' }}
+        />
+      <Stack.Screen
+      name="Standings"
+      component={StandingsScreen}
+      options={{ ...stackScreenOpts, title: 'Standings' }}
+        />
+      <Stack.Screen
+      name="Bracket"
+      component={BracketScreen}
+      options={{ ...stackScreenOpts, title: 'Bracket' }}
+        />
+      <Stack.Screen
+      name="Team"
+      component={TeamProfileScreen}
+      options={{ ...stackScreenOpts, title: 'Team' }}
+        />
+    </>
+  );
+
   return (
     <NavigationContainer
       theme={navTheme}
@@ -211,12 +278,17 @@ export default function RootNavigator() {
       ref={navRef}
       onReady={() => trackScreen(navRef.getCurrentRoute()?.name)}
       onStateChange={() => trackScreen(navRef.getCurrentRoute()?.name)}
+      // A guest tapping something that needs an account (a screen that only exists
+      // for members) → sign up, then come back here.
+      onUnhandledAction={() => { if (!authed) promptSignIn(); }}
     >
       <Stack.Navigator
         // Lazy screens (lazyScreens.ts) show a spinner for the moment their chunk loads.
-        screenLayout={({ children }) => (
+        screenLayout={({ children, route }) => (
           <Suspense fallback={<View style={{ flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={theme.colors.primary} /></View>}>
             {children}
+            {/* Logged-out visitor on a shared page: invite them in. */}
+            {!authed && route.name !== 'Auth' && route.name !== 'Legal' && <GuestBar />}
           </Suspense>
         )}
       >
@@ -224,15 +296,12 @@ export default function RootNavigator() {
           <>
             <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Legal" component={LegalScreen} options={legalOpts} />
+            {publicScreens}
           </>
         ) : (
           <>
             <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="LiveScoring"
-              component={LiveScoringScreen}
-              options={{ ...stackScreenOpts, title: 'Live Scoring' }}
-            />
+            {publicScreens}
             <Stack.Screen
               name="CreateTournament"
               component={CreateTournamentScreen}
@@ -309,19 +378,8 @@ export default function RootNavigator() {
               options={{ ...stackScreenOpts, title: 'Help & Support' }}
             />
             <Stack.Screen name="Legal" component={LegalScreen} options={legalOpts} />
-            <Stack.Screen name="MatchLink" component={MatchLinkScreen} options={{ ...stackScreenOpts, title: 'Match' }} />
             <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ ...stackScreenOpts, title: 'Feedback' }} />
             <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ ...stackScreenOpts, title: 'Delete account' }} />
-            <Stack.Screen
-              name="PlayerProfile"
-              component={PlayerProfileScreen}
-              options={{ ...stackScreenOpts, title: 'Player' }}
-            />
-            <Stack.Screen
-              name="SportProfile"
-              component={SportProfileScreen}
-              options={{ ...stackScreenOpts, title: 'Sport' }}
-            />
             <Stack.Screen
               name="EditProfile"
               component={EditProfileScreen}
@@ -348,11 +406,6 @@ export default function RootNavigator() {
               options={{ ...stackScreenOpts, title: 'Message' }}
             />
             <Stack.Screen
-              name="GolfRound"
-              component={GolfRoundScreen}
-              options={{ ...stackScreenOpts, title: 'Golf round' }}
-            />
-            <Stack.Screen
               name="GolfRoundSetup"
               component={GolfRoundSetupScreen}
               options={{ ...stackScreenOpts, title: 'Golf round' }}
@@ -373,29 +426,9 @@ export default function RootNavigator() {
               options={{ ...stackScreenOpts, title: 'Following' }}
             />
             <Stack.Screen
-              name="Standings"
-              component={StandingsScreen}
-              options={{ ...stackScreenOpts, title: 'Standings' }}
-            />
-            <Stack.Screen
-              name="SportHub"
-              component={SportHubScreen}
-              options={{ ...stackScreenOpts, title: 'Sport' }}
-            />
-            <Stack.Screen
               name="TryNewSport"
               component={TryNewSportScreen}
               options={{ ...stackScreenOpts, title: 'Try a New Sport' }}
-            />
-            <Stack.Screen
-              name="Bracket"
-              component={BracketScreen}
-              options={{ ...stackScreenOpts, title: 'Bracket' }}
-            />
-            <Stack.Screen
-              name="Team"
-              component={TeamProfileScreen}
-              options={{ ...stackScreenOpts, title: 'Team' }}
             />
             <Stack.Screen
               name="Squad"
@@ -436,11 +469,6 @@ export default function RootNavigator() {
               name="JoinTeam"
               component={JoinTeamScreen}
               options={{ ...stackScreenOpts, title: 'Join a Team' }}
-            />
-            <Stack.Screen
-              name="Tournament"
-              component={TournamentProfileScreen}
-              options={{ ...stackScreenOpts, title: 'Tournament' }}
             />
             <Stack.Screen
               name="EditTournament"

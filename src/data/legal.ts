@@ -42,7 +42,15 @@ We do **not** sell your data, show ads, or build advertising profiles.
 
 ## What is public
 
-Your **name, photo, sports, teams, stats, scores and match history** are visible to other users. Your **mobile number and email are hidden by default**, and you can choose to show them in Edit profile. Date of birth, guardian details, ID proofs and messages are never public.
+Your **name, photo, sports, teams, stats, scores and match history** are visible to other users.
+
+**Shared links:**
+- Match, tournament and golf pages can be opened by anyone with the link, without an account.
+- So can the profiles of players aged **18 and over**.
+- **Profiles of under-18 players are only visible to signed-in members.**
+- These app pages are not listed in search engines.
+
+Your **mobile number and email are hidden by default**, and you can choose to show them in Edit profile. Date of birth, guardian details, ID proofs, messages and who you follow are never public.
 
 ## Children (under 18)
 

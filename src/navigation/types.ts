@@ -2,7 +2,8 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { SportId } from '../core/types';
 
 export type RootStackParamList = {
-  Auth: undefined;
+  /** mode: open on Create account ('up') or Sign in ('in') — guest prompts. */
+  Auth: { mode?: 'up' | 'in' } | undefined;
   Tabs: NavigatorScreenParams<TabParamList>;
   LiveScoring: {
     sport: SportId;

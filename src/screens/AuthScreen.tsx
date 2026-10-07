@@ -7,10 +7,10 @@
  *
  *  NOTE: live-only — this screen never mounts in demo mode, so it can't be
  *  previewed against the demo build. Verify on a staging Supabase project. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { theme } from '../core/theme';
@@ -36,7 +36,10 @@ type Flow = 'password' | 'otp' | 'reset';
 
 export default function AuthScreen() {
   const { signIn, signUp, resendConfirmation, sendSignInOtp, verifySignInOtp, sendPhoneOtp, verifyPhoneOtp, sendPasswordReset, confirmPasswordReset } = useAuth();
-  const [mode, setMode] = useState<Mode>('in');
+  // A guest prompt ("Sign up to follow…") opens straight on Create account.
+  const route = useRoute<RouteProp<RootStackParamList, 'Auth'>>();
+  const [mode, setMode] = useState<Mode>(route.params?.mode === 'up' ? 'up' : 'in');
+  useEffect(() => { if (route.params?.mode) setMode(route.params.mode); }, [route.params?.mode]);
   const [flow, setFlow] = useState<Flow>('password'); // sign-in sub-flow
   const [sent, setSent] = useState(false);             // OTP/reset: has the code been requested?
   const [otpChannel, setOtpChannel] = useState<'email' | 'phone'>('email');

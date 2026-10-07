@@ -35,6 +35,15 @@
         "-s"
       ],
       "port": 8095
+    },
+    {
+      "name": "sportfolio-live-guest",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "EXPO_PUBLIC_SUPABASE_URL=https://mpgbvbylmkwasjgupsbq.supabase.co EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wZ2J2YnlsbWt3YXNqZ3Vwc2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMjIxNDQsImV4cCI6MjEwMTU5ODE0NH0.NV7ryMBv-qAc7OzHZVPPxXY2J3agtlHRbvS55R6sWXw EXPO_NO_DOTENV=1 npx expo start --web --port 8094 --clear"
+      ],
+      "port": 8094
     }
   ]
 }

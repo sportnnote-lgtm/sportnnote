@@ -8,6 +8,7 @@ import { ProfileView } from '../components/ProfileView';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, createMyPlayer } from '../data/repos';
 import type { RootStackParamList } from '../navigation/types';
+import { useProfileShare } from '../data/useProfileShare';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,10 +42,13 @@ export default function ProfileScreen() {
     }
   };
 
+  const shareProfile = useProfileShare(playerId);
+
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ProfileView
         playerId={playerId}
+        onShare={playerId ? shareProfile : undefined}
         onOpenSport={playerId ? (sport) => nav.navigate('SportProfile', { playerId, sport }) : undefined}
         onEditProfile={playerId ? () => nav.navigate('EditProfile', { playerId }) : undefined}
         onOpenOrg={(orgId) => nav.navigate('Organization', { orgId })}

@@ -10,6 +10,7 @@ export const SHARE_BASE = 'https://app.sportnnote.in';
 export const matchLink = (matchId: string) => `${SHARE_BASE}/m/${matchId}`;
 export const tournamentLink = (tournamentId: string) => `${SHARE_BASE}/t/${tournamentId}`;
 export const golfLink = (eventId: string) => `${SHARE_BASE}/g/${eventId}`;
+export const profileLink = (playerId: string) => `${SHARE_BASE}/p/${playerId}`;
 
 export interface MatchShareInput {
   sportIcon: string;
@@ -89,5 +90,26 @@ export function golfShareText(g: GolfShareInput): string {
   const lines = [`⛳ ${g.final ? 'RESULT' : 'LIVE'} · ${clean(g.title)}`];
   if (g.leaders.length) lines.push(...g.leaders.slice(0, 5));
   lines.push('', `${g.final ? 'Full leaderboard' : 'Live leaderboard'}: ${golfLink(g.eventId)}`);
+  return lines.join('\n');
+}
+
+export interface ProfileShareInput {
+  name: string;
+  matches: number;
+  wins: number;
+  /** one line per sport, already formatted ("🏏 Cricket · 12 matches · 340 runs") */
+  sports: string[];
+  playerId: string;
+}
+
+/** "Here's my / their record across sports" — a player's profile to share. */
+export function profileShareText(p: ProfileShareInput): string {
+  const lines = [`🏅 ${clean(p.name)} on SportnNote`];
+  if (p.matches > 0) {
+    const rate = Math.round((100 * p.wins) / p.matches);
+    lines.push(`${p.matches} ${p.matches === 1 ? 'match' : 'matches'} · ${p.wins} ${p.wins === 1 ? 'win' : 'wins'} (${rate}%)`);
+  }
+  if (p.sports.length) lines.push('', ...p.sports.slice(0, 8));
+  lines.push('', `Full stats: ${profileLink(p.playerId)}`);
   return lines.join('\n');
 }

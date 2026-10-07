@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-07 — Public share pages (no login) + shareable player profiles
+
+- **Guest mode:** match (`/m`), tournament (`/t`), golf round (`/g`) and player profile
+  (`/p/<id>`, new) open without an account.
+  - Shared `publicScreens` are registered in both navigator branches.
+  - The `GuestBar` (Sign in / Join free) sits under every guest page.
+  - Members-only actions (follow, message, anything only members can reach via
+    `onUnhandledAction`) go through `promptSignIn()`, which opens Create account and
+    returns to the same page after sign-in (`takePendingRoute`).
+  - `Auth` takes `{mode}`.
+- **Privacy (DPDP):**
+  - Under-18 or unknown-age profiles and sport stats are members-only for guests.
+  - App pages are `noindex`.
+  - Follows are now private (migration 0033 drops "read follows"; 4 PGlite tests).
+  - The privacy policy's "What is public" section is updated.
+- **Share profile:** "📤 Share profile / Share my profile" (`useProfileShare`,
+  `profileShareText`) — record, a line per sport, and the `/p` link. Only adults' profiles
+  can be shared by others; anyone can share their own.
+- **Leak fixed:** the verification card ("Pending review") showed on anyone's profile.
+  It now shows only to the owner and support; others see just the ☑️ tick.
+- **Bug fixed:** tournaments were saved with host name "You" (placeholder); new ones save
+  the real name, and old ones display "Organiser".
+- **Verified against the live DB as a logged-out guest** (local `sportfolio-live-guest`
+  preview):
+  - a match page as viewer, with the guest bar;
+  - an adult profile without the verification card;
+  - Follow → Create account;
+  - a tournament page.
+- 381 tests.
+
+---
+
 ### 2026-10-07 — Share, guided first run, iPhone web push, organiser extras, faster web
 
 - **Share (#2):**

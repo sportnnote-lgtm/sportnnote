@@ -8,7 +8,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Pill, SelectChip, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, SelectChip, ScreenTitle, textStyles, Button } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
@@ -17,6 +17,8 @@ import { statCoverage } from '../data/stats';
 import { getMyPlayerId } from '../data/repos';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
 import type { RootStackParamList } from '../navigation/types';
+import { isGuestSession, promptSignIn } from '../core/guest';
+import { ageOf } from '../core/age';
 
 const LABELS: Record<string, string> = {
   goals: 'Goals', openPlayGoals: 'Open-play goals', penaltyGoals: 'Penalties', freekickGoals: 'Free-kick goals',
@@ -36,7 +38,7 @@ export default function SportProfileScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'SportProfile'>>();
   const { playerId, sport } = params;
-  const { profile } = useAuth();
+  const { profile, authed } = useAuth();
   const { player, stats: allStats, official, friendly } = usePlayerProfile(playerId);
   const [scope, setScope] = useState<'all' | 'official' | 'friendly'>('all');
   const { matches } = useMatches();
@@ -60,6 +62,20 @@ export default function SportProfileScreen() {
       };
     }, [profile?.id, playerId])
   );
+
+  // Logged-out visitors: adults only (same rule as the profile page).
+  const guestAge = player ? ageOf(player) : undefined;
+  if (player && isGuestSession(authed) && (guestAge === undefined || guestAge < 18)) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <View style={{ padding: theme.spacing(4), gap: theme.spacing(3) }}>
+          <Text style={textStyles.h3}>🔒 Members only</Text>
+          <Text style={textStyles.muted}>This player’s stats are visible to SportnNote members.</Text>
+          <Button label="Join free" onPress={() => promptSignIn('up')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!player || !allStats || !official || !friendly) {
     return (

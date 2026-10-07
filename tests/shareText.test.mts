@@ -32,3 +32,10 @@ describe('share messages', () => {
   });
   test('short link shape', () => assert.equal(matchLink('m-1'), 'https://app.sportnnote.in/m/m-1'));
 });
+
+import { profileShareText } from '../src/core/shareText.ts';
+test('profile: record across sports + link', () => {
+  const t = profileShareText({ name: 'Hrudhay', matches: 20, wins: 13, sports: ['🏏 Cricket · 12 matches · 340 runs', '🏸 Badminton · 8 matches · 5 wins'], playerId: 'p1' });
+  assert.equal(t, '🏅 Hrudhay on SportnNote\n20 matches · 13 wins (65%)\n\n🏏 Cricket · 12 matches · 340 runs\n🏸 Badminton · 8 matches · 5 wins\n\nFull stats: https://app.sportnnote.in/p/p1');
+  assert.doesNotMatch(profileShareText({ name: 'New', matches: 0, wins: 0, sports: [], playerId: 'x' }), /NaN/);
+});
