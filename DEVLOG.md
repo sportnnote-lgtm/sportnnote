@@ -36,8 +36,11 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   - city "arg" → Argentina;
   - phone search → exact match;
   - fixed an empty-text-node render warning.
-- **Release:** `supabase/release/2026-10-discover-contact-0034.sql`. It **must run before
-  the next publish**, because `PLAYER_SELECT` now reads `findable_by_contact`.
+- **Release:** 0034 run by the founder (`findable_by_contact` → 200), then web and OTA
+  published.
+- **Connect tab** uses the same panel (`sections` and `typeOptions` props): post type,
+  sports, city (cities taken from the posts). It filters on the device, replacing two
+  sideways chip rows.
 
 ---
 

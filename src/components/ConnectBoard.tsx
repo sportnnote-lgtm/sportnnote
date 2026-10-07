@@ -2,18 +2,19 @@
  *  own scroll container) so it sits in Discover's ScrollView. Players post that
  *  they want a team, teams post for players/opponents/grounds; anyone interested
  *  reaches out via the shared contact or a one-tap WhatsApp message. */
-import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Pill, Button, SelectChip, EmptyState, textStyles } from './ui';
-import { SPORT_LIST, getSport } from '../sports/registry';
+import { Card, Pill, Button, EmptyState, textStyles } from './ui';
+import { getSport } from '../sports/registry';
 import { useListings } from '../data/hooks';
+import { PlayerFilters, activeFilterCount, type PlayerFilterState } from './PlayerFilters';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, deleteListing } from '../data/repos';
 import { LISTING_KINDS, kindMeta, openWhatsApp, timeAgo } from '../core/connect';
-import type { Listing, ListingKind, SportId } from '../core/types';
+import type { Listing, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -21,12 +22,25 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function ConnectBoard() {
   const nav = useNavigation<Nav>();
   const { profile } = useAuth();
-  const [kind, setKind] = useState<ListingKind | 'all'>('all');
-  const [sport, setSport] = useState<SportId | 'all'>('all');
-  const { listings, reload } = useListings({
-    kind: kind === 'all' ? undefined : kind,
-    sport: sport === 'all' ? undefined : sport,
-  });
+  // Same "⚙ Filters" panel as People: post type, sports, city. The board is small,
+  // so we load every post and filter on the device.
+  const [filters, setFilters] = useState<PlayerFilterState>({});
+  const { listings: all, reload } = useListings();
+  const cities = useMemo(() => {
+    const counts = new Map<string, { label: string; n: number }>();
+    for (const l of all) {
+      const t = (l.city ?? '').trim();
+      if (!t) continue;
+      const k = t.toLowerCase();
+      counts.set(k, { label: counts.get(k)?.label ?? t, n: (counts.get(k)?.n ?? 0) + 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)).map((c) => c.label);
+  }, [all]);
+  const listings = all.filter((l) =>
+    (!filters.types?.length || filters.types.includes(l.kind))
+    && (!filters.sports?.length || filters.sports.includes(l.sport as SportId))
+    && (!filters.cities?.length || filters.cities.some((c) => c.toLowerCase() === (l.city ?? '').trim().toLowerCase())));
+  const typeOptions = LISTING_KINDS.map((k) => ({ id: k.kind as string, label: `${k.icon} ${k.short}` }));
 
   const [myId, setMyId] = useState<string | null>(null);
   useFocusEffect(
@@ -55,22 +69,10 @@ export function ConnectBoard() {
     <View style={{ gap: theme.spacing(3) }}>
       <Button label="✏️ Post a listing" onPress={() => nav.navigate('CreateListing')} />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
-        <SelectChip label="All posts" active={kind === 'all'} onPress={() => setKind('all')} />
-        {LISTING_KINDS.map((k) => (
-          <SelectChip key={k.kind} label={`${k.icon} ${k.short}`} active={kind === k.kind} onPress={() => setKind(k.kind)} />
-        ))}
-      </ScrollView>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
-        <SelectChip label="All sports" active={sport === 'all'} onPress={() => setSport('all')} />
-        {SPORT_LIST.map((s) => (
-          <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={sport === s.id} onPress={() => setSport(s.id)} />
-        ))}
-      </ScrollView>
+      <PlayerFilters value={filters} onChange={setFilters} cities={cities} sections={['types', 'sports', 'cities']} typeOptions={typeOptions} typeLabel="Post type" />
 
       {listings.length === 0 && (
-        <EmptyState icon="📣" title="No posts here yet" hint="Be the first — tap “Post a listing”." compact />
+        <EmptyState icon="📣" title={activeFilterCount(filters) ? 'No posts match' : 'No posts here yet'} hint={activeFilterCount(filters) ? 'Try removing a filter — or post one yourself.' : 'Be the first — tap “Post a listing”.'} compact />
       )}
 
       {listings.map((l) => {

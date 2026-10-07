@@ -12,7 +12,12 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import type { PlayerSearch } from '../data/repos';
 import type { SportId } from '../core/types';
 
-export type PlayerFilterState = Omit<PlayerSearch, 'query'>;
+export type PlayerFilterState = Omit<PlayerSearch, 'query'> & {
+  /** only when `typeOptions` is given (Connect: post types) */
+  types?: string[];
+};
+type Section = 'types' | 'sports' | 'cities' | 'gender' | 'age' | 'verified';
+const ALL_SECTIONS: Section[] = ['types', 'sports', 'cities', 'gender', 'age', 'verified'];
 
 const AGES: Array<{ id: NonNullable<PlayerSearch['age']>; label: string }> = [
   { id: 'u14', label: 'Under 14' },
@@ -24,19 +29,26 @@ const AGES: Array<{ id: NonNullable<PlayerSearch['age']>; label: string }> = [
 const AGE_LABEL = Object.fromEntries(AGES.map((a) => [a.id, a.label])) as Record<string, string>;
 
 export const activeFilterCount = (f: PlayerFilterState) =>
-  (f.sports?.length ?? 0) + (f.cities?.length ?? 0) + (f.gender ? 1 : 0) + (f.age ? 1 : 0) + (f.verifiedOnly ? 1 : 0);
+  (f.types?.length ?? 0) + (f.sports?.length ?? 0) + (f.cities?.length ?? 0) + (f.gender ? 1 : 0) + (f.age ? 1 : 0) + (f.verifiedOnly ? 1 : 0);
 
 const toggle = <T,>(list: T[] | undefined, v: T): T[] => {
   const cur = list ?? [];
   return cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
 };
 
-export function PlayerFilters({ value, onChange, cities }: {
+export function PlayerFilters({ value, onChange, cities, sections = ALL_SECTIONS, typeOptions, typeLabel = 'Type' }: {
   value: PlayerFilterState;
   onChange: (next: PlayerFilterState) => void;
-  /** cities players are in, most players first */
+  /** cities in use, most common first */
   cities: string[];
+  /** which sections to show (Connect: types, sports, cities) */
+  sections?: Section[];
+  /** options for the 'types' section, e.g. Connect's post kinds */
+  typeOptions?: Array<{ id: string; label: string }>;
+  typeLabel?: string;
 }) {
+  const has = (sec: Section) => sections.includes(sec) && (sec !== 'types' || !!typeOptions?.length);
+  const typeName = (id: string) => typeOptions?.find((t) => t.id === id)?.label ?? id;
   const [open, setOpen] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const n = activeFilterCount(value);
@@ -66,6 +78,9 @@ export function PlayerFilters({ value, onChange, cities }: {
       {/* Active filters — tap ✕ to remove one. */}
       {n > 0 && !open && (
         <View style={st.wrap}>
+          {(value.types ?? []).map((t) => (
+            <SelectChip key={t} label={`${typeName(t)} ✕`} active onPress={() => set({ types: toggle(value.types, t) })} />
+          ))}
           {(value.sports ?? []).map((s) => (
             <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name} ✕`} active onPress={() => set({ sports: toggle(value.sports, s) })} />
           ))}
@@ -80,6 +95,17 @@ export function PlayerFilters({ value, onChange, cities }: {
 
       {open && (
         <Card style={{ gap: theme.spacing(4) }}>
+          {has('types') && (
+            <View style={st.section}>
+              <Text style={st.label}>{typeLabel}{value.types?.length ? ` · ${value.types.length}` : ''}</Text>
+              <View style={st.wrap}>
+                {typeOptions!.map((t) => (
+                  <SelectChip key={t.id} label={t.label} active={(value.types ?? []).includes(t.id)} onPress={() => set({ types: toggle(value.types, t.id) })} />
+                ))}
+              </View>
+            </View>
+          )}
+          {has('sports') && (
           <View style={st.section}>
             <Text style={st.label}>Sport{value.sports?.length ? ` · ${value.sports.length}` : ''}</Text>
             <View style={st.wrap}>
@@ -88,7 +114,9 @@ export function PlayerFilters({ value, onChange, cities }: {
               ))}
             </View>
           </View>
+          )}
 
+          {has('cities') && (
           <View style={st.section}>
             <Text style={st.label}>City{value.cities?.length ? ` · ${value.cities.length}` : ''}</Text>
             {(value.cities ?? []).length > 0 && (
@@ -102,11 +130,13 @@ export function PlayerFilters({ value, onChange, cities }: {
                 <SelectChip key={c} label={`📍 ${c}`} active={false} onPress={() => { set({ cities: toggle(value.cities, c) }); setCityQuery(''); }} />
               ))}
               {!!cityQuery.trim() && citySuggestions.length === 0 && (
-                <Text style={textStyles.muted}>No players in “{cityQuery.trim()}” yet.</Text>
+                <Text style={textStyles.muted}>Nothing in “{cityQuery.trim()}” yet.</Text>
               )}
             </View>
           </View>
+          )}
 
+          {has('gender') && (
           <View style={st.section}>
             <Text style={st.label}>Gender</Text>
             <View style={st.wrap}>
@@ -115,7 +145,9 @@ export function PlayerFilters({ value, onChange, cities }: {
               <SelectChip label="Female" active={value.gender === 'female'} onPress={() => set({ gender: 'female' })} />
             </View>
           </View>
+          )}
 
+          {has('age') && (
           <View style={st.section}>
             <Text style={st.label}>Age group</Text>
             <View style={st.wrap}>
@@ -123,11 +155,14 @@ export function PlayerFilters({ value, onChange, cities }: {
               {AGES.map((a) => <SelectChip key={a.id} label={a.label} active={value.age === a.id} onPress={() => set({ age: a.id })} />)}
             </View>
           </View>
+          )}
 
+          {has('verified') && (
           <View style={st.switchRow}>
             <Text style={[textStyles.body, { flex: 1 }]}>☑️ Verified players only</Text>
             <Switch value={!!value.verifiedOnly} onValueChange={(v) => set({ verifiedOnly: v })} accessibilityLabel="Verified players only" />
           </View>
+          )}
 
           <TouchableOpacity accessibilityRole="button" onPress={() => setOpen(false)} style={st.done} activeOpacity={0.85}>
             <Text style={st.doneText}>Done</Text>
