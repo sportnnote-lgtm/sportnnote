@@ -56,7 +56,8 @@ function explain(e: unknown): string {
   if (code.includes('code-expired')) return 'That code has expired — tap Verify to get a new one.';
   if (code.includes('captcha')) return 'Couldn’t confirm you’re not a robot — reload the page and try again.';
   if (code.includes('network-request-failed')) return 'No connection — check your internet and try again.';
-  return 'Couldn’t send the SMS just now — try again later.';
+  // Unknown: show Firebase's code so a screenshot tells us what happened.
+  return `Couldn’t send the SMS just now — try again later.${code ? ` (${code})` : ''}`;
 }
 
 /** Send the SMS code to `phone`. Throws an Error with a user-facing message. */
@@ -65,19 +66,25 @@ export async function sendPhoneCode(phone: string): Promise<void> {
   try {
     const auth = await authInstance();
     const { RecaptchaVerifier: Verifier, signInWithPhoneNumber } = await import('firebase/auth');
-    // The invisible reCAPTCHA needs a DOM node to attach to.
-    let host = document.getElementById('sn-recaptcha');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'sn-recaptcha';
-      document.body.appendChild(host);
-    }
-    verifier?.clear();
+    // The invisible reCAPTCHA needs a DOM node — a FRESH one each time: reusing a
+    // node that already rendered a widget fails ("already been rendered"), which
+    // broke a second "Send code" (e.g. after changing the number).
+    try { verifier?.clear(); } catch { /* already gone */ }
+    verifier = null;
+    document.getElementById('sn-recaptcha')?.remove();
+    const host = document.createElement('div');
+    host.id = 'sn-recaptcha';
+    document.body.appendChild(host);
     verifier = new Verifier(auth, host, { size: 'invisible' });
     confirmation = await signInWithPhoneNumber(auth, toE164(phone), verifier);
   } catch (e) {
-    verifier?.clear();
+    try { verifier?.clear(); } catch { /* ignore */ }
     verifier = null;
+    // Unexpected Firebase failures go to our error reports (with the code).
+    const code = (e as { code?: string })?.code ?? '';
+    if (!/invalid-phone-number|too-many-requests|quota-exceeded|network-request-failed/.test(code)) {
+      void import('./telemetry').then((t) => t.reportError(e)).catch(() => undefined);
+    }
     throw new Error(explain(e));
   }
 }
