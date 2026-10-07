@@ -55,6 +55,9 @@ verified. **Maintained continuously — new work is appended here as it ships.**
     notify-upcoming and push-send.
   - phone-login guards: 400 without a token, 401 with a bad token.
   - Web published; OTA `dbc4f362`.
+  - **Founder test:** the second "Send code" failed with a generic message (reCAPTCHA host
+    reused) → fixed (fresh host each send; unknown Firebase codes are shown and reported).
+    Retest: code received, and a new number reaches the sign-up form ✅.
 
 ---
 
