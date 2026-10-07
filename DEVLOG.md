@@ -35,6 +35,11 @@ verified. **Maintained continuously — new work is appended here as it ships.**
   It now shows only to the owner and support; others see just the ☑️ tick.
 - **Bug fixed:** tournaments were saved with host name "You" (placeholder); new ones save
   the real name, and old ones display "Organiser".
+- **LIVE 2026-10-07:**
+  - 0033 run: anon `follows` → [].
+  - Web published; the production HTML (`noindex` + new bundle) was served about 5 minutes
+    after deploy (HTML edge cache).
+  - Android OTA `75d3bdeb`.
 - **Verified against the live DB as a logged-out guest** (local `sportfolio-live-guest`
   preview):
   - a match page as viewer, with the guest bar;
