@@ -41,8 +41,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 - **Faster web (#4):** 54 non-tab screens load on demand with a background prefetch.
   The main bundle went from 2.63 MB to 1.90 MB (−28%).
   - Next lever: lazy sport UIs plus the demo data (~400 KB), which needs registry rework.
-- **Release:** `supabase/release/2026-10-push-checkin-0031-0032.sql` (the founder runs it),
-  then republish web and OTA.
+- **LIVE 2026-10-07:**
+  - The founder ran 0031+0032. Checks: `checked_in_at` → 200; anon is refused on
+    `web_push_subscriptions` and the save RPC (42501).
+  - Web republished: manifest, `sw.js` and the VAPID key are in the bundle; `/m` and `/t`
+    links serve.
+  - Android OTA `59cf9d9b`.
+  - New APK with FCM: build `cd76a7b6` (link on sportnnote.in and in
+    `docs/share/HOW_TO_SHARE.md`).
 - 380 tests.
 - **Parked by the founder:** public no-login match/tournament pages.
 
