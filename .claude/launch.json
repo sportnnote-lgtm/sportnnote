@@ -44,6 +44,22 @@
         "EXPO_PUBLIC_SUPABASE_URL=https://mpgbvbylmkwasjgupsbq.supabase.co EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wZ2J2YnlsbWt3YXNqZ3Vwc2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMjIxNDQsImV4cCI6MjEwMTU5ODE0NH0.NV7ryMBv-qAc7OzHZVPPxXY2J3agtlHRbvS55R6sWXw EXPO_PUBLIC_FIREBASE_API_KEY=AIzaSyDmfHFqRzdXt6NvFcgnasWvLMt70-YgT1s EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=sportnnote-5c5e7.firebaseapp.com EXPO_PUBLIC_FIREBASE_PROJECT_ID=sportnnote-5c5e7 EXPO_PUBLIC_FIREBASE_APP_ID=1:458557673593:web:eaf5d7ca8a594a80a244a8 EXPO_NO_DOTENV=1 npx expo start --web --port 8094 --clear"
       ],
       "port": 8094
+    },
+    {
+      "name": "offline-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server@14.1.1",
+        "dist-off",
+        "-p",
+        "8096",
+        "-c-1",
+        "-s",
+        "--proxy",
+        "http://localhost:8096?"
+      ],
+      "port": 8096
     }
   ]
 }

@@ -49,3 +49,4 @@ supabase/.temp/
 dist-ota/
 website/dist/
 dist-size/
+dist-off/

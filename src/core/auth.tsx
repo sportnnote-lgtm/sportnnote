@@ -219,6 +219,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       if (supabase) await supabase.auth.signOut();
+      // Web: wipe the offline copies of data the service worker kept (public/sw.js).
+      try {
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) navigator.serviceWorker.controller.postMessage('clear-data');
+      } catch { /* not a browser */ }
     },
     // Passwordless sign-in via a 6-digit email code (no deep-link redirect needed).
     // shouldCreateUser:false so this only signs in existing accounts — sign-up
