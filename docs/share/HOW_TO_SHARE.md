@@ -15,10 +15,11 @@
 
 **Message to send friends:**
 
-> I'm piloting SportnNote, an app to score our matches and run tournaments.
-> iPhone: open app.sportnnote.in in Safari → Share → Add to Home Screen.
-> Android: install from <APK link>, or use app.sportnnote.in.
-> Sign up with your email, then add your phone on your profile and tap Verify.
+> I'm trying out SportnNote, a free app to score our matches and run tournaments.
+> Open app.sportnnote.in → Continue with your mobile number → enter the SMS code.
+> iPhone: Safari → Share → Add to Home Screen, then turn on notifications.
+> Android: Chrome ⋮ → Add to Home screen, or download the app from sportnnote.in.
+(Full version: docs/share/PILOT_GUIDE.md)
 
 ## Later (stores)
 

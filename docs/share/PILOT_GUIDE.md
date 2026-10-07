@@ -4,26 +4,35 @@
 
 ## Message to forward
 
-> Hey! I'm piloting **SportnNote**, an app to score our matches, run tournaments, and keep
-> everyone's stats in one place. It's free. Would love you to try it this week:
+> Hey! I'm trying out **SportnNote**, a free app to score our matches, run tournaments
+> and keep everyone's stats in one place. Would love you to try it this week 🙏
 >
-> **iPhone:** open **app.sportnnote.in** in Safari → Share → **Add to Home Screen**
-> **Android:** install the app from <APK link>, or use app.sportnnote.in
->
-> 1. **Create account:** email, mobile and date of birth (it's used for age groups).
-> 2. **Profile → your number → Verify:** you'll get an SMS code.
-> 3. **Next game:** Organize → **🤝 Start a friendly**, pick the sport and score it live.
+> 👉 Open **app.sportnnote.in** on your phone
+> 1. Tap **Continue with your mobile number**, enter the SMS code, and fill in your name
+>    and date of birth. That's it, no password.
+> 2. **iPhone:** in Safari tap Share → **Add to Home Screen**, open SportnNote from the
+>    new icon, and tap **Turn on notifications** for match reminders and live scores.
+>    **Android:** in Chrome tap ⋮ → **Add to Home screen**. Or install the app from
+>    **sportnnote.in** → Download for Android.
+> 3. Next game: **Organize → 🤝 Start a friendly**, pick the sport and score it live.
 >    Everyone following sees the score update.
 >
-> Something broken or confusing? **Settings → Send feedback.** It comes straight to me.
+> Something broken or confusing? **Settings → Send feedback**. It comes straight to me.
 
 ## Getting started (2 minutes)
 
-1. **Sign up.**
+1. **Sign up with your mobile number:** app.sportnnote.in → **Continue with your mobile
+   number** → SMS code → name and date of birth.
    - Use your real date of birth; age-group tournaments check it.
-   - Your mobile and email stay **private** unless you choose to show them (Edit profile).
-2. **Verify your number:** Profile → your phone → **Verify** → enter the SMS code.
-3. **Set up your profile:** Edit profile → add your sports, city and a photo.
+   - Your number is verified automatically, because you just proved it with the code.
+   - If an organiser already added you to a team by your number, your new account picks
+     up those matches and stats.
+   - Under 18? A parent/guardian's name, contact and consent are needed.
+   - Prefer email? It's still there under "or use email". The Android app download uses
+     email sign-in for now.
+2. **Add it to your home screen and turn on notifications** (see the message above).
+3. **Set up your profile:** Edit profile → your sports, city and a photo. Your mobile
+   and email stay **private** unless you choose to show them.
 
 ## Scoring a match
 
