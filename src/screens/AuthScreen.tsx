@@ -19,6 +19,8 @@ import { DateField } from '../components/DateTimeField';
 import { useAuth } from '../core/auth';
 import { ageFromDob } from '../core/age';
 import { isValidPhone } from '../core/phone';
+import { phoneLoginAvailable } from '../core/phoneLogin';
+import { PhoneLoginCard } from '../components/PhoneLoginCard';
 import type { Role } from '../core/types';
 
 const ROLES: Role[] = ['player', 'parent', 'scorer', 'organizer', 'fan'];
@@ -170,6 +172,18 @@ export default function AuthScreen() {
           <Text style={st.logo}>🏅 Sport<Text style={st.logoAccent}>nNote</Text></Text>
           <Text style={[textStyles.muted, st.tagline]}>Play a Sport, Make a Note.</Text>
         </View>
+
+        {/* Web: mobile number + SMS code is the main way in; email below. */}
+        {phoneLoginAvailable() && (
+          <>
+            <PhoneLoginCard onUseEmail={() => switchMode('in')} />
+            <View style={st.orRow}>
+              <View style={st.orLine} />
+              <Text style={textStyles.muted}>or use email</Text>
+              <View style={st.orLine} />
+            </View>
+          </>
+        )}
 
         <Card style={st.formCard}>
           <View style={st.tabs}>
@@ -335,6 +349,8 @@ function Field({
 }
 
 const st = StyleSheet.create({
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  orLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(5), gap: theme.spacing(5), flexGrow: 1, justifyContent: 'center' },
   brand: { alignItems: 'center', gap: theme.spacing(1) },

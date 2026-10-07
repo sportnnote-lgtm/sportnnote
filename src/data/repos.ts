@@ -2160,7 +2160,9 @@ export async function createMyPlayer(profileId: string): Promise<string> {
   // The sign-in email is already proven (confirmation link), so seed it as the
   // player's contact email + mark it verified — no need to re-verify it later.
   const { data: authData } = await supabase.auth.getUser();
-  const authEmail = authData.user?.email ?? null;
+  // Mobile sign-ups have an internal placeholder address — not a real email.
+  const rawEmail = authData.user?.email ?? null;
+  const authEmail = rawEmail && !/@phone\.sportnnote\.in$/i.test(rawEmail) ? rawEmail : null;
   const emailVerified = !!(authEmail && authData.user?.email_confirmed_at);
 
   // If someone already added this person by phone (a provisional/invited player —

@@ -42,6 +42,8 @@ async function syncConfirmedEmailToPlayer(profileId: string): Promise<void> {
     const { data: authData } = await supabase.auth.getUser();
     const email = authData.user?.email;
     if (!email || !authData.user?.email_confirmed_at) return;
+    // Mobile sign-ups carry an internal placeholder address — never a contact email.
+    if (/@phone\.sportnnote\.in$/i.test(email)) return;
     const { data: pl } = await supabase
       .from('players_view') // email is a private column — read our own via the view
       .select('id, email, email_verified')

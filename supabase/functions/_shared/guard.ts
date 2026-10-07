@@ -78,6 +78,8 @@ export function safeEqual(a: string, b: string): boolean {
 /** Send a plain-text email via Resend from the no-reply sender (replies go to the
  *  support inbox). Returns false when RESEND_API_KEY isn't set or the send fails. */
 export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+  // Phone sign-ups have an internal placeholder address — never mail it.
+  if (/@phone\.sportnnote\.in$/i.test(to)) return false;
   const key = Deno.env.get('RESEND_API_KEY');
   if (!key) return false;
   const from = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'SportnNote <onboarding@resend.dev>';

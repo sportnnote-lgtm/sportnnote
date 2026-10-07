@@ -17,17 +17,14 @@
  * Deploy:   supabase functions deploy verify-phone-firebase
  * Secrets:  FIREBASE_PROJECT_ID (the Firebase project id, e.g. sportnnote-12345)
  */
-import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6';
 import { admin, CORS, json, rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
+import { firebaseConfigured, verifiedPhoneFromToken } from '../_shared/firebaseToken.ts';
 
-const PROJECT = Deno.env.get('FIREBASE_PROJECT_ID') ?? '';
-const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
-const FRESH_SECONDS = 600;
 const key10 = (p: string) => p.replace(/\D/g, '').slice(-10);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  if (!PROJECT) return json({ verified: false, reason: 'SMS verification isn’t configured yet.' }, 503);
+  if (!firebaseConfigured()) return json({ verified: false, reason: 'SMS verification isn’t configured yet.' }, 503);
   const caller = await requireUser(req);
   if (caller instanceof Response) return caller;
   if (!(await rateLimit('verify-phone-firebase', caller.user.id, 10, 3600))) return tooMany();
@@ -39,22 +36,9 @@ Deno.serve(async (req) => {
   if (!playerId || !channel || !idToken) return json({ verified: false, reason: 'playerId, channel and idToken are required' }, 400);
 
   // 1. Google's signature + our project + freshness.
-  let phone: string;
-  try {
-    const { payload } = await jwtVerify(idToken, JWKS, {
-      issuer: `https://securetoken.google.com/${PROJECT}`,
-      audience: PROJECT,
-    });
-    const authTime = Number(payload.auth_time ?? 0);
-    if (!authTime || Date.now() / 1000 - authTime > FRESH_SECONDS) {
-      return json({ verified: false, reason: 'That code is too old — tap Verify to get a new one.' });
-    }
-    phone = String(payload.phone_number ?? '');
-    if (!phone) return json({ verified: false, reason: 'No phone number in the verification.' });
-  } catch (e) {
-    console.error('firebase token rejected', e);
-    return json({ verified: false, reason: 'Couldn’t confirm the SMS verification — try again.' }, 401);
-  }
+  const verified = await verifiedPhoneFromToken(idToken);
+  if (verified instanceof Error) return json({ verified: false, reason: verified.message }, 401);
+  const phone = verified;
 
   // 2 + 3. The caller's own profile, and the number on it.
   const { data: player } = await admin.from('players').select('id, profile_id, phone, guardian').eq('id', playerId).single();
