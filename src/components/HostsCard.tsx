@@ -4,8 +4,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Card, EmptyState, TextField, Button, textStyles } from './ui';
-import { isValidPhone } from '../core/phone';
+import { Card, EmptyState, textStyles } from './ui';
 
 /** Up to two initials from a name, for a host avatar. */
 const initials = (name?: string): string =>
@@ -17,7 +16,7 @@ export function HostsCard({
   candidates,
   canManage,
   onChange,
-  onAddByPhone,
+  addPicker,
   meId,
   subtitle = 'Hosts can assign the scorer and manage this. Reminders go to all of them.',
 }: {
@@ -26,23 +25,20 @@ export function HostsCard({
   candidates: { id: string; name: string }[];
   canManage: boolean;
   onChange: (ids: string[]) => void;
-  /** add any platform user by phone; returns the new/found player id (or null). */
-  onAddByPhone?: (name: string, phone: string) => Promise<string | null>;
+  /** "add anyone" UI shown in the add panel (e.g. <PersonPicker role="host" …/>) */
+  addPicker?: React.ReactNode;
   /** the viewer's player id — their host row is highlighted with "· you" */
   meId?: string;
   subtitle?: string;
 }) {
   const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [busy, setBusy] = useState(false);
   const addable = candidates.filter((c) => !hostIds.includes(c.id));
 
   return (
     <Card style={{ gap: theme.spacing(2) }}>
       <View style={st.head}>
         <Text style={textStyles.h3}>Hosts{hostIds.length ? ` · ${hostIds.length}` : ''}</Text>
-        {canManage && (addable.length > 0 || !!onAddByPhone) && (
+        {canManage && (addable.length > 0 || !!addPicker) && (
           <Text style={st.link} onPress={() => setAdding((v) => !v)}>{adding ? 'Close' : '+ Add host'}</Text>
         )}
       </View>
@@ -82,21 +78,10 @@ export function HostsCard({
               <Text style={st.optText}>+ {c.name}</Text>
             </TouchableOpacity>
           ))}
-          {onAddByPhone && (
+          {addPicker && (
             <View style={{ gap: theme.spacing(2), paddingTop: theme.spacing(2) }}>
-              <Text style={textStyles.muted}>Add anyone by mobile number:</Text>
-              <TextField label="" value={newPhone} onChange={setNewPhone} placeholder="+91 98765 43210" autoCapitalize="none" />
-              <TextField label="" value={newName} onChange={setNewName} placeholder="Their name" />
-              <Button
-                label={busy ? 'Adding…' : '＋ Add host'}
-                disabled={busy || !isValidPhone(newPhone) || !newName.trim()}
-                onPress={async () => {
-                  setBusy(true);
-                  const id = await onAddByPhone(newName, newPhone);
-                  setBusy(false);
-                  if (id) { onChange([...new Set([...hostIds, id])]); setNewName(''); setNewPhone(''); setAdding(false); }
-                }}
-              />
+              <Text style={textStyles.muted}>Add anyone — by mobile number or name:</Text>
+              {addPicker}
             </View>
           )}
         </View>

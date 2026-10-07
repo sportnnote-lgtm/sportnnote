@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — iPhone resume keeps your screen; add scorer/host by number with WhatsApp/SMS invite
+
+- **Founder report:** minimising the Home Screen app on iPhone (even for seconds) brought
+  them back to a default page.
+  - Cause: iOS unloads standalone web apps and relaunches them at `start_url`.
+  - **Fix:** `RootNavigator` saves the navigation state on every change (web) and restores
+    it when the app opens at "/" within 30 minutes (`initialState`). Shared links still win.
+  - Verified: open a match → reload "/" → back on the match.
+- **`PersonPicker`** (match scorer and host): one box, "Mobile number or name".
+  - A full number on SportnNote → "✓ Name — Add as scorer/host".
+  - Not on it → "Add & invite on WhatsApp / by SMS" or "Just add". A pending player is
+    named "Invited (…1234)" (name optional; they enter their own when they join, and the
+    phone sign-up claim takes over the row).
+  - The invite says who added them, the role, the match, the time, and
+    `app.sportnnote.in/m/<id>`.
+  - Name search → members. Partial numbers show nothing (privacy).
+  - WhatsApp/SMS open inside the tap (iOS blocks opening apps after an await).
+- **Before this, the match scorer/host forms required a name and sent no invite at all.**
+  The name is no longer required. HostsCard takes `addPicker`.
+- **`core/connect` fixes (all invite flows):**
+  - WhatsApp/SMS now add 91 to a bare 10-digit number (wa.me needs the country code).
+  - iOS SMS body uses `&body=`.
+- Verified in the demo:
+  - partial-number hint;
+  - unknown number → invite;
+  - wa.me/919988776655 with the correct message;
+  - "Invited (…6655)" listed as scorer;
+  - no console errors.
+- 383 tests.
+
+---
+
 ### 2026-10-08 — Phone sign-in, offline web app, daily digest, post-publish crash fix
 
 - **Sign in / up with a mobile number (web):** `PhoneLoginCard` on the sign-in screen.

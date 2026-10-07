@@ -1,6 +1,6 @@
 /** Helpers for the Connect noticeboard: listing-kind metadata, a WhatsApp
  *  deep-link opener, and a tiny "time ago" formatter. */
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type { ListingKind } from './types';
 
 export const LISTING_KINDS: {
@@ -28,19 +28,31 @@ export const wantsSchedule = (kind: ListingKind) =>
   kind === 'team_seeking_opponent' || kind === 'team_seeking_ground';
 export const wantsLevel = (kind: ListingKind) => kind === 'team_seeking_opponent';
 
-/** Open a WhatsApp chat with a prefilled message (falls back to a plain tel:). */
+/** Digits with a country code: a bare 10-digit Indian mobile gets 91 (wa.me and
+ *  sms need the full international number). */
+export function intlDigits(phone?: string): string {
+  let d = (phone ?? '').replace(/[^0-9]/g, '').replace(/^00/, '');
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10) d = `91${d}`;
+  return d;
+}
+
+/** Open a WhatsApp chat with a prefilled message. */
 export function openWhatsApp(phone?: string, text?: string): void {
-  const digits = (phone ?? '').replace(/[^0-9]/g, '');
+  const digits = intlDigits(phone);
   if (!digits) return;
   const url = `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
   void Linking.openURL(url);
 }
 
-/** Open the device SMS composer to a number with a prefilled body. */
+/** Open the device SMS composer to a number with a prefilled body. iPhones read
+ *  the body after "&", Android after "?". */
 export function openSms(phone?: string, text?: string): void {
-  const digits = (phone ?? '').replace(/[^0-9]/g, '');
+  const digits = intlDigits(phone);
   if (!digits) return;
-  const url = `sms:${digits}${text ? `?body=${encodeURIComponent(text)}` : ''}`;
+  const ios = Platform.OS === 'ios'
+    || (Platform.OS === 'web' && typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent));
+  const url = `sms:+${digits}${text ? `${ios ? '&' : '?'}body=${encodeURIComponent(text)}` : ''}`;
   void Linking.openURL(url);
 }
 

@@ -13,7 +13,8 @@ import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { shareMessage } from '../core/share';
-import { matchShareText } from '../core/shareText';
+import { PersonPicker } from '../components/PersonPicker';
+import { matchShareText, matchLink } from '../core/shareText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -35,8 +36,6 @@ import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/Fo
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { tournamentHostPlayerIds } from '../core/org';
 import { seriesMetaFromFormat } from '../data/series';
-import { invitePerson } from '../data/repos';
-import { isValidPhone } from '../core/phone';
 import { canFieldPlayer } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
@@ -372,8 +371,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   };
 
   const [pickScorer, setPickScorer] = useState(false);
-  const [newScorerName, setNewScorerName] = useState('');
-  const [newScorerPhone, setNewScorerPhone] = useState('');
   // Persist a new scorer list; revert + surface the error if the write is rejected
   // (e.g. RLS) instead of silently looking saved and reverting on reload.
   const saveScorers = useCallback(
@@ -458,19 +455,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setEditInfo(false);
   };
 
-  // Add any platform user (existing or brand-new) by phone — used to assign a
-  // scorer or host who isn't in either squad. Mirrors the player-add identity
-  // model: one number ⇒ one person.
-  const addPersonByPhone = useCallback(async (name: string, phone: string): Promise<Player | null> => {
-    if (!isValidPhone(phone) || !name.trim()) return null;
-    try {
-      const res = await invitePerson({ name: name.trim(), phone });
-      setExtraPeople((prev) => (prev.some((p) => p.id === res.player.id) ? prev : [...prev, res.player]));
-      return res.player;
-    } catch {
-      return null;
-    }
+  // Keep names of people added from outside the squads (PersonPicker).
+  const rememberPerson = useCallback((p: Player) => {
+    setExtraPeople((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
   }, []);
+  // The WhatsApp/SMS invite for someone not on SportnNote yet: what they've been
+  // made, for which match, and the link — signing up with this number makes it theirs.
+  const inviteTextFor = (role: 'scorer' | 'host') => (name?: string) => {
+    const who = profile?.fullName ?? 'A friend';
+    const vs = `${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`;
+    const when = meta.startsAt ? ` (${formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST')})` : '';
+    const link = matchId ? matchLink(matchId) : 'https://app.sportnnote.in';
+    return `Hi${name ? ` ${name}` : ''}! ${who} added you as ${role === 'scorer' ? 'the scorer' : 'a host'} for ${vs}${when} on SportnNote 🏅\n\n`
+      + `Open this link and sign in with this mobile number to ${role === 'scorer' ? 'score it live' : 'manage the match'}:\n${link}`;
+  };
 
   // When did scoring actually begin? (first event's server time). Refetch when the
   // log changes so a fresh first-tap sets the kickoff for the restart window.
@@ -995,19 +993,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 <Text style={st.scorerOptText}>＋ {p.fullName}</Text>
               </TouchableOpacity>
             ))}
-            {/* Add anyone by mobile number — not limited to the squads. */}
+            {/* Add anyone — by mobile number (invite if they're not on SportnNote) or name. */}
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(1) }}>
-              <Text style={textStyles.muted}>Or add someone by mobile number:</Text>
-              <TextField label="" value={newScorerPhone} onChange={setNewScorerPhone} placeholder="+91 98765 43210" autoCapitalize="none" />
-              <TextField label="" value={newScorerName} onChange={setNewScorerName} placeholder="Their name" />
-              <Button
-                label="＋ Add as scorer"
-                disabled={!isValidPhone(newScorerPhone) || !newScorerName.trim()}
-                onPress={async () => {
-                  const p = await addPersonByPhone(newScorerName, newScorerPhone);
-                  if (p) { setNewScorerName(''); setNewScorerPhone(''); await addScorer(p.id); }
-                }}
-              />
+              <Text style={textStyles.muted}>Or anyone — by mobile number or name:</Text>
+              <PersonPicker role="scorer" excludeIds={scorerIds} onPick={(p) => { rememberPerson(p); return addScorer(p.id); }} inviteText={inviteTextFor('scorer')} />
             </View>
           </View>
         )}
@@ -1477,7 +1466,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   candidates={scorerCandidates.map((p) => ({ id: p.id, name: p.fullName }))}
                   canManage={canManage}
                   onChange={setHosts}
-                  onAddByPhone={async (name, phone) => (await addPersonByPhone(name, phone))?.id ?? null}
+                  addPicker={<PersonPicker role="host" excludeIds={matchHostIds} onPick={(p) => { rememberPerson(p); return setHosts([...new Set([...matchHostIds, p.id])]); }} inviteText={inviteTextFor('host')} />}
                   meId={myPlayerId ?? undefined}
                   subtitle="Hosts for this game (in addition to the tournament's hosts). Reminders to assign a scorer go to all of them."
                 />

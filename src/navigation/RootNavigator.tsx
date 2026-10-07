@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
-import { Text, View, ActivityIndicator } from 'react-native';
+import { Text, View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
 import { navRef } from './navRef';
 import { promptSignIn, takePendingRoute } from '../core/guest';
@@ -93,6 +93,24 @@ const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'Club
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
 // which crashes back to Home. So: the configured paths first; otherwise the first
 // path segment is a stack screen (opened on top of Tabs, query → params); else Home.
+// iPhone Home Screen apps get unloaded in the background (even for seconds) and
+// relaunch at the start page — so remember where you were (web, last 30 min) and
+// reopen it. Only when the app opens at "/" — a shared link always wins.
+const NAV_KEY = 'sn.navState.v1';
+const restoredNav: { state: unknown; authed: boolean } | undefined = (() => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+  try {
+    if (window.location.pathname !== '/') return undefined;
+    const saved = JSON.parse(localStorage.getItem(NAV_KEY) ?? 'null') as { at: number; state: unknown; authed: boolean } | null;
+    if (!saved || Date.now() - saved.at > 30 * 60_000) return undefined;
+    return { state: saved.state, authed: saved.authed };
+  } catch { return undefined; }
+})();
+function saveNavState(authed: boolean) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try { localStorage.setItem(NAV_KEY, JSON.stringify({ at: Date.now(), state: navRef.getRootState(), authed })); } catch { /* storage off */ }
+}
+
 // Screen views for analytics (route names only — never params).
 
 const linking: LinkingOptions<RootStackParamList> = {
@@ -277,7 +295,9 @@ export default function RootNavigator() {
       linking={linking}
       ref={navRef}
       onReady={() => trackScreen(navRef.getCurrentRoute()?.name)}
-      onStateChange={() => trackScreen(navRef.getCurrentRoute()?.name)}
+      onStateChange={() => { trackScreen(navRef.getCurrentRoute()?.name); saveNavState(authed); }}
+      // Reopen the screen you were on after an iPhone background unload (see above).
+      initialState={restoredNav && restoredNav.authed === authed ? (restoredNav.state as never) : undefined}
       // A guest tapping something that needs an account (a screen that only exists
       // for members) → sign up, then come back here.
       onUnhandledAction={() => { if (!authed) promptSignIn(); }}
