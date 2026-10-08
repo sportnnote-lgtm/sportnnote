@@ -26,6 +26,7 @@ import { canScoreByRole } from '../core/roles';
 import type { Match, SportId, Tournament } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { WebPushCard } from '../components/WebPushCard';
+import { Logo } from '../components/Logo';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -113,6 +114,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={st.content}>
         {/* Header: wordmark · notifications · quick-actions toggle */}
         <View style={st.header}>
+          <Logo size={40} />
           <View style={st.brand}>
             <Text style={st.wordmark} numberOfLines={1}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
             <Text style={textStyles.muted} numberOfLines={1}>Play a Sport, Make a Note.</Text>

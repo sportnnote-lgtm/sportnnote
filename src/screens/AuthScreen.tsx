@@ -22,6 +22,7 @@ import { isValidPhone } from '../core/phone';
 import { phoneLoginAvailable } from '../core/phoneLogin';
 import { PhoneLoginCard } from '../components/PhoneLoginCard';
 import type { Role } from '../core/types';
+import { Logo } from '../components/Logo';
 
 const ROLES: Role[] = ['player', 'parent', 'scorer', 'organizer', 'fan'];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -169,7 +170,8 @@ export default function AuthScreen() {
     <SafeAreaView style={st.safe}>
       <ScrollView contentContainerStyle={st.content}>
         <View style={st.brand}>
-          <Text style={st.logo}>🏅 Sport<Text style={st.logoAccent}>nNote</Text></Text>
+          <Logo size={72} />
+          <Text style={st.logo}>Sport<Text style={st.logoAccent}>nNote</Text></Text>
           <Text style={[textStyles.muted, st.tagline]}>Play a Sport, Make a Note.</Text>
         </View>
 

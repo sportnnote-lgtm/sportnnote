@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — SportnNote logo: the "S:N" scoreline
+
+- **Founder pick:** concept A, colour option 1 — green **S**, amber colon, white **N** on the
+  app's dark `#0E1116` (reads like a live score "2 : 1").
+- **One source:** `scripts/build-icons.mjs` draws the mark and writes the masters
+  (`assets/brand/sportnnote-logo.svg`, `-icon-square.svg`, `-mark.svg`, `-logo-512.png`) and
+  every PNG, sized to each platform's safe zone: `assets/icon.png` (native/iOS, website,
+  og:image), Android adaptive background/foreground/monochrome (themed icons + notification
+  icon), `splash-icon.png`, `favicon.png`, and the web app's `apple-touch-icon` / `icon-192` /
+  `icon-512` (maskable). Re-run: `npm i --no-save @resvg/resvg-js@2.6.2 && node scripts/build-icons.mjs`.
+- `app.json`: adaptive-icon background `#0E1116`, notification colour `#3DDC97`.
+- In-app: `components/Logo.tsx` (react-native-svg) beside the Home wordmark and on sign-in
+  (replaces the 🏅).
+- **Reaches:** web app + website on publish/push; the Android **home-screen icon needs a new
+  APK** (an OTA can't change an installed app's icon). iPhone Home Screen icons are copied
+  when added — re-add to see the new one.
+
+---
+
 ### 2026-10-08 — Friendlies: one shared pool of players in both teams; one side per match
 
 - **Founder ask:** friends often have one 20–30 player pool split into two teams on the day,
