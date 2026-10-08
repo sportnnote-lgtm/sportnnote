@@ -4,7 +4,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
+import type { Player } from '../../core/types';
 import { BB_META, FOUL_LABEL, type BBEvent } from './events';
+import { playerLink, idByName } from '../playerLink';
 
 function describe(e: BBEvent): string {
   const who = e.playerName ?? 'Team';
@@ -21,11 +23,18 @@ export function Timeline({
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
   max = 60,
+  homeRoster,
+  awayRoster,
+  onPlayer,
 }: {
   events: BBEvent[];
   homeColor?: string;
   awayColor?: string;
   max?: number;
+  homeRoster?: Player[];
+  awayRoster?: Player[];
+  /** tap a play's player → their profile (plays store names; resolved via the side's roster) */
+  onPlayer?: (playerId: string) => void;
 }) {
   if (events.length === 0) {
     return <Text style={st.empty}>No plays yet — updates appear here as the game unfolds.</Text>;
@@ -51,7 +60,7 @@ export function Timeline({
             <Text style={st.icon}>{meta.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.label}>{meta.label}</Text>
-              <Text style={st.detail}>{describe(e)}</Text>
+              <Text style={st.detail} {...playerLink(idByName(e.playerName, e.side === 'home' ? homeRoster : awayRoster), describe(e), onPlayer)}>{describe(e)}</Text>
             </View>
             {latest ? <Text style={st.latestTag}>LATEST</Text> : null}
           </View>

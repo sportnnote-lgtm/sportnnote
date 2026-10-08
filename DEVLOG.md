@@ -13,6 +13,29 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Team stats page; tap team/player names in a match to open their profiles
+
+- **Founder report:** the team page had no stats section; in a match, team and player names
+  weren't tappable; the team page showed "Squad (0)" for a squad built by number.
+- **Team page** (`TeamProfileScreen`): header actions **📊 Stats** (scrolls to it) and
+  **👥 Squad · ＋ Add**. **Stats** section, per sport (chip switch for multi-sport teams —
+  goals and runs don't add up): played / won / win rate, **form** (last 5, tap → match),
+  **for / against / difference** in the sport's unit, **top performers** (sport awards from
+  `ratings.SPORT_AWARDS` + most games; tap → player), **head-to-head** per opponent (tap →
+  that team). Squad now reads the real roster (`getRoster`).
+- `data/teamStats.ts` (pure, `tests/teamStats.test.mts`, 4 tests): only stats a player made
+  *for this team* count (matchday squad of that match, else squad) — right for shared
+  friendly pools.
+- **Tappable names in a match:** `MatchHeader` team names → team page ("Team profile ›"
+  hint; singles → the player's profile). Matchday-squad names on Info → player. Every
+  sport's live views (lineups/pitch/bench, timelines, box scores, cricket scorecard) link
+  player names via `onPlayer` on `LiveExtrasProps` + `sports/playerLink.ts`; scoring controls
+  untouched. Events that store only a name resolve the id against the rosters.
+- Verified in demo (mobile size): match → "Red House" → team page with football stats;
+  Lineups → Neil Kapoor → his profile; Timeline names are links. No console errors. 387 tests.
+
+---
+
 ### 2026-10-08 — Adding players: one way everywhere, by number / name / email / contacts
 
 - **Founder report:** hard to find where to add players to a new team; the team squad page

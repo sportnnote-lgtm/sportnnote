@@ -157,7 +157,7 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
 // Timeouts this set: 2 per set in indoor volleyball.
 const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, timeoutsPerSet: 2 });
 
-const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
+const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as VolleyballState;
   // Sets played so far (completed + the one in progress) drive the box-score toggle.
   const currentSet = s.setsWon.home + s.setsWon.away + 1;
@@ -173,9 +173,9 @@ const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ s
         )}
       </View>
       <Text style={ctrl.label}>Player stats</Text>
-      <VolleyballBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} />
+      <VolleyballBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
-      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." />
+      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 };

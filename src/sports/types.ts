@@ -132,6 +132,8 @@ export interface LiveExtrasProps {
   canEditHome?: boolean;
   canEditAway?: boolean;
   onEditLineup?: (side: 'home' | 'away') => void;
+  /** tap a player's name anywhere in the live views → their profile */
+  onPlayer?: (playerId: string) => void;
   /** dispatch + write permission, for post-match actions like Player of the Match */
   dispatch?: (action: ScoreAction) => void;
   canScore?: boolean;

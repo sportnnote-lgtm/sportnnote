@@ -8,6 +8,7 @@ import { theme } from '../core/theme';
 import { SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
+import { playerLink, idByName } from './playerLink';
 
 interface Line { name: string; points: number }
 
@@ -24,7 +25,7 @@ export function tally(events: LiveEvent[], side: 'home' | 'away', periodOf: (e: 
   return [...byName.values()].sort((a, b) => b.points - a.points);
 }
 
-function Table({ title, color, lines }: { title: string; color: string; lines: Line[] }) {
+function Table({ title, color, lines, roster, onPlayer }: { title: string; color: string; lines: Line[]; roster?: Player[]; onPlayer?: (playerId: string) => void }) {
   return (
     <View style={st.table}>
       <View style={st.titleRow}>
@@ -38,7 +39,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
       ) : (
         lines.map((l) => (
           <View key={l.name} style={st.row}>
-            <Text style={st.name} numberOfLines={1}>{l.name}</Text>
+            <Text style={st.name} numberOfLines={1} {...playerLink(idByName(l.name, roster), l.name, onPlayer)}>{l.name}</Text>
             <Text style={st.cell}>{l.points}</Text>
           </View>
         ))
@@ -50,7 +51,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
 export function PointBoxScore({
   events, homeName, awayName, homeRoster = [], awayRoster = [],
   homeColor = theme.colors.home, awayColor = theme.colors.away,
-  periods = [], periodLabel = 'Game',
+  periods = [], periodLabel = 'Game', onPlayer,
 }: {
   events: LiveEvent[];
   homeName: string;
@@ -63,6 +64,8 @@ export function PointBoxScore({
   periods?: number[];
   /** word for a period: 'Game' (rally) or 'Set' */
   periodLabel?: string;
+  /** tap a player's name → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const [scope, setScope] = useState<'all' | number>('all');
   // A rally point carries its period in `game`; a set-based one in `set`.
@@ -78,8 +81,8 @@ export function PointBoxScore({
           ))}
         </View>
       )}
-      <Table title={homeName} color={homeColor} lines={tally(events, 'home', periodOf, active, homeRoster)} />
-      <Table title={awayName} color={awayColor} lines={tally(events, 'away', periodOf, active, awayRoster)} />
+      <Table title={homeName} color={homeColor} lines={tally(events, 'home', periodOf, active, homeRoster)} roster={homeRoster} onPlayer={onPlayer} />
+      <Table title={awayName} color={awayColor} lines={tally(events, 'away', periodOf, active, awayRoster)} roster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 }

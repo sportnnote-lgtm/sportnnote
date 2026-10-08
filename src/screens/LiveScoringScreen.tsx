@@ -469,6 +469,22 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   }, []);
   // The WhatsApp/SMS invite for someone not on SportnNote yet: what they've been
   // made, for which match, and the link — signing up with this number makes it theirs.
+  const openPlayer = (playerId: string) => navigation.navigate('PlayerProfile', { playerId });
+  // Tap a side's name → its team page; in singles (a "team" of one person whose
+  // name is that person) → the player's own profile.
+  const soloOf = (sd: 'home' | 'away') => {
+    const full = sd === 'home' ? homeFull : awayFull;
+    const name = sd === 'home' ? (homeTeamName ?? homeName) : (awayTeamName ?? awayName);
+    return full.length === 1 && full[0].fullName === name ? full[0] : null;
+  };
+  const soloSides = !!soloOf('home') && !!soloOf('away');
+  const openSide = (sd: 'home' | 'away') => {
+    const solo = soloOf(sd);
+    if (solo) { navigation.navigate('PlayerProfile', { playerId: solo.id }); return; }
+    const id = sd === 'home' ? meta.homeTeamId : meta.awayTeamId;
+    if (id) navigation.navigate('Team', { teamId: id });
+  };
+
   const inviteTextFor = (role: 'scorer' | 'host') => (name?: string) => {
     const who = profile?.fullName ?? 'A friend';
     const vs = `${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`;
@@ -703,6 +719,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       homeManager={meta.managers?.home} awayManager={meta.managers?.away} view={view}
       homeFormation={homeFormation} awayFormation={awayFormation}
       canEditHome={canEditHome} canEditAway={canEditAway} onEditLineup={editSquad}
+      onPlayer={openPlayer}
     />
   ) : null;
   const liveExtrasNode = renderLiveExtras();
@@ -851,7 +868,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                       {p.jerseyNo != null ? (
                         <View style={[st.jersey, { borderColor: color }]}><Text style={[st.jerseyNum, { color }]}>{p.jerseyNo}</Text></View>
                       ) : <View style={st.jersey} />}
-                      <Text style={[textStyles.body, { flex: 1 }, disputed && st.disputedName]} numberOfLines={1}>
+                      <Text
+                        style={[textStyles.body, { flex: 1 }, disputed && st.disputedName]} numberOfLines={1}
+                        {...(!disputed ? { accessibilityRole: 'link' as const, accessibilityLabel: `Open ${p.fullName}`, onPress: () => openPlayer(p.id) } : {})}
+                      >
                         {disputed ? '❌ X — disputed' : p.fullName}
                         {!disputed && keeper ? '  🧤' : ''}
                         {reported ? '  ⚐ reported' : ''}
@@ -1370,6 +1390,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
                   onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
+                  teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
               </View>
               {matchId && canScore ? <OfflineSyncBanner matchId={matchId} /> : null}
@@ -1415,6 +1437,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
                   onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
+                  teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
                 {!editInfo ? (
                   <>
@@ -1497,6 +1521,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
                   onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
+                  teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
               </View>
               {plugin.Summary ? (

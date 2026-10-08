@@ -13,6 +13,7 @@ import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import type { LineupSlot, Player } from '../../core/types';
 import type { FootballEvent } from './events';
+import { playerLink } from '../playerLink';
 
 const DEF = new Set(['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'SW']);
 const FWD = new Set(['ST', 'CF', 'LW', 'RW', 'SS']);
@@ -76,9 +77,10 @@ function Avatar({ photoUrl, label, color, size = 36 }: { photoUrl?: string; labe
 }
 
 function PlayerDot({
-  slot, color, top, left, jersey, photoUrl, marks,
+  slot, color, top, left, jersey, photoUrl, marks, onPlayer,
 }: {
   slot: LineupSlot; color: string; top: string; left: string; jersey?: number; photoUrl?: string; marks?: Marks;
+  onPlayer?: (playerId: string) => void;
 }) {
   const name = useMask().name(slot.playerName) || undefined;
   return (
@@ -96,7 +98,7 @@ function PlayerDot({
           <View style={s.goalMark}><Text style={s.goalMarkText}>⚽{marks.goals > 1 ? marks.goals : ''}</Text></View>
         ) : null}
       </View>
-      <Text style={s.name} numberOfLines={1}>
+      <Text style={s.name} numberOfLines={1} {...playerLink(slot.playerId, name ?? slot.position, onPlayer)}>
         {jersey != null ? `${jersey} ` : ''}{name ? name.split(' ').slice(-1)[0] : slot.position}
       </Text>
       {marks?.subOff != null && <Text style={s.subMin}>{marks.subOff}&apos;</Text>}
@@ -107,12 +109,14 @@ function PlayerDot({
 export function LineupView({
   homeLineup = [], awayLineup = [], homeRoster = [], awayRoster = [], events = [],
   homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, homeManager, awayManager,
-  homeFormation, awayFormation, canEditHome, canEditAway, onEditLineup,
+  homeFormation, awayFormation, canEditHome, canEditAway, onEditLineup, onPlayer,
 }: {
   homeLineup?: LineupSlot[]; awayLineup?: LineupSlot[]; homeRoster?: Player[]; awayRoster?: Player[];
   events?: FootballEvent[]; homeName: string; awayName: string; homeColor?: string; awayColor?: string;
   homeManager?: string; awayManager?: string; homeFormation?: string; awayFormation?: string;
   canEditHome?: boolean; canEditAway?: boolean; onEditLineup?: (side: 'home' | 'away') => void;
+  /** tap a player's name (pitch or bench) → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const marks = deriveMarks(events);
   const cameOn = subsIn(events);
@@ -167,7 +171,7 @@ export function LineupView({
             <View key={p.id} style={[s.benchRow, side === 'away' && { flexDirection: 'row-reverse' }]}>
               <Avatar photoUrl={p.photoUrl} label={initials(p.fullName)} color={color} size={28} />
               <View style={{ flex: 1 }}>
-                <Text style={[s.benchName, side === 'away' && { textAlign: 'right' }]} numberOfLines={1}>{p.jerseyNo ? `${p.jerseyNo} ` : ''}{mask.byId(p.id, p.fullName)}</Text>
+                <Text style={[s.benchName, side === 'away' && { textAlign: 'right' }]} numberOfLines={1} {...playerLink(p.id, mask.byId(p.id, p.fullName), onPlayer)}>{p.jerseyNo ? `${p.jerseyNo} ` : ''}{mask.byId(p.id, p.fullName)}</Text>
                 {onMin != null && <Text style={[s.benchSub, side === 'away' && { textAlign: 'right' }]}>↑ {onMin}&apos;</Text>}
               </View>
               {m?.goals ? <Text style={s.benchGoal}>⚽{m.goals > 1 ? m.goals : ''}</Text> : null}
@@ -194,11 +198,11 @@ export function LineupView({
         <View style={[s.penSpot, s.penSpotBottom]} />
         {/* Home occupies the top half (matching its header above); away the bottom. */}
         {homeLineup.map((slot, i) => (
-          <PlayerDot key={`h${i}`} slot={slot} color={homeColor} jersey={jersey(slot.playerId, homeById)} photoUrl={photo(slot.playerId, homeById)} marks={slot.playerName ? marks[slot.playerName] : undefined}
+          <PlayerDot key={`h${i}`} slot={slot} color={homeColor} jersey={jersey(slot.playerId, homeById)} photoUrl={photo(slot.playerId, homeById)} marks={slot.playerName ? marks[slot.playerName] : undefined} onPlayer={onPlayer}
             top={`${(slot.y * 0.46 + 0.05) * 100}%`} left={`${(1 - slot.x) * 100}%`} />
         ))}
         {awayLineup.map((slot, i) => (
-          <PlayerDot key={`a${i}`} slot={slot} color={awayColor} jersey={jersey(slot.playerId, awayById)} photoUrl={photo(slot.playerId, awayById)} marks={slot.playerName ? marks[slot.playerName] : undefined}
+          <PlayerDot key={`a${i}`} slot={slot} color={awayColor} jersey={jersey(slot.playerId, awayById)} photoUrl={photo(slot.playerId, awayById)} marks={slot.playerName ? marks[slot.playerName] : undefined} onPlayer={onPlayer}
             top={`${(1 - (slot.y * 0.46 + 0.05)) * 100}%`} left={`${slot.x * 100}%`} />
         ))}
       </View>

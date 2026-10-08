@@ -1,18 +1,24 @@
-/** Team (house) profile: record per sport, squad, matches — and a follow toggle. */
-import React, { useEffect, useState } from 'react';
+/** Team (house) profile: stats (form, scored/conceded, top performers,
+ *  head-to-head), record per sport, squad, matches — and a follow toggle. */
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Pill, Button, LoadingState, ScreenTitle, textStyles } from '../components/ui';
+import { EmptyState, Card, Pill, Button, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
+import { useParamState } from '../navigation/useParamState';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { useTeamSummary, useMatches, usePlayers, useFollow } from '../data/hooks';
+import { getRoster, getMatchStatLines, getMatchSquads } from '../data/repos';
+import { computeTeamStats, resultFor, type Result } from '../data/teamStats';
+import { SPORT_AWARDS, statLabel } from '../data/ratings';
+import type { Player, SportId, StatLine } from '../core/types';
 import { teamStandings } from '../data/standings';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -29,6 +35,54 @@ export default function TeamProfileScreen() {
   const { isFollowing, toggle } = useFollow(profile?.id);
   const [showSquad, setShowSquad] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
+  const [squad, setSquad] = useState<Player[]>([]);
+  const [lines, setLines] = useState<StatLine[]>([]);
+  const [playedFor, setPlayedFor] = useState<Record<string, string[]>>({});
+  // Stats are per sport (goals and runs don't add up) — a multi-sport team picks one.
+  const [statSport, setStatSport] = useParamState<string>('sport', '');
+  const scrollRef = useRef<ScrollView>(null);
+  const [statsY, setStatsY] = useState(0);
+
+  // The team's real squad (the same roster the match screens use).
+  useEffect(() => {
+    if (!team) return;
+    let on = true;
+    Promise.all(team.sports.map((sp) => getRoster(team.name, sp))).then((lists) => {
+      const seen = new Map<string, Player>();
+      for (const p of lists.flat()) seen.set(p.id, p);
+      if (on) setSquad([...seen.values()]);
+    });
+    return () => { on = false; };
+  }, [team?.id, team?.name]);
+
+  // Who played for THIS team in each finished match (its matchday squad, else its
+  // squad) + those matches' stat lines → top performers.
+  const finished = matches.filter((m) => team && (m.homeTeam.id === team.id || m.awayTeam.id === team.id) && resultFor(m, team.id));
+  const sportsPlayed = [...new Set(finished.map((m) => m.sport))]
+    .sort((a, b) => finished.filter((m) => m.sport === b).length - finished.filter((m) => m.sport === a).length);
+  const sport = (sportsPlayed.includes(statSport as SportId) ? statSport : sportsPlayed[0]) as SportId | undefined;
+  const doneIds = finished
+    .filter((m) => m.sport === sport)
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt)).slice(0, 40).map((m) => m.id);
+  const doneKey = doneIds.join(',');
+  useEffect(() => {
+    if (!team || !doneIds.length) { setLines([]); setPlayedFor({}); return; }
+    let on = true;
+    const squadIds = squad.map((p) => p.id);
+    Promise.all(doneIds.map(async (id) => {
+      const m = matches.find((x) => x.id === id)!;
+      const side = m.homeTeam.id === team.id ? 'home' : 'away';
+      const [ls, sq] = await Promise.all([getMatchStatLines(id).catch(() => []), getMatchSquads(id).catch(() => null)]);
+      const picked = sq ? [...sq[side].starters, ...sq[side].subs] : [];
+      return { id, ls, who: picked.length ? picked : squadIds };
+    })).then((rows) => {
+      if (!on) return;
+      setLines(rows.flatMap((r) => r.ls));
+      setPlayedFor(Object.fromEntries(rows.map((r) => [r.id, r.who])));
+    });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team?.id, doneKey, squad.length]);
 
   // Title the nav bar after the team, not a generic "Team" (breadcrumb).
   useEffect(() => {
@@ -57,7 +111,15 @@ export default function TeamProfileScreen() {
   }
 
   const following = isFollowing('team', team.id);
-  const squad = players.filter((p) => p.houseName === team.name);
+  const stats = computeTeamStats(team.id, matches.filter((m) => m.sport === sport), lines, playedFor, SPORT_AWARDS);
+  const nameOf = (id: string) => squad.find((p) => p.id === id)?.fullName ?? players.find((p) => p.id === id)?.fullName ?? 'Player';
+  const openMatch = (m: (typeof matches)[number]) => nav.navigate('LiveScoring', {
+    matchId: m.id, sport: m.sport,
+    homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
+    homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,
+    homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
+    canScore: canScoreByRole(profile?.role),
+  });
   const teamMatches = matches.filter((m) => m.homeTeam.id === team.id || m.awayTeam.id === team.id);
   const records = team.sports
     .map((sp) => ({ sport: sp, row: teamStandings(matches, sp).find((t) => t.teamId === team.id) }))
@@ -70,7 +132,7 @@ export default function TeamProfileScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={st.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={st.content}>
         <View style={st.headerRow}>
           <View style={[st.crest, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33', borderColor: team.colorHex ?? theme.colors.border }]}>
             <Text style={[st.crestText, { color: team.colorHex ?? theme.colors.text }]}>
@@ -92,15 +154,81 @@ export default function TeamProfileScreen() {
           variant={following ? 'ghost' : 'primary'}
           onPress={() => toggle('team', team.id)}
         />
-        <Button label="👥 Squad · ＋ Add players" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} />
+        <View style={st.actions}>
+          <View style={{ flex: 1 }}><Button label="📊 Stats" variant="ghost" onPress={() => scrollRef.current?.scrollTo({ y: statsY, animated: true })} /></View>
+          <View style={{ flex: 1 }}><Button label="👥 Squad · ＋ Add" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} /></View>
+        </View>
 
-        {totalPlayed > 0 && (
-          <View style={st.statGrid}>
-            <Stat value={String(totalPlayed)} label="Played" />
-            <Stat value={String(totalWon)} label="Won" />
-            <Stat value={`${teamWinRate}%`} label="Win rate" />
-          </View>
-        )}
+        {/* ── Stats ── */}
+        <View onLayout={(e) => setStatsY(e.nativeEvent.layout.y)} style={{ gap: theme.spacing(3) }}>
+          <Text style={[textStyles.h3, st.section]}>Stats{sport && sportsPlayed.length === 1 ? ` · ${getSport(sport).icon} ${getSport(sport).name}` : ''}</Text>
+          {sportsPlayed.length > 1 && (
+            <View style={st.tags}>
+              {sportsPlayed.map((sp) => (
+                <SelectChip key={sp} label={`${getSport(sp).icon} ${getSport(sp).name}`} active={sp === sport} onPress={() => setStatSport(sp)} />
+              ))}
+            </View>
+          )}
+          {stats.played === 0 ? (
+            <EmptyState icon="📊" title="No results yet" hint="Stats appear here after this team’s first finished match." compact />
+          ) : (
+            <>
+              <View style={st.statGrid}>
+                <Stat value={String(stats.played)} label="Played" />
+                <Stat value={String(stats.won)} label="Won" />
+                <Stat value={`${Math.round((stats.won / stats.played) * 100)}%`} label="Win rate" />
+              </View>
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.muted}>Form · latest first  ·  {stats.won}W {stats.drawn}D {stats.lost}L</Text>
+                <View style={st.formRow}>
+                  {stats.form.map((f) => (
+                    <TouchableOpacity key={f.matchId} accessibilityRole="button" accessibilityLabel={`${f.result === 'W' ? 'Won' : f.result === 'D' ? 'Drew' : 'Lost'} vs ${f.opponentName}`} onPress={() => { const m = matches.find((x) => x.id === f.matchId); if (m) openMatch(m); }}>
+                      <View style={[st.formChip, { backgroundColor: FORM_COLOR[f.result] }]}><Text style={st.formText}>{f.result}</Text></View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Card>
+              <View style={st.statGrid}>
+                <Stat value={String(stats.scored)} label={stats.unit ? `${cap(stats.unit)} for` : 'Scored'} />
+                <Stat value={String(stats.conceded)} label={stats.unit ? `${cap(stats.unit)} against` : 'Conceded'} />
+                <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label="Difference" />
+              </View>
+              {(stats.leaders.length > 0 || stats.appearances.length > 0) && (
+                <Card style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.muted}>Top performers</Text>
+                  {stats.leaders.map((l) => (
+                    <TouchableOpacity key={l.stat} accessibilityRole="button" style={st.leaderRow} onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}>
+                      <Text style={st.leaderIcon}>{l.icon}</Text>
+                      <Text style={[textStyles.muted, { width: 96 }]}>{l.label}</Text>
+                      <Text style={st.leaderName} numberOfLines={1}>{nameOf(l.playerId)}</Text>
+                      <Text style={st.leaderVal}>{l.total} {statLabel(l.stat, l.total)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {stats.appearances[0] && (
+                    <TouchableOpacity accessibilityRole="button" style={st.leaderRow} onPress={() => nav.navigate('PlayerProfile', { playerId: stats.appearances[0].playerId })}>
+                      <Text style={st.leaderIcon}>👟</Text>
+                      <Text style={[textStyles.muted, { width: 96 }]}>Most games</Text>
+                      <Text style={st.leaderName} numberOfLines={1}>{nameOf(stats.appearances[0].playerId)}</Text>
+                      <Text style={st.leaderVal}>{stats.appearances[0].matches}</Text>
+                    </TouchableOpacity>
+                  )}
+                </Card>
+              )}
+              {stats.headToHead.length > 0 && (
+                <Card style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.muted}>Head-to-head</Text>
+                  {stats.headToHead.map((h) => (
+                    <TouchableOpacity key={h.opponentId} accessibilityRole="button" style={st.leaderRow} onPress={() => nav.push('Team', { teamId: h.opponentId })}>
+                      <Text style={st.leaderName} numberOfLines={1}>vs {h.opponentName}</Text>
+                      <Text style={textStyles.muted}>{h.played}P · {h.won}W {h.drawn}D {h.lost}L</Text>
+                      <Text style={st.leaderVal}>{h.for}–{h.against}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </Card>
+              )}
+            </>
+          )}
+        </View>
 
         {records.length > 0 && (
           <>
@@ -154,15 +282,7 @@ export default function TeamProfileScreen() {
               <MatchCard
                 key={m.id}
                 match={m}
-                onPress={() =>
-                  nav.navigate('LiveScoring', {
-                    matchId: m.id, sport: m.sport,
-                    homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
-                    homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,
-                    homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
-                    canScore: canScoreByRole(profile?.role),
-                  })
-                }
+                onPress={() => openMatch(m)}
               />
             ))}
           </>
@@ -183,7 +303,18 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
+const FORM_COLOR: Record<Result, string> = { W: theme.colors.primary, D: theme.colors.textMuted, L: theme.colors.danger };
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+
 const st = StyleSheet.create({
+  actions: { flexDirection: 'row', gap: theme.spacing(3) },
+  formRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  formChip: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  formText: { color: '#06120D', fontWeight: '900', fontSize: theme.font.body },
+  leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
+  leaderIcon: { fontSize: 18, width: 24 },
+  leaderName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700', flex: 1 },
+  leaderVal: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800' },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   headerRow: { flexDirection: 'row', gap: theme.spacing(3), alignItems: 'center' },

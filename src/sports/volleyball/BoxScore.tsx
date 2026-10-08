@@ -6,7 +6,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { SelectChip } from '../../components/ui';
+import type { Player } from '../../core/types';
 import type { LiveEvent } from '../liveEvents';
+import { playerLink, idByName } from '../playerLink';
 
 interface Line { name: string; points: number; aces: number; blocks: number }
 
@@ -28,7 +30,7 @@ export function tally(events: LiveEvent[], side: 'home' | 'away', scope: 'all' |
   return [...byName.values()].sort((a, b) => b.points - a.points || b.aces - a.aces);
 }
 
-function Table({ title, color, lines }: { title: string; color: string; lines: Line[] }) {
+function Table({ title, color, lines, roster, onPlayer }: { title: string; color: string; lines: Line[]; roster?: Player[]; onPlayer?: (playerId: string) => void }) {
   return (
     <View style={st.table}>
       <View style={st.titleRow}>
@@ -44,7 +46,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
       ) : (
         lines.map((l) => (
           <View key={l.name} style={st.row}>
-            <Text style={st.name} numberOfLines={1}>{l.name}</Text>
+            <Text style={st.name} numberOfLines={1} {...playerLink(idByName(l.name, roster), l.name, onPlayer)}>{l.name}</Text>
             <Text style={[st.cell, st.total]}>{l.points}</Text>
             <Text style={st.cell}>{l.aces}</Text>
             <Text style={st.cell}>{l.blocks}</Text>
@@ -56,7 +58,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
 }
 
 export function VolleyballBoxScore({
-  events, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, periods = [],
+  events, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, periods = [], homeRoster, awayRoster, onPlayer,
 }: {
   events: LiveEvent[];
   homeName: string;
@@ -66,6 +68,10 @@ export function VolleyballBoxScore({
   /** Sets played so far, e.g. [{value:1,label:'Set 1'},…]. The toggle only shows
    *  once two or more sets exist. */
   periods?: { value: number; label: string }[];
+  homeRoster?: Player[];
+  awayRoster?: Player[];
+  /** tap a player's name → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const [scope, setScope] = useState<'all' | number>('all');
   const active = scope !== 'all' && !periods.some((p) => p.value === scope) ? 'all' : scope;
@@ -79,8 +85,8 @@ export function VolleyballBoxScore({
           ))}
         </View>
       )}
-      <Table title={homeName} color={homeColor} lines={tally(events, 'home', active)} />
-      <Table title={awayName} color={awayColor} lines={tally(events, 'away', active)} />
+      <Table title={homeName} color={homeColor} lines={tally(events, 'home', active)} roster={homeRoster} onPlayer={onPlayer} />
+      <Table title={awayName} color={awayColor} lines={tally(events, 'away', active)} roster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 }

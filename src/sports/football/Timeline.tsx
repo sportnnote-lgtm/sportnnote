@@ -4,6 +4,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
+import type { Player } from '../../core/types';
+import { playerLink, idByName } from '../playerLink';
 import { EVENT_META, STAT_META, GOAL_TYPE_LABEL, BODY_PART_LABEL, type FootballEvent, type StatEvent } from './events';
 
 // One row in the merged timeline (key, sort, render).
@@ -17,9 +19,12 @@ interface Item {
   side: 'home' | 'away';
   /** outcome accent: goals green, red cards red, yellows amber */
   tone?: 'boundary' | 'wicket' | 'extra';
+  /** the row's lead player (scorer / carded / fouler / sub coming on) — tapping
+   *  the detail opens their profile; events store names, so resolved via rosters */
+  playerId?: string;
 }
 
-function eventItem(e: FootballEvent, homeName: string, awayName: string): Item {
+function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[]): Item {
   const team = e.side === 'home' ? homeName : awayName;
   const who = e.playerName ?? team;
   let label = EVENT_META[e.type].label;
@@ -42,7 +47,8 @@ function eventItem(e: FootballEvent, homeName: string, awayName: string): Item {
       break;
   }
   const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' ? 'extra' : undefined;
-  return { key: `e${e.id}`, minute: e.minute, order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone };
+  const playerId = idByName(e.type === 'sub' ? e.secondName ?? e.playerName : e.playerName, ...rosters);
+  return { key: `e${e.id}`, minute: e.minute, order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone, playerId };
 }
 
 // Every scored action earns a timeline row — the scorer should see each tap here.
@@ -51,7 +57,7 @@ const STAT_IN_TIMELINE = new Set<StatEvent['kind']>([
   'attackContribution', 'defenceContribution', 'penaltyWon', 'penaltyMissed',
 ]);
 
-function statItem(st: StatEvent, homeName: string, awayName: string): Item {
+function statItem(st: StatEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[]): Item {
   const team = st.side === 'home' ? homeName : awayName;
   const m = STAT_META[st.kind];
   const who = st.playerName ?? team;
@@ -67,7 +73,8 @@ function statItem(st: StatEvent, homeName: string, awayName: string): Item {
   } else if (st.kind === 'pass') {
     detail = `${who} · ${st.complete ? 'completed' : 'misplaced'}`;
   }
-  return { key: `s${st.id}`, minute: st.minute, order: st.id, icon: m.icon, label: m.label, detail, side: st.side };
+  const playerId = st.playerId ?? idByName(st.playerName, ...rosters);
+  return { key: `s${st.id}`, minute: st.minute, order: st.id, icon: m.icon, label: m.label, detail, side: st.side, playerId };
 }
 
 export function Timeline({
@@ -78,6 +85,9 @@ export function Timeline({
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
   max = 60,
+  homeRoster,
+  awayRoster,
+  onPlayer,
 }: {
   events: FootballEvent[];
   stats?: StatEvent[];
@@ -86,11 +96,16 @@ export function Timeline({
   homeColor?: string;
   awayColor?: string;
   max?: number;
+  homeRoster?: Player[];
+  awayRoster?: Player[];
+  /** tap a row's player → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const mask = useMask();
+  const rosters = [homeRoster, awayRoster];
   const all: Item[] = [
-    ...events.map((e) => eventItem(e, homeName, awayName)),
-    ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName)),
+    ...events.map((e) => eventItem(e, homeName, awayName, rosters)),
+    ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName, rosters)),
   ].sort((a, b) => b.minute - a.minute || b.order - a.order);
   const items = all.slice(0, max);
   const hidden = all.length - items.length;
@@ -119,7 +134,7 @@ export function Timeline({
             <Text style={st.icon}>{it.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[st.label, (it.tone === 'boundary' || it.tone === 'wicket') && { color: toneColor! }]}>{it.label}</Text>
-              <Text style={st.detail}>{mask.text(it.detail)}</Text>
+              <Text style={st.detail} {...playerLink(it.playerId, mask.text(it.detail), onPlayer)}>{mask.text(it.detail)}</Text>
             </View>
             {latest ? <Text style={st.latestTag}>LATEST</Text> : null}
           </View>

@@ -117,7 +117,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     );
   };
 
-  const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster }) => {
+  const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
     const s = state as RallyState;
     const periods = Array.from({ length: Math.max(1, s.games.length + 1) }, (_, i) => i + 1);
     return (
@@ -131,9 +131,9 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
           )}
         </View>
         <Text style={ctrl.label}>Box score</Text>
-        <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Game" />
+        <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Game" onPlayer={onPlayer} />
         <Text style={ctrl.label}>Rally log</Text>
-        <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." />
+        <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       </View>
     );
   };

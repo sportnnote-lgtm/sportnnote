@@ -6,14 +6,14 @@
  * on the scoreboard above the tabs; this answers who, not what the score is.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { theme } from '../core/theme';
 import { LogoPicker } from './LogoPicker';
 
 export function MatchHeader({
   sportIcon, sportName, statusLabel, matchLive, complete,
   homeName, awayName, homeColor, awayColor,
-  hasMatch, logoUrl, canManage, onPickLogo,
+  hasMatch, logoUrl, canManage, onPickLogo, onTeamPress, teamLinkLabel = 'Team profile ›',
 }: {
   sportIcon: string;
   sportName: string;
@@ -29,7 +29,23 @@ export function MatchHeader({
   logoUrl?: string;
   canManage?: boolean;
   onPickLogo?: (uri: string) => void;
+  /** tap a team name → its profile (stats, squad, matches) */
+  onTeamPress?: (side: 'home' | 'away') => void;
+  /** the hint under each name ("Player profile ›" for singles) */
+  teamLinkLabel?: string;
 }) {
+  const side = (sd: 'home' | 'away', name: string, color: string) => {
+    const body = (
+      <>
+        <View style={[st.bar, { backgroundColor: color }]} />
+        <Text style={[st.teamName, { color }]} numberOfLines={2}>{name}</Text>
+        {onTeamPress ? <Text style={st.teamLink}>{teamLinkLabel}</Text> : null}
+      </>
+    );
+    return onTeamPress ? (
+      <TouchableOpacity style={st.team} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel={`Open ${name}`} onPress={() => onTeamPress(sd)}>{body}</TouchableOpacity>
+    ) : <View style={st.team}>{body}</View>;
+  };
   return (
     <View style={{ gap: theme.spacing(1) }}>
       <View style={st.topRow}>
@@ -50,15 +66,9 @@ export function MatchHeader({
         </View>
       </View>
       <View style={st.teams}>
-        <View style={st.team}>
-          <View style={[st.bar, { backgroundColor: homeColor ?? theme.colors.home }]} />
-          <Text style={[st.teamName, { color: homeColor ?? theme.colors.home }]} numberOfLines={2}>{homeName}</Text>
-        </View>
+        {side('home', homeName, homeColor ?? theme.colors.home)}
         <Text style={st.vs}>VS</Text>
-        <View style={st.team}>
-          <View style={[st.bar, { backgroundColor: awayColor ?? theme.colors.away }]} />
-          <Text style={[st.teamName, { color: awayColor ?? theme.colors.away }]} numberOfLines={2}>{awayName}</Text>
-        </View>
+        {side('away', awayName, awayColor ?? theme.colors.away)}
       </View>
     </View>
   );
@@ -77,5 +87,6 @@ const st = StyleSheet.create({
   team: { flex: 1, alignItems: 'center', gap: theme.spacing(2) },
   bar: { width: 40, height: 4, borderRadius: 2 },
   teamName: { fontSize: theme.font.h3, fontWeight: '900', textAlign: 'center' },
+  teamLink: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700' },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800', marginHorizontal: theme.spacing(2) },
 });

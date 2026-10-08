@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
+import { playerLink, idByName } from '../playerLink';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
 import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
@@ -956,10 +957,12 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
  *  overs) that expands to the batting card (with dismissals), extras, total,
  *  who's yet to bat, and the opposition's bowling figures. */
 function InningsCard({
-  s, side, name, color, roster, batting, open, onToggle,
+  s, side, name, color, roster, batting, open, onToggle, onPlayer,
 }: {
   s: CricketState; side: 'home' | 'away'; name: string; color: string;
   roster: Player[]; batting: boolean; open: boolean; onToggle: () => void;
+  /** tap a batter/bowler name → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const inn = s.scores[side];
   const batters = Object.entries(s.batting).filter(([, c]) => c.side === side).map(([id, c]) => ({ id, ...c }));
@@ -1005,7 +1008,7 @@ function InningsCard({
                 return (
                 <View key={b.id} style={[ctrl.trow, live && ctrl.trowLive]}>
                   <View style={ctrl.cName}>
-                    <Text style={[ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1}>{b.name || 'Batter'}{role(b.id)}{!b.out && !b.retired ? ' *' : ''}{onStrike ? ' 🏏' : ''}</Text>
+                    <Text style={[ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1} {...playerLink(roster.some((p) => p.id === b.id) ? b.id : undefined, b.name || 'Batter', onPlayer)}>{b.name || 'Batter'}{role(b.id)}{!b.out && !b.retired ? ' *' : ''}{onStrike ? ' 🏏' : ''}</Text>
                     <Text style={ctrl.bDismiss} numberOfLines={1}>{b.out ? (b.dismissal ?? 'out') : b.retired ? (b.dismissal ?? 'retired hurt') : 'not out'}</Text>
                   </View>
                   <Text style={[ctrl.cNum, live && ctrl.cNumLive]}>{b.runs}</Text>
@@ -1027,7 +1030,13 @@ function InningsCard({
             <Text style={ctrl.totalLabel}>Total</Text>
             <Text style={ctrl.totalVal}>{inn.runs}/{inn.wickets} ({oversStr(inn.balls, s.ballsPerOver)} ov) · CRR {runRate(inn.runs, inn.balls, s.ballsPerOver)}</Text>
           </View>
-          {toBat.length > 0 && <Text style={ctrl.toBat}>Yet to bat: {toBat.map((p) => p.fullName).join(', ')}</Text>}
+          {toBat.length > 0 && (
+            <Text style={ctrl.toBat}>
+              Yet to bat: {toBat.map((p, i) => (
+                <Text key={p.id} {...playerLink(p.id, p.fullName, onPlayer)}>{i > 0 ? ', ' : ''}{p.fullName}</Text>
+              ))}
+            </Text>
+          )}
 
           {bowlers.length > 0 && (
             <>
@@ -1042,7 +1051,7 @@ function InningsCard({
                 const live = atCrease && b.id === s.bowlerId;
                 return (
                 <View key={b.id} style={[ctrl.trow, live && ctrl.trowLive]}>
-                  <Text style={[ctrl.cName, ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1}>{b.name || 'Bowler'}{live ? ' 🎯' : ''}</Text>
+                  <Text style={[ctrl.cName, ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1} {...playerLink(b.id, b.name || 'Bowler', onPlayer)}>{b.name || 'Bowler'}{live ? ' 🎯' : ''}</Text>
                   <Text style={ctrl.cNum}>{oversStr(b.balls, s.ballsPerOver)}</Text>
                   <Text style={ctrl.cNum}>{b.runs}</Text>
                   <Text style={[ctrl.cNum, live && ctrl.cNumLive]}>{b.wickets}</Text>
@@ -1075,7 +1084,7 @@ const ballRuns = (sym: string): number => {
   return parseInt(sym, 10) || 0;
 };
 
-const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore }) => {
+const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore, onPlayer }) => {
   const s = state as CricketState;
   // Default the open innings to whoever is batting (or the chase, post-match).
   const [open, setOpen] = useState<'home' | 'away' | null>(s.battingSide);
@@ -1110,14 +1119,14 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
 
       <InningsCard
         s={s} side="home" name={homeName} color={homeColor ?? theme.colors.home}
-        roster={homeRoster} batting={s.battingSide === 'home'} open={open === 'home'} onToggle={() => toggle('home')}
+        roster={homeRoster} batting={s.battingSide === 'home'} open={open === 'home'} onToggle={() => toggle('home')} onPlayer={onPlayer}
       />
       <InningsCard
         s={s} side="away" name={awayName} color={awayColor ?? theme.colors.away}
-        roster={awayRoster} batting={s.battingSide === 'away'} open={open === 'away'} onToggle={() => toggle('away')}
+        roster={awayRoster} batting={s.battingSide === 'away'} open={open === 'away'} onToggle={() => toggle('away')} onPlayer={onPlayer}
       />
 
-      {s.potm ? <Text style={ctrl.potm}>🏅 Player of the Match: {s.potm}</Text> : null}
+      {s.potm ? <Text style={ctrl.potm} {...playerLink(idByName(s.potm, homeRoster, awayRoster), s.potm, onPlayer)}>🏅 Player of the Match: {s.potm}</Text> : null}
 
       {s.ended && canScore && dispatch && !s.potm && (homeRoster.length > 0 || awayRoster.length > 0) && (
         <View style={ctrl.card}>

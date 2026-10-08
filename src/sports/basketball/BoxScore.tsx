@@ -8,6 +8,7 @@ import { theme } from '../../core/theme';
 import { SelectChip } from '../../components/ui';
 import type { Player } from '../../core/types';
 import { pointsOf, type BBEvent } from './events';
+import { playerLink, idByName } from '../playerLink';
 
 interface Line { name: string; pts: number; reb: number; ast: number; stl: number; blk: number; to: number; pf: number }
 
@@ -34,7 +35,7 @@ export function tally(events: BBEvent[], side: 'home' | 'away', roster: Player[]
   return [...byName.values()].sort((a, b) => b.pts - a.pts);
 }
 
-function Table({ title, color, lines }: { title: string; color: string; lines: Line[] }) {
+function Table({ title, color, lines, roster, onPlayer }: { title: string; color: string; lines: Line[]; roster: Player[]; onPlayer?: (playerId: string) => void }) {
   return (
     <View style={st.table}>
       <View style={st.titleRow}>
@@ -54,7 +55,7 @@ function Table({ title, color, lines }: { title: string; color: string; lines: L
       ) : (
         lines.map((l) => (
           <View key={l.name} style={st.row}>
-            <Text style={st.name} numberOfLines={1}>{l.name}</Text>
+            <Text style={st.name} numberOfLines={1} {...playerLink(idByName(l.name, roster), l.name, onPlayer)}>{l.name}</Text>
             <Text style={st.cell}>{l.pts}</Text>
             <Text style={st.cell}>{l.reb}</Text>
             <Text style={st.cell}>{l.ast}</Text>
@@ -78,6 +79,7 @@ export function BoxScore({
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
   periods = [],
+  onPlayer,
 }: {
   events: BBEvent[];
   homeName: string;
@@ -90,6 +92,8 @@ export function BoxScore({
    *  toggle only shows once two or more periods exist (before that, Overall
    *  and the single quarter are identical). */
   periods?: { value: number; label: string }[];
+  /** tap a player's name → their profile */
+  onPlayer?: (playerId: string) => void;
 }) {
   const [scope, setScope] = useState<'all' | number>('all');
   // Guard against a stale selection if the shown periods shrink (e.g. reload).
@@ -104,8 +108,8 @@ export function BoxScore({
           ))}
         </View>
       )}
-      <Table title={homeName} color={homeColor} lines={tally(events, 'home', homeRoster, active)} />
-      <Table title={awayName} color={awayColor} lines={tally(events, 'away', awayRoster, active)} />
+      <Table title={homeName} color={homeColor} lines={tally(events, 'home', homeRoster, active)} roster={homeRoster} onPlayer={onPlayer} />
+      <Table title={awayName} color={awayColor} lines={tally(events, 'away', awayRoster, active)} roster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 }

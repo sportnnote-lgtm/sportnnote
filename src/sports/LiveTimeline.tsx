@@ -3,7 +3,9 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { useMask } from '../core/disputeMask';
+import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
+import { playerLink, idByName } from './playerLink';
 
 export function LiveTimeline({
   events,
@@ -11,12 +13,19 @@ export function LiveTimeline({
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
   max = 60,
+  homeRoster,
+  awayRoster,
+  onPlayer,
 }: {
   events: LiveEvent[];
   emptyText?: string;
   homeColor?: string;
   awayColor?: string;
   max?: number;
+  homeRoster?: Player[];
+  awayRoster?: Player[];
+  /** tap an event's player → their profile (events store names; resolved via rosters) */
+  onPlayer?: (playerId: string) => void;
 }) {
   const mask = useMask();
   if (events.length === 0) return <Text style={st.empty}>{emptyText}</Text>;
@@ -31,6 +40,7 @@ export function LiveTimeline({
         const toneColor = e.tone === 'boundary' ? theme.colors.primary : e.tone === 'wicket' ? theme.colors.danger : e.tone === 'extra' ? theme.colors.accent : null;
         const nodeColor = toneColor ?? sideColor;
         const latest = i === 0;
+        const pid = idByName(e.playerName, ...(e.side === 'away' ? [awayRoster] : e.side === 'home' ? [homeRoster] : [homeRoster, awayRoster]));
         return (
           <View key={e.id} style={st.row}>
             {/* Timeline spine: a continuous rail with a coloured node per event.
@@ -44,7 +54,7 @@ export function LiveTimeline({
             <Text style={st.icon}>{e.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[st.label, (e.tone === 'boundary' || e.tone === 'wicket') && { color: toneColor! }]}>{e.label}</Text>
-              {e.detail ? <Text style={st.detail}>{mask.text(e.detail)}</Text> : null}
+              {e.detail ? <Text style={st.detail} {...playerLink(pid, mask.text(e.detail), onPlayer)}>{mask.text(e.detail)}</Text> : null}
             </View>
             {latest ? <Text style={st.latestTag}>LATEST</Text> : null}
           </View>

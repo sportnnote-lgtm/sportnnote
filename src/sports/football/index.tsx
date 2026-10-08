@@ -1200,13 +1200,14 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   canEditHome,
   canEditAway,
   onEditLineup,
+  onPlayer,
   view = 'lineups',
 }) => {
   const s = state as FootballState;
   const hc = homeColor ?? theme.colors.home;
   const ac = awayColor ?? theme.colors.away;
   if (view === 'timeline') {
-    return <Timeline events={s.events} stats={s.stats} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />;
+    return <Timeline events={s.events} stats={s.stats} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
   }
   if (view === 'stats') {
     return <StatsComparison s={s} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} />;
@@ -1217,7 +1218,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
       events={s.events} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac}
       homeManager={homeManager} awayManager={awayManager}
       homeFormation={homeFormation} awayFormation={awayFormation}
-      canEditHome={canEditHome} canEditAway={canEditAway} onEditLineup={onEditLineup}
+      canEditHome={canEditHome} canEditAway={canEditAway} onEditLineup={onEditLineup} onPlayer={onPlayer}
     />
   );
 };
