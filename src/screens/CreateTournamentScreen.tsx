@@ -22,7 +22,14 @@ import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { createTournament, getMyPlayerId, getPlayer } from '../data/repos';
 import { useAuth } from '../core/auth';
-import { useOrganizations } from '../data/hooks';
+import { notice } from '../core/confirm';
+import { useMatches, useOrganizations } from '../data/hooks';
+import { knownVenueNames } from '../data/scheduleConflicts';
+import { categoryFromOrgType } from '../data/tournamentForm';
+import {
+  TournamentImagesField, TournamentPlaceFields, SportBasics, TournamentContactFields,
+  emptyDetails, detailsPayload, type DetailsValue,
+} from '../components/TournamentDetailsFields';
 import { organizableOrgsForPlayer } from '../core/org';
 import type { SportId, TournamentStructure, TournamentScoring, TournamentParticipation } from '../core/types';
 
@@ -71,18 +78,44 @@ export default function CreateTournamentScreen() {
   const [regDeadline, setRegDeadline] = useState<Date | null>(null);
   const [minTeams, setMinTeams] = useState(0);
   const [maxTeams, setMaxTeams] = useState(0);
+  // Tournament details (parity #09). Images are uploaded by the picker and kept
+  // here until the tournament is created.
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [bannerUrl, setBannerUrl] = useState<string | undefined>(undefined);
+  const [details, setDetails] = useState<DetailsValue>(emptyDetails);
+  // City/category prefill from the host org until the organiser edits them.
+  const touched = React.useRef({ city: false, category: false, phone: false });
+  const patchDetails = (p: Partial<DetailsValue>) => {
+    if ('city' in p) touched.current.city = true;
+    if ('eventCategory' in p) touched.current.category = true;
+    if ('organiserPhone' in p) touched.current.phone = true;
+    setDetails((d) => ({ ...d, ...p }));
+  };
+  const { matches: allMatches } = useMatches();
+  const knownVenues = React.useMemo(() => knownVenueNames(allMatches), [allMatches]);
   React.useEffect(() => {
     let on = true;
     getMyPlayerId(profile?.id).then(async (id) => {
       if (!on || !id) return;
       setMyId(id);
       const p = await getPlayer(id);
-      if (on && p) setMyName(p.fullName);
+      if (on && p) {
+        setMyName(p.fullName);
+        if (p.phone && !touched.current.phone) setDetails((d) => ({ ...d, organiserPhone: p.phone ?? '' }));
+      }
     });
     return () => { on = false; };
   }, [profile?.id]);
   // Only communities where you're an Admin or Organizer can host your event.
   const myOrgs = organizableOrgsForPlayer(orgs, myId);
+  const hostOrg = hostChoice !== 'self' ? myOrgs.find((o) => o.id === hostChoice) : undefined;
+  React.useEffect(() => {
+    setDetails((d) => ({
+      ...d,
+      city: touched.current.city ? d.city : (hostOrg?.city ?? ''),
+      eventCategory: touched.current.category ? d.eventCategory : categoryFromOrgType(hostOrg?.type),
+    }));
+  }, [hostOrg?.id, hostOrg?.city, hostOrg?.type]);
   const [start, setStart] = useState(() => toISODate(new Date()));
   const [end, setEnd] = useState(() => toISODate(addDays(new Date(), 5)));
   const [sports, setSports] = useState<SportId[]>(initialSport ? [initialSport] : []);
@@ -143,7 +176,10 @@ export default function CreateTournamentScreen() {
         reminderLeadMinutes: customReminders ? reminderMins : undefined,
         coHostIds: coHosts.map((c) => c.id),
         categories: divisions.length ? divisions : undefined,
+        logoUrl, bannerUrl,
+        ...detailsPayload(details),
       });
+      if (created.profileSaved === false) notice('Saved', 'Banner, grounds and contact will save after the server update.');
       // Straight to the admin hub with the setup checklist (parity #08).
       nav.replace('Tournament', { tournamentId: created.id, tab: 'Settings' });
     } catch (e) {
@@ -157,7 +193,9 @@ export default function CreateTournamentScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="New tournament" subtitle="Set up your meet & its format" />
+        <TournamentImagesField logoUrl={logoUrl} bannerUrl={bannerUrl} onLogo={setLogoUrl} onBanner={setBannerUrl} />
         <TextField label="Name" value={name} onChange={setName} placeholder="Annual Sports Meet 2026" />
+        <TournamentPlaceFields value={details} onChange={patchDetails} knownVenues={knownVenues} />
 
         <FieldLabel>Host</FieldLabel>
         <View style={st.chips}>
@@ -192,6 +230,7 @@ export default function CreateTournamentScreen() {
         {/* Divisions (age × gender) — school meets run many at once. Optional. */}
         <DivisionsEditor value={divisions} onChange={setDivisions} />
 
+
         <View style={st.row}>
           <View style={st.flex}><DateField label="Start date" value={start} onChange={setStart} /></View>
           <View style={st.flex}><DateField label="End date" value={end} onChange={setEnd} /></View>
@@ -223,7 +262,11 @@ export default function CreateTournamentScreen() {
           );
         })}
 
+        <SportBasics sports={sports} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
+
         <SportSettingsButtons sports={sports} />
+
+        <TournamentContactFields value={details} onChange={patchDetails} />
 
         <FieldLabel>Player reminders</FieldLabel>
         <View style={st.chips}>

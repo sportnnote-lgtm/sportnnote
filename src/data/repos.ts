@@ -15,6 +15,7 @@ import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
 import { mergeSportFormat } from './formatPatch';
+import { isLiveTournament } from './tournamentForm';
 import type { PointsAdjustment } from './standings';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
@@ -214,11 +215,10 @@ async function withMatchCols<T>(build: (cols: string) => PromiseLike<{ data: T |
 }
 
 export async function getTournament(): Promise<Tournament> {
-  if (!isSupabaseConfigured || !supabase) return demo.tournaments[0];
-  const { data, error } = await withTournamentCols((cols) =>
-    supabase!.from('tournaments').select(cols).order('start_date', { ascending: true }).limit(1).single());
-  if (error || !data) return demo.tournaments[0];
-  return toTournament(data);
+  if (!isSupabaseConfigured || !supabase) return demo.tournaments.find(isLiveTournament) ?? demo.tournaments[0];
+  // First not-deleted tournament (parity #09 soft delete).
+  const live = (await getTournaments()).slice().sort((x, y) => (x.startDate ?? '').localeCompare(y.startDate ?? ''));
+  return live[0] ?? demo.tournaments[0];
 }
 
 const toTournament = (data: any): Tournament => ({
@@ -244,6 +244,14 @@ const toTournament = (data: any): Tournament => ({
   structure: data.structure ?? undefined,
   knockoutFormat: data.knockout_format ?? undefined,
   reminderLeadMinutes: data.reminder_lead_minutes ?? undefined,
+  bannerUrl: data.banner_url ?? undefined,
+  city: data.city ?? undefined,
+  grounds: data.grounds ?? undefined,
+  eventCategory: data.event_category ?? undefined,
+  about: data.about ?? undefined,
+  organiserPhone: data.organiser_phone ?? undefined,
+  organiserEmail: data.organiser_email ?? undefined,
+  deletedAt: data.deleted_at ?? undefined,
 });
 
 // The registration columns (registration_deadline / min_teams / max_teams) need
@@ -251,22 +259,27 @@ const toTournament = (data: any): Tournament => ({
 // before it's applied, and a full set that includes them.
 const TOURNAMENT_COLS_BASE = 'id, name, host_name, host_org_id, logo_url, organizer_id, host_ids, is_open, sports, start_date, end_date, formats, structure, knockout_format, reminder_lead_minutes';
 const TOURNAMENT_SELECT = `${TOURNAMENT_COLS_BASE}, registration_deadline, min_teams, max_teams, scoring, created_by, participation`;
+// Tournament details + soft delete (0041) and the banner (0038).
+const TOURNAMENT_PROFILE_COLS = 'banner_url, city, grounds, event_category, about, organiser_phone, organiser_email, deleted_at';
 
 /** Run a tournaments query with the full column set; if the registration columns
  *  aren't in the live DB yet, transparently retry with the base set. */
 async function withTournamentCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  const profile = await build(`${TOURNAMENT_SELECT}, ${TOURNAMENT_PROFILE_COLS}`);
+  if (!profile.error) return profile;
   const full = await build(TOURNAMENT_SELECT);
   if (!full.error) return full;
   return build(TOURNAMENT_COLS_BASE);
 }
 
 /** Every tournament, newest first. */
-export async function getTournaments(): Promise<Tournament[]> {
-  if (!isSupabaseConfigured || !supabase) return demo.tournaments;
+export async function getTournaments(opts: { includeDeleted?: boolean } = {}): Promise<Tournament[]> {
+  if (!isSupabaseConfigured || !supabase) return opts.includeDeleted ? demo.tournaments : demo.tournaments.filter(isLiveTournament);
   const { data, error } = await withTournamentCols<any[]>((cols) =>
     supabase!.from('tournaments').select(cols).order('start_date', { ascending: false }));
   if (error || !data) return [];
-  return data.map(toTournament);
+  const all = data.map(toTournament);
+  return opts.includeDeleted ? all : all.filter(isLiveTournament);
 }
 
 /** Tournaments the user plays in or follows (organizer-owned + followed). In
@@ -286,9 +299,22 @@ export async function getMyTournaments(profileId?: string, followedIds: string[]
   return scoped.length ? scoped : all;
 }
 
+/** Ids of soft-deleted tournaments (parity #09); none before migration 0041. */
+async function deletedTournamentIds(): Promise<Set<string>> {
+  if (!isSupabaseConfigured || !supabase) return new Set(demo.tournaments.filter((t) => !isLiveTournament(t)).map((t) => t.id));
+  const { data, error } = await supabase.from('tournaments').select('id').not('deleted_at', 'is', null);
+  if (error || !data) return new Set();
+  return new Set((data as { id: string }[]).map((r) => r.id));
+}
+/** A deleted tournament's matches drop out of feeds — except finished ones, whose
+ *  results stay on players' profiles and records. */
+const visibleAfterDelete = (deleted: Set<string>) => (m: Match) =>
+  !(m.tournamentId && deleted.has(m.tournamentId) && m.status !== 'completed');
+
 export async function getMatches(filter?: SportId): Promise<Match[]> {
+  const deleted = await deletedTournamentIds();
   if (!isSupabaseConfigured || !supabase) {
-    const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).filter(visibleAfterDelete(deleted));
     return filter ? all.filter((m) => m.sport === filter) : all;
   }
   const { data, error } = await withMatchCols<unknown[]>((cols) => {
@@ -297,7 +323,7 @@ export async function getMatches(filter?: SportId): Promise<Match[]> {
     return q;
   });
   if (error || !data) return [];
-  return (data as unknown as MatchRow[]).map(toMatch);
+  return (data as unknown as MatchRow[]).map(toMatch).filter(visibleAfterDelete(deleted));
 }
 
 export async function getMatch(id: string): Promise<Match | null> {
@@ -2538,7 +2564,69 @@ export async function createMyPlayer(profileId: string): Promise<string> {
 
 /* ----------------------------- Organizer writes ---------------------------- */
 
-export interface NewTournament {
+/** Tournament details (parity #09): images, where, what kind, who to call, rules. */
+export interface TournamentDetails {
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
+  city?: string | null;
+  grounds?: string[];
+  eventCategory?: Tournament['eventCategory'] | null;
+  about?: string | null;
+  organiserPhone?: string | null;
+  organiserEmail?: string | null;
+}
+
+/** Save tournament details. false = the database doesn't have the columns yet
+ *  (migration 0041) — the rest of the tournament still saved. */
+export async function saveTournamentDetails(id: string, d: TournamentDetails): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === id);
+    if (t) {
+      for (const [k, v] of Object.entries(d)) if (v !== undefined) (t as unknown as Record<string, unknown>)[k] = v ?? undefined;
+    }
+    return true;
+  }
+  const row: Record<string, unknown> = {};
+  if (d.logoUrl !== undefined) { assertPersistable(d.logoUrl); row.logo_url = d.logoUrl; }
+  if (d.bannerUrl !== undefined) { assertPersistable(d.bannerUrl); row.banner_url = d.bannerUrl; }
+  if (d.city !== undefined) row.city = d.city?.trim() || null;
+  if (d.grounds !== undefined) row.grounds = d.grounds;
+  if (d.eventCategory !== undefined) row.event_category = d.eventCategory;
+  if (d.about !== undefined) row.about = d.about ? d.about.slice(0, 4000) : null;
+  if (d.organiserPhone !== undefined) row.organiser_phone = d.organiserPhone?.trim() || null;
+  if (d.organiserEmail !== undefined) row.organiser_email = d.organiserEmail?.trim() || null;
+  if (!Object.keys(row).length) return true;
+  const res = await supabase.from('tournaments').update(row).eq('id', id).select('id');
+  if (res.error && (res.error.code === '42703' || res.error.code === 'PGRST204')) {
+    // No detail columns yet: keep at least the logo (an older column).
+    if (row.logo_url !== undefined) await supabase.from('tournaments').update({ logo_url: row.logo_url }).eq('id', id);
+    return false;
+  }
+  if (res.error) throw new Error(res.error.message);
+  return true;
+}
+
+/** Soft-delete a tournament (parity #09): hidden everywhere, its upcoming matches
+ *  cancelled, completed results kept on players' profiles. Not while a match is live. */
+export async function deleteTournament(id: string, by?: { playerId?: string; name?: string }): Promise<void> {
+  const matches = (await getMatches()).filter((m) => m.tournamentId === id);
+  if (matches.some((m) => m.status === 'live')) throw new Error('A match is live right now — finish or end it first.');
+  const upcoming = matches.filter((m) => m.status === 'scheduled' || m.status === 'postponed');
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === id);
+    if (t) t.deletedAt = new Date().toISOString();
+    for (const m of upcoming) { const dm = demo.matches.find((x) => x.id === m.id); if (dm) dm.status = 'cancelled'; }
+    return;
+  }
+  const res = await supabase.from('tournaments').update({ deleted_at: new Date().toISOString() }).eq('id', id).select('id');
+  if (res.error && (res.error.code === '42703' || res.error.code === 'PGRST204')) throw new Error('Deleting tournaments needs a database update first.');
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('You can’t delete this tournament.');
+  for (const m of upcoming) await supabase.from('matches').update({ status: 'cancelled' }).eq('id', m.id);
+  await logActivity({ scope: 'tournament', refId: id, action: 'tournament.deleted', detail: `${upcoming.length} upcoming match${upcoming.length === 1 ? '' : 'es'} cancelled`, byPlayerId: by?.playerId, byName: by?.name }).catch(() => {});
+}
+
+export interface NewTournament extends TournamentDetails {
   name: string;
   hostName: string;
   /** when an organization hosts; otherwise the creator is the individual host */
@@ -2567,12 +2655,12 @@ export interface NewTournament {
   categories?: NewTournamentCategory[];
 }
 
-export async function createTournament(input: NewTournament): Promise<Tournament> {
+export async function createTournament(input: NewTournament): Promise<Tournament & { profileSaved?: boolean }> {
   const me = demo.players[0]?.id;
   // Org-hosted → no individual hostIds (the org's members are the hosts);
   // otherwise the creator is the sole individual host.
   if (!isSupabaseConfigured || !supabase) {
-    const t = addTournament({ ...input, isOpen: input.isOpen, createdBy: me, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
+    const t = addTournament({ ...(input as Omit<NewTournament, keyof TournamentDetails>), ...(Object.fromEntries(Object.entries(pickDetails(input)).map(([k, v]) => [k, v ?? undefined])) as Partial<Tournament>), isOpen: input.isOpen, createdBy: me, hostIds: [...new Set([...(input.hostOrgId ? [] : me ? [me] : []), ...(input.coHostIds ?? [])])] });
     if (input.categories?.length) addTournamentCategoriesDemo(t.id, input.categories);
     await recordOwnershipCreated(t, me);
     return t;
@@ -2617,7 +2705,17 @@ export async function createTournament(input: NewTournament): Promise<Tournament
     try { await addTournamentCategories(tournament.id, input.categories); } catch { /* pre-0008 or transient */ }
   }
   await recordOwnershipCreated(tournament, myPlayerId);
-  return tournament;
+  // Details (banner, city, grounds, contact…) — migration 0041; degrade if absent.
+  const details = pickDetails(input);
+  const profileSaved = Object.keys(details).length ? await saveTournamentDetails(tournament.id, details) : true;
+  return { ...tournament, ...details, profileSaved } as Tournament & { profileSaved: boolean };
+}
+
+const DETAIL_KEYS = ['logoUrl', 'bannerUrl', 'city', 'grounds', 'eventCategory', 'about', 'organiserPhone', 'organiserEmail'] as const;
+function pickDetails(x: TournamentDetails): TournamentDetails {
+  const out: Record<string, unknown> = {};
+  for (const k of DETAIL_KEYS) if (x[k] !== undefined) out[k] = x[k];
+  return out as TournamentDetails;
 }
 
 /* ------------------------- Tournament ownership & transfer ----------------- */
@@ -2780,7 +2878,7 @@ export async function unassignTournamentOfficial(tournamentId: string, playerId:
 
 /** Editable tournament fields (host/organizer are fixed at creation; co-hosts and
  *  divisions are managed on the tournament page). */
-export interface TournamentPatch {
+export interface TournamentPatch extends TournamentDetails {
   name?: string;
   sports?: SportId[];
   startDate?: string;
@@ -2797,12 +2895,14 @@ export interface TournamentPatch {
 
 /** Update a tournament in place (RLS: only its organizer/hosts). Only the fields
  *  present in the patch are changed. */
-export async function updateTournament(id: string, patch: TournamentPatch): Promise<void> {
+export async function updateTournament(id: string, patch: TournamentPatch): Promise<{ profileSaved: boolean }> {
   if (!isSupabaseConfigured || !supabase) {
     const t = demo.tournaments.find((x) => x.id === id);
     if (t) Object.assign(t, patch); // demo Tournament uses these camelCase keys
-    return;
+    return { profileSaved: true };
   }
+  const details = pickDetails(patch);
+  const profileSaved = Object.keys(details).length ? await saveTournamentDetails(id, details) : true;
   const row: Record<string, unknown> = {};
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.sports !== undefined) row.sports = patch.sports;
@@ -2826,6 +2926,7 @@ export async function updateTournament(id: string, patch: TournamentPatch): Prom
       await supabase.from('tournaments').update(row).eq('id', id); // pre-0014 fallback
     }
   }
+  return { profileSaved };
 }
 
 /** The keys `after` changes relative to `before` (removed keys → undefined), so a

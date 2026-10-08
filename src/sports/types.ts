@@ -187,6 +187,9 @@ export interface FormatField {
    *  impact player); preset = a named version (T20, Futsal, 3×3…) that snaps the
    *  sibling fields via each option's `set`, with a "Custom" option to reveal them. */
   type: 'number' | 'choice' | 'count' | 'toggle' | 'preset';
+  /** also shown inline on the tournament form's "{Sport} basics" (parity #09);
+   *  every `preset` field is shown there anyway */
+  onCreate?: boolean;
   default: number | string | boolean;
   /** for 'choice' and 'preset' */
   options?: FormatFieldOption[];

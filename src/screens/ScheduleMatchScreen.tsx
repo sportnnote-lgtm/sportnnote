@@ -2,7 +2,7 @@
  *  → kickoff time. Creates a 'scheduled' match in the demo store or Supabase.
  *  Sport is a compact picklist; teams lead with the ones you've played for and
  *  fall back to a search (type 3+ letters) so the list never sprawls. */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -16,7 +16,8 @@ import { VenueField } from '../components/VenueField';
 import { ConflictNotice } from '../components/ConflictNotice';
 import { ClubQuickPick } from '../components/ClubQuickPick';
 import { SPORT_LIST, getSport, participantMode, type ParticipantMode } from '../sports/registry';
-import { useTeams, useMatches, usePlayers } from '../data/hooks';
+import { useTeams, useMatches, usePlayers, useTournamentById } from '../data/hooks';
+import { venueOptions } from '../data/tournamentForm';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
 import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMatchScorer } from '../data/repos';
 import { useAuth } from '../core/auth';
@@ -90,10 +91,19 @@ export default function ScheduleMatchScreen() {
   // used in this tournament (or, for a friendly, anywhere) become reuse chips so
   // they're named consistently; the same fixtures feed conflict checks.
   const { matches: allMatches } = useMatches('all');
+  // The tournament's own grounds lead the chips (parity #09).
+  const tournament = useTournamentById(tournamentId);
   const knownVenues = useMemo(
-    () => knownVenueNames(tournamentId ? allMatches.filter((mm) => mm.tournamentId === tournamentId) : allMatches),
-    [allMatches, tournamentId]
+    () => venueOptions(tournament?.grounds, knownVenueNames(tournamentId ? allMatches.filter((mm) => mm.tournamentId === tournamentId) : allMatches)),
+    [allMatches, tournamentId, tournament?.grounds]
   );
+  // Exactly one ground → it's the venue (once; the organiser can still change it).
+  const venuePrefilled = useRef(false);
+  useEffect(() => {
+    if (venuePrefilled.current || tournament?.grounds?.length !== 1) return;
+    venuePrefilled.current = true;
+    setVenue((v) => v || tournament.grounds![0]);
+  }, [tournament?.grounds]);
   const homeTeam = teams.find((t) => t.id === home);
   const awayTeam = teams.find((t) => t.id === away);
   const conflicts = useMemo(

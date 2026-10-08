@@ -13,6 +13,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Tournament form: banner/logo, city, grounds, category, sport basics, contact, rules, delete (parity #09)
+
+- **Ask (parity queue #09):** teams and parents ask where, what kind, who to call, what rules — none
+  of it was on the form (it went on a WhatsApp poster); a test tournament couldn't be deleted.
+- **Migration 0041** `20261019120900_tournament_profile.sql` (bundle `2026-10-tournament-profile-0041.sql`)
+  — founder to run: `city, grounds text[], event_category, about, organiser_phone, organiser_email,
+  deleted_at`. Reads try profile cols → registration cols → base; `saveTournamentDetails` returns
+  false before the migration (logo still saved) → "Banner, grounds and contact will save after
+  the server update." `createTournament` / `updateTournament` take the details and report
+  `profileSaved`.
+- **Soft delete:** `deleteTournament` (refused while a match is live; upcoming matches cancelled;
+  completed kept; activity log). One predicate `tournamentForm.isLiveTournament`: `getTournaments`
+  (unless `includeDeleted`), `getTournament`, and `getMatches` (a deleted tournament's unfinished
+  matches drop out; results stay on profiles). The tournament page says "This tournament was
+  deleted by the organiser."
+- **Form (helper agent):** `TournamentDetailsFields` on Create and Edit — banner + overlapping logo
+  (#01 uploads), City (from host org), Grounds chips (suggested from past venues), Category chips
+  (prefilled from org type), "{Sport} basics" inline (`FormatField.onCreate` + presets via
+  `SportFormatEditor onlyKeys`; cricket ball type + new pitch type; chess none), organiser
+  phone/email, About & rules (≤4000). Edit: per-sport `patchTournamentFormat` kept (#07), sticky
+  "Delete tournament" | "Save changes". **Info tab:** category pill, 📍 city + grounds (→ Maps),
+  basics line, About & rules (Markdown), Contact organiser (Call / WhatsApp / Email). Schedule /
+  Edit match venue chips lead with the tournament's grounds; one ground → prefilled.
+- Verified in demo (8093): create cricket tournament with every field → Info shows it → Edit
+  prefilled, saved round-trip → schedule a match lists grounds first → Delete confirms, hides it,
+  deep link shows the notice. Tests: tournament-form (4). 488 tests.
+
+---
+
 ### 2026-10-09 — Tournament admin hub + post-create setup checklist (parity #08)
 
 - **Ask (parity queue #08):** after creating a meet the organiser landed back where she started;

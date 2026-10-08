@@ -3,7 +3,7 @@
  *  tournament the sport selector is skipped and its table shown directly. */
 import { notice } from '../core/confirm';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -44,6 +44,27 @@ import { realName } from '../core/invite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupChecklist, firstSportWithoutFormat, type SetupStep } from '../data/setupChecklist';
 import { SetupChecklist } from '../components/SetupChecklist';
+import { Markdown } from '../components/Markdown';
+import { EVENT_CATEGORIES, inlineFieldKeys } from '../data/tournamentForm';
+import { openVenue } from '../core/venue';
+import { openWhatsApp } from '../core/connect';
+import type { Tournament } from '../core/types';
+
+/** "🏏 T20 · Leather · Turf" — the sport's inline basics (preset + onCreate
+ *  fields) that the tournament actually set; empty when none are set. */
+function basicsLine(t: Tournament, sport: SportId): string {
+  const plugin = getSport(sport);
+  const fmt = (t.formats as Record<string, Record<string, unknown>> | undefined)?.[sport];
+  if (!fmt) return '';
+  const parts = inlineFieldKeys(plugin.formatFields).flatMap((k) => {
+    const field = plugin.formatFields?.find((f) => f.key === k);
+    const v = fmt[k];
+    if (!field || v === undefined || v === 'custom') return [];
+    const label = field.options?.find((o) => o.value === v)?.label;
+    return label ? [label.replace(/\s*\(.*\)\s*$/, '')] : [];
+  });
+  return parts.length ? `${plugin.icon} ${parts.join(' · ')}` : '';
+}
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -97,7 +118,7 @@ export default function TournamentProfileScreen() {
       title: tournament.name,
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {headerManage ? (
+          {headerManage && !tournament.deletedAt ? (
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Manage this tournament" onPress={headerManage} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
               <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>⚙ Manage</Text>
             </TouchableOpacity>
@@ -305,6 +326,14 @@ export default function TournamentProfileScreen() {
       </SafeAreaView>
     );
   }
+  // Soft-deleted (parity #09): a deep link lands here — say so, nothing else.
+  if (tournament.deletedAt) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <EmptyState icon="🗑️" title="This tournament was deleted by the organiser." />
+      </SafeAreaView>
+    );
+  }
   const following = isFollowing('tournament', tournament.id);
   const singleSport = sports.length === 1;
   // Teams in this tournament (house ids appear in its matches).
@@ -466,6 +495,51 @@ export default function TournamentProfileScreen() {
                 })}
               </View>
             )}
+
+            {/* Details (parity #09): place, category, sport basics, about, contact. */}
+            {(tournament.city || (tournament.grounds?.length ?? 0) > 0 || tournament.eventCategory) && (
+              <View style={st.tags}>
+                {tournament.eventCategory && (
+                  <Pill label={EVENT_CATEGORIES.find((c) => c.key === tournament.eventCategory)?.label ?? tournament.eventCategory} />
+                )}
+                {tournament.city ? <Text style={[textStyles.muted, { alignSelf: 'center', color: theme.colors.text }]}>📍 {tournament.city}</Text> : null}
+                {(tournament.grounds ?? []).map((g) => (
+                  <TouchableOpacity key={g} accessibilityRole="link" accessibilityLabel={`Open ${g} in maps`} activeOpacity={0.8}
+                    onPress={() => openVenue(tournament.city ? `${g}, ${tournament.city}` : g)}>
+                    <Pill label={`📍 ${g} ›`} color={theme.colors.primary + '22'} textColor={theme.colors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {(() => {
+              const lines = sports.map((s) => basicsLine(tournament, s)).filter(Boolean);
+              return lines.length ? <View style={{ gap: theme.spacing(1) }}>{lines.map((l) => <Text key={l} style={textStyles.muted}>{l}</Text>)}</View> : null;
+            })()}
+            {tournament.about ? (
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>About & rules</Text>
+                <Markdown content={tournament.about} />
+              </Card>
+            ) : null}
+            {(tournament.organiserPhone || tournament.organiserEmail) ? (
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>Contact organiser</Text>
+                <Text style={textStyles.muted}>
+                  {[tournament.hostName, tournament.organiserPhone, tournament.organiserEmail].filter(Boolean).join(' · ')}
+                </Text>
+                <View style={st.tags}>
+                  {tournament.organiserPhone ? (
+                    <>
+                      <Button label="📞 Call" variant="ghost" onPress={() => void Linking.openURL(`tel:${tournament.organiserPhone!.replace(/[^0-9+]/g, '')}`)} />
+                      <Button label="💬 WhatsApp" variant="ghost" onPress={() => openWhatsApp(tournament.organiserPhone)} />
+                    </>
+                  ) : null}
+                  {tournament.organiserEmail ? (
+                    <Button label="✉️ Email" variant="ghost" onPress={() => void Linking.openURL(`mailto:${tournament.organiserEmail}`)} />
+                  ) : null}
+                </View>
+              </Card>
+            ) : null}
 
             {hostOrg ? (
               <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => nav.navigate('Organization', { orgId: hostOrg.id })}>

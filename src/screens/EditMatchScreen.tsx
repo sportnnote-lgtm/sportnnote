@@ -13,7 +13,8 @@ import { DateTimeField } from '../components/DateTimeField';
 import { VenueField } from '../components/VenueField';
 import { ConflictNotice } from '../components/ConflictNotice';
 import { getMatch, rescheduleMatch, setMatchStatus, deleteMatch } from '../data/repos';
-import { useMatches } from '../data/hooks';
+import { useMatches, useTournamentById } from '../data/hooks';
+import { venueOptions } from '../data/tournamentForm';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
 import { readSeriesMeta } from '../data/series';
 import type { Match } from '../core/types';
@@ -49,9 +50,11 @@ export default function EditMatchScreen() {
   // Reuse chips + clash-detection draw on every other fixture (grounds scoped to
   // this match's tournament). Hooks run before the loading/not-found returns.
   const { matches: allMatches } = useMatches('all');
+  // The tournament's own grounds lead the chips (parity #09).
+  const tournament = useTournamentById(match?.tournamentId);
   const knownVenues = useMemo(
-    () => knownVenueNames(match?.tournamentId ? allMatches.filter((mm) => mm.tournamentId === match.tournamentId) : allMatches),
-    [allMatches, match?.tournamentId]
+    () => venueOptions(tournament?.grounds, knownVenueNames(match?.tournamentId ? allMatches.filter((mm) => mm.tournamentId === match.tournamentId) : allMatches)),
+    [allMatches, match?.tournamentId, tournament?.grounds]
   );
   const conflicts = useMemo(
     () =>

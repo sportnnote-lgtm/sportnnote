@@ -83,6 +83,13 @@ export default function GenerateFixturesScreen() {
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
+  // Exactly one tournament ground → it's the venue (parity #09); still editable.
+  const venuePrefilled = useRef(false);
+  useEffect(() => {
+    if (venuePrefilled.current || tournament?.grounds?.length !== 1) return;
+    venuePrefilled.current = true;
+    setVenue((v) => v || tournament.grounds![0]);
+  }, [tournament?.grounds]);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

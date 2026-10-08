@@ -541,6 +541,9 @@ export type SportFormat = Record<string, number | string | boolean>;
 /** How a tournament is decided based on team count. */
 export type TournamentStructure = 'league' | 'knockout' | 'league_knockout';
 
+/** What kind of event a tournament is (parity #09) — drives Discover filters. */
+export type EventCategory = 'school' | 'college' | 'university' | 'corporate' | 'community' | 'open' | 'other';
+
 /** Who a tournament is contested by (see Tournament.participation). */
 export type TournamentParticipation = 'open' | 'inter_house' | 'school_team' | 'individual';
 
@@ -608,6 +611,16 @@ export interface Tournament {
   logoUrl?: string;
   /** wide header image (3:1), migration 0038 */
   bannerUrl?: string;
+  /** tournament details (parity #09, migration 0041) */
+  city?: string;
+  grounds?: string[];
+  eventCategory?: EventCategory;
+  /** about & rules (markdown, ≤ 4000 chars) */
+  about?: string;
+  organiserPhone?: string;
+  organiserEmail?: string;
+  /** soft-deleted by the organiser (hidden from lists; stats survive) */
+  deletedAt?: string;
   /** The people who run this tournament (player ids). Any host can manage it and
    *  receives "no scorer assigned" reminders — multiple hosts avoid a single
    *  point of contact. Maps to `host_ids` on the backend. */

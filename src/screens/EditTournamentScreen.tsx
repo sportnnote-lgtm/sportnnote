@@ -15,8 +15,15 @@ import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } 
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
-import { updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
-import { useTournamentById } from '../data/hooks';
+import { updateTournament, patchTournamentFormat, formatDiff, deleteTournament, setTournamentLogo, setTournamentBanner, getMyPlayerId, getPlayer } from '../data/repos';
+import { useMatches, useTournamentById } from '../data/hooks';
+import { useAuth } from '../core/auth';
+import { confirmAction, notice } from '../core/confirm';
+import { knownVenueNames } from '../data/scheduleConflicts';
+import {
+  TournamentImagesField, TournamentPlaceFields, SportBasics, TournamentContactFields,
+  emptyDetails, detailsPayload, type DetailsValue,
+} from '../components/TournamentDetailsFields';
 import type { SportId, TournamentScoring } from '../core/types';
 import type { FormatField } from '../sports/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -36,6 +43,24 @@ export default function EditTournamentScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'EditTournament'>>();
   const tournament = useTournamentById(params.tournamentId);
+  const { profile } = useAuth();
+  const { matches: allMatches } = useMatches();
+  const knownVenues = React.useMemo(() => knownVenueNames(allMatches), [allMatches]);
+  const [me, setMe] = useState<{ playerId?: string; name?: string }>({});
+  useEffect(() => {
+    let on = true;
+    getMyPlayerId(profile?.id).then(async (id) => {
+      if (!on || !id) return;
+      const p = await getPlayer(id);
+      if (on) setMe({ playerId: id, name: p?.fullName });
+    });
+    return () => { on = false; };
+  }, [profile?.id]);
+  // Details (parity #09). Images save the moment they're picked.
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [bannerUrl, setBannerUrl] = useState<string | undefined>(undefined);
+  const [details, setDetails] = useState<DetailsValue>(emptyDetails);
+  const patchDetails = (p: Partial<DetailsValue>) => setDetails((d) => ({ ...d, ...p }));
 
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
@@ -68,6 +93,16 @@ export default function EditTournamentScreen() {
     setMinTeams(tournament.minTeams ?? 0);
     setMaxTeams(tournament.maxTeams ?? 0);
     setScoring(tournament.scoring);
+    setLogoUrl(tournament.logoUrl);
+    setBannerUrl(tournament.bannerUrl);
+    setDetails({
+      city: tournament.city ?? '',
+      grounds: tournament.grounds ?? [],
+      eventCategory: tournament.eventCategory,
+      organiserPhone: tournament.organiserPhone ?? '',
+      organiserEmail: tournament.organiserEmail ?? '',
+      about: tournament.about ?? '',
+    });
     setLoaded(true);
   }, [tournament, loaded]);
 
@@ -98,7 +133,7 @@ export default function EditTournamentScreen() {
       // Per-sport formats are the source of truth now; the coarse structure label
       // is derived from them (and the football tie-decider lives in formats.football).
       const finalFormats = { ...tournamentDraft.all() } as FormatMap;
-      await updateTournament(params.tournamentId, {
+      const { profileSaved } = await updateTournament(params.tournamentId, {
         name: name.trim(),
         sports,
         startDate: s,
@@ -109,6 +144,7 @@ export default function EditTournamentScreen() {
         minTeams: minTeams > 0 ? minTeams : null,
         maxTeams: maxTeams > 0 ? maxTeams : null,
         scoring: sports.length > 1 ? scoring ?? null : null,
+        ...detailsPayload(details),
       });
       // Formats: only what this edit changed, merged into a fresh read — so points
       // adjustments / manual rows added meanwhile survive (REVIEW Decision 5).
@@ -116,6 +152,7 @@ export default function EditTournamentScreen() {
         const before = (tournament?.formats as Record<string, Record<string, unknown>> | undefined)?.[sp];
         await patchTournamentFormat(params.tournamentId, sp, formatDiff(before, finalFormats[sp as keyof FormatMap] as Record<string, unknown>));
       }
+      if (!profileSaved) notice('Saved', 'Banner, grounds and contact will save after the server update.');
       nav.goBack();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save changes.');
@@ -130,12 +167,40 @@ export default function EditTournamentScreen() {
 
   const removed = tournament.sports.filter((sp) => !sports.includes(sp));
 
+  async function remove() {
+    const n = allMatches.filter((m) => m.tournamentId === params.tournamentId && (m.status === 'scheduled' || m.status === 'postponed')).length;
+    const ok = await confirmAction(
+      'Delete tournament?',
+      `${n} upcoming match${n === 1 ? '' : 'es'} will be cancelled. Completed results stay on players' profiles.`,
+      'Delete', true,
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await deleteTournament(params.tournamentId, me);
+      nav.popToTop();
+    } catch (err) {
+      notice('Couldn’t delete', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Edit tournament" subtitle={tournament.name} />
 
+        <TournamentImagesField
+          logoUrl={logoUrl}
+          bannerUrl={bannerUrl}
+          onLogo={async (url) => { await setTournamentLogo(params.tournamentId, url); setLogoUrl(url); }}
+          onBanner={async (url) => { await setTournamentBanner(params.tournamentId, url); setBannerUrl(url); }}
+        />
+
         <TextField label="Name" value={name} onChange={setName} placeholder="Annual Sports Meet 2026" />
+
+        <TournamentPlaceFields value={details} onChange={patchDetails} knownVenues={knownVenues} />
 
         <View style={st.row}>
           <View style={st.flex}><DateField label="Start date" value={start} onChange={setStart} /></View>
@@ -154,7 +219,11 @@ export default function EditTournamentScreen() {
 
         {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
+        <SportBasics sports={sports} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
+
         <SportSettingsButtons sports={sports} />
+
+        <TournamentContactFields value={details} onChange={patchDetails} />
 
         <FieldLabel>Registration</FieldLabel>
         <View style={st.chips}>
@@ -187,8 +256,12 @@ export default function EditTournamentScreen() {
         )}
 
         <FormError message={error} />
-        <Button label={busy ? 'Saving…' : 'Save changes'} onPress={save} disabled={busy} />
       </ScrollView>
+      {/* Sticky action bar: delete is secondary (left), save is the main action. */}
+      <View style={st.bar}>
+        <Text style={st.delete} accessibilityRole="button" onPress={busy ? undefined : remove}>Delete tournament</Text>
+        <Button label={busy ? 'Saving…' : 'Save changes'} onPress={save} disabled={busy} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -207,6 +280,12 @@ function NumberStepper({ value, min, max, onChange, zeroLabel }: { value: number
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
+  bar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(3),
+    paddingHorizontal: theme.spacing(4), paddingVertical: theme.spacing(3),
+    borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg,
+  },
+  delete: { color: theme.colors.danger, fontWeight: '800', fontSize: theme.font.body },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   flex: { flex: 1 },

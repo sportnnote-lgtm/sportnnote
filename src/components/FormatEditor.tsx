@@ -77,7 +77,7 @@ export function FormatFieldEditor({ field, value, onChange }: { field: FormatFie
  *  If the sport has a `preset` field, it leads; the granular (advanced) fields are
  *  hidden until the preset is "Custom" or the organizer taps "Customize". */
 export function SportFormatEditor({
-  sport, value, onChange, heading, omitKeys,
+  sport, value, onChange, heading, omitKeys, onlyKeys,
 }: {
   sport: SportId;
   value: Record<string, FormatVal>;
@@ -87,9 +87,12 @@ export function SportFormatEditor({
   /** field keys to hide — used when a field (e.g. Singles/Doubles) is already
    *  surfaced elsewhere in the flow, so it isn't shown twice. */
   omitKeys?: string[];
+  /** render ONLY these keys (the tournament form's inline "basics") — no
+   *  advanced reveal and no "Customize" link; the full editor lives elsewhere. */
+  onlyKeys?: string[];
 }) {
   const plugin = getSport(sport);
-  const fields = (plugin.formatFields ?? []).filter((f) => !omitKeys?.includes(f.key));
+  const fields = (plugin.formatFields ?? []).filter((f) => !omitKeys?.includes(f.key) && (!onlyKeys || onlyKeys.includes(f.key)));
   const [showAll, setShowAll] = useState(false);
   if (!fields.length) return null;
 
@@ -98,7 +101,7 @@ export function SportFormatEditor({
   const presetVal = presetField ? (value[presetField.key] ?? presetField.default) : 'custom';
   const isCustom = presetVal === 'custom';
   const hasAdvanced = rest.some((f) => f.advanced);
-  const revealAdvanced = !presetField || isCustom || showAll;
+  const revealAdvanced = !!onlyKeys || !presetField || isCustom || showAll;
 
   // Picking a preset snaps every sibling it names; each onChange composes on the
   // parent's functional setState, so the batch lands together.
@@ -134,7 +137,7 @@ export function SportFormatEditor({
         )
       )}
 
-      {presetField && !isCustom && hasAdvanced && (
+      {!onlyKeys && presetField && !isCustom && hasAdvanced && (
         <Text style={fe.customize} onPress={() => setShowAll((s) => !s)}>
           {showAll ? '▴ Hide detailed options' : '⚙ Customize this format'}
         </Text>

@@ -1233,10 +1233,21 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     },
     { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 11, min: 1, max: 11, hint: 'wickets = players − 1 · set any number for box' },
     {
-      key: 'ballType', label: 'Ball', type: 'choice', default: 'leather',
+      key: 'ballType', label: 'Ball', type: 'choice', default: 'leather', onCreate: true,
       options: [
         { value: 'leather', label: 'Leather (match ball)' },
         { value: 'tennis', label: 'Tennis ball' },
+      ],
+    },
+    {
+      // Informational only (parity #09) — shown on the tournament page; the engine ignores it.
+      key: 'pitchType', label: 'Pitch', type: 'choice', default: 'turf', onCreate: true,
+      options: [
+        { value: 'turf', label: 'Turf' },
+        { value: 'matting', label: 'Matting' },
+        { value: 'cement', label: 'Cement' },
+        { value: 'astroturf', label: 'Astroturf' },
+        { value: 'rough', label: 'Rough' },
       ],
     },
     {
