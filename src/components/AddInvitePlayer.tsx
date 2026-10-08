@@ -13,6 +13,7 @@ import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
 import { provisionalInviteMessage } from '../core/invite';
 import { isValidPhone } from '../core/phone';
+import { reportError } from '../core/telemetry';
 import type { Player, SportId } from '../core/types';
 
 /** Up to two initials from a name, for an invited-player avatar. */
@@ -69,6 +70,12 @@ export function AddInvitePlayer({
       if (p) setName(p.fullName); // one number ⇒ one name — never let a duplicate be typed
       // Was this number reported as "not me"? Block re-adding until it's cleared.
       setMatchedReported(p ? (await getReportedPlayerIds([p.id])).has(p.id) : false);
+    }).catch((e) => {
+      // Lookup failed (offline / rate limit): don't hang on "checking" — treat the
+      // number as new; the server still links it to the right person on save.
+      if (!on) return;
+      setLooking(false); setMatched(null);
+      reportError(e);
     });
     return () => { on = false; };
   }, [phone, valid]);

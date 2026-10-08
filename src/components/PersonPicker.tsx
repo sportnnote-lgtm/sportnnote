@@ -17,6 +17,7 @@ import { looksLikeContact } from '../core/contactQuery';
 import { openSms, openWhatsApp } from '../core/connect';
 import { findPlayerByPhone, invitePerson, lookupPeople } from '../data/repos';
 import type { Player } from '../core/types';
+import { reportError } from '../core/telemetry';
 
 export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
   role: 'scorer' | 'host';
@@ -49,7 +50,19 @@ export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
           if (on) setPeople(list.filter((p) => !excludeIds.includes(p.id)).slice(0, 6));
         }
       } catch (e) {
-        if (on) setError(e instanceof Error && /Too many/.test(e.message) ? 'Too many lookups — try again in a while.' : 'Couldn’t check that number just now.');
+        if (!on) return;
+        const limited = e instanceof Error && /Too many/.test(e.message);
+        if (!limited) reportError(e); // so a broken lookup reaches us, not just the user
+        if (limited) {
+          setError('Too many lookups — try again in a while.');
+        } else if (isNumber) {
+          // Still offer add & invite — saving re-checks the number, so an existing
+          // member is still linked rather than duplicated.
+          setFound(null);
+          setError('Couldn’t check if they’re on SportnNote — you can still add & invite them below.');
+        } else {
+          setError('Couldn’t search just now — try again.');
+        }
       }
     }, 400);
     return () => { on = false; clearTimeout(t); };
@@ -78,7 +91,8 @@ export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
       const res = await invitePerson({ name: label, phone: q });
       await onPick(res.player);
       reset(via === 'none' ? `✓ Added as ${role} — let them know to join with this number` : `✓ Added as ${role} — invite opened in ${via === 'whatsapp' ? 'WhatsApp' : 'Messages'}`);
-    } catch {
+    } catch (e) {
+      reportError(e);
       setError('Couldn’t add that number — try again.');
     }
     setBusy(false);

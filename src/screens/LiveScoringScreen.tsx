@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore 
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { shareMessage } from '../core/share';
 import { PersonPicker } from '../components/PersonPicker';
+import { useParamState } from '../navigation/useParamState';
 import { matchShareText, matchLink } from '../core/shareText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -370,11 +371,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setRemindedSides((r) => ({ ...r, [sd]: true }));
   };
 
-  const [pickScorer, setPickScorerState] = useState(!!route.params.addScorer);
-  const setPickScorer = useCallback((v: boolean) => {
-    setPickScorerState(v);
-    navigation.setParams({ addScorer: v || undefined });
-  }, [navigation]);
+  // Kept in params so they survive the phone unloading the app (useParamState).
+  const [pickScorer, setPickScorer] = useParamState<boolean>('addScorer', false);
   // Persist a new scorer list; revert + surface the error if the write is rejected
   // (e.g. RLS) instead of silently looking saved and reverting on reload.
   const saveScorers = useCallback(
@@ -508,11 +506,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   );
 
   // The live screen splits into Info / Score / Summary tabs for every sport.
-  const [tab, setTabState] = useState<string>(route.params.tab ?? '');
-  const setTab = useCallback((t: string) => {
-    setTabState(t);
-    navigation.setParams({ tab: t });
-  }, [navigation]);
+  const [tab, setTab] = useParamState<string>('tab', '');
   const [infoOpen, setInfoOpen] = useState<'home' | 'away' | null>(null);
 
   const editSquad = (sd: 'home' | 'away') => {

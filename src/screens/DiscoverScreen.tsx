@@ -18,6 +18,7 @@ import { useAuth } from '../core/auth';
 import { headline, sportSummary, hasPartialCoverage } from '../data/stats';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 const MODES = [
   { key: 'connect', label: '🤝 Connect' },
@@ -30,7 +31,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function DiscoverScreen() {
   const nav = useNavigation<Nav>();
   const { profile } = useAuth();
-  const [mode, setMode] = useState<Mode>('connect');
+  const [mode, setMode] = useParamState<Mode>('mode', 'connect');
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<PlayerFilterState>({});
   const fSports = filters.sports ?? [];

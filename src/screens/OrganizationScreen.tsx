@@ -36,6 +36,7 @@ import {
 import { notify } from '../core/notifications';
 import type { Organization, OrgMember, OrgRole, OrgRequest, House, ActivityEvent, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -63,7 +64,7 @@ export default function OrganizationScreen() {
   const [joinStandard, setJoinStandard] = useState(''); // class for a new student
   const [rolling, setRolling] = useState(false); // year-rollover panel open
   const [actionError, setActionError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'details' | 'events' | 'teams' | 'members'>('details');
+  const [tab, setTab] = useParamState<'details' | 'events' | 'teams' | 'members'>('tab', 'details');
   const [showCurrentEvents, setShowCurrentEvents] = useState(false);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [expandedRoleSections, setExpandedRoleSections] = useState<Record<string, boolean>>({});

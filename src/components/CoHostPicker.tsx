@@ -85,23 +85,25 @@ export function CoHostPicker({
 
   const invite = async (channel: 'email' | 'whatsapp' | 'sms') => {
     setNote(null);
-    const name = iName.trim() || query.trim();
-    if (!name) return setNote('Add a name.');
     if (channel === 'email' && !iEmail.trim()) return setNote('Enter an email to invite by email.');
     if (channel !== 'email' && !iPhone.trim()) return setNote('Enter a phone number for WhatsApp / SMS.');
+    // Name optional — they enter their own when they join; until then a placeholder.
+    const q = query.trim();
+    const typedName = iName.trim() || (looksEmail(q) || looksPhone(q) ? '' : q);
+    const name = typedName || (iPhone.trim() ? `Invited (…${iPhone.replace(/\D/g, '').slice(-4)})` : `Invited (${iEmail.trim()})`);
     setBusy(channel);
     try {
       const { player } = await invitePerson({ name, phone: iPhone.trim() || undefined, email: iEmail.trim() || undefined });
       onChange([...value, { id: player.id, name: player.fullName, invited: true }]);
       const link = joinLink(player.id);
       if (channel === 'email') {
-        const sent = await sendInviteEmail(iEmail.trim(), { name: player.fullName, inviterName, link, context });
+        const sent = await sendInviteEmail(iEmail.trim(), { name: typedName || player.fullName.replace(/^Invited \(.*\)$/, ''), inviterName, link, context });
         setNote(sent ? `📧 Invite emailed to ${iEmail.trim()}.` : `📧 Opened your mail app to send ${player.fullName}'s invite.`);
       } else if (channel === 'whatsapp') {
-        openWhatsApp(iPhone.trim(), inviteMessage({ name: player.fullName, inviterName, link, context }));
+        openWhatsApp(iPhone.trim(), inviteMessage({ name: typedName || player.fullName.replace(/^Invited \(.*\)$/, ''), inviterName, link, context }));
         setNote(`💬 Opened WhatsApp to invite ${player.fullName}.`);
       } else {
-        openSms(iPhone.trim(), inviteMessage({ name: player.fullName, inviterName, link, context }));
+        openSms(iPhone.trim(), inviteMessage({ name: typedName || player.fullName.replace(/^Invited \(.*\)$/, ''), inviterName, link, context }));
         setNote(`✉️ Opened Messages to invite ${player.fullName}.`);
       }
       setInvOpen(false); setQuery(''); setResults([]); setIName(''); setIPhone(''); setIEmail('');
@@ -154,7 +156,7 @@ export function CoHostPicker({
             <View style={{ gap: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(2) }}>
               <Text style={textStyles.h3}>Invite to SportnNote</Text>
               <Text style={textStyles.muted}>They’ll get a link to install the app &amp; register, and join as a co-host.</Text>
-              <TextField label="Name" value={iName} onChange={setIName} placeholder="Their name" />
+              <TextField label="Name (optional)" value={iName} onChange={setIName} placeholder="They’ll add it when they join" />
               <View style={st.row}>
                 <View style={st.flex}><TextField label="Phone" value={iPhone} onChange={setIPhone} placeholder="+91…" autoCapitalize="none" /></View>
                 <View style={st.flex}><TextField label="Email" value={iEmail} onChange={setIEmail} placeholder="name@email.com" autoCapitalize="none" /></View>

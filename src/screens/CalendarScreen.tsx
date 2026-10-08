@@ -18,6 +18,7 @@ import { exportToCalendar, type CalEvent } from '../core/ics';
 import { formatDay, formatDayShort } from '../core/dates';
 import type { Match, Tournament, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -71,7 +72,7 @@ export default function CalendarScreen() {
 
   const now = new Date();
   const todayStr = ymd(now.getFullYear(), now.getMonth(), now.getDate());
-  const [view, setView] = useState<'month' | 'agenda'>('month');
+  const [view, setView] = useParamState<'month' | 'agenda'>('view', 'month');
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() }); // visible month
   const [selected, setSelected] = useState(todayStr);
 

@@ -16,6 +16,7 @@ import { canScoreByRole } from '../core/roles';
 import { SPORT_LIST } from '../sports/registry';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList, TabParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,7 +31,7 @@ export default function MatchesScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<TabParamList, 'Matches'>>();
   const { profile } = useAuth();
-  const [tab, setTab] = useState<Tab>(params?.initialTab ?? 'upcoming');
+  const [tab, setTab] = useParamState<Tab>('tab', params?.initialTab ?? 'upcoming');
   const [filter, setFilter] = useState<SportId | 'all'>(params?.initialSport ?? 'all');
   // A "See all" link can re-open this tab with a different section/sport.
   useEffect(() => {

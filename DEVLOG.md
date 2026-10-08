@@ -13,6 +13,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Fix "Couldn't check that number"; consistent people pickers; every tab survives an unload
+
+- **Founder report:** typing a mobile number in Add scorer / Add host always showed
+  "Couldn't check that number just now."
+- **Root cause (server):** `find_player_by_phone`, `find_player_by_email` and
+  `discover_player_by_contact` were declared `STABLE` but record a rate-limit hit (an INSERT).
+  PostgREST runs STABLE rpc calls in a READ ONLY transaction → every live call failed with
+  "cannot execute INSERT in a read-only transaction". Affected: Add scorer/host, the team
+  squad's add-player box (stuck on "checking"), name+number search (`lookupPeople`, silently),
+  Discover search by phone/email, and the duplicate check in `invitePerson`.
+  **Migration 0036** (`20261017120000_contact_lookup_volatile.sql`) marks them VOLATILE.
+  New PGlite suite `readonly.mjs` mimics PostgREST and audits that no STABLE/IMMUTABLE
+  function writes (only these three did).
+- **Consistency:**
+  - Tournament hosts now use the same `PersonPicker` as match scorer/host (number or name,
+    add & invite on WhatsApp/SMS with the tournament link, name optional).
+  - `CoHostPicker` (new tournament): name optional (placeholder "Invited (…1234)").
+  - Lookup failures are reported to telemetry and never hang; PersonPicker still offers
+    add & invite when the check fails.
+  - `openWhatsApp` / `openSms`: if Safari blocks the new window (opened after an await),
+    open in place. Fixes invites from co-host / team / tournament-team forms on iPhone.
+- **Unload-proof screens everywhere:** new `useParamState` hook keeps a screen's tab/view in
+  route params (saved + restored with the nav state). Used by Live scoring (tab, Add scorer
+  panel), Tournament, Golf round, Organization, Matches, Calendar, Discover. Restore now works
+  on **Android** too (AsyncStorage; skipped when opened from a link/notification).
+  Verified in demo: tournament on Teams + match on Info → reload "/" → both restored.
+
+---
+
 ### 2026-10-08 — iPhone resume also keeps the match tab + open "Add scorer" panel
 
 - **Founder report:** after minimising on the match's Info tab, the app came back on the right

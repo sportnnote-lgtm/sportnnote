@@ -37,12 +37,23 @@ export function intlDigits(phone?: string): string {
   return d;
 }
 
+/** Open WhatsApp / Messages. On the web, Safari blocks opening a new window
+ *  unless it happens right inside the tap — and invite buttons often save first
+ *  (an await). So: try a new window; if it's blocked, go there in this one
+ *  (the app reopens on the same screen afterwards). `sms:` always goes in place. */
+function openExternal(url: string): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') { void Linking.openURL(url); return; }
+  if (!/^https?:/.test(url)) { window.location.href = url; return; }
+  const w = window.open(url, '_blank');
+  if (w) { try { w.opener = null; } catch { /* cross-origin */ } return; }
+  window.location.href = url;
+}
+
 /** Open a WhatsApp chat with a prefilled message. */
 export function openWhatsApp(phone?: string, text?: string): void {
   const digits = intlDigits(phone);
   if (!digits) return;
-  const url = `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
-  void Linking.openURL(url);
+  openExternal(`https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ''}`);
 }
 
 /** Open the device SMS composer to a number with a prefilled body. iPhones read
@@ -52,8 +63,7 @@ export function openSms(phone?: string, text?: string): void {
   if (!digits) return;
   const ios = Platform.OS === 'ios'
     || (Platform.OS === 'web' && typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent));
-  const url = `sms:+${digits}${text ? `${ios ? '&' : '?'}body=${encodeURIComponent(text)}` : ''}`;
-  void Linking.openURL(url);
+  openExternal(`sms:+${digits}${text ? `${ios ? '&' : '?'}body=${encodeURIComponent(text)}` : ''}`);
 }
 
 /** "2h ago", "3d ago", "just now" from an ISO timestamp. */

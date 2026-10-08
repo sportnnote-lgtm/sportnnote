@@ -14,7 +14,7 @@ import { LeagueTable } from '../components/LeagueTable';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { HostsCard } from '../components/HostsCard';
-import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
+import { PersonPicker } from '../components/PersonPicker';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
@@ -38,6 +38,7 @@ import { MedalTable } from '../components/MedalTable';
 import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -87,7 +88,9 @@ export default function TournamentProfileScreen() {
       ),
     });
   }, [nav, tournament]);
-  const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName;
+  // People added as hosts from outside the loaded players (PersonPicker).
+  const [extraPeople, setExtraPeople] = useState<Record<string, string>>({});
+  const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName ?? extraPeople[id];
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.
   const canManageHosts = tournament ? canManageTournament(tournament, orgs, myId) : false;
@@ -139,7 +142,7 @@ export default function TournamentProfileScreen() {
   // overview + how to enter), Settings (organizer-only management), Matches, Stats
   // (standings + leaders), and Teams. Settings only exists for people who can manage.
   type Tab = 'Info' | 'Settings' | 'Matches' | 'Stats' | 'Teams';
-  const [tab, setTab] = useState<Tab>('Info');
+  const [tab, setTab] = useParamState<Tab>('tab', 'Info');
   // Reset the content scroll to the top when switching tabs, so a new tab never
   // opens part-way down where the previous tab was scrolled.
   const scrollRef = useRef<ScrollView>(null);
@@ -426,15 +429,16 @@ export default function TournamentProfileScreen() {
                   subtitle="Everyone who runs this tournament. Any host can manage matches and gets reminders to assign scorers."
                 />
                 {canManageHosts && (
-                  <CoHostPicker
-                    value={hostIds.map((id) => ({ id, name: playerName(id) ?? 'Host' }))}
-                    onChange={(list: CoHost[]) => saveHosts(list.map((c) => c.id))}
-                    inviterName={playerName(myId ?? '') ?? profile?.fullName ?? 'A host'}
-                    excludeIds={myId ? [myId] : []}
-                    context={tournament.name}
-                    label="Add or invite a host"
-                    hideList
-                  />
+                  <View style={{ gap: theme.spacing(2) }}>
+                    <Text style={textStyles.muted}>Add a host — by mobile number or name:</Text>
+                    <PersonPicker
+                      role="host"
+                      excludeIds={hostIds}
+                      onPick={(p) => { setExtraPeople((m) => ({ ...m, [p.id]: p.fullName })); saveHosts([...new Set([...hostIds, p.id])]); }}
+                      inviteText={(name) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a host of ${tournament.name} on SportnNote 🏆\n\n`
+                        + `Open this link and sign in with this mobile number to help run it:\n${tournamentLink(tournament.id)}`}
+                    />
+                  </View>
                 )}
               </View>
             )}

@@ -23,6 +23,7 @@ import {
 import { summarize, toParLabel, type GolfCard, type HoleScore } from '../sports/golf/engine';
 import type { FieldEntry } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -35,7 +36,7 @@ export default function GolfRoundScreen() {
   const fmt = ev ? golfFormatOf(ev) : null;
   const course = ev && fmt ? courses.find((c) => c.id === fmt.courseId) : undefined;
 
-  const [tab, setTab] = useState<'card' | 'board'>('card');
+  const [tab, setTab] = useParamState<'card' | 'board'>('tab', 'card');
   const [me, setMe] = useState<string | null>(null);
   const [group, setGroup] = useState<number | null>(null);
   const [hole, setHole] = useState(0);
