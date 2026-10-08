@@ -81,6 +81,8 @@ export type RootStackParamList = {
   Bracket: { tournamentId?: string; sport?: SportId } | undefined;
   Team: { teamId: string };
   Squad: { teamId: string };
+  /** correct a finished match (parity #05) */
+  CorrectMatch: { matchId: string; sport: SportId };
   JoinTeam: { token?: string } | undefined;
   /** The multi-sport "Team" (Club) system. Clubs = my teams list; CreateClub =
    *  the simple create flow; ClubHome = the team dashboard; ClubSport = one sport's

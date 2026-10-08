@@ -1185,6 +1185,8 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
   manualRate: (s) => manualNrrOvers(s),
   manualEnd: { drawLabel: 'Tie', nrrToggle: true },
+  // Hidden from post-match correction until #06 brings a cricket editor.
+  correctable: false,
   summary: (s) => {
     // While a Super Over is live/decided, tag each side's board with its SO runs.
     const so = s.superOver;

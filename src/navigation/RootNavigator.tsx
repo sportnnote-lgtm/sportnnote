@@ -21,6 +21,7 @@ import DiscoverScreen from '../screens/DiscoverScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 const LiveScoringScreen = lazyScreen(() => import('../screens/LiveScoringScreen'));
 const InviteScreen = lazyScreen(() => import('../screens/InviteScreen'));
+const CorrectMatchScreen = lazyScreen(() => import('../screens/CorrectMatchScreen'));
 import AuthScreen from '../screens/AuthScreen';
 import OrganizeScreen from '../screens/OrganizeScreen';
 const CreateTournamentScreen = lazyScreen(() => import('../screens/CreateTournamentScreen'));
@@ -88,7 +89,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'JoinClub', 'JoinTeam', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -464,6 +465,11 @@ export default function RootNavigator() {
               name="Squad"
               component={SquadScreen}
               options={{ ...stackScreenOpts, title: 'Squad' }}
+            />
+            <Stack.Screen
+              name="CorrectMatch"
+              component={CorrectMatchScreen}
+              options={{ ...stackScreenOpts, title: 'Correct match' }}
             />
             <Stack.Screen
               name="Clubs"

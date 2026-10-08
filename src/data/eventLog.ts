@@ -48,3 +48,22 @@ export function statReversals(e: Pick<MatchEventRecord, 'attribution' | 'payload
 /** A sync error the server will never accept (another device holds the scoring
  *  lock) vs. one worth retrying (network, timeout). */
 export const isRejection = (message?: string | null) => /not_active_scorer/i.test(message ?? '');
+
+/** Who a player's stats belong to now: follows RESOLVED participation disputes
+ *  (the disputed player → their confirmed replacement, possibly chained), the
+ *  same move resolution makes on stat_lines. Pure; used by corrections (#05) and
+ *  the stat sync (#19) so a correction never recreates the wrong person's line. */
+export function followDisputes(
+  disputes: { playerId: string; status: string; replacementId?: string }[],
+  playerId: string,
+): string {
+  let id = playerId;
+  const seen = new Set<string>();
+  for (;;) {
+    if (seen.has(id)) return id; // a loop can't happen, but never spin
+    seen.add(id);
+    const d = disputes.find((x) => x.status === 'resolved' && x.playerId === id && x.replacementId);
+    if (!d?.replacementId) return id;
+    id = d.replacementId;
+  }
+}

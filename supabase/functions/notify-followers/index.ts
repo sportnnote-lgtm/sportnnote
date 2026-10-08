@@ -9,7 +9,10 @@
  *   table: stat_lines · events: INSERT, UPDATE · type: Supabase Edge Function
  *
  * On each stat-line change it:
- *   1. loads the player + the new stat delta,
+ *   0. diffs the new row against `old_record` and stops unless a HEADLINE stat
+ *      (goals, runs, wickets, points…) went UP — so a post-match correction or a
+ *      completion sync (rows rewritten, values lowered or unchanged) pushes nothing,
+ *   1. loads the player + what went up,
  *   2. finds everyone following that player,
  *   3. collects their push tokens,
  *   4. sends a batch to https://exp.host/--/api/v2/push/send.
@@ -34,6 +37,13 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
+// Stats worth a push when they go up. Everything else (shots, balls faced…) is
+// detail for the profile, not an alert.
+const HEADLINE = new Set([
+  'goals', 'assists', 'runs', 'wickets', 'catches', 'points', 'raidPoints', 'tacklePoints',
+  'aces', 'blocks', 'birdies', 'eagles', 'queens', 'fifties', 'hundreds',
+]);
+
 interface StatLineRecord {
   player_id: string;
   sport: string;
@@ -48,8 +58,14 @@ Deno.serve(async (req) => {
   if (!safeEqual(req.headers.get('x-webhook-secret') ?? '', WEBHOOK_SECRET)) {
     return new Response('forbidden', { status: 403 });
   }
-  const { record } = (await req.json()) as { record: StatLineRecord };
+  const { record, old_record } = (await req.json()) as { record: StatLineRecord; old_record?: StatLineRecord | null };
   if (!record?.player_id) return new Response('no record', { status: 200 });
+
+  // 0) only headline stats that INCREASED (an INSERT has no old_record → all count)
+  const before = old_record?.stats ?? {};
+  const rose = Object.entries(record.stats ?? {})
+    .filter(([k, v]) => HEADLINE.has(k) && (Number(v) || 0) > (Number(before[k]) || 0));
+  if (rose.length === 0) return new Response('no headline increase', { status: 200 });
 
   // 1) player name
   const { data: player } = await supabase
@@ -67,9 +83,7 @@ Deno.serve(async (req) => {
   const followerIds = (followers ?? []).map((f) => f.follower_id);
   if (followerIds.length === 0) return new Response('no followers', { status: 200 });
 
-  const headline = Object.entries(record.stats)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(', ');
+  const headline = rose.map(([k, v]) => `${v} ${k}`).join(', ');
   const pushTitle = `${player?.full_name ?? 'A player you follow'} — ${headline}`;
   const pushBody = record.opponent ? `${record.sport} vs ${record.opponent}` : record.sport;
   // Web push (iPhone Home Screen app, browsers).

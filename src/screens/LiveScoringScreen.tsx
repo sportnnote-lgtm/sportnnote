@@ -14,6 +14,8 @@ import { getDeviceId } from '../core/deviceId';
 import { mergeMatchConfig } from '../core/matchConfig';
 import { manualResultLine, isNoResult } from '../core/matchResult';
 import { isEliminationStage } from '../data/bracket';
+import { completedAt } from '../sports/amend';
+import { canCorrectMatch, correctionHoursLeft, formatTimeLeft } from '../core/roles';
 import { standingsConfigFromFormat, noResultPoints } from '../data/standings';
 import { lockStatus, type ScoringLock } from '../core/scoringLock';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -33,7 +35,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -193,7 +195,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setLock(l);
   }, [matchId]);
 
-  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -373,6 +375,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Any host of the match — or of its tournament — manages it: designates the
   // scorer and edits the XI. Per-match ownership, not a global role, and any of
   // several hosts will do (so a single point of contact never blocks things).
+  // Post-match corrections (parity #05): the public log + when the match ended.
+  const [scoreEdits, setScoreEdits] = useState<{ at: string; byName: string; lines: string[] }[]>([]);
+  const [endedAt, setEndedAt] = useState<number | null>(null);
+  const focusedOnce = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!matchId) return;
+    let on = true;
+    void getScoreEdits(matchId).then((e) => on && setScoreEdits(e));
+    // Back on this screen (e.g. from publishing a correction) → replay the log.
+    if (focusedOnce.current) void refresh();
+    focusedOnce.current = true;
+    void getMatchEvents(matchId).then((ev) => on && setEndedAt(completedAt(ev, meta.result)));
+    return () => { on = false; };
+  }, [matchId, meta.result]));
   const allHostIds = useMemo(
     () => Array.from(new Set([...matchHostIds, ...(meta.tournamentHostIds ?? [])])),
     [matchHostIds, meta.tournamentHostIds]
@@ -760,6 +776,45 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   ) : retiredLocally ? (
     <View style={st.retiredBanner}>
       <Text style={st.retiredText}>🏁 Match ended early — {retiredLocally === 'home' ? homeName : awayName} awarded the win.</Text>
+    </View>
+  ) : null;
+
+  // ✏️ Correct this match (parity #05): scorers + match hosts for 24 h after the
+  // end, tournament hosts anytime; never while taps are still uploading; cricket
+  // waits for its own editor (#06). Plus the public Score edits log.
+  const isTournamentHost = !!myPlayerId && (meta.tournamentHostIds ?? []).includes(myPlayerId);
+  const mayCorrect = hasMatch && plugin.correctable !== false && canCorrectMatch({
+    complete, isScorer: canScore, isMatchHost: !!myPlayerId && matchHostIds.includes(myPlayerId),
+    isTournamentHost, completedAt: endedAt, now: Date.now(),
+  });
+  const unsynced = matchId ? matchOutbox.pendingCount(matchId) : 0;
+  const timeLeft = !isTournamentHost && endedAt ? formatTimeLeft(correctionHoursLeft(endedAt, Date.now())) : '';
+  const openCorrection = async () => {
+    if (!matchId) return;
+    if (!(await confirmAction('Fix a scoring mistake?', 'Use this only for genuine scoring mistakes. Every change you publish is listed publicly under Info → Score edits.', 'Continue'))) return;
+    navigation.navigate('CorrectMatch', { matchId, sport });
+  };
+  const correctionCard = (mayCorrect || scoreEdits.length > 0) ? (
+    <View style={st.infoCard}>
+      {mayCorrect ? (
+        <View style={{ gap: theme.spacing(1) }}>
+          <Button label="✏️ Correct this match" variant="ghost" disabled={unsynced > 0} onPress={() => void openCorrection()} />
+          <Text style={textStyles.muted}>
+            {unsynced > 0 ? 'Waiting for unsynced taps to upload.' : timeLeft ? `Open for ${timeLeft} more` : 'Fix a wrongly credited player or an entry that never happened.'}
+          </Text>
+        </View>
+      ) : null}
+      {scoreEdits.length > 0 ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={textStyles.h3}>Score edits</Text>
+          {scoreEdits.map((e, i) => (
+            <View key={`${e.at}${i}`} style={{ gap: 2 }}>
+              <Text style={textStyles.muted}>{e.at ? formatDateTime(e.at, viewerTz) : 'Earlier'} · {e.byName}</Text>
+              {e.lines.map((l) => <Text key={l} style={textStyles.body}>• {l}</Text>)}
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   ) : null;
 
@@ -1642,6 +1697,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {activeTab === 'info' && (
             <View style={{ gap: theme.spacing(3) }}>
               {meta.result ? retiredBanner : null}
+              {correctionCard}
               <View style={st.infoCard}>
                 <MatchHeader
                   sportIcon={plugin.icon} sportName={plugin.name}

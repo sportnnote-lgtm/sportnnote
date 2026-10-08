@@ -48,3 +48,15 @@ test('isRejection: only the lock refusal is permanent', () => {
   assert.equal(isRejection('Failed to fetch'), false);
   assert.equal(isRejection(undefined), false);
 });
+
+import { followDisputes } from '../src/data/eventLog.ts';
+test('followDisputes: resolved replacements (chained), others ignored', () => {
+  const ds = [
+    { playerId: 'a', status: 'resolved', replacementId: 'b' },
+    { playerId: 'b', status: 'resolved', replacementId: 'c' },
+    { playerId: 'x', status: 'open', replacementId: 'y' },
+  ];
+  assert.equal(followDisputes(ds, 'a'), 'c');
+  assert.equal(followDisputes(ds, 'x'), 'x'); // not resolved
+  assert.equal(followDisputes(ds, 'z'), 'z');
+});

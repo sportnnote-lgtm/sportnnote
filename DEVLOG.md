@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Correct a finished match: preview, publish, public "Score edits" (parity #05)
+
+- **Ask (parity queue #05):** after full time a wrongly credited goal or a phantom point was frozen
+  in — stats and the table stayed wrong.
+- **Model (no migration):** a correction is ONE append-only `AMEND` event `{ops: replace|void by
+  seq, lines, byName, deltas}`; these rows are the public log. Pure engine `sports/amend.ts`
+  (helper agent): `effectiveLog` (ops applied, last write wins, void wins), `replayLog`,
+  `attributionTotals`, `statDeltas`, `completedAt` (max of last scoring event and a #04 manual
+  end), `eventSeqs`, `undoAmendDeltas`. `useLiveMatch` replays through `effectiveLog`, rebuilds on
+  a realtime AMEND, and undoing an AMEND reverses its STORED deltas exactly (REVIEW).
+- **Publish** (`data/amendments.ts`, standalone — post-match needs no offline queue):
+  `planAmendment` → deltas mapped through the one shared `repos.mapThroughDisputes` (pure
+  `eventLog.followDisputes`, REVIEW must-fix), only non-zero rows written; then the snapshot (a
+  #04 manual result is kept by `updateMatchSnapshot`) and, for a manual result, its stored score
+  refreshed via `endMatchManually` (the only result writer). `getScoreEdits` reads the log.
+- **notify-followers** now diffs `old_record` and pushes only when a headline stat ROSE — a
+  correction or rewrite pushes nothing (REVIEW must-fix). **Not deployed — founder deploys before
+  corrections go live** (and ship an OTA first: older builds ignore AMEND rows).
+- **UI:** Info → "✏️ Correct this match" (`canCorrectMatch`: scorers + match hosts for 24 h,
+  tournament hosts anytime; "Open for 17 h 40 m more"; disabled "Waiting for unsynced taps to
+  upload." while the outbox has events; hidden for sports with `correctable:false` — cricket until
+  #06) → confirm → new `CorrectMatchScreen`: generic `EventCorrectionList` (team actions newest
+  first, ✕ Remove / ✎ Player, staged by record seq) or a sport's `CorrectionEditor` → Preview
+  (score + result before→after, per-player stat impact, changes; Publish blocked if the match
+  would be unfinished) → Publish. Info shows the public **Score edits** card; the screen replays on
+  return.
+- Verified in demo (8093): football m1 (awarded) → remove Rohan's goal → preview 2–1→1–1, goals −1
+  → publish → Score edits entry, scoreboard 1–1, result kept; cricket m8 has no button. Tests:
+  amend (21), event-log (+1). 448 tests.
+
+---
+
 ### 2026-10-09 — End a match by hand: abandoned, no result, draw/tie, conceded, awarded — with the reason (parity #04)
 
 - **Ask (parity queue #04):** the only exit was "End early — retirement / walkover": it forced a

@@ -26,6 +26,7 @@ import { notify } from '../core/notifications';
 import type { MatchEventRecord, SportId } from '../core/types';
 import type { ScoreAction } from '../sports/types';
 import { mergeLog, eventKey, statReversals } from './eventLog';
+import { effectiveLog, undoAmendDeltas, AMEND_TYPE } from '../sports/amend';
 import { newUuid } from '../core/deviceId';
 import { canWriteWith, type LockStatus } from '../core/scoringLock';
 
@@ -53,6 +54,8 @@ export interface UseLiveMatch {
   rejectedCount: number;
   /** throw those taps away (reversing the stats they credited) and reload */
   discardRejected: () => Promise<void>;
+  /** replay the log again (e.g. back from publishing a correction) */
+  refresh: () => Promise<void>;
 }
 
 export function useLiveMatch(params: {
@@ -100,7 +103,9 @@ export function useLiveMatch(params: {
   // — when an event is deleted upstream or the realtime channel reconnects.
   const rebuildFromLog = useCallback(async () => {
     if (!matchId) return;
-    const events = mergeLog(await getMatchEvents(matchId), matchOutbox.getPending(matchId));
+    // Published corrections (AMEND rows, parity #05) apply their edits on replay.
+    const raw = mergeLog(await getMatchEvents(matchId), matchOutbox.getPending(matchId));
+    const events = effectiveLog(raw);
     let s = plugin.createInitialState(config);
     const applied = new Set<string>();
     let maxSeq = 0;
@@ -109,10 +114,11 @@ export function useLiveMatch(params: {
       applied.add(eventKey(e));
       maxSeq = Math.max(maxSeq, e.seq);
     }
+    for (const e of raw) { applied.add(eventKey(e)); maxSeq = Math.max(maxSeq, e.seq); }
     appliedRef.current = applied;
     seqRef.current = maxSeq;
     setBoth(s);
-    setEventCount(events.length);
+    setEventCount(raw.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, plugin, config]);
 
@@ -147,6 +153,8 @@ export function useLiveMatch(params: {
             // Fast path: apply the single new event incrementally.
             const row = payload.new as MatchEventRecord & { client_id?: string | null };
             const e: MatchEventRecord = { ...row, clientId: row.client_id ?? undefined };
+            // A correction rewrites earlier events → replay everything.
+            if (e.type === AMEND_TYPE) { void rebuildFromLog(); return; }
             const key = eventKey(e);
             if (appliedRef.current.has(key)) return; // already applied locally (optimistic)
             appliedRef.current.add(key);
@@ -271,7 +279,10 @@ export function useLiveMatch(params: {
     if (!removed) return;
     // Reverse every stat the event credited (attribution, its extras, and a second
     // attribution such as a fielder's catch) — otherwise an undone goal lingers.
-    for (const r of statReversals(removed)) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
+    // A correction undoes exactly the stat changes it stored; anything else
+    // reverses the stats its own attribution credited.
+    const reversals = removed.type === AMEND_TYPE ? undoAmendDeltas(removed) : statReversals(removed);
+    for (const r of reversals) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
     // Re-derive from the truncated log. In live mode this DELETE also reaches
     // viewers' realtime subscriptions, which rebuild the same way.
     await rebuildFromLog();
@@ -299,5 +310,5 @@ export function useLiveMatch(params: {
     await rebuildFromLog();
   }, [matchId, sport, rebuildFromLog]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected };
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog };
 }

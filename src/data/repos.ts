@@ -13,6 +13,7 @@ import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
+import { followDisputes } from './eventLog';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
 import {
@@ -1185,6 +1186,26 @@ export async function getMatchDisputes(matchId: string): Promise<MatchDispute[]>
   if (!isSupabaseConfigured || !supabase) return demo.disputes.filter((d) => d.matchId === matchId);
   const { data } = await supabase.from('match_disputes').select('*').eq('match_id', matchId);
   return (data ?? []).map(rowToDispute);
+}
+
+/** The player whose stat line now holds this player's stats in this match
+ *  (after resolved disputes) — the ONE shared helper for corrections (#05) and
+ *  the completion stat sync (#19). */
+export async function mapThroughDisputes(matchId: string, playerId: string): Promise<string> {
+  return followDisputes(await getMatchDisputes(matchId), playerId);
+}
+
+/** The public "Score edits" log of a match (parity #05): every published
+ *  correction, newest first. */
+export async function getScoreEdits(matchId: string): Promise<{ at: string; byName: string; lines: string[] }[]> {
+  const events = await getMatchEvents(matchId);
+  return events
+    .filter((e) => e.type === 'AMEND')
+    .map((e) => {
+      const p = (e.payload ?? {}) as { byName?: string; lines?: string[] };
+      return { at: e.created_at ?? '', byName: p.byName ?? 'A scorer', lines: p.lines ?? [] };
+    })
+    .reverse();
 }
 
 export interface NewDispute {

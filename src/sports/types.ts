@@ -242,6 +242,19 @@ export interface SportPlugin<S = unknown> {
   /** End-match-by-hand dialog (parity #04): what the level result is called
    *  ("Draw" by default, cricket "Tie") and whether to offer the NRR toggle. */
   manualEnd?: { drawLabel: string; nrrToggle?: boolean };
+  /** Can a finished match be corrected with the generic list (parity #05)? false
+   *  hides "Correct this match" — cricket until #06 ships its own editor, since
+   *  re-crediting `attribution` alone would split its scorecard from its stats. */
+  correctable?: boolean;
+  /** A sport's own correction editor (cricket, #06); else the generic list. */
+  CorrectionEditor?: React.FC<{
+    log: import('../core/types').MatchEventRecord[];
+    config?: Record<string, unknown>;
+    ops: import('./amend').AmendOp[];
+    onOps: (ops: import('./amend').AmendOp[], lines: string[]) => void;
+    homeName: string; awayName: string;
+    homeRoster: Player[]; awayRoster: Player[];
+  }>;
   /** Rally points won by each side over the match (every game's points) — the
    *  ITTF "points ratio" league tie-break. Rally sports supply it. */
   standingsPoints?: (state: S) => { home: number; away: number } | null;
