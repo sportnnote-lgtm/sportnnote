@@ -103,7 +103,9 @@ export function useTournamentById(id?: string) {
         setTournament(null);
         return;
       }
-      getTournaments().then((list) => on && setTournament(list.find((t) => t.id === id) ?? null));
+      // A fresh object each time: demo mode updates tournaments in place, and the
+      // same reference wouldn't re-render (e.g. back from saving its format).
+      getTournaments().then((list) => { const t = list.find((x) => x.id === id); if (on) setTournament(t ? { ...t } : null); });
       return () => {
         on = false;
       };

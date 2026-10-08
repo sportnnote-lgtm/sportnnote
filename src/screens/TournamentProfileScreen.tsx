@@ -41,6 +41,9 @@ import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setupChecklist, firstSportWithoutFormat, type SetupStep } from '../data/setupChecklist';
+import { SetupChecklist } from '../components/SetupChecklist';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -80,6 +83,8 @@ export default function TournamentProfileScreen() {
     getMyPlayerId(profile?.id).then((id) => on && setMyId(id));
     return () => { on = false; };
   }, [profile?.id]);
+  // ⚙ Manage in the header (managers only) — set once the tab state exists below.
+  const [headerManage, setHeaderManage] = useState<(() => void) | null>(null);
   // Title the nav bar after the tournament, not a generic "Tournament".
   useEffect(() => {
     if (!tournament) return;
@@ -91,12 +96,19 @@ export default function TournamentProfileScreen() {
     nav.setOptions({
       title: tournament.name,
       headerRight: () => (
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share this tournament" onPress={share} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
-          <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>Share</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {headerManage ? (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Manage this tournament" onPress={headerManage} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
+              <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>⚙ Manage</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share this tournament" onPress={share} hitSlop={10} style={{ paddingHorizontal: theme.spacing(2) }}>
+            <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: theme.font.body }}>Share</Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [nav, tournament]);
+  }, [nav, tournament, headerManage]);
   // People added as hosts from outside the loaded players (PersonPicker).
   const [extraPeople, setExtraPeople] = useState<Record<string, string>>({});
   const hostInvite = (name?: string) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a host of ${tournament?.name ?? 'a tournament'} on SportnNote 🏆\n\n`
@@ -154,6 +166,32 @@ export default function TournamentProfileScreen() {
   // (standings + leaders), and Teams. Settings only exists for people who can manage.
   type Tab = 'Info' | 'Settings' | 'Matches' | 'Stats' | 'Teams';
   const [tab, setTab] = useParamState<Tab>('tab', 'Info');
+  // Admin hub (parity #08): one inline panel open at a time; the gear jumps here.
+  const [panel, setPanel] = useParamState<string>('panel', '');
+  useEffect(() => {
+    setHeaderManage(() => (canManageHosts ? () => setTab('Settings') : null));
+  }, [canManageHosts, setTab]);
+  const [setupHidden, setSetupHidden] = useState(false);
+  useEffect(() => {
+    let on = true;
+    void AsyncStorage.getItem(`setupHidden:${params.tournamentId}`).then((v) => on && setSetupHidden(v === '1')).catch(() => {});
+    return () => { on = false; };
+  }, [params.tournamentId]);
+  const hideSetup = () => {
+    setSetupHidden(true);
+    void AsyncStorage.setItem(`setupHidden:${params.tournamentId}`, '1').catch(() => {});
+  };
+  const setupSteps = tournament ? setupChecklist(tournament, participants.length, matches.length) : [];
+  const openSetupStep = (key: SetupStep['key']) => {
+    if (!tournament) return;
+    if (key === 'teams') nav.navigate('TournamentTeams', { tournamentId: tournament.id });
+    else if (key === 'format') nav.navigate('SportSettings', { sport: firstSportWithoutFormat(tournament) as SportId, tournamentId: tournament.id });
+    else {
+      const amSport = tournament.sports.find((sp) => structureFromFormat(tournament.formats?.[sp])?.shape === 'americano');
+      if (amSport) nav.navigate('Americano', { tournamentId: tournament.id, sport: amSport });
+      else nav.navigate('GenerateFixtures', { tournamentId: tournament.id });
+    }
+  };
   // Reset the content scroll to the top when switching tabs, so a new tab never
   // opens part-way down where the previous tab was scrolled.
   const scrollRef = useRef<ScrollView>(null);
@@ -359,6 +397,11 @@ export default function TournamentProfileScreen() {
         {/* ------------------------------- INFO ------------------------------- */}
         {activeTab === 'Info' && (
           <>
+            {canManageHosts && !setupHidden && setupSteps.some((x) => !x.done) && (
+              <Text style={st.link} accessibilityRole="button" onPress={() => setTab('Settings')}>
+                Setup {setupSteps.filter((x) => x.done).length}/3 · Continue ›
+              </Text>
+            )}
             {myEligibleTeams.length > 0 && (() => {
               const invitedMine = myEligibleTeams.filter((t) => statusByTeam.get(t.id) === 'invited');
               const requestable = tournament.isOpen ? myEligibleTeams.filter((t) => !statusByTeam.has(t.id)) : [];
@@ -491,37 +534,91 @@ export default function TournamentProfileScreen() {
         {/* ----------------------------- SETTINGS ----------------------------- */}
         {activeTab === 'Settings' && canManageHosts && (
           <>
-            <View style={{ gap: theme.spacing(2) }}>
-              <Button
-                label={participants.length ? `👥 Participating teams · ${participants.length}` : '👥 Add participating teams'}
-                variant="ghost"
-                onPress={() => nav.navigate('TournamentTeams', { tournamentId: tournament.id })}
-              />
-              {isMedal && (
-                <Button label="🏅 Contingents (all sports)" variant="ghost" onPress={() => nav.navigate('Contingents', { tournamentId: tournament.id })} />
-              )}
-              {(() => {
-                // Americano sports run their own rotate-partners flow instead of fixtures.
-                const amSport = tournament.sports.find((s) => structureFromFormat(tournament.formats?.[s])?.shape === 'americano');
-                return amSport
-                  ? <Button label={`🎾 Americano — manage ${getSport(amSport).name}`} variant="ghost" onPress={() => nav.navigate('Americano', { tournamentId: tournament.id, sport: amSport })} />
-                  : (
-                    <>
-                      <Button label="📅 Schedule a match" variant="ghost" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
-                      <Button label="⚡ Auto-generate fixtures" variant="ghost" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
-                    </>
-                  );
-              })()}
-              {upcomingMatches.length > 0 && (
-                <>
-                  <Button label="📤 Share fixtures on WhatsApp" variant="ghost" onPress={shareFixtures} />
-                  {Platform.OS === 'web' && <Button label="🖨 Print fixtures / save PDF" variant="ghost" onPress={printFixtures} />}
-                </>
-              )}
-              <Button label="🔁 New series / tie" variant="ghost" onPress={() => nav.navigate('CreateSeries', { tournamentId: tournament.id, sport: tournament.sports[0] })} />
-              <Button label="✎ Edit tournament" variant="ghost" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
-            </View>
+            {/* Admin hub (parity #08): the setup checklist, then grouped rows. */}
+            <SetupChecklist steps={setupSteps} hidden={setupHidden} onHide={hideSetup} onStep={openSetupStep} />
 
+            <SectionHeader title="Tournament" />
+            <HubRow icon="✎" title="Edit details" status="Name, dates, sports, registration" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
+            {tournament.sports.map((sp) => {
+              const fmt = tournament.formats?.[sp] as Record<string, unknown> | undefined;
+              const cfg = structureFromFormat(fmt);
+              const pts = standingsConfigFromFormat(sp, fmt);
+              return (
+                <HubRow key={sp} icon={getSport(sp).icon} title={`${getSport(sp).name} — format & points`}
+                  status={`${cfg ? describeStructure(cfg) : 'Not set yet'} · ${pts.win}/${pts.draw}/${pts.loss}`}
+                  onPress={() => nav.navigate('SportSettings', { sport: sp, tournamentId: tournament.id })} />
+              );
+            })}
+            <HubRow icon="🏆" title="Points table" status="Adjust points, view groups" onPress={() => nav.navigate('Standings', { tournamentId: tournament.id })} />
+
+            <SectionHeader title="Teams" />
+            <HubRow icon="👥" title="Participating teams" status={participants.length ? `${participants.length} team${participants.length === 1 ? '' : 's'}` : 'None yet — add them'} onPress={() => nav.navigate('TournamentTeams', { tournamentId: tournament.id })} />
+            {isMedal && <HubRow icon="🏅" title="Contingents" status="One squad across every sport" onPress={() => nav.navigate('Contingents', { tournamentId: tournament.id })} />}
+
+            <SectionHeader title="Matches" />
+            {(() => {
+              // Americano sports run their own rotate-partners flow instead of fixtures.
+              const amSport = tournament.sports.find((s) => structureFromFormat(tournament.formats?.[s])?.shape === 'americano');
+              return amSport
+                ? <HubRow icon="🎾" title={`Americano — ${getSport(amSport).name}`} status="Rounds and partners" onPress={() => nav.navigate('Americano', { tournamentId: tournament.id, sport: amSport })} />
+                : (
+                  <>
+                    <HubRow icon="📅" title="Schedule a match" status="One fixture at a time" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
+                    <HubRow icon="⚡" title="Auto-generate fixtures" status="League, groups or knockout" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
+                  </>
+                );
+            })()}
+            <HubRow icon="🔁" title="New series / tie" status="Several matches between two teams" onPress={() => nav.navigate('CreateSeries', { tournamentId: tournament.id, sport: tournament.sports[0] })} />
+            {upcomingMatches.length > 0 && (
+              <>
+                <HubRow icon="📤" title="Share fixtures on WhatsApp" status={`${upcomingMatches.length} upcoming`} onPress={shareFixtures} />
+                {Platform.OS === 'web' && <HubRow icon="🖨" title="Print fixtures" status="Or save as PDF" onPress={printFixtures} />}
+              </>
+            )}
+
+            <SectionHeader title="People" />
+            <HubRow icon="🎽" title="Scorers & referees" status={`${assignedIds('scorer').length + assignedIds('referee').length} assigned`} open={panel === 'officials'} onPress={() => setPanel(panel === 'officials' ? '' : 'officials')} />
+            {panel === 'officials' && (
+            <Card style={{ gap: theme.spacing(3) }}>
+              <Text style={textStyles.h3}>🎽 Scorers & referees</Text>
+              <Text style={textStyles.muted}>
+                {hostOrg ? 'Assign from this organization’s eligible scorers & referees.' : 'Assign from the tournament’s hosts.'} They can then be given specific matches to score.
+              </Text>
+              {(['scorer', 'referee'] as OfficialRole[]).map((role) => {
+                const assigned = assignedIds(role);
+                const eligible = eligibleFor(role).filter((id) => !assigned.includes(id));
+                return (
+                  <View key={role} style={{ gap: theme.spacing(1) }}>
+                    <Text style={st.groupHead}>{role === 'scorer' ? 'Scorers' : 'Referees'}</Text>
+                    {assigned.length === 0 && <Text style={textStyles.muted}>None assigned yet.</Text>}
+                    {assigned.map((id) => (
+                      <View key={id} style={st.entryRow}>
+                        <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{playerName(id) ?? 'Player'}</Text>
+                        <Text style={st.link} onPress={() => void removeOfficial(id, role)}>Remove</Text>
+                      </View>
+                    ))}
+                    {eligible.length > 0 && (
+                      <View style={st.chips}>
+                        {eligible.map((id) => (
+                          <SelectChip key={id} label={`+ ${playerName(id) ?? 'Player'}`} active={false} onPress={() => void assignOfficial(id, role)} />
+                        ))}
+                      </View>
+                    )}
+                    {eligible.length === 0 && assigned.length === 0 && (
+                      <Text style={textStyles.muted}>
+                        {hostOrg ? `No one has the ${role === 'scorer' ? 'Scorer' : 'Referee'} role in ${hostOrg.name} yet — set it in the community’s Members tab.` : 'Add hosts to assign them.'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </Card>
+            )}
+            <HubRow icon="🤝" title="Hosts" status={`${hostIds.length} host${hostIds.length === 1 ? '' : 's'}`} onPress={() => setTab('Info')} />
+
+            <SectionHeader title="More" />
+            <HubRow icon="🔔" title="Player reminders" status={customReminders ? `Custom: ${(reminderMins ?? []).length} reminder${(reminderMins ?? []).length === 1 ? '' : 's'}` : 'Players’ own settings'} open={panel === 'reminders'} onPress={() => setPanel(panel === 'reminders' ? '' : 'reminders')} />
+            {panel === 'reminders' && (
             <Card style={{ gap: theme.spacing(2) }}>
               <Text style={textStyles.h3}>🔔 Player reminders</Text>
               <View style={st.tags}>
@@ -549,8 +646,9 @@ export default function TournamentProfileScreen() {
                   : 'Each player is reminded using their own settings from Profile.'}
               </Text>
             </Card>
-
-            {/* Ownership: who owns/created it, transfer, and the audit trail. */}
+            )}
+            <HubRow icon="🔑" title="Ownership & history" status={currentOwnerLabel} open={panel === 'ownership'} onPress={() => setPanel(panel === 'ownership' ? '' : 'ownership')} />
+            {panel === 'ownership' && (
             <Card style={{ gap: theme.spacing(2) }}>
               <Text style={textStyles.h3}>🔑 Ownership</Text>
               <Text style={textStyles.muted}>Organized by <Text style={textStyles.body}>{currentOwnerLabel}</Text>{creatorName ? ` · Created by ${creatorName}` : ''}</Text>
@@ -587,42 +685,7 @@ export default function TournamentProfileScreen() {
                 </View>
               )}
             </Card>
-
-            {/* Scorers & referees assigned to this tournament (§9). */}
-            <Card style={{ gap: theme.spacing(3) }}>
-              <Text style={textStyles.h3}>🎽 Scorers & referees</Text>
-              <Text style={textStyles.muted}>
-                {hostOrg ? 'Assign from this organization’s eligible scorers & referees.' : 'Assign from the tournament’s hosts.'} They can then be given specific matches to score.
-              </Text>
-              {(['scorer', 'referee'] as OfficialRole[]).map((role) => {
-                const assigned = assignedIds(role);
-                const eligible = eligibleFor(role).filter((id) => !assigned.includes(id));
-                return (
-                  <View key={role} style={{ gap: theme.spacing(1) }}>
-                    <Text style={st.groupHead}>{role === 'scorer' ? 'Scorers' : 'Referees'}</Text>
-                    {assigned.length === 0 && <Text style={textStyles.muted}>None assigned yet.</Text>}
-                    {assigned.map((id) => (
-                      <View key={id} style={st.entryRow}>
-                        <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{playerName(id) ?? 'Player'}</Text>
-                        <Text style={st.link} onPress={() => void removeOfficial(id, role)}>Remove</Text>
-                      </View>
-                    ))}
-                    {eligible.length > 0 && (
-                      <View style={st.chips}>
-                        {eligible.map((id) => (
-                          <SelectChip key={id} label={`+ ${playerName(id) ?? 'Player'}`} active={false} onPress={() => void assignOfficial(id, role)} />
-                        ))}
-                      </View>
-                    )}
-                    {eligible.length === 0 && assigned.length === 0 && (
-                      <Text style={textStyles.muted}>
-                        {hostOrg ? `No one has the ${role === 'scorer' ? 'Scorer' : 'Referee'} role in ${hostOrg.name} yet — set it in the community’s Members tab.` : 'Add hosts to assign them.'}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
-            </Card>
+            )}
           </>
         )}
 
@@ -789,7 +852,25 @@ export default function TournamentProfileScreen() {
   );
 }
 
+/** One admin-hub row: icon, title, a one-line status, › (or ▾ when it opens inline). */
+function HubRow({ icon, title, status, onPress, open }: { icon: string; title: string; status?: string; onPress: () => void; open?: boolean }) {
+  return (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} activeOpacity={0.85} onPress={onPress}>
+      <Card style={st.hubRow}>
+        <Text style={st.hubIcon}>{icon}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={textStyles.body} numberOfLines={1}>{title}</Text>
+          {status ? <Text style={textStyles.muted} numberOfLines={1}>{status}</Text> : null}
+        </View>
+        <Text style={st.chevron}>{open === undefined ? '›' : open ? '▴' : '▾'}</Text>
+      </Card>
+    </TouchableOpacity>
+  );
+}
+
 const st = StyleSheet.create({
+  hubRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  hubIcon: { fontSize: 20, width: 28, textAlign: 'center' },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   header: { paddingHorizontal: theme.spacing(4), paddingTop: theme.spacing(3), gap: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },

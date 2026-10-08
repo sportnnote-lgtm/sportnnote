@@ -4,20 +4,23 @@
  *  racket sport shows neither. Plus the structure (league / knockout / groups)
  *  and points & tie-breakers for that sport. Edits the shared tournament draft,
  *  which the Create / Edit form reads back. */
-import React, { useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Button, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
+import { Button, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { SportFormatEditor } from '../components/FormatEditor';
 import { StructureEditor } from '../components/StructureEditor';
 import { PointsEditor } from '../components/PointsEditor';
 import { getSport } from '../sports/registry';
-import { structureFromFormat } from '../data/structureConfig';
+import { structureFromFormat, mergeStructure, shapeForStructure } from '../data/structureConfig';
 import { tournamentDraft } from '../data/tournamentDraft';
+import { useTournamentById } from '../data/hooks';
+import { patchTournamentFormat, formatDiff, getTournaments, updateTournament } from '../data/repos';
+import { migrateFormatsForSettings, coarseStructureFrom } from '../components/SportSettingsButtons';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -28,6 +31,41 @@ export default function SportSettingsScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'SportSettings'>>();
   const sport = params.sport;
   const plugin = getSport(sport);
+
+  // Opened from a tournament's admin hub (parity #08): seed the draft from the
+  // saved tournament and SAVE this sport directly — only the keys changed here,
+  // merged into a fresh read (so points adjustments added meanwhile survive).
+  const tournament = useTournamentById(params.tournamentId);
+  const [seeded, setSeeded] = useState<Record<string, unknown> | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!params.tournamentId || !tournament || seeded) return;
+    const fm = migrateFormatsForSettings(tournament);
+    tournamentDraft.seed(fm);
+    // The baseline is what's SAVED — the migrated draft already fills in defaults
+    // (e.g. the structure), which then must count as changes on Save.
+    setSeeded({ ...((tournament.formats?.[sport] as Record<string, unknown>) ?? {}) });
+  }, [params.tournamentId, tournament, seeded, sport]);
+  const saveDirect = async () => {
+    if (!params.tournamentId || !tournament) return;
+    setSaving(true); setSaveErr(null);
+    try {
+      // Saving with the format shown (League by default) records it, even when
+      // nothing was tapped — that's the organiser accepting it.
+      const draft = { ...(tournamentDraft.get(sport) as Record<string, unknown>) };
+      const shownCfg = structureFromFormat(draft) ?? { shape: shapeForStructure(tournament.structure), groupCount: 4, advanceTopN: 2, advanceBest: 0, doubleRound: false, superPhase: false, manualStandings: false, swissRounds: 5 };
+      const withShape = structureFromFormat(draft) ? draft : mergeStructure(draft as never, shownCfg as never) as Record<string, unknown>;
+      await patchTournamentFormat(params.tournamentId, sport, formatDiff(seeded, withShape));
+      const fresh = (await getTournaments()).find((t) => t.id === params.tournamentId);
+      if (fresh) await updateTournament(params.tournamentId, { structure: coarseStructureFrom((fresh.formats ?? {}) as never, fresh.sports) });
+      nav.goBack();
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : 'Couldn’t save.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Re-render whenever the draft changes (edits happen through it).
   useSyncExternalStore(tournamentDraft.subscribe, tournamentDraft.getVersion);
@@ -82,7 +120,14 @@ export default function SportSettingsScreen() {
         <PointsEditor sport={sport} value={value} onChange={set} />
 
         <Text style={textStyles.muted}>These apply only to {plugin.name} in this tournament.</Text>
-        <Button label="Done" onPress={() => nav.goBack()} />
+        {params.tournamentId ? (
+          <>
+            <FormError message={saveErr} />
+            <Button label={saving ? 'Saving…' : 'Save'} onPress={() => void saveDirect()} disabled={saving || !seeded} />
+          </>
+        ) : (
+          <Button label="Done" onPress={() => nav.goBack()} />
+        )}
       </ScrollView>
     </SafeAreaView>
   );

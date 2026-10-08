@@ -13,6 +13,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Tournament admin hub + post-create setup checklist (parity #08)
+
+- **Ask (parity queue #08):** after creating a meet the organiser landed back where she started;
+  changing "3 points a win" was three levels deep; Settings was an unordered stack of buttons.
+- **Checklist:** pure `data/setupChecklist` (teams ≥2 · format set for every sport or matches exist ·
+  matches scheduled; "Add players" for individual events) + `SetupChecklist` card ("Tournament
+  created — 3 quick steps" / "Finish setting up · 1 of 3", next step highlighted, Hide remembered
+  per device in AsyncStorage `setupHidden:<id>`, gone when all done). Create now lands on
+  `Tournament {tab: 'Settings'}`; Info shows "Setup 1/3 · Continue ›" for managers.
+- **Hub** (Settings tab): grouped `HubRow`s — Tournament (Edit details · one "format & points" row
+  per sport with `describeStructure` + W/D/L points · Points table), Teams, Matches (schedule /
+  auto-generate or Americano · series · share/print), People (Scorers & referees inline · Hosts),
+  More (Player reminders inline · Ownership & history inline); one panel open at a time
+  (`useParamState('panel')`). Existing card bodies moved unchanged. "⚙ Manage" in the header for
+  managers.
+- **SportSettings direct save** (`{sport, tournamentId}`): seeds the draft from the tournament,
+  "Save" = `patchTournamentFormat` with only the changed keys vs the SAVED format (#07, so
+  adjustments survive), recording the shown default structure too; then the coarse structure label.
+- GenerateFixtures: "Add at least 2 teams first" + "Add teams" when there are <2 participants.
+  `useTournamentById` returns a fresh object on focus (demo updates in place → no re-render).
+- Verified in demo (8093): create → Settings with 0/3 card + ⚙ Manage → format row → Save →
+  "Single league … · 3/1/0", card 1/3 → reminders panel inline → Hide persists across reload.
+  Tests: setupChecklist (5). 484 tests.
+
+---
+
 ### 2026-10-09 — Points table: one table per phase, bonus/penalty adjustments (parity #07)
 
 - **Ask (parity queue #07):** Standings mixed groups and knockouts in one flat table; a points

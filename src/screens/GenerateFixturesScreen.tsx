@@ -349,6 +349,13 @@ export default function GenerateFixturesScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Auto-generate fixtures" subtitle={tournament?.name ?? 'Bulk-schedule matches'} />
+        {/* Prerequisite (parity #08): fixtures need at least two participants. */}
+        {participants.length < 2 && (
+          <View style={{ gap: theme.spacing(2) }}>
+            <EmptyState icon="👥" title="Add at least 2 teams first" hint="Fixtures are drawn from this tournament's participating teams." compact />
+            <Button label="Add teams" onPress={() => nav.navigate('TournamentTeams', { tournamentId: params.tournamentId })} />
+          </View>
+        )}
 
         {tourSports.length > 1 && (
           <>

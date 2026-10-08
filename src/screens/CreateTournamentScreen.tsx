@@ -126,7 +126,7 @@ export default function CreateTournamentScreen() {
     try {
       const chosenOrg = hostChoice !== 'self' ? myOrgs.find((o) => o.id === hostChoice) : undefined;
       const finalFormats = { ...tournamentDraft.all() } as FormatMap;
-      await createTournament({
+      const created = await createTournament({
         name: name.trim(),
         hostName: chosenOrg ? chosenOrg.name : (myName || profile?.fullName || 'Organiser'),
         hostOrgId: chosenOrg?.id,
@@ -144,7 +144,8 @@ export default function CreateTournamentScreen() {
         coHostIds: coHosts.map((c) => c.id),
         categories: divisions.length ? divisions : undefined,
       });
-      nav.goBack();
+      // Straight to the admin hub with the setup checklist (parity #08).
+      nav.replace('Tournament', { tournamentId: created.id, tab: 'Settings' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create tournament');
     } finally {

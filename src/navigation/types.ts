@@ -44,7 +44,8 @@ export type RootStackParamList = {
   TournamentTeams: { tournamentId: string; sport?: SportId };
   Contingents: { tournamentId: string };
   Americano: { tournamentId: string; sport: SportId };
-  SportSettings: { sport: SportId };
+  /** with tournamentId: edits and SAVES that tournament's sport directly (parity #08) */
+  SportSettings: { sport: SportId; tournamentId?: string };
   OrganizerDashboard: undefined;
   NotificationPrefs: undefined;
   Settings: undefined;
@@ -93,7 +94,8 @@ export type RootStackParamList = {
   ClubSport: { clubId: string; sport: SportId };
   JoinClub: { token?: string } | undefined;
   ScanQR: undefined;
-  Tournament: { tournamentId: string };
+  /** tab: open on a tab (e.g. 'Settings' right after creating it) */
+  Tournament: { tournamentId: string; tab?: string };
   EditTournament: { tournamentId: string };
   Organization: { orgId: string };
   Notifications: undefined;
