@@ -24,7 +24,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { cricketVoice } from '../voiceParsers';
 import {
   init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
-  oversStr, runRate, inPowerplay, nrrOvers,
+  oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
@@ -783,7 +783,7 @@ export function matchRatings(s: CricketState): {
   return { players, mvp, bestBat, bestBowl };
 }
 
-const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer }) => {
+const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer, manualResultLine }) => {
   const s = state as CricketState;
   const mask = useMask();
   const { players, mvp, bestBat, bestBowl } = matchRatings(s);
@@ -849,6 +849,19 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
   // Live, in progress: show the standouts so far rather than a bare "come back
   // later" card (matches the generic MatchSummary's live treatment). Before a
   // ball is bowled there's nothing to rank, so keep the gentle placeholder.
+  // Closed by hand (abandoned / no result / conceded…) before the natural end:
+  // the stored result is the final word — no LIVE card, no chase equation.
+  if (!s.ended && manualResultLine) {
+    return (
+      <View style={{ gap: theme.spacing(3) }}>
+        <View style={ctrl.card}>
+          <Text style={ctrl.label}>🏁 Result</Text>
+          <Text style={sum.awardName}>{manualResultLine}</Text>
+        </View>
+        {mvp ? <Award icon="👑" label="Most valuable player" p={mvp} detail={mvpDetail(mvp)} /> : null}
+      </View>
+    );
+  }
   if (!s.ended) {
     if (players.length === 0) {
       return (
@@ -1170,6 +1183,8 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     return { winner, ...score };
   },
   standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
+  manualRate: (s) => manualNrrOvers(s),
+  manualEnd: { drawLabel: 'Tie', nrrToggle: true },
   summary: (s) => {
     // While a Super Over is live/decided, tag each side's board with its SO runs.
     const so = s.superOver;

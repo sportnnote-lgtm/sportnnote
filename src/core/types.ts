@@ -733,6 +733,22 @@ export interface MatchEventRecord {
 
 export type MatchStatus = 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
 
+/** How a match ended when it was closed by hand (parity #04, `matches.result`). */
+export type ResultKind = 'awarded' | 'conceded' | 'draw' | 'tie' | 'no_result' | 'abandoned';
+export interface MatchResult {
+  kind: ResultKind;
+  /** set for awarded / conceded */
+  winner?: 'home' | 'away';
+  /** why — the public record (required) */
+  reason: string;
+  /** cricket win/tie: count the match in net run rate with all overs (default true) */
+  countNrr?: boolean;
+  score?: { home: number; away: number };
+  byId?: string;
+  byName?: string;
+  at: string;
+}
+
 export interface Match {
   id: UUID;
   /** the tournament this match belongs to — absent for an ad-hoc friendly */
@@ -763,6 +779,9 @@ export interface Match {
   /** decided without being played — a walkover (the absent side forfeits). Counts
    *  as a normal win/loss in the tables, but is shown as "w/o" not a score. */
   walkover?: boolean;
+  /** closed by hand: abandoned / no result / draw / conceded / awarded (parity #04).
+   *  The only result store; it beats whatever the scoring state would derive. */
+  result?: MatchResult;
   /** format override for a one-off/friendly game (else inherits the tournament) */
   format?: SportFormat;
   /** Who created/owns this match (player ids). Any match host — and any host of

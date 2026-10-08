@@ -11,6 +11,7 @@ import { getSport } from '../sports/registry';
 import { openVenue } from '../core/venue';
 import { formatShort, useUserTimeZone } from '../core/time';
 import type { Match } from '../core/types';
+import { manualResultLine } from '../core/matchResult';
 
 /** A small dot that gently pulses — the universal "live" signal. */
 function LiveBadge() {
@@ -101,7 +102,7 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
         {live ? (
           <Text style={s.cta}>tap to score ›</Text>
         ) : done ? (
-          walkover ? 'Walkover' : 'Full time'
+          match.result ? manualResultLine(match.result, match.homeTeam.name, match.awayTeam.name) : walkover ? 'Walkover' : 'Full time'
         ) : (
           time
         )}

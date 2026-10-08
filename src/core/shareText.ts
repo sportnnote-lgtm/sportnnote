@@ -24,6 +24,8 @@ export interface MatchShareInput {
   detailLine?: string;
   /** final only */
   winner?: 'home' | 'away' | 'draw';
+  /** final only: a match closed by hand ("Match abandoned — Rain") — replaces the winner line */
+  resultLine?: string;
   tournamentName?: string;
   /** upcoming only, already formatted for the reader ("Sat 12 Oct, 6:00 pm") */
   when?: string;
@@ -45,7 +47,9 @@ export function matchShareText(m: MatchShareInput): string {
     lines.push(row(m.home, m.homeScore), row(m.away, m.awayScore));
   }
 
-  if (m.status === 'final' && m.winner) {
+  if (m.status === 'final' && m.resultLine) {
+    lines.push(`🏁 ${clean(m.resultLine)}`);
+  } else if (m.status === 'final' && m.winner) {
     lines.push(m.winner === 'draw' ? '🤝 Match drawn' : `🏆 ${clean(m.winner === 'home' ? m.home : m.away)} won`);
   }
   const detail = [clean(m.statusLine), clean(m.detailLine)].filter(Boolean).join(' · ');

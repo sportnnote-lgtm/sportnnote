@@ -20,6 +20,10 @@ export const KO_STAGE_LABEL: Record<KoStage, string> = {
   qf: 'Quarter-finals', sf: 'Semi-finals', final: 'Final',
 };
 export const isKoStage = (s?: string | null): s is KoStage => !!s && (KO_STAGES as readonly string[]).includes(s);
+/** Every stage where a match MUST produce a winner (knockouts, third place,
+ *  playoff qualifiers/eliminator, play-ins) — not group, Super Four or Swiss. */
+export const isEliminationStage = (s?: string | null): boolean =>
+  isKoStage(s) || ['third', 'q1', 'q2', 'eliminator', 'playin', 'play-in'].includes(s ?? '');
 /** Order index — larger = later round (closer to the final). */
 export const koStageRank = (s: KoStage): number => KO_STAGES.indexOf(s);
 /** The stage a round of N teams belongs to (2 → final, 4 → sf, …). */

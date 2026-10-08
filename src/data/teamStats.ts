@@ -26,6 +26,8 @@ const UNIT: Partial<Record<SportId, string>> = { football: 'goals', cricket: 'ru
 
 export function resultFor(m: Match, teamId: string): Result | null {
   if (m.status !== 'completed' || !m.winner) return null;
+  // A no result / abandoned match (parity #04) isn't a W/D/L — leave it out.
+  if (m.result?.kind === 'no_result' || m.result?.kind === 'abandoned') return null;
   if (m.winner === 'draw') return 'D';
   const side = m.homeTeam.id === teamId ? 'home' : m.awayTeam.id === teamId ? 'away' : null;
   if (!side) return null;

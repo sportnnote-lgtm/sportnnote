@@ -11,6 +11,10 @@
  */
 import { notice, confirmAction } from '../core/confirm';
 import { getDeviceId } from '../core/deviceId';
+import { mergeMatchConfig } from '../core/matchConfig';
+import { manualResultLine, isNoResult } from '../core/matchResult';
+import { isEliminationStage } from '../data/bracket';
+import { standingsConfigFromFormat, noResultPoints } from '../data/standings';
 import { lockStatus, type ScoringLock } from '../core/scoringLock';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -29,7 +33,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -49,7 +53,7 @@ import { MatchSummary } from '../components/MatchSummary';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
-import type { DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
+import type { MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
@@ -91,7 +95,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     tournamentHostIds?: string[];
     status?: Match['status']; score?: { home: number; away: number }; winner?: Match['winner'];
     logoUrl?: string; managers?: { home?: string; away?: string };
+    /** closed by hand (parity #04) */
+    result?: MatchResult; stage?: string;
   }>({});
+  const lastConfigJson = useRef<{ json: string; obj: Record<string, unknown> | undefined }>({ json: '', obj: undefined });
   useFocusEffect(
     useCallback(() => {
       let on = true;
@@ -103,8 +110,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             getTournaments(), getOrganizations(), getTeamLeaders(m.homeTeam.id), getTeamLeaders(m.awayTeam.id),
           ]);
           const tour = tours.find((t) => t.id === m.tournamentId);
-          // friendly per-match format overrides the tournament's format for the sport
-          const config = (m.format ?? tour?.formats?.[sport]) as Record<string, unknown> | undefined;
+          // The tournament's format for the sport, with per-match settings on top
+          // (never instead of it) and internal `__*` keys dropped. Same JSON → same
+          // object, so an unchanged format doesn't rebuild the live match.
+          const merged = mergeMatchConfig(tour?.formats?.[sport] as Record<string, unknown> | undefined, m.format as Record<string, unknown> | undefined);
+          const config = merged && JSON.stringify(merged) === lastConfigJson.current.json ? lastConfigJson.current.obj : merged;
+          lastConfigJson.current = { json: JSON.stringify(merged ?? null), obj: config };
           if (on) {
             setScorerIds(m.scorerIds && m.scorerIds.length ? m.scorerIds : (m.scorerId ? [m.scorerId] : []));
             setMatchHostIds(m.hostIds ?? []);
@@ -116,6 +127,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               // org-hosted tournaments → every org member is a tournament host
               tournamentHostIds: tour ? tournamentHostPlayerIds(tour, orgs) : [],
               status: m.status, score: m.score, winner: m.winner, logoUrl: m.logoUrl, managers: m.managers,
+              result: m.result, stage: m.stage,
             });
           }
         })();
@@ -141,6 +153,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [restartOpen, setRestartOpen] = useState(false);
   const [woOpen, setWoOpen] = useState(false); // walkover: pick the winning side
   const [retiredLocally, setRetiredLocally] = useState<'home' | 'away' | null>(null);
+  // "🏁 End match…" panel (parity #04): how it ended, who won, why.
+  const [endKind, setEndKind] = useState<ResultKind | null>(null);
+  const [endWinner, setEndWinner] = useState<'home' | 'away' | null>(null);
+  const [endReason, setEndReason] = useState('');
+  const [endNrr, setEndNrr] = useState(true);
+  const [endBusy, setEndBusy] = useState(false);
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
   const [editingStream, setEditingStream] = useState(false);
@@ -331,6 +349,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         statusLine: final ? undefined : summary.statusLine,
         detailLine: final ? undefined : summary.detailLine,
         winner: complete ? (meta.winner ?? plugin.result?.(state)?.winner ?? undefined) : undefined,
+        resultLine: complete && meta.result ? manualResultLine(meta.result, hName, aName) : undefined,
         tournamentName: meta.tournamentName,
         when: meta.startsAt ? formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST') : undefined,
         venue: meta.venueName,
@@ -601,13 +620,61 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     </TouchableOpacity>
   ) : null;
 
-  // End a match early with a declared winner — retirement / walkover / a conceded
-  // match, where the sport's normal end condition is never reached.
-  const retireWinner = (winner: 'home' | 'away') => {
-    if (!matchId) { setRetiredLocally(winner); setRetireOpen(false); return; }
-    void retireMatch(matchId, winner, 'retired');
-    setRetiredLocally(winner);
-    setRetireOpen(false);
+  // End a match by hand (parity #04): win / conceded / draw|tie / no result /
+  // abandoned, with a required reason. Knockouts must produce a winner.
+  const knockout = isEliminationStage(meta.stage);
+  const drawLabel = plugin.manualEnd?.drawLabel ?? 'Draw';
+  const endKinds: { kind: ResultKind; label: string }[] = [
+    { kind: 'awarded', label: 'Win' }, { kind: 'conceded', label: 'Conceded' },
+    ...(knockout ? [] : [
+      { kind: (drawLabel === 'Tie' ? 'tie' : 'draw') as ResultKind, label: drawLabel },
+      { kind: 'no_result' as ResultKind, label: 'No result' }, { kind: 'abandoned' as ResultKind, label: 'Abandoned' },
+    ]),
+  ];
+  const needsWinner = endKind === 'awarded' || endKind === 'conceded';
+  const endReady = !!endKind && endReason.trim().length >= 3 && (!needsWinner || !!endWinner);
+  const draftResult: MatchResult | null = endKind ? {
+    kind: endKind, ...(needsWinner && endWinner ? { winner: endWinner } : {}), reason: endReason.trim(),
+    ...(plugin.manualEnd?.nrrToggle && (needsWinner || endKind === 'tie' || endKind === 'draw') ? { countNrr: endNrr } : {}),
+    at: new Date().toISOString(),
+  } : null;
+  const fullHome = homeTeamName ?? homeName;
+  const fullAway = awayTeamName ?? awayName;
+  const endPreview = (() => {
+    if (!draftResult || !endReady) return null;
+    const line = manualResultLine(draftResult, fullHome, fullAway);
+    if (!meta.tournamentId) return line;
+    const cfg = standingsConfigFromFormat(sport, meta.config);
+    const nr = noResultPoints(sport, cfg);
+    const table = isNoResult(draftResult)
+      ? `both teams +${nr} (no result)`
+      : endKind === 'draw' || endKind === 'tie'
+      ? `both teams +${cfg.draw}`
+      : `${draftResult.winner === 'home' ? fullHome : fullAway} +${cfg.win}`;
+    return `${line} · Points table: ${table}`;
+  })();
+  const closeEnd = () => { setRetireOpen(false); setEndKind(null); setEndWinner(null); setEndReason(''); setEndNrr(true); };
+  const endMatch = async () => {
+    if (!draftResult || !endReady) return;
+    const sm = plugin.summary(state);
+    const h = parseInt(String(sm.homeScore), 10), a = parseInt(String(sm.awayScore), 10);
+    const r: MatchResult = {
+      ...draftResult,
+      ...(Number.isFinite(h) && Number.isFinite(a) ? { score: { home: h, away: a } } : {}),
+      byId: myPlayerId ?? undefined, byName: profile?.fullName ?? undefined, at: new Date().toISOString(),
+    };
+    if (!matchId) { setMeta((m) => ({ ...m, status: 'completed', result: r })); closeEnd(); return; }
+    setEndBusy(true);
+    try {
+      const how = await endMatchManually(matchId, r);
+      setMeta((m) => ({ ...m, status: 'completed', result: how === 'full' ? r : undefined, winner: r.winner ?? (r.kind === 'draw' || r.kind === 'tie' ? 'draw' : undefined) }));
+      if (how === 'legacy') notice('Match ended', 'Saved without the reason until the database update runs.');
+      closeEnd();
+    } catch (e) {
+      notice('Couldn’t end the match', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setEndBusy(false);
+    }
   };
   // Restart a match started/scored by mistake — only while nothing is scored yet, or
   // within the first 5 minutes of the first score. After that it's committed.
@@ -643,25 +710,56 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     )
   ) : null;
 
-  const retireBar = canScore && !complete && retiredLocally == null ? (
+  const retireBar = (canScore || isHost) && started && !complete ? (
     !retireOpen ? (
       <TouchableOpacity style={st.retireBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => setRetireOpen(true)}>
-        <Text style={st.retireText}>🏳️ End early — retirement / walkover</Text>
+        <Text style={st.retireText}>🏁 End match…</Text>
       </TouchableOpacity>
     ) : (
       <View style={st.retirePanel}>
-        <Text style={st.retirePrompt}>End the match now — who is awarded the win?</Text>
-        <View style={st.retireRow}>
-          <Button label={homeName} variant="home" style={{ flex: 1 }} onPress={() => retireWinner('home')} />
-          <Button label={awayName} variant="away" style={{ flex: 1 }} onPress={() => retireWinner('away')} />
+        <Text style={st.retirePrompt}>How did it end?</Text>
+        <View style={st.endChips}>
+          {endKinds.map((k) => <SelectChip key={k.kind} label={k.label} active={endKind === k.kind} onPress={() => setEndKind(k.kind)} />)}
         </View>
-        <Button label="Cancel" variant="ghost" onPress={() => setRetireOpen(false)} />
+        {knockout ? <Text style={textStyles.muted}>Knockout: pick who goes through.</Text> : null}
+        {needsWinner && (
+          <>
+            <Text style={st.retirePrompt}>{endKind === 'conceded' ? 'Who wins? (the other side conceded)' : 'Who wins?'}</Text>
+            <View style={st.retireRow}>
+              <Button label={homeName} variant={endWinner === 'home' ? 'home' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('home')} />
+              <Button label={awayName} variant={endWinner === 'away' ? 'away' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('away')} />
+            </View>
+          </>
+        )}
+        {endKind && (
+          <>
+            <TextField label="Reason" value={endReason} onChange={setEndReason} placeholder="e.g. heavy rain, ground unfit" />
+            <View style={st.endChips}>
+              {['Rain', 'Bad light', 'Ground unfit', 'Time up', 'Injury', 'Team left'].map((r) => (
+                <SelectChip key={r} label={r} active={endReason === r} onPress={() => setEndReason(r)} />
+              ))}
+            </View>
+          </>
+        )}
+        {plugin.manualEnd?.nrrToggle && endKind && (needsWinner || endKind === 'tie' || endKind === 'draw') ? (
+          <SelectChip label="Count in NRR (all overs)" active={endNrr} onPress={() => setEndNrr(!endNrr)} />
+        ) : null}
+        {endPreview ? <Text style={textStyles.muted}>{endPreview}</Text> : null}
+        <View style={st.retireRow}>
+          <Button label={endBusy ? 'Ending…' : 'End match'} variant="danger" style={{ flex: 1 }} disabled={!endReady || endBusy} onPress={() => void endMatch()} />
+          <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={closeEnd} />
+        </View>
       </View>
     )
   ) : null;
-  const retiredBanner = retiredLocally ? (
+  // How a match closed by hand ended — saved, so it shows for everyone, every time.
+  const retiredBanner = meta.result ? (
     <View style={st.retiredBanner}>
-      <Text style={st.retiredText}>🏁 Match ended early — {retiredLocally === 'home' ? homeName : awayName} awarded the win (retirement / walkover).</Text>
+      <Text style={st.retiredText}>🏁 {manualResultLine(meta.result, fullHome, fullAway)}</Text>
+    </View>
+  ) : retiredLocally ? (
+    <View style={st.retiredBanner}>
+      <Text style={st.retiredText}>🏁 Match ended early — {retiredLocally === 'home' ? homeName : awayName} awarded the win.</Text>
     </View>
   ) : null;
 
@@ -1543,6 +1641,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
           {activeTab === 'info' && (
             <View style={{ gap: theme.spacing(3) }}>
+              {meta.result ? retiredBanner : null}
               <View style={st.infoCard}>
                 <MatchHeader
                   sportIcon={plugin.icon} sportName={plugin.name}
@@ -1630,6 +1729,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
           {activeTab === 'summary' && (
             <View style={{ gap: theme.spacing(3) }}>
+              {meta.result ? retiredBanner : null}
               <View style={st.infoCard}>
                 <MatchHeader
                   sportIcon={plugin.icon} sportName={plugin.name}
@@ -1646,6 +1746,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               <plugin.Summary
                 state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
+                manualResultLine={meta.result ? manualResultLine(meta.result, fullHome, fullAway) : undefined}
               />
             ) : (
               <MatchSummary
@@ -1859,6 +1960,7 @@ const st = StyleSheet.create({
   retirePanel: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   retirePrompt: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   retireRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  endChips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   retiredBanner: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.md, padding: theme.spacing(3) },
   retiredText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   reschedBanner: { borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },

@@ -12,6 +12,7 @@ import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
 import { getDeviceId } from '../core/deviceId';
+import { snapshotOutcome } from '../core/matchResult';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
 import {
@@ -51,6 +52,7 @@ import { getSport } from '../sports/registry';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
   Role,
+  MatchResult,
   AcademicYear,
   Club,
   ClubInvite,
@@ -108,6 +110,8 @@ interface TeamRow {
   adhoc?: boolean | null;
 }
 interface MatchRow {
+  /** manual result (migration 0040) — absent on older databases */
+  result?: MatchResult | null;
   id: string;
   tournament_id: string;
   group_label: string | null;
@@ -173,8 +177,10 @@ function toMatch(r: MatchRow): Match {
     // Prefer the result derived from live state; fall back to the stored column
     // (seed/archived matches with a winner but no state). Score has no column —
     // it's always derived from state, so for/against works in standings.
-    winner: res?.winner ?? r.winner ?? undefined,
-    score: res ? { home: res.home, away: res.away } : undefined,
+    // A result closed by hand (abandoned, conceded…) beats what the state derives.
+    winner: r.result ? (r.result.winner ?? (r.result.kind === 'draw' || r.result.kind === 'tie' ? 'draw' : undefined)) : res?.winner ?? r.winner ?? undefined,
+    score: r.result?.score ?? (res ? { home: res.home, away: res.away } : undefined),
+    result: r.result ?? undefined,
     walkover: (r.format as Record<string, unknown> | null)?.__walkover === true,
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
@@ -190,10 +196,19 @@ function toMatch(r: MatchRow): Match {
   };
 }
 
-const MATCH_SELECT =
+const MATCH_SELECT_BASE =
   'id, tournament_id, group_label, stage, byes, sport, status, starts_at, venue_id, venue_name, venue_maps_url, stream_url, winner, host_ids, logo_url, scorer_id, scorer_ids, format, state,' +
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
+const MATCH_SELECT = MATCH_SELECT_BASE + ', result';
+
+/** Read matches with the newest columns, retrying without them on a database
+ *  that hasn't run their migration yet (`result`: 0040). */
+async function withMatchCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  const full = await build(MATCH_SELECT);
+  if (!full.error) return full;
+  return build(MATCH_SELECT_BASE);
+}
 
 export async function getTournament(): Promise<Tournament> {
   if (!isSupabaseConfigured || !supabase) return demo.tournaments[0];
@@ -273,16 +288,18 @@ export async function getMatches(filter?: SportId): Promise<Match[]> {
     const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     return filter ? all.filter((m) => m.sport === filter) : all;
   }
-  let q = supabase.from('matches').select(MATCH_SELECT).order('starts_at', { ascending: true });
-  if (filter) q = q.eq('sport', filter);
-  const { data, error } = await q;
+  const { data, error } = await withMatchCols<unknown[]>((cols) => {
+    let q = supabase!.from('matches').select(cols).order('starts_at', { ascending: true });
+    if (filter) q = q.eq('sport', filter);
+    return q;
+  });
   if (error || !data) return [];
   return (data as unknown as MatchRow[]).map(toMatch);
 }
 
 export async function getMatch(id: string): Promise<Match | null> {
   if (!isSupabaseConfigured || !supabase) return demo.matches.find((m) => m.id === id) ?? null;
-  const { data, error } = await supabase.from('matches').select(MATCH_SELECT).eq('id', id).single();
+  const { data, error } = await withMatchCols<unknown>((cols) => supabase!.from('matches').select(cols).eq('id', id).single());
   if (error || !data) return null;
   return toMatch(data as unknown as MatchRow);
 }
@@ -1604,8 +1621,10 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
     const m = demo.matches.find((x) => x.id === matchId);
     if (!m) return;
     m.state = state;
-    m.status = completed ? 'completed' : 'live';
-    if (completed) {
+    // A match closed by hand keeps its result: never re-derived, never back to live.
+    const out = snapshotOutcome(m.result, completed);
+    m.status = out.status;
+    if (out.rederive) {
       const res = deriveResult(m.sport, state);
       m.winner = res?.winner;
       m.score = res ? { home: res.home, away: res.away } : undefined;
@@ -1621,6 +1640,14 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
   // On completion, derive the result (winner + score) from the sport plugin and
   // persist it: the winner column drives standings/records, and each player's
   // stat line gets its `won` flag set so career wins/win-rate are correct.
+  // A match closed by hand (parity #04) keeps its result: a later snapshot — a
+  // correction, or a stale second device — only refreshes the state.
+  const { data: manual, error: manualErr } = await supabase.from('matches').select('result').eq('id', matchId).maybeSingle();
+  const manualResult = manualErr ? null : (manual as { result?: MatchResult | null } | null)?.result;
+  if (manualResult) {
+    await supabase.from('matches').update({ state, status: snapshotOutcome(manualResult, completed).status, updated_at: new Date().toISOString() }).eq('id', matchId);
+    return;
+  }
   let winner: 'home' | 'away' | 'draw' | null = null;
   let meta: MatchMeta | null = null;
   if (completed) {
@@ -1649,27 +1676,74 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
  *  Keeps whatever score is on the board and stamps the winner + completed status
  *  directly (toMatch falls back to this stored winner when the state isn't a
  *  natural completion). `reason` is for the caller's log/UX; not persisted yet. */
-export async function retireMatch(matchId: string, winner: 'home' | 'away', _reason: string): Promise<void> {
+/** Set each player's `won` flag for a finished match (winning side's roster →
+ *  true, everyone else false; no winner → all false). */
+async function flagWinners(matchId: string, winner: 'home' | 'away' | 'draw' | null): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const m = demo.matches.find((x) => x.id === matchId);
     if (!m) return;
-    m.status = 'completed';
-    m.winner = winner;
-    const winTeam = winner === 'home' ? m.homeTeam : m.awayTeam;
-    const winRoster = winTeam.roster && winTeam.roster.length
+    const winTeam = winner === 'home' ? m.homeTeam : winner === 'away' ? m.awayTeam : null;
+    const winRoster = !winTeam ? [] : winTeam.roster && winTeam.roster.length
       ? winTeam.roster
       : demo.players.filter((p) => p.houseName === winTeam.name).map((p) => p.id);
     for (const l of demo.statLines) if (l.matchId === matchId) l.won = winRoster.includes(l.playerId);
     return;
   }
-  await supabase.from('matches').update({ status: 'completed', winner, updated_at: new Date().toISOString() }).eq('id', matchId);
+  await supabase.from('stat_lines').update({ won: false }).eq('match_id', matchId);
+  if (winner !== 'home' && winner !== 'away') return;
   const { data } = await supabase.from('matches').select('home_team_id, away_team_id').eq('id', matchId).single();
   const meta = data as { home_team_id: string; away_team_id: string } | null;
   if (!meta) return;
-  await supabase.from('stat_lines').update({ won: false }).eq('match_id', matchId);
   const winTeamId = winner === 'home' ? meta.home_team_id : meta.away_team_id;
   const winners = (await getTeamRosters([winTeamId])).get(winTeamId) ?? [];
   if (winners.length) await supabase.from('stat_lines').update({ won: true }).eq('match_id', matchId).in('player_id', winners);
+}
+
+/** Close a match by hand — abandoned, no result, draw/tie, conceded, awarded —
+ *  with the reason (parity #04). `matches.result` is the ONLY result store
+ *  (REVIEW Decision 1); a correction (#05) calls this again. Returns 'legacy' when
+ *  the database has no `result` column yet (migration 0040): the outcome is saved
+ *  the old way and the reason isn't. */
+export async function endMatchManually(matchId: string, r: MatchResult): Promise<'full' | 'legacy'> {
+  const winner: 'home' | 'away' | 'draw' | null =
+    r.kind === 'draw' || r.kind === 'tie' ? 'draw' : r.kind === 'no_result' || r.kind === 'abandoned' ? null : r.winner ?? null;
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (!m) return 'full';
+    m.status = 'completed';
+    m.result = r;
+    m.winner = winner ?? undefined;
+    if (r.score) m.score = r.score;
+    await flagWinners(matchId, winner);
+    return 'full';
+  }
+  const now = new Date().toISOString();
+  const lockCleared = { active_scorer_id: null, active_scorer_device: null, active_scorer_at: null };
+  let res = await supabase.from('matches').update({ status: 'completed', result: r, winner, updated_at: now, ...lockCleared }).eq('id', matchId).select('id');
+  // No scoring-lock columns yet (0039) → without them.
+  if (res.error && /active_scorer/.test(res.error.message)) res = await supabase.from('matches').update({ status: 'completed', result: r, winner, updated_at: now }).eq('id', matchId).select('id');
+  if (res.error && /result/.test(res.error.message)) {
+    // Before migration 0040: keep the outcome, lose the reason.
+    if (r.kind === 'no_result' || r.kind === 'abandoned') {
+      // A direct update — setMatchStatus only handles pre-match statuses.
+      const c = await supabase.from('matches').update({ status: 'cancelled', winner: null, updated_at: now }).eq('id', matchId).select('id');
+      if (c.error) throw new Error(c.error.message);
+    } else {
+      const c = await supabase.from('matches').update({ status: 'completed', winner, updated_at: now }).eq('id', matchId).select('id');
+      if (c.error) throw new Error(c.error.message);
+    }
+    await flagWinners(matchId, winner);
+    return 'legacy';
+  }
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('You can’t end this match.');
+  await flagWinners(matchId, winner);
+  return 'full';
+}
+
+/** End early with a winner (retirement / injury) — an awarded manual result. */
+export async function retireMatch(matchId: string, winner: 'home' | 'away', reason: string): Promise<void> {
+  await endMatchManually(matchId, { kind: 'awarded', winner, reason: reason || 'Retired', at: new Date().toISOString() });
 }
 
 /** Move a scheduled match — new date/time and/or venue — without recreating it.
@@ -3746,9 +3820,12 @@ export async function setContingentParticipation(tournamentId: string, name: str
 export async function walkoverMatch(matchId: string, winner: 'home' | 'away'): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const mm = demo.matches.find((x) => x.id === matchId);
-    if (mm) { mm.status = 'completed'; mm.winner = winner; mm.walkover = true; mm.format = { ...(mm.format ?? {}), __walkover: true }; }
+    if (mm) { mm.status = 'completed'; mm.winner = winner; mm.walkover = true; mm.result = { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() }; mm.format = { ...(mm.format ?? {}), __walkover: true }; }
     return;
   }
+  // The result (with its reason) lives in matches.result; `__walkover` stays only
+  // as the marker older builds read to show "w/o" instead of a score.
+  await endMatchManually(matchId, { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() });
   const { data } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
   const format = { ...((data?.format as Record<string, unknown>) ?? {}), __walkover: true };
   await supabase.from('matches').update({ status: 'completed', winner, format }).eq('id', matchId);

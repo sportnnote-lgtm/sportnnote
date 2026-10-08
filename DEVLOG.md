@@ -13,6 +13,45 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — End a match by hand: abandoned, no result, draw/tie, conceded, awarded — with the reason (parity #04)
+
+- **Ask (parity queue #04):** the only exit was "End early — retirement / walkover": it forced a
+  winner, dropped the reason (`retireMatch(_, _, _reason)`), its banner was local state, and
+  abandoned games couldn't share points.
+- **Step 0 — live bug fixed first:** `LiveScoringScreen` replayed with `m.format ?? tour.formats[sport]`,
+  so ANY per-match format key (football settings card, `__walkover`) made a tournament match lose
+  the tournament's overs/halves. New pure `core/matchConfig` (`stripInternal`, `mergeMatchConfig`
+  = tournament format + per-match keys, `__*` dropped), memoised by JSON.
+- **Result model:** `MatchResult {kind: awarded|conceded|draw|tie|no_result|abandoned, winner?,
+  reason, countNrr?, score?, byId, byName, at}` in `matches.result` — the ONLY result store (REVIEW
+  Decision 1); status stays `completed`. **Migration 0040** `20261019120400_match_result.sql`
+  (bundle `2026-10-match-result-0040.sql`) — founder to run. Reads go through `withMatchCols`
+  (retries without `result`); `endMatchManually` returns `'legacy'` before the migration (outcome
+  saved the old way — NR/abandoned → `cancelled` by direct update — plus a notice). It clears the
+  scoring lock (#03) and re-flags `won` via extracted `flagWinners`. `retireMatch` wraps it
+  (awarded); `walkoverMatch` also writes `{conceded, 'Walkover'}`. `toMatch`: the manual result's
+  winner/score win. **`updateMatchSnapshot` never overwrites a manual result** (stays completed,
+  winner/won untouched) — pure `snapshotOutcome` (REVIEW must-fix; covers #05 AMEND + stale devices).
+- **Text:** `core/matchResult.manualResultLine` ("Match abandoned — Rain", "Blue won — Red
+  conceded", "Red awarded the match — Injury", "No result — …", "Match drawn/tied") on the
+  MatchCard footer, share text, a saved banner on Scoring/Info/Summary, and cricket's Summary
+  (`SummaryProps.manualResultLine`, no LIVE card for a match ended early).
+- **Standings (helper agent):** `noResultPoints(sport, cfg)` (cricket 1, others 0; `nrPoints`),
+  NR/abandoned → played+1, nr+1, +points, no for/against/rate; `countNrr:false` keeps points but
+  not runs/rate; cricket `manualRate` charges both sides full overs (registry passes `manual`);
+  head-to-head gives each side NR points (was an away win) and SB/ratio skip NR; LeagueTable NR
+  column when any; PointsEditor "No result" 0–3; teamStats skips NR. `isEliminationStage` in
+  bracket.ts (KO stages + third/q1/q2/eliminator/play-in).
+- **UI:** "🏁 End match…" (scorers + hosts, once started): How did it end? (Win · Conceded ·
+  Draw|Tie · No result · Abandoned; knockouts only Win/Conceded — "Knockout: pick who goes
+  through."), Who wins?, reason (required, chips Rain · Bad light · Ground unfit · Time up · Injury
+  · Team left), cricket "Count in NRR (all overs)", live preview incl. points-table effect.
+- Verified in demo (8093): cricket m8 Abandoned/Rain → banner, card "Match abandoned — Rain",
+  Stats table 1NR each (+1, runs excluded); football m1 Win/Time up → "+3". Tests:
+  match-result (5) + match-result-standings (13); standings/tiebreakers unchanged. 426 tests.
+
+---
+
 ### 2026-10-09 — One active scorer: scoring lock, take over, hand over, server-ordered events (parity #03)
 
 - **Ask (parity queue #03):** two scorers tapping the same match overwrote each other (each phone

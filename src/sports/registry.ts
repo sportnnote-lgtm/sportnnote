@@ -60,7 +60,13 @@ let rateWired = false;
 export function getSport(id: SportId): SportPlugin<any> {
   if (!rateWired) {
     rateWired = true;
-    setStandingsRateProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsRate?.(state) ?? null));
+    // A match closed by hand (parity #04) is charged its full overs when the
+    // sport says so (cricket "count in NRR, all overs").
+    setStandingsRateProvider((sport, state, manual) => {
+      if (state == null) return null;
+      const p = SPORTS[sport];
+      return (manual && p.manualRate ? p.manualRate(state) : p.standingsRate?.(state)) ?? null;
+    });
     setStandingsPointsProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsPoints?.(state) ?? null));
   }
   return SPORTS[id];

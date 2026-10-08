@@ -158,6 +158,9 @@ export interface SummaryProps {
   homeColor?: string;
   awayColor?: string;
   onPlayer?: (playerId: string) => void;
+  /** set when the match was closed by hand (parity #04): the final word, which
+   *  replaces the sport's own result line and LIVE treatment */
+  manualResultLine?: string;
 }
 
 /**
@@ -232,6 +235,13 @@ export interface SportPlugin<S = unknown> {
    *  overs faced by each side (a side bowled out counts its full quota), which
    *  drives Net Run Rate. Sports without a rate omit this. */
   standingsRate?: (state: S) => { home: number; away: number } | null;
+  /** Rate denominators for a match ended by hand (parity #04, "Count in NRR —
+   *  all overs"): cricket charges BOTH sides their full `oversLimit`. Same shape
+   *  as `standingsRate`; the standings use it instead when `match.result` is set. */
+  manualRate?: (state: S) => { home: number; away: number } | null;
+  /** End-match-by-hand dialog (parity #04): what the level result is called
+   *  ("Draw" by default, cricket "Tie") and whether to offer the NRR toggle. */
+  manualEnd?: { drawLabel: string; nrrToggle?: boolean };
   /** Rally points won by each side over the match (every game's points) — the
    *  ITTF "points ratio" league tie-break. Rally sports supply it. */
   standingsPoints?: (state: S) => { home: number; away: number } | null;

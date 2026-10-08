@@ -212,6 +212,10 @@ export function nrrOvers(s: CricketState): { home: number; away: number } {
     inn.wickets >= s.wicketsLimit ? s.oversLimit : inn.balls / s.ballsPerOver;
   return { home: facedOvers(s.scores.home), away: facedOvers(s.scores.away) };
 }
+/** NRR overs for a match ended by hand with "Count in NRR (all overs)": each
+ *  side is charged its full quota, however far the match got (parity #04). */
+export const manualNrrOvers = (s: CricketState): { home: number; away: number } =>
+  ({ home: s.oversLimit, away: s.oversLimit });
 // Delivery notation for ball-by-ball: the Nth ball reads over.ball with ball 1–bpo,
 // so the last ball of an over is "0.6" (not "1.0"). `balls` includes this delivery.
 export const ballStamp = (balls: number, bpo = 6) =>

@@ -13,6 +13,8 @@ export interface TeamStanding {
   won: number;
   lost: number;
   drawn: number;
+  /** no result / abandoned (parity #04): counts as played, `noResult` points each */
+  nr: number;
   /** points/goals/runs scored & conceded across the team's matches */
   for: number;
   against: number;
@@ -46,6 +48,9 @@ export interface StandingsConfig {
   win: number;
   draw: number;
   loss: number;
+  /** points each side takes from a no-result / abandoned match (parity #04).
+   *  Absent = the sport default — always read it through `noResultPoints()`. */
+  noResult?: number;
   order: TieBreaker[];
   /** ITTF-style: when a criterion separates SOME of the tied teams, the ones
    *  still level start the whole procedure again among themselves only (so
@@ -58,7 +63,9 @@ const isTieBreaker = (s: string): s is TieBreaker => (ALL_TB as string[]).includ
 /** Sensible defaults: football is the modern 3 points a win; cricket ranks ties
  *  by net run rate; chess and table tennis follow FIDE / ITTF; everything else
  *  by points difference. Head-to-head first, which is how most real
- *  competitions read a two-team tie. */
+ *  competitions read a two-team tie. A no result is worth 1 in cricket (common
+ *  league practice, the washout shares the points) and 0 elsewhere (usually
+ *  replayed) — see `noResultPoints`. */
 export function defaultStandingsConfig(sport: SportId): StandingsConfig {
   // Chess: game points 1 / ½ / 0. FIDE (C.07) leaves the order to each event;
   // elite round robins (Candidates 2024, Tata Steel 2024) rank ties by
@@ -73,6 +80,12 @@ export function defaultStandingsConfig(sport: SportId): StandingsConfig {
   return { win, draw: 1, loss: 0, order };
 }
 
+/** Points each side takes from a no result / abandoned match: the config's
+ *  `noResult` (the organiser's `nrPoints`), else the sport default. */
+export function noResultPoints(sport: SportId, cfg?: StandingsConfig | null): number {
+  return cfg?.noResult ?? (sport === 'cricket' ? 1 : 0);
+}
+
 /** The tie-breakers an organiser can put first for a sport (PointsEditor). */
 export function availableTieBreakers(sport: SportId): TieBreaker[] {
   if (sport === 'chess') return ['sb', 'wins', 'h2h'];
@@ -81,8 +94,9 @@ export function availableTieBreakers(sport: SportId): TieBreaker[] {
 }
 
 /** Read a tournament's per-sport override from its `formats[sport]` (reserved
- *  `winPoints`/`drawPoints`/`lossPoints`/`tieBreak` keys), falling back to the
- *  sport defaults. Zero-migration: rides on the existing formats jsonb. */
+ *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`tieBreak` keys), falling
+ *  back to the sport defaults. Zero-migration: rides on the existing formats
+ *  jsonb. `noResult` is set only when the organiser chose `nrPoints`. */
 export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, unknown> | null): StandingsConfig {
   const d = defaultStandingsConfig(sport);
   if (!fmt) return d;
@@ -90,14 +104,18 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
   const order = typeof fmt.tieBreak === 'string'
     ? (fmt.tieBreak as string).split(',').map((s) => s.trim()).filter(isTieBreaker)
     : [];
-  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}) };
+  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}),
+    ...(typeof fmt.nrPoints === 'number' ? { noResult: fmt.nrPoints } : {}) };
 }
 
 /** DI so `standings.ts` can compute NRR without importing the sport registry
  *  (which would pull React Native into the pure test runner). The app registers
  *  a provider at startup (see registry.ts); returns the rate denominators —
- *  cricket's overs faced by each side — or null for sports without a rate. */
-type RateProvider = (sport: SportId, state: unknown) => { home: number; away: number } | null;
+ *  cricket's overs faced by each side — or null for sports without a rate.
+ *  `manual` is set for a match ended by hand (parity #04): the provider should
+ *  use the plugin's `manualRate` (cricket charges both sides all their overs)
+ *  when it has one, else the normal `standingsRate`. */
+type RateProvider = (sport: SportId, state: unknown, manual?: boolean) => { home: number; away: number } | null;
 let rateProvider: RateProvider | null = null;
 export function setStandingsRateProvider(fn: RateProvider | null): void { rateProvider = fn; }
 /** Rally points won by each side over the whole match (table tennis: every
@@ -106,25 +124,41 @@ type PointsProvider = (sport: SportId, state: unknown) => { home: number; away: 
 let pointsProvider: PointsProvider | null = null;
 export function setStandingsPointsProvider(fn: PointsProvider | null): void { pointsProvider = fn; }
 
+/** A match closed by hand as no result / abandoned (parity #04) — no winner,
+ *  counts as played, each side takes `noResult` points. */
+export const isNoResultMatch = (m: Match): boolean =>
+  m.result?.kind === 'no_result' || m.result?.kind === 'abandoned';
+
 /** League table for a sport, ranked by the config's points + tie-breakers. */
 export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): TeamStanding[] {
   const table = new Map<string, TeamStanding>();
   const ensure = (id: string, name: string, color?: string) => {
     if (!table.has(id))
-      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0 });
+      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, nr: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0 });
     return table.get(id)!;
   };
-  const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && !!m.winner);
+  const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
   for (const m of played) {
     const h = ensure(m.homeTeam.id, m.homeTeam.name, m.homeTeam.colorHex);
     const a = ensure(m.awayTeam.id, m.awayTeam.name, m.awayTeam.colorHex);
     h.played += 1;
     a.played += 1;
-    if (m.score) {
-      h.for += m.score.home; h.against += m.score.away;
-      a.for += m.score.away; a.against += m.score.home;
+    // No result / abandoned: played and the NR points, but nothing towards
+    // for/against or the rate.
+    if (isNoResultMatch(m)) {
+      const nrPts = noResultPoints(sport, cfg);
+      h.nr += 1; a.nr += 1; h.points += nrPts; a.points += nrPts;
+      continue;
     }
-    const rate = rateProvider?.(sport, m.state);
+    // A manual cricket result with "Count in NRR" off still takes its points,
+    // but its runs and overs stay out of the table.
+    const counts = m.result?.countNrr !== false;
+    const score = m.result?.score ?? m.score;
+    if (score && counts) {
+      h.for += score.home; h.against += score.away;
+      a.for += score.away; a.against += score.home;
+    }
+    const rate = counts ? rateProvider?.(sport, m.state, !!m.result) : null;
     if (rate) {
       h.forUnits += rate.home; h.againstUnits += rate.away;
       a.forUnits += rate.away; a.againstUnits += rate.home;
@@ -145,6 +179,7 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
   if (cfg.order.includes('sb')) {
     for (const t of table.values()) t.sb = 0;
     for (const m of played) {
+      if (isNoResultMatch(m)) continue;
       const h = table.get(m.homeTeam.id)!;
       const a = table.get(m.awayTeam.id)!;
       const share = m.winner === 'draw' ? 0.5 : 1;
@@ -193,6 +228,7 @@ function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match
     if (!ids.has(m.homeTeam.id) || !ids.has(m.awayTeam.id)) continue;
     const isHome = m.homeTeam.id === teamId;
     if (!isHome && m.awayTeam.id !== teamId) continue;
+    if (isNoResultMatch(m)) continue;
     const sc = rally ? pointsProvider?.(m.sport, m.state) ?? null : m.score ?? null;
     if (!sc) continue;
     won += isHome ? sc.home : sc.away;
@@ -210,7 +246,9 @@ function headToHeadPoints(teamId: string, cluster: TeamStanding[], matches: Matc
     const isHome = m.homeTeam.id === teamId;
     const isAway = m.awayTeam.id === teamId;
     if (!isHome && !isAway) continue;
-    if (m.winner === 'draw') pts += cfg.draw;
+    // A winner-less no result shares `noResult` (it used to read as an away win).
+    if (isNoResultMatch(m)) pts += noResultPoints(m.sport, cfg);
+    else if (m.winner === 'draw') pts += cfg.draw;
     else if ((m.winner === 'home') === isHome) pts += cfg.win;
     else pts += cfg.loss;
   }
