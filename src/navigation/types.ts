@@ -54,6 +54,8 @@ export type RootStackParamList = {
   Feedback: undefined;
   /** Short share link /m/<matchId> → resolves to LiveScoring. */
   MatchLink: { matchId: string };
+  /** Invite landing (app.sportnnote.in/i/<id>): sign up with the invited number. */
+  Invite: { playerId: string; notme?: string };
   DeleteAccount: undefined;
   /** In-app messaging (migration 0027). */
   Messages: undefined;

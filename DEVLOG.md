@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Invite links land on a sign-up page; "Not me" needs a confirm; placeholder names never greeted
+
+- **Founder report:** a friend invited by number got "Hi Invited (…9401)!" and a link to a
+  plain-text page ("ask the person who invited you for the download link") — no way to sign up.
+- **Cause:** `*.supabase.co/functions` serves text/plain only (no buttons/links), and the
+  greeting used the placeholder name.
+- **Invite page** `app.sportnnote.in/i/<playerId>` (`InviteScreen`, public): "You've been added
+  to <team> 🏆" + **phone sign-up right there** (PhoneLoginCard; sign-up claims the provisional
+  player → placed in the team with their real name); Android download link; signed-in view
+  ("✓ You're in <team>" → Open team). `joinLink`/`reportLink`/`clubJoinLink` now point at the
+  app. Message: "Tap the link and sign up with this mobile number (1 minute, no password)";
+  `realName()` never greets "Invited (…1234)".
+- **Edge functions (deployed):** `join` GET → 302 to the invite page (old messages keep
+  working), `?format=json` → `{team, teamId, claimed}` (teams.roster is jsonb → JSON contains).
+  `report-invite` GET → 302 to the page's "Not you?" step (**records nothing** — link previews
+  used to be able to flag people); POST `{p}` records (only unclaimed rows).
+- **Migration 0037** (`20261018120000_claim_reported_invite.sql`): signing up with the invited
+  number claims the spot even if it was reported, and clears the report (SMS code proves the
+  number). PGlite phonelogin suite +2 tests (15/15).
+- Verified live: both old links 302 to the page; JSON returns the Fnatic team; page renders with
+  sign-up on a phone-size guest session; POST validates ids.
+
+---
+
 ### 2026-10-08 — Team stats page; tap team/player names in a match to open their profiles
 
 - **Founder report:** the team page had no stats section; in a match, team and player names

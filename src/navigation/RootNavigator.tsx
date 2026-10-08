@@ -20,6 +20,7 @@ import MatchesScreen from '../screens/MatchesScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 const LiveScoringScreen = lazyScreen(() => import('../screens/LiveScoringScreen'));
+const InviteScreen = lazyScreen(() => import('../screens/InviteScreen'));
 import AuthScreen from '../screens/AuthScreen';
 import OrganizeScreen from '../screens/OrganizeScreen';
 const CreateTournamentScreen = lazyScreen(() => import('../screens/CreateTournamentScreen'));
@@ -129,6 +130,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       JoinTeam: 'join/:token',
       // Short share links (core/shareText.ts).
       MatchLink: 'm/:matchId',
+      Invite: 'i/:playerId',
       Tournament: 't/:tournamentId',
       GolfRound: 'g/:eventId',
       PlayerProfile: 'p/:playerId',
@@ -248,6 +250,7 @@ export default function RootNavigator() {
   const publicScreens = (
     <>
       <Stack.Screen name="MatchLink" component={MatchLinkScreen} options={{ ...stackScreenOpts, title: 'Match' }} />
+      <Stack.Screen name="Invite" component={InviteScreen} options={{ ...stackScreenOpts, title: 'Join SportnNote' }} />
       <Stack.Screen
       name="LiveScoring"
       component={LiveScoringScreen}

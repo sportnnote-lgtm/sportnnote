@@ -1,18 +1,17 @@
 /**
  * Edge Function: join  (PUBLIC — deploy with --no-verify-jwt)
  * ------------------------------------------------------------------------
- * The install/accept link in a provisional-player invite (WhatsApp/SMS). Opened
- * in a browser by an invited person who isn't on the app yet. The old link pointed
- * at https://sportnnote.in/join/<id>, but that domain is the marketing site and has
- * no such route (404). This serves a clear, working page instead.
+ * The accept link in a provisional-player invite (WhatsApp/SMS).
  *
- * We don't auto-install (no Play Store listing yet) and the shared *.supabase.co
- * /functions domain forces text/plain (anti-phishing), so we return a clean,
- * ASCII-only instruction page. The key mechanic: once the invitee installs the app
- * and registers with THIS phone number, `createMyPlayer` claims this exact
- * provisional row — so they land in the team/captain slot they were invited to.
+ * The shared *.supabase.co/functions domain forces text/plain (anti-phishing),
+ * so it can't show a real page with a sign-up button. So:
+ *   GET /join?p=<playerId>              → 302 to the web app's invite page
+ *                                          (app.sportnnote.in/i/<id>), where the
+ *                                          person signs up right there with the
+ *                                          invited number and lands in the team.
+ *   GET /join?p=<playerId>&format=json  → { team, teamId, claimed } for that page.
+ * Older messages carry this link, so it keeps working forever.
  *
- * Contract:  GET /join?p=<playerId>   -> text/plain instructions
  * Deploy:    npx supabase functions deploy join --no-verify-jwt \
  *              --project-ref mpgbvbylmkwasjgupsbq
  */
@@ -20,41 +19,31 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const PROJECT_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.sportnnote.in';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const reply = (message: string) =>
-  new Response(`SportnNote\n\n${message}\n`, {
-    status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' },
-  });
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 
 Deno.serve(async (req) => {
-  const id = new URL(req.url).searchParams.get('p') ?? '';
-  if (!UUID.test(id)) {
-    return reply('This invite link looks invalid. Ask whoever invited you to resend it.');
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const url = new URL(req.url);
+  const id = url.searchParams.get('p') ?? '';
+  const json = url.searchParams.get('format') === 'json';
+  if (!json) {
+    return new Response(null, { status: 302, headers: { ...CORS, Location: UUID.test(id) ? `${APP_URL}/i/${id}` : APP_URL, 'Cache-Control': 'no-store' } });
   }
-  let team = '';
-  let claimed = false;
-  try {
-    const svc = createClient(PROJECT_URL, SERVICE);
-    const { data } = await svc.from('players').select('house_name, profile_id').eq('id', id).maybeSingle();
-    team = (data?.house_name as string | null) ?? '';
-    claimed = !!(data?.profile_id);
-  } catch {
-    // fall through with generic copy
+  const out = { team: '', teamId: null as string | null, claimed: false };
+  if (UUID.test(id)) {
+    try {
+      const svc = createClient(PROJECT_URL, SERVICE);
+      const [{ data: p }, { data: teams }] = await Promise.all([
+        svc.from('players').select('house_name, profile_id').eq('id', id).maybeSingle(),
+        // teams.roster is jsonb, so match it as a JSON array
+        svc.from('teams').select('id, name').contains('roster', JSON.stringify([id])).limit(1),
+      ]);
+      out.claimed = !!p?.profile_id;
+      out.team = (teams?.[0]?.name as string | undefined) ?? (p?.house_name as string | null) ?? '';
+      out.teamId = (teams?.[0]?.id as string | undefined) ?? null;
+    } catch { /* generic page */ }
   }
-
-  if (claimed) {
-    return reply('This invite has already been accepted. If that was you, just open the SportnNote app. If not, contact whoever invited you.');
-  }
-
-  const forTeam = team ? ` to join ${team}` : '';
-  return reply(
-    `You have been invited${forTeam} on SportnNote - the app for scoring and following matches.\n\n` +
-    `To accept:\n` +
-    `1) Install the SportnNote app (ask the person who invited you for the download link).\n` +
-    `2) Open it and register with THIS phone number - the one this invite was sent to.\n\n` +
-    `That is it - you will be placed in your team automatically. If you already have the app, just open it and register with this number.\n\n` +
-    `Didn't expect this? You can ignore the message - nothing is created for you unless you install the app and register yourself.`,
-  );
+  return new Response(JSON.stringify(out), { headers: { ...CORS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 });
