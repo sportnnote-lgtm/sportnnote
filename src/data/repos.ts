@@ -11,6 +11,8 @@ import type { PickedImage } from '../core/photo';
 import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
+import { getDeviceId } from '../core/deviceId';
+import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
 import {
   demo,
@@ -779,13 +781,88 @@ export async function getCaptainTeams(profileId?: string): Promise<string[]> {
 /** Replayable scoring log for a match (newest reducers rebuild state from it). */
 export async function getMatchEvents(matchId: string): Promise<MatchEventRecord[]> {
   if (!isSupabaseConfigured || !supabase) return demo.matchEvents[matchId] ?? [];
-  const { data, error } = await supabase
-    .from('match_events')
-    .select('seq, type, side, payload, attribution, created_at')
-    .eq('match_id', matchId)
-    .order('seq', { ascending: true });
+  const read = (cols: string) => supabase!.from('match_events').select(cols).eq('match_id', matchId).order('seq', { ascending: true });
+  let { data, error } = await read('seq, type, side, payload, attribution, created_at, client_id');
+  // Before migration 0039 there's no client_id column — read without it.
+  if (error && /client_id/.test(error.message)) ({ data, error } = await read('seq, type, side, payload, attribution, created_at'));
   if (error || !data) return [];
-  return data as MatchEventRecord[];
+  return (data as unknown as (MatchEventRecord & { client_id?: string | null })[]).map(({ client_id, ...e }) => ({ ...e, clientId: client_id ?? undefined }));
+}
+
+/* ------------------------- Scoring lock (parity #03) ----------------------- */
+// One active scorer at a time (migration 0039). scorer_ids = who MAY score; the
+// lock = who IS scoring (player + device). Demo mode keeps locks in memory; the
+// dev hook `__sportfolioScoring.takeover(matchId, name)` fakes another device.
+
+const demoLocks: Record<string, { holderId: string | null; holderName: string | null; device: string | null; at: string }> = {};
+let lockRpcMissing = false; // pre-migration database → today's behaviour
+
+const isMissingFn = (e?: { code?: string; message?: string } | null) =>
+  !!e && (e.code === 'PGRST202' || e.code === '42883' || /could not find the function/i.test(e.message ?? ''));
+
+export async function getScoringLock(matchId: string): Promise<ScoringLock> {
+  if (!isSupabaseConfigured || !supabase) {
+    const l = demoLocks[matchId];
+    return { supported: true, holderId: l?.holderId ?? null, holderName: l?.holderName ?? null, device: l?.device ?? null, at: l?.at ?? null };
+  }
+  const { data, error } = await supabase.from('matches').select('active_scorer_id, active_scorer_device, active_scorer_at').eq('id', matchId).maybeSingle();
+  if (error) return { supported: false };
+  const row = data as { active_scorer_id: string | null; active_scorer_device: string | null; active_scorer_at: string | null } | null;
+  let holderName: string | null = null;
+  if (row?.active_scorer_id) {
+    const { data: p } = await supabase.from(PLAYERS_READ).select('full_name').eq('id', row.active_scorer_id).maybeSingle();
+    holderName = (p as { full_name?: string } | null)?.full_name ?? null;
+  }
+  return { supported: true, holderId: row?.active_scorer_id ?? null, holderName, device: row?.active_scorer_device ?? null, at: row?.active_scorer_at ?? null };
+}
+
+/** Take the lock if it's free or already mine; `takeover` takes it from whoever
+ *  holds it. Returns who holds it when refused. */
+export async function claimScoring(matchId: string, opts: { takeover?: boolean; playerId?: string | null; playerName?: string } = {}): Promise<{ ok: boolean; holderId?: string; holderName?: string; at?: string }> {
+  const device = await getDeviceId();
+  if (!isSupabaseConfigured || !supabase) {
+    const l = demoLocks[matchId];
+    if (!l?.holderId || l.device === device || opts.takeover) {
+      demoLocks[matchId] = { holderId: opts.playerId ?? 'me', holderName: opts.playerName ?? 'You', device, at: new Date().toISOString() };
+      return { ok: true };
+    }
+    return { ok: false, holderId: l.holderId, holderName: l.holderName ?? undefined, at: l.at };
+  }
+  const { data, error } = await supabase.rpc('claim_scoring', { p_match: matchId, p_device: device, p_takeover: !!opts.takeover });
+  if (isMissingFn(error)) { lockRpcMissing = true; return { ok: true }; }
+  if (error) throw new Error(error.message);
+  const r = data as { ok: boolean; holder_id?: string; holder_name?: string; at?: string };
+  return { ok: r.ok, holderId: r.holder_id, holderName: r.holder_name, at: r.at };
+}
+
+/** Give scoring to another allowed scorer (they take over on their next tap). */
+export async function handoverScoring(matchId: string, toPlayerId: string, toName?: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demoLocks[matchId] = { holderId: toPlayerId, holderName: toName ?? null, device: null, at: new Date().toISOString() };
+    return;
+  }
+  const { error } = await supabase.rpc('handover_scoring', { p_match: matchId, p_to: toPlayerId });
+  if (error) throw new Error(isMissingFn(error) ? 'Handing over needs a database update first.' : error.message);
+}
+
+export async function releaseScoring(matchId: string): Promise<void> {
+  const device = await getDeviceId();
+  if (!isSupabaseConfigured || !supabase) {
+    if (demoLocks[matchId]?.device === device) delete demoLocks[matchId];
+    return;
+  }
+  await supabase.rpc('release_scoring', { p_match: matchId, p_device: device });
+}
+
+if (typeof __DEV__ !== 'undefined' && __DEV__ && typeof window !== 'undefined') {
+  (window as unknown as { __sportfolioScoring?: object }).__sportfolioScoring = {
+    /** Pretend someone on another phone took over this match's scoring. */
+    takeover(matchId: string, name = 'Another scorer') {
+      demoLocks[matchId] = { holderId: 'demo-other', holderName: name, device: 'demo-other-device', at: new Date().toISOString() };
+      return `${name} is now scoring ${matchId}`;
+    },
+    release(matchId: string) { delete demoLocks[matchId]; return 'lock cleared'; },
+  };
 }
 
 /** Server timestamp of a match's first event = when scoring actually began (kickoff).
@@ -815,19 +892,41 @@ export async function resetMatch(matchId: string): Promise<void> {
     demo.statLines = demo.statLines.filter((l) => l.matchId !== matchId);
     const m = demo.matches.find((x) => x.id === matchId);
     if (m) { m.state = {}; m.status = 'scheduled'; m.winner = undefined; m.score = undefined; }
+    delete demoLocks[matchId];
     return;
   }
+  // Back to not-started FIRST: that clears the scoring lock (migration 0039), so a
+  // host who isn't the current scorer can still wipe the log.
+  await supabase.from('matches').update({ state: {}, status: 'scheduled', winner: null, updated_at: new Date().toISOString() }).eq('id', matchId);
   await supabase.from('match_events').delete().eq('match_id', matchId);
   await supabase.from('stat_lines').update({ stats: {}, won: false }).eq('match_id', matchId);
-  await supabase.from('matches').update({ state: {}, status: 'scheduled', winner: null, updated_at: new Date().toISOString() }).eq('id', matchId);
 }
 
+/** Save one scoring event. The server numbers it (and ignores a retried
+ *  clientId); only the scoring-lock holder may write while the match is played.
+ *  THROWS on any failure, so the outbox keeps the tap instead of dropping it. */
 export async function appendMatchEvent(matchId: string, rec: MatchEventRecord): Promise<void> {
+  const device = await getDeviceId();
   if (!isSupabaseConfigured || !supabase) {
-    appendDemoMatchEvent(matchId, rec);
+    const l = demoLocks[matchId];
+    if (l?.holderId && l.device && l.device !== device) throw new Error('not_active_scorer');
+    if (!l?.holderId) demoLocks[matchId] = { holderId: 'me', holderName: 'You', device, at: new Date().toISOString() };
+    else demoLocks[matchId] = { ...l, device: l.device ?? device, at: new Date().toISOString() };
+    const arr = demo.matchEvents[matchId] ?? [];
+    if (rec.clientId && arr.some((e) => e.clientId === rec.clientId)) return;
+    appendDemoMatchEvent(matchId, { ...rec, seq: arr.reduce((m, e) => Math.max(m, e.seq), 0) + 1 });
     return;
   }
-  await supabase.from('match_events').insert({
+  if (!lockRpcMissing) {
+    const { error } = await supabase.rpc('append_match_event', {
+      p_match: matchId, p_device: device, p_client_id: rec.clientId ?? null, p_type: rec.type,
+      p_side: rec.side ?? null, p_payload: rec.payload ?? {}, p_attribution: rec.attribution ?? null,
+    });
+    if (!error) return;
+    if (!isMissingFn(error)) throw new Error(error.message);
+    lockRpcMissing = true; // pre-migration: plain insert below
+  }
+  const { error } = await supabase.from('match_events').insert({
     match_id: matchId,
     seq: rec.seq,
     type: rec.type,
@@ -835,11 +934,25 @@ export async function appendMatchEvent(matchId: string, rec: MatchEventRecord): 
     payload: rec.payload ?? {},
     attribution: rec.attribution ?? null,
   });
+  if (error) throw new Error(error.message);
 }
 
 /** Remove & return the most recent event for a match — powers undo. */
 export async function popMatchEvent(matchId: string): Promise<MatchEventRecord | null> {
-  if (!isSupabaseConfigured || !supabase) return popDemoMatchEvent(matchId);
+  if (!isSupabaseConfigured || !supabase) {
+    const l = demoLocks[matchId];
+    if (l?.holderId && l.device && l.device !== (await getDeviceId())) throw new Error('not_active_scorer');
+    return popDemoMatchEvent(matchId);
+  }
+  if (!lockRpcMissing) {
+    const { data, error } = await supabase.rpc('pop_match_event', { p_match: matchId, p_device: await getDeviceId() });
+    if (!error) {
+      const r = data as (MatchEventRecord & { client_id?: string | null }) | null;
+      return r ? { seq: r.seq, type: r.type, side: r.side, payload: r.payload, attribution: r.attribution, clientId: r.client_id ?? undefined } : null;
+    }
+    if (!isMissingFn(error)) throw new Error(error.message);
+    lockRpcMissing = true;
+  }
   const { data } = await supabase
     .from('match_events')
     .select('seq, type, side, payload, attribution')
@@ -864,6 +977,9 @@ export async function setMatchScorers(matchId: string, playerIds: string[]): Pro
   if (!isSupabaseConfigured || !supabase) {
     const m = demo.matches.find((x) => x.id === matchId);
     if (m) { m.scorerIds = ids; m.scorerId = ids[0] ?? undefined; }
+    // Taking the active scorer off the list ends their turn (as the server does).
+    const l = demoLocks[matchId];
+    if (l?.holderId && l.holderId !== 'me' && l.holderId !== 'demo-other' && !ids.includes(l.holderId)) delete demoLocks[matchId];
     return;
   }
   const { error } = await supabase

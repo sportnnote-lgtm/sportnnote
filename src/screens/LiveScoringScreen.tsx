@@ -9,8 +9,10 @@
  * the score update instantly. The reducer being pure means the server can
  * replay the same events to authoritative state.
  */
-import { notice } from '../core/confirm';
-import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { notice, confirmAction } from '../core/confirm';
+import { getDeviceId } from '../core/deviceId';
+import { lockStatus, type ScoringLock } from '../core/scoringLock';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { shareMessage } from '../core/share';
 import { PersonPicker } from '../components/PersonPicker';
@@ -27,7 +29,7 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring } from '../data/repos';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -148,10 +150,36 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // Per-dispute "add a new name" inputs (reassign to someone not in the system).
   const [newName, setNewName] = useState<Record<string, string>>({});
 
-  const { state, dispatch, undo, reset, eventCount, live, syncing } = useLiveMatch({
+  // One active scorer at a time (parity #03): the lock names who IS scoring;
+  // scorerIds only says who MAY. Polled on focus and every 15 s while scoring.
+  const [lock, setLock] = useState<ScoringLock | null>(null);
+  const [deviceId, setDeviceId] = useState('');
+  useEffect(() => { void getDeviceId().then(setDeviceId); }, []);
+  const lockStat = hasMatch ? lockStatus(lock, myPlayerId, deviceId) : 'unsupported';
+  const [lostTo, setLostTo] = useState<string | null>(null); // "Scoring moved to …"
+  const prevLockStat = useRef(lockStat);
+  useEffect(() => {
+    if (prevLockStat.current === 'mine' && (lockStat === 'other' || lockStat === 'mine-other-device')) setLostTo(lock?.holderName ?? 'another device');
+    if (lockStat === 'mine') setLostTo(null);
+    prevLockStat.current = lockStat;
+  }, [lockStat, lock?.holderName]);
+  const lockAgo = (() => {
+    const t = lock?.at ? Date.parse(lock.at) : NaN;
+    if (!Number.isFinite(t)) return '';
+    const min = Math.max(0, Math.round((Date.now() - t) / 60_000));
+    return min < 1 ? 'just now' : `${min} min ago`;
+  })();
+  const refreshLock = useCallback(async () => {
+    if (!matchId) return;
+    const l = await getScoringLock(matchId).catch(() => null);
+    setLock(l);
+  }, [matchId]);
+
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected } = useLiveMatch({
     matchId,
     sport,
     canScore,
+    lockStatus: lockStat,
     homeTeamName,
     awayTeamName,
     homeTeamId: meta.homeTeamId,
@@ -653,6 +681,21 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             </Text>
           )}
         </View>
+      ) : lockStat === 'other' || lockStat === 'mine-other-device' ? (
+        <View style={st.lockCard}>
+          <Text style={textStyles.body}>
+            <Text style={{ fontWeight: '800' }}>{lockStat === 'mine-other-device' ? 'You' : lock?.holderName ?? 'Someone'}</Text>
+            {lockStat === 'mine-other-device' ? ' are scoring on another device' : ' is scoring right now'}{lockAgo ? ` (last update ${lockAgo})` : ''}. One person scores at a time.
+          </Text>
+          <View style={st.lockBtns}>
+            <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} accessibilityRole="button" onPress={() => void takeOver()}>
+              <Text style={st.assignBtnText}>Take over scoring</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.lockWatch} activeOpacity={0.85} accessibilityRole="button" onPress={() => setTab(contentViews[0].key)}>
+              <Text style={st.lockWatchText}>Watch live</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : !started ? (
         <View style={{ gap: theme.spacing(3), alignItems: 'center' }}>
           <Text style={[textStyles.muted, { textAlign: 'center' }]}>You're the scorer for this match.</Text>
@@ -779,6 +822,43 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   ];
   const defaultTab = canScore ? 'scoring' : contentViews[0].key;
   const activeTab = TABS.some((tb) => tb.key === tab) ? tab : defaultTab;
+
+  // Scoring lock: read it on focus and every 15 s on the Scoring tab; an allowed
+  // scorer opening a match nobody is scoring takes it silently (resume = no dialog).
+  useFocusEffect(useCallback(() => { void refreshLock(); }, [refreshLock]));
+  useEffect(() => {
+    if (!matchId || activeTab !== 'scoring') return;
+    const id = setInterval(() => { void refreshLock(); }, 15_000);
+    return () => clearInterval(id);
+  }, [matchId, activeTab, refreshLock]);
+  useEffect(() => {
+    if (!matchId || !canScore || complete || lockStat !== 'free' || !deviceId) return;
+    void claimScoring(matchId, { playerId: myPlayerId, playerName: profile?.fullName }).then(() => refreshLock()).catch(() => {});
+  }, [matchId, canScore, complete, lockStat, deviceId, myPlayerId, profile?.fullName, refreshLock]);
+  const takeOver = async () => {
+    if (!matchId) return;
+    const who = lock?.holderName ?? 'the other scorer';
+    if (!(await confirmAction(`Take over from ${who}?`, 'Their device will stop scoring; any taps they haven’t synced won’t be saved.', 'Take over'))) return;
+    try {
+      await claimScoring(matchId, { takeover: true, playerId: myPlayerId, playerName: profile?.fullName });
+      setLostTo(null);
+      await refreshLock();
+    } catch (e) {
+      notice('Couldn’t take over', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
+  const handOver = async (toId: string) => {
+    if (!matchId) return;
+    const toName = nameOf(toId) ?? 'them';
+    if (!(await confirmAction(`Hand scoring to ${toName}?`, 'They’ll score from their next tap; this device stops scoring.', 'Hand over'))) return;
+    try {
+      await handoverScoring(matchId, toId, toName);
+      void notify({ title: `🎯 You're scoring now — ${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`, body: 'Open the match to keep scoring.', playerId: toId, matchId });
+      await refreshLock();
+    } catch (e) {
+      notice('Couldn’t hand over', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
   const scrollTabs = TABS.length > 3;
     const fmt = meta.config ?? {};
     const dateStr = meta.startsAt ? formatDateTime(meta.startsAt, viewerTz) : '—';
@@ -975,7 +1055,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       <View style={st.infoCard}>
         <Text style={textStyles.h3}>Match scorers</Text>
         <Text style={textStyles.muted}>
-          Anyone here can update the score live from their own device; everyone else follows along. You can add more than one and change them anytime — even mid-match.
+          Several people can be allowed to score; one scores at a time, from their own device, and everyone else follows along. Add or change scorers anytime — even mid-match.
         </Text>
 
         {/* Current scorers — each removable by a manager. */}
@@ -999,13 +1079,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>{nameOf(id) ?? 'Scorer'}{mine ? ' · you' : ''}</Text>
-                  <Text style={textStyles.muted} numberOfLines={1}>{mine ? '📱 Scoring from this device' : personOf(id)?.invited ? '⏳ Invited · hasn’t joined yet' : matchLive ? 'Scoring from their device' : 'Can score this match'}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{mine ? (lock?.supported && lock.holderId && lock.holderId !== id ? 'Can score — someone else is scoring now' : '📱 Scoring from this device') : personOf(id)?.invited ? '⏳ Invited · hasn’t joined yet' : matchLive ? 'Scoring from their device' : 'Can score this match'}</Text>
                   {canManage && personOf(id)?.invited ? (
                     <RemindInstall playerId={id} name={nameOf(id) ?? 'Scorer'} phone={personOf(id)?.phone} message={inviteTextFor('scorer')(realName(nameOf(id)))} />
                   ) : null}
                 </View>
-                {matchLive ? (
+                {lock?.holderId === id ? (
+                  <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>SCORING NOW</Text></View>
+                ) : matchLive && lockStat === 'unsupported' ? (
                   <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>LIVE</Text></View>
+                ) : (canManage || lockStat === 'mine') && lock?.supported && !complete && !personOf(id)?.invited ? (
+                  <Text style={st.editLink} accessibilityRole="button" accessibilityLabel={`Hand scoring to ${nameOf(id) ?? 'scorer'}`} onPress={() => void handOver(id)}>Hand over</Text>
                 ) : null}
                 {canManage && (
                   <Text style={[st.editLink, { color: theme.colors.danger }]} accessibilityRole="button" accessibilityLabel={`Remove ${nameOf(id) ?? 'scorer'}`} onPress={() => removeScorer(id)}>Remove</Text>
@@ -1409,7 +1493,22 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
               </View>
-              {matchId && canScore ? <OfflineSyncBanner matchId={matchId} /> : null}
+              {matchId && canScore && (lostTo || rejectedCount > 0) ? (
+                <View style={[st.syncBanner, st.syncOffline]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.syncTitle}>Scoring moved to {lock?.holderName ?? lostTo ?? 'another device'}</Text>
+                    {rejectedCount > 0 ? <Text style={st.syncSub}>{rejectedCount === 1 ? '1 unsynced tap from this device wasn’t saved.' : `${rejectedCount} unsynced taps from this device weren’t saved.`}</Text> : null}
+                  </View>
+                  {rejectedCount > 0 ? (
+                    <TouchableOpacity style={st.syncBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => void discardRejected()}>
+                      <Text style={st.syncBtnText}>Discard</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={st.syncBtnText} accessibilityRole="button" onPress={() => setLostTo(null)}>✕</Text>
+                  )}
+                </View>
+              ) : null}
+              {matchId && canScore && rejectedCount === 0 ? <OfflineSyncBanner matchId={matchId} /> : null}
               {/* Running score, so the scorer never leaves this tab to check the
                   state. The big board above the tabs is suppressed here to avoid
                   duplication. Sports with a broadcast board (tennis/volleyball/
@@ -1774,6 +1873,10 @@ const st = StyleSheet.create({
   mgrAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
   scorerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   scorerAvatarText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900' },
+  lockCard: { gap: theme.spacing(3), padding: theme.spacing(4), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt },
+  lockBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3), alignItems: 'center' },
+  lockWatch: { paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border },
+  lockWatchText: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.body },
   scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
   scorerLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
   scorerLiveText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },

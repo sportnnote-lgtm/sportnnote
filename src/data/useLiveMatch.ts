@@ -16,7 +16,7 @@
  * happened. Stat-line writes and notifications happen only on the scorer's
  * dispatch, never on replay, so viewers never double-count.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
 import { recordStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch } from './repos';
@@ -24,7 +24,10 @@ import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
 import type { MatchEventRecord, SportId } from '../core/types';
-import type { Attribution, ScoreAction } from '../sports/types';
+import type { ScoreAction } from '../sports/types';
+import { mergeLog, eventKey, statReversals } from './eventLog';
+import { newUuid } from '../core/deviceId';
+import { canWriteWith, type LockStatus } from '../core/scoringLock';
 
 const toAction = (e: MatchEventRecord): ScoreAction => ({
   type: e.type,
@@ -33,13 +36,6 @@ const toAction = (e: MatchEventRecord): ScoreAction => ({
   attribution: e.attribution ?? undefined,
 });
 
-/** Merge backend + queued (unsynced) events, de-duped by seq and ordered — so
- *  replay reflects everything even when some taps haven't synced yet. */
-const mergeBySeq = (a: MatchEventRecord[], b: MatchEventRecord[]): MatchEventRecord[] => {
-  const bySeq = new Map<number, MatchEventRecord>();
-  for (const e of [...a, ...b]) bySeq.set(e.seq, e);
-  return [...bySeq.values()].sort((x, y) => x.seq - y.seq);
-};
 
 export interface UseLiveMatch {
   state: unknown;
@@ -53,6 +49,10 @@ export interface UseLiveMatch {
   /** true = changes are broadcast over realtime (Supabase); false = local-only */
   live: boolean;
   syncing: boolean;
+  /** taps the server refused because another device took over scoring */
+  rejectedCount: number;
+  /** throw those taps away (reversing the stats they credited) and reload */
+  discardRejected: () => Promise<void>;
 }
 
 export function useLiveMatch(params: {
@@ -69,8 +69,12 @@ export function useLiveMatch(params: {
   tournamentId?: string;
   /** organizer-chosen format (overs, players/side, sub rules…) */
   config?: Record<string, unknown>;
+  /** the scoring lock for this device (parity #03); only the holder writes */
+  lockStatus?: LockStatus;
 }): UseLiveMatch {
-  const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config } = params;
+  const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config, lockStatus = 'unsupported' } = params;
+  // Allowed to score AND (holding the lock, or nobody holds it, or no lock yet).
+  const canWrite = canScore && canWriteWith(lockStatus);
   const plugin = getSport(sport);
   const live = isSupabaseConfigured && !!matchId && !!supabase;
 
@@ -81,7 +85,10 @@ export function useLiveMatch(params: {
   // Refs avoid stale closures inside the realtime callback and dispatch.
   const stateRef = useRef(state);
   const seqRef = useRef(0);
-  const appliedRef = useRef<Set<number>>(new Set());
+  // Events already applied here, by clientId (or seq for older events).
+  const appliedRef = useRef<Set<string>>(new Set());
+  useSyncExternalStore(matchOutbox.subscribe, matchOutbox.getSnapshot, matchOutbox.getSnapshot);
+  const rejectedCount = matchId && matchOutbox.isRejected(matchId) ? matchOutbox.pendingCount(matchId) : 0;
 
   const setBoth = (next: unknown) => {
     stateRef.current = next;
@@ -93,13 +100,13 @@ export function useLiveMatch(params: {
   // — when an event is deleted upstream or the realtime channel reconnects.
   const rebuildFromLog = useCallback(async () => {
     if (!matchId) return;
-    const events = mergeBySeq(await getMatchEvents(matchId), matchOutbox.getPending(matchId));
+    const events = mergeLog(await getMatchEvents(matchId), matchOutbox.getPending(matchId));
     let s = plugin.createInitialState(config);
-    const applied = new Set<number>();
+    const applied = new Set<string>();
     let maxSeq = 0;
     for (const e of events) {
       s = plugin.reducer(s, toAction(e));
-      applied.add(e.seq);
+      applied.add(eventKey(e));
       maxSeq = Math.max(maxSeq, e.seq);
     }
     appliedRef.current = applied;
@@ -138,9 +145,11 @@ export function useLiveMatch(params: {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             // Fast path: apply the single new event incrementally.
-            const e = payload.new as MatchEventRecord;
-            if (appliedRef.current.has(e.seq)) return; // already applied locally (optimistic)
-            appliedRef.current.add(e.seq);
+            const row = payload.new as MatchEventRecord & { client_id?: string | null };
+            const e: MatchEventRecord = { ...row, clientId: row.client_id ?? undefined };
+            const key = eventKey(e);
+            if (appliedRef.current.has(key)) return; // already applied locally (optimistic)
+            appliedRef.current.add(key);
             seqRef.current = Math.max(seqRef.current, e.seq);
             setBoth(plugin.reducer(stateRef.current, toAction(e)));
           } else {
@@ -169,7 +178,7 @@ export function useLiveMatch(params: {
       const next = plugin.reducer(stateRef.current, action);
       setBoth(next);
 
-      if (!matchId || !canScore) return;
+      if (!matchId || !canWrite) return;
 
       // Player attribution → stat line + notify followers (scorer side only,
       // so replay/realtime on viewers never double-counts).
@@ -205,9 +214,12 @@ export function useLiveMatch(params: {
 
       // Persist to the event log (demo store or Supabase) so the timeline is
       // durable and — in live mode — broadcast to every viewer.
+      // A provisional seq for display; the server assigns the real one, and the
+      // clientId makes a retried sync idempotent.
       const seq = seqRef.current + 1;
       seqRef.current = seq;
-      appliedRef.current.add(seq);
+      const clientId = newUuid();
+      appliedRef.current.add(clientId);
       setEventCount((c) => c + 1);
 
       // Notify followers of either team or the tournament when the match goes
@@ -232,6 +244,7 @@ export function useLiveMatch(params: {
         // can reverse it; the reducer ignores unknown payload keys on replay.
         payload: action.attribution2 ? { ...(action.payload ?? {}), _attr2: action.attribution2 } : action.payload ?? {},
         attribution: action.attribution ?? null,
+        clientId,
       };
       // Durably queue the event first (survives offline/refresh), then let the
       // outbox sync it to the backend with retry. The snapshot is derived state,
@@ -239,52 +252,52 @@ export function useLiveMatch(params: {
       matchOutbox.enqueue(matchId, rec);
       void updateMatchSnapshot(matchId, next as object, plugin.isComplete(next)).catch(() => {});
     },
-    [plugin, matchId, canScore, sport, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId]
+    [plugin, matchId, canWrite, sport, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId]
   );
 
   // Undo the last recorded event: drop it from the log, reverse any stat line it
   // credited, then re-derive state by replaying the truncated log. Repeating this
   // walks the match back to any earlier point so the scorer can fix a mistake.
   const undo = useCallback(async () => {
-    if (!matchId || !canScore) return;
+    if (!matchId || !canWrite) return;
     // Undo the freshest event wherever it lives: an unsynced tap comes off the
-    // outbox; otherwise pop it from the backend log.
-    const removed = matchOutbox.pendingCount(matchId) > 0 ? matchOutbox.popLast(matchId) : await popMatchEvent(matchId);
+    // outbox; otherwise pop it from the backend log (only the active scorer may).
+    let removed: MatchEventRecord | null;
+    try {
+      removed = matchOutbox.pendingCount(matchId) > 0 ? matchOutbox.popLast(matchId) : await popMatchEvent(matchId);
+    } catch {
+      return; // scoring moved to another device — the screen shows why
+    }
     if (!removed) return;
-    if (removed.attribution) {
-      const { playerId, stat, by = 1, extra } = removed.attribution;
-      void recordStatLine({ matchId, playerId, sport, stat, by: -by });
-      // Reverse the secondary stats the action also credited (e.g. a goal also
-      // bumped shots & shotsOnTarget) — otherwise an undone goal lingers in the
-      // per-player tallies / summary.
-      if (extra) {
-        for (const [k, v] of Object.entries(extra)) {
-          void recordStatLine({ matchId, playerId, sport, stat: k, by: -v });
-        }
-      }
-    }
-    // Reverse a second attribution stashed in the payload (e.g. a fielder's catch).
-    const a2 = (removed.payload as { _attr2?: Attribution } | null)?._attr2;
-    if (a2) {
-      void recordStatLine({ matchId, playerId: a2.playerId, sport, stat: a2.stat, by: -(a2.by ?? 1) });
-      if (a2.extra) for (const [k, v] of Object.entries(a2.extra)) void recordStatLine({ matchId, playerId: a2.playerId, sport, stat: k, by: -v });
-    }
+    // Reverse every stat the event credited (attribution, its extras, and a second
+    // attribution such as a fielder's catch) — otherwise an undone goal lingers.
+    for (const r of statReversals(removed)) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
     // Re-derive from the truncated log. In live mode this DELETE also reaches
     // viewers' realtime subscriptions, which rebuild the same way.
     await rebuildFromLog();
     void updateMatchSnapshot(matchId, stateRef.current as object, plugin.isComplete(stateRef.current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId, canScore, plugin, sport, rebuildFromLog]);
+  }, [matchId, canWrite, plugin, sport, rebuildFromLog]);
 
   // Wipe the match back to "not started" — for a game started/scored by mistake.
   // Drops unsynced taps, deletes the backend log + blanks stat lines, then rebuilds
   // to the initial state. The SCREEN gates who may do this and the time window.
   const reset = useCallback(async () => {
-    if (!matchId || !canScore) return;
+    if (!matchId || !canWrite) return;
     matchOutbox.clear(matchId);
     await resetMatch(matchId);
     await rebuildFromLog();
-  }, [matchId, canScore, rebuildFromLog]);
+  }, [matchId, canWrite, rebuildFromLog]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing };
+  // Taps the server refused (another device took over): drop them, reverse the
+  // stat lines they already credited on dispatch, and show the server's log.
+  const discardRejected = useCallback(async () => {
+    if (!matchId) return;
+    for (const rec of matchOutbox.discard(matchId)) {
+      for (const r of statReversals(rec)) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
+    }
+    await rebuildFromLog();
+  }, [matchId, sport, rebuildFromLog]);
+
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected };
 }

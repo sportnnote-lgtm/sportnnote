@@ -89,3 +89,24 @@ describe('outbox: offline vs stuck', () => {
     assert.equal(q.isStuck(), false);
   });
 });
+
+// Parity #03: another device holds the scoring lock → the server will never take
+// these taps. That's neither "offline" nor "stuck": the queue is REJECTED, stops
+// retrying, and the scorer is offered Discard (with the stats those taps credited
+// reversed). See matchOutbox.flush + eventLog.isRejection.
+import { isRejection } from '../src/data/eventLog.ts';
+
+describe('outbox: rejected by the scoring lock', () => {
+  function classify(message: string, deviceOnline: boolean) {
+    if (isRejection(message)) return 'rejected';
+    return deviceOnline ? 'retry' : 'offline';
+  }
+  test('a lock refusal is permanent — rejected, regardless of network', () => {
+    assert.equal(classify('not_active_scorer', true), 'rejected');
+    assert.equal(classify('not_active_scorer', false), 'rejected');
+  });
+  test('ordinary failures keep retrying', () => {
+    assert.equal(classify('Failed to fetch', true), 'retry');
+    assert.equal(classify('Failed to fetch', false), 'offline');
+  });
+});

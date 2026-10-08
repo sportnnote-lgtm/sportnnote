@@ -727,6 +727,8 @@ export interface MatchEventRecord {
   attribution?: { playerId: string; stat: string; by?: number; playerName?: string; extra?: Record<string, number>; tracked?: string[] } | null;
   /** server insert time; present when read back (used to find kickoff). */
   created_at?: string;
+  /** this device's id for the tap (idempotent retries; migration 0039) */
+  clientId?: string;
 }
 
 export type MatchStatus = 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';

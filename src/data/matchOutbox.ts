@@ -13,6 +13,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appendMatchEvent } from './repos';
 import type { MatchEventRecord } from '../core/types';
+import { isRejection } from './eventLog';
 
 const keyFor = (matchId: string) => `sportfolio.outbox.${matchId}`;
 
@@ -30,6 +31,9 @@ const flushing = new Set<string>();
 const failures = new Map<string, number>();
 const lastError = new Map<string, string>();
 const STUCK_AFTER = 3;
+// Matches whose queued taps the server REFUSED (another device holds the scoring
+// lock). Never retried — the scorer discards them (see useLiveMatch).
+const rejected = new Set<string>();
 
 // On the web we get real online/offline events; on native we probe instead.
 const hasOnlineEvents =
@@ -64,6 +68,8 @@ export const matchOutbox = {
   /** The last sync error for a match, for display/support. */
   syncError: (matchId: string) => lastError.get(matchId) ?? null,
   pendingCount: (matchId: string) => queues.get(matchId)?.length ?? 0,
+  /** The server refused this match's queued taps (scoring moved to another device). */
+  isRejected: (matchId: string) => rejected.has(matchId),
   getPending: (matchId: string) => queues.get(matchId) ?? [],
 
   /** Load a match's persisted queue into memory (once). Returns the pending events. */
@@ -105,13 +111,27 @@ export const matchOutbox = {
    *  that was started by mistake, so nothing pending re-appears on rebuild. */
   clear(matchId: string) {
     queues.set(matchId, []);
+    rejected.delete(matchId);
     void persist(matchId);
     emit();
+  },
+
+  /** Throw away refused taps and return them (so their stats can be reversed). */
+  discard(matchId: string): MatchEventRecord[] {
+    const removed = queues.get(matchId) ?? [];
+    queues.set(matchId, []);
+    rejected.delete(matchId);
+    failures.delete(matchId);
+    lastError.delete(matchId);
+    void persist(matchId);
+    emit();
+    return removed;
   },
 
   /** Try to sync a match's queue to the backend, oldest first. */
   async flush(matchId: string, force = false): Promise<void> {
     if (flushing.has(matchId)) return;
+    if (rejected.has(matchId)) return; // the server will never take these — awaiting Discard
     if (force) failures.delete(matchId); // a manual retry gets a clean slate
     if (!online && !force) return; // known offline — wait for reconnect
     const q = queues.get(matchId);
@@ -124,6 +144,12 @@ export const matchOutbox = {
         try {
           await appendMatchEvent(matchId, rec);
         } catch (e) {
+          if (isRejection(e instanceof Error ? e.message : String(e))) {
+            rejected.add(matchId);
+            lastError.set(matchId, 'Scoring moved to another device');
+            emit();
+            return;
+          }
           const n = (failures.get(matchId) ?? 0) + 1;
           failures.set(matchId, n);
           lastError.set(matchId, e instanceof Error ? e.message : 'Sync failed');

@@ -13,6 +13,42 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — One active scorer: scoring lock, take over, hand over, server-ordered events (parity #03)
+
+- **Ask (parity queue #03):** two scorers tapping the same match overwrote each other (each phone
+  numbered events locally; `mergeBySeq` de-duped by seq), undo removed the other phone's ball,
+  and `appendMatchEvent` IGNORED insert errors — a collision or RLS denial counted as synced and
+  the outbox dropped the tap.
+- **Server (migration 0039 `20261019120300_scoring_lock.sql`, founder to run):** `matches.active_scorer_id /
+  _device / _at`, `match_events.client_id` (unique per match). RPCs `claim_scoring` (free, mine,
+  or `takeover`), `handover_scoring` (+ activity_log in tournaments), `release_scoring`,
+  `append_match_event` (can_manage_match AND lock holder; server assigns seq; a retried client_id
+  returns its seq; first tap on a free match takes the lock), `pop_match_event` (atomic, holder
+  only). Trigger `guard_match_event_write` blocks direct client writes by non-holders. Per REVIEW
+  the lock only applies while the match is scheduled/live: `clear_scoring_lock` drops it on
+  completed/cancelled/postponed, reset (live→scheduled or state wiped) and when the holder leaves
+  `scorer_ids`; afterwards managers can still write (post-match corrections). PGlite suite
+  `scoringlock.mjs` 27/27.
+- **Client:** `core/deviceId` (per device; web adds a per-tab sessionStorage suffix — REVIEW),
+  pure `core/scoringLock.lockStatus` (unsupported/free/mine/mine-other-device/other) and
+  `data/eventLog` (`mergeLog` by clientId, `eventKey`, `statReversals`, `isRejection`).
+  `appendMatchEvent` now THROWS on any error (stuck, never lost); uses the RPCs, falling back to
+  the old insert before the migration. `getMatchEvents` reads `client_id` tolerantly.
+  `matchOutbox`: refused taps → `isRejected`, no retries, `discard()`. `useLiveMatch` gives each
+  tap a clientId, gates writes on the lock, and `discardRejected()` reverses the stat lines those
+  taps credited (REVIEW must-fix). Demo: in-memory locks + `__sportfolioScoring.takeover(id,
+  name)`.
+- **UI (LiveScoringScreen):** lock read on focus + every 15 s on Scoring; an allowed scorer
+  auto-claims a free lock. Someone else scoring → card "**X** is scoring right now (last update…).
+  One person scores at a time." + Take over (confirm) / Watch live. Losing the lock → banner
+  "Scoring moved to X" + "N unsynced taps weren't saved" + Discard. Scorer list: "SCORING NOW" on
+  the holder, "Hand over" (confirm → handover + push to them).
+- Verified in demo (8093): football (auto-claim, takeover card + banner, queued tap rejected →
+  Discard, Take over, Hand over moves SCORING NOW), cricket and badminton cards. Tests:
+  scoring-lock (2), event-log (7), match-outbox (+2). 408 tests.
+
+---
+
 ### 2026-10-09 — Squad permission gates + honest errors on captain/roster/role changes (parity #02)
 
 - **Ask (parity queue #02):** every viewer of a team squad saw "Make captain", "Generate invite
