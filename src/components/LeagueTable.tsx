@@ -41,7 +41,7 @@ export function LeagueTable({
                 </Text>
               </View>
               <View style={st.ptsCol}>
-                <Text style={st.pts}>{t.points}</Text>
+                <Text style={st.pts}>{t.points}{t.adjust ? '*' : ''}</Text>
                 <Text style={st.ptsLabel}>PTS</Text>
               </View>
             </View>

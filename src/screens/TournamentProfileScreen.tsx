@@ -35,7 +35,7 @@ import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFo
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
 import { medalStandings } from '../data/medalStandings';
 import { MedalTable } from '../components/MedalTable';
-import { groupTables, superPhaseLabel } from '../data/groups';
+import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
@@ -253,6 +253,7 @@ export default function TournamentProfileScreen() {
   // own league table, separate from the group stage.
   const superMatches = useMemo(() => (activeSport ? matches.filter((m) => m.stage === 'super' && m.sport === activeSport) : []), [matches, activeSport]);
   const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport, stCfg) : []), [superMatches, activeSport, stCfg]);
+  const phases = useMemo(() => (activeSport ? standingsPhases(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
   const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
   const categories = useMemo(
     () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),
@@ -729,27 +730,22 @@ export default function TournamentProfileScreen() {
                 ))}
               </ScrollView>
             )}
-            {activeSport && groups.length > 0 ? (
-              groups.map((g) => (
-                <View key={g.name} style={{ gap: theme.spacing(1) }}>
-                  <Text style={st.groupHead}>Group {g.name}</Text>
-                  <LeagueTable teams={g.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+            {/* One table per league phase (parity #07) — groups, Super phase, Swiss;
+                knockouts are never in a table (the bracket shows them). */}
+            {activeSport && phases.length > 0 ? (
+              phases.map((ph) => (
+                <View key={ph.key} style={{ gap: theme.spacing(1) }}>
+                  {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
+                  <LeagueTable teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
                 </View>
               ))
             ) : activeSport ? (
               <LeagueTable
-                teams={table}
+                teams={[]}
                 onTeam={(teamId) => nav.navigate('Team', { teamId })}
                 emptyLabel={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet.`}
               />
             ) : null}
-
-            {activeSport && superMatches.length > 0 && (
-              <View style={{ gap: theme.spacing(1) }}>
-                <Text style={st.groupHead}>🔁 {superName}</Text>
-                <LeagueTable teams={superTable} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
-              </View>
-            )}
 
             {activeSport && categories.length > 0 && (
               <>

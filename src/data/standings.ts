@@ -28,6 +28,25 @@ export interface TeamStanding {
   sb?: number;
   /** net rate (cricket: net run rate) when the sport supplies rate units */
   nrr?: number;
+  /** organiser points adjustment (parity #07): Σ of the team's signed
+   *  adjustments for this phase, already included in `points` */
+  adjust: number;
+}
+
+/** An organiser's signed points bonus/penalty for one team (parity #07), with
+ *  a public reason. Stored as a JSON array in `formats[sport].pointsAdj`.
+ *  `phase` ('league' | 'group:A' | 'super' | 'swiss') scopes it to one table;
+ *  absent = applies to every table the team appears in. */
+export interface PointsAdjustment {
+  id: string;
+  teamId: string;
+  /** signed: −2 is a deduction */
+  points: number;
+  reason: string;
+  phase?: string;
+  byName?: string;
+  /** ISO timestamp */
+  at: string;
 }
 
 /** How a league/group table awards points and breaks ties. Points default per
@@ -56,6 +75,8 @@ export interface StandingsConfig {
    *  still level start the whole procedure again among themselves only (so
    *  "among the tied" criteria are recomputed for the smaller group). */
   restart?: boolean;
+  /** organiser points adjustments (parity #07) — absent when there are none */
+  adjustments?: PointsAdjustment[];
 }
 const ALL_TB: TieBreaker[] = ['h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints'];
 const isTieBreaker = (s: string): s is TieBreaker => (ALL_TB as string[]).includes(s);
@@ -93,10 +114,32 @@ export function availableTieBreakers(sport: SportId): TieBreaker[] {
   return sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
 }
 
+/** The saved points adjustments in a sport's format (`pointsAdj`, a JSON
+ *  string). Bad JSON or malformed rows are ignored, like `manualStandings`. */
+export function pointsAdjustmentsFromFormat(fmt?: Record<string, unknown> | null): PointsAdjustment[] {
+  const raw = fmt?.pointsAdj;
+  if (typeof raw !== 'string' || !raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((a): a is PointsAdjustment => {
+    if (!a || typeof a !== 'object') return false;
+    const r = a as Record<string, unknown>;
+    return typeof r.id === 'string' && typeof r.teamId === 'string' && typeof r.points === 'number' && Number.isFinite(r.points)
+      && typeof r.reason === 'string' && typeof r.at === 'string'
+      && (r.phase === undefined || typeof r.phase === 'string') && (r.byName === undefined || typeof r.byName === 'string');
+  });
+}
+
 /** Read a tournament's per-sport override from its `formats[sport]` (reserved
- *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`tieBreak` keys), falling
- *  back to the sport defaults. Zero-migration: rides on the existing formats
- *  jsonb. `noResult` is set only when the organiser chose `nrPoints`. */
+ *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`tieBreak`/`pointsAdj`
+ *  keys), falling back to the sport defaults. Zero-migration: rides on the
+ *  existing formats jsonb. `noResult` is set only when the organiser chose
+ *  `nrPoints`; `adjustments` only when there are any. */
 export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, unknown> | null): StandingsConfig {
   const d = defaultStandingsConfig(sport);
   if (!fmt) return d;
@@ -104,8 +147,10 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
   const order = typeof fmt.tieBreak === 'string'
     ? (fmt.tieBreak as string).split(',').map((s) => s.trim()).filter(isTieBreaker)
     : [];
+  const adjustments = pointsAdjustmentsFromFormat(fmt);
   return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}),
-    ...(typeof fmt.nrPoints === 'number' ? { noResult: fmt.nrPoints } : {}) };
+    ...(typeof fmt.nrPoints === 'number' ? { noResult: fmt.nrPoints } : {}),
+    ...(adjustments.length ? { adjustments } : {}) };
 }
 
 /** DI so `standings.ts` can compute NRR without importing the sport registry
@@ -129,12 +174,16 @@ export function setStandingsPointsProvider(fn: PointsProvider | null): void { po
 export const isNoResultMatch = (m: Match): boolean =>
   m.result?.kind === 'no_result' || m.result?.kind === 'abandoned';
 
-/** League table for a sport, ranked by the config's points + tie-breakers. */
-export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): TeamStanding[] {
+/** League table for a sport, ranked by the config's points + tie-breakers.
+ *  `phaseKey` ('league' | 'group:A' | 'super' | 'swiss') picks which of the
+ *  config's points adjustments apply: those tagged with that phase plus the
+ *  phase-less ones (no `phaseKey` = all of them). Adjustments are added to
+ *  `points` before ranking; head-to-head ignores them. */
+export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport), phaseKey?: string): TeamStanding[] {
   const table = new Map<string, TeamStanding>();
   const ensure = (id: string, name: string, color?: string) => {
     if (!table.has(id))
-      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, nr: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0 });
+      table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, nr: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0, adjust: 0 });
     return table.get(id)!;
   };
   const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
@@ -175,6 +224,15 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
     t.diff = t.for - t.against;
     if (t.forUnits > 0 && t.againstUnits > 0) t.nrr = t.for / t.forUnits - t.against / t.againstUnits;
   }
+  // Organiser adjustments — only for teams already in this table (a team with
+  // no result in the phase has no row to adjust).
+  for (const a of cfg.adjustments ?? []) {
+    if (phaseKey && a.phase && a.phase !== phaseKey) continue;
+    const t = table.get(a.teamId);
+    if (!t) continue;
+    t.adjust += a.points;
+    t.points += a.points;
+  }
   // Sonneborn-Berger needs everyone's final points, so it's a second pass.
   if (cfg.order.includes('sb')) {
     for (const t of table.values()) t.sb = 0;
@@ -183,8 +241,9 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
       const h = table.get(m.homeTeam.id)!;
       const a = table.get(m.awayTeam.id)!;
       const share = m.winner === 'draw' ? 0.5 : 1;
-      if (m.winner === 'home' || m.winner === 'draw') h.sb! += share * a.points;
-      if (m.winner === 'away' || m.winner === 'draw') a.sb! += share * h.points;
+      // Game points only — an organiser adjustment isn't a result.
+      if (m.winner === 'home' || m.winner === 'draw') h.sb! += share * (a.points - a.adjust);
+      if (m.winner === 'away' || m.winner === 'draw') a.sb! += share * (h.points - h.adjust);
     }
   }
   return rankTeams([...table.values()], played, cfg);

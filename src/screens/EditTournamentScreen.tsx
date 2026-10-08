@@ -15,7 +15,7 @@ import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } 
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
 import { SPORT_LIST, getSport } from '../sports/registry';
-import { updateTournament } from '../data/repos';
+import { updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
 import { useTournamentById } from '../data/hooks';
 import type { SportId, TournamentScoring } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -104,13 +104,18 @@ export default function EditTournamentScreen() {
         startDate: s,
         endDate: e,
         structure: coarseStructureFrom(finalFormats, sports),
-        formats: finalFormats,
         isOpen,
         registrationDeadline: isOpen && regDeadline ? regDeadline.toISOString() : null,
         minTeams: minTeams > 0 ? minTeams : null,
         maxTeams: maxTeams > 0 ? maxTeams : null,
         scoring: sports.length > 1 ? scoring ?? null : null,
       });
+      // Formats: only what this edit changed, merged into a fresh read — so points
+      // adjustments / manual rows added meanwhile survive (REVIEW Decision 5).
+      for (const sp of Object.keys(finalFormats)) {
+        const before = (tournament?.formats as Record<string, Record<string, unknown>> | undefined)?.[sp];
+        await patchTournamentFormat(params.tournamentId, sp, formatDiff(before, finalFormats[sp as keyof FormatMap] as Record<string, unknown>));
+      }
       nav.goBack();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save changes.');

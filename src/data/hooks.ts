@@ -34,6 +34,7 @@ import {
 } from './repos';
 import { aggregate, type PlayerStats } from './stats';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
+import { standingsPhases, type StandingsPhase } from './groups';
 import { followStore, type FollowType } from './followStore';
 import { captainStore } from './captainStore';
 import { useAuth } from '../core/auth';
@@ -370,8 +371,8 @@ export function useTeamSummary(id: string) {
 /** Per-sport standings + individual stat leaders (and the matches, for reuse).
  *  Pass `tournamentId` to scope the table AND the leaders to one tournament —
  *  otherwise it's every match in that sport. */
-export function useStandings(sport: SportId, tournamentId?: string): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[] } {
-  const [data, setData] = useState<{ teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[] }>({ teams: [], leaders: [], matches: [] });
+export function useStandings(sport: SportId, tournamentId?: string): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[]; phases: StandingsPhase[] } {
+  const [data, setData] = useState<{ teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[]; phases: StandingsPhase[] }>({ teams: [], leaders: [], matches: [], phases: [] });
   useFocusEffect(
     useCallback(() => {
       let on = true;
@@ -388,6 +389,8 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
           teams: teamStandings(scopedMatches, sport, cfg),
           leaders: statLeaders(scopedLines, players, sport),
           matches: scopedMatches,
+          // Per-phase tables (league / groups / Super / Swiss), knockouts excluded (parity #07).
+          phases: standingsPhases(scopedMatches, sport, cfg),
         });
       });
       return () => {

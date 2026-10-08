@@ -13,6 +13,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Points table: one table per phase, bonus/penalty adjustments (parity #07)
+
+- **Ask (parity queue #07):** Standings mixed groups and knockouts in one flat table; a points
+  deduction (late arrival) or bonus needed the hand-typed "Scorecard" mode.
+- **Data (helper agent, no migration):** `formats[sport].pointsAdj` = JSON list of
+  `PointsAdjustment {id, teamId, points (signed), reason, phase?, byName?, at}`;
+  `standingsConfigFromFormat` parses it (bad JSON/rows ignored, key omitted when empty);
+  `TeamStanding.adjust` added to points before ranking, per `phaseKey`; head-to-head ignores
+  adjustments; SB uses points without them. `groups.standingsPhases` → league → Group A… → Super →
+  Swiss, elimination stages dropped (#04's `isEliminationStage`); `groupTables` passes the phase so
+  adjustments feed qualification; `useStandings` returns `phases`.
+- **Every tournament-format write is now a fresh read → merge → write**: `repos.patchTournamentFormat`
+  (+ pure `formatPatch.mergeSportFormat`, `formatDiff` so callers send only the keys THEY changed)
+  — Edit tournament, Generate fixtures, Americano and manual Standings used to save a whole
+  `formats` from a stale copy and would erase adjustments (REVIEW Decision 5).
+  `savePointsAdjustments` + activity log `points.adjusted`.
+- **UI:** StandingsScreen — one table per phase (P/W/D*/L/NR*/NRR*/Pts, `12*` when adjusted,
+  public footnotes "Red House −2 · late arrival · by Priya, 12 Oct"); managers get ± per row → −/+
+  stepper (±20), required public reason, Save; existing adjustments with ✕ (confirm). Tournament
+  Stats tab and the sport hub use the same phases (no knockout rows). LeagueTable shows `*`.
+- Verified in demo (8093): t1 football — Red House −4 "late arrival" → re-ranked 1st→3rd, footnote
+  + `*`; ✕ confirms and restores. Group splits covered by tests (no grouped demo tournament).
+  Tests: standings-phases (10). 479 tests.
+
+---
+
 ### 2026-10-09 — Cricket: edit a specific past ball, bowler or batter (parity #06)
 
 - **Ask (parity queue #06):** a 1 tapped for a 4 in over 3, noticed in over 7 — undo would wipe four

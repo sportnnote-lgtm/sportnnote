@@ -14,7 +14,7 @@ import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivisions } from '../data/hooks';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { createMatch, getMyPlayerId, updateTournament } from '../data/repos';
+import { createMatch, getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
 import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
 import { defaultsFor } from '../components/FormatEditor';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
@@ -332,8 +332,9 @@ export default function GenerateFixturesScreen() {
         };
         const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
         const field = structureFieldFor(cfg.shape);
+        const before = tournament?.formats?.[sport] as Record<string, unknown> | undefined;
+        await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, mergeStructure(tournament?.formats?.[sport], cfg) as Record<string, unknown>));
         await updateTournament(params.tournamentId, {
-          formats: { ...(tournament?.formats ?? {}), [sport]: mergeStructure(tournament?.formats?.[sport], cfg) },
           // Keep the coarse label representative in a multi-sport meet (never downgrade).
           structure: rank(field) >= rank(tournament?.structure) ? field : tournament?.structure,
         });

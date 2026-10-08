@@ -14,6 +14,8 @@ import { canManageTeamLocal } from '../core/teamPermissions';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
+import { mergeSportFormat } from './formatPatch';
+import type { PointsAdjustment } from './standings';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
 import {
@@ -2824,6 +2826,42 @@ export async function updateTournament(id: string, patch: TournamentPatch): Prom
       await supabase.from('tournaments').update(row).eq('id', id); // pre-0014 fallback
     }
   }
+}
+
+/** The keys `after` changes relative to `before` (removed keys → undefined), so a
+ *  writer that edited a possibly-stale copy of a sport's format only sends what
+ *  IT changed. */
+export function formatDiff(before: Record<string, unknown> | null | undefined, after: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const b = before ?? {}, a = after ?? {};
+  for (const k of new Set([...Object.keys(b), ...Object.keys(a)])) {
+    if (JSON.stringify(b[k]) !== JSON.stringify(a[k])) out[k] = a[k];
+  }
+  return out;
+}
+
+/** Change some keys of ONE sport's tournament format: fresh read → merge → write
+ *  (REVIEW Decision 5). Saving a whole `formats` object from a stale draft used to
+ *  erase what others added meanwhile (points adjustments, manual rows…). */
+export async function patchTournamentFormat(tournamentId: string, sport: string, patch: Record<string, unknown>): Promise<void> {
+  if (!Object.keys(patch).length) return;
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === tournamentId);
+    if (t) t.formats = mergeSportFormat(t.formats as never, sport, patch) as never;
+    return;
+  }
+  const { data, error } = await supabase.from('tournaments').select('formats').eq('id', tournamentId).maybeSingle();
+  if (error) throw new Error(error.message);
+  const formats = mergeSportFormat((data as { formats?: Record<string, Record<string, unknown>> } | null)?.formats, sport, patch);
+  const res = await supabase.from('tournaments').update({ formats }).eq('id', tournamentId).select('id');
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('You can’t change this tournament.');
+}
+
+/** Save a sport's points adjustments (parity #07) + an audit line. */
+export async function savePointsAdjustments(tournamentId: string, sport: string, list: PointsAdjustment[], audit?: { detail: string; byPlayerId?: string; byName?: string }): Promise<void> {
+  await patchTournamentFormat(tournamentId, sport, { pointsAdj: list.length ? JSON.stringify(list) : undefined });
+  if (audit) await logActivity({ scope: 'tournament', refId: tournamentId, action: 'points.adjusted', detail: audit.detail, byPlayerId: audit.byPlayerId, byName: audit.byName }).catch(() => {});
 }
 
 /* ------------------------------ Organizations ------------------------------ */

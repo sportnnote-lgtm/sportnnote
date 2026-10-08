@@ -11,6 +11,7 @@
 import type { Match, SportId, TournamentEntry } from '../core/types.ts';
 import { teamStandings, defaultStandingsConfig, type TeamStanding, type StandingsConfig } from './standings.ts';
 import type { GeneratedPairing } from './fixtures.ts';
+import { isEliminationStage } from './bracket.ts';
 
 /** One group's ranked table. */
 export interface GroupTable { name: string; rows: TeamStanding[] }
@@ -43,7 +44,8 @@ function seedCmp(cfg: StandingsConfig) {
 
 /** Per-group tables for a sport: partition the tournament's matches by their
  *  `group` tag and rank each with the normal league logic. Ungrouped matches
- *  (e.g. knockout ties) are ignored. */
+ *  (e.g. knockout ties) are ignored. Each group is the `group:<name>` phase, so
+ *  the organiser's points adjustments for it feed qualification. */
 export function groupTables(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): GroupTable[] {
   const byGroup = new Map<string, Match[]>();
   for (const m of matches) {
@@ -54,7 +56,45 @@ export function groupTables(matches: Match[], sport: SportId, cfg: StandingsConf
   }
   return [...byGroup.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([name, ms]) => ({ name, rows: teamStandings(ms, sport, cfg) }));
+    .map(([name, ms]) => ({ name, rows: teamStandings(ms, sport, cfg, `group:${name}`) }));
+}
+
+/** One points table of a tournament (parity #07). `key` is the phase an
+ *  adjustment is tagged with: 'league' | 'group:A' | 'super' | 'swiss'. */
+export interface StandingsPhase { key: string; title: string; rows: TeamStanding[] }
+
+/**
+ * Every points table for a sport, in tournament order: the league (untagged
+ * matches) → each group ("Group A", …) → the Super round-robin (Super Four /
+ * Six / …) → Swiss rounds. Knockout / elimination matches (QF, SF, final,
+ * third place, playoff qualifiers, play-ins) never appear in a table. A phase
+ * shows once it has a fixture, even before any result. [] when there are none.
+ */
+export function standingsPhases(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): StandingsPhase[] {
+  const league: Match[] = [];
+  const groups = new Map<string, Match[]>();
+  const superMs: Match[] = [];
+  const swiss: Match[] = [];
+  for (const m of matches) {
+    if (m.sport !== sport || isEliminationStage(m.stage)) continue;
+    if (m.group) {
+      const list = groups.get(m.group) ?? [];
+      list.push(m);
+      groups.set(m.group, list);
+    } else if (m.stage === 'super') superMs.push(m);
+    else if (m.stage?.startsWith('swiss')) swiss.push(m);
+    else if (!m.stage || m.stage === 'group' || m.stage === 'league') league.push(m);
+  }
+  const out: StandingsPhase[] = [];
+  if (league.length) out.push({ key: 'league', title: 'League', rows: teamStandings(league, sport, cfg, 'league') });
+  for (const [name, ms] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])))
+    out.push({ key: `group:${name}`, title: `Group ${name}`, rows: teamStandings(ms, sport, cfg, `group:${name}`) });
+  if (superMs.length) {
+    const size = new Set(superMs.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size;
+    out.push({ key: 'super', title: superPhaseLabel(size), rows: teamStandings(superMs, sport, cfg, 'super') });
+  }
+  if (swiss.length) out.push({ key: 'swiss', title: 'Swiss', rows: teamStandings(swiss, sport, cfg, 'swiss') });
+  return out;
 }
 
 /**
@@ -165,4 +205,4 @@ export function matchesInDivision(matches: Match[], entries: TournamentEntry[], 
 }
 
 // Test/inspection hook (parity with the other engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision };
+(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, standingsPhases, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision };

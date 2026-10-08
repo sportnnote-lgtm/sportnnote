@@ -16,11 +16,12 @@ import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canManageTournament } from '../core/org';
 import { useTournament, useTournamentById, useStandings, useDivisions, useOrganizations } from '../data/hooks';
-import { leaderStat, teamStandings, standingsConfigFromFormat } from '../data/standings';
-import { matchesInDivision } from '../data/groups';
+import { leaderStat, teamStandings, standingsConfigFromFormat, type PointsAdjustment, type TeamStanding } from '../data/standings';
+import { matchesInDivision, standingsPhases } from '../data/groups';
 import { structureFromFormat } from '../data/structureConfig';
 import { manualRows, withManualRows, blankManualRow, rankManualRows, type ManualStandingRow } from '../data/manualStandings';
-import { getMyPlayerId, updateTournament } from '../data/repos';
+import { getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff, savePointsAdjustments } from '../data/repos';
+import { notice, confirmAction } from '../core/confirm';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -47,6 +48,17 @@ export default function StandingsScreen() {
       ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]))
       : teams),
     [activeCat, matches, entries, activeSport, teams, tournament],
+  );
+  // Saved adjustments show straight away (the tournament hook doesn't refetch).
+  const [adjOverride, setAdjOverride] = useState<Record<string, string | undefined>>({});
+  const cfg = useMemo(() => {
+    const fmt = { ...((tournament?.formats?.[activeSport] as Record<string, unknown>) ?? {}) };
+    if (activeSport in adjOverride) fmt.pointsAdj = adjOverride[activeSport];
+    return standingsConfigFromFormat(activeSport, fmt);
+  }, [activeSport, tournament, adjOverride]);
+  const phases = useMemo(
+    () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg),
+    [activeCat, matches, entries, activeSport, cfg],
   );
   const lead = leaderStat(activeSport);
   const [showTeams, setShowTeams] = useState(false);
@@ -81,13 +93,23 @@ export default function StandingsScreen() {
   };
   const addRow = () => { setRows((rs) => [...rs, blankManualRow()]); setDirty(true); };
   const removeRow = (id: string) => { setRows((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
+  const saveAdjustments = async (list: PointsAdjustment[], detail: string) => {
+    if (!tournament?.id) return;
+    try {
+      // Stamp who made a new adjustment (shown in the public footnote).
+      list = list.map((x) => (x.byName ? x : { ...x, byName: profile?.fullName ?? undefined }));
+      await savePointsAdjustments(tournament.id, activeSport, list, { detail, byPlayerId: myId ?? undefined, byName: profile?.fullName });
+      setAdjOverride((o) => ({ ...o, [activeSport]: list.length ? JSON.stringify(list) : undefined }));
+    } catch (e) {
+      notice('Couldn’t save the adjustment', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
   const saveRows = async () => {
     if (!tournament?.id) return;
     setSaving(true);
     const clean = rows.filter((r) => r.name.trim()).map((r) => ({ ...r, name: r.name.trim() }));
-    await updateTournament(tournament.id, {
-      formats: { ...(tournament.formats ?? {}), [activeSport]: withManualRows(tournament.formats?.[activeSport], divisionKey, clean) },
-    });
+    const before = tournament.formats?.[activeSport] as Record<string, unknown> | undefined;
+    await patchTournamentFormat(tournament.id, activeSport, formatDiff(before, withManualRows(tournament.formats?.[activeSport], divisionKey, clean) as Record<string, unknown>));
     setSaving(false);
     setDirty(false);
   };
@@ -169,52 +191,20 @@ export default function StandingsScreen() {
         )}
 
         {!manual && (<>
-        <SectionHeader
-          title={`${getSport(activeSport).icon} Team standings`}
-          count={table.length}
-          onSeeAll={table.length > SECTION_CAP ? () => setShowTeams((v) => !v) : undefined}
-          expanded={showTeams}
-        />
-        <Card style={{ gap: theme.spacing(1) }}>
-          <View style={[st.row, st.head]}>
-            <View style={st.posCell}><Text style={st.headText}>#</Text></View>
-            <Text style={[st.teamCol, st.headText]}>Team</Text>
-            <Text style={[st.num, st.headText]}>P</Text>
-            <Text style={[st.num, st.headText]}>W</Text>
-            {hasDraws && <Text style={[st.num, st.headText]}>D</Text>}
-            <Text style={[st.num, st.headText]}>L</Text>
-            <Text style={[st.num, st.headText]}>Pts</Text>
-          </View>
-          {table.length === 0 ? (
-            <EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact />
-          ) : (
-            (showTeams ? table : table.slice(0, SECTION_CAP)).map((t, i) => {
-              const tier = podiumColor(i);
-              return (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points, played ${t.played}, won ${t.won}${hasDraws ? `, drawn ${t.drawn}` : ''}, lost ${t.lost}`}
-                  key={t.teamId}
-                  activeOpacity={0.8}
-                  onPress={() => nav.navigate('Team', { teamId: t.teamId })}
-                >
-                  <View style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.rowDivider]}>
-                    <RankBadge index={i} />
-                    <View style={[st.teamCol, st.teamCell]}>
-                      <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
-                      <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
-                    </View>
-                    <Text style={st.num}>{t.played}</Text>
-                    <Text style={st.num}>{t.won}</Text>
-                    {hasDraws && <Text style={st.num}>{t.drawn}</Text>}
-                    <Text style={st.num}>{t.lost}</Text>
-                    <Text style={[st.num, st.pts]}>{t.points}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </Card>
+        {/* One table per league phase (league / Group A / Group B / Super / Swiss);
+            knockout results never appear in a table — the bracket covers them. */}
+        {phases.length === 0 ? (
+          <>
+            <SectionHeader title={`${getSport(activeSport).icon} Team standings`} count={0} />
+            <Card><EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact /></Card>
+          </>
+        ) : phases.map((ph) => (
+          <PhaseTable key={ph.key} title={phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} Team standings` : ph.title}
+            phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
+            expanded={showTeams} onToggle={() => setShowTeams((v) => !v)}
+            onTeam={(id) => nav.navigate('Team', { teamId: id })}
+            onSave={(list, detail) => saveAdjustments(list, detail)} />
+        ))}
 
         <SectionHeader
           title={`Top performers · ${lead.label}`}
@@ -254,7 +244,111 @@ export default function StandingsScreen() {
   );
 }
 
+/** One phase's table (league / Group A / Super Four / Swiss). Managers get a ±
+ *  per row: a signed points adjustment with a public reason (parity #07). */
+function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave }: {
+  title: string; phaseKey: string; rows: TeamStanding[]; adjustments: PointsAdjustment[]; canManage: boolean;
+  expanded: boolean; onToggle: () => void; onTeam: (teamId: string) => void;
+  onSave: (list: PointsAdjustment[], detail: string) => Promise<void>;
+}) {
+  const [openTeam, setOpenTeam] = useState<string | null>(null);
+  const [delta, setDelta] = useState(0);
+  const [reason, setReason] = useState('');
+  const hasDraws = rows.some((t) => t.drawn > 0);
+  const hasNr = rows.some((t) => (t.nr ?? 0) > 0);
+  const hasNrr = rows.some((t) => t.nrr !== undefined);
+  const phaseLabel = phaseKey === 'league' ? '' : ` (${title})`;
+  const inPhase = (a: PointsAdjustment) => !a.phase || a.phase === phaseKey;
+  const shown = expanded ? rows : rows.slice(0, SECTION_CAP);
+  const nameOf = (id: string) => rows.find((r) => r.teamId === id)?.name ?? 'A team';
+  const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`;
+  const footnotes = adjustments.filter((a) => inPhase(a) && rows.some((r) => r.teamId === a.teamId));
+  return (
+    <>
+      <SectionHeader title={title} count={rows.length} onSeeAll={rows.length > SECTION_CAP ? onToggle : undefined} expanded={expanded} />
+      <Card style={{ gap: theme.spacing(1) }}>
+        <View style={[st.row, st.head]}>
+          <View style={st.posCell}><Text style={st.headText}>#</Text></View>
+          <Text style={[st.teamCol, st.headText]}>Team</Text>
+          <Text style={[st.num, st.headText]}>P</Text>
+          <Text style={[st.num, st.headText]}>W</Text>
+          {hasDraws && <Text style={[st.num, st.headText]}>D</Text>}
+          <Text style={[st.num, st.headText]}>L</Text>
+          {hasNr && <Text style={[st.num, st.headText]}>NR</Text>}
+          {hasNrr && <Text style={[st.num, st.headText, { width: 48 }]}>NRR</Text>}
+          <Text style={[st.num, st.headText]}>Pts</Text>
+          {canManage && <View style={{ width: 24 }} />}
+        </View>
+        {shown.map((t, i) => {
+          const tier = podiumColor(i);
+          const mine = adjustments.filter((a) => a.teamId === t.teamId && inPhase(a));
+          return (
+            <View key={t.teamId}>
+              <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => onTeam(t.teamId)}
+                accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points${t.adjust ? `, adjusted ${signed(t.adjust)}` : ''}`}>
+                <View style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.rowDivider]}>
+                  <RankBadge index={i} />
+                  <View style={[st.teamCol, st.teamCell]}>
+                    <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
+                    <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
+                  </View>
+                  <Text style={st.num}>{t.played}</Text>
+                  <Text style={st.num}>{t.won}</Text>
+                  {hasDraws && <Text style={st.num}>{t.drawn}</Text>}
+                  <Text style={st.num}>{t.lost}</Text>
+                  {hasNr && <Text style={st.num}>{t.nr ?? 0}</Text>}
+                  {hasNrr && <Text style={[st.num, { width: 48 }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
+                  <Text style={[st.num, st.pts]}>{t.points}{t.adjust ? '*' : ''}</Text>
+                  {canManage && (
+                    <Text style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
+                      onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>±</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              {canManage && openTeam === t.teamId && (
+                <View style={st.adjPanel}>
+                  <View style={st.adjStepper}>
+                    <Button label="−" variant="ghost" onPress={() => setDelta((d) => Math.max(-20, d - 1))} />
+                    <Text style={st.adjValue}>{signed(delta) || '0'}</Text>
+                    <Button label="+" variant="ghost" onPress={() => setDelta((d) => Math.min(20, d + 1))} />
+                  </View>
+                  <TextField label="Reason (shown publicly)" value={reason} onChange={setReason} placeholder="e.g. late arrival" />
+                  <Button label="Save adjustment" disabled={delta === 0 || reason.trim().length < 3} onPress={async () => {
+                    const a: PointsAdjustment = { id: `adj-${Date.now()}`, teamId: t.teamId, points: delta, reason: reason.trim(), ...(phaseKey !== 'league' ? { phase: phaseKey } : {}), at: new Date().toISOString() };
+                    await onSave([...adjustments, a], `${t.name} ${signed(delta)}${phaseLabel}: ${a.reason}`);
+                    setOpenTeam(null);
+                  }} />
+                  {mine.map((a) => (
+                    <View key={a.id} style={st.adjRow}>
+                      <Text style={[textStyles.muted, { flex: 1 }]}>{signed(a.points)} · {a.reason}</Text>
+                      <Text style={st.adjRemove} accessibilityRole="button" onPress={async () => {
+                        if (!(await confirmAction('Remove this adjustment?', `${t.name} ${signed(a.points)} · ${a.reason}`, 'Remove', true))) return;
+                        await onSave(adjustments.filter((x) => x.id !== a.id), `${t.name}: removed ${signed(a.points)}${phaseLabel} (${a.reason})`);
+                      }}>✕</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
+        {footnotes.map((a) => (
+          <Text key={a.id} style={textStyles.muted}>
+            * {nameOf(a.teamId)} {signed(a.points)} · {a.reason}{a.byName ? ` · by ${a.byName}` : ''}, {new Date(a.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+          </Text>
+        ))}
+      </Card>
+    </>
+  );
+}
+
 const st = StyleSheet.create({
+  adjBtn: { width: 24, textAlign: 'center', color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.body },
+  adjPanel: { gap: theme.spacing(2), padding: theme.spacing(3), marginVertical: theme.spacing(1), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt },
+  adjStepper: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  adjValue: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900', minWidth: 40, textAlign: 'center' },
+  adjRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  adjRemove: { color: theme.colors.danger, fontWeight: '900', paddingHorizontal: theme.spacing(2) },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { gap: theme.spacing(2), paddingVertical: theme.spacing(1) },

@@ -15,7 +15,7 @@ import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canManageTournament } from '../core/org';
 import { useTournamentById, useOrganizations } from '../data/hooks';
-import { getMyPlayerId, updateTournament } from '../data/repos';
+import { getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
 import {
   americanoSchedule, americanoStandings, suggestedAmericanoRounds, gameKey,
   readAmericano, writeAmericano, newAmericanoPlayer, type AmericanoState,
@@ -51,9 +51,8 @@ export default function AmericanoScreen() {
     setState(next); setDirty(false);
     if (!tournament?.id) return;
     setBusy(true);
-    await updateTournament(tournament.id, {
-      formats: { ...(tournament.formats ?? {}), [sport]: writeAmericano(tournament.formats?.[sport], next) },
-    });
+    const before = tournament.formats?.[sport] as Record<string, unknown> | undefined;
+    await patchTournamentFormat(tournament.id, sport, formatDiff(before, writeAmericano(tournament.formats?.[sport], next) as Record<string, unknown>));
     setBusy(false);
   };
 
