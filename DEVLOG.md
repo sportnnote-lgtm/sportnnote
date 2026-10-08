@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Match housekeeping: clone, delete a played match, breaks, quick-options sheet (parity #13)
+
+- **Ask (parity queue #13):** test matches couldn't be removed; rematches rebuilt by hand; breaks,
+  keeper changes, squad fixes and the scorecard scattered mid-match.
+- **Migration 0045** `20261019121300_match_delete_played.sql` (bundle `2026-10-match-delete-played-0045.sql`)
+  — founder to run: the "delete match" policy keeps pre-match deletes for `can_manage_match`, and adds
+  live / completed-within-30-min deletes for **friendly hosts only** (no `matches.created_by` column;
+  the creator is a host). PGlite matchdelete 19/19.
+- **Data:** pure `data/matchHousekeeping.ts` (`cloneDraft` on the merged config — no officials /
+  result / potm / internal flags; `BREAK_KINDS`; `deleteVerdict` delete/reset/none + minutes left).
+  repos: `getMatchLastActivityAt`, `deleteMatch(id,{played})`, `setMatchBreak` (`format.__break` →
+  `Match.onBreak`), `resetMatch` also clears result, potm, `__break` and the scoring lock (each
+  tolerant of a missing column). Cricket `SET_KEEPER` logs "🧤 NEW KEEPER" after ball 1 when the
+  keeper changes (stumpings credit the new keeper); `involvedPlayerIds`.
+- **UI:** Info "🔁 Clone match" (friendly, prefilled + squads copied) and Danger zone (delete with
+  window countdown / tournament "Reset fixture"); break banner + "▶ Resume play", BREAK tag on cards;
+  `QuickOptionsSheet` (break, squad, scorer, scorecard, cricket Change keeper); played players locked
+  in squad editors; "▶ Start scoring" on Matches cards; uneven-squads soft warning.
+- **Verified:** tsc + 524 tests; demo 8093 clone/tiles/keeper/break/lock/delete window/reset. Not
+  verified: the uneven warning click-through, live Supabase, potm clear (#21). Match settings tile
+  waits for #14.
+
+---
+
 ### 2026-10-09 — Admin edits player details: name, shirt number, photo, roles (parity #12)
 
 - **Ask (parity queue #12):** 200 students added by phone come out as "Invited (…4821)"; only the

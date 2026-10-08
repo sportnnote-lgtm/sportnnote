@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { EmptyState, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { useScopedMatches } from '../data/hooks';
+import { getMyPlayerId } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { SPORT_LIST } from '../sports/registry';
@@ -42,6 +43,14 @@ export default function MatchesScreen() {
   const { mine, loading } = useScopedMatches(profile?.id);
   const matches = filter === 'all' ? mine : mine.filter((m) => m.sport === filter);
   const canScore = canScoreByRole(profile?.role);
+  // Which of these I'm a scorer for → a "▶ Start scoring" shortcut on the card.
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  useEffect(() => {
+    let on = true;
+    void getMyPlayerId(profile?.id).then((id) => on && setMyPlayerId(id));
+    return () => { on = false; };
+  }, [profile?.id]);
+  const iScore = (m: Match) => !!myPlayerId && (m.scorerIds ?? (m.scorerId ? [m.scorerId] : [])).includes(myPlayerId);
 
   // Live = in progress; Upcoming = scheduled (soonest first); Completed = most recent first.
   // Postponed / cancelled games are still pre-match, so they stay under Upcoming
@@ -58,7 +67,7 @@ export default function MatchesScreen() {
   const list = tab === 'live' ? live : tab === 'upcoming' ? upcoming : completed;
   const countFor = (key: Tab) => (key === 'live' ? live : key === 'upcoming' ? upcoming : completed).length;
 
-  const open = (m: Match) =>
+  const open = (m: Match, tab?: string) =>
     nav.navigate('LiveScoring', {
       matchId: m.id,
       sport: m.sport,
@@ -69,6 +78,7 @@ export default function MatchesScreen() {
       homeColor: m.homeTeam.colorHex,
       awayColor: m.awayTeam.colorHex,
       canScore,
+      ...(tab ? { tab } : {}),
     });
 
   return (
@@ -113,7 +123,9 @@ export default function MatchesScreen() {
             hint={tab === 'live' ? 'Live games will show here the moment scoring starts.' : tab === 'upcoming' ? 'Scheduled games will appear here.' : 'Finished games land here once scored.'}
           />
         ) : (
-          list.map((m) => <MatchCard key={m.id} match={m} onPress={() => open(m)} />)
+          list.map((m) => (
+            <MatchCard key={m.id} match={m} onPress={() => open(m)} onStart={iScore(m) ? () => open(m, 'scoring') : undefined} />
+          ))
         )}
       </ScrollView>
     </SafeAreaView>

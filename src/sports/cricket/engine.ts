@@ -664,7 +664,20 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const side = a.payload?.side as 'home' | 'away';
       const id = String(a.payload?.id ?? '');
       if (!side || !id) return s;
-      return { ...s, keepers: { ...s.keepers, [side]: { id, name: String(a.payload?.name ?? '') } } };
+      const name = String(a.payload?.name ?? '');
+      const keepers = { ...s.keepers, [side]: { id, name } };
+      // A mid-match change (parity #13) is logged once a ball has been bowled;
+      // pre-match picks stay silent. Display-only (the event shifts ids, not maths).
+      const started = s.scores.home.balls + s.scores.away.balls > 0 || s.thisOver.length > 0 || s.innings > 1;
+      const prev = s.keepers[side];
+      if (!started || prev?.id === id) return { ...s, keepers };
+      seq += 1;
+      return {
+        ...s,
+        keepers,
+        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🧤', label: 'NEW KEEPER', detail: prev?.name ? `${name} takes the gloves from ${prev.name}` : `${name} keeps wicket`, side }],
+        seq,
+      };
     }
     case 'POTM':
       return { ...s, potm: String(a.payload?.name ?? '') };
@@ -736,3 +749,19 @@ function resultLine(s: CricketState): string {
 
 export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal };
 export type { Innings };
+
+/** Everyone who has taken part so far (parity #13 squad lock): batted, was out,
+ *  retired or is at the crease, bowled, or took a catch / run-out / stumping.
+ *  Includes a Super Over's players. These can't be dropped from the squad. */
+export function involvedPlayerIds(s: CricketState): string[] {
+  const ids = new Set<string>();
+  const walk = (x: CricketState) => {
+    Object.keys(x.batting ?? {}).forEach((id) => ids.add(id));
+    Object.keys(x.bowling ?? {}).forEach((id) => ids.add(id));
+    for (const id of [x.strikerId, x.nonStrikerId]) if (id) ids.add(id);
+    for (const d of x.dismissals ?? []) for (const id of [d.outId, d.bowlerId, d.fielderId]) if (id) ids.add(id);
+    if (x.superOver?.state) walk(x.superOver.state);
+  };
+  walk(s);
+  return [...ids];
+}

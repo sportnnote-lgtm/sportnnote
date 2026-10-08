@@ -19,6 +19,7 @@ import { followDisputes } from './eventLog';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
 import { normalizeOfficials, type MatchOfficial } from './matchOfficials';
+import { readBreak, type MatchBreak } from './matchHousekeeping';
 import type { PointsAdjustment } from './standings';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
@@ -189,6 +190,7 @@ function toMatch(r: MatchRow): Match {
     score: r.result?.score ?? (res ? { home: res.home, away: res.away } : undefined),
     result: r.result ?? undefined,
     walkover: (r.format as Record<string, unknown> | null)?.__walkover === true,
+    onBreak: readBreak(r.format as Record<string, unknown> | null),
     hostIds: r.host_ids ?? undefined,
     logoUrl: r.logo_url ?? undefined,
     scorerId: r.scorer_id ?? undefined,
@@ -1068,16 +1070,85 @@ export async function resetMatch(matchId: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     demo.matchEvents[matchId] = [];
     demo.statLines = demo.statLines.filter((l) => l.matchId !== matchId);
-    const m = demo.matches.find((x) => x.id === matchId);
-    if (m) { m.state = {}; m.status = 'scheduled'; m.winner = undefined; m.score = undefined; }
+    const m = demo.matches.find((x) => x.id === matchId) as (Match & { potm?: unknown }) | undefined;
+    if (m) {
+      m.state = {}; m.status = 'scheduled'; m.winner = undefined; m.score = undefined;
+      // Parity #13: everything derived goes too — result, POTM, break.
+      m.result = undefined; m.walkover = undefined; m.onBreak = undefined; delete m.potm;
+      if (m.format && '__break' in m.format) {
+        const { __break: _b, ...rest } = m.format as Record<string, unknown>;
+        m.format = (Object.keys(rest).length ? rest : undefined) as Match['format'];
+      }
+    }
     delete demoLocks[matchId];
     return;
   }
   // Back to not-started FIRST: that clears the scoring lock (migration 0039), so a
   // host who isn't the current scorer can still wipe the log.
   await supabase.from('matches').update({ state: {}, status: 'scheduled', winner: null, updated_at: new Date().toISOString() }).eq('id', matchId);
+  // Parity #13 — clear what's derived from the play, each tolerant of a database
+  // that lacks the column (result 0040, potm #21, lock 0039): a failed optional
+  // update is ignored, never fatal.
+  const clear = async (patch: Record<string, unknown>) => {
+    try { await supabase!.from('matches').update(patch).eq('id', matchId); } catch { /* column absent */ }
+  };
+  await clear({ result: null });
+  await clear({ potm: null });
+  await clear({ active_scorer_id: null, active_scorer_device: null, active_scorer_at: null });
+  const { data: f } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
+  const fmt = (f?.format as Record<string, unknown> | null) ?? {};
+  if ('__break' in fmt) {
+    const { __break: _b, ...rest } = fmt;
+    await supabase.from('matches').update({ format: rest }).eq('id', matchId);
+  }
   await supabase.from('match_events').delete().eq('match_id', matchId);
   await supabase.from('stat_lines').update({ stats: {}, won: false }).eq('match_id', matchId);
+}
+
+/** When this match last saw scoring activity: its latest event, else the match
+ *  row's own last update. Drives the "delete within 30 min" window (parity #13);
+ *  the server re-checks it in the delete policy. Null if unknown. */
+export async function getMatchLastActivityAt(matchId: string): Promise<number | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    const evs = (demo.matchEvents[matchId] ?? []) as (MatchEventRecord & { created_at?: string })[];
+    const last = evs.reduce<number | null>((mx, e) => {
+      const t = e.created_at ? new Date(e.created_at).getTime() : NaN;
+      return Number.isFinite(t) && (mx == null || t > mx) ? t : mx;
+    }, null);
+    if (last != null) return last;
+    const m = demo.matches.find((x) => x.id === matchId) as (Match & { updatedAt?: string }) | undefined;
+    return m?.updatedAt ? new Date(m.updatedAt).getTime() : null;
+  }
+  const { data } = await supabase.from('match_events').select('created_at').eq('match_id', matchId)
+    .order('created_at', { ascending: false }).limit(1);
+  const at = (data ?? [])[0] as { created_at?: string } | undefined;
+  if (at?.created_at) return new Date(at.created_at).getTime();
+  const { data: row } = await supabase.from('matches').select('updated_at').eq('id', matchId).maybeSingle();
+  const u = (row as { updated_at?: string } | null)?.updated_at;
+  return u ? new Date(u).getTime() : null;
+}
+
+/** Pause (or, with null, resume) play: writes `format.__break` like the
+ *  `__walkover` precedent — no scoring event, so undo stays clean. Read back as
+ *  `Match.onBreak`. Other format keys are kept. */
+export async function setMatchBreak(matchId: string, info: { kind: string; note?: string } | null): Promise<void> {
+  const value: MatchBreak | null = info
+    ? { kind: info.kind as MatchBreak['kind'], ...(info.note?.trim() ? { note: info.note.trim() } : {}), since: new Date().toISOString() }
+    : null;
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (!m) return;
+    const fmt = { ...((m.format as Record<string, unknown>) ?? {}) };
+    if (value) fmt.__break = value; else delete fmt.__break;
+    m.format = (Object.keys(fmt).length ? fmt : undefined) as Match['format'];
+    m.onBreak = value ?? undefined;
+    return;
+  }
+  const { data } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
+  const fmt = { ...((data?.format as Record<string, unknown>) ?? {}) };
+  if (value) fmt.__break = value; else delete fmt.__break;
+  const { error } = await supabase.from('matches').update({ format: fmt }).eq('id', matchId);
+  if (error) throw new Error(error.message);
 }
 
 /** Save one scoring event. The server numbers it (and ignores a retried
@@ -2034,14 +2105,37 @@ const isDeletableStatus = (s: MatchStatus): boolean => (DELETABLE_STATUSES as re
 /** Permanently delete a match — allowed ONLY for a pre-match fixture (never a
  *  live/completed one, so scoring data can't be destroyed). Child rows (events,
  *  stat lines, lineups, squads, disputes) cascade-delete in the DB. */
-export async function deleteMatch(matchId: string): Promise<void> {
+export async function deleteMatch(matchId: string, opts?: { played?: boolean }): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const idx = demo.matches.findIndex((x) => x.id === matchId);
     if (idx < 0) return;
-    if (!isDeletableStatus(demo.matches[idx].status)) throw new Error('Only a match that has not started can be deleted.');
+    const m = demo.matches[idx];
+    if (!isDeletableStatus(m.status)) {
+      // A played delete (parity #13): friendlies only, live or inside the window.
+      if (!opts?.played) throw new Error('Only a match that has not started can be deleted.');
+      const at = await getMatchLastActivityAt(matchId);
+      const ok = !m.tournamentId && (m.status === 'live' || (m.status === 'completed' && at != null && Date.now() - at < 30 * 60000));
+      if (!ok) throw new Error('Couldn’t delete — past the window, or the server update isn’t installed yet.');
+    }
     demo.matches.splice(idx, 1);
     delete demo.lineups[matchId];
+    delete demo.matchEvents[matchId];
+    delete demo.matchSquads[matchId];
+    demo.statLines = demo.statLines.filter((l) => l.matchId !== matchId);
     demo.disputes = demo.disputes.filter((d) => d.matchId !== matchId);
+    return;
+  }
+  if (opts?.played) {
+    // A live / just-played friendly. The WHERE clause pins it to the current
+    // status and a friendly; the "delete match" policy (0045) enforces hosts
+    // only and the 30-minute window. Zero rows = refused.
+    const { data: cur } = await supabase.from('matches').select('status').eq('id', matchId).maybeSingle();
+    const status = (cur as { status?: string } | null)?.status;
+    if (!status) throw new Error('Match not found.');
+    const { data, error } = await supabase
+      .from('matches').delete().eq('id', matchId).eq('status', status).is('tournament_id', null).select('id');
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('Couldn’t delete — past the window, or the server update isn’t installed yet.');
     return;
   }
   // The status guard lives in the WHERE clause, so a direct call can never delete

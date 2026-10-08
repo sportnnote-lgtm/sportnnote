@@ -190,3 +190,44 @@ describe('cricket — toss decides who bats first (Tier-3 gap)', () => {
     assert.equal(after.battingSide, 'away'); // unchanged — toss is locked
   });
 })
+
+describe('cricket — change keeper mid-match (parity #13)', () => {
+  test('no event when the keeper is set before ball 1', () => {
+    let s = opened();
+    const before = s.events.length;
+    s = reducer(s, { type: 'SET_KEEPER', payload: { side: 'away', id: 'k1', name: 'Keeper One' } });
+    assert.equal(s.keepers.away?.id, 'k1');
+    assert.equal(s.events.length, before);
+  });
+
+  test('a change after a ball logs NEW KEEPER and a later stumping credits the new keeper', () => {
+    let s = reducer(opened(), { type: 'SET_KEEPER', payload: { side: 'away', id: 'k1', name: 'Keeper One' } });
+    s = ball(s, 'RUNS', { runs: 1 });
+    s = reducer(s, { type: 'SET_KEEPER', payload: { side: 'away', id: 'k2', name: 'Keeper Two' } });
+    const last = s.events[s.events.length - 1];
+    assert.equal(last.label, 'NEW KEEPER');
+    assert.equal(last.icon, '🧤');
+    assert.match(String(last.detail), /Keeper Two/);
+    // same keeper again → no duplicate event
+    const n = s.events.length;
+    s = reducer(s, { type: 'SET_KEEPER', payload: { side: 'away', id: 'k2', name: 'Keeper Two' } });
+    assert.equal(s.events.length, n);
+    s = ball(s, 'WICKET', { kind: 'stumped', newBatId: 's3', newBatName: 'C' });
+    const d = s.dismissals[s.dismissals.length - 1];
+    assert.equal(d.kind, 'stumped');
+    assert.equal(d.fielderId, 'k2');
+    assert.equal(d.fielderName, 'Keeper Two');
+  });
+});
+
+describe('cricket — involvedPlayerIds (squad lock, parity #13)', () => {
+  test('batters, bowler and the stumping keeper are involved; the bench is not', async () => {
+    const { involvedPlayerIds } = await import('../src/sports/cricket/engine.ts');
+    let s = reducer(opened(), { type: 'SET_KEEPER', payload: { side: 'away', id: 'k1', name: 'K' } });
+    assert.deepEqual(involvedPlayerIds(s).sort(), ['b1', 's1', 's2']);
+    s = ball(s, 'WICKET', { kind: 'stumped', newBatId: 's3', newBatName: 'C' });
+    const ids = involvedPlayerIds(s);
+    for (const id of ['s1', 's2', 's3', 'b1', 'k1']) assert.ok(ids.includes(id), id);
+    assert.ok(!ids.includes('s9'));
+  });
+});

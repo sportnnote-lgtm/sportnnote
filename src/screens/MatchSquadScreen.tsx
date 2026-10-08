@@ -51,6 +51,8 @@ export default function MatchSquadScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'MatchSquad'>>();
   const { matchId, side, teamName, sport, playersPerSide = 11, teamId, homeTeamName, awayTeamName, homeColor, awayColor, editableSides } = params;
+  // Players who've already taken part (parity #13) keep their place: "played".
+  const locked = new Set<string>(Array.isArray(params.lockedIds) ? params.lockedIds : typeof params.lockedIds === 'string' ? String(params.lockedIds).split(',') : []);
   const plugin = getSport(sport);
   const hasPitch = !!plugin.Court; // football + the court sports can arrange positions
 
@@ -103,15 +105,15 @@ export default function MatchSquadScreen() {
     if (!lastSquad) return;
     setRoles(() => {
       const next: Record<string, Role> = {};
-      roster.forEach((p) => { next[p.id] = 'out'; });
-      let starts = 0;
+      roster.forEach((p) => { next[p.id] = locked.has(p.id) ? roles[p.id] ?? 'out' : 'out'; });
+      let starts = Object.values(next).filter((x) => x === 'start').length;
       for (const id of lastSquad.starters) {
         const p = roster.find((x) => x.id === id);
         if (p && pickable(p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
       }
       for (const id of lastSquad.subs) {
         const p = roster.find((x) => x.id === id);
-        if (p && pickable(p) && next[id] !== 'start') next[id] = 'sub';
+        if (p && pickable(p) && next[id] !== 'start' && !locked.has(id)) next[id] = 'sub';
       }
       return next;
     });
@@ -125,6 +127,7 @@ export default function MatchSquadScreen() {
   const setRole = (id: string, role: Role) =>
     setRoles((r) => {
       const p = roster.find((x) => x.id === id);
+      if (locked.has(id) && r[id] !== 'out') return r; // already played — keeps their place
       if (p && !pickable(p)) return r; // playing for the other side, or unverified players can't be fielded (unless the testing override is on)
       if (role === 'start' && r[id] !== 'start' && startCount >= playersPerSide) return r; // XI full
       return { ...r, [id]: r[id] === role ? 'out' : role };
@@ -141,7 +144,7 @@ export default function MatchSquadScreen() {
       }
       return next;
     });
-  const clearAll = () => setRoles((r) => Object.fromEntries(Object.keys(r).map((k) => [k, 'out' as Role])));
+  const clearAll = () => setRoles((r) => Object.fromEntries(Object.keys(r).map((k) => [k, locked.has(k) && r[k] !== 'out' ? r[k] : ('out' as Role)])));
 
   async function persist(): Promise<{ starters: string[]; subs: string[] }> {
     // Re-check the other side right before saving (its squad may have been set
@@ -231,6 +234,7 @@ export default function MatchSquadScreen() {
             const elsewhere = taken.has(p.id);
             const canField = canFieldPlayer(p) && !elsewhere; // eligible (or testing override) and not on the other side today
             const overridden = !elig.ok && canField; // fieldable only because of the override
+            const played = locked.has(p.id) && role !== 'out';
             const disableStart = !canField || (role !== 'start' && xiFull);
             return (
               <View key={p.id} style={[st.row, !canField && st.rowLocked, role !== 'out' && st.rowActive]}>
@@ -247,7 +251,9 @@ export default function MatchSquadScreen() {
                     </Text>
                   ) : null}
                 </View>
-                {canField ? (
+                {played ? (
+                  <Text style={st.playedTag} accessibilityLabel={`${p.fullName} has played — can't be removed`}>✓ played</Text>
+                ) : canField ? (
                   <View style={st.toggles}>
                     <Toggle label="Start" active={role === 'start'} disabled={disableStart} color={theme.colors.primary} onPress={() => setRole(p.id, 'start')} />
                     <Toggle label="Bench" active={role === 'sub'} color={theme.colors.accent} onPress={() => setRole(p.id, 'sub')} />
@@ -255,7 +261,7 @@ export default function MatchSquadScreen() {
                 ) : (
                   <Text style={st.lockTag}>{elsewhere ? 'Other side' : 'Not eligible'}</Text>
                 )}
-                {teamId ? (
+                {teamId && !played ? (
                   <Text
                     style={st.removeLink}
                     accessibilityRole="button"
@@ -332,6 +338,7 @@ const st = StyleSheet.create({
   lockReason: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
   overrideReason: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 2 },
   lockTag: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  playedTag: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   removeLink: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '900', paddingHorizontal: theme.spacing(1) },
   testBanner: { backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   testBannerText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },

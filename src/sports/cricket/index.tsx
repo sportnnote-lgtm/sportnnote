@@ -20,11 +20,12 @@ import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
 import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
 import type { Player } from '../../core/types';
-import type { ScoreAction, SportPlugin } from '../types';
+import type { ScoreAction, SportPlugin, QuickOptionsProps } from '../types';
+import { Tile } from '../../components/QuickOptionsSheet';
 import { cricketVoice } from '../voiceParsers';
 import {
   init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
-  oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers,
+  oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
@@ -1159,7 +1160,42 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
   );
 };
 
+/** Quick options (parity #13): 🧤 Change keeper — the fielding side's roster,
+ *  † on the current keeper; a tap sends SET_KEEPER (logged once a ball is bowled). */
+function CricketQuickOptions({ state, dispatch, homeRoster, awayRoster, homeName, awayName, onDone }: QuickOptionsProps) {
+  const s = state as CricketState;
+  const [open, setOpen] = useState(false);
+  const fielding = other(s.battingSide);
+  const roster = fielding === 'home' ? homeRoster : awayRoster;
+  const cur = s.keepers[fielding];
+  const unavailable = new Set(s.unavailable ?? []);
+  return (
+    <View style={{ gap: theme.spacing(2) }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) }}>
+        <Tile icon="🧤" label="Change keeper" hint={cur ? `Now: ${cur.name}` : 'No keeper set'} active={open} onPress={() => setOpen((o) => !o)} />
+      </View>
+      {open && (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={textStyles.muted}>{fielding === 'home' ? homeName : awayName} are fielding — who keeps wicket?</Text>
+          <View style={ctrl.chips}>
+            {roster.filter((p) => !unavailable.has(p.id)).map((p) => (
+              <SelectChip key={p.id} label={`${p.fullName}${cur?.id === p.id ? ' †' : ''}`} active={cur?.id === p.id}
+                onPress={() => {
+                  if (cur?.id !== p.id) dispatch({ type: 'SET_KEEPER', payload: { side: fielding, id: p.id, name: p.fullName } });
+                  onDone(`${p.fullName} is now keeping`);
+                }} />
+            ))}
+            {roster.length === 0 && <Text style={textStyles.muted}>No players in this squad yet.</Text>}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export const cricketPlugin: SportPlugin<CricketState> = {
+  QuickOptions: CricketQuickOptions,
+  involvedPlayerIds,
   id: 'cricket',
   name: 'Cricket',
   icon: '🏏',

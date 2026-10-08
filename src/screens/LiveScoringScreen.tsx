@@ -35,7 +35,9 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt } from '../data/repos';
+import { deleteVerdict, breakLabel, type BreakKind, type MatchBreak } from '../data/matchHousekeeping';
+import { QuickOptionsSheet } from '../components/QuickOptionsSheet';
 import { slotsFor, officialsLine, isCommentarySlot, type MatchOfficial } from '../data/matchOfficials';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
@@ -49,7 +51,7 @@ import { seriesMetaFromFormat } from '../data/series';
 import { canFieldPlayer } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
-import { formatDateTime, useUserTimeZone } from '../core/time';
+import { formatDateTime, formatTime, useUserTimeZone } from '../core/time';
 import { exportToCalendar } from '../core/ics';
 import { notify } from '../core/notifications';
 import { MatchSummary } from '../components/MatchSummary';
@@ -100,6 +102,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     logoUrl?: string; managers?: { home?: string; away?: string };
     /** closed by hand (parity #04) */
     result?: MatchResult; stage?: string;
+    /** play paused (parity #13) — `format.__break` */
+    onBreak?: MatchBreak;
   }>({});
   const lastConfigJson = useRef<{ json: string; obj: Record<string, unknown> | undefined }>({ json: '', obj: undefined });
   // Parity #11: the tournament's scorer/referee pool + this match's officials.
@@ -138,7 +142,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               // org-hosted tournaments → every org member is a tournament host
               tournamentHostIds: tour ? tournamentHostPlayerIds(tour, orgs) : [],
               status: m.status, score: m.score, winner: m.winner, logoUrl: m.logoUrl, managers: m.managers,
-              result: m.result, stage: m.stage,
+              result: m.result, stage: m.stage, onBreak: m.onBreak as MatchBreak | undefined,
             });
           }
         })();
@@ -660,16 +664,26 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // null = untouched (an empty team you can fill starts open); 'closed' = user closed them.
   const [infoOpen, setInfoOpen] = useState<'home' | 'away' | 'closed' | null>(null);
 
-  const editSquad = (sd: 'home' | 'away') => {
+  // Squad lock (parity #13): who has already taken part can't be benched — the
+  // sport says who (cricket: batted/bowled/fielded), else a non-zero stat line.
+  const involvedIds = async (): Promise<string[]> => {
+    if (!started && eventCount === 0) return [];
+    if (plugin.involvedPlayerIds) return plugin.involvedPlayerIds(state);
+    if (!matchId) return [];
+    const lines = await getMatchStatLines(matchId).catch(() => [] as StatLine[]);
+    return [...new Set(lines.filter((l) => Object.values(l.stats ?? {}).some((v) => typeof v === 'number' && v !== 0)).map((l) => l.playerId))];
+  };
+  const editSquad = async (sd: 'home' | 'away') => {
     // A captain of one side must not be able to open the other side's editor.
     if (!canEditSide(sd)) return;
+    const lockedIds = await involvedIds();
     const perSide = meta.config?.playersPerSide ? Number(meta.config.playersPerSide) : undefined;
     if (sport === 'cricket') {
       // Cricket's lineup is an ordered XI + wicket-keeper, not a positional court.
       return navigation.navigate('CricketLineup', {
         matchId: matchId!, sport,
         homeTeamName: homeTeamName ?? homeName, awayTeamName: awayTeamName ?? awayName, homeColor, awayColor,
-        playersPerSide: perSide,
+        playersPerSide: perSide, ...(lockedIds.length ? { lockedIds } : {}),
       });
     }
     // Every other sport picks who plays first (the simple Start/Bench list). For
@@ -679,8 +693,103 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       matchId: matchId!, side: sd, teamName: sd === 'home' ? homeTeamName ?? homeName : awayTeamName ?? awayName,
       sport, playersPerSide: perSide, teamId: sd === 'home' ? meta.homeTeamId : meta.awayTeamId,
       homeTeamName: homeTeamName ?? homeName, awayTeamName: awayTeamName ?? awayName, homeColor, awayColor,
-      editableSides,
+      editableSides, ...(lockedIds.length ? { lockedIds } : {}),
     });
+  };
+
+  // ----- Match housekeeping (parity #13): breaks, quick options, uneven squads -----
+  const onBreak = !complete ? meta.onBreak : undefined;
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [toast]);
+  const startBreak = async (kind: BreakKind, note?: string) => {
+    const since = new Date().toISOString();
+    setMeta((m) => ({ ...m, onBreak: { kind, ...(note ? { note } : {}), since } }));
+    if (!matchId) return;
+    try { await setMatchBreak(matchId, { kind, note }); } catch (e) {
+      setMeta((m) => ({ ...m, onBreak: undefined }));
+      notice('Couldn’t start the break', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
+  const resumePlay = async () => {
+    const prev = meta.onBreak;
+    setMeta((m) => ({ ...m, onBreak: undefined }));
+    if (!matchId) return;
+    try { await setMatchBreak(matchId, null); } catch (e) {
+      setMeta((m) => ({ ...m, onBreak: prev }));
+      notice('Couldn’t resume', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
+  const breakBanner = onBreak ? (
+    <View style={st.breakBanner} accessibilityRole="text">
+      <Text style={st.breakBannerText}>⏸ {breakLabel(onBreak)} · since {formatTime(onBreak.since, viewerTz)}</Text>
+    </View>
+  ) : null;
+  // "Start the match" soft-warns when both squads are set but uneven or short.
+  const [unevenAsk, setUnevenAsk] = useState<string | null>(null);
+  const tryStart = () => {
+    const h = squads?.home.starters.length ?? 0;
+    const a = squads?.away.starters.length ?? 0;
+    const need = meta.config?.playersPerSide ? Number(meta.config.playersPerSide) : 0;
+    if (h > 0 && a > 0 && (h !== a || (need > 0 && (h < need || a < need)))) { setUnevenAsk(`${h} v ${a}`); return; }
+    setLocalStarted(true);
+  };
+
+  // Danger zone (parity #13): delete a friendly while live / within 30 min of the
+  // end, or reset a played tournament fixture. Hosts only; the server re-checks.
+  const [dangerAsk, setDangerAsk] = useState<'delete' | 'reset' | null>(null);
+  const [dangerBusy, setDangerBusy] = useState(false);
+  const [lastActivityAt, setLastActivityAt] = useState<number | null>(null);
+  const [dangerTick, setDangerTick] = useState(Date.now());
+  useFocusEffect(useCallback(() => {
+    if (!matchId) return;
+    let on = true;
+    void getMatchLastActivityAt(matchId).then((t) => on && setLastActivityAt(t), () => {});
+    setDangerTick(Date.now());
+    return () => { on = false; };
+  }, [matchId, eventCount, complete]));
+  useEffect(() => {
+    if (!complete || !isHost) return;
+    const id = setInterval(() => setDangerTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [complete, isHost]);
+  const effStatus: Match['status'] = complete ? 'completed' : meta.status === 'live' || eventCount > 0 ? 'live' : meta.status ?? 'scheduled';
+  const verdict = deleteVerdict({ status: effStatus, tournamentId: meta.tournamentId, lastActivityAt }, Math.max(dangerTick, nowTick));
+  const doDelete = async () => {
+    if (!matchId) return;
+    setDangerBusy(true);
+    try {
+      await deleteMatch(matchId, effStatus === 'live' || effStatus === 'completed' ? { played: true } : undefined);
+      matchOutbox.clear(matchId);
+      setDangerAsk(null);
+      navigation.popToTop();
+    } catch (e) {
+      notice('Couldn’t delete', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setDangerBusy(false);
+    }
+  };
+  const doReset = async () => {
+    if (!matchId) return;
+    setDangerBusy(true);
+    try {
+      matchOutbox.clear(matchId);
+      await resetMatch(matchId);
+      await refresh();
+      setLocalStarted(false);
+      setKickoffAt(null);
+      setMeta((m) => ({ ...m, status: 'scheduled', result: undefined, winner: undefined, score: undefined, onBreak: undefined }));
+      setDangerAsk(null);
+      setReloadTick((n) => n + 1);
+    } catch (e) {
+      notice('Couldn’t reset', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setDangerBusy(false);
+    }
   };
 
   const header = (
@@ -975,8 +1084,29 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       ) : !started ? (
         <View style={{ gap: theme.spacing(3), alignItems: 'center' }}>
           <Text style={[textStyles.muted, { textAlign: 'center' }]}>You're the scorer for this match.</Text>
-          <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Start the match" onPress={() => setLocalStarted(true)}>
-            <Text style={st.assignBtnText}>▶ Start the match</Text>
+          {unevenAsk ? (
+            <View style={[st.retirePanel, { alignSelf: 'stretch' }]}>
+              <Text style={st.retirePrompt}>Squads look uneven — {unevenAsk}. Start anyway?</Text>
+              <View style={st.retireRow}>
+                <Button label="Start anyway" style={{ flex: 1 }} onPress={() => { setUnevenAsk(null); setLocalStarted(true); }} />
+                <Button label="Fix squads" variant="ghost" style={{ flex: 1 }} onPress={() => {
+                  const h = squads?.home.starters.length ?? 0, a = squads?.away.starters.length ?? 0;
+                  setUnevenAsk(null);
+                  void editSquad(h <= a ? 'home' : 'away');
+                }} />
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Start the match" onPress={tryStart}>
+              <Text style={st.assignBtnText}>▶ Start the match</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : onBreak ? (
+        <View style={{ gap: theme.spacing(3), alignItems: 'center' }}>
+          <Text style={[textStyles.muted, { textAlign: 'center' }]}>Play is paused — {breakLabel(onBreak).toLowerCase()} since {formatTime(onBreak.since, viewerTz)}.</Text>
+          <TouchableOpacity style={st.assignBtn} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Resume play" onPress={() => void resumePlay()}>
+            <Text style={st.assignBtnText}>▶ Resume play</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -1766,6 +1896,37 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       </View>
     ) : null;
 
+    const dangerZone = hasMatch && isHost && verdict.verdict !== 'none' ? (
+      <View style={[st.infoCard, st.dangerCard]}>
+        <Text style={[textStyles.h3, st.dangerTitle]}>Danger zone</Text>
+        {verdict.verdict === 'delete' ? (
+          <Text style={textStyles.muted}>
+            {verdict.minutesLeft != null ? `Delete available for ${verdict.minutesLeft} more min.` : effStatus === 'live' ? 'Started by mistake or a test match? Delete it.' : 'Not played yet — you can delete it.'}
+          </Text>
+        ) : (
+          <Text style={textStyles.muted}>
+            A tournament fixture can’t be deleted (it would leave a hole in the fixtures). Reset it to not started instead{verdict.minutesLeft != null ? ` — available for ${verdict.minutesLeft} more min` : ''}.
+          </Text>
+        )}
+        {dangerAsk === null ? (
+          <Button label={verdict.verdict === 'delete' ? '🗑 Delete match' : '↺ Reset fixture to not started'} variant="danger" onPress={() => setDangerAsk(verdict.verdict === 'delete' ? 'delete' : 'reset')} />
+        ) : (
+          <View style={{ gap: theme.spacing(2) }}>
+            <Text style={st.retirePrompt}>
+              {dangerAsk === 'delete'
+                ? 'Delete this match? The score, its player stats and any table result go for everyone.'
+                : 'Reset this fixture to not started? The score, player stats, result and POTM are cleared for everyone.'}
+            </Text>
+            <View style={st.retireRow}>
+              <Button label="Keep" variant="ghost" style={{ flex: 1 }} onPress={() => setDangerAsk(null)} />
+              <Button label={dangerBusy ? 'Working…' : dangerAsk === 'delete' ? 'Delete match' : 'Reset fixture'} variant="danger" style={{ flex: 1 }} disabled={dangerBusy}
+                onPress={() => void (dangerAsk === 'delete' ? doDelete() : doReset())} />
+            </View>
+          </View>
+        )}
+      </View>
+    ) : null;
+
     return (
       <SafeAreaView style={st.safe} edges={['top']}>
        <DisputeMaskProvider value={maskValue}>
@@ -1778,6 +1939,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               (cricket hides it — its scorecard shows the score). On the Scoring
               tab a compact MiniScore replaces it (rendered by the controls), so
               the score sits next to the buttons instead of being duplicated. */}
+          {breakBanner}
           {showFinalOnly ? finalScoreNode : (activeTab === 'scoring' && started && !complete ? null : scoreboardNode)}
           {/* No scorer yet + I can manage → surface the primary action up front so a
               host isn't left wondering how to score their own match. One tap makes me
@@ -1879,6 +2041,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 />
               )}
               {!retiredLocally && controlsNode}
+              {/* ☰ Quick options (parity #13): breaks, squad, scorer, scorecard, sport tiles. */}
+              {canScore && started && !complete && !retiredLocally && (
+                <TouchableOpacity style={st.quickBar} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Quick options" onPress={() => setQuickOpen(true)}>
+                  <Text style={st.quickBarText}>☰ Quick options</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
 
@@ -1969,6 +2137,14 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               <Text style={textStyles.h3}>Matchday squads</Text>
               {squadCard('home')}
               {squadCard('away')}
+              {hasMatch && (isHost || canScore) && (
+                <View style={st.infoCard}>
+                  <InfoRow icon="🔁" label="Clone match" value="Same teams, squads & rules ›"
+                    onPress={() => navigation.navigate('ScheduleMatch', { cloneOf: matchId })}
+                    accessibilityLabel="Clone this match" />
+                </View>
+              )}
+              {dangerZone}
             </View>
           )}
 
@@ -2009,6 +2185,27 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
           {noteNode}
         </ScrollView>
+        <QuickOptionsSheet
+          visible={quickOpen} onClose={() => setQuickOpen(false)}
+          homeName={fullHome} awayName={fullAway}
+          onBreak={(kind, note) => void startBreak(kind, note)}
+          onSquad={hasMatch && canEditSquad ? (sd) => void editSquad(sd) : undefined}
+          onScorer={hasMatch ? () => setTab('info') : undefined}
+          onScorecard={() => setTab(contentViews[0].key)}
+          // ⚙️ Match settings: #14 (liveSettings) isn't built yet — no tile until it is.
+          pluginTiles={plugin.QuickOptions ? (
+            <plugin.QuickOptions
+              state={state} dispatch={dispatch} homeRoster={homeScoreRoster} awayRoster={awayScoreRoster}
+              homeName={fullHome} awayName={fullAway}
+              onDone={(msg) => { setQuickOpen(false); if (msg) setToast(msg); }}
+            />
+          ) : undefined}
+        />
+        {toast ? (
+          <View style={st.toast} pointerEvents="none" accessibilityLiveRegion="polite">
+            <Text style={st.toastText}>{toast}</Text>
+          </View>
+        ) : null}
        </DisputeMaskProvider>
       </SafeAreaView>
     );
@@ -2211,6 +2408,14 @@ const st = StyleSheet.create({
   endChips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   retiredBanner: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.md, padding: theme.spacing(3) },
   retiredText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  breakBanner: { backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent + '66', borderRadius: theme.radius.md, padding: theme.spacing(3) },
+  breakBannerText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800', textAlign: 'center' },
+  quickBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingVertical: theme.spacing(3) },
+  quickBarText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  toast: { position: 'absolute', left: theme.spacing(4), right: theme.spacing(4), bottom: theme.spacing(6), backgroundColor: theme.colors.text, borderRadius: theme.radius.md, paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4), alignItems: 'center' },
+  toastText: { color: theme.colors.bg, fontSize: theme.font.small, fontWeight: '800' },
+  dangerCard: { borderColor: theme.colors.danger + '66' },
+  dangerTitle: { color: theme.colors.danger },
   reschedBanner: { borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },
   reschedBannerText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   sportName: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '800' },

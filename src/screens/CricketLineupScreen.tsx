@@ -26,6 +26,8 @@ export default function CricketLineupScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'CricketLineup'>>();
   const { matchId, sport, homeTeamName, awayTeamName, homeColor, awayColor, playersPerSide = 11 } = params;
+  // Anyone who has batted, bowled or fielded a dismissal can't be removed (parity #13).
+  const locked = new Set<string>(Array.isArray(params.lockedIds) ? params.lockedIds : typeof params.lockedIds === 'string' ? String(params.lockedIds).split(',') : []);
 
   const [side, setSide] = useState<'home' | 'away'>('home');
   const [homeRoster, setHomeRoster] = useState<Player[]>([]);
@@ -70,6 +72,7 @@ export default function CricketLineupScreen() {
   // a picked player can always be removed (e.g. the Remove link passes a bare id).
   const toggle = (id: string, player?: Player) => {
     const isPicked = picked.includes(id);
+    if (isPicked && locked.has(id)) return; // already played — keeps their place
     if (!isPicked && otherPicked.has(id)) return; // one side per match
     if (!isPicked && player && !canFieldPlayer(player)) return; // can't add an unverified player (unless the testing override is on)
     setOrder((o) => {
@@ -131,7 +134,11 @@ export default function CricketLineupScreen() {
                 >
                   <Text style={[st.wkText, isKeeper && st.wkTextActive]}>† WK</Text>
                 </TouchableOpacity>
-                <Text style={st.remove} accessibilityRole="button" accessibilityLabel={`Remove ${nameById(id)}`} onPress={() => toggle(id)}>Remove</Text>
+                {locked.has(id) ? (
+                  <Text style={st.played} accessibilityLabel={`${nameById(id)} has played — can't be removed`}>✓ played</Text>
+                ) : (
+                  <Text style={st.remove} accessibilityRole="button" accessibilityLabel={`Remove ${nameById(id)}`} onPress={() => toggle(id)}>Remove</Text>
+                )}
               </View>
             );
           })
@@ -190,5 +197,6 @@ const st = StyleSheet.create({
   wkText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
   wkTextActive: { color: '#06120D' },
   remove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
+  played: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   countFull: { color: theme.colors.primary },
 });

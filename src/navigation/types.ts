@@ -31,12 +31,15 @@ export type RootStackParamList = {
     homeTeamName?: string; awayTeamName?: string; homeColor?: string; awayColor?: string;
     // Which sides the viewer may edit (a captain = own side only); forwarded to the pitch editor.
     editableSides?: ('home' | 'away')[];
+    /** players who've already taken part — shown "played", can't be benched (parity #13) */
+    lockedIds?: string[];
   };
   CreateTournament: { sport?: SportId; orgId?: string } | undefined;
   CreateCommunity: undefined;
   DiscoverOrgs: undefined;
   Teams: undefined;
-  ScheduleMatch: { tournamentId?: string; sport?: SportId } | undefined;
+  /** cloneOf: a match id to copy (parity #13) — always a friendly, kicks off now */
+  ScheduleMatch: { tournamentId?: string; sport?: SportId; cloneOf?: string } | undefined;
   CreateSeries: { tournamentId?: string; sport?: SportId } | undefined;
   Series: { seriesId: string };
   EditMatch: { matchId: string };
@@ -126,6 +129,8 @@ export type RootStackParamList = {
     homeColor?: string;
     awayColor?: string;
     playersPerSide?: number;
+    /** players who've already batted/bowled/fielded — can't be removed (parity #13) */
+    lockedIds?: string[];
   };
 };
 

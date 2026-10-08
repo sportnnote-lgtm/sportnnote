@@ -19,7 +19,8 @@ import { SPORT_LIST, getSport, participantMode, type ParticipantMode } from '../
 import { useTeams, useMatches, usePlayers, useTournamentById } from '../data/hooks';
 import { venueOptions } from '../data/tournamentForm';
 import { findScheduleConflicts, knownVenueNames } from '../data/scheduleConflicts';
-import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMatchScorer } from '../data/repos';
+import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMatchScorer, getMatch, getTournaments, getMatchSquads, setMatchSquad } from '../data/repos';
+import { cloneDraft } from '../data/matchHousekeeping';
 import { useAuth } from '../core/auth';
 import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
 import type { Player, SportId, Team } from '../core/types';
@@ -49,6 +50,9 @@ export default function ScheduleMatchScreen() {
   // into the live scorer once created.
   const tournamentId = route.params?.tournamentId;
   const isFriendly = !tournamentId;
+  // Parity #13: "🔁 Clone match" pre-fills this form from another match. A clone
+  // is always a friendly that kicks off now; the toss is re-done.
+  const cloneOf = route.params?.cloneOf;
   const { profile } = useAuth();
 
   // No sport chosen yet → the picker reads "Select a sport" and the rest of the
@@ -83,6 +87,33 @@ export default function ScheduleMatchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Clone: teams, venue, stream and the EFFECTIVE rules (tournament merged with
+  // the match's own), never officials / result / POTM. Squads copy after Save.
+  const [cloneReady, setCloneReady] = useState(!cloneOf);
+  const cloneNames = useRef<{ home?: string; away?: string }>({});
+  useEffect(() => {
+    if (!cloneOf) return;
+    let on = true;
+    (async () => {
+      const src = await getMatch(cloneOf);
+      if (!src || !on) { setCloneReady(true); return; }
+      const tour = src.tournamentId ? (await getTournaments()).find((t) => t.id === src.tournamentId) : undefined;
+      const d = cloneDraft(src, tour?.formats?.[src.sport] as Record<string, unknown> | undefined);
+      if (!on) return;
+      setSport(d.sport);
+      setFormat({ ...defaultsFor(getSport(d.sport).formatFields ?? []), ...((d.format as Record<string, FormatVal>) ?? {}) });
+      setHome(d.homeTeamId);
+      setAway(d.awayTeamId);
+      cloneNames.current = { home: src.homeTeam.name, away: src.awayTeam.name };
+      setVenue(d.venueName ?? '');
+      setVenueUrl(d.venueMapsUrl ?? '');
+      setStream(d.streamUrl ?? '');
+      setWhen(new Date());
+      setCloneReady(true);
+    })();
+    return () => { on = false; };
+  }, [cloneOf]);
+
   // A friendly kicking off ~now jumps straight into the scorer; one set for later
   // is just filed as scheduled (it shows under Upcoming, like any planned match).
   const isImmediate = isFriendly && when.getTime() <= Date.now() + 120_000;
@@ -104,6 +135,18 @@ export default function ScheduleMatchScreen() {
     venuePrefilled.current = true;
     setVenue((v) => v || tournament.grounds![0]);
   }, [tournament?.grounds]);
+  // A cloned side whose id isn't in this sport's team list (e.g. a house team
+  // listed under another id) is matched by name, so the picker shows it selected.
+  useEffect(() => {
+    if (!cloneOf || !teams.length) return;
+    const fix = (id: string | null, name: string | undefined, set: (v: string) => void) => {
+      if (!id || !name || teams.some((t) => t.id === id)) return;
+      const byName = teams.find((t) => t.name === name);
+      if (byName) set(byName.id);
+    };
+    fix(home, cloneNames.current.home, setHome);
+    fix(away, cloneNames.current.away, setAway);
+  }, [cloneOf, teams, home, away]);
   const homeTeam = teams.find((t) => t.id === home);
   const awayTeam = teams.find((t) => t.id === away);
   const conflicts = useMemo(
@@ -252,6 +295,15 @@ export default function ScheduleMatchScreen() {
       // the Info tab anytime. (Tournament matches are left unassigned — the organizer
       // schedules many they won't personally score.)
       if (isFriendly && myId) await setMatchScorer(created.id, myId);
+      // A clone copies the source match's matchday squads (each side that has one).
+      if (cloneOf) {
+        try {
+          const sq = await getMatchSquads(cloneOf);
+          for (const sd of ['home', 'away'] as const) {
+            if (sq[sd].starters.length + sq[sd].subs.length > 0) await setMatchSquad(created.id, sd, sq[sd]);
+          }
+        } catch { /* squads are a convenience — the match itself is created */ }
+      }
       // A "now" friendly jumps straight into scoring (replace so Back skips the
       // form); a friendly set for later just files as scheduled → Upcoming.
       if (isImmediate) {
@@ -283,8 +335,8 @@ export default function ScheduleMatchScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle
-          title={isFriendly ? 'Start a friendly' : 'Schedule a match'}
-          subtitle={isFriendly ? 'A quick game — no tournament needed' : 'Pick sport, teams & time'}
+          title={cloneOf ? 'Clone match' : isFriendly ? 'Start a friendly' : 'Schedule a match'}
+          subtitle={cloneOf ? (cloneReady ? 'Same teams, squads, venue & rules — kicks off now. The toss is re-done.' : 'Loading the match to copy…') : isFriendly ? 'A quick game — no tournament needed' : 'Pick sport, teams & time'}
         />
 
         <SportPicker sport={sport} onPick={pickSport} />

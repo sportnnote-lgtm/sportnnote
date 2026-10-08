@@ -311,4 +311,22 @@ export interface SportPlugin<S = unknown> {
    */
   formation?: (perSide?: number) => LineupSlot[];
   Court?: React.FC<CourtProps>;
+  /** Extra tiles for the in-play Quick options sheet (parity #13) — e.g.
+   *  cricket's 🧤 Change keeper. `onDone(message)` closes the sheet and shows
+   *  the message as a short toast. */
+  QuickOptions?: React.FC<QuickOptionsProps>;
+  /** Players who have already taken part (parity #13): they can't be removed
+   *  from the matchday squad. Omitted → anyone with a non-zero stat line. */
+  involvedPlayerIds?: (state: S) => string[];
+}
+
+/** Props for a sport's Quick-options tiles. */
+export interface QuickOptionsProps {
+  state: unknown;
+  dispatch: (a: ScoreAction) => void;
+  homeRoster: Player[];
+  awayRoster: Player[];
+  homeName: string;
+  awayName: string;
+  onDone: (message?: string) => void;
 }

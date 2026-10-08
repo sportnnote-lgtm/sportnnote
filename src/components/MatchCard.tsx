@@ -34,11 +34,15 @@ function LiveBadge() {
   );
 }
 
-export function MatchCard({ match, onPress }: { match: Match; onPress: () => void }) {
+/** `onStart` (parity #13): the scorer's one-tap "▶ Start scoring" / "Continue
+ *  scoring" straight into the Scoring tab. */
+export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: () => void; onStart?: () => void }) {
   const plugin = getSport(match.sport);
   const tz = useUserTimeZone(); // show kickoff in the viewer's own timezone
   const time = formatShort(match.startsAt, tz);
   const live = match.status === 'live';
+  // Play paused (drinks, rain, stumps…) — an amber BREAK tag instead of LIVE.
+  const onBreak = live && !!match.onBreak;
   const done = match.status === 'completed';
   const postponed = match.status === 'postponed';
   const cancelled = match.status === 'cancelled';
@@ -46,12 +50,15 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
   const showScore = (live || done) && !!match.score && !walkover;
 
   return (
+    // The start button sits beside (not inside) the card's touchable — a button
+    // can't nest inside another button on web.
+    <View style={[s.card, live && s.cardLive]}>
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${plugin.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}${
         showScore ? `, ${match.score!.home} to ${match.score!.away}` : ''
-      }, ${live ? 'live now' : done ? 'final' : time}`}
-      style={[s.card, live && s.cardLive]}
+      }, ${onBreak ? 'on a break' : live ? 'live now' : done ? 'final' : time}`}
+      style={s.body}
       activeOpacity={0.85}
       onPress={onPress}
     >
@@ -59,7 +66,9 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
         <Text style={s.sport}>
           {plugin.icon} {plugin.name}
         </Text>
-        {live ? (
+        {onBreak ? (
+          <Text style={s.breakTag}>⏸ BREAK</Text>
+        ) : live ? (
           <LiveBadge />
         ) : done ? (
           <Text style={s.finalTag}>FINAL</Text>
@@ -120,6 +129,13 @@ export function MatchCard({ match, onPress }: { match: Match; onPress: () => voi
         ) : null}
       </Text>
     </TouchableOpacity>
+      {onStart && (live || match.status === 'scheduled') ? (
+        <TouchableOpacity style={s.startBtn} activeOpacity={0.85} accessibilityRole="button"
+          accessibilityLabel={live ? 'Continue scoring' : 'Start scoring'} onPress={onStart}>
+          <Text style={s.startText}>{live ? '▶ Continue scoring' : '▶ Start scoring'}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
 }
 
@@ -133,6 +149,7 @@ const s = StyleSheet.create({
     gap: theme.spacing(3),
     ...theme.shadow.card,
   },
+  body: { gap: theme.spacing(3) },
   cardLive: {
     borderColor: theme.colors.danger + '66',
     ...theme.shadow.live,
@@ -154,6 +171,9 @@ const s = StyleSheet.create({
   finalTag: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   postponedTag: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   cancelledTag: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
+  breakTag: { color: theme.colors.accent, backgroundColor: theme.colors.accent + '22', fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, overflow: 'hidden' },
+  startBtn: { backgroundColor: theme.colors.primary + '1F', borderWidth: 1, borderColor: theme.colors.primary + '66', borderRadius: theme.radius.pill, paddingVertical: theme.spacing(2), alignItems: 'center' },
+  startText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   timeTag: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
 
   board: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },

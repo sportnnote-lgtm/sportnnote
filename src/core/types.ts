@@ -804,6 +804,9 @@ export interface Match {
   result?: MatchResult;
   /** format override for a one-off/friendly game (else inherits the tournament) */
   format?: SportFormat;
+  /** play is paused (drinks, rain, stumps…) — read from `format.__break` (parity #13).
+   *  No scoring event is written for a break. */
+  onBreak?: { kind: string; note?: string; since: string };
   /** Who created/owns this match (player ids). Any match host — and any host of
    *  its tournament — can manage it (assign the scorer, edit the XI) and gets
    *  "no scorer assigned" reminders. Maps to `host_ids` on the backend. */
