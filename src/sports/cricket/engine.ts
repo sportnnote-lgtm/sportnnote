@@ -252,7 +252,7 @@ function inningsComplete(s: CricketState, inn: Innings): boolean {
   return inn.balls >= s.oversLimit * s.ballsPerOver || inn.wickets >= s.wicketsLimit;
 }
 
-interface BallInfo {
+export interface BallInfo {
   strikerId?: string;
   strikerName?: string;
   bowlerId?: string;
@@ -264,6 +264,16 @@ const ballInfo = (a: ScoreAction): BallInfo => ({
   bowlerId: a.payload?.bowlerId as string | undefined,
   bowlerName: a.payload?.bowlerName as string | undefined,
 });
+
+/** Ball actions — each carries the striker/bowler it was bowled with. */
+const BALL_TYPES = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA']);
+
+/** Parity #06 — each ball's RECORDED striker is the truth. If the payload names
+ *  the batter currently at the non-striker's end, swap ends before applying it
+ *  (an edited earlier ball can change the derived rotation). Live-recorded logs
+ *  always stamp the current striker, so this is a no-op for them. */
+export const alignCrease = (s: CricketState, info: BallInfo): CricketState =>
+  info.strikerId && s.nonStrikerId && info.strikerId === s.nonStrikerId && info.strikerId !== s.strikerId ? swapStrike(s) : s;
 
 const reducer = (s: CricketState, a: ScoreAction): CricketState => {
   if (s.ended && a.type !== 'END' && a.type !== 'POTM') return s;
@@ -301,10 +311,18 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     return resolveSuperOver(s, inner); // the round just ended — decide or await the next
   }
 
+  const info = ballInfo(a);
+  if (BALL_TYPES.has(a.type)) {
+    const aligned = alignCrease(s, info);
+    if (aligned !== s) return reducer(aligned, a);
+  }
+
   const bat = s.battingSide;
   const cur = s.scores[bat];
   let seq = s.seq;
-  const info = ballInfo(a);
+  // Who faced this delivery: the recorded striker (payload), else the crease.
+  const strikerId = info.strikerId ?? s.strikerId;
+  const strikerName = info.strikerId ? (info.strikerName ?? s.strikerName) : s.strikerName;
 
   // Start of a fresh over? (a legal ball arrives after 6 were bowled)
   const newOver = s.ballsInOver >= s.ballsPerOver;
@@ -400,7 +418,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         ...s,
         // byes/leg-byes are team extras — not the batter's runs, not charged to the bowler
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, extras: cur.extras + r, balls } },
-        batting: applyBat(s.batting, s.strikerId, s.strikerName, { balls: 1 }),
+        batting: applyBat(s.batting, strikerId, strikerName, { balls: 1 }),
         bowling: bumpBowl({ balls: 1 }),
         thisOver: [...baseOver, (isLeg ? 'lb' : 'b') + (r > 1 ? r : '')],
         ballsInOver: baseBalls + 1,
@@ -414,8 +432,8 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
       const keeper = s.keepers[other(bat)]?.name;
       const dismissal = composeDismissal(kind, info.bowlerName, a.payload?.fielderName as string | undefined, keeper);
-      const outId = batterOut === 'nonstriker' ? s.nonStrikerId : s.strikerId;
-      const outName = batterOut === 'nonstriker' ? s.nonStrikerName : s.strikerName;
+      const outId = batterOut === 'nonstriker' ? s.nonStrikerId : strikerId;
+      const outName = batterOut === 'nonstriker' ? s.nonStrikerName : strikerName;
       const newBatId = a.payload?.newBatId as string | undefined;
       const newBatName = a.payload?.newBatName as string | undefined;
       // The new batsman fills whichever end the departing batsman vacated.
@@ -447,7 +465,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       seq += 1;
       // The striker faces the delivery (and is credited any completed runs); the
       // dismissed batsman (striker, or a run-out non-striker) is marked out.
-      let batting = applyBat(s.batting, s.strikerId, s.strikerName, { balls: 1, runs: completed });
+      let batting = applyBat(s.batting, strikerId, strikerName, { balls: 1, runs: completed });
       batting = applyBat(batting, outId, outName, { out: true, dismissal });
       if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
 
@@ -495,15 +513,15 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       if (a.payload?.runout) {
         const completed = Math.max(0, Number(a.payload?.runs ?? 0));
         const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
-        const outId = batterOut === 'nonstriker' ? s.nonStrikerId : s.strikerId;
-        const outName = batterOut === 'nonstriker' ? s.nonStrikerName : s.strikerName;
+        const outId = batterOut === 'nonstriker' ? s.nonStrikerId : strikerId;
+        const outName = batterOut === 'nonstriker' ? s.nonStrikerName : strikerName;
         const newBatId = a.payload?.newBatId as string | undefined;
         const newBatName = a.payload?.newBatName as string | undefined;
         const fielderId = a.payload?.fielderId as string | undefined;
         const fielderName = a.payload?.fielderName as string | undefined;
         const dismissal = composeDismissal('runout', undefined, fielderName);
         let batting = s.batting;
-        if (isNoBall) batting = applyBat(batting, s.strikerId, s.strikerName, { runs: completed, balls: 1 });
+        if (isNoBall) batting = applyBat(batting, strikerId, strikerName, { runs: completed, balls: 1 });
         batting = applyBat(batting, outId, outName, { out: true, dismissal });
         if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
         const crease = batterOut === 'nonstriker'
@@ -533,7 +551,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         const byes = Math.max(0, Number(a.payload?.byes ?? 0));
         const total = 1 + offBat + byes;
         const ran = offBat + byes; // runs run between the wickets → strike parity
-        const batting = applyBat(s.batting, s.strikerId, s.strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
+        const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
         const sym = `${ran > 0 ? ran : ''}nb`;
         const label = `No ball${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''} — free hit`;
         let next: CricketState = {

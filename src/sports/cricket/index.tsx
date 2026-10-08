@@ -28,6 +28,7 @@ import {
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
+import { OverEditor } from './OverEditor';
 
 /* ------------------------------- Controls ---------------------------------- */
 
@@ -1185,8 +1186,9 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
   manualRate: (s) => manualNrrOvers(s),
   manualEnd: { drawLabel: 'Tie', nrrToggle: true },
-  // Hidden from post-match correction until #06 brings a cricket editor.
-  correctable: false,
+  // Its own correction editor (parity #06): ball chips → Edit ball, bowler, batters.
+  correctable: true,
+  CorrectionEditor: OverEditor,
   summary: (s) => {
     // While a Super Over is live/decided, tag each side's board with its SO runs.
     const so = s.superOver;

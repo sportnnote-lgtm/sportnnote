@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket: edit a specific past ball, bowler or batter (parity #06)
+
+- **Ask (parity queue #06):** a 1 tapped for a 4 in over 3, noticed in over 7 — undo would wipe four
+  overs. Fix that one ball (or an over's bowler, or a wrong batter) and have totals/figures/strike
+  recompute.
+- **Engine (helper agent):** `alignCrease` — each ball's RECORDED striker is the truth (swap ends
+  first if the recorded striker is at the non-striker's end); byes/leg byes/wickets/extras now
+  credit the recorded striker (they used the current crease). Live-recorded logs replay
+  identically; the old seed generator didn't swap ends after a last-ball wicket, so some
+  intermediate crease fields differ on seed replays (scores, cards, final states identical;
+  existing cricket/seed/replay tests unchanged and green).
+- **Pure `cricket/editOvers.ts`:** `editableOvers` (innings → overs newest first → ball chips with
+  stamp/sym/category/crease), `editBall` (spreads the original payload, passes non-ball actions
+  through, category fixed — REVIEW), `remapPlayer`, `changeBowlerOps` (this over / all overs,
+  consecutive-over error), `swapBattersOps`, diff lines ("Ball 2.3: 1 run → 4 runs", "Over 3
+  bowler: Arjun → Kabir", "Swapped records: Ravi ⇄ Dev"), `applyOps`.
+- **UI `cricket/OverEditor.tsx`** = cricket's `CorrectionEditor` (#05 slot; cricket now
+  `correctable`): collapsible innings, over rows (bowler + batters links, coloured chips, staged
+  outline), inline Edit-ball card (runs · off bat/bye/leg bye · who faced; out type · fielder ·
+  run-out runs/end; wide ⇄ no ball +0–4), replace bowler (this over / all overs), swap batters;
+  unchanged saves aren't staged. **Live:** "✎ Edit a past ball" beside Undo for the lock holder
+  (disabled while taps are unsynced — REVIEW) → inline editor → "Update score (n)" = one AMEND via
+  the outbox (`useLiveMatch.amend`) → "Who's on strike now?" if the rebuilt crease changed.
+  **Post-match:** inside #05's Correct match (Preview → Publish).
+- Verified in demo (8093): live m8 ball 9.1 1→4 → 118/6 → 121/6, Undo reverts; 2nd-innings 6.3
+  3→2 → 72/3 → 71/3 (no strike prompt: the demo log pins the final crease); ck1 Correct → ball
+  9.2 1→4 → Preview 104/6 → 107/6 → Publish → Score edits. Tests: cricket-edit (new) + all
+  cricket/seed/replay/amend green. 469 tests.
+
+---
+
 ### 2026-10-09 — Correct a finished match: preview, publish, public "Score edits" (parity #05)
 
 - **Ask (parity queue #05):** after full time a wrongly credited goal or a phantom point was frozen

@@ -14,7 +14,7 @@ import { getDeviceId } from '../core/deviceId';
 import { mergeMatchConfig } from '../core/matchConfig';
 import { manualResultLine, isNoResult } from '../core/matchResult';
 import { isEliminationStage } from '../data/bracket';
-import { completedAt } from '../sports/amend';
+import { completedAt, effectiveLog, type AmendOp } from '../sports/amend';
 import { canCorrectMatch, correctionHoursLeft, formatTimeLeft } from '../core/roles';
 import { standingsConfigFromFormat, noResultPoints } from '../data/standings';
 import { lockStatus, type ScoringLock } from '../core/scoringLock';
@@ -55,7 +55,7 @@ import { MatchSummary } from '../components/MatchSummary';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
-import type { MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
+import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
@@ -195,7 +195,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setLock(l);
   }, [matchId]);
 
-  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -776,6 +776,68 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   ) : retiredLocally ? (
     <View style={st.retiredBanner}>
       <Text style={st.retiredText}>🏁 Match ended early — {retiredLocally === 'home' ? homeName : awayName} awarded the win.</Text>
+    </View>
+  ) : null;
+
+  // ✎ Edit a past ball (parity #06): the sport's own correction editor, inline,
+  // for the active scorer while the match is live. "Update score" = one AMEND.
+  const [liveEditOpen, setLiveEditOpen] = useState(false);
+  const [liveEditLog, setLiveEditLog] = useState<MatchEventRecord[]>([]);
+  const [liveOps, setLiveOps] = useState<{ ops: AmendOp[]; lines: string[] }>({ ops: [], lines: [] });
+  const [strikeAsk, setStrikeAsk] = useState<{ before?: string; ids: [string, string]; names: [string, string] } | null>(null);
+  const liveCanWrite = canScore && (lockStat === 'mine' || lockStat === 'free' || lockStat === 'unsupported');
+  const pendingTaps = matchId ? matchOutbox.pendingCount(matchId) : 0;
+  const openLiveEdit = async () => {
+    if (!matchId) return;
+    setLiveEditLog(effectiveLog(await getMatchEvents(matchId)));
+    setLiveOps({ ops: [], lines: [] });
+    setLiveEditOpen(true);
+  };
+  const crease = (st0: unknown) => {
+    const c = st0 as { strikerId?: string; nonStrikerId?: string; strikerName?: string; nonStrikerName?: string } | null;
+    return c?.strikerId && c.nonStrikerId ? { ids: [c.strikerId, c.nonStrikerId] as [string, string], names: [c.strikerName ?? 'Striker', c.nonStrikerName ?? 'Non-striker'] as [string, string] } : null;
+  };
+  const updateScore = async () => {
+    const before = crease(state)?.ids[0];
+    await amend(liveOps.ops, liveOps.lines, profile?.fullName ?? 'Scorer');
+    setLiveEditOpen(false);
+    setLiveOps({ ops: [], lines: [] });
+    // The rebuilt crease may differ (who faced changed) — ask who's on strike.
+    setStrikeAsk({ before, ids: ['', ''], names: ['', ''] });
+  };
+  useEffect(() => {
+    if (!strikeAsk || strikeAsk.ids[0]) return;
+    const c = crease(state);
+    if (!c || c.ids[0] === strikeAsk.before) { setStrikeAsk(null); return; }
+    setStrikeAsk({ before: strikeAsk.before, ...c });
+  }, [state, strikeAsk]);
+  const liveEditBar = plugin.CorrectionEditor && matchId && liveCanWrite && !complete && eventCount > 0 ? (
+    !liveEditOpen ? (
+      <Text style={[st.editLink, pendingTaps > 0 && { color: theme.colors.textMuted }]} accessibilityRole="button"
+        onPress={() => { if (pendingTaps === 0) void openLiveEdit(); }}>
+        {pendingTaps > 0 ? '✎ Edit a past ball — waiting for unsynced taps to upload' : '✎ Edit a past ball'}
+      </Text>
+    ) : (
+      <View style={st.retirePanel}>
+        <plugin.CorrectionEditor log={liveEditLog} config={meta.config} ops={liveOps.ops}
+          onOps={(ops, lines) => setLiveOps({ ops, lines })}
+          homeName={fullHome} awayName={fullAway} homeRoster={homeScoreRoster} awayRoster={awayScoreRoster} />
+        <View style={st.retireRow}>
+          <Button label={`Update score (${liveOps.ops.length})`} style={{ flex: 1 }} disabled={liveOps.ops.length === 0} onPress={() => void updateScore()} />
+          <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => { setLiveEditOpen(false); setLiveOps({ ops: [], lines: [] }); }} />
+        </View>
+      </View>
+    )
+  ) : null;
+  const strikeCard = strikeAsk && strikeAsk.ids[0] ? (
+    <View style={st.retirePanel}>
+      <Text style={st.retirePrompt}>Who’s on strike now?</Text>
+      <View style={st.retireRow}>
+        {strikeAsk.ids.map((id, i) => (
+          <Button key={id} label={strikeAsk.names[i]} variant="ghost" style={{ flex: 1 }}
+            onPress={() => { if (i === 1) dispatch({ type: 'SWAP_STRIKE' }); setStrikeAsk(null); }} />
+        ))}
+      </View>
     </View>
   ) : null;
 
@@ -1680,6 +1742,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               )}
               {retiredBanner}
               {undoBar}
+              {liveEditBar}
+              {strikeCard}
               {restartBar}
               {retireBar}
               {canScore && !retiredLocally && meta.homeTeamId && meta.awayTeamId && (

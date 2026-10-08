@@ -26,7 +26,8 @@ import { notify } from '../core/notifications';
 import type { MatchEventRecord, SportId } from '../core/types';
 import type { ScoreAction } from '../sports/types';
 import { mergeLog, eventKey, statReversals } from './eventLog';
-import { effectiveLog, undoAmendDeltas, AMEND_TYPE } from '../sports/amend';
+import { effectiveLog, undoAmendDeltas, AMEND_TYPE, type AmendOp } from '../sports/amend';
+import { planAmendment } from './amendments';
 import { newUuid } from '../core/deviceId';
 import { canWriteWith, type LockStatus } from '../core/scoringLock';
 
@@ -56,6 +57,9 @@ export interface UseLiveMatch {
   discardRejected: () => Promise<void>;
   /** replay the log again (e.g. back from publishing a correction) */
   refresh: () => Promise<void>;
+  /** live correction of past events (cricket "Edit a past ball", #06): one AMEND
+   *  row through the outbox, its stat changes written; only the active scorer. */
+  amend: (ops: AmendOp[], lines: string[], byName: string) => Promise<void>;
 }
 
 export function useLiveMatch(params: {
@@ -310,5 +314,16 @@ export function useLiveMatch(params: {
     await rebuildFromLog();
   }, [matchId, sport, rebuildFromLog]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog };
+  const amend = useCallback(async (ops: AmendOp[], lines: string[], byName: string) => {
+    // Unsynced taps have provisional seqs — an op could hit the wrong event, so the
+    // screen blocks editing until the outbox is empty; double-check here.
+    if (!matchId || !canWrite || !ops.length || matchOutbox.pendingCount(matchId) > 0) return;
+    const plan = await planAmendment(matchId, sport, config, ops, lines, byName);
+    matchOutbox.enqueue(matchId, { ...plan.record, seq: seqRef.current + 1 });
+    for (const d of plan.deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+    await rebuildFromLog();
+    void updateMatchSnapshot(matchId, stateRef.current as object, plugin.isComplete(stateRef.current)).catch(() => {});
+  }, [matchId, canWrite, sport, config, plugin, rebuildFromLog]);
+
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend };
 }
