@@ -378,7 +378,10 @@ export async function getTeamSummary(id: string): Promise<TeamSummary | null> {
       if (`${m.sport}-${t.shortName}` === id) return all.find((s) => s.id === t.id) ?? null;
     }
   }
-  return null;
+  // A team that hasn't played yet (just created) isn't in any match — read the
+  // team itself, so its profile and squad page open (and players can be added).
+  const team = (await getTeams()).find((t) => t.id === id);
+  return team ? { id: team.id, name: team.name, colorHex: team.colorHex, sports: [team.sport] } : null;
 }
 
 export async function getTeams(sport?: SportId): Promise<Team[]> {
@@ -1155,7 +1158,15 @@ async function conflictTeamsForAdd(targetTeamId: string, sport: SportId, matchId
   return result;
 }
 
-export async function invitePlayer(args: { teamId: string; teamName: string; name: string; phone: string; sport: SportId; matchId?: string }): Promise<InvitePlayerResult> {
+export async function invitePlayer(args: {
+  teamId: string; teamName: string; name: string; sport: SportId; matchId?: string;
+  /** a NEW person is always added by mobile number (their identity) */
+  phone?: string;
+  /** someone already on SportnNote, found by number / name / email */
+  player?: Player;
+  /** optional shirt number for a new (pending) player */
+  jerseyNo?: number;
+}): Promise<InvitePlayerResult> {
   const appendRoster = async (playerId: string) => {
     if (!isSupabaseConfigured || !supabase) {
       const t = demo.teams.find((x) => x.id === args.teamId);
@@ -1194,7 +1205,10 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   // One number ⇒ one identity: reuse whoever already owns this number (their name
   // is pulled up, never duplicated). A confirmed account → 'existing'; a still-
   // pending invite → re-added as 'invited'.
-  const existing = await findPlayerByPhone(args.phone);
+  const existing = args.player ?? (args.phone ? await findPlayerByPhone(args.phone) : null);
+  if (!existing && !args.phone) throw new Error('Add a new player by their mobile number.');
+  const phone = args.phone ?? '';
+  const newName = args.name.trim() || `Invited (…${phone.replace(/\D/g, '').slice(-4)})`;
   // One person, one team per tournament: block adding someone already rostered on
   // another team in the same tournament+sport (friendlies allow shared squads). (A brand-new number
   // can't clash — they're on no team yet — so we only check a known person.)
@@ -1213,13 +1227,13 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   }
   // New number → create a pending invited player (phone stored normalised).
   if (!isSupabaseConfigured || !supabase) {
-    const player = addPlayer({ fullName: args.name.trim(), sports: [args.sport], houseName: args.teamName, phone: normalizePhone(args.phone), phoneVerified: false, invited: true });
+    const player = addPlayer({ fullName: newName, sports: [args.sport], houseName: args.teamName, phone: normalizePhone(phone), phoneVerified: false, invited: true, jerseyNo: args.jerseyNo });
     await appendRoster(player.id);
     const madeCaptain = await maybeSetCaptain(player.id);
     return { player, status: 'invited', madeCaptain };
   }
   const { data, error } = await supabase.from('players')
-    .insert({ full_name: args.name.trim(), sports: [args.sport], house_name: args.teamName, phone: normalizePhone(args.phone), phone_verified: false })
+    .insert({ full_name: newName, sports: [args.sport], house_name: args.teamName, phone: normalizePhone(phone), phone_verified: false, jersey_no: args.jerseyNo ?? null })
     .select('id').single();
   if (error || !data) throw new Error(error?.message ?? 'Could not add player');
   const p = await getPlayer(data.id as string);

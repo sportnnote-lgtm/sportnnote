@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "SportnNote uses the microphone for hands-free voice scoring and navigation.",
-        "NSSpeechRecognitionUsageDescription": "SportnNote uses speech recognition to let you score and navigate by voice."
+        "NSSpeechRecognitionUsageDescription": "SportnNote uses speech recognition to let you score and navigate by voice.",
+        "NSContactsUsageDescription": "Allow SportnNote to open your contacts so you can pick a player’s mobile number. Only the contact you pick is used."
       }
     },
     "android": {
@@ -24,10 +25,14 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
+        "READ_CONTACTS",
         "RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false,
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -49,6 +54,12 @@
         "expo-camera",
         {
           "cameraPermission": "Allow SportnNote to use the camera to scan a team invite QR code."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow SportnNote to open your contacts so you can pick a player’s mobile number. Only the contact you pick is used."
         }
       ]
     ],

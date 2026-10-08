@@ -277,6 +277,8 @@ export default function MatchSquadScreen() {
             homeTeamName={teamName} awayTeamName={teamName}
             sport={sport} matchId={matchId}
             invited={roster.filter((p) => p.invited)}
+            existingIds={roster.map((p) => p.id)}
+            defaultOpen={roster.length === 0}
             onChanged={() => setRosterNonce((n) => n + 1)}
           />
         )}

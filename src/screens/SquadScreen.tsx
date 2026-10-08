@@ -1,6 +1,7 @@
 /** Squad management for a team — a captain/coach adds players to the roster.
- *  The invite link (to hand squad-building to a captain) is a demo stub for now;
- *  full link auth + matchday XI/subs selection for every sport come next. */
+ *  Players are added the one way used everywhere (AddInvitePlayer): by mobile
+ *  number / from contacts for new people, or by number, name or email for anyone
+ *  already on SportnNote — never a bare typed name. */
 import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
@@ -10,9 +11,10 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Button, Pill, TextField, ScreenTitle, textStyles, plural } from '../components/ui';
+import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getTeamSummary, getPlayers, createPlayer, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
+import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
+import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { useCaptainships } from '../data/hooks';
 import { RemindInstall } from '../components/RemindInstall';
 import type { Player, TeamLeadership, TeamSummary } from '../core/types';
@@ -24,8 +26,6 @@ export default function SquadScreen() {
   const { teamId } = params;
   const [team, setTeam] = useState<TeamSummary | null>(null);
   const [squad, setSquad] = useState<Player[]>([]);
-  const [name, setName] = useState('');
-  const [jersey, setJersey] = useState('');
   const [busy, setBusy] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [leaders, setLeaders] = useState<TeamLeadership>({});
@@ -34,11 +34,15 @@ export default function SquadScreen() {
 
   const load = useCallback(() => {
     let on = true;
-    getTeamSummary(teamId).then((t) => on && setTeam(t));
     getTeamLeaders(teamId).then((l) => on && setLeaders(l));
-    getPlayers().then((ps) => {
-      if (!on) return;
-      getTeamSummary(teamId).then((t) => t && setSquad(ps.filter((p) => p.houseName === t.name)));
+    // The same roster the match screens use (explicit roster, else house members).
+    getTeamSummary(teamId).then(async (t) => {
+      if (!on || !t) return;
+      setTeam(t);
+      const lists = await Promise.all(t.sports.map((sp) => getRoster(t.name, sp)));
+      const seen = new Map<string, Player>();
+      for (const p of lists.flat()) seen.set(p.id, p);
+      if (on) setSquad([...seen.values()]);
     });
     return () => { on = false; };
   }, [teamId]);
@@ -58,23 +62,6 @@ export default function SquadScreen() {
     void setTeamLeaders(teamId, next);
   };
 
-  async function add() {
-    if (!team || !name.trim()) return;
-    setBusy(true);
-    await createPlayer({
-      fullName: name.trim(),
-      houseName: team.name,
-      houseColor: team.colorHex,
-      sports: team.sports,
-      jerseyNo: jersey ? Number(jersey) : undefined,
-      city: undefined,
-    });
-    setName('');
-    setJersey('');
-    setBusy(false);
-    load();
-  }
-
   if (!team) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -90,43 +77,18 @@ export default function SquadScreen() {
 
         {captain && <Text style={st.captain}>✓ You’re the captain of {team.name}</Text>}
 
-        <Card style={{ gap: theme.spacing(2) }}>
-          <Text style={textStyles.body}>📨 Invite the captain / coach</Text>
-          <Text style={textStyles.muted}>Generate a code/link they redeem under “Join a team” to manage this squad.</Text>
-          <Button
-            label={busy && !inviteCode ? 'Generating…' : inviteCode ? 'New invite code' : 'Generate invite link'}
-            variant="ghost"
-            onPress={async () => {
-              setBusy(true);
-              try {
-                const inv = await createInvite(team.id, team.name);
-                setInviteCode(inv.token);
-              } catch (e) {
-                notice('Couldn’t create an invite', (e as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-          {inviteCode && (
-            <Text style={st.link} selectable>
-              Code: {inviteCode}{'\n'}sportnnote.in/join/{inviteCode}
-            </Text>
-          )}
-        </Card>
-
-        <Card style={{ gap: theme.spacing(3) }}>
-          <Text style={textStyles.h3}>Add a player</Text>
-          <View style={st.row}>
-            <View style={st.flex2}><TextField label="Name" value={name} onChange={setName} placeholder="Player name" /></View>
-            <View style={st.flex1}><TextField label="Jersey" value={jersey} onChange={(t) => setJersey(t.replace(/[^0-9]/g, ''))} placeholder="#" autoCapitalize="none" /></View>
-          </View>
-          <Button label={busy ? 'Adding…' : 'Add to squad'} onPress={add} />
-        </Card>
+        {/* Adding players is this page's main job — first, and already open. */}
+        <AddInvitePlayer
+          fixedSide="home" defaultOpen
+          title={squad.length === 0 ? '＋ Add players to this team' : '＋ Add more players'}
+          homeTeamId={team.id} awayTeamId={team.id} homeTeamName={team.name} awayTeamName={team.name}
+          sport={team.sports[0]} invited={squad.filter((p) => p.invited)} existingIds={squad.map((p) => p.id)}
+          onChanged={load}
+        />
 
         <Text style={[textStyles.h3, st.section]}>Squad</Text>
         {squad.length === 0 ? (
-          <EmptyState icon="👥" title="No players yet" hint="Add them above or share the invite link." compact />
+          <EmptyState icon="👥" title="No players yet" hint="Add them above by mobile number or from your contacts." compact />
         ) : (
           squad.map((p) => {
             const isCap = leaders.captainId === p.id;
@@ -177,9 +139,31 @@ export default function SquadScreen() {
           })
         )}
 
-        <Text style={st.note}>
-          Matchday squad &amp; substitute selection is available for football (Lineup editor on the live match); rolling it out to every sport is next.
-        </Text>
+        <Card style={{ gap: theme.spacing(2) }}>
+          <Text style={textStyles.body}>📨 Invite the captain / coach</Text>
+          <Text style={textStyles.muted}>Generate a code/link they redeem under “Join a team” to manage this squad.</Text>
+          <Button
+            label={busy && !inviteCode ? 'Generating…' : inviteCode ? 'New invite code' : 'Generate invite link'}
+            variant="ghost"
+            onPress={async () => {
+              setBusy(true);
+              try {
+                const inv = await createInvite(team.id, team.name);
+                setInviteCode(inv.token);
+              } catch (e) {
+                notice('Couldn’t create an invite', (e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+          {inviteCode && (
+            <Text style={st.link} selectable>
+              Code: {inviteCode}{'\n'}sportnnote.in/join/{inviteCode}
+            </Text>
+          )}
+        </Card>
+
       </ScrollView>
     </SafeAreaView>
   );

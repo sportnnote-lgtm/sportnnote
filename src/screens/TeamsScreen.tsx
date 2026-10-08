@@ -36,10 +36,12 @@ export default function TeamsScreen() {
     setError(null);
     setBusy(true);
     try {
-      await createTeam({ name: name.trim(), shortName: short.trim().toUpperCase(), sport, colorHex: color });
+      const team = await createTeam({ name: name.trim(), shortName: short.trim().toUpperCase(), sport, colorHex: color });
       setName('');
       setShort('');
       setTick((t) => t + 1);
+      // A new team's next step is always its players — go straight there.
+      nav.navigate('Squad', { teamId: team.id });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add team');
     } finally {

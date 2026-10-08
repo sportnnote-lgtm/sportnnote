@@ -92,7 +92,7 @@ export default function TeamProfileScreen() {
           variant={following ? 'ghost' : 'primary'}
           onPress={() => toggle('team', team.id)}
         />
-        <Button label="👥 Manage squad" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} />
+        <Button label="👥 Squad · ＋ Add players" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} />
 
         {totalPlayed > 0 && (
           <View style={st.statGrid}>

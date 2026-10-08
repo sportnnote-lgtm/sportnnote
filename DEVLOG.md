@@ -13,6 +13,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Adding players: one way everywhere, by number / name / email / contacts
+
+- **Founder report:** hard to find where to add players to a new team; the team squad page
+  added players by **name + jersey only** (anyone could type anything); wants phone contacts.
+- **One add-player box everywhere** (`AddInvitePlayer`): live match (Info → Matchday squads),
+  matchday squad picker, and now the team's **Squad** page. One field — *mobile number, name or
+  email*: names/emails find people already on SportnNote (tap ＋ Add); a NEW person can only be
+  added by full mobile number (name + jersey optional, "Invited (…1234)" placeholder) → invited +
+  WhatsApp/SMS invite. People already on the team aren't offered again. Opens expanded when
+  the team is empty.
+- **Phone contacts** (`core/pickContact.ts`): Android app → native picker (`expo-contacts`,
+  `Contact.presentPicker()`, SDK 56 class API; READ only — WRITE_CONTACTS blocked; needs a new
+  APK, older installs simply don't show the button); Android Chrome web → Contact Picker API;
+  iPhone web (no contact access in Safari) → **📋 Paste number**.
+- `invitePlayer` takes `player` (an existing person found by name/email) or `phone` (new
+  person), plus optional `jerseyNo`.
+- **Bug fixed:** a team with no matches had no profile/squad page ("Loading…" forever) —
+  `getTeamSummary` now falls back to the team record. New teams (Organize → Teams) go straight
+  to their Squad page; team page button renamed **Squad · ＋ Add players**. Squad page lists the
+  real roster (`getRoster`), not just house-name members. Help guide updated.
+- Verified in demo: create team → lands on Squad → name search adds Aarav (made captain) → new
+  number shows invite form (name/jersey optional) → WhatsApp opens with +91 number; unknown
+  email / partial number give clear hints; no console errors.
+- Open question: WhatsApp's desktop preview shows the invite emoji as "�" (wa.me and
+  api.whatsapp.com alike) — founder to check how it looks on the phone.
+
+---
+
 ### 2026-10-08 — SportnNote logo: the "S:N" scoreline
 
 - **Founder pick:** concept A, colour option 1 — green **S**, amber colon, white **N** on the

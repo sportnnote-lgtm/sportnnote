@@ -925,6 +925,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeTeamName={homeTeamName} awayTeamName={awayTeamName}
                   sport={sport} matchId={matchId}
                   invited={(sd === 'home' ? homeFull : awayFull).filter((p) => p.invited)}
+                  existingIds={(sd === 'home' ? homeFull : awayFull).map((p) => p.id)}
+                  defaultOpen={(sd === 'home' ? homeFull : awayFull).length === 0}
                   onChanged={() => setRosterNonce((n) => n + 1)}
                 />
               )}

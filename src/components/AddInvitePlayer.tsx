@@ -1,14 +1,19 @@
-/** Add or invite a player to a team by mobile number — the phone is the identity,
- *  so a known number pulls up the existing person and a new number opens a WhatsApp
- *  invite-to-install (they show "invited/pending" until they register). Used both on
- *  the live-scoring screen (two teams, with a Home/Away toggle) and on the matchday
- *  squad picker (one team, `fixedSide` locks the toggle away). Adds persist to the
- *  team's saved squad. */
+/** Add or invite a player to a team — THE way people get onto a team, everywhere
+ *  (live match, matchday squad, team squad page). One box: mobile number, name or
+ *  email, or pick straight from the phone's contacts.
+ *   • Someone already on SportnNote shows up (exact number / email, or by name) —
+ *     one tap adds the real person.
+ *   • A NEW person can only be added by mobile number (their identity — no
+ *     made-up names): we add them as "invited" and open a WhatsApp/SMS invite;
+ *     they're confirmed when they register with that number.
+ *  `fixedSide` locks it to one team (no Home/Away toggle). */
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { theme } from '../core/theme';
 import { SelectChip, TextField, Button, textStyles } from './ui';
-import { invitePlayer, markPlayerRegistered, findPlayerByPhone, getReportedPlayerIds, removePlayerFromTeam } from '../data/repos';
+import { invitePlayer, markPlayerRegistered, findPlayerByPhone, findPlayerByEmail, lookupPeople, getReportedPlayerIds, removePlayerFromTeam } from '../data/repos';
+import { looksLikeContact } from '../core/contactQuery';
+import { canPickContact, pickContact, canPaste, pasteText } from '../core/pickContact';
 import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
 import { provisionalInviteMessage } from '../core/invite';
@@ -21,7 +26,7 @@ const initials = (name?: string): string =>
   (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 export function AddInvitePlayer({
-  homeTeamId, awayTeamId, homeTeamName, awayTeamName, sport, invited, onChanged, fixedSide, title, matchId,
+  homeTeamId, awayTeamId, homeTeamName, awayTeamName, sport, invited, onChanged, fixedSide, title, matchId, defaultOpen = false, existingIds = [],
 }: {
   homeTeamId: string; awayTeamId: string;
   homeTeamName?: string; awayTeamName?: string;
@@ -30,8 +35,15 @@ export function AddInvitePlayer({
   fixedSide?: 'home' | 'away'; title?: string;
   // The match this add happens in — enables the "one person, one team" conflict check.
   matchId?: string;
+  /** start expanded (e.g. a team page whose whole job is adding players) */
+  defaultOpen?: boolean;
+  /** players already on the team — not offered again */
+  existingIds?: string[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const [jersey, setJersey] = useState('');
+  const [people, setPeople] = useState<Player[]>([]);
+  const [searching, setSearching] = useState(false);
   const [side, setSide] = useState<'home' | 'away'>(fixedSide ?? 'home');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
@@ -46,7 +58,11 @@ export function AddInvitePlayer({
 
   const teamId = side === 'home' ? homeTeamId : awayTeamId;
   const teamName = (side === 'home' ? homeTeamName : awayTeamName) ?? 'the team';
-  const valid = isValidPhone(phone);
+  // `phone` holds whatever is typed: a number, a name or an email.
+  const kind = looksLikeContact(phone);
+  const valid = kind === 'phone' && isValidPhone(phone);
+  const isEmail = kind === 'email';
+  const isName = !kind && phone.trim().length >= 2 && !/^[+\d\s()-]+$/.test(phone.trim());
 
   // Which team an invited player actually belongs to (by the team they were added
   // under), so Remove targets the right side even when this form's toggle is on the
@@ -62,12 +78,13 @@ export function AddInvitePlayer({
 
   // The number is the identity — recognise it first and pull up the known name.
   useEffect(() => {
-    if (!valid) { setMatched(null); setMatchedReported(false); setLooking(false); return; }
+    if (!valid && !isEmail) { setMatched(null); setMatchedReported(false); setLooking(false); return; }
     let on = true; setLooking(true);
-    findPlayerByPhone(phone).then(async (p) => {
+    (valid ? findPlayerByPhone(phone) : findPlayerByEmail(phone.trim())).then(async (p) => {
       if (!on) return;
       setLooking(false); setMatched(p);
       if (p) setName(p.fullName); // one number ⇒ one name — never let a duplicate be typed
+      else if (isEmail) setName('');
       // Was this number reported as "not me"? Block re-adding until it's cleared.
       setMatchedReported(p ? (await getReportedPlayerIds([p.id])).has(p.id) : false);
     }).catch((e) => {
@@ -78,7 +95,38 @@ export function AddInvitePlayer({
       reportError(e);
     });
     return () => { on = false; };
-  }, [phone, valid]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, valid, isEmail]);
+
+  // Typing a name → members with that name (pick the real person, never retype them).
+  useEffect(() => {
+    if (!isName) { setPeople([]); setSearching(false); return; }
+    let on = true; setSearching(true);
+    const t = setTimeout(() => {
+      lookupPeople(phone).then((list) => { if (on) setPeople(list.filter((p) => !existingIds.includes(p.id)).slice(0, 6)); })
+        .catch(() => { if (on) setPeople([]); })
+        .finally(() => { if (on) setSearching(false); });
+    }, 300);
+    return () => { on = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, isName]);
+
+  const fromContacts = async () => {
+    setNote(null);
+    try {
+      const c = await pickContact();
+      if (!c) return;
+      const num = c.phones.find((n) => isValidPhone(n)) ?? c.phones[0];
+      if (!num) { setNote('That contact has no mobile number.'); return; }
+      setPhone(num.trim()); setName(c.name ?? '');
+    } catch (e) {
+      reportError(e);
+      setNote(Platform.OS === 'web' ? 'Couldn’t open your contacts — paste or type the number instead.' : 'Couldn’t open your contacts — allow SportnNote to access them in Settings, or type the number.');
+    }
+  };
+  const paste = async () => {
+    try { const t = await pasteText(); if (t) setPhone(t); } catch { setNote('Couldn’t read the clipboard — long-press the box and choose Paste.'); }
+  };
 
   // Flag any pending invitees who reported "this isn't me".
   useEffect(() => {
@@ -89,13 +137,18 @@ export function AddInvitePlayer({
     return () => { on = false; };
   }, [invited]);
 
-  const submit = async () => {
-    if (!valid || busy) return;
-    if (matchedReported) { setNote('⚠ This person reported that this number isn’t them — they can’t be added.'); return; }
-    if (!matched && !name.trim()) { setNote('Enter the player’s name.'); return; }
+  const submit = async (pick?: Player) => {
+    const person = pick ?? matched ?? undefined;
+    if (busy || (!person && !valid)) return;
+    if (!pick && matchedReported) { setNote('⚠ This person reported that this number isn’t them — they can’t be added.'); return; }
     setBusy(true); setNote(null);
     try {
-      const res = await invitePlayer({ teamId, teamName, name: (matched?.fullName ?? name).trim(), phone, sport, matchId });
+      const res = await invitePlayer({
+        teamId, teamName, sport, matchId,
+        name: (person?.fullName ?? name).trim(),
+        player: person, phone: person ? undefined : phone,
+        jerseyNo: !person && jersey ? Number(jersey) : undefined,
+      });
       const cap = res.madeCaptain;
       // First player on a captain-less team becomes captain — tell them in-app so
       // they can build the rest of the squad themselves.
@@ -115,7 +168,7 @@ export function AddInvitePlayer({
         setLastInvite({ phone, msg }); // keep it so they can also send by SMS
         setNote(`⏳ Invited ${res.player.fullName}${cap ? ' as captain' : ''} — WhatsApp opened. If they don’t use WhatsApp, send by SMS below. They’re confirmed once they register.`);
       }
-      setPhone(''); setName(''); setMatched(null);
+      setPhone(''); setName(''); setJersey(''); setMatched(null); setPeople([]);
       onChanged();
     } catch (e) {
       // Surfaces the "already on another team" conflict message, or a generic fallback.
@@ -145,29 +198,56 @@ export function AddInvitePlayer({
             </View>
           )}
 
-          {/* Number first — the primary identity. */}
-          <TextField label="Mobile number" value={phone} onChange={setPhone} placeholder="+91 98765 43210" autoCapitalize="none" />
+          {/* One box: number (the identity), name or email — or straight from contacts. */}
+          <TextField label="Mobile number, name or email" value={phone} onChange={(v) => { setPhone(v); setNote(null); }} placeholder="98765 43210" autoCapitalize="none" />
+          {(canPickContact() || canPaste()) && (
+            <View style={st.sourceRow}>
+              {canPickContact() && <Text style={st.sourceBtn} accessibilityRole="button" onPress={() => void fromContacts()}>📇 Choose from contacts</Text>}
+              {!canPickContact() && canPaste() && <Text style={st.sourceBtn} accessibilityRole="button" onPress={() => void paste()}>📋 Paste number</Text>}
+            </View>
+          )}
 
-          {!valid ? (
-            <Text style={textStyles.muted}>Enter a mobile number to add or invite a player. The number is how we recognise a person — one number, one profile.</Text>
+          {!phone.trim() ? (
+            <Text style={textStyles.muted}>New players are added by their mobile number — that’s how we know a real person (one number, one profile). Players already on SportnNote show up as you type.</Text>
+          ) : isName ? (
+            <>
+              {people.map((p) => (
+                <TouchableOpacity key={p.id} accessibilityRole="button" style={st.personRow} activeOpacity={0.8} onPress={() => void submit(p)} disabled={busy}>
+                  <Text style={st.personName} numberOfLines={1}>{p.fullName}{p.city ? ` · ${p.city}` : ''}{p.invited ? ' · invited' : ''}</Text>
+                  <Text style={st.personAdd}>＋ Add</Text>
+                </TouchableOpacity>
+              ))}
+              {!searching && people.length === 0 && <Text style={textStyles.muted}>No one on SportnNote by that name. Add them with their mobile number{canPickContact() ? ' or from your contacts' : ''}.</Text>}
+            </>
+          ) : !valid && !isEmail ? (
+            <Text style={textStyles.muted}>Enter the full 10-digit mobile number.</Text>
           ) : looking ? (
-            <Text style={textStyles.muted}>Checking this number…</Text>
+            <Text style={textStyles.muted}>{isEmail ? 'Checking this email…' : 'Checking this number…'}</Text>
           ) : matched && matchedReported ? (
             <Text style={st.reportedNote}>⚠ {matched.fullName} reported this number isn’t them — they can’t be added.</Text>
           ) : matched ? (
-            <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote. Adding them to {teamName}.</Text>
+            existingIds.includes(matched.id)
+              ? <Text style={textStyles.muted}>{matched.fullName} is already in {teamName}.</Text>
+              : <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote.</Text>
+          ) : isEmail ? (
+            <Text style={textStyles.muted}>No one on SportnNote with that email. Add new players by their mobile number.</Text>
           ) : (
             <>
-              <TextField label="Player name" value={name} onChange={setName} placeholder="e.g. Rahul Sharma" />
-              <Text style={textStyles.muted}>New number → we open an invite to install &amp; register (WhatsApp, or send by SMS if they don’t use WhatsApp). They show as “invited” until they do.</Text>
+              <Text style={textStyles.body}>Not on SportnNote yet — add them and send an invite:</Text>
+              <View style={st.newRow}>
+                <View style={{ flex: 3 }}><TextField label="Name (optional)" value={name} onChange={setName} placeholder="They’ll confirm it when they join" /></View>
+                <View style={{ flex: 1 }}><TextField label="Jersey" value={jersey} onChange={(t) => setJersey(t.replace(/[^0-9]/g, '').slice(0, 3))} placeholder="#" autoCapitalize="none" /></View>
+              </View>
             </>
           )}
 
-          <Button
-            label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName}` : '＋ Add & invite (WhatsApp / SMS)'}
-            onPress={submit}
-            disabled={busy || !valid || matchedReported || (!matched && !name.trim())}
-          />
+          {(valid || (isEmail && matched)) && !looking && !(matched && (matchedReported || existingIds.includes(matched.id))) && (
+            <Button
+              label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName} to ${teamName}` : '＋ Add & invite (WhatsApp / SMS)'}
+              onPress={() => void submit()}
+              disabled={busy}
+            />
+          )}
           {note && <Text style={st.inviteNote}>{note}</Text>}
           {lastInvite && (
             <View style={st.sendRow}>
@@ -222,6 +302,12 @@ const st = StyleSheet.create({
   pendingCountText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900' },
   caretMuted: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: '800' },
   sideRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  sourceRow: { flexDirection: 'row', gap: theme.spacing(3), marginTop: -theme.spacing(1) },
+  sourceBtn: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800', paddingVertical: theme.spacing(1) },
+  newRow: { flexDirection: 'row', gap: theme.spacing(3) },
+  personRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
+  personName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', flex: 1 },
+  personAdd: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   inviteNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '600' },
   sendRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   sendVia: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },

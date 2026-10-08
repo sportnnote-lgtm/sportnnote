@@ -139,10 +139,9 @@ If a table looks wrong, check you're viewing the right tournament and that the f
   'add-players': `A team's roster is the pool you pick each match's lineup from.
 
 ## Add a player
-1. Open the team (from a match, a tournament, or **Discover → People**).
-2. Tap **Manage squad** / **+ Add / invite a player**.
-3. Search for an existing SportnNote player and add them, or create a new one with just a name.
-4. Set each player's **jersey number** so they're easy to pick while scoring.
+1. Open the team: **Organize → Teams** (a team you just created opens here automatically), the team's page → **Squad · ＋ Add players**, or a match's **Info → Matchday squads → ＋ Add players to this team**.
+2. In **Mobile number, name or email**: type a name to find someone already on SportnNote, or enter their mobile number — or tap **📇 Choose from contacts** (Android) / **📋 Paste number** (iPhone).
+3. Already on SportnNote → tap **＋ Add**. New number → **＋ Add & invite**: they're added as "invited" and WhatsApp opens with an invite. Their name and jersey number are optional.
 
 A player is identified by their **phone number**, so the same number is always the same person across teams and tournaments. If they're not on SportnNote yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
 
