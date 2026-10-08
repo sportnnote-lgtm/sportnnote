@@ -370,7 +370,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setRemindedSides((r) => ({ ...r, [sd]: true }));
   };
 
-  const [pickScorer, setPickScorer] = useState(false);
+  const [pickScorer, setPickScorerState] = useState(!!route.params.addScorer);
+  const setPickScorer = useCallback((v: boolean) => {
+    setPickScorerState(v);
+    navigation.setParams({ addScorer: v || undefined });
+  }, [navigation]);
   // Persist a new scorer list; revert + surface the error if the write is rejected
   // (e.g. RLS) instead of silently looking saved and reverting on reload.
   const saveScorers = useCallback(
@@ -504,7 +508,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   );
 
   // The live screen splits into Info / Score / Summary tabs for every sport.
-  const [tab, setTab] = useState<string>('');
+  const [tab, setTabState] = useState<string>(route.params.tab ?? '');
+  const setTab = useCallback((t: string) => {
+    setTabState(t);
+    navigation.setParams({ tab: t });
+  }, [navigation]);
   const [infoOpen, setInfoOpen] = useState<'home' | 'away' | null>(null);
 
   const editSquad = (sd: 'home' | 'away') => {
@@ -975,7 +983,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             style={st.editLink}
             accessibilityRole="button"
             accessibilityState={{ expanded: pickScorer }}
-            onPress={() => setPickScorer((v) => !v)}
+            onPress={() => setPickScorer(!pickScorer)}
           >
             {pickScorer ? 'Close' : '＋ Add scorer'}
           </Text>

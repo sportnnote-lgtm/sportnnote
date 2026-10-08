@@ -18,6 +18,10 @@ export type RootStackParamList = {
     matchId?: string;
     /** false for viewers — read-only scoreboard */
     canScore?: boolean;
+    /** the open tab / "Add scorer" panel — kept in params so they survive an iPhone
+     *  background unload (the nav state is saved and restored) */
+    tab?: string;
+    addScorer?: boolean;
   };
   MatchSquad: {
     matchId: string; side: 'home' | 'away'; teamName: string; sport: SportId; playersPerSide?: number;

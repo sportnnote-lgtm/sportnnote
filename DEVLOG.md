@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — iPhone resume also keeps the match tab + open "Add scorer" panel
+
+- **Founder report:** after minimising on the match's Info tab, the app came back on the right
+  match but on the **Scoring** tab (the default for a scorer). The tab and the "Add scorer"
+  panel were in-memory state, so the restored nav state didn't carry them.
+- **Fix:** `LiveScoringScreen` keeps both in route params (`tab`, `addScorer`) via
+  `navigation.setParams`, and starts from them — so the saved nav state restores them too.
+  Verified in demo: Info + open Add scorer → reload "/" → same tab, panel open.
+
+---
+
 ### 2026-10-08 — iPhone resume keeps your screen; add scorer/host by number with WhatsApp/SMS invite
 
 - **Founder report:** minimising the Home Screen app on iPhone (even for seconds) brought
