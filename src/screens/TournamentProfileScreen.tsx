@@ -39,6 +39,8 @@ import { groupTables, superPhaseLabel } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
+import { RemindInstall } from '../components/RemindInstall';
+import { realName } from '../core/invite';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -90,6 +92,8 @@ export default function TournamentProfileScreen() {
   }, [nav, tournament]);
   // People added as hosts from outside the loaded players (PersonPicker).
   const [extraPeople, setExtraPeople] = useState<Record<string, string>>({});
+  const hostInvite = (name?: string) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a host of ${tournament?.name ?? 'a tournament'} on SportnNote 🏆\n\n`
+    + `Open this link and sign in with this mobile number to help run it:\n${tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in'}`;
   const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName ?? extraPeople[id];
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.
@@ -426,6 +430,12 @@ export default function TournamentProfileScreen() {
                   candidates={[]}
                   canManage={canManageHosts}
                   onChange={saveHosts}
+                  renderExtra={(id) => {
+                    const p = allPlayers.find((x) => x.id === id);
+                    return canManageHosts && p?.invited
+                      ? <RemindInstall playerId={id} name={p.fullName} phone={p.phone} message={hostInvite(realName(p.fullName))} />
+                      : null;
+                  }}
                   subtitle="Everyone who runs this tournament. Any host can manage matches and gets reminders to assign scorers."
                 />
                 {canManageHosts && (
@@ -435,8 +445,7 @@ export default function TournamentProfileScreen() {
                       role="host"
                       excludeIds={hostIds}
                       onPick={(p) => { setExtraPeople((m) => ({ ...m, [p.id]: p.fullName })); saveHosts([...new Set([...hostIds, p.id])]); }}
-                      inviteText={(name) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a host of ${tournament.name} on SportnNote 🏆\n\n`
-                        + `Open this link and sign in with this mobile number to help run it:\n${tournamentLink(tournament.id)}`}
+                      inviteText={hostInvite}
                     />
                   </View>
                 )}

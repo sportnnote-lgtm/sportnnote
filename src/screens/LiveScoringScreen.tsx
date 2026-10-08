@@ -49,6 +49,8 @@ import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
 import type { DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { RemindInstall } from '../components/RemindInstall';
+import { realName } from '../core/invite';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveScoring'>;
 
@@ -177,8 +179,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [rosterNonce, setRosterNonce] = useState(0);
   useEffect(() => {
     let on = true;
-    if (homeTeamName) getRoster(homeTeamName, sport).then((r) => on && setHomeFull(r));
-    if (awayTeamName) getRoster(awayTeamName, sport).then((r) => on && setAwayFull(r));
+    if (homeTeamName) getRoster(homeTeamName, sport, meta.homeTeamId).then((r) => on && setHomeFull(r));
+    if (awayTeamName) getRoster(awayTeamName, sport, meta.awayTeamId).then((r) => on && setAwayFull(r));
     // Adding the first player auto-assigns a captain, so refresh leaders here too
     // — otherwise the card keeps showing "No captain set" until a reload.
     if (meta.homeTeamId) getTeamLeaders(meta.homeTeamId).then((l) => on && setHomeLeaders(l));
@@ -357,6 +359,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   }, [homeRoster, awayRoster]);
   const nameOf = (id?: string) =>
     id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers, ...extraPeople].find((p) => p.id === id)?.fullName : undefined;
+  const personOf = (id?: string | null) =>
+    id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers, ...extraPeople].find((p) => p.id === id) : undefined;
   const scorerNames = scorerIds.map((id) => nameOf(id) ?? 'Scorer');
   const scorerName = scorerNames[0];
   const iAmScorer = !!myPlayerId && scorerIds.includes(myPlayerId);
@@ -529,7 +533,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
   // The live screen splits into Info / Score / Summary tabs for every sport.
   const [tab, setTab] = useParamState<string>('tab', '');
-  const [infoOpen, setInfoOpen] = useState<'home' | 'away' | null>(null);
+  // null = untouched (an empty team you can fill starts open); 'closed' = user closed them.
+  const [infoOpen, setInfoOpen] = useState<'home' | 'away' | 'closed' | null>(null);
 
   const editSquad = (sd: 'home' | 'away') => {
     // A captain of one side must not be able to open the other side's editor.
@@ -806,7 +811,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const name = sd === 'home' ? homeName : awayName;
       const roster = sd === 'home' ? homeRoster : awayRoster;
       const color = (sd === 'home' ? homeColor : awayColor) ?? theme.colors.text;
-      const open = infoOpen === sd;
+      const open = infoOpen === sd || (infoOpen === null && roster.length === 0 && canEditSide(sd) && !!matchId);
       const L = leadersFor(sd);
       const set = squadSet(sd);
       const hasCaptain = !!(L.captainId || L.viceCaptainId);
@@ -820,7 +825,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const count = (sq?.starters.length ?? 0) + (sq?.subs.length ?? 0);
       return (
         <View style={st.infoCard}>
-          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? null : sd)}>
+          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? 'closed' : sd)}>
             <View style={[st.legendDot, { backgroundColor: color }]} />
             <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]}>{sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name}</Text>
             <Text style={[textStyles.muted, { color: set ? theme.colors.primary : theme.colors.textMuted }]}>
@@ -868,14 +873,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                       {p.jerseyNo != null ? (
                         <View style={[st.jersey, { borderColor: color }]}><Text style={[st.jerseyNum, { color }]}>{p.jerseyNo}</Text></View>
                       ) : <View style={st.jersey} />}
-                      <Text
-                        style={[textStyles.body, { flex: 1 }, disputed && st.disputedName]} numberOfLines={1}
-                        {...(!disputed ? { accessibilityRole: 'link' as const, accessibilityLabel: `Open ${p.fullName}`, onPress: () => openPlayer(p.id) } : {})}
-                      >
-                        {disputed ? '❌ X — disputed' : p.fullName}
-                        {!disputed && keeper ? '  🧤' : ''}
-                        {reported ? '  ⚐ reported' : ''}
-                      </Text>
+                      <View style={{ flex: 1, gap: theme.spacing(1) }}>
+                        <Text
+                          style={[textStyles.body, disputed && st.disputedName]} numberOfLines={1}
+                          {...(!disputed ? { accessibilityRole: 'link' as const, accessibilityLabel: `Open ${p.fullName}`, onPress: () => openPlayer(p.id) } : {})}
+                        >
+                          {disputed ? '❌ X — disputed' : p.fullName}
+                          {!disputed && keeper ? '  🧤' : ''}
+                          {reported ? '  ⚐ reported' : ''}
+                          {p.invited && !disputed ? '  ⏳' : ''}
+                        </Text>
+                        {p.invited && !disputed && !reported && canEditSide(sd) ? (
+                          <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={sd === 'home' ? (homeTeamName ?? homeName) : (awayTeamName ?? awayName)} />
+                        ) : null}
+                      </View>
                       {!disputed && role ? <View style={[st.roleTag, role === 'C' && st.roleCaptain]}><Text style={[st.roleTagText, role === 'C' && st.roleTagTextDark]}>{role}</Text></View> : null}
                       {mine && !disputed && !reported && matchId && (
                         <Text style={st.objectLink} accessibilityRole="button" accessibilityLabel="Object: I'm not in this match" onPress={() => objectToMatch(sd, p)}>🚩 Not me — object</Text>
@@ -947,7 +958,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   invited={(sd === 'home' ? homeFull : awayFull).filter((p) => p.invited)}
                   existingIds={(sd === 'home' ? homeFull : awayFull).map((p) => p.id)}
                   defaultOpen={(sd === 'home' ? homeFull : awayFull).length === 0}
-                  onChanged={() => setRosterNonce((n) => n + 1)}
+                  // keep this card open after adding (it auto-opened while the team was empty)
+                  onChanged={() => { setInfoOpen(sd); setRosterNonce((n) => n + 1); }}
                 />
               )}
             </View>
@@ -987,7 +999,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[textStyles.body, { fontWeight: '700' }]} numberOfLines={1}>{nameOf(id) ?? 'Scorer'}{mine ? ' · you' : ''}</Text>
-                  <Text style={textStyles.muted} numberOfLines={1}>{mine ? '📱 Scoring from this device' : matchLive ? 'Scoring from their device' : 'Can score this match'}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{mine ? '📱 Scoring from this device' : personOf(id)?.invited ? '⏳ Invited · hasn’t joined yet' : matchLive ? 'Scoring from their device' : 'Can score this match'}</Text>
+                  {canManage && personOf(id)?.invited ? (
+                    <RemindInstall playerId={id} name={nameOf(id) ?? 'Scorer'} phone={personOf(id)?.phone} message={inviteTextFor('scorer')(realName(nameOf(id)))} />
+                  ) : null}
                 </View>
                 {matchLive ? (
                   <View style={st.scorerLive}><View style={st.scorerLiveDot} /><Text style={st.scorerLiveText}>LIVE</Text></View>
@@ -1497,6 +1512,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 <HostsCard
                   hostIds={matchHostIds}
                   nameOf={(id) => nameOf(id) ?? undefined}
+                  renderExtra={(id) => canManage && personOf(id)?.invited ? (
+                    <RemindInstall playerId={id} name={nameOf(id) ?? 'Host'} phone={personOf(id)?.phone} message={inviteTextFor('host')(realName(nameOf(id)))} />
+                  ) : null}
                   candidates={scorerCandidates.map((p) => ({ id: p.id, name: p.fullName }))}
                   canManage={canManage}
                   onChange={setHosts}

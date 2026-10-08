@@ -16,10 +16,11 @@ import { looksLikeContact } from '../core/contactQuery';
 import { canPickContact, pickContact, canPaste, pasteText } from '../core/pickContact';
 import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
-import { provisionalInviteMessage } from '../core/invite';
+import { provisionalInviteMessage, realName } from '../core/invite';
 import { isValidPhone } from '../core/phone';
 import { reportError } from '../core/telemetry';
 import type { Player, SportId } from '../core/types';
+import { RemindInstall } from './RemindInstall';
 
 /** Up to two initials from a name, for an invited-player avatar. */
 const initials = (name?: string): string =>
@@ -166,7 +167,7 @@ export function AddInvitePlayer({
         const msg = inviteMsg(res.player.id, res.player.fullName, !!cap);
         openWhatsApp(phone, msg);
         setLastInvite({ phone, msg }); // keep it so they can also send by SMS
-        setNote(`⏳ Invited ${res.player.fullName}${cap ? ' as captain' : ''} — WhatsApp opened. If they don’t use WhatsApp, send by SMS below. They’re confirmed once they register.`);
+        setNote(`⏳ Invited ${realName(res.player.fullName) || 'them'}${cap ? ' as captain' : ''} — WhatsApp opened. Didn’t send it? Use WhatsApp / SMS below, or “📤 Invite again” next to their name any time. They’re confirmed once they sign up.`);
       }
       setPhone(''); setName(''); setJersey(''); setMatched(null); setPeople([]);
       onChanged();
@@ -228,7 +229,9 @@ export function AddInvitePlayer({
           ) : matched ? (
             existingIds.includes(matched.id)
               ? <Text style={textStyles.muted}>{matched.fullName} is already in {teamName}.</Text>
-              : <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote.</Text>
+              : matched.invited
+                ? <Text style={st.matchedNote}>⏳ Invited earlier — hasn’t joined yet. Add them to {teamName} too.</Text>
+                : <Text style={st.matchedNote}>✓ {matched.fullName} — already on SportnNote.</Text>
           ) : isEmail ? (
             <Text style={textStyles.muted}>No one on SportnNote with that email. Add new players by their mobile number.</Text>
           ) : (
@@ -243,7 +246,7 @@ export function AddInvitePlayer({
 
           {(valid || (isEmail && matched)) && !looking && !(matched && (matchedReported || existingIds.includes(matched.id))) && (
             <Button
-              label={busy ? 'Adding…' : matched ? `＋ Add ${matched.fullName} to ${teamName}` : '＋ Add & invite (WhatsApp / SMS)'}
+              label={busy ? 'Adding…' : matched ? `＋ Add ${realName(matched.fullName) || 'them'} to ${teamName}` : '＋ Add & invite (WhatsApp / SMS)'}
               onPress={() => void submit()}
               disabled={busy}
             />
@@ -263,22 +266,19 @@ export function AddInvitePlayer({
               {invited.map((p) => (
                 <View key={p.id} style={st.invitedRow}>
                   <View style={st.invAvatar}><Text style={st.invAvatarText}>{initials(p.fullName)}</Text></View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, gap: theme.spacing(1) }}>
                     <Text style={st.invitedName} numberOfLines={1}>{p.fullName}</Text>
                     {reportedIds.has(p.id)
                       ? <Text style={st.reportedRowNote} numberOfLines={1}>⚠ reported this isn’t them</Text>
-                      : p.phone ? <Text style={st.invitedPhone} numberOfLines={1}>{p.phone}</Text> : null}
+                      : <>
+                          {p.phone ? <Text style={st.invitedPhone} numberOfLines={1}>{p.phone}</Text> : null}
+                          <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={(p.houseName === awayTeamName ? awayTeamName : homeTeamName) ?? teamName} />
+                        </>}
                   </View>
                   {reportedIds.has(p.id) ? (
                     <View style={st.reportedTag}><Text style={st.reportedTagText}>REPORTED</Text></View>
                   ) : (
                     <>
-                      {p.phone ? (
-                        <>
-                          <Text style={st.resendLink} accessibilityRole="button" accessibilityLabel={`Resend WhatsApp invite to ${p.fullName}`} onPress={() => openWhatsApp(p.phone, inviteMsg(p.id, p.fullName, false))}>WA</Text>
-                          <Text style={st.resendLink} accessibilityRole="button" accessibilityLabel={`Send SMS invite to ${p.fullName}`} onPress={() => openSms(p.phone, inviteMsg(p.id, p.fullName, false))}>SMS</Text>
-                        </>
-                      ) : null}
                       <Text style={st.registeredLink} onPress={() => registered(p.id)}>Mark registered</Text>
                       <Text style={st.removeLink} accessibilityRole="button" accessibilityLabel={`Remove ${p.fullName}`} onPress={async () => { await removePlayerFromTeam(teamIdForPlayer(p), p.id, matchId); onChanged(); }}>Remove</Text>
                     </>

@@ -1705,8 +1705,16 @@ export async function pushToPlayers(
 /** Players eligible to play a given sport for a given house/team. A team with an
  *  explicit roster (created within a community) uses that; otherwise the roster
  *  is derived from players whose house matches the team name. */
-export async function getRoster(teamName: string, sport: SportId): Promise<Player[]> {
+/** A team's squad. Pass `teamId` whenever it's known: two teams can share a
+ *  name (e.g. the same friendly side created twice), and a name lookup would
+ *  then show the other one's players. */
+export async function getRoster(teamName: string, sport: SportId, teamId?: string): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) {
+    const byId = teamId ? demo.teams.find((t) => t.id === teamId) : undefined;
+    if (byId) {
+      if (byId.roster?.length) { const ids = new Set(byId.roster); return demo.players.filter((p) => ids.has(p.id)); }
+      return demo.players.filter((p) => p.houseName === byId.name && p.sports.includes(sport));
+    }
     const team = demo.teams.find((t) => t.name === teamName && t.sport === sport && t.roster?.length);
     if (team?.roster?.length) {
       const ids = new Set(team.roster);
@@ -1717,12 +1725,9 @@ export async function getRoster(teamName: string, sport: SportId): Promise<Playe
   // Live: an explicit team roster (ad-hoc friendly teams, or existing players
   // added by phone) takes precedence over the house-name-derived squad — mirrors
   // demo. Fall back to house-name only when no explicit roster is set (house teams).
-  const { data: teamRows } = await supabase
-    .from('teams')
-    .select('id, roster')
-    .eq('name', teamName)
-    .eq('sport', sport)
-    .limit(1);
+  const { data: teamRows } = teamId
+    ? await supabase.from('teams').select('id, roster').eq('id', teamId).limit(1)
+    : await supabase.from('teams').select('id, roster').eq('name', teamName).eq('sport', sport).limit(1);
   const explicit = (teamRows?.[0]?.roster ?? null) as string[] | null;
   if (explicit && explicit.length) {
     const { data } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).in('id', explicit);

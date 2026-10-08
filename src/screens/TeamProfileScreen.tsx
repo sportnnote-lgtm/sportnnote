@@ -21,6 +21,7 @@ import { SPORT_AWARDS, statLabel } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
 import { teamStandings } from '../data/standings';
 import type { RootStackParamList } from '../navigation/types';
+import { RemindInstall } from '../components/RemindInstall';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -47,7 +48,7 @@ export default function TeamProfileScreen() {
   useEffect(() => {
     if (!team) return;
     let on = true;
-    Promise.all(team.sports.map((sp) => getRoster(team.name, sp))).then((lists) => {
+    Promise.all(team.sports.map((sp) => getRoster(team.name, sp, team.id))).then((lists) => {
       const seen = new Map<string, Player>();
       for (const p of lists.flat()) seen.set(p.id, p);
       if (on) setSquad([...seen.values()]);
@@ -261,9 +262,10 @@ export default function TeamProfileScreen() {
                     {p.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}</Text>
-                  <Text style={textStyles.muted}>{p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}</Text>
+                  <Text style={textStyles.muted}>{p.invited ? 'Invited · hasn’t joined yet' : p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
+                  {p.invited && p.phone ? <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={team.name} /> : null}
                 </View>
               </Card>
             </TouchableOpacity>

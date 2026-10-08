@@ -19,6 +19,7 @@ import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { matchEligibility, canFieldPlayer, TESTING_ALLOW_UNVERIFIED } from '../core/eligibility';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { RemindInstall } from '../components/RemindInstall';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Role = 'start' | 'sub' | 'out';
@@ -71,7 +72,7 @@ export default function MatchSquadScreen() {
     useCallback(() => {
       let on = true;
       Promise.all([
-        getRoster(teamName, sport), getMatchSquads(matchId), getLineup(matchId, sport, playersPerSide), getLastSquadForTeam(teamName, sport, matchId),
+        getRoster(teamName, sport, teamId), getMatchSquads(matchId), getLineup(matchId, sport, playersPerSide), getLastSquadForTeam(teamName, sport, matchId),
       ]).then(([rs, squads, lu, last]) => {
         if (!on) return;
         setRoster(rs);
@@ -237,6 +238,7 @@ export default function MatchSquadScreen() {
                   <Text style={[textStyles.body, !canField && st.lockedName]}>
                     {p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}
                   </Text>
+                  {p.invited && !elsewhere ? <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={teamName} /> : null}
                   {elsewhere ? (
                     <Text style={st.lockReason}>Playing for {otherName} in this match</Text>
                   ) : !elig.ok ? (

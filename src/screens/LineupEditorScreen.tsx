@@ -13,7 +13,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
+import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad, getMatch } from '../data/repos';
 import { formationSlots, formationNamesFor, defaultFormationFor } from '../sports/football/formation';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -43,8 +43,11 @@ export default function LineupEditorScreen() {
     useCallback(() => {
       let on = true;
       getLineup(matchId, sport, playersPerSide).then((l) => on && setLocal(l));
-      getRoster(homeTeamName, sport).then((r) => on && setHomeRoster(r));
-      getRoster(awayTeamName, sport).then((r) => on && setAwayRoster(r));
+      // Rosters by the match's team ids (two teams can share a name).
+      getMatch(matchId).then((m) => {
+        getRoster(homeTeamName, sport, m?.homeTeam.id).then((r) => on && setHomeRoster(r));
+        getRoster(awayTeamName, sport, m?.awayTeam.id).then((r) => on && setAwayRoster(r));
+      });
       getMatchSquads(matchId).then((sq) => on && setSubs({ home: sq.home.subs, away: sq.away.subs }));
       return () => {
         on = false;

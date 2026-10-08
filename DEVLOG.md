@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — "📤 Invite again" next to everyone who hasn't joined; rosters by team id
+
+- **Founder ask:** the first invite can go unsent (WhatsApp closed before Send) — there was no
+  way to re-share it.
+- **`RemindInstall` → "📤 Invite again"** pill → *WhatsApp · SMS · Share / Copy* (Share sheet;
+  desktop web copies to clipboard; Share/Copy works even without a visible number). Shown for
+  every pending (invited) person: the add box's pending list, match Info squad rows (managers
+  only), matchday squad picker, team squad page, team profile squad, invited **scorers** and
+  **hosts** (match + tournament; scorer/host get their own invite text). `HostsCard` gained
+  `renderExtra`.
+- Squad cards on match Info **open automatically for an empty team** you can fill, and stay
+  open after adding. Confirmations never say "Invited Invited (…9401)"; a number invited earlier
+  reads "Invited earlier — hasn't joined yet" (not "already on SportnNote").
+- **Bug fixed — rosters looked up by team NAME:** two teams with the same name showed each
+  other's players. `getRoster(name, sport, teamId?)` now uses the id wherever known (live match,
+  matchday squad, squad page, team page; cricket batting order + pitch editor via the match).
+- Verified in demo: invite a number → row shows "⏳ / 📤 Invite again" → WhatsApp opens with the
+  new invite (+91, "Hi there!", app.sportnnote.in/i/… link). No console errors. 387 tests.
+
+---
+
 ### 2026-10-08 — Invite links land on a sign-up page; "Not me" needs a confirm; placeholder names never greeted
 
 - **Founder report:** a friend invited by number got "Hi Invited (…9401)!" and a link to a

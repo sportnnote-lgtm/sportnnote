@@ -18,6 +18,7 @@ export function HostsCard({
   onChange,
   addPicker,
   meId,
+  renderExtra,
   subtitle = 'Hosts can assign the scorer and manage this. Reminders go to all of them.',
 }: {
   hostIds: string[];
@@ -27,6 +28,8 @@ export function HostsCard({
   onChange: (ids: string[]) => void;
   /** "add anyone" UI shown in the add panel (e.g. <PersonPicker role="host" …/>) */
   addPicker?: React.ReactNode;
+  /** extra content under a host's name (e.g. "Invite again" for someone who hasn't joined) */
+  renderExtra?: (id: string) => React.ReactNode;
   /** the viewer's player id — their host row is highlighted with "· you" */
   meId?: string;
   subtitle?: string;
@@ -54,7 +57,10 @@ export function HostsCard({
               <View style={[st.avatar, me && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}>
                 <Text style={[st.avatarText, me && { color: '#0B0F14' }]}>{initials(nameOf(id))}</Text>
               </View>
-              <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(id) ?? 'Host'}{me ? ' · you' : ''}</Text>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={textStyles.body} numberOfLines={1}>{nameOf(id) ?? 'Host'}{me ? ' · you' : ''}</Text>
+                {renderExtra?.(id)}
+              </View>
               {canManage && hostIds.length > 1 && (
                 <Text style={st.remove} onPress={() => onChange(hostIds.filter((h) => h !== id))}>Remove</Text>
               )}

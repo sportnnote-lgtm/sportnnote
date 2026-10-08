@@ -14,7 +14,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
-import { getRoster, getMatchSquads, setMatchSquad } from '../data/repos';
+import { getRoster, getMatchSquads, setMatchSquad, getMatch } from '../data/repos';
 import { canFieldPlayer } from '../core/eligibility';
 import { splitBattingOrder } from '../sports/cricket/lineup';
 import type { Player } from '../core/types';
@@ -38,11 +38,12 @@ export default function CricketLineupScreen() {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([
-        getRoster(homeTeamName, sport),
-        getRoster(awayTeamName, sport),
+      // Rosters by the match's team ids (two teams can share a name).
+      getMatch(matchId).then((m) => Promise.all([
+        getRoster(homeTeamName, sport, m?.homeTeam.id),
+        getRoster(awayTeamName, sport, m?.awayTeam.id),
         getMatchSquads(matchId),
-      ]).then(([hr, ar, sq]) => {
+      ])).then(([hr, ar, sq]) => {
         if (!on) return;
         setHomeRoster(hr);
         setAwayRoster(ar);

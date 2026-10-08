@@ -39,7 +39,7 @@ export default function SquadScreen() {
     getTeamSummary(teamId).then(async (t) => {
       if (!on || !t) return;
       setTeam(t);
-      const lists = await Promise.all(t.sports.map((sp) => getRoster(t.name, sp)));
+      const lists = await Promise.all(t.sports.map((sp) => getRoster(t.name, sp, t.id)));
       const seen = new Map<string, Player>();
       for (const p of lists.flat()) seen.set(p.id, p);
       if (on) setSquad([...seen.values()]);
