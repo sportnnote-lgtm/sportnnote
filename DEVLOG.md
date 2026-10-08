@@ -13,6 +13,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Admin edits player details: name, shirt number, photo, roles (parity #12)
+
+- **Ask (parity queue #12):** 200 students added by phone come out as "Invited (…4821)"; only the
+  person who typed each one could fix it. Co-organisers and captains need to correct names, shirt
+  numbers and sides before scorecards go public.
+- **Migration 0044** `20261019121200_admin_edit_player.sql` (bundle `2026-10-admin-edit-player-0044.sql`)
+  — founder to run: `can_admin_player` (unclaimed + unreported player on a team / house team / club /
+  host-side tournament team the caller manages — **every arm also requires the team or club to have
+  been created by the player's creator**, so nobody can build a roster around someone else's player
+  id and gain edit rights; REVIEW row 12's house-name and entered-team holes closed);
+  `can_edit_player` + `guard_player_write` re-copied from 0025 with the admin arm. Admins never
+  change a set phone/email, house, privacy flags, verification or `profile_id`. PGlite 37/37.
+- **Data:** pure `core/playerEditAccess.ts` (`editAccess`, `adminPatch`); repos
+  `getPlayerEditAccess`; `updatePlayer` now `.select('id')` and throws the friendly "You can't edit
+  this player any more…" on 0 rows (RLS-filtered updates used to "succeed").
+- **UI:** `EditProfile {asAdmin}` — "Edit player details", photo (both modes), shirt number, DOB
+  optional, phone/email "On file", guardian recommended, no privacy/bio; entry points Squad "✎ Edit
+  details", Sport profile "Edit ›", Player profile "✎ Edit player details"; Squad role chips per team
+  (team's own sport); claimed players show "Manages their own profile".
+- **Verified:** tsc + 514 tests; demo 8093: renamed an invited cricket player with shirt #7 + city,
+  shows on squad/profile/sport profile; cricket role chips persist. Not verified: photo upload via
+  the native picker, live RLS. Follow-up: cricket `BatCard.name` snapshots keep the old name.
+
+---
+
 ### 2026-10-09 — Scorers and officials: tournament scorer pool, bulk assign, self-join, match officials (parity #11)
 
 - **Ask (parity queue #11):** a meet's scorers were set up on the tournament but never reached the

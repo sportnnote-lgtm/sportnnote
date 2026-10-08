@@ -34,6 +34,7 @@ export function ProfileView({
   onMessage,
   onOpenSport,
   onEditProfile,
+  onAdminEdit,
   onOpenOrg,
   onOpenSettings,
   onOpenVerificationReview,
@@ -51,6 +52,9 @@ export function ProfileView({
   onOpenSport?: (sport: SportId) => void;
   /** own profile: edit your own details */
   onEditProfile?: () => void;
+  /** someone else's UNCLAIMED player I manage (parity #12): fix their details.
+   *  Not onEditProfile — that one means "my own profile". */
+  onAdminEdit?: () => void;
   /** open an organization the player belongs to */
   onOpenOrg?: (orgId: string) => void;
   /** own profile: open the Settings home (preferences, account, sign out) */
@@ -184,6 +188,9 @@ export function ProfileView({
 
       {onEditProfile && (
         <Button label="✎ Edit profile" variant="ghost" onPress={onEditProfile} />
+      )}
+      {!onEditProfile && onAdminEdit && (
+        <Button label="✎ Edit player details" variant="ghost" onPress={onAdminEdit} />
       )}
       {onShare && <Button label={ownProfile ? '📤 Share my profile' : '📤 Share profile'} variant="ghost" onPress={onShare} />}
       {follow && (

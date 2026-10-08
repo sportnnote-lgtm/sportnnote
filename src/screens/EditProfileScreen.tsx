@@ -1,7 +1,13 @@
 /** Edit your own player profile — contact details, base city, the sports you
  *  play, and per-sport position, dominant side(s) and the teams you've
  *  represented. Club & jersey aren't global: they live under each sport, since
- *  every team / tournament / game can mean a different team and number. */
+ *  every team / tournament / game can mean a different team and number.
+ *
+ *  Admin mode (`asAdmin`, parity #12): a team / tournament manager fixes an
+ *  UNCLAIMED player's details — name, photo, shirt number, city, gender, DOB
+ *  (optional), sides. A phone / email already on file is read-only, privacy is
+ *  never shown, and a guardian is recommended for under-18s but not required.
+ *  The save goes through adminPatch so nothing the server would lock is sent. */
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +18,9 @@ import { DateField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { SPORT_SIDE_FIELDS, POSITION_HINT } from '../data/sportProfileFields';
 import { getPlayer, updatePlayer } from '../data/repos';
+import { LogoPicker } from '../components/LogoPicker';
+import { adminPatch } from '../core/playerEditAccess';
+import { notice } from '../core/confirm';
 import { ageFromDob } from '../core/age';
 import type { Player, SportDetail, SportId, TeamStint } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -22,6 +31,7 @@ const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
 export default function EditProfileScreen({ route, navigation }: Props) {
   const { playerId } = route.params;
+  const asAdmin = route.params.asAdmin === true || String(route.params.asAdmin) === 'true';
 
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
@@ -40,11 +50,14 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   const [gName, setGName] = useState('');
   const [gPhone, setGPhone] = useState('');
   const [gEmail, setGEmail] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  // Admin mode only: the player's own shirt number (self mode keeps per-team jerseys).
+  const [jersey, setJersey] = useState('');
   const [sports, setSports] = useState<SportId[]>([]);
   const [details, setDetails] = useState<Partial<Record<SportId, SportDetail>>>({});
   // Original contact + verification, to reset a channel's verified flag if edited.
-  const [loaded, setLoaded] = useState<{ phone: string; email: string; phoneVerified: boolean; emailVerified: boolean; guardian?: Player['guardian'] }>(
-    { phone: '', email: '', phoneVerified: false, emailVerified: false }
+  const [loaded, setLoaded] = useState<{ phone: string; email: string; phoneVerified: boolean; emailVerified: boolean; guardian?: Player['guardian']; name: string; photoUrl: string }>(
+    { phone: '', email: '', phoneVerified: false, emailVerified: false, name: '', photoUrl: '' }
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +79,20 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       setGName(p.guardian?.name ?? '');
       setGPhone(p.guardian?.phone ?? '');
       setGEmail(p.guardian?.email ?? '');
+      setPhotoUrl(p.photoUrl ?? '');
+      setJersey(p.jerseyNo != null ? String(p.jerseyNo) : '');
       setSports(p.sports);
       setDetails(p.sportDetails ?? {});
-      setLoaded({ phone: p.phone ?? '', email: p.email ?? '', phoneVerified: !!p.phoneVerified, emailVerified: !!p.emailVerified, guardian: p.guardian });
+      setLoaded({ phone: p.phone ?? '', email: p.email ?? '', phoneVerified: !!p.phoneVerified, emailVerified: !!p.emailVerified, guardian: p.guardian, name: p.fullName, photoUrl: p.photoUrl ?? '' });
     });
     return () => {
       on = false;
     };
   }, [playerId]);
+
+  useEffect(() => {
+    if (asAdmin) navigation.setOptions({ title: 'Edit player' });
+  }, [asAdmin, navigation]);
 
   const toggleSport = (s: SportId) =>
     setSports((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
@@ -98,7 +117,50 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   const removeTeam = (s: SportId, i: number) =>
     patchDetail(s, { teams: (details[s]?.teams ?? []).filter((_, j) => j !== i) });
 
+  // Keep details only for sports still selected; drop blank teams.
+  function keptDetails(): Partial<Record<SportId, SportDetail>> {
+    const kept: Partial<Record<SportId, SportDetail>> = {};
+    for (const s of sports) {
+      const d = details[s];
+      if (!d) continue;
+      const teams = (d.teams ?? [])
+        .map((t) => ({ name: t.name.trim(), jersey: t.jersey, since: t.since, until: t.until }))
+        .filter((t) => t.name.length > 0);
+      kept[s] = { position: d.position?.trim() || undefined, sides: d.sides, teams: teams.length ? teams : undefined };
+    }
+    return kept;
+  }
+
+  async function saveAsAdmin() {
+    if (!name.trim()) return setError('Enter the player’s name.');
+    // DOB is optional here (the admin may not know it) — but validated if entered.
+    if (dob.trim() && ageFromDob(dob.trim()) === undefined) return setError('Enter a valid date of birth (YYYY-MM-DD), or leave it blank.');
+    const jerseyNo = jersey.trim() ? Number(jersey.replace(/[^0-9]/g, '')) : undefined;
+    if (jersey.trim() && (!Number.isFinite(jerseyNo) || (jerseyNo as number) > 999)) return setError('Shirt number should be 0–999.');
+    setError(null);
+    setBusy(true);
+    try {
+      await updatePlayer(playerId, adminPatch({
+        fullName: name, city, gender, dob, phone, email,
+        photoUrl: photoUrl !== loaded.photoUrl ? photoUrl : undefined,
+        jerseyNo,
+        // Only a changed guardian is written (keeps its verified flags otherwise).
+        guardian: gName.trim() && (gName.trim() !== (loaded.guardian?.name ?? '') || gPhone.trim() !== (loaded.guardian?.phone ?? '') || gEmail.trim() !== (loaded.guardian?.email ?? ''))
+          ? { name: gName, phone: gPhone, email: gEmail } : undefined,
+        sports,
+        sportDetails: keptDetails(),
+      }, { phone: loaded.phone, email: loaded.email }));
+      notice('Saved', `${name.trim()}’s details were updated.`);
+      navigation.goBack();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the player’s details');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function save() {
+    if (asAdmin) return saveAsAdmin();
     if (!name.trim()) return setError('Enter your name.');
     // Date of birth is mandatory; minors must have a guardian contact.
     const age = ageFromDob(dob.trim());
@@ -110,16 +172,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
     setError(null);
     setBusy(true);
     try {
-      // Keep details only for sports still selected; drop blank teams.
-      const kept: Partial<Record<SportId, SportDetail>> = {};
-      for (const s of sports) {
-        const d = details[s];
-        if (!d) continue;
-        const teams = (d.teams ?? [])
-          .map((t) => ({ name: t.name.trim(), jersey: t.jersey, since: t.since, until: t.until }))
-          .filter((t) => t.name.length > 0);
-        kept[s] = { position: d.position?.trim() || undefined, sides: d.sides, teams: teams.length ? teams : undefined };
-      }
+      const kept = keptDetails();
       // Changing a contact resets its verified status (the new value is unverified).
       const phoneVerified = phone.trim() === loaded.phone ? loaded.phoneVerified : false;
       const emailVerified = email.trim() === loaded.email ? loaded.emailVerified : false;
@@ -151,6 +204,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         guardian,
         sports,
         sportDetails: kept,
+        ...(photoUrl !== loaded.photoUrl ? { photoUrl } : {}),
       });
       navigation.goBack();
     } catch (e) {
@@ -161,18 +215,46 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   }
 
   const age = ageFromDob(dob);
-  const guardianRequired = age !== undefined && age < 18;
+  const under18 = age !== undefined && age < 18;
+  const guardianRequired = !asAdmin && under18;
+  const initials = (name.trim() || loaded.name).split(/\s+/).filter((w) => /^\p{L}/u.test(w)).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '🙂';
+  // Admin mode: the guardian card is a recommendation for under-18s only. A
+  // guardian the admin can't see (live reads hide it) is "on file" — not editable.
+  const guardianOnFile = !!loaded.guardian?.hidden && !!loaded.guardian?.present;
+  const showGuardian = !asAdmin || under18;
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title="Edit profile" subtitle="Your details, as you want them shown" />
+        {asAdmin ? (
+          <ScreenTitle title="Edit player details" subtitle={`You added ${loaded.name || 'this player'} — they can change these once they join`} />
+        ) : (
+          <ScreenTitle title="Edit profile" subtitle="Your details, as you want them shown" />
+        )}
+
+        <View style={st.photoRow}>
+          <LogoPicker
+            logoUrl={photoUrl || undefined}
+            canManage
+            kind="player-photo"
+            shape="circle"
+            size={72}
+            placeholder={initials}
+            label={asAdmin ? 'Add photo' : 'Add your photo'}
+            onPick={(url) => setPhotoUrl(url)}
+          />
+          {asAdmin && (
+            <View style={st.jerseyCol}>
+              <TextField label="Shirt no." value={jersey} onChange={(v) => setJersey(v.replace(/[^0-9]/g, '').slice(0, 3))} placeholder="10" autoCapitalize="none" />
+            </View>
+          )}
+        </View>
 
         <TextField label="Full name" value={name} onChange={setName} placeholder="First & last name" />
         <View style={st.row}>
           <View style={st.flex}><TextField label="Location (city)" value={city} onChange={setCity} placeholder="Bengaluru" /></View>
           <View style={st.flex}>
-            <DateField label="Date of birth" value={dob} onChange={setDob} />
+            <DateField label={asAdmin ? 'Date of birth (optional)' : 'Date of birth'} value={dob} onChange={setDob} />
             {age !== undefined ? <Text style={st.ageHint}>Age: {age} yrs</Text> : null}
           </View>
         </View>
@@ -187,9 +269,25 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         </View>
 
         <View style={st.row}>
-          <View style={st.flex}><TextField label="Contact number" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" /></View>
-          <View style={st.flex}><TextField label="Email" value={email} onChange={setEmail} placeholder="you@email.com" autoCapitalize="none" /></View>
+          <View style={st.flex}>
+            {asAdmin && loaded.phone ? (
+              <OnFile label="Contact number" />
+            ) : (
+              <TextField label="Contact number" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" />
+            )}
+          </View>
+          <View style={st.flex}>
+            {asAdmin && loaded.email ? (
+              <OnFile label="Email" />
+            ) : (
+              <TextField label="Email" value={email} onChange={setEmail} placeholder={asAdmin ? 'name@email.com' : 'you@email.com'} autoCapitalize="none" />
+            )}
+          </View>
         </View>
+        {asAdmin && (loaded.phone || loaded.email) ? (
+          <Text style={textStyles.muted}>A number or email on file can’t be changed — it’s how they claim this profile. Ask support if it’s wrong.</Text>
+        ) : null}
+        {!asAdmin && (<>
         <Card style={{ gap: theme.spacing(2) }}>
           <Text style={textStyles.h3}>🔒 Who can see your contact details</Text>
           {guardianRequired ? (
@@ -221,13 +319,20 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         </Card>
 
         <TextField label="About you (optional)" value={bio} onChange={setBio} placeholder="A short note about you — how you play, what you're into…" multiline />
+        </>)}
 
-
+        {showGuardian && (
         <Card style={{ gap: theme.spacing(2) }}>
-          <Text style={textStyles.h3}>👪 Parent / Guardian {guardianRequired ? '· required' : '(optional)'}</Text>
+          <Text style={textStyles.h3}>👪 Parent / Guardian {guardianRequired ? '· required' : asAdmin ? '· recommended' : '(optional)'}</Text>
           {guardianRequired && (
             <Text style={st.requiredNote}>Required — this player is under 18. Add a name and a phone or email.</Text>
           )}
+          {asAdmin && (
+            <Text style={st.requiredNote}>Recommended — this player is under 18. Add a parent or guardian so someone can be reached.</Text>
+          )}
+          {asAdmin && guardianOnFile ? (
+            <Text style={textStyles.muted}>A guardian is already on file.</Text>
+          ) : (<>
           <Text style={textStyles.muted}>
             For young players who don&apos;t have their own phone or email, a parent/guardian can be the point of contact. Their phone &amp; email are verified, and you can upload a document on your profile to confirm age &amp; guardianship.
           </Text>
@@ -236,9 +341,11 @@ export default function EditProfileScreen({ route, navigation }: Props) {
             <View style={st.flex}><TextField label="Guardian phone" value={gPhone} onChange={setGPhone} placeholder="+91…" autoCapitalize="none" /></View>
             <View style={st.flex}><TextField label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" autoCapitalize="none" /></View>
           </View>
+          </>)}
         </Card>
+        )}
 
-        <Text style={[textStyles.h3, st.section]}>Sports you play</Text>
+        <Text style={[textStyles.h3, st.section]}>{asAdmin ? 'Sports they play' : 'Sports you play'}</Text>
         <View style={st.chips}>
           {SPORT_LIST.map((s) => (
             <SelectChip key={s.id} label={`${s.icon} ${s.name}`} active={sports.includes(s.id)} onPress={() => toggleSport(s.id)} />
@@ -296,13 +403,25 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         })}
 
         <FormError message={error} />
-        <Button label={busy ? 'Saving…' : 'Save profile'} onPress={save} />
+        <Button label={busy ? 'Saving…' : asAdmin ? 'Save details' : 'Save profile'} onPress={save} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+/** A phone / email already on file: shown, not editable (admin mode). */
+function OnFile({ label }: { label: string }) {
+  return (
+    <View style={{ gap: theme.spacing(1) }}>
+      <FieldLabel>{label}</FieldLabel>
+      <Text style={[textStyles.body, st.onFile]}>✓ On file</Text>
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
+  photoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(4) },
+  onFile: { color: theme.colors.textMuted, paddingVertical: theme.spacing(2) },
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },

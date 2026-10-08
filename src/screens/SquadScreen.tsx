@@ -4,23 +4,27 @@
  *  already on SportnNote — never a bare typed name. */
 import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Image, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles, plural } from '../components/ui';
+import { EmptyState, Card, Button, Pill, ScreenTitle, SelectChip, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, setTeamAdmins, getMyPlayerId, getTeams } from '../data/repos';
+import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, setTeamAdmins, getMyPlayerId, getTeams, getPlayerEditAccess, getTeamPlayerRoles, setTeamPlayerRoles } from '../data/repos';
+import { rolesForSport, sportHasRoles } from '../data/teamRoles';
+import { displayableImage } from '../core/imageUrl';
+import { isSupabaseConfigured } from '../core/supabase';
+import type { EditAccess } from '../core/playerEditAccess';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { useCaptainships, useTeamPermission } from '../data/hooks';
 import { nextLeaders } from '../core/teamPermissions';
 import { confirmAction } from '../core/confirm';
 import { useAuth } from '../core/auth';
 import { RemindInstall } from '../components/RemindInstall';
-import type { Player, TeamLeadership, TeamSummary } from '../core/types';
+import type { Player, SportId, TeamLeadership, TeamSummary } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function SquadScreen() {
@@ -34,6 +38,8 @@ export default function SquadScreen() {
   const [leaders, setLeaders] = useState<TeamLeadership>({});
   // Set when this is a club's sport team — its admins live on the club page.
   const [clubId, setClubId] = useState<string | null>(null);
+  // This team row's own sport (a summary can span a house's sports) — drives roles.
+  const [teamSport, setTeamSport] = useState<SportId | null>(null);
   const { isCaptain } = useCaptainships();
   const captain = isCaptain(teamId);
   // The server decides who may edit; null = still checking (stay read-only).
@@ -41,11 +47,20 @@ export default function SquadScreen() {
   const { profile } = useAuth();
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   useEffect(() => { void getMyPlayerId(profile?.id).then(setMyPlayerId); }, [profile?.id]);
+  // Parity #12: who may fix each player's details (fetched once per squad load),
+  // and the team's sport roles (managers set them; claimed players too).
+  const [access, setAccess] = useState<Record<string, EditAccess>>({});
+  const [roles, setRoles] = useState<Record<string, string[]>>({});
 
   const load = useCallback(() => {
     let on = true;
     getTeamLeaders(teamId).then((l) => on && setLeaders(l));
-    getTeams().then((all) => on && setClubId(all.find((t) => t.id === teamId)?.clubId ?? null)).catch(() => undefined);
+    getTeams().then((all) => {
+      if (!on) return;
+      const row = all.find((t) => t.id === teamId);
+      setClubId(row?.clubId ?? null);
+      setTeamSport(row?.sport ?? null);
+    }).catch(() => undefined);
     // The same roster the match screens use (explicit roster, else house members).
     getTeamSummary(teamId).then(async (t) => {
       if (!on || !t) return;
@@ -53,10 +68,27 @@ export default function SquadScreen() {
       const lists = await Promise.all(t.sports.map((sp) => getRoster(t.name, sp, t.id)));
       const seen = new Map<string, Player>();
       for (const p of lists.flat()) seen.set(p.id, p);
-      if (on) setSquad([...seen.values()]);
+      const list = [...seen.values()];
+      if (on) setSquad(list);
+      const me = await getMyPlayerId(profile?.id);
+      const acc = await Promise.all(list.map((p) => getPlayerEditAccess(p.id, me).catch((): EditAccess => 'none')));
+      if (on) setAccess(Object.fromEntries(list.map((p, i) => [p.id, acc[i]])));
     });
+    getTeamPlayerRoles(teamId).then((r) => on && setRoles(r)).catch(() => undefined);
     return () => { on = false; };
-  }, [teamId]);
+  }, [teamId, profile?.id]);
+
+  const toggleRole = async (playerId: string, role: string) => {
+    const cur = roles[playerId] ?? [];
+    const next = cur.includes(role) ? cur.filter((r) => r !== role) : [...cur, role];
+    setRoles((r) => ({ ...r, [playerId]: next }));
+    try {
+      await setTeamPlayerRoles(teamId, playerId, next);
+    } catch (e) {
+      setRoles((r) => ({ ...r, [playerId]: cur }));
+      notice('Couldn’t update roles', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
   useFocusEffect(load);
 
   // Breadcrumb: name the nav bar after the team, not a generic "Squad".
@@ -148,17 +180,30 @@ export default function SquadScreen() {
             // Admin chip: managers only; hidden before migration 0042 (adminIds
             // undefined) and for club teams (admins live on the club page).
             const showAdmin = !!canManage && leaders.adminIds !== undefined && !clubId;
+            const sport = teamSport ?? (team.sports.length === 1 ? team.sports[0] : null);
+            const showRoles = !!canManage && !!sport && sportHasRoles(sport);
+            const pRoles = roles[p.id] ?? [];
+            const photo = displayableImage(p.photoUrl, !isSupabaseConfigured);
             return (
               <Card key={p.id} style={{ gap: theme.spacing(2) }}>
                 <View style={st.playerRow}>
                   <View style={[st.avatar, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33' }]}>
-                    <Text style={[st.avatarText, { color: team.colorHex ?? theme.colors.primary }]}>
-                      {p.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                    </Text>
+                    {photo ? (
+                      <Image source={{ uri: photo }} style={st.avatarImg} accessibilityIgnoresInvertColors />
+                    ) : (
+                      <Text style={[st.avatarText, { color: team.colorHex ?? theme.colors.primary }]}>
+                        {p.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                      </Text>
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}</Text>
-                    <Text style={textStyles.muted}>{p.invited ? 'Invited · not registered yet' : p.sports.map((s) => getSport(s).icon).join(' ')}</Text>
+                    <Text style={textStyles.muted}>{p.invited ? 'Invited · not registered yet' : p.sports.map((s) => getSport(s).icon).join(' ')}{pRoles.length && !showRoles ? ` · ${pRoles.join(', ')}` : ''}</Text>
+                    {access[p.id] === 'admin' ? (
+                      <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('EditProfile', { playerId: p.id, asAdmin: true })}>✎ Edit details</Text>
+                    ) : canManage && p.profileId && access[p.id] !== 'self' ? (
+                      <Text style={st.ownProfile}>Manages their own profile</Text>
+                    ) : null}
                   </View>
                   {isCap ? (
                     <Pill label="★ C" color={theme.colors.primary + '22'} textColor={theme.colors.primary} />
@@ -200,6 +245,13 @@ export default function SquadScreen() {
                     </Text>
                   )}
                 </View>}
+                {showRoles && (
+                  <View style={st.leaderBtns} accessibilityLabel={`${p.fullName}’s roles`}>
+                    {rolesForSport(sport).map((r) => (
+                      <SelectChip key={r} label={r} active={pRoles.includes(r)} onPress={() => void toggleRole(p.id, r)} />
+                    ))}
+                  </View>
+                )}
               </Card>
             );
           })
@@ -254,5 +306,7 @@ const st = StyleSheet.create({
   leaderBtnOn: { color: theme.colors.primary, borderColor: theme.colors.primary },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontWeight: '800' },
+  avatarImg: { width: 40, height: 40, borderRadius: 20 },
+  ownProfile: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontStyle: 'italic', marginTop: 2 },
   note: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic', marginTop: theme.spacing(2) },
 });

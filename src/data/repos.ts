@@ -11,6 +11,7 @@ import type { PickedImage } from '../core/photo';
 import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
+import { editAccess, type EditAccess } from '../core/playerEditAccess';
 import { parseTournamentToken } from '../core/tournamentInvite';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
@@ -2401,7 +2402,8 @@ export async function deleteMyAccount(): Promise<string | null> {
   }
 }
 
-/** Update a player's own profile details. */
+/** Update a player's details — your own, or (parity #12) an unclaimed player you
+ *  manage. Throws a friendly error when the server refused or matched no row. */
 export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const p = demo.players.find((x) => x.id === id);
@@ -2428,8 +2430,30 @@ export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void
   if (patch.showPhone !== undefined) row.show_phone = patch.showPhone;
   if (patch.showEmail !== undefined) row.show_email = patch.showEmail;
   if (patch.findableByContact !== undefined) row.findable_by_contact = patch.findableByContact;
-  const { error } = await supabase.from('players').update(row).eq('id', id);
-  if (error) throw new Error(error.message);
+  // .select('id'): an RLS-filtered update (a claimed player, or no right to it)
+  // returns no error and no rows — surface that instead of a silent "Saved".
+  const { data, error } = await supabase.from('players').update(row).eq('id', id).select('id');
+  if (error) throw new Error(error.code === '42501' ? PLAYER_EDIT_REFUSED : error.message);
+  if (!data || data.length === 0) throw new Error(PLAYER_EDIT_REFUSED);
+}
+
+const PLAYER_EDIT_REFUSED = 'You can’t edit this player any more — they may have joined and now manage their own profile';
+
+/** May I edit this player — my own ('self'), an unclaimed player on a team /
+ *  club / tournament I run ('admin', parity #12), or not at all? Live: the
+ *  server's can_edit_player (before migration 0044 it only answers for the
+ *  creator, so other managers simply don't see Edit). Demo: the demo user
+ *  organises everything, so any unclaimed player on a demo team is 'admin'. */
+export async function getPlayerEditAccess(playerId: string, meId?: string | null): Promise<EditAccess> {
+  const player = await getPlayer(playerId);
+  if (!player) return 'none';
+  if (meId && meId === playerId) return 'self';
+  if (!isSupabaseConfigured || !supabase) {
+    const onTeam = demo.teams.some((t) => (t.roster && t.roster.length ? t.roster.includes(playerId) : player.houseName === t.name));
+    return editAccess({ meId, player, canAdmin: onTeam });
+  }
+  const { data, error } = await supabase.rpc('can_edit_player', { p_player: playerId });
+  return editAccess({ meId, player, canAdmin: !error && data === true });
 }
 
 /** Mark a contact channel verified (after a successful OTP check). */

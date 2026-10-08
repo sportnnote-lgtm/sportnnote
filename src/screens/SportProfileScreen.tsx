@@ -14,7 +14,8 @@ import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
 import { statCoverage } from '../data/stats';
-import { getMyPlayerId } from '../data/repos';
+import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
+import type { EditAccess } from '../core/playerEditAccess';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
 import type { RootStackParamList } from '../navigation/types';
 import { isGuestSession, promptSignIn } from '../core/guest';
@@ -45,7 +46,8 @@ export default function SportProfileScreen() {
   const matchById = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
   const plugin = getSport(sport);
 
-  const [canEdit, setCanEdit] = useState(false);
+  // 'self' = my own profile; 'admin' = an unclaimed player I manage (parity #12).
+  const [access, setAccess] = useState<EditAccess>('none');
   const [openStat, setOpenStat] = useState<string | null>(null);
 
   // Name the nav bar after whose profile this is, so the header reads as a
@@ -56,7 +58,10 @@ export default function SportProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      getMyPlayerId(profile?.id).then((id) => on && setCanEdit(id === playerId));
+      getMyPlayerId(profile?.id)
+        .then((id) => getPlayerEditAccess(playerId, id))
+        .then((a) => on && setAccess(a))
+        .catch(() => on && setAccess('none'));
       return () => {
         on = false;
       };
@@ -195,8 +200,8 @@ export default function SportProfileScreen() {
         <Card style={{ gap: theme.spacing(2) }}>
           <View style={st.fbHeader}>
             <Text style={textStyles.h3}>Details</Text>
-            {canEdit && (
-              <Text style={st.editLink} onPress={() => nav.navigate('EditProfile', { playerId })}>Edit ›</Text>
+            {access !== 'none' && (
+              <Text style={st.editLink} accessibilityRole="link" onPress={() => nav.navigate('EditProfile', access === 'admin' ? { playerId, asAdmin: true } : { playerId })}>Edit ›</Text>
             )}
           </View>
           {hasDetails ? (
@@ -229,7 +234,7 @@ export default function SportProfileScreen() {
             </>
           ) : (
             <Text style={textStyles.muted}>
-              {canEdit ? 'Add your position, dominant side and the teams you’ve represented.' : 'No details added yet.'}
+              {access === 'self' ? 'Add your position, dominant side and the teams you’ve represented.' : access === 'admin' ? 'No details yet — tap Edit to add their position and sides.' : 'No details added yet.'}
             </Text>
           )}
         </Card>

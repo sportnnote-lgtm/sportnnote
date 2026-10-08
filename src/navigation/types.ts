@@ -74,7 +74,9 @@ export type RootStackParamList = {
   TryNewSport: { sports?: SportId[] } | undefined;
   PlayerProfile: { playerId: string };
   SportProfile: { playerId: string; sport: SportId };
-  EditProfile: { playerId: string };
+  /** asAdmin (parity #12): a manager editing an unclaimed player they added or run.
+   *  On web it may come back from the URL as the string 'true'. */
+  EditProfile: { playerId: string; asAdmin?: boolean };
   VerificationReview: undefined;
   CreateListing: undefined;
   Following: undefined;
