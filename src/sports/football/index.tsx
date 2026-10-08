@@ -32,7 +32,7 @@ import type { ScoreAction, SportPlugin } from '../types';
 import {
   type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
-  clockLabel, clockTime, possessionPct, cardCount, footballStats,
+  clockLabel, clockTime, possessionPct, cardCount, footballStats, FOOTBALL_LIVE_SETTINGS,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -1287,6 +1287,7 @@ export const footballPlugin: SportPlugin<FootballState> = {
   // so the generic court isn't shown twice on the live screen.
   lineupsInExtras: true,
   liveViews: FOOTBALL_VIEWS,
+  liveSettings: FOOTBALL_LIVE_SETTINGS,
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'eleven',

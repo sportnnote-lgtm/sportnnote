@@ -21,15 +21,16 @@ export interface QuickOptionsSheetProps {
   onScorer?: () => void;
   /** 📋 Full scorecard — goes to the first live view */
   onScorecard?: () => void;
-  /** ⚙️ Match settings — only when a per-match settings mechanism exists (#14) */
-  onSettings?: () => void;
+  /** ⚙️ Match settings (#14) — the sport's LiveSettingsCard, shown inside the
+   *  sheet. No tile when the sport has no live settings. */
+  settingsPanel?: React.ReactNode;
   /** the sport's own tiles (SportPlugin.QuickOptions), already bound to state */
   pluginTiles?: React.ReactNode;
 }
 
-type Panel = null | 'break' | 'squad';
+type Panel = null | 'break' | 'squad' | 'settings';
 
-export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBreak, onSquad, onScorer, onScorecard, onSettings, pluginTiles }: QuickOptionsSheetProps) {
+export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBreak, onSquad, onScorer, onScorecard, settingsPanel, pluginTiles }: QuickOptionsSheetProps) {
   const [panel, setPanel] = useState<Panel>(null);
   const [kind, setKind] = useState<BreakKind | null>(null);
   const [note, setNote] = useState('');
@@ -48,7 +49,7 @@ export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBrea
         <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()}>
           <ScrollView contentContainerStyle={{ gap: theme.spacing(3) }} keyboardShouldPersistTaps="handled">
             <View style={st.head}>
-              <Text style={st.title}>{panel === 'break' ? '⏸ Match break' : panel === 'squad' ? '👥 Change squad' : 'Quick options'}</Text>
+              <Text style={st.title}>{panel === 'break' ? '⏸ Match break' : panel === 'squad' ? '👥 Change squad' : panel === 'settings' ? '⚙️ Match settings' : 'Quick options'}</Text>
               <Text style={st.close} accessibilityRole="button" onPress={panel ? () => setPanel(null) : onClose}>{panel ? '‹ Back' : '✕'}</Text>
             </View>
 
@@ -59,7 +60,7 @@ export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBrea
                   {onSquad && <Tile icon="👥" label="Change squad" hint="Add or bench players" onPress={() => setPanel('squad')} />}
                   {onScorer && <Tile icon="🎙" label="Change scorer" hint="Scorers & officials" onPress={() => { onClose(); onScorer(); }} />}
                   {onScorecard && <Tile icon="📋" label="Full scorecard" hint="See the whole card" onPress={() => { onClose(); onScorecard(); }} />}
-                  {onSettings && <Tile icon="⚙️" label="Match settings" hint="This match only" onPress={() => { onClose(); onSettings(); }} />}
+                  {settingsPanel ? <Tile icon="⚙️" label="Match settings" hint="This match only" onPress={() => setPanel('settings')} /> : null}
                 </View>
                 {pluginTiles}
               </>
@@ -75,6 +76,8 @@ export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBrea
                 <Button label="⏸ Start break" disabled={!kind || (kind === 'other' && !note.trim())} onPress={startBreak} />
               </View>
             )}
+
+            {panel === 'settings' && settingsPanel}
 
             {panel === 'squad' && onSquad && (
               <View style={st.grid}>

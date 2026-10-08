@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket local rules + generic live settings card (parity #14)
+
+- **Ask (parity queue #14):** school/gully cricket plays wide = 2, no-ball counts as a ball, normal
+  rules in the last 2 overs; scorers were fixing totals by hand, and umpires change rules mid-match.
+- **Generic:** `SportPlugin.liveSettings` (`mode: 'event' | 'config'`, `beforeStart`, `FormatField.group`)
+  + `components/LiveSettingsCard.tsx` (Info tab and #13's ⚙️ Quick options tile) — the only
+  per-match settings mechanism (REVIEW Decision 2). Pure `sports/liveSettings.ts` (apply as format
+  patch vs event, who can edit, "N custom" pill). Football's inline card moved onto it (mode config,
+  same behaviour).
+- **Cricket:** `sports/cricket/rules.ts` (`CricketRules`, `STANDARD_RULES`, `rulesFromConfig`/`rulesToConfig`
+  with byesAllowed⇄byes mapping, `effectiveRules` incl. "standard in the last N overs",
+  `LOCAL_RULE_FIELDS`); engine `SET_RULES` event (from the next ball; Super Over always standard;
+  undo-able), wide/no-ball penalty and legality, free hit per rules, disabled byes rejected in the
+  reducer. Before ball 1 (toss doesn't count) Apply patches `matches.format` instead. Pad hides
+  disabled byes, prompts show the penalty, "⚙️ Local rules: Wd 2" chip. #06 over-editor symbols
+  follow the rules in force.
+- **Compat:** default rules replay every seed/live/synthetic log identically (902-action side-by-side
+  check against HEAD); cricket, seed, replay-wave1, cricket-edit, amend tests green.
+- **Verified:** tsc + 555 tests (28 new cricket-rules, 3 football); demo 8093: Wide = 2 mid-over on
+  m8 (past wide stays +1, next +2, chip, timeline, second tab, undo, byes off), m9 pre-start format
+  patch, football card unchanged. No migration.
+
+---
+
 ### 2026-10-09 — Match housekeeping: clone, delete a played match, breaks, quick-options sheet (parity #13)
 
 - **Ask (parity queue #13):** test matches couldn't be removed; rematches rebuilt by hand; breaks,

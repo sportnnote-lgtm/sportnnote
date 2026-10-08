@@ -199,7 +199,38 @@ export interface FormatField {
   hint?: string;
   /** Granular fields flagged advanced are hidden behind the preset until the user
    *  picks "Custom" or taps "Customize". Non-advanced fields always show. */
-  advanced?: boolean;
+  advanced?: boolean;  /** Toggles that share a group render as one chip row under this heading
+   *  (parity #14's live settings, e.g. football's "Stats captured"). */
+  group?: string;
+  /** For a 'number' field in the live settings card: render a −step / +step
+   *  stepper (clamped to min/max) instead of a text input. */
+  step?: number;
+}
+
+export type FormatValue = number | string | boolean;
+
+/**
+ * Settings a scorer may change on a live match (parity #14) — the ONLY per-match
+ * settings mechanism (REVIEW Decision 2). Rendered by LiveSettingsCard.
+ *  - mode 'config': each change patches `matches.format` at once and the log is
+ *    replayed with it (football's stats-captured toggles, half length).
+ *  - mode 'event': before play (`beforeStart`) a change patches the format
+ *    (the new baseline); after it, Apply dispatches `actionType` with the patch,
+ *    so it applies from the next play and past plays keep their rules.
+ */
+export interface LiveSettings<S = unknown> {
+  title: string;
+  /** one line under the title */
+  hint?: string;
+  fields: FormatField[];
+  /** current values keyed by field key */
+  read: (state: S) => Record<string, FormatValue>;
+  /** true = no play yet (patch the format). Default: eventCount === 0. */
+  beforeStart?: (state: S) => boolean;
+  mode: 'event' | 'config';
+  actionType?: string;
+  /** "standard" values — drive the Standard / N custom pill and Reset */
+  defaults?: Record<string, FormatValue>;
 }
 
 export interface SportPlugin<S = unknown> {
@@ -293,6 +324,8 @@ export interface SportPlugin<S = unknown> {
   Summary?: React.FC<SummaryProps>;
   /** Organizer-configurable format options for this sport. */
   formatFields?: FormatField[];
+  /** Settings changeable on a live match (parity #14); see LiveSettings. */
+  liveSettings?: LiveSettings<S>;
   /**
    * Optional hands-free scoring. `parse` is a PURE function mapping a spoken (or
    * typed) phrase to the action(s) to dispatch, or null if unrecognised; `hints`

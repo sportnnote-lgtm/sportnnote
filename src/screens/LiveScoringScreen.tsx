@@ -38,6 +38,7 @@ import { matchOutbox } from '../data/matchOutbox';
 import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt } from '../data/repos';
 import { deleteVerdict, breakLabel, type BreakKind, type MatchBreak } from '../data/matchHousekeeping';
 import { QuickOptionsSheet } from '../components/QuickOptionsSheet';
+import { LiveSettingsCard } from '../components/LiveSettingsCard';
 import { slotsFor, officialsLine, isCommentarySlot, type MatchOfficial } from '../data/matchOfficials';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
@@ -1646,45 +1647,27 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       </View>
     );
 
-    // Per-match scoring settings (football): toggle which stats are captured and
-    // tweak half length — game-wise, for last-minute changes (rain, stand-in
-    // scorer, etc.). Saving re-derives the live state with the new config.
+    // Per-match live settings (parity #14) — the sport's `liveSettings`, via the
+    // generic card: football's stats-captured / half length (config mode, applies
+    // at once and replays), cricket's local rules (event mode: a format patch
+    // before ball 1, a SET_RULES event after it). The ⚙️ quick-options tile shows
+    // the same card inside the sheet.
     const applyFormat = (patch: Record<string, number | string | boolean>) => {
       if (!matchId) return;
       void setMatchFormat(matchId, patch);
       setMeta((m) => ({ ...m, config: { ...(m.config ?? {}), ...patch } }));
     };
-    const fb = sport === 'football' ? (state as { track?: Record<string, boolean>; halfMinutes?: number }) : undefined;
-    const TRACKABLE: [string, string][] = [
-      ['shots', 'Shots'], ['possession', 'Possession'], ['passes', 'Passes'], ['fouls', 'Fouls'],
-      ['cards', 'Cards'], ['offsides', 'Offsides'], ['corners', 'Corners'], ['tackles', 'Tackles'],
-      ['interceptions', 'Interceptions'], ['saves', 'Saves'],
-      ['attackContribution', 'Attacking play'], ['defenceContribution', 'Defensive play'],
-    ];
-    const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
-    const trackedCount = fb ? TRACKABLE.filter(([k]) => fb.track?.[k]).length : 0;
-    const scoringSettingsCard = fb && (canScore || canManage) && !complete ? (
-      <View style={st.infoCard}>
-        <View style={st.streamHead}>
-          <Text style={textStyles.h3}>⚙️ Scoring settings</Text>
-          <Text style={textStyles.muted}>{trackedCount} of {TRACKABLE.length} tracked</Text>
-        </View>
-        <Text style={textStyles.muted}>Capture only what this scorer can keep up with — toggles apply to this match only.</Text>
-        <Text style={st.squadSection}>Stats captured</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) }}>
-          {TRACKABLE.map(([key, label]) => {
-            const on = fb.track?.[key] ?? false;
-            return <SelectChip key={key} label={label} active={on} onPress={() => applyFormat({ [`track${cap(key)}`]: !on })} />;
-          })}
-        </View>
-        <Text style={st.squadSection}>Match length</Text>
-        <View style={st.stepperRow}>
-          <SelectChip label="−5" active={false} onPress={() => applyFormat({ halfMinutes: Math.max(5, (fb.halfMinutes ?? 45) - 5) })} />
-          <Text style={st.stepperVal}>{fb.halfMinutes ?? 45}<Text style={textStyles.muted}> min / half</Text></Text>
-          <SelectChip label="+5" active={false} onPress={() => applyFormat({ halfMinutes: Math.min(60, (fb.halfMinutes ?? 45) + 5) })} />
-        </View>
-      </View>
-    ) : null;
+    const ls = plugin.liveSettings;
+    // Config mode keeps the old card's audience (scorer / manager, not after the
+    // match). Event mode is shown to everyone; only the allowed can edit.
+    const showLiveSettings = !!ls && hasMatch && (ls.mode === 'event' || ((canScore || canManage) && !complete));
+    const liveSettingsCard = (onApplied?: (msg: string) => void) => (showLiveSettings && ls ? (
+      <LiveSettingsCard
+        settings={ls} state={state} eventCount={eventCount}
+        canScore={canScore} canManage={canManage} complete={complete}
+        onPatchFormat={applyFormat} dispatch={dispatch} onApplied={onApplied}
+      />
+    ) : null);
 
     // Live-stream link — any host/scorer can add or change it before & during the
     // match; when set, the player pins to the top of the screen for everyone.
@@ -2106,7 +2089,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                         omitKeys={getSport(sport).participantKind === 'both' ? ['playersPerSide'] : undefined}
                       />
                     )}
-                    {matchLive && <Text style={textStyles.muted}>Format is locked once the match is live.</Text>}
+                    {matchLive && (
+                      <Text style={textStyles.muted}>
+                        Format is locked once the match is live{showLiveSettings && ls ? `…local rules can still be changed in ${ls.title.replace(/^[^A-Za-z]+/, '')} below.` : '.'}
+                      </Text>
+                    )}
                     <View style={{ flexDirection: 'row', gap: theme.spacing(3) }}>
                       <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setEditInfo(false)} />
                       <Button label="Save changes" style={{ flex: 1 }} onPress={saveInfo} />
@@ -2118,7 +2105,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               {hasMatch && scorerCard}
               {hasMatch && officialsCard}
               {hasMatch && streamSettingsCard}
-              {hasMatch && scoringSettingsCard}
+              {liveSettingsCard((msg) => setToast(msg))}
               {hasMatch && (
                 <HostsCard
                   hostIds={matchHostIds}
@@ -2192,7 +2179,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           onSquad={hasMatch && canEditSquad ? (sd) => void editSquad(sd) : undefined}
           onScorer={hasMatch ? () => setTab('info') : undefined}
           onScorecard={() => setTab(contentViews[0].key)}
-          // ⚙️ Match settings: #14 (liveSettings) isn't built yet — no tile until it is.
+          settingsPanel={showLiveSettings && !complete ? liveSettingsCard((msg) => { setQuickOpen(false); setToast(msg); }) : undefined}
           pluginTiles={plugin.QuickOptions ? (
             <plugin.QuickOptions
               state={state} dispatch={dispatch} homeRoster={homeScoreRoster} awayRoster={awayScoreRoster}

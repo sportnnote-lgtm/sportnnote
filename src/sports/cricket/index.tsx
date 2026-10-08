@@ -30,6 +30,10 @@ import {
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
 import { OverEditor } from './OverEditor';
+import {
+  LOCAL_RULE_FIELDS, CRICKET_LIVE_SETTINGS, rulesOf, effectiveRules, inStandardWindow, isStandard,
+  rulesChip, STANDARD_RULES,
+} from './rules';
 
 /* ------------------------------- Controls ---------------------------------- */
 
@@ -217,6 +221,12 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const battingColor = state.battingSide === 'home' ? (homeColor ?? theme.colors.home) : (awayColor ?? theme.colors.away);
   const rosterFor = (sd: 'home' | 'away') => (sd === 'home' ? homeRoster : awayRoster);
   const cur = state.scores[state.battingSide];
+  // Local rules (parity #14) in force for the next ball (a Super Over is standard).
+  const rules = rulesOf(state);
+  const R = effectiveRules(state);
+  const rulesNote = isStandard(rules) ? null
+    : inStandardWindow(state) ? `Normal rules now (last ${rules.stdLastOvers} over${rules.stdLastOvers === 1 ? '' : 's'})`
+    : `Local rules: ${rulesChip(rules)}`;
 
   const { strikerId, strikerName, nonStrikerId, nonStrikerName, bowlerId, bowlerName } = state;
   const isOut = (id: string) => state.batting[id]?.out === true;
@@ -527,6 +537,12 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         </View>
       )}
 
+      {rulesNote ? (
+        <View style={ctrl.rulesChip} accessibilityLabel={rulesNote}>
+          <Text style={ctrl.rulesChipText}>⚙️ {rulesNote}</Text>
+        </View>
+      ) : null}
+
       {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
       <View style={ctrl.row}>
         {[0, 1, 2, 3, 4, 6].map((r) => (
@@ -536,11 +552,13 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
       {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
       <View style={{ gap: theme.spacing(2) }}>
-        <View style={ctrl.row}>
-          <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />
-          <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />
-        </View>
-        {(extraMode === 'b' || extraMode === 'lb') && (
+        {(R.byes || R.legByes) && (
+          <View style={ctrl.row}>
+            {R.byes && <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />}
+            {R.legByes && <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />}
+          </View>
+        )}
+        {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
           <View style={ctrl.row}>
             {[1, 2, 3, 4].map((n) => (
               <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={ctrl.flex}
@@ -550,7 +568,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         )}
         {extraMode === 'nb' && (
           <>
-            <Text style={ctrl.meta}>No ball — runs off the bat?</Text>
+            <Text style={ctrl.meta}>No ball{R.noBallRuns !== STANDARD_RULES.noBallRuns ? ` (+${R.noBallRuns})` : ''}{R.noBallLegal ? ' · counts as a ball' : ''} — runs off the bat?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4, 6].map((n) => (
                 <Button key={n} label={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={ctrl.flex}
@@ -570,7 +588,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         )}
         {extraMode === 'wd' && (
           <>
-            <Text style={ctrl.meta}>Wide — any runs run (byes on the wide, or 4 if it beat the keeper)?</Text>
+            <Text style={ctrl.meta}>Wide{R.wideRuns !== STANDARD_RULES.wideRuns ? ` (+${R.wideRuns})` : ''}{R.wideLegal ? ' · counts as a ball' : ''} — any runs run (byes on the wide, or 4 if it beat the keeper)?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 4].map((n) => (
                 <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n}`} color={n === 4 ? theme.colors.primary : battingColor} style={ctrl.flex}
@@ -1305,7 +1323,10 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     { key: 'dls', label: 'DLS (rain-revised targets)', type: 'toggle', default: false, advanced: true, hint: 'reduce overs on a rain break; the chase target auto-revises' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 0, min: 0, max: 5, advanced: true, hint: '12th man, etc.' },
     { key: 'impactPlayer', label: 'Impact Player (IPL-style)', type: 'toggle', default: false, hint: 'one named sub can come in to bat or bowl mid-match' },
+    // Local rules (parity #14) — also editable mid-match via liveSettings.
+    ...LOCAL_RULE_FIELDS,
   ],
+  liveSettings: CRICKET_LIVE_SETTINGS,
 };
 
 const ctrl = StyleSheet.create({
@@ -1326,6 +1347,8 @@ const ctrl = StyleSheet.create({
   needTag: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
   needTagText: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800' },
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
+  rulesChip: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.accent, paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
+  rulesChipText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   freeHitBox: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.primary, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   freeHitText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.3 },
   wktRecap: { backgroundColor: theme.colors.danger + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },

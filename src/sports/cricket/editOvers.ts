@@ -13,6 +13,7 @@
 import type { MatchEventRecord } from '../../core/types';
 import type { ScoreAction } from '../types';
 import { AMEND_TYPE, effectiveLog, type AmendOp } from '../amend.ts';
+import { effectiveRules } from './rules.ts';
 import { init, reducer, ballStamp, oversStr, alignCrease, NO_BOWLER, type CricketState, type DismissalKind } from './engine.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -116,7 +117,9 @@ export function ballCategory(a: Pick<ScoreAction, 'type' | 'payload'>): BallKind
 const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** The over-strip symbol the engine writes for this ball (mirrors engine.ts). */
-export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>): string {
+/** `widePenalty`: the wide value in force for this ball (#14 local rules; standard 1),
+ *  so the chip matches the live over strip. */
+export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>, widePenalty = 1): string {
   const p = a.payload ?? {};
   switch (a.type) {
     case 'RUNS': {
@@ -143,7 +146,7 @@ export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>): string {
         return `${ran > 0 ? ran : ''}nb`;
       }
       const w = Math.max(0, num(p.runs));
-      return w > 0 ? `${1 + w}wd` : 'wd';
+      return w > 0 ? `${widePenalty + w}wd` : 'wd';
     }
     default:
       return '';
@@ -248,7 +251,7 @@ export function editableOvers(effLog: MatchEventRecord[], config?: Record<string
     over.balls.push({
       seq: rec.seq,
       stamp: ballStamp(legalBefore + 1, pre.ballsPerOver),
-      sym: ballSymbol(action),
+      sym: ballSymbol(action, effectiveRules(pre).wideRuns),
       category: ballCategory(action),
       crease: [strikerId, nonStrikerId],
       action,

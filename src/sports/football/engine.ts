@@ -2,7 +2,7 @@
  *  No React / React Native imports, so it runs in tests and on the server exactly
  *  as it does on-device; the UI lives in index.tsx. Mirrors the basketball /
  *  cricket / kabaddi engines. */
-import type { ScoreAction } from "../types";
+import type { ScoreAction, LiveSettings, FormatField } from "../types";
 import type { FootballEvent, GoalType, BodyPart, StatEvent, StatKind } from "./events";
 import type { Player } from "../../core/types";
 export type Decider = 'none' | 'extra_time' | 'penalties';
@@ -88,6 +88,36 @@ export const readTrack = (config?: Record<string, unknown>): TrackConfig => {
     out[k] = v === undefined ? def[k] : Boolean(v);
   }
   return out;
+};
+
+/** The stats a scorer can switch on/off mid-match (parity #14 live settings —
+ *  the old inline "Scoring settings" card's set, in the same order). */
+const TRACKABLE: [keyof TrackConfig, string][] = [
+  ['shots', 'Shots'], ['possession', 'Possession'], ['passes', 'Passes'], ['fouls', 'Fouls'],
+  ['cards', 'Cards'], ['offsides', 'Offsides'], ['corners', 'Corners'], ['tackles', 'Tackles'],
+  ['interceptions', 'Interceptions'], ['saves', 'Saves'],
+  ['attackContribution', 'Attacking play'], ['defenceContribution', 'Defensive play'],
+];
+const trackKey = (k: string) => `track${k[0].toUpperCase()}${k.slice(1)}`;
+
+/** Football's live settings (config mode): each tap patches the match format and
+ *  the log replays with it, exactly as the old inline card did. */
+export const FOOTBALL_LIVE_SETTINGS: LiveSettings<FootballState> = {
+  title: '⚙️ Scoring settings',
+  hint: 'Capture only what this scorer can keep up with — toggles apply to this match only.',
+  mode: 'config',
+  fields: [
+    ...TRACKABLE.map(([k, label]): FormatField => ({ key: trackKey(k), label, type: 'toggle', default: readTrack()[k], group: 'Stats captured' })),
+    { key: 'halfMinutes', label: 'Match length', type: 'number', default: 45, min: 5, max: 60, step: 5, hint: 'min / half' },
+  ],
+  read: (s) => ({
+    ...Object.fromEntries(TRACKABLE.map(([k]) => [trackKey(k), s.track?.[k] ?? false])),
+    halfMinutes: s.halfMinutes ?? 45,
+  }),
+  defaults: {
+    ...Object.fromEntries(TRACKABLE.map(([k]) => [trackKey(k), readTrack()[k]])),
+    halfMinutes: 45,
+  },
 };
 
 export const init = (config?: Record<string, unknown>): FootballState => ({

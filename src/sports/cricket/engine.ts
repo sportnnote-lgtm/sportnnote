@@ -12,6 +12,7 @@ import type { LiveEvent } from '../liveEvents';
 // not do extensionless resolution); tsc (bundler resolution) and Metro both
 // accept it too.
 import { resourcePct, revisedTarget } from './dls.ts';
+import { rulesFromConfig, rulesOf, effectiveRules, patchRules, describeRulesChange, type CricketRules } from './rules.ts';
 
 interface Innings {
   runs: number;
@@ -112,6 +113,9 @@ export interface CricketState {
   isSuperOver?: boolean;
   /** the live Super-Over tie-breaker, if one is under way / decided the match. */
   superOver?: SuperOverState;
+  /** local rules (parity #14) — from the format, changed mid-match by SET_RULES.
+   *  Optional so older saved states still read; use `rulesOf(s)`. */
+  rules?: CricketRules;
 }
 
 /** A Super Over: a self-contained 1-over, 2-wicket mini-match run through this
@@ -154,6 +158,7 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   ballsPerOver: Number(config?.ballsPerOver ?? 6),
   ballType: (config?.ballType as CricketState['ballType']) ?? 'leather',
   dls: Boolean(config?.dls ?? false),
+  rules: rulesFromConfig(config),
   r1Lost: 0,
   r2Lost: 0,
   events: [],
@@ -300,6 +305,21 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     };
   }
 
+  // ── Local rules (parity #14) ──────────────────────────────────────────────
+  // Handled before Super-Over routing: it changes the PARENT match only (a Super
+  // Over is always played to standard rules). Applies from the next ball.
+  if (a.type === 'SET_RULES') {
+    const prev = rulesOf(s);
+    const next = patchRules(prev, a.payload);
+    const text = describeRulesChange(prev, next);
+    if (!text) return s;
+    const inn = s.scores[s.battingSide];
+    return {
+      ...s, rules: next, seq: s.seq + 1,
+      events: [...s.events, { id: s.seq + 1, stamp: oversStr(inn.balls, s.ballsPerOver), icon: '⚙️', label: 'RULES', detail: text, side: s.battingSide }],
+    };
+  }
+
   // ── Super Over ────────────────────────────────────────────────────────────
   // Starting one freezes the parent match and spins up a nested mini-innings.
   if (a.type === 'START_SUPER_OVER') return startSuperOver(s);
@@ -382,12 +402,16 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
   const overEnd = baseBalls + 1 >= s.ballsPerOver;
   // End-of-(legal)-ball housekeeping: strike rotation, over change (clear the
   // bowler & remember who bowled it so they can't bowl two in a row), and
-  // consuming the free hit (any legal delivery clears it).
-  const afterLegalBall = (next: CricketState, rotate: boolean): CricketState => {
+  // consuming the free hit (any legal delivery clears it — unless it is itself
+  // a legal no-ball/wide under local rules, which may keep one: `freeHitAfter`).
+  // An innings end still clears it (settle → clearCrease).
+  const afterLegalBall = (next: CricketState, rotate: boolean, freeHitAfter = false): CricketState => {
     let r = rotate ? swapStrike(next) : next;
     if (overEnd) r = { ...r, lastOverBowlerId: s.bowlerId, bowlerId: undefined, bowlerName: undefined };
-    return settle({ ...r, freeHit: false });
+    return settle({ ...r, freeHit: freeHitAfter });
   };
+  // Rules in force for THIS ball (local rules, or standard in the last N overs).
+  const R = effectiveRules(s);
 
   switch (a.type) {
     case 'RUNS': {
@@ -412,6 +436,9 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     case 'LEGBYES': {
       const r = Math.max(1, Number(a.payload?.runs ?? 1));
       const isLeg = a.type === 'LEGBYES';
+      // Disabled by local rules → rejected here, so voice scoring can't bypass it.
+      // (Legacy logs have standard rules, so they replay identically.)
+      if (isLeg ? !rulesOf(s).legByes : !rulesOf(s).byes) return s;
       const balls = cur.balls + 1;
       seq += 1;
       const next: CricketState = {
@@ -504,12 +531,22 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const kind = String(a.payload?.kind ?? 'Wide');
       const isNoBall = kind === 'No ball';
       seq += 1;
-      // Neither a wide nor a no-ball is a legal ball (no over progress).
+      // Local rules (#14): the penalty (standard 1) and whether it counts as a
+      // ball (standard: never — no over progress). Standard rules → today's maths.
+      const pen = isNoBall ? R.noBallRuns : R.wideRuns;
+      const legal = isNoBall ? R.noBallLegal : R.wideLegal;
+      const penTag = pen === 1 ? '' : ` (${pen} run${pen === 1 ? '' : 's'})`;
+      // A free hit after a no-ball (if the rules give one); a pending free hit
+      // carries over a wide.
+      const fhAfter = isNoBall ? R.freeHit || s.freeHit : s.freeHit;
       const overReset = s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver;
+      // A legal extra advances the innings ball count, the bowler's balls and the over.
+      const legalBits = (next: CricketState): CricketState =>
+        legal ? { ...next, scores: { ...next.scores, [bat]: { ...next.scores[bat], balls: cur.balls + 1 } }, ballsInOver: baseBalls + 1 } : next;
 
-      // Run-out off the extra: a wicket falls without a legal ball being bowled
-      // (the over does NOT advance). The +1 penalty stands; any completed runs
-      // count (off the bat on a no-ball, as extras on a wide); no bowler credit.
+      // Run-out off the extra: a wicket falls (no legal ball unless local rules
+      // count it). The penalty stands; any completed runs count (off the bat on a
+      // no-ball, as extras on a wide); no bowler credit.
       if (a.payload?.runout) {
         const completed = Math.max(0, Number(a.payload?.runs ?? 0));
         const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
@@ -528,60 +565,63 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           ? { nonStrikerId: newBatId, nonStrikerName: newBatName }
           : { strikerId: newBatId, strikerName: newBatName };
         const sym = `${completed > 0 ? completed : ''}${isNoBall ? 'nb' : 'wd'}+W`;
-        let next: CricketState = {
+        let next: CricketState = legalBits({
           ...s,
-          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + 1 + completed, extras: cur.extras + (isNoBall ? 1 : 1 + completed), wickets: cur.wickets + 1 } },
+          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + pen + completed, extras: cur.extras + (isNoBall ? pen : pen + completed), wickets: cur.wickets + 1 } },
           batting,
-          bowling: bumpBowl({ runs: 1 + completed, extras: isNoBall ? 1 : 1 + completed }),
+          bowling: bumpBowl({ runs: pen + completed, extras: isNoBall ? pen : pen + completed, ...(legal ? { balls: 1 } : {}) }),
           dismissals: [...s.dismissals, { kind: 'runout', outId, fielderId, fielderName }],
           thisOver: [...overReset, sym],
-          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '🎯', label: `${isNoBall ? 'No ball' : 'Wide'} — RUN OUT`, detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
+          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '🎯', label: `${isNoBall ? 'No ball' : 'Wide'}${penTag} — RUN OUT`, detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
           seq,
-          freeHit: isNoBall ? true : s.freeHit,
+          freeHit: fhAfter,
           ...crease,
-        };
+        });
+        if (legal) return afterLegalBall(next, (completed % 2 === 1) !== overEnd, fhAfter);
         if (completed % 2 === 1) next = swapStrike(next);
         return settle(next);
       }
       if (isNoBall) {
-        // No-ball: +1 penalty, PLUS runs off the bat (credited to the striker) AND/OR
+        // No-ball: the penalty, PLUS runs off the bat (credited to the striker) AND/OR
         // byes run without hitting (team extras, not charged to the bowler). The
         // striker faces a no-ball (counts as a ball faced) and gets a free hit next.
         const offBat = Math.max(0, Number(a.payload?.runs ?? 0));
         const byes = Math.max(0, Number(a.payload?.byes ?? 0));
-        const total = 1 + offBat + byes;
+        const total = pen + offBat + byes;
         const ran = offBat + byes; // runs run between the wickets → strike parity
         const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
         const sym = `${ran > 0 ? ran : ''}nb`;
-        const label = `No ball${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''} — free hit`;
-        let next: CricketState = {
+        const label = `No ball${penTag}${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''}${R.freeHit ? ' — free hit' : ''}`;
+        let next: CricketState = legalBits({
           ...s,
-          // extras conceded = the +1 penalty + any byes (off-bat runs are the batter's)
-          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + 1 + byes } },
+          // extras conceded = the penalty + any byes (off-bat runs are the batter's)
+          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + pen + byes } },
           batting,
-          bowling: bumpBowl({ runs: 1 + offBat, extras: 1 }), // bowler charged penalty + off-bat, not byes
+          bowling: bumpBowl({ runs: pen + offBat, extras: pen, ...(legal ? { balls: 1 } : {}) }), // bowler charged penalty + off-bat, not byes
           thisOver: [...overReset, sym],
           events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label, detail: undefined, side: bat, tone: 'extra' }],
           seq,
-          freeHit: true,
-        };
+          freeHit: fhAfter,
+        });
+        if (legal) return afterLegalBall(next, (ran % 2 === 1) !== overEnd, fhAfter);
         if (ran % 2 === 1) next = swapStrike(next); // crossed an odd number of times
         return settle(next);
       }
-      // Wide: +1 penalty PLUS any runs the batsmen run (byes on the wide, or a wide
+      // Wide: the penalty PLUS any runs the batsmen run (byes on the wide, or a wide
       // to the boundary = 4). All are extras charged to the bowler; no ball is faced.
       const wideRuns = Math.max(0, Number(a.payload?.runs ?? 0));
-      const total = 1 + wideRuns;
+      const total = pen + wideRuns;
       const sym = wideRuns > 0 ? `${total}wd` : 'wd';
-      let next: CricketState = {
+      let next: CricketState = legalBits({
         ...s,
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + total } },
-        bowling: bumpBowl({ runs: total, extras: total }),
+        bowling: bumpBowl({ runs: total, extras: total, ...(legal ? { balls: 1 } : {}) }),
         thisOver: [...overReset, sym],
-        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: wideRuns > 0 ? `Wide + ${wideRuns}` : 'Wide', detail: undefined, side: bat, tone: 'extra' }],
+        events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: `Wide${penTag}${wideRuns > 0 ? ` + ${wideRuns}` : ''}`, detail: undefined, side: bat, tone: 'extra' }],
         seq,
-        freeHit: s.freeHit,
-      };
+        freeHit: fhAfter,
+      });
+      if (legal) return afterLegalBall(next, (wideRuns % 2 === 1) !== overEnd, fhAfter);
       if (wideRuns % 2 === 1) next = swapStrike(next);
       return settle(next);
     }

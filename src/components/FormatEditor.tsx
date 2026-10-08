@@ -24,14 +24,14 @@ export const defaultsFor = (fields: FormatField[]): Record<string, FormatVal> =>
   return out;
 };
 
-export function FormatFieldEditor({ field, value, onChange }: { field: FormatField; value: FormatVal; onChange: (v: FormatVal) => void }) {
+export function FormatFieldEditor({ field, value, onChange, disabled }: { field: FormatField; value: FormatVal; onChange: (v: FormatVal) => void; disabled?: boolean }) {
   if (field.type === 'choice' || field.type === 'preset') {
     return (
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={textStyles.muted}>{field.label}{field.hint ? ` · ${field.hint}` : ''}</Text>
         <View style={fe.chips}>
           {(field.options ?? []).map((o) => (
-            <SelectChip key={String(o.value)} label={o.label} active={value === o.value} onPress={() => onChange(o.value)} />
+            <SelectChip key={String(o.value)} label={o.label} active={value === o.value} disabled={disabled} onPress={() => onChange(o.value)} />
           ))}
         </View>
       </View>
@@ -46,7 +46,7 @@ export function FormatFieldEditor({ field, value, onChange }: { field: FormatFie
         <Text style={textStyles.muted}>{field.label}{field.hint ? ` · ${field.hint}` : ''}</Text>
         <View style={fe.chips}>
           {nums.map((n) => (
-            <SelectChip key={n} label={String(n)} active={value === n} onPress={() => onChange(n)} />
+            <SelectChip key={n} label={String(n)} active={value === n} disabled={disabled} onPress={() => onChange(n)} />
           ))}
         </View>
       </View>
@@ -57,8 +57,8 @@ export function FormatFieldEditor({ field, value, onChange }: { field: FormatFie
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={textStyles.muted}>{field.label}{field.hint ? ` · ${field.hint}` : ''}</Text>
         <View style={fe.chips}>
-          <SelectChip label="On" active={value === true} onPress={() => onChange(true)} />
-          <SelectChip label="Off" active={value !== true} onPress={() => onChange(false)} />
+          <SelectChip label="On" active={value === true} disabled={disabled} onPress={() => onChange(true)} />
+          <SelectChip label="Off" active={value !== true} disabled={disabled} onPress={() => onChange(false)} />
         </View>
       </View>
     );

@@ -147,3 +147,29 @@ describe('football — substitution caps by type (Tier-2 fix)', () => {
     assert.equal(subsMade(s, 'home'), 6); // all six changes stuck, past the bench size
   });
 })
+
+describe('live settings (parity #14): trackX still drives state.track', async () => {
+  const { FOOTBALL_LIVE_SETTINGS: LS } = await import('../src/sports/football/engine.ts');
+  const { planLiveApply } = await import('../src/sports/liveSettings.ts');
+  test('format trackX keys drive state.track, and the card reads them back', () => {
+    const s = init({ trackShots: false, trackPasses: true, halfMinutes: 30 });
+    assert.equal(s.track.shots, false);
+    assert.equal(s.track.passes, true);
+    const v = LS.read(s);
+    assert.equal(v.trackShots, false);
+    assert.equal(v.trackPasses, true);
+    assert.equal(v.halfMinutes, 30);
+  });
+  test('a tap is a format patch (config mode) that re-derives state.track on replay', () => {
+    const s = init({});
+    const cur = LS.read(s);
+    const plan = planLiveApply(LS, s, 10, cur, { ...cur, trackShots: false });
+    assert.deepEqual(plan, { kind: 'format', patch: { trackShots: false } });
+    assert.equal(init({ ...(plan.kind === 'format' ? plan.patch : {}) }).track.shots, false);
+  });
+  test('stats-captured toggles share one group; half length is a ±5 stepper', () => {
+    assert.ok(LS.fields.filter((f) => f.type === 'toggle').every((f) => f.group === 'Stats captured'));
+    const hm = LS.fields.find((f) => f.key === 'halfMinutes')!;
+    assert.deepEqual([hm.step, hm.min, hm.max], [5, 5, 60]);
+  });
+});
