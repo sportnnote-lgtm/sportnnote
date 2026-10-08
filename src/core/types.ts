@@ -361,6 +361,10 @@ export interface Team {
   /** created on the fly (e.g. a one-off side for a friendly). De-emphasised in
    *  "Manage teams" so ad-hoc teams don't clutter the real houses/clubs. */
   adhoc?: boolean;
+  /** team logo (migration 0042) — absent before it / when unset */
+  logoUrl?: string;
+  /** home city / town (migration 0042) */
+  city?: string;
 }
 
 /* ------------------------------- Clubs (teams) ---------------------------- */
@@ -527,6 +531,9 @@ export interface DisputeEvent {
 export interface TeamLeadership {
   captainId?: UUID;
   viceCaptainId?: UUID;
+  /** team admins (player ids, teams.admin_ids — migration 0042). `undefined` =
+   *  the database predates it, so hide "Make admin"; `[]` = none yet. */
+  adminIds?: UUID[];
 }
 
 export interface Venue {

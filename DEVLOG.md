@@ -13,6 +13,36 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Tournament teams: search, edit team, confirmed removals, team admins, join by link/code (parity #10)
+
+- **Ask (parity queue #10):** 30–60 school teams in unsearchable chips; no way to fix a misspelt
+  team; removals without "are you sure?"; captains should enter their own team from one link; a
+  captain should share squad duties with an admin.
+- **Migration 0042** `20261019121000_tournament_teams_admin.sql` (bundle
+  `2026-10-tournament-teams-0042.sql`) — founder to run: `teams.logo_url / city / admin_ids`;
+  `can_manage_team` + `guard_team_write` re-copied from their latest bodies with admins added
+  (organiser still not a team manager — deliberate); `tournament_invites` (one live link per
+  tournament) + RPCs `tournament_invite` (mint `T-XXXXXX` / turn off), `get_tournament_invite`
+  (rate-limited, VOLATILE), `redeem_tournament_invite` (link on, you manage the team, sport
+  matches, capacity/deadline; confirmed; a pending/invited entry is upgraded). PGlite 35/35;
+  re-applying the bundle is idempotent.
+- **Data (helper agent):** pure `teamSearch.filterTeams`, `tournamentInvite` (parse/link/message);
+  `canManageTeamLocal` counts admins; repos `updateTeam`, `getTeamDetails`, `setTeamAdmins`,
+  `getLiveTournamentInvite/setTournamentInvite/getTournamentInvite/redeemTournamentInvite`,
+  `getTeamsSetup`, `deleteTeam` (zero matches only), `removeTournamentTeam` throws;
+  `NeedsDbUpdateError` → UI shows "Needs the latest database update" and hides only that part.
+- **UI (helper agent):** TournamentTeams — search (30 + "Show all"), "Teams can join by link"
+  switch with code / WhatsApp / Copy link, next-step subtitles ("No captain yet"), Edit link,
+  every decline/cancel/withdraw/remove/Save-that-drops confirms (suggests Withdraw when fixtures
+  exist). New EditTeam (logo, name, short, colour, city, delete) and JoinTournament
+  (`join-tournament/:token`, public screen → sign in and back; your teams + new team + division →
+  Enter); JoinTeam forwards `T-` codes. Squad: "✎ Edit team", "Make admin" chip + Admin pill.
+- Verified in demo (8093): search, confirms, rename Gold → Golden House, make admin (persists),
+  link on → typed code → entered Blue House (Confirmed) → link off → "This link is turned off".
+  Tests: teamSearch, tournamentInvite, team-permissions (+admin). 498 tests.
+
+---
+
 ### 2026-10-09 — Tournament form: banner/logo, city, grounds, category, sport basics, contact, rules, delete (parity #09)
 
 - **Ask (parity queue #09):** teams and parents ask where, what kind, who to call, what rules — none

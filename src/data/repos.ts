@@ -11,6 +11,7 @@ import type { PickedImage } from '../core/photo';
 import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
+import { parseTournamentToken } from '../core/tournamentInvite';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
@@ -449,7 +450,16 @@ export async function getTeams(sport?: SportId): Promise<Team[]> {
 
 /** A team's captain & vice-captain (responsible for the matchday squad). */
 export async function getTeamLeaders(teamId: string): Promise<TeamLeadership> {
-  if (!isSupabaseConfigured || !supabase) return demo.teamLeaders[teamId] ?? {};
+  if (!isSupabaseConfigured || !supabase) {
+    const l = demo.teamLeaders[teamId] ?? {};
+    return { ...l, adminIds: l.adminIds ?? [] };
+  }
+  // admin_ids arrives with migration 0042 — before it, adminIds stays undefined.
+  const full = await supabase.from('teams').select('captain_id, vice_captain_id, admin_ids').eq('id', teamId).maybeSingle();
+  if (!full.error) {
+    const d = full.data as { captain_id: string | null; vice_captain_id: string | null; admin_ids: string[] | null } | null;
+    return { captainId: d?.captain_id ?? undefined, viceCaptainId: d?.vice_captain_id ?? undefined, adminIds: d ? (d.admin_ids ?? []) : undefined };
+  }
   const { data } = await supabase.from('teams').select('captain_id, vice_captain_id').eq('id', teamId).maybeSingle();
   return { captainId: data?.captain_id ?? undefined, viceCaptainId: data?.vice_captain_id ?? undefined };
 }
@@ -484,6 +494,126 @@ export async function setTeamLeaders(teamId: string, leaders: TeamLeadership): P
     return;
   }
   assertTeamWrite(await supabase.from('teams').update({ captain_id: leaders.captainId ?? null, vice_captain_id: leaders.viceCaptainId ?? null }).eq('id', teamId).select('id'));
+}
+
+/* ---------------- Team edit / admins / delete (parity #10, 0042) ----------- */
+
+/** The database predates the migration a feature needs. The UI shows the muted
+ *  line "Needs the latest database update" (the error's message) and hides only
+ *  that affordance. Test with `isNeedsDbUpdate(e)`. */
+export class NeedsDbUpdateError extends Error {
+  constructor() { super('Needs the latest database update'); this.name = 'NeedsDbUpdateError'; }
+}
+export const isNeedsDbUpdate = (e: unknown): e is NeedsDbUpdateError => e instanceof NeedsDbUpdateError;
+
+/** Missing column (42703 / PGRST204), function (42883 / PGRST202) or table (42P01 / PGRST205). */
+const isMissingSchema = (err: { code?: string } | null | undefined): boolean =>
+  !!err && ['42703', 'PGRST204', '42883', 'PGRST202', '42P01', 'PGRST205'].includes(err.code ?? '');
+
+export interface TeamPatch { name?: string; shortName?: string; colorHex?: string | null; logoUrl?: string | null; city?: string | null }
+
+/** Edit a team's identity. Throws TeamPermissionError when the server refuses
+ *  (not a manager / 0 rows), NeedsDbUpdateError when logoUrl / city are passed
+ *  before migration 0042 (name / short / colour still work pre-migration). */
+export async function updateTeam(teamId: string, patch: TeamPatch): Promise<void> {
+  if (patch.name !== undefined && !patch.name.trim()) throw new Error('Give the team a name.');
+  const name = patch.name?.trim();
+  const shortName = patch.shortName?.trim().toUpperCase();
+  if (patch.shortName !== undefined && !shortName) throw new Error('Give the team a short name.');
+  const city = patch.city === undefined ? undefined : (patch.city?.trim() || null);
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.teams.find((x) => x.id === teamId);
+    if (!t) throw new Error('Team not found.');
+    if (name !== undefined) t.name = name;
+    if (shortName !== undefined) t.shortName = shortName;
+    if (patch.colorHex !== undefined) t.colorHex = patch.colorHex ?? undefined;
+    if (patch.logoUrl !== undefined) t.logoUrl = patch.logoUrl ?? undefined;
+    if (city !== undefined) t.city = city ?? undefined;
+    return;
+  }
+  if (patch.logoUrl !== undefined) assertPersistable(patch.logoUrl);
+  const row: Record<string, unknown> = {};
+  if (name !== undefined) row.name = name;
+  if (shortName !== undefined) row.short_name = shortName;
+  if (patch.colorHex !== undefined) row.color_hex = patch.colorHex;
+  if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl;
+  if (city !== undefined) row.city = city;
+  if (!Object.keys(row).length) return;
+  const res = await supabase.from('teams').update(row).eq('id', teamId).select('id');
+  if (isMissingSchema(res.error) && ('logo_url' in row || 'city' in row)) throw new NeedsDbUpdateError();
+  assertTeamWrite(res);
+}
+
+export interface TeamDetails {
+  /** false ⇒ the database predates 0042: hide logo / city / Make admin */
+  supported: boolean;
+  logoUrl?: string;
+  city?: string;
+  /** undefined pre-migration */
+  adminIds?: string[];
+}
+
+/** A team's logo, city and admins. Never throws: pre-0042 (or on any read
+ *  error) it returns { supported: false }. */
+export async function getTeamDetails(teamId: string): Promise<TeamDetails> {
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.teams.find((x) => x.id === teamId);
+    return { supported: true, logoUrl: t?.logoUrl, city: t?.city, adminIds: demo.teamLeaders[teamId]?.adminIds ?? [] };
+  }
+  const { data, error } = await supabase.from('teams').select('logo_url, city, admin_ids').eq('id', teamId).maybeSingle();
+  if (error) return { supported: false };
+  const d = data as { logo_url: string | null; city: string | null; admin_ids: string[] | null } | null;
+  return { supported: true, logoUrl: d?.logo_url ?? undefined, city: d?.city ?? undefined, adminIds: d?.admin_ids ?? [] };
+}
+
+/** Replace a team's admins (player ids). Throws TeamPermissionError when
+ *  refused, NeedsDbUpdateError pre-0042. */
+export async function setTeamAdmins(teamId: string, adminIds: string[]): Promise<void> {
+  const ids = [...new Set(adminIds)];
+  if (!isSupabaseConfigured || !supabase) {
+    demoSetTeamLeaders(teamId, { ...(demo.teamLeaders[teamId] ?? {}), adminIds: ids });
+    return;
+  }
+  const res = await supabase.from('teams').update({ admin_ids: ids }).eq('id', teamId).select('id');
+  if (isMissingSchema(res.error)) throw new NeedsDbUpdateError();
+  assertTeamWrite(res);
+}
+
+/** Per team: is there a captain, and how many players are in its squad — for the
+ *  next-step subtitle ("No captain yet" / "No players yet"). Never throws; a
+ *  team that can't be read is reported as { hasCaptain: false, players: 0 }. */
+export async function getTeamsSetup(teamIds: string[]): Promise<Record<string, { hasCaptain: boolean; players: number }>> {
+  const out: Record<string, { hasCaptain: boolean; players: number }> = {};
+  if (!teamIds.length) return out;
+  const rosters = await getTeamRosters(teamIds);
+  let captains = new Set<string>();
+  if (!isSupabaseConfigured || !supabase) {
+    captains = new Set(teamIds.filter((id) => !!demo.teamLeaders[id]?.captainId));
+  } else {
+    const { data } = await supabase.from('teams').select('id, captain_id').in('id', teamIds);
+    captains = new Set(((data ?? []) as { id: string; captain_id: string | null }[]).filter((r) => r.captain_id).map((r) => r.id));
+  }
+  for (const id of teamIds) out[id] = { hasCaptain: captains.has(id), players: rosters.get(id)?.length ?? 0 };
+  return out;
+}
+
+/** Delete a team outright — only when it has never been in a match. Throws
+ *  'This team has matches…' otherwise, TeamPermissionError when refused. Removing
+ *  a team from a tournament is removeTournamentTeam, not this. */
+export async function deleteTeam(teamId: string): Promise<void> {
+  const HAS_MATCHES = 'This team has matches, so it can’t be deleted. Remove it from the tournament instead.';
+  if (!isSupabaseConfigured || !supabase) {
+    if (demo.matches.some((m) => m.homeTeam?.id === teamId || m.awayTeam?.id === teamId)) throw new Error(HAS_MATCHES);
+    demo.teams = demo.teams.filter((t) => t.id !== teamId);
+    demo.tournamentTeams = demo.tournamentTeams.filter((r) => r.teamId !== teamId);
+    delete demo.teamLeaders[teamId];
+    return;
+  }
+  const { count, error } = await supabase.from('matches').select('id', { count: 'exact', head: true })
+    .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`);
+  if (error) throw new Error('Couldn’t check this team’s matches — try again.');
+  if ((count ?? 0) > 0) throw new Error(HAS_MATCHES);
+  assertTeamWrite(await supabase.from('teams').delete().eq('id', teamId).select('id'));
 }
 
 /* -------------------------------- Players ---------------------------------- */
@@ -3897,7 +4027,106 @@ export async function removeTournamentTeam(tournamentId: string, teamId: string)
     removeTournamentTeamDemo(tournamentId, teamId);
     return;
   }
-  await supabase.from('tournament_teams').delete().eq('tournament_id', tournamentId).eq('team_id', teamId);
+  const res = await supabase.from('tournament_teams').delete().eq('tournament_id', tournamentId).eq('team_id', teamId).select('team_id');
+  if (res.error) throw new Error(res.error.code === '42501' ? 'Only the organiser can remove this team.' : 'Couldn’t remove the team — try again.');
+  if (!res.data?.length) {
+    // RLS filters a refused delete silently — tell that apart from "already gone".
+    const { data } = await supabase.from('tournament_teams').select('team_id').eq('tournament_id', tournamentId).eq('team_id', teamId).limit(1);
+    if (data?.length) throw new Error('Only the organiser can remove this team.');
+  }
+}
+
+/* ---------------------- Tournament join link (parity #10) ------------------ */
+// One link per tournament (`T-XXXXXX`, migration 0042). While ON, a team's
+// manager enters their team with it and the entry is confirmed at once.
+
+const demoTournamentInvites = new Map<string, { tournamentId: string; active: boolean }>();
+const demoInviteToken = (): string => {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let t = 'T-';
+  for (let i = 0; i < 6; i++) t += A[Math.floor(Math.random() * A.length)];
+  return t;
+};
+
+/** The tournament's live join code, for its organiser: a token, null when the
+ *  link is OFF, or undefined pre-0042 (hide the invite card). Never throws. */
+export async function getLiveTournamentInvite(tournamentId: string): Promise<string | null | undefined> {
+  if (!isSupabaseConfigured || !supabase) {
+    for (const [tok, v] of demoTournamentInvites) if (v.tournamentId === tournamentId && v.active) return tok;
+    return null;
+  }
+  const { data, error } = await supabase.from('tournament_invites').select('token').eq('tournament_id', tournamentId).eq('active', true).limit(1);
+  if (error) return isMissingSchema(error) ? undefined : null;
+  return (data?.[0] as { token: string } | undefined)?.token ?? null;
+}
+
+/** Turn the join link ON (returns the live code — the same one if it's already
+ *  on) or OFF (returns null; a later ON mints a new code). Organiser only.
+ *  Throws NeedsDbUpdateError pre-0042. */
+export async function setTournamentInvite(tournamentId: string, on: boolean): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    const live = [...demoTournamentInvites].find(([, v]) => v.tournamentId === tournamentId && v.active);
+    if (!on) { if (live) live[1].active = false; return null; }
+    if (live) return live[0];
+    const tok = demoInviteToken();
+    demoTournamentInvites.set(tok, { tournamentId, active: true });
+    return tok;
+  }
+  const { data, error } = await supabase.rpc('tournament_invite', { p_tid: tournamentId, p_on: on });
+  if (isMissingSchema(error)) throw new NeedsDbUpdateError();
+  if (error) throw new Error(error.code === '42501' ? 'Only the organiser can change the join link.' : error.message);
+  return (data as string | null) ?? null;
+}
+
+export interface TournamentInviteInfo { tournamentId: string; name: string; sports: SportId[]; active: boolean }
+
+/** Resolve a typed / pasted code or link. null = not a tournament code, or no
+ *  such code; `active: false` = "This link is turned off". Throws
+ *  NeedsDbUpdateError pre-0042, or the server's message (e.g. rate limit). */
+export async function getTournamentInvite(tokenOrLink: string): Promise<TournamentInviteInfo | null> {
+  const token = parseTournamentToken(tokenOrLink);
+  if (!token) return null;
+  if (!isSupabaseConfigured || !supabase) {
+    const inv = demoTournamentInvites.get(token);
+    const t = inv && demo.tournaments.find((x) => x.id === inv.tournamentId);
+    return inv && t ? { tournamentId: t.id, name: t.name, sports: [...(t.sports ?? [])], active: inv.active } : null;
+  }
+  const { data, error } = await supabase.rpc('get_tournament_invite', { p_token: token });
+  if (isMissingSchema(error)) throw new NeedsDbUpdateError();
+  if (error) throw new Error(error.message);
+  const r = ((data ?? []) as { tournament_id: string; name: string; sports: string[] | null; active: boolean }[])[0];
+  return r ? { tournamentId: r.tournament_id, name: r.name, sports: (r.sports ?? []) as SportId[], active: r.active } : null;
+}
+
+/** Enter a team you manage through the live link → 'joined' (confirmed now) or
+ *  'already' (it was already in). Throws the server's message for: invalid code,
+ *  "This link is turned off", not your team, sport not in the tournament, wrong
+ *  division, full, deadline passed, withdrawn; NeedsDbUpdateError pre-0042. */
+export async function redeemTournamentInvite(tokenOrLink: string, teamId: string, categoryId?: string): Promise<'joined' | 'already'> {
+  const token = parseTournamentToken(tokenOrLink);
+  if (!token) throw new Error('This invite code isn’t valid');
+  if (!isSupabaseConfigured || !supabase) {
+    const inv = demoTournamentInvites.get(token);
+    const t = inv && demo.tournaments.find((x) => x.id === inv.tournamentId);
+    if (!inv || !t) throw new Error('This invite code isn’t valid');
+    if (!inv.active) throw new Error('This link is turned off');
+    const team = demo.teams.find((x) => x.id === teamId);
+    if (!team) throw new Error('You can only enter a team you manage');
+    if (t.sports?.length && !t.sports.includes(team.sport)) throw new Error('This team’s sport isn’t played in this tournament');
+    const cur = demo.tournamentTeams.find((r) => r.tournamentId === t.id && r.teamId === teamId);
+    if (cur?.status === 'confirmed') return 'already';
+    if (cur?.status === 'withdrawn') throw new Error('This team was withdrawn — ask the organiser to add it back');
+    if (cur?.status !== 'invited') {
+      const block = joinBlockReason({ ...t, isOpen: true }, demo.tournamentTeams.filter((r) => r.tournamentId === t.id).map((r) => ({ status: r.status }) as TournamentEntry), Date.now());
+      if (block) throw new Error(block);
+    }
+    addTournamentTeamsDemo(t.id, [teamId], 'confirmed', categoryId);
+    return 'joined';
+  }
+  const { data, error } = await supabase.rpc('redeem_tournament_invite', { p_token: token, p_team: teamId, p_category: categoryId ?? null });
+  if (isMissingSchema(error)) throw new NeedsDbUpdateError();
+  if (error) throw new Error(error.message);
+  return data === 'already' ? 'already' : 'joined';
 }
 
 /* ------------------------- Multi-sport contingents ------------------------ */

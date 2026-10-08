@@ -11,7 +11,7 @@
  *  manager/captain contact who gets invited to claim the team & manage its
  *  squad (a team-claim invite → join link, sent by email / WhatsApp / SMS). */
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Switch, Linking, Platform, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -22,8 +22,11 @@ import { RegistrationBanner } from '../components/RegistrationBanner';
 import { ClubQuickPick } from '../components/ClubQuickPick';
 import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
-import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData } from '../data/hooks';
-import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, setTournamentTeamCheckIn, getTeamLeaders, enterOrgHousesAsTeams } from '../data/repos';
+import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategories, useLeagueData, useCaptainships } from '../data/hooks';
+import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, setTournamentTeamCheckIn, getTeamLeaders, enterOrgHousesAsTeams, getLiveTournamentInvite, setTournamentInvite, getTeamsSetup, canManageTeam, getMyPlayerId, isNeedsDbUpdate } from '../data/repos';
+import { filterTeams } from '../core/teamSearch';
+import { tournamentInviteMessage, tournamentJoinLink } from '../core/tournamentInvite';
+import { confirmAction, notice } from '../core/confirm';
 import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
 import { notify } from '../core/notifications';
@@ -32,6 +35,9 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const PALETTE = ['#FF5C5C', '#4DA3FF', '#3DDC97', '#FFB454', '#B98AFF', '#FF8AC4'];
+/** Chips shown before "Show all N" — a school meet can have 60 teams. */
+const CHIP_CAP = 30;
+const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 export default function TournamentTeamsScreen() {
   const nav = useNavigation<Nav>();
@@ -90,6 +96,18 @@ export default function TournamentTeamsScreen() {
   const [mgrEmail, setMgrEmail] = useState('');
   // Confirmation shown after a team is added (with an optional share-invite CTA).
   const [added, setAdded] = useState<{ note: string; link?: string; phone?: string; name?: string; context?: string } | null>(null);
+  // Quick search over the team chips.
+  const [query, setQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  // Join link: a code, null = OFF, undefined = loading / database predates it.
+  const [inviteToken, setInviteToken] = useState<string | null | undefined>(undefined);
+  const [inviteNeedsDb, setInviteNeedsDb] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // Confirmed rows: next-step subtitle + which teams I may edit.
+  const [setup, setSetup] = useState<Record<string, { hasCaptain: boolean; players: number }>>({});
+  const [manageable, setManageable] = useState<Set<string>>(new Set());
+  const { isCaptain } = useCaptainships();
 
   // Seed the selection from what's confirmed in the active division — but only
   // until the user edits it, so a background refetch doesn't clobber in-progress
@@ -107,6 +125,66 @@ export default function TournamentTeamsScreen() {
     if (tourSports.length && !tourSports.includes(sport)) setSport(tourSports[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
+
+  // The tournament's join link (organiser).
+  useEffect(() => {
+    let on = true;
+    void getLiveTournamentInvite(params.tournamentId).then((t) => {
+      if (!on) return;
+      setInviteToken(t);
+      if (t === undefined) setInviteNeedsDb(true);
+    });
+    return () => { on = false; };
+  }, [params.tournamentId]);
+
+  // Next step per confirmed team ("No captain yet" / "No players yet") and
+  // whether I may edit it (the server decides — organisers can't edit teams
+  // they don't manage).
+  const confirmedKey = confirmedInScope.map((e) => e.team.id).join(',');
+  useEffect(() => {
+    const ids = confirmedKey ? confirmedKey.split(',') : [];
+    if (!ids.length) { setSetup({}); setManageable(new Set()); return; }
+    let on = true;
+    void getTeamsSetup(ids).then((r) => on && setSetup(r));
+    void (async () => {
+      const myPlayerId = await getMyPlayerId(profile?.id);
+      const oks = await Promise.all(ids.map((id) =>
+        canManageTeam(id, { profileId: profile?.id, myPlayerId, role: profile?.role, isCaptainStore: isCaptain(id) }).catch(() => false)));
+      if (on) setManageable(new Set(ids.filter((_, i) => oks[i])));
+    })();
+    return () => { on = false; };
+  }, [confirmedKey, profile?.id, profile?.role, isCaptain, tick]);
+
+  async function toggleInvite(on: boolean) {
+    setInviteBusy(true); setCopied(false);
+    try {
+      setInviteToken(await setTournamentInvite(params.tournamentId, on));
+    } catch (e) {
+      if (isNeedsDbUpdate(e)) { setInviteNeedsDb(true); setInviteToken(undefined); }
+      else notice('Couldn’t change the join link', errMsg(e, 'Please try again.'));
+    } finally { setInviteBusy(false); }
+  }
+  async function copyInviteLink(token: string) {
+    const link = tournamentJoinLink(token);
+    const clip = Platform.OS === 'web' && typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+    try {
+      if (clip) { await clip.writeText(link); setCopied(true); return; }
+      await Share.share({ message: link });
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') return;
+      notice('Couldn’t copy the link', link);
+    }
+  }
+  const shareInviteWhatsApp = (token: string) => {
+    const msg = tournamentInviteMessage({ tournamentName: tournament?.name ?? 'our tournament', inviterName: profile?.fullName, token });
+    void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+  };
+
+  // Teams with fixtures in this tournament — removing those loses them from the
+  // list while their matches remain; Withdraw is the right tool.
+  // (Demo data keys pickers by `${sport}-${shortName}`; live ids match directly.)
+  const withFixtures = (teamId: string) => matches.some((m) => [m.homeTeam, m.awayTeam].some((t) => !!t && (t.id === teamId || `${m.sport}-${t.shortName}` === teamId)));
+  const tourName = tournament?.name ?? 'the tournament';
 
   const pickSport = (s: SportId) => { setSport(s); setDirty(false); };
   const pickCategory = (id: string) => { setActiveCatId(id); setDirty(false); setAdded(null); };
@@ -172,6 +250,12 @@ export default function TournamentTeamsScreen() {
   // Organizer acts on a request/invite. `confirm` → the team is in; otherwise the
   // entry is dropped. Either way the team's captain is notified of the outcome.
   async function decide(entry: TournamentEntry, confirm: boolean) {
+    if (!confirm) {
+      const ok = entry.status === 'invited'
+        ? await confirmAction(`Cancel ${entry.team.name}’s invite?`, `${entry.team.name} won’t be able to accept and will be dropped from ${tourName}.`, 'Cancel invite', true)
+        : await confirmAction(`Decline ${entry.team.name}?`, `Their request to join ${tourName} will be turned down.`, 'Decline', true);
+      if (!ok) return;
+    }
     setError(null); setBusy(true);
     try {
       if (confirm) await setTournamentTeamStatus(params.tournamentId, entry.team.id, 'confirmed');
@@ -185,19 +269,24 @@ export default function TournamentTeamsScreen() {
       }
       setTick((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update the entry');
+      notice('Couldn’t update the entry', errMsg(e, 'Please try again.'));
     } finally { setBusy(false); }
   }
 
   // Soft lifecycle change (withdraw a confirmed team, or reinstate a withdrawn one)
   // — keeps the entry + its history, unlike a hard remove.
   async function changeStatus(entry: TournamentEntry, status: 'confirmed' | 'withdrawn') {
+    if (status === 'withdrawn' && !(await confirmAction(
+      `Withdraw ${entry.team.name}?`,
+      `${entry.team.name} is pulled out of ${tourName}: kept for the record, out of the fixtures. You can reinstate it later.`,
+      'Withdraw', true,
+    ))) return;
     setError(null); setBusy(true);
     try {
       await setTournamentTeamStatus(params.tournamentId, entry.team.id, status);
       setTick((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update the entry');
+      notice('Couldn’t update the entry', errMsg(e, 'Please try again.'));
     } finally { setBusy(false); }
   }
   // Match-day check-in: tap to mark a team as arrived (tap again to undo).
@@ -207,25 +296,38 @@ export default function TournamentTeamsScreen() {
       await setTournamentTeamCheckIn(params.tournamentId, entry.team.id, !entry.checkedInAt);
       setTick((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update check-in');
+      notice('Couldn’t update check-in', errMsg(e, 'Please try again.'));
     } finally { setBusy(false); }
   }
   // Hard-remove an entry (used on a withdrawn team the organizer wants gone).
   async function removeEntry(entry: TournamentEntry) {
+    const hint = withFixtures(entry.team.id)
+      ? `\n\n${entry.team.name} has fixtures here — keeping it Withdrawn keeps its record.`
+      : '';
+    if (!(await confirmAction(`Remove ${entry.team.name} from ${tourName}?`, `It’s dropped from the list (the team itself isn’t deleted).${hint}`, 'Remove', true))) return;
     setError(null); setBusy(true);
     try {
       await removeTournamentTeam(params.tournamentId, entry.team.id);
       setTick((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove the entry');
+      notice('Couldn’t remove the team', errMsg(e, 'Please try again.'));
     } finally { setBusy(false); }
   }
 
   async function save() {
+    const added = selected.filter((id) => !original.includes(id));
+    const removed = original.filter((id) => !selected.includes(id));
+    if (removed.length) {
+      const nameOf = (id: string) => allTeams.find((t) => t.id === id)?.name ?? entryByTeam.get(id)?.team.name ?? 'A team';
+      const playing = removed.filter(withFixtures).map(nameOf);
+      const title = removed.length === 1 ? `Remove ${nameOf(removed[0])} from ${tourName}?` : `Remove ${removed.length} teams from ${tourName}?`;
+      const hint = playing.length
+        ? `\n\n${playing.join(', ')} ${playing.length === 1 ? 'has' : 'have'} fixtures here — use Withdraw instead to keep ${playing.length === 1 ? 'its' : 'their'} results.`
+        : '';
+      if (!(await confirmAction(title, `They’re dropped from the list (the teams themselves aren’t deleted).${hint}`, 'Remove', true))) return;
+    }
     setError(null); setBusy(true);
     try {
-      const added = selected.filter((id) => !original.includes(id));
-      const removed = original.filter((id) => !selected.includes(id));
       if (added.length) await addTournamentTeams(params.tournamentId, added, entryMode, activeCat ?? undefined);
       for (const id of removed) await removeTournamentTeam(params.tournamentId, id);
       // Invited teams: let each captain know they've been invited to accept.
@@ -240,7 +342,8 @@ export default function TournamentTeamsScreen() {
       setTick((n) => n + 1);
       nav.goBack();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save participants');
+      setTick((n) => n + 1);
+      notice('Couldn’t save participants', errMsg(e, 'Please try again.'));
     } finally { setBusy(false); }
   }
 
@@ -283,6 +386,32 @@ export default function TournamentTeamsScreen() {
         )}
 
         {tournament && <RegistrationBanner tournament={tournament} enteredCount={enteredCount} />}
+
+        {/* Join link: captains enter their own team from one WhatsApp link (or
+            type its code under "Join a team"). Entries are confirmed at once. */}
+        {pMode === 'team' && (inviteNeedsDb ? (
+          <Text style={textStyles.muted}>Join by link · Needs the latest database update</Text>
+        ) : inviteToken !== undefined && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <View style={st.rowBetween}>
+              <Text style={[textStyles.body, st.flex1]}>🔗 Teams can join by link</Text>
+              <Switch value={!!inviteToken} onValueChange={(v) => void toggleInvite(v)} disabled={inviteBusy} accessibilityLabel="Teams can join by link" />
+            </View>
+            {inviteToken ? (
+              <>
+                <Text style={textStyles.muted}>Captains open the link (or type the code under “Join a team”) and pick their team — it’s in at once.</Text>
+                <Text style={st.code} selectable>{inviteToken}</Text>
+                <View style={st.chips}>
+                  <Button label="💬 WhatsApp" variant="ghost" onPress={() => shareInviteWhatsApp(inviteToken)} />
+                  <Button label={copied ? 'Copied ✓' : 'Copy link'} variant="ghost" onPress={() => void copyInviteLink(inviteToken)} />
+                </View>
+                <Text style={textStyles.muted}>Turn this off once every team is in.</Text>
+              </>
+            ) : (
+              <Text style={textStyles.muted}>Off — turn it on to share one link every captain can use to enter their team.</Text>
+            )}
+          </Card>
+        ))}
 
         {/* Lifecycle gate: requests to join (approve/decline), pending invites
             (confirm/cancel), and withdrawals (reinstate/remove). Only confirmed
@@ -340,7 +469,21 @@ export default function TournamentTeamsScreen() {
             </Text>
             {confirmedInScope.map((e) => (
               <View key={e.team.id} style={st.entryRow}>
-                <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.checkedInAt ? '✅ ' : ''}{e.team.name}</Text>
+                <View style={st.flex1}>
+                  <Text style={textStyles.body} numberOfLines={1}>{e.checkedInAt ? '✅ ' : ''}{e.team.name}</Text>
+                  {pMode === 'team' && (() => {
+                    const s = setup[e.team.id];
+                    const next = !s ? null : !s.hasCaptain ? 'No captain yet' : s.players === 0 ? 'No players yet' : null;
+                    return next || manageable.has(e.team.id) ? (
+                      <Text style={textStyles.muted} numberOfLines={1}>
+                        {next}{next && manageable.has(e.team.id) ? ' · ' : ''}
+                        {manageable.has(e.team.id) && (
+                          <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('EditTeam', { teamId: e.team.id })}>Edit</Text>
+                        )}
+                      </Text>
+                    ) : null;
+                  })()}
+                </View>
                 <SelectChip label={e.checkedInAt ? 'Checked in' : 'Check in'} active={!!e.checkedInAt} onPress={() => void toggleCheckIn(e)} />
                 <Button label="Withdraw" variant="ghost" onPress={() => changeStatus(e, 'withdrawn')} disabled={busy} />
               </View>
@@ -400,13 +543,27 @@ export default function TournamentTeamsScreen() {
 
         {pickable.length === 0 ? (
           <Text style={textStyles.muted}>No {sportName} {nounPl} to add yet. Add one below.</Text>
-        ) : (
-          <View style={st.chips}>
-            {pickable.map((t) => (
-              <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggle(t.id)} />
-            ))}
-          </View>
-        )}
+        ) : (() => {
+          const hits = filterTeams(pickable, query, selected);
+          const shown = showAll ? hits : hits.slice(0, CHIP_CAP);
+          return (
+            <>
+              <TextField label="" value={query} onChange={(v) => { setQuery(v); setShowAll(false); }} placeholder={`Search ${nounPl}`} autoCapitalize="none" />
+              {hits.length === 0 ? (
+                <Text style={textStyles.muted}>No {nounPl} match “{query.trim()}”.</Text>
+              ) : (
+                <View style={st.chips}>
+                  {shown.map((t) => (
+                    <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggle(t.id)} />
+                  ))}
+                </View>
+              )}
+              {hits.length > shown.length && (
+                <Text style={st.link} accessibilityRole="button" onPress={() => setShowAll(true)}>Show all {hits.length}</Text>
+              )}
+            </>
+          );
+        })()}
 
         {/* Inline add-a-team so an organizer can build the roster without leaving. */}
         {adding ? (
@@ -492,4 +649,5 @@ const st = StyleSheet.create({
   hint: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '600' },
   swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'transparent', overflow: 'hidden' },
   swatchActive: { borderColor: theme.colors.text },
+  code: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '800', letterSpacing: 2 },
 });

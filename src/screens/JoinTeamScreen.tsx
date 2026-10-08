@@ -12,6 +12,7 @@ import { Card, Button, TextField, ScreenTitle, FormError, textStyles } from '../
 import { useAuth } from '../core/auth';
 import { getInvite, claimInvite } from '../data/repos';
 import { captainStore } from '../data/captainStore';
+import { parseTournamentToken } from '../core/tournamentInvite';
 import type { TeamInvite } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -30,6 +31,9 @@ export default function JoinTeamScreen() {
     setError(null);
     setInvite(null);
     if (!code.trim()) return setError('Enter an invite code.');
+    // A tournament code (T-XXXXXX) works here like a PIN → enter a team in it.
+    const tToken = parseTournamentToken(code);
+    if (tToken) return nav.navigate('JoinTournament', { token: tToken });
     setBusy(true);
     let inv: TeamInvite | null = null;
     try { inv = await getInvite(code); }

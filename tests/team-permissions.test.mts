@@ -17,6 +17,16 @@ test('canManageTeamLocal: plain player and no player are refused', () => {
   assert.equal(canManageTeamLocal({}), false);
 });
 
+test('canManageTeamLocal: a team admin may manage; adminIds of others or pre-migration may not', () => {
+  assert.equal(canManageTeamLocal({ role: 'player', myPlayerId: 'p3', leaders: { captainId: 'p1', adminIds: ['p2', 'p3'] } }), true);
+  assert.equal(canManageTeamLocal({ role: 'player', myPlayerId: 'p9', leaders: { captainId: 'p1', adminIds: ['p2', 'p3'] } }), false);
+  assert.equal(canManageTeamLocal({ role: 'player', myPlayerId: 'p3', leaders: { captainId: 'p1', adminIds: undefined } }), false);
+});
+
+test('nextLeaders keeps adminIds', () => {
+  assert.deepEqual(nextLeaders({ adminIds: ['x'] }, 'captainId', 'a'), { adminIds: ['x'], captainId: 'a' });
+});
+
 test('nextLeaders: toggle on and off', () => {
   assert.deepEqual(nextLeaders({}, 'captainId', 'a'), { captainId: 'a' });
   assert.deepEqual(nextLeaders({ captainId: 'a' }, 'captainId', 'a'), { captainId: undefined });

@@ -2,7 +2,7 @@
  * Who may manage a team's squad (add/remove players, captain/VC, roles, invite
  * link). The server decides (SQL `can_manage_team`); this pure rule is the demo
  * and offline fallback, mirroring it: organisers/support, the captain or VC,
- * anyone the captain store marks as captain, or a club admin.
+ * a team admin (adminIds), anyone the captain store marks as captain, or a club admin.
  */
 import type { Role, TeamLeadership } from './types';
 
@@ -17,7 +17,7 @@ export function canManageTeamLocal(ctx: {
   if (ctx.isCaptainStore || ctx.isClubAdmin) return true;
   const me = ctx.myPlayerId;
   if (!me) return false;
-  return ctx.leaders?.captainId === me || ctx.leaders?.viceCaptainId === me;
+  return ctx.leaders?.captainId === me || ctx.leaders?.viceCaptainId === me || !!ctx.leaders?.adminIds?.includes(me);
 }
 
 /** Tapping "Make captain" / "Make vice-captain": toggles that role for the

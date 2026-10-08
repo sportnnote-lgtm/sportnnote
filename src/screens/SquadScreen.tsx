@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
 import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, getMyPlayerId } from '../data/repos';
+import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, setTeamAdmins, getMyPlayerId, getTeams } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { useCaptainships, useTeamPermission } from '../data/hooks';
 import { nextLeaders } from '../core/teamPermissions';
@@ -32,6 +32,8 @@ export default function SquadScreen() {
   const [busy, setBusy] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [leaders, setLeaders] = useState<TeamLeadership>({});
+  // Set when this is a club's sport team — its admins live on the club page.
+  const [clubId, setClubId] = useState<string | null>(null);
   const { isCaptain } = useCaptainships();
   const captain = isCaptain(teamId);
   // The server decides who may edit; null = still checking (stay read-only).
@@ -43,6 +45,7 @@ export default function SquadScreen() {
   const load = useCallback(() => {
     let on = true;
     getTeamLeaders(teamId).then((l) => on && setLeaders(l));
+    getTeams().then((all) => on && setClubId(all.find((t) => t.id === teamId)?.clubId ?? null)).catch(() => undefined);
     // The same roster the match screens use (explicit roster, else house members).
     getTeamSummary(teamId).then(async (t) => {
       if (!on || !t) return;
@@ -84,6 +87,25 @@ export default function SquadScreen() {
     }
   };
 
+  // Team admins share squad duties with the captain (several allowed; an admin
+  // can also be captain). Player ids, so unclaimed players work too.
+  const toggleAdmin = async (playerId: string) => {
+    const prev = leaders;
+    const cur = prev.adminIds ?? [];
+    const isAdmin = cur.includes(playerId);
+    const next = { ...prev, adminIds: isAdmin ? cur.filter((x) => x !== playerId) : [...cur, playerId] };
+    const iLoseIt = isAdmin && playerId === myPlayerId && prev.captainId !== myPlayerId && prev.viceCaptainId !== myPlayerId;
+    if (iLoseIt && !(await confirmAction('Step down as admin?', `You’ll stop managing ${team?.name ?? 'this team'}. Continue?`, 'Continue', true))) return;
+    setLeaders(next);
+    try {
+      await setTeamAdmins(teamId, next.adminIds);
+      if (iLoseIt) refresh();
+    } catch (e) {
+      setLeaders(prev);
+      notice('Couldn’t update admins', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
+
   if (!team) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -98,6 +120,12 @@ export default function SquadScreen() {
         <ScreenTitle title={`${team.name} squad`} subtitle={`${plural(squad.length, 'player')} · ${team.sports.map((s) => getSport(s).icon).join(' ')}`} />
 
         {captain && <Text style={st.captain}>✓ You’re the captain of {team.name}</Text>}
+        {canManage && (
+          <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('EditTeam', { teamId })}>✎ Edit team</Text>
+        )}
+        {canManage && clubId && (
+          <Text style={textStyles.muted} onPress={() => nav.navigate('ClubHome', { clubId })}>Admins are set on the club page ›</Text>
+        )}
         {canManage === false && <Text style={textStyles.muted}>Only the captain, vice-captain or team admins can edit this squad.</Text>}
 
         {/* Adding players is this page's main job — first, and already open. */}
@@ -116,6 +144,10 @@ export default function SquadScreen() {
           squad.map((p) => {
             const isCap = leaders.captainId === p.id;
             const isVice = leaders.viceCaptainId === p.id;
+            const isAdmin = !!leaders.adminIds?.includes(p.id);
+            // Admin chip: managers only; hidden before migration 0042 (adminIds
+            // undefined) and for club teams (admins live on the club page).
+            const showAdmin = !!canManage && leaders.adminIds !== undefined && !clubId;
             return (
               <Card key={p.id} style={{ gap: theme.spacing(2) }}>
                 <View style={st.playerRow}>
@@ -133,6 +165,7 @@ export default function SquadScreen() {
                   ) : isVice ? (
                     <Pill label="VC" color={theme.colors.surfaceAlt} textColor={theme.colors.accent} />
                   ) : null}
+                  {isAdmin ? <Pill label="Admin" color={theme.colors.surfaceAlt} textColor={theme.colors.primary} /> : null}
                 </View>
                 {/* Always-available re-share so a captain/coach can remind anyone who
                     hasn't installed yet — WhatsApp or SMS, from the team squad. */}
@@ -156,6 +189,16 @@ export default function SquadScreen() {
                   >
                     {isVice ? '★ Vice-captain' : 'Make vice-captain'}
                   </Text>
+                  {showAdmin && (
+                    <Text
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isAdmin }}
+                      style={[st.leaderBtn, isAdmin && st.leaderBtnOn]}
+                      onPress={() => void toggleAdmin(p.id)}
+                    >
+                      {isAdmin ? '★ Admin' : 'Make admin'}
+                    </Text>
+                  )}
                 </View>}
               </Card>
             );
