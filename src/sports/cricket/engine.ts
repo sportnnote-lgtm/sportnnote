@@ -172,15 +172,64 @@ export const oversBowled = (s: CricketState) => Math.floor(s.scores[s.battingSid
 export const inPowerplay = (s: CricketState) =>
   s.powerplayOvers > 0 && !s.ended && oversBowled(s) < s.powerplayOvers;
 
-/** Auto commentary for a delivery. */
-function commentary(kind: 'runs' | 'wicket' | 'extra', value: number, batter?: string, bowler?: string): string {
+/** Auto commentary for a delivery. `isBoundary` (parity #15): only a real
+ *  boundary reads "FOUR!"/"SIX!" — an all-run 4 or overthrows read as runs. */
+function commentary(kind: 'runs' | 'wicket' | 'extra', value: number, batter?: string, bowler?: string, isBoundary = value === 4 || value === 6, overthrows = 0, allRun = false): string {
   const b = batter ?? 'the batter';
   if (kind === 'wicket') return `${bowler ? bowler + ' strikes — ' : ''}${b} departs`;
   if (kind === 'extra') return 'extra, free run';
   if (value === 0) return `${b} defends, no run`;
-  if (value === 4) return `FOUR! ${b} finds the boundary`;
-  if (value === 6) return `SIX! ${b} goes downtown`;
+  if (isBoundary && value === 4) return `FOUR! ${b} finds the boundary`;
+  if (isBoundary && value === 6) return `SIX! ${b} goes downtown`;
+  if (overthrows > 0) return `${b} gets ${value} — ${overthrows} of them overthrows`;
+  if (allRun) return `${b} runs ${value} — all run`;
   return `${b} works it for ${value}`;
+}
+
+// ─── Run entry helpers (parity #15) ───────────────────────────────────────────
+
+/** Runs on one ball: a whole number 0–99 (typo guard). Used for every runs payload. */
+export const clampRuns = (n: unknown): number => Math.min(99, Math.max(0, Math.floor(Number(n) || 0)));
+
+/** Was this many off-the-bat runs a boundary? An explicit `boundary` flag wins;
+ *  a MISSING flag is a legacy event → a 4 or 6 is a boundary (replays unchanged).
+ *  Only a 4 or 6 can be a boundary, and overthrows are never a batter's four. */
+export const isBoundaryHit = (r: number, boundary: unknown, overthrows = 0): boolean =>
+  (r === 4 || r === 6) && overthrows <= 0 && (boundary === undefined || boundary === null ? true : boundary === true);
+
+/** Over-strip chip for runs off the bat: a boundary '4'/'6'; overthrows '5ot';
+ *  an all-run 4/6 '4r'/'6r'; otherwise the number. */
+export function runSymbol(r: number, isBoundary: boolean, overthrows = 0): string {
+  if (isBoundary && (r === 4 || r === 6)) return String(r);
+  if (overthrows > 0) return `${r}ot`;
+  if (r === 4 || r === 6) return `${r}r`;
+  return String(r);
+}
+
+/** The extra penalty for a wide / no-ball (standard 1; local rules — #14 — may
+ *  change it). The one place the "1 +" lives. */
+export const penalty = (kind: 'wide' | 'noball', rules?: Pick<CricketRules, 'wideRuns' | 'noBallRuns'>): number =>
+  kind === 'noball' ? (rules?.noBallRuns ?? 1) : (rules?.wideRuns ?? 1);
+
+/** Runs conceded on a single ball, decoded from its over-strip symbol
+ *  (e.g. '4'→4, '5ot'→5, '4r'→4, '2+W'→2, 'wd'→1, '3wd'→3, '2nb'→3, 'lb2'→2,
+ *  'W'/'0'→0). `rules`: the penalties in force (#14; default standard). A wide
+ *  with runs already carries its total ('3wd'); a no-ball carries the runs only. */
+export function ballRuns(sym: string, rules?: Pick<CricketRules, 'wideRuns' | 'noBallRuns'>): number {
+  if (sym.endsWith('nb')) return penalty('noball', rules) + (parseInt(sym, 10) || 0);
+  if (sym === 'wd') return penalty('wide', rules);
+  if (sym.startsWith('lb')) return parseInt(sym.slice(2), 10) || 1;
+  if (sym.startsWith('b')) return parseInt(sym.slice(1), 10) || 1;
+  return parseInt(sym, 10) || 0; // '4', '5ot', '4r', '2+W', 'W', '3wd'
+}
+
+/** Theme-free tone of an over-strip chip: a wicket, a real boundary ('4'/'6'
+ *  only — not '4r'/'5ot'), an extra, or plain runs. UI maps it to a colour. */
+export function symbolTone(sym: string): 'wicket' | 'boundary' | 'extra' | 'plain' {
+  if (sym === 'W' || sym.endsWith('W')) return 'wicket';
+  if (sym === '4' || sym === '6') return 'boundary';
+  if (sym.endsWith('wd') || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb')) return 'extra';
+  return 'plain';
 }
 
 /** Scorecard dismissal text, e.g. "c Veer b Ishaan", "lbw b Ishaan", "run out (Veer)". */
@@ -415,26 +464,36 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
 
   switch (a.type) {
     case 'RUNS': {
-      const r = Number(a.payload?.runs ?? 0);
+      // Payload { runs, boundary?, overthrows? } (parity #15). A missing
+      // `boundary` is a legacy event: a 4 or 6 is a boundary.
+      const r = clampRuns(a.payload?.runs);
+      const ot = Math.min(r, clampRuns(a.payload?.overthrows));
+      const isBoundary = isBoundaryHit(r, a.payload?.boundary, ot);
       const balls = cur.balls + 1;
       seq += 1;
+      const runsLabel = `${r} run${r === 1 ? '' : 's'}`;
+      const label = isBoundary ? (r === 4 ? 'FOUR' : 'SIX')
+        : ot > 0 ? `${runsLabel} (incl. ${ot} overthrow${ot === 1 ? '' : 's'})`
+        : r === 4 || r === 6 ? `${runsLabel} (all run)`
+        : runsLabel;
       const next: CricketState = {
         ...s,
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, balls } },
-        batting: bumpBat({ runs: r, balls: 1, fours: r === 4 ? 1 : 0, sixes: r === 6 ? 1 : 0 }),
+        batting: bumpBat({ runs: r, balls: 1, fours: isBoundary && r === 4 ? 1 : 0, sixes: isBoundary && r === 6 ? 1 : 0 }),
         bowling: bumpBowl({ runs: r, balls: 1 }),
-        thisOver: [...baseOver, r === 4 ? '4' : r === 6 ? '6' : String(r)],
+        thisOver: [...baseOver, runSymbol(r, isBoundary, ot)],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label: r === 4 ? 'FOUR' : r === 6 ? 'SIX' : `${r} run${r === 1 ? '' : 's'}`, detail: commentary('runs', r, info.strikerName, info.bowlerName), side: bat, tone: r === 4 || r === 6 ? 'boundary' : undefined }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label, detail: commentary('runs', r, info.strikerName, info.bowlerName, isBoundary, ot, a.payload?.boundary === false && r >= 4), side: bat, tone: isBoundary ? 'boundary' : undefined }],
         seq,
       };
       // Strike rotation: odd runs swap ends, and the end of an over swaps ends.
       // Both happening (a single off the last ball) cancel out — hence XOR.
+      // (A boundary overthrow adds 4 — even — so parity = runs actually run.)
       return afterLegalBall(next, (r % 2 === 1) !== overEnd);
     }
     case 'BYES':
     case 'LEGBYES': {
-      const r = Math.max(1, Number(a.payload?.runs ?? 1));
+      const r = Math.max(1, a.payload?.runs === undefined ? 1 : clampRuns(a.payload?.runs));
       const isLeg = a.type === 'LEGBYES';
       // Disabled by local rules → rejected here, so voice scoring can't bypass it.
       // (Legacy logs have standard rules, so they replay identically.)
@@ -533,7 +592,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       seq += 1;
       // Local rules (#14): the penalty (standard 1) and whether it counts as a
       // ball (standard: never — no over progress). Standard rules → today's maths.
-      const pen = isNoBall ? R.noBallRuns : R.wideRuns;
+      const pen = penalty(isNoBall ? 'noball' : 'wide', R);
       const legal = isNoBall ? R.noBallLegal : R.wideLegal;
       const penTag = pen === 1 ? '' : ` (${pen} run${pen === 1 ? '' : 's'})`;
       // A free hit after a no-ball (if the rules give one); a pending free hit
@@ -548,7 +607,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       // count it). The penalty stands; any completed runs count (off the bat on a
       // no-ball, as extras on a wide); no bowler credit.
       if (a.payload?.runout) {
-        const completed = Math.max(0, Number(a.payload?.runs ?? 0));
+        const completed = clampRuns(a.payload?.runs);
         const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
         const outId = batterOut === 'nonstriker' ? s.nonStrikerId : strikerId;
         const outName = batterOut === 'nonstriker' ? s.nonStrikerName : strikerName;
@@ -585,11 +644,14 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         // No-ball: the penalty, PLUS runs off the bat (credited to the striker) AND/OR
         // byes run without hitting (team extras, not charged to the bowler). The
         // striker faces a no-ball (counts as a ball faced) and gets a free hit next.
-        const offBat = Math.max(0, Number(a.payload?.runs ?? 0));
-        const byes = Math.max(0, Number(a.payload?.byes ?? 0));
+        const offBat = clampRuns(a.payload?.runs);
+        const byes = clampRuns(a.payload?.byes);
         const total = pen + offBat + byes;
         const ran = offBat + byes; // runs run between the wickets → strike parity
-        const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: offBat === 4 ? 1 : 0, sixes: offBat === 6 ? 1 : 0 });
+        // `boundary?` (parity #15): same legacy fallback as RUNS — a 4/6 off the
+        // bat without the flag is a boundary; `boundary: false` = all run.
+        const nbBoundary = isBoundaryHit(offBat, a.payload?.boundary);
+        const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: nbBoundary && offBat === 4 ? 1 : 0, sixes: nbBoundary && offBat === 6 ? 1 : 0 });
         const sym = `${ran > 0 ? ran : ''}nb`;
         const label = `No ball${penTag}${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''}${R.freeHit ? ' — free hit' : ''}`;
         let next: CricketState = legalBits({
@@ -609,7 +671,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       }
       // Wide: the penalty PLUS any runs the batsmen run (byes on the wide, or a wide
       // to the boundary = 4). All are extras charged to the bowler; no ball is faced.
-      const wideRuns = Math.max(0, Number(a.payload?.runs ?? 0));
+      const wideRuns = clampRuns(a.payload?.runs);
       const total = pen + wideRuns;
       const sym = wideRuns > 0 ? `${total}wd` : 'wd';
       let next: CricketState = legalBits({

@@ -26,6 +26,7 @@ import { cricketVoice } from '../voiceParsers';
 import {
   init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
+  clampRuns, ballRuns, symbolTone, penalty,
 } from './engine';
 import type { CricketState, DismissalKind, Innings } from './engine';
 import { resourcePct, revisedTarget } from './dls';
@@ -192,11 +193,37 @@ const DISMISSALS: DismissalKind[] = ['bowled', 'caught', 'lbw', 'stumped', 'runo
 const needsFielder = (k: DismissalKind) => k === 'caught' || k === 'runout';
 const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'retired' || k === 'timedout';
 
+/** A rare run value (parity #15): digits-only field + Add, 0–99. Common values
+ *  stay one-tap buttons; this is only for the odd 9 or Wd+7. */
+function RunsInput({ onAdd, min = 0, placeholder, addLabel }: {
+  onAdd: (n: number) => void;
+  min?: number;
+  placeholder?: string;
+  /** button text for a valid value, e.g. n => `Add Wd+${n}` */
+  addLabel?: (n: number) => string;
+}) {
+  const [v, setV] = useState('');
+  const n = clampRuns(v);
+  const ok = v !== '' && n >= min;
+  return (
+    <View style={[ctrl.row, { alignItems: 'center' }]}>
+      <View style={ctrl.flex}>
+        <TextField label="" value={v} onChange={(t) => setV(t.replace(/[^0-9]/g, '').slice(0, 2))} placeholder={placeholder ?? `Other runs (${min}–99)`} autoCapitalize="none" />
+      </View>
+      <Button label={ok ? (addLabel ? addLabel(n) : `Add ${n}`) : 'Add'} variant="ghost" disabled={!ok}
+        onPress={() => { if (!ok) return; onAdd(n); setV(''); }} />
+    </View>
+  );
+}
+
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
   const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number; offExtra?: 'wide' | 'noball' } | null>(null);
-  const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | null>(null);
+  const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | 'more' | null>(null);
+  // Overthrows builder (parity #15): runs completed + overthrows.
+  const [otRan, setOtRan] = useState(0);
+  const [otOver, setOtOver] = useState<number | null>(null);
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
   const [rain, setRain] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -265,8 +292,11 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       payload: { ...extra.payload, strikerId, strikerName, bowlerId, bowlerName },
     } as ScoreAction);
 
-  const runs = (r: number) =>
-    ball({ type: 'RUNS', payload: { runs: r }, attribution: strikerId ? { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName } : undefined });
+  // `boundary`: 4/6 keys send true; all-run / overthrow / typed runs send false
+  // (parity #15). A missing flag (old clients, voice) is read as a legacy event.
+  const runs = (r: number, extra: { boundary?: boolean; overthrows?: number } = {}) =>
+    ball({ type: 'RUNS', payload: { runs: r, ...extra }, attribution: strikerId ? { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName } : undefined });
+  const closeMore = () => { setExtraMode(null); setOtRan(0); setOtOver(null); };
 
   // ----- wicket flow ----- (retired hurt isn't a wicket, so it never "all out")
   const allOut = wf?.kind !== 'retired' && cur.wickets + 1 >= state.wicketsLimit;
@@ -546,9 +576,53 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
       <View style={ctrl.row}>
         {[0, 1, 2, 3, 4, 6].map((r) => (
-          <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={ctrl.flex} disabled={!canScore} onPress={() => runs(r)} />
+          <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]} disabled={!canScore}
+            accessibilityLabel={r === 4 ? 'Four (boundary)' : r === 6 ? 'Six (boundary)' : undefined}
+            onPress={() => (r === 4 || r === 6 ? runs(r, { boundary: true }) : runs(r))} />
         ))}
+        {/* 7th key: rare run values (a compact ghost key so the pad stays one row). */}
+        <TouchableOpacity
+          style={[ctrl.flex, ctrl.moreKey, extraMode === 'more' && ctrl.moreKeyOn, !canScore && { opacity: 0.4 }]}
+          disabled={!canScore} activeOpacity={0.85} accessibilityRole="button"
+          accessibilityLabel="More runs: all run, overthrows, other" accessibilityState={{ disabled: !canScore, expanded: extraMode === 'more' }}
+          onPress={() => { const open = extraMode === 'more'; closeMore(); if (!open) setExtraMode('more'); }}>
+          <Text style={ctrl.moreKeyText} numberOfLines={1} adjustsFontSizeToFit>5·7·+</Text>
+        </TouchableOpacity>
       </View>
+
+      {extraMode === 'more' && (() => {
+        const otTotal = otRan + (otOver ?? 0);
+        const credit = otOver === 4 || otTotal === 4 ? ' · not a four' : otTotal === 6 ? ' · not a six' : '';
+        return (
+          <View style={ctrl.morePanel}>
+            <Text style={ctrl.meta}>All run — not a boundary</Text>
+            <View style={ctrl.row}>
+              {[4, 5, 7].map((n) => (
+                <Button key={n} label={`${n} runs`} color={battingColor} style={ctrl.flex}
+                  onPress={() => { runs(n, { boundary: false }); closeMore(); }} />
+              ))}
+            </View>
+            <Text style={ctrl.meta}>Overthrows — runs completed, then the overthrows</Text>
+            <View style={[ctrl.chips, { alignItems: 'center' }]}>
+              <Text style={ctrl.moreLabel}>Ran</Text>
+              {[0, 1, 2, 3].map((n) => <SelectChip key={n} label={String(n)} active={otRan === n} onPress={() => setOtRan(n)} />)}
+            </View>
+            <View style={[ctrl.chips, { alignItems: 'center' }]}>
+              <Text style={ctrl.moreLabel}>Overthrows</Text>
+              {[1, 2, 3, 4].map((n) => <SelectChip key={n} label={n === 4 ? '4 (boundary)' : String(n)} active={otOver === n} onPress={() => setOtOver(n)} />)}
+            </View>
+            {otOver ? (
+              <>
+                <Text style={ctrl.morePreview}>= {otTotal} to {strikerName ?? 'the striker'}{credit}</Text>
+                <Button label={`Add ${otTotal} run${otTotal === 1 ? '' : 's'}`} color={battingColor}
+                  onPress={() => { runs(otTotal, { boundary: false, overthrows: otOver }); closeMore(); }} />
+              </>
+            ) : null}
+            <Text style={ctrl.meta}>Any other number</Text>
+            <RunsInput onAdd={(n) => { runs(n, { boundary: false }); closeMore(); }} addLabel={(n) => `Add ${n}`} />
+          </View>
+        );
+      })()}
 
       {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
       <View style={{ gap: theme.spacing(2) }}>
@@ -560,25 +634,36 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         )}
         {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
           <View style={ctrl.row}>
-            {[1, 2, 3, 4].map((n) => (
-              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={ctrl.flex}
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={[ctrl.flex, ctrl.padKey]}
                 onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
             ))}
           </View>
+        )}
+        {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
+          <>
+            <RunsInput min={1} placeholder={`Other ${extraMode === 'lb' ? 'leg byes' : 'byes'} (1–99)`}
+              addLabel={(n) => `Add ${extraMode === 'lb' ? 'LB' : 'B'} ${n}`}
+              onAdd={(n) => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
+            <Text style={ctrl.meta}>Overthrows off a bye → add them to the byes.</Text>
+          </>
         )}
         {extraMode === 'nb' && (
           <>
             <Text style={ctrl.meta}>No ball{R.noBallRuns !== STANDARD_RULES.noBallRuns ? ` (+${R.noBallRuns})` : ''}{R.noBallLegal ? ' · counts as a ball' : ''} — runs off the bat?</Text>
             <View style={ctrl.row}>
-              {[0, 1, 2, 3, 4, 6].map((n) => (
-                <Button key={n} label={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={ctrl.flex}
-                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n } }); setExtraMode(null); }} />
+              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                <Button key={n} label={n === 0 ? 'Nb' : `+${n}`} accessibilityLabel={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
+                  // 4 and 6 are boundaries; an all-run 4 off a no-ball goes in the field below.
+                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: n === 4 || n === 6 } }); setExtraMode(null); }} />
               ))}
             </View>
+            <RunsInput placeholder="Other off the bat, all run (0–99)" addLabel={(n) => `Add Nb+${n}`}
+              onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: false } }); setExtraMode(null); }} />
             <Text style={ctrl.meta}>…or byes run off the no-ball (missed the bat)?</Text>
             <View style={ctrl.row}>
-              {[1, 2, 3, 4].map((n) => (
-                <Button key={n} label={`Nb+${n}b`} variant="ghost" style={ctrl.flex}
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Button key={n} label={`Nb+${n}b`} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', byes: n } }); setExtraMode(null); }} />
               ))}
             </View>
@@ -590,11 +675,14 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <>
             <Text style={ctrl.meta}>Wide{R.wideRuns !== STANDARD_RULES.wideRuns ? ` (+${R.wideRuns})` : ''}{R.wideLegal ? ' · counts as a ball' : ''} — any runs run (byes on the wide, or 4 if it beat the keeper)?</Text>
             <View style={ctrl.row}>
-              {[0, 1, 2, 4].map((n) => (
-                <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n}`} color={n === 4 ? theme.colors.primary : battingColor} style={ctrl.flex}
+              {[0, 1, 2, 3, 4].map((n) => (
+                // label shows the total with the wide penalty in force, e.g. Wd+3 (=4)
+                <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n} (=${penalty('wide', R) + n})`} color={n === 4 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
               ))}
             </View>
+            <RunsInput placeholder="Other runs on the wide (0–99)" addLabel={(n) => `Add Wd+${n} (=${penalty('wide', R) + n})`}
+              onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
             <Button label="🎯 …or a RUN OUT off the wide" variant="danger" disabled={!canScore}
               onPress={() => { setExtraMode(null); setWf({ kind: 'runout', offExtra: 'wide' }); }} />
           </>
@@ -1100,21 +1188,17 @@ function InningsCard({
   );
 }
 
-const overSymbolColor = (sym: string) =>
-  sym === 'W' || sym.endsWith('W') ? theme.colors.danger
-    : sym === '4' || sym === '6' ? theme.colors.primary
-    : sym.endsWith('wd') || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb') ? theme.colors.accent
-    : theme.colors.surfaceAlt;
-
-/** Runs conceded on a single ball, decoded from its over-strip symbol
- *  (e.g. '4'→4, '2+W'→2, 'wd'→1, '2nb'→3, 'lb2'→2, 'W'/'0'→0). */
-const ballRuns = (sym: string): number => {
-  if (sym.endsWith('nb')) return 1 + (parseInt(sym, 10) || 0);
-  if (sym === 'wd') return 1;
-  if (sym.startsWith('lb')) return parseInt(sym.slice(2), 10) || 1;
-  if (sym.startsWith('b')) return parseInt(sym.slice(1), 10) || 1;
-  if (sym.endsWith('W')) return parseInt(sym, 10) || 0;
-  return parseInt(sym, 10) || 0;
+/** Over-strip chip colour from the engine's `symbolTone` (so the strip, the
+ *  over editor and the engine agree on '4' vs '4r' / '5ot'). */
+const TONE_COLOR = {
+  wicket: theme.colors.danger, boundary: theme.colors.primary, extra: theme.colors.accent, plain: theme.colors.surfaceAlt,
+} as const;
+const overSymbolColor = (sym: string) => TONE_COLOR[symbolTone(sym)];
+/** Chip text + caption: '5ot' → '5' with a small 'ot'; '4r' → '4' with 'r'; '0' → '·'. */
+const chipParts = (sym: string): { main: string; cap?: string } => {
+  const m = /^(\d+)(ot|r)$/.exec(sym);
+  if (m) return { main: m[1], cap: m[2] };
+  return { main: sym === '0' ? '·' : sym };
 };
 
 const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore, onPlayer }) => {
@@ -1137,13 +1221,17 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
                 {s.thisOver.map((sym, i) => {
                   const bg = overSymbolColor(sym);
                   const neutral = bg === theme.colors.surfaceAlt;
+                  const { main, cap } = chipParts(sym);
                   return (
-                    <View key={i} style={[ctrl.ballDot, { backgroundColor: bg }, neutral && ctrl.ballDotNeutral]}>
-                      <Text style={[ctrl.ballSym, neutral && ctrl.ballSymNeutral]}>{sym === '0' ? '·' : sym}</Text>
+                    <View key={i} style={[ctrl.ballDot, { backgroundColor: bg }, neutral && ctrl.ballDotNeutral]}
+                      accessibilityLabel={cap === 'ot' ? `${main} including overthrows` : cap === 'r' ? `${main} all run` : undefined}>
+                      <Text style={[ctrl.ballSym, neutral && ctrl.ballSymNeutral]}>
+                        {main}{cap ? <Text style={ctrl.ballCap}>{cap}</Text> : null}
+                      </Text>
                     </View>
                   );
                 })}
-                <Text style={ctrl.overRuns}>{s.thisOver.reduce((a, x) => a + ballRuns(x), 0)} runs</Text>
+                <Text style={ctrl.overRuns}>{s.thisOver.reduce((a, x) => a + ballRuns(x, effectiveRules(s)), 0)} runs</Text>
               </>
             )}
           </View>
@@ -1270,7 +1358,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   LiveExtras,
   Summary: CricketSummary,
   hideScoreboard: true,
-  voice: { hints: ['four', 'six', 'dot', 'wicket', 'wide', 'two runs'], parse: cricketVoice },
+  voice: { hints: ['four', 'six', 'dot', 'wicket', 'wide', 'two runs', 'five', 'all run four'], parse: cricketVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 't20',
@@ -1399,6 +1487,16 @@ const ctrl = StyleSheet.create({
   ballDotNeutral: { borderWidth: 1, borderColor: theme.colors.border },
   ballSym: { color: '#06120D', fontSize: theme.font.tiny, fontWeight: '800' },
   ballSymNeutral: { color: theme.colors.text },
+  ballCap: { fontSize: 8, fontWeight: '700' },
+  // parity #15 — the '5·7·+' key and its panel
+  // 7 keys in one row on a phone: no side padding, equal widths
+  padKey: { paddingHorizontal: 0, minWidth: 0 },
+  moreKey: { minWidth: 0, alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing(3), paddingHorizontal: 2, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border },
+  moreKeyOn: { borderColor: theme.colors.primary, backgroundColor: theme.colors.surface },
+  moreKeyText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  morePanel: { gap: theme.spacing(2), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+  moreLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700', minWidth: 76 },
+  morePreview: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   overRuns: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', marginLeft: theme.spacing(1) },
   scTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.spacing(2) },
   // collapsible innings card

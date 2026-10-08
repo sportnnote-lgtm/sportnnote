@@ -14,7 +14,10 @@ import type { MatchEventRecord } from '../../core/types';
 import type { ScoreAction } from '../types';
 import { AMEND_TYPE, effectiveLog, type AmendOp } from '../amend.ts';
 import { effectiveRules } from './rules.ts';
-import { init, reducer, ballStamp, oversStr, alignCrease, NO_BOWLER, type CricketState, type DismissalKind } from './engine.ts';
+import {
+  init, reducer, ballStamp, oversStr, alignCrease, NO_BOWLER, clampRuns, isBoundaryHit, runSymbol, symbolTone, ballRuns as engineBallRuns,
+  type CricketState, type DismissalKind,
+} from './engine.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -123,12 +126,14 @@ export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>, widePenalty
   const p = a.payload ?? {};
   switch (a.type) {
     case 'RUNS': {
-      const r = num(p.runs);
-      return String(r);
+      // Same chip as the engine (#15): '4'/'6' boundary, '5ot' overthrows, '4r' all run.
+      const r = clampRuns(p.runs);
+      const ot = Math.min(r, clampRuns(p.overthrows));
+      return runSymbol(r, isBoundaryHit(r, p.boundary, ot), ot);
     }
     case 'BYES':
     case 'LEGBYES': {
-      const r = Math.max(1, num(p.runs, 1));
+      const r = Math.max(1, p.runs === undefined ? 1 : clampRuns(p.runs));
       return (a.type === 'LEGBYES' ? 'lb' : 'b') + (r > 1 ? r : '');
     }
     case 'WICKET': {
@@ -138,14 +143,14 @@ export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>, widePenalty
     case 'EXTRA': {
       const nb = p.kind === 'No ball';
       if (p.runout) {
-        const c = Math.max(0, num(p.runs));
+        const c = clampRuns(p.runs);
         return `${c > 0 ? c : ''}${nb ? 'nb' : 'wd'}+W`;
       }
       if (nb) {
-        const ran = Math.max(0, num(p.runs)) + Math.max(0, num(p.byes));
+        const ran = clampRuns(p.runs) + clampRuns(p.byes);
         return `${ran > 0 ? ran : ''}nb`;
       }
-      const w = Math.max(0, num(p.runs));
+      const w = clampRuns(p.runs);
       return w > 0 ? `${widePenalty + w}wd` : 'wd';
     }
     default:
@@ -156,24 +161,12 @@ export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>, widePenalty
 /** Chip text: a dot ball reads '·'. */
 export const chipLabel = (sym: string) => (sym === '0' ? '·' : sym);
 
-/** Theme-free chip tone, matching index.tsx `overSymbolColor`
- *  (wicket → danger, boundary → primary, extra → accent, plain → surfaceAlt). */
-export function overSymbolTone(sym: string): 'wicket' | 'boundary' | 'extra' | 'plain' {
-  if (sym === 'W' || sym.endsWith('W')) return 'wicket';
-  if (sym === '4' || sym === '6') return 'boundary';
-  if (sym.endsWith('wd') || sym.endsWith('nb') || sym.startsWith('b') || sym.startsWith('lb')) return 'extra';
-  return 'plain';
-}
+/** Theme-free chip tone — the engine's `symbolTone`, shared with the live
+ *  over strip (wicket → danger, boundary → primary, extra → accent, plain). */
+export const overSymbolTone = symbolTone;
 
-/** Runs conceded on a single ball, decoded from its symbol (same as index.tsx `ballRuns`). */
-export function ballRuns(sym: string): number {
-  if (sym.endsWith('nb')) return 1 + (parseInt(sym, 10) || 0);
-  if (sym === 'wd') return 1;
-  if (sym.startsWith('lb')) return parseInt(sym.slice(2), 10) || 1;
-  if (sym.startsWith('b')) return parseInt(sym.slice(1), 10) || 1;
-  if (sym.endsWith('W')) return parseInt(sym, 10) || 0;
-  return parseInt(sym, 10) || 0;
-}
+/** Runs conceded on a single ball, decoded from its symbol — the engine's `ballRuns`. */
+export const ballRuns = engineBallRuns;
 
 /** Replay an effective log (no AMEND rows) through the cricket reducer. */
 export function replayCricket(effLog: MatchEventRecord[], config?: Record<string, unknown>): CricketState {
@@ -302,7 +295,8 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
     const curType = orig.type === 'BYES' ? 'bye' : orig.type === 'LEGBYES' ? 'legbye' : 'bat';
     const t = edit.type ?? curType;
     const r = edit.runs ?? num(op.runs, t === 'bat' ? 0 : 1);
-    if (!Number.isInteger(r) || r < 0 || r > 7) return { error: 'Runs must be 0–7.' };
+    // A value already recorded (e.g. a 9 entered live, #15) is kept as-is.
+    if (!Number.isInteger(r) || r < 0 || (r > 7 && r !== num(op.runs, -1))) return { error: 'Runs must be 0–7.' };
     if (t !== 'bat' && r < 1) return { error: `A ${t === 'bye' ? 'bye' : 'leg bye'} needs at least 1 run.` };
     p.runs = r;
     const type = t === 'bat' ? 'RUNS' : t === 'bye' ? 'BYES' : 'LEGBYES';
@@ -365,7 +359,8 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
   const switching = ek !== cat;
   let r = edit.extraRuns ?? edit.runs ?? num(op.runs);
   if (switching && ek === 'wide' && !op.runout && edit.extraRuns === undefined && edit.runs === undefined) r += num(op.byes);
-  if (!Number.isInteger(r) || r < 0 || r > (ek === 'noball' ? 6 : 4)) return { error: ek === 'noball' ? 'No-ball runs must be 0–6.' : 'Wide runs must be 0–4.' };
+  const unchanged = !switching && r === num(op.runs, -1); // a recorded Wd+7 / Nb+9 (#15) survives
+  if (!Number.isInteger(r) || r < 0 || (!unchanged && r > (ek === 'noball' ? 6 : 4))) return { error: ek === 'noball' ? 'No-ball runs must be 0–6.' : 'Wide runs must be 0–4.' };
   p.kind = ek === 'noball' ? 'No ball' : 'Wide';
   p.runs = r;
   if (ek === 'wide') delete p.byes; // a wide has no off-bat/bye split — all runs are wides

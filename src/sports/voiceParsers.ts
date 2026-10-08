@@ -91,10 +91,15 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
     type, side: s.battingSide, payload: { ...payload, strikerId: s.strikerId, strikerName: s.strikerName, bowlerId: s.bowlerId, bowlerName: s.bowlerName },
   });
   const n = numberFromText(q);
-  const runsOffText = n != null && n <= 6 ? n : undefined;
+  const runsOffText = n != null && n <= 7 ? n : undefined;
 
   // Extras (contain words that overlap runs — check first).
-  if (/\bno ?ball\b/.test(q)) return [wrap('EXTRA', { kind: 'No ball', runs: runsOffText ?? 0 })];
+  if (/\bno ?ball\b/.test(q)) {
+    const nb = runsOffText ?? 0;
+    // a 4/6 off the no-ball is a boundary unless "all run" was said (parity #15)
+    const allRun = /\ball run\b|\bran\b/.test(q);
+    return [wrap('EXTRA', { kind: 'No ball', runs: nb, ...(nb === 4 || nb === 6 ? { boundary: !allRun } : {}) })];
+  }
   if (/\bwide\b/.test(q)) return [wrap('EXTRA', { kind: 'Wide' })];
   if (/\bleg ?bye/.test(q)) return [wrap('LEGBYES', { runs: runsOffText ?? 1 })];
   if (/\bbye/.test(q)) return [wrap('BYES', { runs: runsOffText ?? 1 })];
@@ -112,16 +117,22 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
     return [{ ...wrap('WICKET', { kind }), attribution: s.bowlerId && kind !== 'runout' ? { playerId: s.bowlerId, stat: 'wickets', by: 1, playerName: s.bowlerName } : undefined }];
   }
 
-  // Runs — a run word or a bare 0-6.
+  // Runs — a run word or a bare 0-7 (parity #15: "five", "seven"; "all run" /
+  // "ran four" = not a boundary; "four" / "six" / "boundary" = a boundary).
+  const allRun = /\ball run\b|\bran (four|4|six|6)\b/.test(q);
   let r: number | undefined;
   if (/\bdot\b|no run|nothing|\bzero\b/.test(q)) r = 0;
-  else if (/\bfour\b|\bboundary\b/.test(q)) r = 4;
+  else if (allRun) r = runsOffText;
+  else if (/\bfour\b|\bboundary\b/.test(q)) r = /\bsix\b/.test(q) ? 6 : 4;
   else if (/\bsix\b|\bmaximum\b/.test(q)) r = 6;
   else if (/\bsingle\b/.test(q)) r = 1;
   else if (/\bcouple\b|\bdouble\b/.test(q)) r = 2;
   else r = runsOffText;
-  const runWord = /\b(dot|no run|nothing|zero|four|boundary|six|maximum|single|couple|double|run|runs|scored?)\b/.test(q);
-  if (r != null && r >= 0 && r <= 6 && (runWord || /^\d$/.test(q.trim()))) return [{ ...wrap('RUNS', { runs: r }), attribution: s.strikerId ? { playerId: s.strikerId, stat: 'runs', by: r, playerName: s.strikerName } : undefined }];
+  const runWord = /\b(dot|no run|nothing|zero|four|boundary|six|maximum|single|couple|double|run|runs|ran|scored?)\b/.test(q);
+  if (r != null && r >= 0 && r <= 7 && (runWord || /^\d$/.test(q.trim()) || /^(five|seven)$/.test(q.trim()))) {
+    const boundaryFlag = r === 4 || r === 6 ? { boundary: !allRun } : allRun ? { boundary: false } : {};
+    return [{ ...wrap('RUNS', { runs: r, ...boundaryFlag }), attribution: s.strikerId ? { playerId: s.strikerId, stat: 'runs', by: r, playerName: s.strikerName } : undefined }];
+  }
   return null;
 }
 

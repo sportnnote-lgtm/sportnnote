@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket run entry: 5/7/custom, overthrows, all-run 4s, extras values (parity #15)
+
+- **Ask (parity queue #15):** school grounds mean 1 + 4 overthrows, run 5s, all-run 4s, Wd+3 and
+  Nb+5 — none enterable, so scorecards drifted from the paper book.
+- **Engine** (no new action types): `clampRuns` (0–99) on every runs payload; RUNS / no-ball
+  `boundary?` + `overthrows?` (missing flag = legacy, 4/6 count as boundaries, so old logs replay
+  identically — checked against HEAD on 782 seed events × 4 configs); chips `'4r'` / `'5ot'`, labels
+  "5 runs (incl. 4 overthrows)" / "4 runs (all run)"; exported `runSymbol`, `ballRuns`, `symbolTone`,
+  `penalty(kind, rules)` (#14's value in force). #06's over editor reuses them.
+- **UI:** run pad 4/6 send `boundary: true` + a `5·7·+` key → All run 4/5/7, an Overthrows builder
+  ("= 5 to Sanjay · not a four"), a 0–99 input; bye/LB 1–5 + input; wide 0–4 labelled with the
+  total (`Wd+3 (=4)`) + input; no-ball off-bat 0–6 + all-run input; over-strip ot/r captions. Voice
+  accepts 0–7, "five"/"seven", "all run".
+- **Verified:** tsc + 574 tests (19 new cricket-runs); demo 8093 on m8: overthrows, all-run 4, Wd+3,
+  Nb+5 → scorecard runs/4s/extras/bowler right; undo walks each back; fits at 375 px. Not verified:
+  native layout, voice at runtime. No migration.
+
+---
+
 ### 2026-10-09 — Cricket local rules + generic live settings card (parity #14)
 
 - **Ask (parity queue #14):** school/gully cricket plays wide = 2, no-ball counts as a ball, normal
