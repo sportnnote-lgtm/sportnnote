@@ -13,6 +13,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Friendlies: one shared pool of players in both teams; one side per match
+
+- **Founder ask:** friends often have one 20–30 player pool split into two teams on the day,
+  so the same person must be addable to both teams; the playing five differs per match.
+- **Squads:** `conflictTeamsForAdd` now returns nothing for a friendly (no tournament) — the
+  "can't play for two teams" block applies to tournaments only (message reworded).
+- **On the day, one side per match:**
+  - `MatchSquadScreen`: anyone in the other side's matchday squad shows "Playing for <team>
+    in this match" and can't be picked (also skipped by Fill starters / Copy last XI); the
+    other side is re-read right before saving, so two phones can't both pick someone.
+  - `LiveScoringScreen.applySquad`: a side without a matchday squad plays from its full
+    squad minus anyone the other side picked.
+  - `CricketLineupScreen` (batting order) and `LineupEditorScreen` (pitch): same rule.
+- Verified in demo: friendly Pool A vs Pool B → Aarav added to both → starter for Pool A →
+  Pool B's picker shows him as "Playing for Pool A", not selectable. No console errors.
+
+---
+
 ### 2026-10-08 — Minimise keeps your place, close starts fresh; lookups never hang
 
 - **Founder report:** a closed-and-reopened app still came back on the old page (wrong — only

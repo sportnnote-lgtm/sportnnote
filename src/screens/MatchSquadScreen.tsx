@@ -55,6 +55,13 @@ export default function MatchSquadScreen() {
 
   const [roster, setRoster] = useState<Player[]>([]);
   const [roles, setRoles] = useState<Record<string, Role>>({});
+  // Friendlies often share one pool of players between both teams; on the day each
+  // person plays for ONE side. Players already in the other side's matchday squad
+  // can't be picked here.
+  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const otherSide = side === 'home' ? 'away' : 'home';
+  const otherName = (side === 'home' ? awayTeamName : homeTeamName) ?? 'the other team';
+  const pickable = (p: Player) => canFieldPlayer(p) && !taken.has(p.id);
   const [lineup, setLineupState] = useState<MatchLineup | null>(null);
   const [lastSquad, setLastSquad] = useState<{ starters: string[]; subs: string[] } | null>(null);
   const [rosterNonce, setRosterNonce] = useState(0); // bumped after adding/inviting a player
@@ -71,22 +78,25 @@ export default function MatchSquadScreen() {
         setLineupState(lu);
         setLastSquad(last);
         const sq = squads[side];
+        const other = new Set([...squads[otherSide].starters, ...squads[otherSide].subs]);
+        setTaken(other);
         // Preserve any picks already made this session (e.g. after adding a player).
         setRoles((prev) => {
           const next: Record<string, Role> = {};
           rs.forEach((p) => {
-            next[p.id] = prev[p.id] ?? (sq.starters.includes(p.id) ? 'start' : sq.subs.includes(p.id) ? 'sub' : 'out');
+            next[p.id] = other.has(p.id) ? 'out' : prev[p.id] ?? (sq.starters.includes(p.id) ? 'start' : sq.subs.includes(p.id) ? 'sub' : 'out');
           });
           return next;
         });
       });
       return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [matchId, side, teamName, sport, rosterNonce])
   );
 
   // The last XI is only copyable for players still in this squad and eligible.
   const lastEligibleCount = lastSquad
-    ? [...lastSquad.starters, ...lastSquad.subs].filter((id) => roster.some((p) => p.id === id && canFieldPlayer(p))).length
+    ? [...lastSquad.starters, ...lastSquad.subs].filter((id) => roster.some((p) => p.id === id && pickable(p))).length
     : 0;
   const copyLastXI = () => {
     if (!lastSquad) return;
@@ -96,17 +106,17 @@ export default function MatchSquadScreen() {
       let starts = 0;
       for (const id of lastSquad.starters) {
         const p = roster.find((x) => x.id === id);
-        if (p && canFieldPlayer(p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
+        if (p && pickable(p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
       }
       for (const id of lastSquad.subs) {
         const p = roster.find((x) => x.id === id);
-        if (p && canFieldPlayer(p) && next[id] !== 'start') next[id] = 'sub';
+        if (p && pickable(p) && next[id] !== 'start') next[id] = 'sub';
       }
       return next;
     });
   };
 
-  const eligible = roster.filter((p) => canFieldPlayer(p));
+  const eligible = roster.filter((p) => pickable(p));
   const startCount = Object.values(roles).filter((r) => r === 'start').length;
   const subCount = Object.values(roles).filter((r) => r === 'sub').length;
   const xiFull = startCount >= playersPerSide;
@@ -114,7 +124,7 @@ export default function MatchSquadScreen() {
   const setRole = (id: string, role: Role) =>
     setRoles((r) => {
       const p = roster.find((x) => x.id === id);
-      if (p && !canFieldPlayer(p)) return r; // unverified players can't be fielded (unless the testing override is on)
+      if (p && !pickable(p)) return r; // playing for the other side, or unverified players can't be fielded (unless the testing override is on)
       if (role === 'start' && r[id] !== 'start' && startCount >= playersPerSide) return r; // XI full
       return { ...r, [id]: r[id] === role ? 'out' : role };
     });
@@ -133,8 +143,13 @@ export default function MatchSquadScreen() {
   const clearAll = () => setRoles((r) => Object.fromEntries(Object.keys(r).map((k) => [k, 'out' as Role])));
 
   async function persist(): Promise<{ starters: string[]; subs: string[] }> {
-    const starters = roster.filter((p) => roles[p.id] === 'start').map((p) => p.id);
-    const subs = roster.filter((p) => roles[p.id] === 'sub').map((p) => p.id);
+    // Re-check the other side right before saving (its squad may have been set
+    // meanwhile on another phone) — one person never plays for both sides.
+    const now = (await getMatchSquads(matchId))[otherSide];
+    const busyElsewhere = new Set([...now.starters, ...now.subs]);
+    setTaken(busyElsewhere);
+    const starters = roster.filter((p) => roles[p.id] === 'start' && !busyElsewhere.has(p.id)).map((p) => p.id);
+    const subs = roster.filter((p) => roles[p.id] === 'sub' && !busyElsewhere.has(p.id)).map((p) => p.id);
     await setMatchSquad(matchId, side, { starters, subs });
     // For pitch sports, keep a positional lineup in sync so the Lineups tab is
     // populated even if the user never opens the pitch.
@@ -212,7 +227,8 @@ export default function MatchSquadScreen() {
           roster.map((p) => {
             const role = roles[p.id] ?? 'out';
             const elig = matchEligibility(p);
-            const canField = canFieldPlayer(p); // eligible, OR the testing override is on
+            const elsewhere = taken.has(p.id);
+            const canField = canFieldPlayer(p) && !elsewhere; // eligible (or testing override) and not on the other side today
             const overridden = !elig.ok && canField; // fieldable only because of the override
             const disableStart = !canField || (role !== 'start' && xiFull);
             return (
@@ -221,7 +237,9 @@ export default function MatchSquadScreen() {
                   <Text style={[textStyles.body, !canField && st.lockedName]}>
                     {p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}
                   </Text>
-                  {!elig.ok ? (
+                  {elsewhere ? (
+                    <Text style={st.lockReason}>Playing for {otherName} in this match</Text>
+                  ) : !elig.ok ? (
                     <Text style={overridden ? st.overrideReason : st.lockReason}>
                       {overridden ? '⚠️' : '🔒'} {elig.reason}{overridden ? ' · allowed (testing)' : ''}
                     </Text>
@@ -233,7 +251,7 @@ export default function MatchSquadScreen() {
                     <Toggle label="Bench" active={role === 'sub'} color={theme.colors.accent} onPress={() => setRole(p.id, 'sub')} />
                   </View>
                 ) : (
-                  <Text style={st.lockTag}>Not eligible</Text>
+                  <Text style={st.lockTag}>{elsewhere ? 'Other side' : 'Not eligible'}</Text>
                 )}
                 {teamId ? (
                   <Text

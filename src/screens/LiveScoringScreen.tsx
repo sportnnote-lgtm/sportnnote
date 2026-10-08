@@ -222,13 +222,19 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
   // The scoring roster = the matchday squad (starters then subs) if one is set,
   // otherwise the whole team squad.
-  const applySquad = (full: Player[], squad?: { starters: string[]; subs: string[] }): Player[] => {
-    if (!squad || squad.starters.length + squad.subs.length === 0) return full;
+  // A side without a matchday squad plays from its full squad — minus anyone the
+  // other side has picked today (friendlies can share one pool of players, but a
+  // person plays for one side per match).
+  const applySquad = (full: Player[], squad?: { starters: string[]; subs: string[] }, other?: { starters: string[]; subs: string[] }): Player[] => {
+    if (!squad || squad.starters.length + squad.subs.length === 0) {
+      const busy = new Set([...(other?.starters ?? []), ...(other?.subs ?? [])]);
+      return full.filter((p) => !busy.has(p.id));
+    }
     const ids = [...squad.starters, ...squad.subs];
     return ids.map((id) => full.find((p) => p.id === id)).filter((p): p is Player => !!p);
   };
-  const homeRoster = useMemo(() => applySquad(homeFull, squads?.home), [homeFull, squads]);
-  const awayRoster = useMemo(() => applySquad(awayFull, squads?.away), [awayFull, squads]);
+  const homeRoster = useMemo(() => applySquad(homeFull, squads?.home, squads?.away), [homeFull, squads]);
+  const awayRoster = useMemo(() => applySquad(awayFull, squads?.away, squads?.home), [awayFull, squads]);
   // Only verified players can take part in scoring (under-18 → verified guardian;
   // 18+ → own verified mobile & email). Ineligible players are kept out of the
   // scoring roster & lineups so they can't be fielded or credited stats.

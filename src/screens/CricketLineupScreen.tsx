@@ -59,6 +59,8 @@ export default function CricketLineupScreen() {
 
   const roster = side === 'home' ? homeRoster : awayRoster;
   const picked = order[side];
+  // Shared friendly squads: someone in the other side's order plays for them today.
+  const otherPicked = new Set(order[side === 'home' ? 'away' : 'home']);
   const teamName = side === 'home' ? homeTeamName : awayTeamName;
   const { starters, subs } = splitBattingOrder(picked, playersPerSide);
 
@@ -67,6 +69,7 @@ export default function CricketLineupScreen() {
   // a picked player can always be removed (e.g. the Remove link passes a bare id).
   const toggle = (id: string, player?: Player) => {
     const isPicked = picked.includes(id);
+    if (!isPicked && otherPicked.has(id)) return; // one side per match
     if (!isPicked && player && !canFieldPlayer(player)) return; // can't add an unverified player (unless the testing override is on)
     setOrder((o) => {
       const cur = o[side];
@@ -138,13 +141,14 @@ export default function CricketLineupScreen() {
         <View style={st.chips}>
           {roster.length === 0 && <EmptyState icon="👥" title="No squad for this team yet" compact />}
           {roster.map((p) => {
-            const canField = canFieldPlayer(p);
+            const elsewhere = otherPicked.has(p.id) && battingNo(p.id) < 0;
+            const canField = canFieldPlayer(p) && !elsewhere;
             const no = battingNo(p.id);
             const label = no >= 0 ? `${no < playersPerSide ? no + 1 : 'S'}. ${p.fullName}` : p.fullName;
             return (
               <SelectChip
                 key={p.id}
-                label={canField ? label : `🔒 ${p.fullName}`}
+                label={elsewhere ? `${p.fullName} · other side` : canField ? label : `🔒 ${p.fullName}`}
                 active={no >= 0}
                 onPress={() => toggle(p.id, p)}
               />

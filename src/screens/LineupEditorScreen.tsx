@@ -61,7 +61,9 @@ export default function LineupEditorScreen() {
   }
 
   const slots = lineup[side];
-  const roster = side === 'home' ? homeRoster : awayRoster;
+  // Shared friendly squads: anyone already placed for the other side plays for them today.
+  const otherPlaced = new Set(lineup[side === 'home' ? 'away' : 'home'].map((s) => s.playerId).filter(Boolean));
+  const roster = (side === 'home' ? homeRoster : awayRoster).filter((p) => !otherPlaced.has(p.id));
   const assignedIds = new Set(slots.map((s) => s.playerId).filter(Boolean));
   const placedCount = slots.filter((s) => s.playerId).length;
 

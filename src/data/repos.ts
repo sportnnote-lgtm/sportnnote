@@ -1126,8 +1126,10 @@ export async function invitePerson(args: { name: string; phone?: string; email?:
  *  confirmed only once they install & register. The caller sends the WhatsApp
  *  invite (see openWhatsApp) and refetches the roster. */
 /** The team(s) a player may NOT already be on when being added to `targetTeamId`:
- *  the opponent in this match, plus every other team in the same tournament for this
- *  sport. One person can't play for two teams in the same game/tournament. */
+ *  in a TOURNAMENT, every other team in it for this sport (incl. this match's
+ *  opponent) — one person, one team per tournament. A FRIENDLY has none: friends
+ *  often split one shared pool into two teams on the day, so the same person can
+ *  be in both squads; the matchday squad picker keeps them to one side per match. */
 async function conflictTeamsForAdd(targetTeamId: string, sport: SportId, matchId?: string): Promise<{ id: string; name: string }[]> {
   if (!matchId) return [];
   const out = new Map<string, string>();
@@ -1140,9 +1142,10 @@ async function conflictTeamsForAdd(targetTeamId: string, sport: SportId, matchId
     const { data } = await supabase.from('matches').select('home_team_id, away_team_id, tournament_id').eq('id', matchId).maybeSingle();
     homeId = (data?.home_team_id as string) ?? undefined; awayId = (data?.away_team_id as string) ?? undefined; tournamentId = (data?.tournament_id as string) ?? undefined;
   }
+  if (!tournamentId) return []; // friendly — shared squads are fine
   const opponent = targetTeamId === homeId ? awayId : targetTeamId === awayId ? homeId : undefined;
   if (opponent) out.set(opponent, '');
-  if (tournamentId) {
+  {
     for (const t of await getTournamentTeams(tournamentId, sport)) if (t.id !== targetTeamId) out.set(t.id, t.name);
   }
   out.delete(targetTeamId);
@@ -1192,8 +1195,8 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
   // is pulled up, never duplicated). A confirmed account → 'existing'; a still-
   // pending invite → re-added as 'invited'.
   const existing = await findPlayerByPhone(args.phone);
-  // One person, one team per game/tournament: block adding someone already rostered
-  // on the opponent or another team in the same tournament+sport. (A brand-new number
+  // One person, one team per tournament: block adding someone already rostered on
+  // another team in the same tournament+sport (friendlies allow shared squads). (A brand-new number
   // can't clash — they're on no team yet — so we only check a known person.)
   if (existing) {
     const conflicts = await conflictTeamsForAdd(args.teamId, args.sport, args.matchId);
@@ -1201,8 +1204,7 @@ export async function invitePlayer(args: { teamId: string; teamName: string; nam
       const rosters = await getTeamRosters(conflicts.map((c) => c.id));
       const clash = conflicts.find((c) => (rosters.get(c.id) ?? []).includes(existing.id));
       if (clash) {
-        const where = args.matchId ? 'this match' : 'this game';
-        throw new Error(`${existing.fullName} is already playing for ${clash.name} in ${where}. One person can’t play for two teams in the same ${args.sport} game or tournament.`);
+        throw new Error(`${existing.fullName} is already playing for ${clash.name} in this tournament. One person can’t play for two teams in the same tournament.`);
       }
     }
     await appendRoster(existing.id);
