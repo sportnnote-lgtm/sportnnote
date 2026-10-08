@@ -13,6 +13,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Real image uploads: logos, banners, player photos (CricHeroes parity #01)
+
+- **Ask (parity queue #01):** logos/photos were saved as device-local URIs (`file://`, `blob:`) —
+  only the uploader's device could show them, and on web they vanished after a reload.
+- **Fix:** `repos.uploadImage(img, kind)` uploads to a public `media` bucket at
+  `<uid>/<kind>/<ts>-<rand>.<ext>` (ArrayBuffer — Blob uploads 0 bytes on Android; 5 MB cap) and
+  returns the public URL; demo returns the local URI. `core/imageUrl.ts` (pure):
+  `isLocalImageUri`, `displayableImage`, `mediaPath`, `extForMime`. `core/photo.ts` `pickImage()`
+  (quality 0.6, aspect) → `{uri,mimeType,fileSize}`; `pickPhoto` kept for verification docs.
+- `LogoPicker` (`kind`, `shape` square/circle/banner, async `onPick`): dimmed preview + spinner →
+  upload → save; on any error it reverts and shows a notice. Callers await their repo call:
+  match logo, tournament logo, **new tournament banner** (3:1, slim "＋ Add banner" strip for
+  hosts, `setTournamentBanner` / tolerant `getTournamentBanner`), club logo (home + create), org
+  logo. `ProfileView` photo uploads the same way. `setMatchLogo` / `setTournamentLogo` /
+  `setOrgLogo` / `updateClub` now `.select('id')` and throw on error or 0 rows (RLS denial);
+  `assertPersistable` refuses local URIs in live mode (also `updatePlayer.photoUrl`, `createClub`).
+  Legacy `file://` rows render the placeholder/initials (ProfileView, ClubsScreen, LineupView).
+- `delete-account` edge fn also clears the person's own photos `media/<uid>/player-photo/` — not
+  logos they uploaded for shared tournaments/clubs (REVIEW) — not deployed, on request.
+- **Migration 0038** `20261019120100_media_storage.sql` (bundle
+  `supabase/release/2026-10-media-storage-0038.sql`) — **founder to run**: `media` bucket +
+  uid-folder insert/delete policies + `tournaments.banner_url`. Until then uploads say "Photo
+  uploads aren't switched on yet" and nothing local is saved.
+- Verified in demo (8093, offline): banner, tournament logo and profile photo show immediately
+  from a picked file, no network calls, no console errors. `tests/image-url.test.mts` (5).
+  392 tests.
+
+---
+
 ### 2026-10-08 — "📤 Invite again" next to everyone who hasn't joined; rosters by team id
 
 - **Founder ask:** the first invite can go unsent (WhatsApp closed before Send) — there was no

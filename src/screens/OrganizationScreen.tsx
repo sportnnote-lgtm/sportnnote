@@ -263,10 +263,10 @@ export default function OrganizationScreen() {
     await cancelOrgRequest(req.id);
     setRequests(await getOrgRequests(params.orgId, 'pending'));
   };
-  const saveLogo = (uri: string) => {
+  const saveLogo = async (url: string) => {
     if (!org) return;
-    setOrg({ ...org, logoUrl: uri });
-    void setOrgLogo(org.id, uri);
+    await setOrgLogo(org.id, url); // throws → LogoPicker reverts + tells them
+    setOrg({ ...org, logoUrl: url });
   };
   const addAcademicYear = (ay: AcademicYear) => {
     if (!org) return;
@@ -410,7 +410,7 @@ export default function OrganizationScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <View style={st.header}>
-        <LogoPicker logoUrl={org.logoUrl} canManage={canManage} onPick={saveLogo} size={60} placeholder="🏛️" />
+        <LogoPicker logoUrl={org.logoUrl} canManage={canManage} onPick={saveLogo} kind="org-logo" size={60} placeholder="🏛️" />
         <View style={{ flex: 1 }}>
           <ScreenTitle title={org.name} subtitle={[org.type, org.city ? `📍 ${org.city}` : ''].filter(Boolean).join(' · ') || 'Community'} />
         </View>

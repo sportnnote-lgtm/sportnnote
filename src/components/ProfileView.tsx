@@ -11,8 +11,8 @@ import { inviteGuardianToLink } from '../data/messages';
 import { isSupabaseConfigured } from '../core/supabase';
 import { Linking } from 'react-native';
 import { usePlayerProfile, useOrganizations } from '../data/hooks';
-import { updatePlayer, verifyGuardianContact, submitVerificationDoc, reviewVerification, verificationDocUrl, getPendingVerifications, SUPPORT_EMAIL } from '../data/repos';
-import { pickPhoto } from '../core/photo';
+import { updatePlayer, uploadImage, verifyGuardianContact, submitVerificationDoc, reviewVerification, verificationDocUrl, getPendingVerifications, SUPPORT_EMAIL } from '../data/repos';
+import { pickImage } from '../core/photo';
 import { pickDocument } from '../core/document';
 import { ageFromDob, ageOf, isMinor } from '../core/age';
 import { notify } from '../core/notifications';
@@ -24,6 +24,8 @@ import { teamsByRecency, teamPeriod, type TeamAffiliation } from '../core/teams'
 import { getSport } from '../sports/registry';
 import { sportSummary, hasPartialCoverage } from '../data/stats';
 import type { Player, SportId } from '../core/types';
+import { displayableImage } from '../core/imageUrl';
+import { notice } from '../core/confirm';
 
 export function ProfileView({
   playerId,
@@ -84,13 +86,26 @@ export function ProfileView({
   const [showComm, setShowComm] = useState(false);
   const [showPastComm, setShowPastComm] = useState(false);
   useEffect(() => setPhoto(player?.photoUrl), [player?.photoUrl]);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const changePhoto = async () => {
     if (!player) return;
-    const uri = await pickPhoto();
-    if (!uri) return;
-    setPhoto(uri);
-    await updatePlayer(player.id, { photoUrl: uri });
+    const img = await pickImage({ aspect: [1, 1] });
+    if (!img) return;
+    const before = photo;
+    setPhoto(img.uri); // preview while it uploads
+    setPhotoBusy(true);
+    try {
+      const url = await uploadImage(img, 'player-photo');
+      await updatePlayer(player.id, { photoUrl: url });
+      setPhoto(url);
+    } catch (e) {
+      setPhoto(before);
+      notice('Couldn’t save the photo', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setPhotoBusy(false);
+    }
   };
+  const shownPhoto = displayableImage(photo, !isSupabaseConfigured || photoBusy);
 
   if (!player || !allStats || !official || !friendly) {
     // Own account with no player yet (a fresh sign-up): make this actionable —
@@ -133,8 +148,8 @@ export function ProfileView({
       <View style={st.headerRow}>
         <TouchableOpacity accessibilityRole="button" activeOpacity={onEditProfile ? 0.8 : 1} disabled={!onEditProfile} onPress={changePhoto}>
           <View style={[st.avatar, { backgroundColor: (player.houseColor ?? theme.colors.surfaceAlt) + '33', borderColor: player.houseColor ?? theme.colors.border }]}>
-            {photo ? (
-              <Image source={{ uri: photo }} style={st.avatarImg} />
+            {shownPhoto ? (
+              <Image source={{ uri: shownPhoto }} style={[st.avatarImg, photoBusy && { opacity: 0.4 }]} />
             ) : (
               <Text style={[st.avatarText, { color: player.houseColor ?? theme.colors.primary }]}>{initials}</Text>
             )}

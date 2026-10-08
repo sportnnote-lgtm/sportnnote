@@ -7,6 +7,8 @@ import { ageOf } from '../core/age';
 import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import type { PickedDoc } from '../core/document';
+import type { PickedImage } from '../core/photo';
+import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
 import { MATCHES } from '../core/mockData';
 import {
@@ -884,6 +886,42 @@ export async function setTournamentReminderLeads(tournamentId: string, minutes: 
   await supabase.from('tournaments').update({ reminder_lead_minutes: minutes ?? null }).eq('id', tournamentId);
 }
 
+/* ------------------------------ Images ---------------------------------- */
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Upload a picked image to the public `media` bucket (migration 0038) and return
+ *  its public URL — the only kind of image URL other devices can open. Demo mode
+ *  is single-device, so the local URI is returned as-is. */
+export async function uploadImage(img: PickedImage, kind: ImageKind): Promise<string> {
+  if (!isSupabaseConfigured || !supabase) return img.uri;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error('Sign in to add photos.');
+  if (img.fileSize && img.fileSize > MAX_IMAGE_BYTES) throw new Error('That image is over 5 MB — pick a smaller one.');
+  // ArrayBuffer, not Blob: a Blob from fetch() uploads 0 bytes on Android.
+  const bytes = await (await fetch(img.uri)).arrayBuffer();
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('That image is over 5 MB — pick a smaller one.');
+  const path = mediaPath(uid, kind, extForMime(img.mimeType), Date.now(), Math.random().toString(36).slice(2, 8));
+  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType: img.mimeType ?? 'image/jpeg', upsert: false });
+  if (error) {
+    if (/bucket not found/i.test(error.message)) throw new Error('Photo uploads aren’t switched on yet.');
+    throw new Error(error.message);
+  }
+  return supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
+}
+
+/** Live mode never saves a device-local image URI: nobody else could open it. */
+function assertPersistable(url?: string | null): void {
+  if (isSupabaseConfigured && isLocalImageUri(url)) throw new Error('That image wasn’t uploaded — try again.');
+}
+
+/** An update that RLS silently filtered out returns no error and 0 rows. */
+function assertUpdated(res: { error: { message: string } | null; data: unknown[] | null }, what: string): void {
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data || res.data.length === 0) throw new Error(`You can’t change this ${what}.`);
+}
+
 /** Set a match's logo/banner image. */
 export async function setMatchLogo(matchId: string, logoUrl: string | null): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
@@ -891,17 +929,41 @@ export async function setMatchLogo(matchId: string, logoUrl: string | null): Pro
     if (m) m.logoUrl = logoUrl ?? undefined;
     return;
   }
-  await supabase.from('matches').update({ logo_url: logoUrl }).eq('id', matchId);
+  assertPersistable(logoUrl);
+  assertUpdated(await supabase.from('matches').update({ logo_url: logoUrl }).eq('id', matchId).select('id'), 'match');
 }
 
-/** Set a tournament's logo/banner image. */
+/** Set a tournament's logo image. */
 export async function setTournamentLogo(tournamentId: string, logoUrl: string | null): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const t = demo.tournaments.find((x) => x.id === tournamentId);
     if (t) t.logoUrl = logoUrl ?? undefined;
     return;
   }
-  await supabase.from('tournaments').update({ logo_url: logoUrl }).eq('id', tournamentId);
+  assertPersistable(logoUrl);
+  assertUpdated(await supabase.from('tournaments').update({ logo_url: logoUrl }).eq('id', tournamentId).select('id'), 'tournament');
+}
+
+/** Set a tournament's wide banner image (migration 0038 adds the column). */
+export async function setTournamentBanner(tournamentId: string, url: string | null): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === tournamentId);
+    if (t) t.bannerUrl = url ?? undefined;
+    return;
+  }
+  assertPersistable(url);
+  const res = await supabase.from('tournaments').update({ banner_url: url }).eq('id', tournamentId).select('id');
+  if (res.error && (res.error.code === '42703' || res.error.code === 'PGRST204')) throw new Error('Banners aren’t switched on yet.');
+  assertUpdated(res, 'tournament');
+}
+
+/** A tournament's banner, read on its own so a database without the column
+ *  (before migration 0038) just means "no banner". */
+export async function getTournamentBanner(tournamentId: string): Promise<string | undefined> {
+  if (!isSupabaseConfigured || !supabase) return demo.tournaments.find((x) => x.id === tournamentId)?.bannerUrl;
+  const { data, error } = await supabase.from('tournaments').select('banner_url').eq('id', tournamentId).maybeSingle();
+  if (error) return undefined;
+  return (data as { banner_url?: string | null } | null)?.banner_url ?? undefined;
 }
 
 /** Persist a per-match format override (scoring-aspect toggles, half length…),
@@ -1900,7 +1962,7 @@ export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void
   if (patch.email !== undefined) row.email = patch.email || null;
   if (patch.phoneVerified !== undefined) row.phone_verified = patch.phoneVerified;
   if (patch.emailVerified !== undefined) row.email_verified = patch.emailVerified;
-  if (patch.photoUrl !== undefined) row.photo_url = patch.photoUrl || null;
+  if (patch.photoUrl !== undefined) { assertPersistable(patch.photoUrl); row.photo_url = patch.photoUrl || null; }
   if (patch.sportDetails !== undefined) row.sport_details = patch.sportDetails;
   if (patch.dob !== undefined) row.dob = patch.dob || null;
   if (patch.guardian !== undefined) row.guardian = patch.guardian ?? null;
@@ -2876,7 +2938,8 @@ export async function setOrgLogo(orgId: string, logoUrl: string | null): Promise
     if (o) o.logoUrl = logoUrl ?? undefined;
     return;
   }
-  await supabase.from('organizations').update({ logo_url: logoUrl }).eq('id', orgId);
+  assertPersistable(logoUrl);
+  assertUpdated(await supabase.from('organizations').update({ logo_url: logoUrl }).eq('id', orgId).select('id'), 'community');
 }
 
 /** Editable community details (admins only via UI). */
@@ -3022,6 +3085,7 @@ export async function createClub(input: NewClub): Promise<Club> {
     };
     demo.clubs.push(club);
   } else {
+    assertPersistable(input.logoUrl);
     const { data, error } = await supabase
       .from('clubs')
       .insert({
@@ -3092,7 +3156,8 @@ export async function updateClub(clubId: string, patch: Partial<Omit<Club, 'id' 
     if (c) Object.assign(c, patch);
     return;
   }
-  await supabase.from('clubs').update({
+  if (patch.logoUrl !== undefined) assertPersistable(patch.logoUrl);
+  const res = await supabase.from('clubs').update({
     ...(patch.name !== undefined ? { name: patch.name } : {}),
     ...(patch.shortName !== undefined ? { short_name: patch.shortName } : {}),
     ...(patch.logoUrl !== undefined ? { logo_url: patch.logoUrl } : {}),
@@ -3101,7 +3166,8 @@ export async function updateClub(clubId: string, patch: Partial<Omit<Club, 'id' 
     ...(patch.about !== undefined ? { about: patch.about } : {}),
     ...(patch.contactPhone !== undefined ? { contact_phone: patch.contactPhone } : {}),
     ...(patch.contactEmail !== undefined ? { contact_email: patch.contactEmail } : {}),
-  }).eq('id', clubId);
+  }).eq('id', clubId).select('id');
+  assertUpdated(res, 'team');
 }
 
 /* --------------------------- Club membership ------------------------------ */

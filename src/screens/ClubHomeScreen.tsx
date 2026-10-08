@@ -133,6 +133,7 @@ export default function ClubHomeScreen() {
               size={56}
               placeholder={club.shortName?.slice(0, 3) || '🛡️'}
               label="Add logo"
+              kind="club-logo"
               onPick={async (uri) => { await updateClub(clubId, { logoUrl: uri }); setClub((c) => (c ? { ...c, logoUrl: uri } : c)); }}
             />
           ) : (

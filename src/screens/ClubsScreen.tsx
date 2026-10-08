@@ -12,6 +12,8 @@ import { getSport } from '../sports/registry';
 import { getClubs, getClubSports } from '../data/repos';
 import type { Club, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { displayableImage } from '../core/imageUrl';
+import { isSupabaseConfigured } from '../core/supabase';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -49,8 +51,8 @@ export default function ClubsScreen() {
               <TouchableOpacity key={c.id} accessibilityRole="button" accessibilityLabel={`Open ${c.name}`}
                 onPress={() => nav.navigate('ClubHome', { clubId: c.id })}>
                 <Card style={st.row}>
-                  {c.logoUrl ? (
-                    <Image source={{ uri: c.logoUrl }} style={st.badgeImg} resizeMode="cover" />
+                  {displayableImage(c.logoUrl, !isSupabaseConfigured) ? (
+                    <Image source={{ uri: c.logoUrl! }} style={st.badgeImg} resizeMode="cover" />
                   ) : (
                     <View style={[st.badge, { backgroundColor: c.colorHex ?? theme.colors.primary }]}>
                       <Text style={st.badgeText}>{c.shortName?.slice(0, 3) || c.name.slice(0, 2).toUpperCase()}</Text>

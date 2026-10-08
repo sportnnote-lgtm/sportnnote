@@ -1404,7 +1404,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
-                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onPickLogo={async (url) => { if (matchId) { await setMatchLogo(matchId, url); setMeta((m) => ({ ...m, logoUrl: url })); } }}
                   onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
                   teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
@@ -1451,7 +1451,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
-                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onPickLogo={async (url) => { if (matchId) { await setMatchLogo(matchId, url); setMeta((m) => ({ ...m, logoUrl: url })); } }}
                   onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
                   teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />
@@ -1538,7 +1538,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   homeName={homeTeamName ?? homeName} awayName={awayTeamName ?? awayName}
                   homeColor={homeColor} awayColor={awayColor}
                   hasMatch={hasMatch} logoUrl={meta.logoUrl} canManage={canManage}
-                  onPickLogo={(uri) => matchId && setMatchLogo(matchId, uri)}
+                  onPickLogo={async (url) => { if (matchId) { await setMatchLogo(matchId, url); setMeta((m) => ({ ...m, logoUrl: url })); } }}
                   onTeamPress={meta.homeTeamId && meta.awayTeamId ? openSide : undefined}
                   teamLinkLabel={soloSides ? 'Player profile ›' : 'Team profile ›'}
                 />

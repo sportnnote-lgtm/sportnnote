@@ -26,7 +26,7 @@ import { formatDate, formatTime, zoneAbbrev } from '../core/time';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial } from '../data/repos';
+import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial } from '../data/repos';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
 import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole } from '../core/types';
@@ -62,6 +62,13 @@ export default function TournamentProfileScreen() {
   const participants = useTournamentTeams(params.tournamentId);
   const allPlayers = usePlayers();
   const orgs = useOrganizations();
+  // The banner is read on its own (tolerates a database without the column yet).
+  const [banner, setBanner] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let on = true;
+    void getTournamentBanner(params.tournamentId).then((b) => on && setBanner(b));
+    return () => { on = false; };
+  }, [params.tournamentId]);
 
   // Individual-host list (managed in-place); org-hosted tournaments manage hosts
   // through the organization instead.
@@ -308,11 +315,19 @@ export default function TournamentProfileScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       {/* Persistent header: identity + status stay visible across tabs. */}
       <View style={st.header}>
+        {/* Banner: viewers see it only when set; hosts get "＋ Add banner". */}
+        <LogoPicker
+          shape="banner" kind="tournament-banner" aspect={[3, 1]} label="Add banner"
+          logoUrl={banner}
+          canManage={canManageHosts}
+          onPick={async (url) => { await setTournamentBanner(tournament.id, url); setBanner(url); }}
+        />
         <View style={st.titleRow}>
           <LogoPicker
             logoUrl={tournament.logoUrl}
             canManage={canManageHosts}
-            onPick={(uri) => setTournamentLogo(tournament.id, uri)}
+            kind="tournament-logo"
+            onPick={(url) => setTournamentLogo(tournament.id, url)}
             size={44}
           />
           <View style={{ flex: 1 }}>

@@ -15,17 +15,19 @@
 import { admin, CORS, json, rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
 
 const DOCS_BUCKET = 'verification-docs';
+// Uploaded logos / banners / photos (migration 0038), also under `${uid}/…`.
+const MEDIA_BUCKET = 'media';
 
-/** Every object path under `${prefix}/`, recursing into folders. */
-async function listAll(prefix: string): Promise<string[]> {
+/** Every object path under `${prefix}/` in a bucket, recursing into folders. */
+async function listAll(bucket: string, prefix: string): Promise<string[]> {
   const out: string[] = [];
-  const { data, error } = await admin.storage.from(DOCS_BUCKET).list(prefix, { limit: 1000 });
+  const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
   if (error || !data) return out;
   for (const item of data) {
     const path = `${prefix}/${item.name}`;
     // Folders come back without an id.
     if (item.id) out.push(path);
-    else out.push(...(await listAll(path)));
+    else out.push(...(await listAll(bucket, path)));
   }
   return out;
 }
@@ -50,15 +52,19 @@ Deno.serve(async (req) => {
     return json({ error: 'Couldn’t delete your data just now — please try again or contact support.' }, 500);
   }
 
-  // Uploaded documents live under `${uid}/…` (see repos.ts → verification upload).
-  try {
-    const paths = await listAll(uid);
-    for (let i = 0; i < paths.length; i += 100) {
-      const { error } = await admin.storage.from(DOCS_BUCKET).remove(paths.slice(i, i + 100));
-      if (error) console.error('storage remove', error);
+  // Uploaded documents live under `${uid}/…`; of the uploaded images (uploadImage)
+  // only the person's own photos go — tournament/club/match logos they uploaded
+  // belong to things other people run. A missing bucket just lists nothing.
+  for (const [bucket, prefix] of [[DOCS_BUCKET, uid], [MEDIA_BUCKET, `${uid}/player-photo`]] as const) {
+    try {
+      const paths = await listAll(bucket, prefix);
+      for (let i = 0; i < paths.length; i += 100) {
+        const { error } = await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
+        if (error) console.error('storage remove', bucket, error);
+      }
+    } catch (e) {
+      console.error('storage cleanup', bucket, e);
     }
-  } catch (e) {
-    console.error('storage cleanup', e);
   }
 
   const { error: authErr } = await admin.auth.admin.deleteUser(uid, true);

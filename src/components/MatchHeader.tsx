@@ -28,7 +28,7 @@ export function MatchHeader({
   hasMatch?: boolean;
   logoUrl?: string;
   canManage?: boolean;
-  onPickLogo?: (uri: string) => void;
+  onPickLogo?: (url: string) => void | Promise<void>;
   /** tap a team name → its profile (stats, squad, matches) */
   onTeamPress?: (side: 'home' | 'away') => void;
   /** the hint under each name ("Player profile ›" for singles) */
@@ -53,7 +53,8 @@ export function MatchHeader({
           <LogoPicker
             logoUrl={logoUrl}
             canManage={!!canManage}
-            onPick={(uri) => onPickLogo?.(uri)}
+            onPick={async (url) => { await onPickLogo?.(url); }}
+            kind="match-logo"
             size={36}
             placeholder={sportIcon}
             label="Add"

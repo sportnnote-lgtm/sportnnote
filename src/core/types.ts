@@ -606,6 +606,8 @@ export interface Tournament {
   hostOrgId?: UUID;
   /** tournament logo/banner (image URI) the hosts can set */
   logoUrl?: string;
+  /** wide header image (3:1), migration 0038 */
+  bannerUrl?: string;
   /** The people who run this tournament (player ids). Any host can manage it and
    *  receives "no scorer assigned" reminders — multiple hosts avoid a single
    *  point of contact. Maps to `host_ids` on the backend. */
