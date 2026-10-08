@@ -820,6 +820,9 @@ export interface Match {
    *  one person can share scoring duties. Maps to `scorer_ids` on the backend;
    *  `scorerId` is the first of these. */
   scorerIds?: UUID[];
+  /** Demo store only: per-match officials (parity #11). Live, they're read
+   *  separately via `getMatchOfficials` (never part of the match select). */
+  officials?: { slot: string; playerId?: string; name: string }[];
   /** Sport-specific live state — shape defined by the sport's plugin. */
   state: unknown;
 }

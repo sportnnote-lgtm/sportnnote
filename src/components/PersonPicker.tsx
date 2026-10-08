@@ -1,5 +1,5 @@
 /**
- * Add a person (scorer / host) by mobile number or name.
+ * Add a person (scorer / host / referee / official) by mobile number or name.
  *  • A full mobile number that's already on SportnNote → shows them; one tap adds.
  *  • A number that isn't → "Add & invite" on WhatsApp or SMS: they're added right
  *    away (a pending player for that number) and get a message with the match
@@ -20,7 +20,7 @@ import type { Player } from '../core/types';
 import { reportError } from '../core/telemetry';
 
 export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
-  role: 'scorer' | 'host';
+  role: 'scorer' | 'host' | 'referee' | 'official';
   excludeIds?: string[];
   /** add this player to the role */
   onPick: (player: Player) => Promise<void> | void;

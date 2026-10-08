@@ -41,6 +41,7 @@ export type RootStackParamList = {
   Series: { seriesId: string };
   EditMatch: { matchId: string };
   GenerateFixtures: { tournamentId: string; sport?: SportId };
+  AssignScorers: { tournamentId: string };
   TournamentTeams: { tournamentId: string; sport?: SportId };
   Contingents: { tournamentId: string };
   Americano: { tournamentId: string; sport: SportId };

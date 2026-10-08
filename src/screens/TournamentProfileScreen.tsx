@@ -46,6 +46,7 @@ import { setupChecklist, firstSportWithoutFormat, type SetupStep } from '../data
 import { SetupChecklist } from '../components/SetupChecklist';
 import { Markdown } from '../components/Markdown';
 import { EVENT_CATEGORIES, inlineFieldKeys } from '../data/tournamentForm';
+import { assignableMatches } from '../data/scorerAssign';
 import { openVenue } from '../core/venue';
 import { openWhatsApp } from '../core/connect';
 import type { Tournament } from '../core/types';
@@ -368,13 +369,27 @@ export default function TournamentProfileScreen() {
     return tournament!.hostIds ?? []; // individual host: the hosts can officiate
   };
   async function assignOfficial(pid: string, role: OfficialRole) {
-    await assignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
-    setOffTick((n) => n + 1);
+    try {
+      await assignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
+    } catch (e) {
+      notice('Couldn’t add them', e instanceof Error ? e.message : 'Please try again.');
+      throw e; // PersonPicker shows its own "try again" too
+    } finally {
+      setOffTick((n) => n + 1);
+    }
   }
   async function removeOfficial(pid: string, role: OfficialRole) {
-    await unassignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
+    try {
+      await unassignTournamentOfficial(tournament!.id, pid, role, myId ?? undefined);
+    } catch (e) {
+      notice('Couldn’t remove them', e instanceof Error ? e.message : 'Please try again.');
+    }
     setOffTick((n) => n + 1);
   }
+  const officialInvite = (role: OfficialRole) => (name?: string) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a ${role} for ${tournament?.name ?? 'a tournament'} on SportnNote 🏆\n\n`
+    + `Open this link and sign in with this mobile number:\n${tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in'}`;
+  // Fixtures still waiting for a scorer (drives "Assign scorers to fixtures").
+  const unscoredCount = assignableMatches(matches).length;
 
   const TABS: Tab[] = canManageHosts ? ['Info', 'Settings', 'Matches', 'Stats', 'Teams'] : ['Info', 'Matches', 'Stats', 'Teams'];
   const activeTab: Tab = TABS.includes(tab) ? tab : 'Info';
@@ -651,12 +666,12 @@ export default function TournamentProfileScreen() {
             )}
 
             <SectionHeader title="People" />
-            <HubRow icon="🎽" title="Scorers & referees" status={`${assignedIds('scorer').length + assignedIds('referee').length} assigned`} open={panel === 'officials'} onPress={() => setPanel(panel === 'officials' ? '' : 'officials')} />
+            <HubRow icon="🎽" title="Scorers & officials" status={`${assignedIds('scorer').length + assignedIds('referee').length} assigned`} open={panel === 'officials'} onPress={() => setPanel(panel === 'officials' ? '' : 'officials')} />
             {panel === 'officials' && (
             <Card style={{ gap: theme.spacing(3) }}>
-              <Text style={textStyles.h3}>🎽 Scorers & referees</Text>
+              <Text style={textStyles.h3}>🎽 Scorers & officials</Text>
               <Text style={textStyles.muted}>
-                {hostOrg ? 'Assign from this organization’s eligible scorers & referees.' : 'Assign from the tournament’s hosts.'} They can then be given specific matches to score.
+                {hostOrg ? 'Pick from this organization’s scorers & referees, or add anyone by mobile number or name.' : 'Pick from the tournament’s hosts, or add anyone by mobile number or name.'} Any tournament scorer can take over one of its matches.
               </Text>
               {(['scorer', 'referee'] as OfficialRole[]).map((role) => {
                 const assigned = assignedIds(role);
@@ -678,10 +693,18 @@ export default function TournamentProfileScreen() {
                         ))}
                       </View>
                     )}
-                    {eligible.length === 0 && assigned.length === 0 && (
-                      <Text style={textStyles.muted}>
-                        {hostOrg ? `No one has the ${role === 'scorer' ? 'Scorer' : 'Referee'} role in ${hostOrg.name} yet — set it in the community’s Members tab.` : 'Add hosts to assign them.'}
-                      </Text>
+                    <PersonPicker
+                      role={role}
+                      excludeIds={assigned}
+                      onPick={async (p) => { setExtraPeople((m) => ({ ...m, [p.id]: p.fullName })); await assignOfficial(p.id, role); }}
+                      inviteText={officialInvite(role)}
+                    />
+                    {role === 'scorer' && (
+                      <Button
+                        label={`🎯 Assign scorers to fixtures · ${unscoredCount} without a scorer`}
+                        variant="ghost"
+                        onPress={() => nav.navigate('AssignScorers', { tournamentId: tournament.id })}
+                      />
                     )}
                   </View>
                 );

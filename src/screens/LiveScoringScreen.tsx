@@ -35,7 +35,8 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials } from '../data/repos';
+import { slotsFor, officialsLine, isCommentarySlot, type MatchOfficial } from '../data/matchOfficials';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
 import { SelectChip, TextField, Button } from '../components/ui';
@@ -101,6 +102,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     result?: MatchResult; stage?: string;
   }>({});
   const lastConfigJson = useRef<{ json: string; obj: Record<string, unknown> | undefined }>({ json: '', obj: undefined });
+  // Parity #11: the tournament's scorer/referee pool + this match's officials.
+  const [tourOfficials, setTourOfficials] = useState<{ playerId: string; role: string }[]>([]);
+  const [officials, setOfficials] = useState<{ available: boolean; list: MatchOfficial[] }>({ available: false, list: [] });
+  const [reloadTick, setReloadTick] = useState(0);
   useFocusEffect(
     useCallback(() => {
       let on = true;
@@ -112,6 +117,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             getTournaments(), getOrganizations(), getTeamLeaders(m.homeTeam.id), getTeamLeaders(m.awayTeam.id),
           ]);
           const tour = tours.find((t) => t.id === m.tournamentId);
+          // Officials are best-effort extras — never block the match loading.
+          void (m.tournamentId ? getTournamentOfficials(m.tournamentId) : Promise.resolve([]))
+            .then((o) => on && setTourOfficials(o), () => on && setTourOfficials([]));
+          void getMatchOfficials(matchId).then((o) => on && setOfficials(o), () => on && setOfficials({ available: false, list: [] }));
           // The tournament's format for the sport, with per-match settings on top
           // (never instead of it) and internal `__*` keys dropped. Same JSON → same
           // object, so an unchanged format doesn't rebuild the live match.
@@ -137,7 +146,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       return () => {
         on = false;
       };
-    }, [matchId, sport])
+    }, [matchId, sport, reloadTick])
   );
 
   // Only the designated scorer's device can score a real match. Ad-hoc local
@@ -494,6 +503,58 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setTab('scoring');
   }, [myPlayerId, scorerIds, saveScorers]);
 
+  // Parity #11: a tournament scorer can take any of its open matches themself
+  // (server-checked by join_match_as_scorer) — "a colleague's phone died".
+  const tourScorerIds = useMemo(
+    () => [...new Set(tourOfficials.filter((o) => o.role === 'scorer').map((o) => o.playerId))],
+    [tourOfficials]
+  );
+  const tourRefereeIds = useMemo(
+    () => [...new Set(tourOfficials.filter((o) => o.role === 'referee').map((o) => o.playerId))],
+    [tourOfficials]
+  );
+  const [joining, setJoining] = useState(false);
+  const joinAsScorer = useCallback(async () => {
+    if (!matchId || joining) return;
+    setJoining(true);
+    try {
+      const pid = await joinMatchAsScorer(matchId, myPlayerId);
+      setScorerIds((ids) => (ids.includes(pid) ? ids : [...ids, pid]));
+      setReloadTick((n) => n + 1);
+      setTab('scoring');
+    } catch (e) {
+      notice('Can’t score this match yet', e instanceof Error ? e.message : 'Ask the organiser to add you as this match’s scorer');
+    }
+    setJoining(false);
+  }, [matchId, myPlayerId, joining]);
+
+  // Per-match officials — saved whole (small list), reverted if the write fails.
+  const [officialSlot, setOfficialSlot] = useState<string | null>(null);
+  const [officialName, setOfficialName] = useState('');
+  const saveOfficials = useCallback(async (next: MatchOfficial[]) => {
+    if (!matchId) return false;
+    const prev = officials;
+    setOfficials({ available: true, list: next });
+    try {
+      await setMatchOfficials(matchId, next);
+      return true;
+    } catch (e) {
+      setOfficials(prev);
+      notice('Couldn’t save officials', e instanceof Error ? e.message : 'Please try again.');
+      return false;
+    }
+  }, [matchId, officials]);
+  const setOfficial = useCallback(async (slot: string, o: { playerId?: string; name: string }) => {
+    const name = o.name.trim();
+    if (!name) return;
+    const next = [...officials.list.filter((x) => x.slot !== slot), { slot, name, ...(o.playerId ? { playerId: o.playerId } : {}) }];
+    if (await saveOfficials(next)) { setOfficialSlot(null); setOfficialName(''); }
+  }, [officials.list, saveOfficials]);
+  const removeOfficial = useCallback(
+    (slot: string) => void saveOfficials(officials.list.filter((x) => x.slot !== slot)),
+    [officials.list, saveOfficials]
+  );
+
   const setHosts = useCallback(
     async (ids: string[]) => {
       if (!matchId) return;
@@ -552,13 +613,13 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     if (id) navigation.navigate('Team', { teamId: id });
   };
 
-  const inviteTextFor = (role: 'scorer' | 'host') => (name?: string) => {
+  const inviteTextFor = (role: 'scorer' | 'host' | 'official') => (name?: string) => {
     const who = profile?.fullName ?? 'A friend';
     const vs = `${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`;
     const when = meta.startsAt ? ` (${formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST')})` : '';
     const link = matchId ? matchLink(matchId) : 'https://app.sportnnote.in';
-    return `Hi${name ? ` ${name}` : ''}! ${who} added you as ${role === 'scorer' ? 'the scorer' : 'a host'} for ${vs}${when} on SportnNote 🏅\n\n`
-      + `Open this link and sign in with this mobile number to ${role === 'scorer' ? 'score it live' : 'manage the match'}:\n${link}`;
+    return `Hi${name ? ` ${name}` : ''}! ${who} added you as ${role === 'scorer' ? 'the scorer' : role === 'official' ? 'an official' : 'a host'} for ${vs}${when} on SportnNote 🏅\n\n`
+      + `Open this link and sign in with this mobile number to ${role === 'scorer' ? 'score it live' : role === 'official' ? 'follow the match' : 'manage the match'}:\n${link}`;
   };
 
   // When did scoring actually begin? (first event's server time). Refetch when the
@@ -1265,7 +1326,54 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
     const myName = nameOf(myPlayerId ?? undefined) ?? profile?.fullName ?? 'this device';
     // Roster/known people who aren't already scorers — the "add" candidates.
-    const addableScorers = scorerCandidates.filter((p) => !scorerIds.includes(p.id));
+    const addableScorers = scorerCandidates.filter((p) => !scorerIds.includes(p.id) && !tourScorerIds.includes(p.id));
+    // Match officials (parity #11): scorers edit until full time, hosts after too.
+    const canEditOfficials = hasMatch && (isHost || (canScore && !complete));
+    const officialSlots = slotsFor(sport);
+    const filledOfficials = officialSlots.filter((sl) => officials.list.some((o) => o.slot === sl.key));
+    const officialsCard = !officials.available || (!canEditOfficials && filledOfficials.length === 0) ? null : (
+      <View style={st.infoCard}>
+        <Text style={textStyles.h3}>Match officials</Text>
+        {(canEditOfficials ? officialSlots : filledOfficials).map((sl) => {
+          const o = officials.list.find((x) => x.slot === sl.key);
+          const open = officialSlot === sl.key;
+          const refs = isCommentarySlot(sl.key) ? [] : tourRefereeIds.filter((id) => !officials.list.some((x) => x.playerId === id));
+          return (
+            <View key={sl.key} style={{ gap: theme.spacing(1) }}>
+              <View style={st.officialRow}>
+                <Text style={[textStyles.muted, st.officialLabel]}>{sl.label}</Text>
+                <Text style={[textStyles.body, { flex: 1, fontWeight: o ? '700' : '400' }]} numberOfLines={1}>{o?.name ?? ''}</Text>
+                {canEditOfficials && o && (
+                  <Text style={[st.editLink, { color: theme.colors.danger }]} accessibilityRole="button" accessibilityLabel={`Remove ${o.name} as ${sl.label}`} onPress={() => removeOfficial(sl.key)}>Remove</Text>
+                )}
+                {canEditOfficials && !o && (
+                  <Text style={st.editLink} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Add ${sl.label}`} onPress={() => { setOfficialSlot(open ? null : sl.key); setOfficialName(''); }}>{open ? 'Close' : '＋ Add'}</Text>
+                )}
+              </View>
+              {canEditOfficials && open && !o && (
+                <View style={st.scorerPicker}>
+                  {refs.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) }}>
+                      {refs.map((id) => (
+                        <SelectChip key={id} label={`+ ${nameOf(id) ?? 'Referee'}`} active={false} onPress={() => void setOfficial(sl.key, { playerId: id, name: nameOf(id) ?? 'Referee' })} />
+                      ))}
+                    </View>
+                  )}
+                  <PersonPicker role="official" excludeIds={officials.list.map((x) => x.playerId).filter((x): x is string => !!x)} onPick={async (p) => { rememberPerson(p); await setOfficial(sl.key, { playerId: p.id, name: p.fullName }); }} inviteText={inviteTextFor('official')} />
+                  <Text style={textStyles.muted}>Or just a name:</Text>
+                  <View style={{ flexDirection: 'row', gap: theme.spacing(2), alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <TextField label="" value={officialName} onChange={setOfficialName} placeholder="e.g. Mr Rao, PE teacher" autoCapitalize="words" />
+                    </View>
+                    <Button label="Save" onPress={() => void setOfficial(sl.key, { name: officialName })} disabled={!officialName.trim()} />
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
     const scorerCard = (
       <View style={st.infoCard}>
         <Text style={textStyles.h3}>Match scorers</Text>
@@ -1314,6 +1422,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           })
         )}
 
+        {/* A tournament scorer who isn't on this match yet takes it in one tap. */}
+        {!!myPlayerId && !iAmScorer && !complete && meta.status !== 'cancelled' && tourScorerIds.includes(myPlayerId) && (
+          <Button label={joining ? 'Joining…' : '🎯 Score this match'} onPress={() => void joinAsScorer()} disabled={joining} />
+        )}
+
         {canManage && (
           <Text
             style={st.editLink}
@@ -1327,6 +1440,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
         {canManage && pickScorer && (
           <View style={st.scorerPicker}>
+            {/* The tournament's scorer pool first — one tap each. */}
+            {tourScorerIds.some((id) => !scorerIds.includes(id)) && (
+              <>
+                <Text style={textStyles.muted}>Tournament scorers</Text>
+                {tourScorerIds.filter((id) => !scorerIds.includes(id)).map((id) => (
+                  <TouchableOpacity key={`t-${id}`} style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Add ${nameOf(id) ?? 'scorer'} as a scorer`} onPress={() => addScorer(id)}>
+                    <Text style={st.scorerOptText}>🎽 {nameOf(id) ?? 'Scorer'}{id === myPlayerId ? ' · you' : ''}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
             {myPlayerId && !iAmScorer && (
               <TouchableOpacity style={st.scorerOpt} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Score from this device as ${myName}`} onPress={() => addScorer(myPlayerId)}>
                 <Text style={st.scorerOptText}>📱 This device — {myName}</Text>
@@ -1824,6 +1948,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               </View>
               {disputesCard}
               {hasMatch && scorerCard}
+              {hasMatch && officialsCard}
               {hasMatch && streamSettingsCard}
               {hasMatch && scoringSettingsCard}
               {hasMatch && (
@@ -1875,6 +2000,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 summary={summary} complete={complete} live={matchLive}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
               />
+              )}
+              {officials.available && officials.list.length > 0 && (
+                <Text style={[textStyles.muted, { textAlign: 'center' }]}>{officialsLine(officials.list, sport)}</Text>
               )}
             </View>
           )}
@@ -2108,6 +2236,8 @@ const st = StyleSheet.create({
   streamPillText: { color: '#0B0F14', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
   streamRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   streamPlatform: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  officialRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
+  officialLabel: { width: 130 },
   scorerPicker: { marginTop: theme.spacing(2), gap: theme.spacing(1) },
   scorerOpt: { paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   scorerOptText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },

@@ -13,6 +13,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Scorers and officials: tournament scorer pool, bulk assign, self-join, match officials (parity #11)
+
+- **Ask (parity queue #11):** a meet's scorers were set up on the tournament but never reached the
+  match pickers; assigning 40 fixtures meant 40 trips; a scorer whose phone died couldn't hand on
+  without the organiser; umpires/referees had nowhere to live.
+- **Migration 0043** `20261019121100_match_officials.sql` (bundle `2026-10-match-officials-0043.sql`)
+  — founder to run: `matches.officials jsonb` (own column, never `format` — REVIEW Decision 3);
+  `join_match_as_scorer(p_match)` (security definer, authenticated only): a tournament scorer appends
+  themself to `scorer_ids` of a scheduled/live match of that tournament, else 42501. PGlite 17/17;
+  scenarios/privacy/scoringlock/tournamentteams still green.
+- **Data:** pure `data/matchOfficials.ts` (per-sport `OFFICIAL_SLOTS`, `normalizeOfficials`,
+  `officialsLine`) and `data/scorerAssign.ts` (`planScorerAssignments`: rotate / by ground / one,
+  only-unassigned, no same-time double booking when avoidable; legacy `scorerId` counts as
+  assigned). repos: official add/remove now throw; `getMatchOfficials` (separate tolerant select,
+  `available:false` before 0043), `setMatchOfficials`, `joinMatchAsScorer` (missing RPC → "Ask the
+  organiser…"), `bulkSetMatchScorers` via `setMatchScorers` (so the #03 lock clears correctly).
+- **UI:** "🎽 Scorers & officials" panel (PersonPicker per role, "🎯 Assign scorers to fixtures · N
+  without a scorer") → new `AssignScorersScreen`; Live scoring: "Tournament scorers" block first in
+  the scorer picker, "🎯 Score this match" self-join, "Match officials" card (slots, referee chips,
+  name-only entry; viewers see filled rows only), muted officials line under the Summary.
+- **Verified:** tsc + 509 tests (11 new); demo 8093: pool add, even split 4/3/3 + chip cycling +
+  "✓ 10 assigned", self-join on live kabaddi, cricket umpires + football referee, viewer line.
+  Not verified: live RLS, pre-migration notice, push delivery to other scorers, "By ground" in UI.
+
+---
+
 ### 2026-10-09 — Tournament teams: search, edit team, confirmed removals, team admins, join by link/code (parity #10)
 
 - **Ask (parity queue #10):** 30–60 school teams in unsearchable chips; no way to fix a misspelt

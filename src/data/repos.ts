@@ -17,6 +17,7 @@ import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
+import { normalizeOfficials, type MatchOfficial } from './matchOfficials';
 import type { PointsAdjustment } from './standings';
 import type { ScoringLock } from '../core/scoringLock';
 import { MATCHES } from '../core/mockData';
@@ -1162,6 +1163,67 @@ export async function setMatchScorers(matchId: string, playerIds: string[]): Pro
     .from('matches')
     .update({ scorer_ids: ids, scorer_id: ids[0] ?? null })
     .eq('id', matchId);
+  if (error) throw new Error(error.message);
+}
+
+/** Save a bulk scorer plan (`planScorerAssignments`) match by match. Goes
+ *  through `setMatchScorers`, so taking the current lock holder off a match's
+ *  list also ends their turn (#03). Never throws — failures are returned. */
+export async function bulkSetMatchScorers(plan: Record<string, string[]>): Promise<{ ok: string[]; failed: string[] }> {
+  const ok: string[] = [];
+  const failed: string[] = [];
+  for (const [matchId, ids] of Object.entries(plan)) {
+    try { await setMatchScorers(matchId, ids); ok.push(matchId); } catch { failed.push(matchId); }
+  }
+  return { ok, failed };
+}
+
+/** Shown when the self-join RPC isn't deployed yet (or the server refuses). */
+export const JOIN_AS_SCORER_FALLBACK = 'Ask the organiser to add you as this match’s scorer';
+
+/** A tournament scorer adds themself to this match's scorers (parity #11,
+ *  `join_match_as_scorer`). Returns the player id that joined. Throws — the
+ *  message is user-facing. */
+export async function joinMatchAsScorer(matchId: string, myPlayerId?: string | null): Promise<string> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    const pid = myPlayerId ?? demo.players[0]?.id;
+    const isScorer = !!m?.tournamentId && !!pid && demo.tournamentOfficials.some((o) => o.tournamentId === m.tournamentId && o.role === 'scorer' && o.playerId === pid);
+    if (!m || !pid || !isScorer || (m.status !== 'scheduled' && m.status !== 'live')) throw new Error('Only this tournament’s scorers can do that');
+    const ids = m.scorerIds?.length ? m.scorerIds : m.scorerId ? [m.scorerId] : [];
+    m.scorerIds = ids.includes(pid) ? ids : [...ids, pid];
+    m.scorerId = m.scorerId ?? pid;
+    return pid;
+  }
+  const { data, error } = await supabase.rpc('join_match_as_scorer', { p_match: matchId });
+  if (isMissingFn(error)) throw new Error(JOIN_AS_SCORER_FALLBACK);
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Per-match officials (umpires, referees, commentator). Read separately — never
+ *  part of MATCH_SELECT — so the app keeps working before migration 0043:
+ *  `available: false` then, and the officials card stays hidden. */
+export async function getMatchOfficials(matchId: string): Promise<{ available: boolean; list: MatchOfficial[] }> {
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    return { available: true, list: normalizeOfficials(m?.officials ?? [], m?.sport) };
+  }
+  const { data, error } = await supabase.from('matches').select('sport, officials').eq('id', matchId).maybeSingle();
+  if (error) return { available: false, list: [] };
+  const row = data as { sport?: string; officials?: unknown } | null;
+  return { available: true, list: normalizeOfficials(row?.officials ?? [], row?.sport) };
+}
+
+/** Replace a match's officials. Throws on a failed write. */
+export async function setMatchOfficials(matchId: string, list: MatchOfficial[]): Promise<void> {
+  const clean = normalizeOfficials(list);
+  if (!isSupabaseConfigured || !supabase) {
+    const m = demo.matches.find((x) => x.id === matchId);
+    if (m) m.officials = clean;
+    return;
+  }
+  const { error } = await supabase.from('matches').update({ officials: clean }).eq('id', matchId);
   if (error) throw new Error(error.message);
 }
 
@@ -2980,26 +3042,29 @@ export async function getTournamentOfficials(tournamentId: string): Promise<Tour
   return (data ?? []).map(toOfficial);
 }
 
-/** Assign a person to officiate a tournament (scorer/referee). Idempotent + audited. */
+/** Assign a person to officiate a tournament (scorer/referee). Idempotent + audited.
+ *  Throws on a failed write so the caller can surface it. */
 export async function assignTournamentOfficial(tournamentId: string, playerId: string, role: OfficialRole, byPlayerId?: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     if (!demo.tournamentOfficials.some((o) => o.tournamentId === tournamentId && o.playerId === playerId && o.role === role)) {
       demo.tournamentOfficials.push({ tournamentId, playerId, role, assignedBy: byPlayerId, at: new Date().toISOString() });
     }
   } else {
-    await supabase.from('tournament_officials').upsert({ tournament_id: tournamentId, player_id: playerId, role, assigned_by: byPlayerId ?? null }, { onConflict: 'tournament_id,player_id,role' });
+    const { error } = await supabase.from('tournament_officials').upsert({ tournament_id: tournamentId, player_id: playerId, role, assigned_by: byPlayerId ?? null }, { onConflict: 'tournament_id,player_id,role' });
+    if (error) throw new Error(error.message);
   }
   const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
   const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
   await logActivity({ scope: 'tournament', refId: tournamentId, action: 'official.assigned', detail: `${who} assigned as ${role}`, byPlayerId, byName });
 }
 
-/** Remove a tournament official assignment. Audited. */
+/** Remove a tournament official assignment. Audited. Throws on a failed write. */
 export async function unassignTournamentOfficial(tournamentId: string, playerId: string, role: OfficialRole, byPlayerId?: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     demo.tournamentOfficials = demo.tournamentOfficials.filter((o) => !(o.tournamentId === tournamentId && o.playerId === playerId && o.role === role));
   } else {
-    await supabase.from('tournament_officials').delete().eq('tournament_id', tournamentId).eq('player_id', playerId).eq('role', role);
+    const { error } = await supabase.from('tournament_officials').delete().eq('tournament_id', tournamentId).eq('player_id', playerId).eq('role', role);
+    if (error) throw new Error(error.message);
   }
   const who = (await getPlayer(playerId))?.fullName ?? 'Someone';
   const byName = byPlayerId ? (await getPlayer(byPlayerId))?.fullName : undefined;
