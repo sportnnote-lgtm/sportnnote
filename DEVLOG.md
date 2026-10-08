@@ -13,6 +13,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket dismissals: retired out, Mankad, hit twice, obstructing, stumped off a wide, run-out end/2nd fielder/byes (parity #16)
+
+- **Ask (parity queue #16):** retired-out, Mankads and stumpings off wides couldn't be recorded;
+  run-outs credited byes to the batter, had no 2nd fielder and misplaced the new batter.
+- **Engine:** new kinds `retiredout`/`mankad`/`hittwice`/`obstruct` (none the bowler's wicket);
+  `composeDismissal` with fielder 2 ("run out (A/B)", Mankad "run out (Bowler)"); `creaseAfterWicket`
+  driven by "wicket broken at" (`end`); `runsAs` bye/leg-bye on run-outs and obstructions (bowler not
+  charged, chips `2b+W`/`2lb+W`); EXTRA `wicket` (legacy `runout:true` still maps) with stumped / hit
+  wicket off a wide (bowler's wicket, penalty in force from #14); shared `wicketAttribution` (the
+  run-out striker credit lives only here — REVIEW Decision 6). `ballRuns` now decodes wicket chips
+  with extras (`wd+W` used to count 0).
+- **UI:** six main chips + "More ▾"; run-out/obstruct steps (runs were → runs → fielder 1 → optional
+  2nd fielder → who's out → broken at → "Next ball: X faces"); off-a-wide / off-a-no-ball toggles;
+  Mankad auto non-striker; free-hit kinds; extras pad opens only the wickets allowed there; over
+  editor knows hit twice / obstructing.
+- **Compat:** legacy logs identical vs HEAD (seed + live + 3,000 fuzzed games, ~120k actions).
+- **Verified:** tsc + 607 tests (33 new cricket-dismissals); demo 8093 m8: Mankad, stumping off a
+  wide, 2-fielder run-out off a bye, retired out, undo; fits 375 px. Not verified: free-hit panel in
+  the demo; Mankad rating by test (lives in .tsx). No migration.
+
+---
+
 ### 2026-10-09 — Cricket run entry: 5/7/custom, overthrows, all-run 4s, extras values (parity #15)
 
 - **Ask (parity queue #15):** school grounds mean 1 + 4 overthrows, run 5s, all-run 4s, Wd+3 and

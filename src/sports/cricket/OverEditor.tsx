@@ -19,7 +19,9 @@ import {
 } from './editOvers';
 
 type Staged = { key: string; ops: AmendOp[]; line: string };
-const WICKET_KINDS = [['bowled', 'Bowled'], ['caught', 'Caught'], ['lbw', 'LBW'], ['stumped', 'Stumped'], ['runout', 'Run out'], ['hitwicket', 'Hit wicket']] as const;
+const WICKET_KINDS = [['bowled', 'Bowled'], ['caught', 'Caught'], ['lbw', 'LBW'], ['stumped', 'Stumped'], ['runout', 'Run out'], ['hitwicket', 'Hit wicket'], ['hittwice', 'Hit twice'], ['obstruct', 'Obstructing']] as const;
+/** Kinds whose completed runs count (parity #16): run out and obstructing. */
+const takesRuns = (k: string) => k === 'runout' || k === 'obstruct';
 
 export function OverEditor({ log, config, onOps, homeName, awayName, homeRoster, awayRoster }: {
   log: MatchEventRecord[];
@@ -190,7 +192,7 @@ function BallCard({ ball, log, fielders, onSave, onCancel }: {
     if (ball.category === 'legal') onSave({ runs, type, strikerId: striker, strikerName: nameOf(striker) });
     else if (ball.category === 'wicket') {
       const f = fielders.find((x) => x.id === fielder);
-      onSave({ kind, fielderId: f?.id, fielderName: f?.fullName, runs: kind === 'runout' ? runs : undefined, batterOut: kind === 'runout' ? out : undefined });
+      onSave({ kind, fielderId: f?.id, fielderName: f?.fullName, runs: takesRuns(kind) ? runs : undefined, batterOut: takesRuns(kind) ? out : undefined });
     } else onSave({ extraKind, extraRuns: runs });
   };
   return (
@@ -214,7 +216,7 @@ function BallCard({ ball, log, fielders, onSave, onCancel }: {
           {(kind === 'caught' || kind === 'runout') && (
             <View style={st.chips}>{fielders.map((f) => <SelectChip key={f.id} label={f.fullName} active={fielder === f.id} onPress={() => setFielder(f.id)} />)}</View>
           )}
-          {kind === 'runout' && (
+          {takesRuns(kind) && (
             <>
               <View style={st.chips}>{[0, 1, 2, 3].map((n) => <SelectChip key={n} label={`${n} run${n === 1 ? '' : 's'}`} active={runs === n} onPress={() => setRuns(n)} />)}</View>
               <View style={st.chips}>

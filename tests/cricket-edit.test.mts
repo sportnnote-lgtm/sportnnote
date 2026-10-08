@@ -235,7 +235,9 @@ describe('wickets', () => {
     const ro = editBall(recAt(log, wseq), { kind: 'runout', fielderId: 'kabir', fielderName: 'Kabir', runs: 1, batterOut: 'nonStriker' }) as ScoreAction;
     assert.equal(ro.payload!.batterOut, 'nonstriker');
     assert.deepEqual(ro.attribution, { playerId: 'kabir', stat: 'runouts', playerName: 'Kabir' });
-    assert.equal(ro.attribution2, undefined);
+    // Parity #16 (REVIEW Decision 6): a run-out's completed runs off the bat are
+    // credited to the striker as the 2nd attribution (was: none).
+    assert.deepEqual(ro.attribution2, { playerId: 'ravi', stat: 'runs', by: 1, playerName: 'Ravi' });
   });
 });
 

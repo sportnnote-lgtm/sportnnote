@@ -15,8 +15,9 @@ import type { ScoreAction } from '../types';
 import { AMEND_TYPE, effectiveLog, type AmendOp } from '../amend.ts';
 import { effectiveRules } from './rules.ts';
 import {
-  init, reducer, ballStamp, oversStr, alignCrease, NO_BOWLER, clampRuns, isBoundaryHit, runSymbol, symbolTone, ballRuns as engineBallRuns,
-  type CricketState, type DismissalKind,
+  init, reducer, ballStamp, oversStr, alignCrease, NO_DELIVERY as ENGINE_NO_DELIVERY, clampRuns, isBoundaryHit, runSymbol, symbolTone, ballRuns as engineBallRuns,
+  wicketSymbol, wicketAttribution, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS,
+  type CricketState, type DismissalKind, type RunsAs,
 } from './engine.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -89,8 +90,12 @@ export const CATEGORY_HINT = 'To make it a wicket or a wide, undo back to that b
 // ─── Small helpers ─────────────────────────────────────────────────────────
 
 const BALL_TYPES = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA']);
-const NO_DELIVERY = new Set(['retired', 'timedout']);
-const DELIVERY_KINDS = new Set(['bowled', 'caught', 'lbw', 'stumped', 'runout', 'hitwicket']);
+// Retired hurt / retired out / timed out / Mankad (parity #16) aren't deliveries.
+const NO_DELIVERY = new Set<string>(ENGINE_NO_DELIVERY);
+const DELIVERY_KINDS = new Set(['bowled', 'caught', 'lbw', 'stumped', 'runout', 'hitwicket', 'hittwice', 'obstruct']);
+/** The wicket kind on an EXTRA: `wicket` (parity #16), or a legacy `runout: true`. */
+const extraWicket = (p: Payload): DismissalKind | undefined =>
+  (p.wicket ? String(p.wicket) : p.runout ? 'runout' : undefined) as DismissalKind | undefined;
 
 /** A stored row → the reducer action (same mapping as amend.ts / useLiveMatch),
  *  with the persisted `_attr2` lifted back into `attribution2`. */
@@ -104,7 +109,7 @@ export function recordToAction(rec: MatchEventRecord): ScoreAction {
   return a;
 }
 
-/** Is this record a delivery that the editor lists (not retired/timed-out)? */
+/** Is this record a delivery that the editor lists (not retired/timed-out/Mankad)? */
 export function isEditableBall(rec: Pick<MatchEventRecord, 'type' | 'payload'>): boolean {
   if (!BALL_TYPES.has(rec.type)) return false;
   if (rec.type === 'WICKET' && NO_DELIVERY.has(String(rec.payload?.kind ?? 'bowled'))) return false;
@@ -137,13 +142,15 @@ export function ballSymbol(a: Pick<ScoreAction, 'type' | 'payload'>, widePenalty
       return (a.type === 'LEGBYES' ? 'lb' : 'b') + (r > 1 ? r : '');
     }
     case 'WICKET': {
-      const c = p.kind === 'runout' ? Math.max(0, num(p.runs)) : 0;
-      return c > 0 ? `${c}+W` : 'W';
+      // '2+W' off the bat, '2b+W' / '2lb+W' as byes (parity #16) — same as the engine.
+      const c = RUNS_KINDS.includes(p.kind as DismissalKind) ? clampRuns(p.runs) : 0;
+      return wicketSymbol(c, p.runsAs === 'bye' || p.runsAs === 'legbye' ? p.runsAs : 'bat');
     }
     case 'EXTRA': {
       const nb = p.kind === 'No ball';
-      if (p.runout) {
-        const c = clampRuns(p.runs);
+      const wk = extraWicket(p);
+      if (wk) {
+        const c = RUNS_KINDS.includes(wk) ? clampRuns(p.runs) : 0;
         return `${c > 0 ? c : ''}${nb ? 'nb' : 'wd'}+W`;
       }
       if (nb) {
@@ -309,8 +316,9 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
   if (cat === 'wicket') {
     if (edit.type !== undefined || edit.extraKind !== undefined || edit.extraRuns !== undefined) return { error: CATEGORY_HINT };
     const kind = String(edit.kind ?? op.kind ?? 'bowled') as DismissalKind;
-    if (!DELIVERY_KINDS.has(kind)) return { error: 'Retired hurt / timed out aren’t deliveries — undo back to that ball.' };
+    if (!DELIVERY_KINDS.has(kind)) return { error: 'Retired / timed out / Mankad aren’t deliveries — undo back to that ball.' };
     const isRunOut = kind === 'runout';
+    const takesRuns = RUNS_KINDS.includes(kind);
     const needsFielder = kind === 'caught' || isRunOut;
     if (needsFielder) {
       const keepOld = edit.fielderId === undefined && (op.kind === 'caught' || op.kind === 'runout');
@@ -321,59 +329,84 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
       p.fielderId = undefined;
       p.fielderName = undefined;
     }
-    if (isRunOut) {
+    if (takesRuns) {
       const bo = edit.batterOut ?? op.batterOut ?? 'striker';
       p.batterOut = String(bo).toLowerCase() === 'nonstriker' ? 'nonstriker' : 'striker';
       const r = edit.runs ?? num(op.runs);
-      if (!Number.isInteger(r) || r < 0 || r > 3) return { error: 'Run-out runs must be 0–3.' };
+      // A value recorded live (parity #15/#16 RunsInput) is kept as-is.
+      if (!Number.isInteger(r) || r < 0 || (r > 3 && r !== num(op.runs, -1))) return { error: 'Run-out runs must be 0–3.' };
       p.runs = r;
     } else {
       if (edit.runs !== undefined && edit.runs !== 0) return { error: 'Only a run out can carry completed runs.' };
       p.batterOut = 'striker';
       p.runs = 0;
     }
+    // Run-out keys (parity #16: fielder2Id/Name, runsAs, end) ride along in the
+    // spread payload; the engine reads them only for a run-out / obstruction,
+    // so they're inert if the ball becomes, say, bowled.
     p.kind = kind;
-    const fielderCredit = (): Attr | undefined => {
-      if (kind === 'caught' && p.fielderId) return { playerId: p.fielderId as string, stat: 'catches', playerName: p.fielderName as string | undefined };
-      if (kind === 'stumped') {
-        if (ctx.keeper?.id) return { playerId: ctx.keeper.id, stat: 'stumpings', playerName: ctx.keeper.name };
-        if (op.kind === 'stumped' && orig.attribution2) return orig.attribution2;
-        return undefined;
-      }
-      if (isRunOut && p.fielderId) return { playerId: p.fielderId as string, stat: 'runouts', playerName: p.fielderName as string | undefined };
-      return undefined;
-    };
     const a: ScoreAction = { type: 'WICKET', payload: cleanUndef(p) };
     if (orig.side) a.side = orig.side;
-    const attr = isRunOut ? fielderCredit() : bowlerId && !NO_BOWLER.includes(kind) ? { playerId: bowlerId, stat: 'wickets', by: 1, playerName: bowlerName } : undefined;
-    const attr2 = isRunOut ? undefined : fielderCredit();
-    if (attr) a.attribution = attr;
-    if (attr2) a.attribution2 = attr2;
+    // Stumped: the keeper from the context, else the one the ball already credited.
+    const keeper = ctx.keeper?.id ? ctx.keeper
+      : op.kind === 'stumped' && orig.attribution2 ? { id: orig.attribution2.playerId, name: orig.attribution2.playerName } : undefined;
+    const credits = wicketAttribution({
+      kind,
+      bowler: { id: bowlerId, name: bowlerName },
+      fielder: { id: p.fielderId as string | undefined, name: p.fielderName as string | undefined },
+      keeper,
+      striker: { id: strikerId, name: strikerName },
+      runs: num(p.runs),
+      runsAs: p.runsAs as RunsAs | undefined,
+    });
+    if (credits.attribution) a.attribution = credits.attribution;
+    if (credits.attribution2) a.attribution2 = credits.attribution2;
     return a;
   }
 
   // Extras: Wide ⇄ No ball, runs 0–4 (0–6 accepted so a recorded no-ball six survives).
-  if (edit.type !== undefined || (edit.kind !== undefined && !(op.runout && edit.kind === 'runout'))) return { error: CATEGORY_HINT };
-  if (!op.runout && (edit.fielderId !== undefined || edit.batterOut !== undefined)) return { error: CATEGORY_HINT };
+  const wk = extraWicket(op);
+  if (edit.type !== undefined || (edit.kind !== undefined && !(wk && edit.kind === wk))) return { error: CATEGORY_HINT };
+  if (!wk && (edit.fielderId !== undefined || edit.batterOut !== undefined)) return { error: CATEGORY_HINT };
   const ek = edit.extraKind ?? (cat === 'noball' ? 'noball' : 'wide');
   const switching = ek !== cat;
+  // A wicket on a wide (stumped…) can't move to a no-ball unless it can fall there too.
+  if (wk && !(ek === 'noball' ? NOBALL_WICKETS : WIDE_WICKETS).includes(wk)) return { error: CATEGORY_HINT };
   let r = edit.extraRuns ?? edit.runs ?? num(op.runs);
-  if (switching && ek === 'wide' && !op.runout && edit.extraRuns === undefined && edit.runs === undefined) r += num(op.byes);
+  if (switching && ek === 'wide' && !wk && edit.extraRuns === undefined && edit.runs === undefined) r += num(op.byes);
   const unchanged = !switching && r === num(op.runs, -1); // a recorded Wd+7 / Nb+9 (#15) survives
   if (!Number.isInteger(r) || r < 0 || (!unchanged && r > (ek === 'noball' ? 6 : 4))) return { error: ek === 'noball' ? 'No-ball runs must be 0–6.' : 'Wide runs must be 0–4.' };
   p.kind = ek === 'noball' ? 'No ball' : 'Wide';
   p.runs = r;
-  if (ek === 'wide') delete p.byes; // a wide has no off-bat/bye split — all runs are wides
-  if (op.runout) {
-    const bo = edit.batterOut ?? op.batterOut ?? 'striker';
-    p.batterOut = String(bo).toLowerCase() === 'nonstriker' ? 'nonstriker' : 'striker';
+  if (ek === 'wide') { delete p.byes; delete p.runsAs; } // a wide has no off-bat/bye split — all runs are wides
+  if (wk) {
+    if (RUNS_KINDS.includes(wk)) {
+      const bo = edit.batterOut ?? op.batterOut ?? 'striker';
+      p.batterOut = String(bo).toLowerCase() === 'nonstriker' ? 'nonstriker' : 'striker';
+      if (r > 3 && !unchanged) return { error: 'Run-out runs must be 0–3.' };
+    } else {
+      p.batterOut = 'striker';
+      if (r !== 0) return { error: 'Only a run out can carry completed runs.' };
+    }
     if (edit.fielderId !== undefined) { p.fielderId = edit.fielderId; p.fielderName = edit.fielderName; }
-    if (r > 3) return { error: 'Run-out runs must be 0–3.' };
   }
   const a: ScoreAction = { type: 'EXTRA', payload: cleanUndef(p) };
   if (orig.side) a.side = orig.side;
-  if (op.runout) {
-    if (p.fielderId) a.attribution = { playerId: p.fielderId as string, stat: 'runouts', playerName: p.fielderName as string | undefined };
+  if (wk) {
+    const keeper = ctx.keeper?.id ? ctx.keeper
+      : wk === 'stumped' && orig.attribution2 ? { id: orig.attribution2.playerId, name: orig.attribution2.playerName } : undefined;
+    const credits = wicketAttribution({
+      kind: wk,
+      bowler: { id: bowlerId, name: bowlerName },
+      fielder: { id: p.fielderId as string | undefined, name: p.fielderName as string | undefined },
+      keeper,
+      striker: { id: strikerId, name: strikerName },
+      runs: r,
+      runsAs: p.runsAs as RunsAs | undefined,
+      wide: ek === 'wide',
+    });
+    if (credits.attribution) a.attribution = credits.attribution;
+    if (credits.attribution2) a.attribution2 = credits.attribution2;
   } else if (orig.attribution) {
     a.attribution = orig.attribution; // live extras carry none; keep anything a later spec added
   }
@@ -476,6 +509,7 @@ export function swapBattersOps(
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const KIND_LABEL: Record<string, string> = {
   bowled: 'Bowled', caught: 'Caught', lbw: 'LBW', stumped: 'Stumped', runout: 'Run out', hitwicket: 'Hit wicket',
+  hittwice: 'Hit twice', obstruct: 'Obstructing', mankad: 'Mankad', retiredout: 'Retired out',
 };
 
 /** Short human text for one ball: '1 run', '4 runs', '2 byes', 'Leg bye',
@@ -488,15 +522,18 @@ export function describeBall(a: Pick<ScoreAction, 'type' | 'payload'>): string {
     case 'LEGBYES': { const r = Math.max(1, num(p.runs, 1)); return r === 1 ? 'Leg bye' : plural(r, 'leg bye'); }
     case 'WICKET': {
       const k = String(p.kind ?? 'bowled');
-      const f = (k === 'caught' || k === 'runout') && p.fielderName ? ` (${p.fielderName})` : '';
-      const out = k === 'runout' && p.batterOut === 'nonstriker' ? ', non-striker' : '';
-      const r = k === 'runout' ? num(p.runs) : 0;
-      return `${KIND_LABEL[k] ?? 'Out'}${f}${out}${r > 0 ? ` + ${plural(r, 'run')}` : ''}`;
+      const f = (k === 'caught' || k === 'runout') && p.fielderName ? ` (${[p.fielderName, k === 'runout' ? p.fielder2Name : undefined].filter(Boolean).join('/')})` : '';
+      const takesRuns = k === 'runout' || k === 'obstruct';
+      const out = takesRuns && p.batterOut === 'nonstriker' ? ', non-striker' : '';
+      const r = takesRuns ? num(p.runs) : 0;
+      const unit = p.runsAs === 'bye' ? 'bye' : p.runsAs === 'legbye' ? 'leg bye' : 'run';
+      return `${KIND_LABEL[k] ?? 'Out'}${f}${out}${r > 0 ? ` + ${plural(r, unit)}` : ''}`;
     }
     case 'EXTRA': {
       const base = p.kind === 'No ball' ? 'No ball' : 'Wide';
       const r = num(p.runs) + (p.kind === 'No ball' ? num(p.byes) : 0);
-      return `${base}${r > 0 ? ` + ${r}` : ''}${p.runout ? ' + run out' : ''}`;
+      const wk = extraWicket(p);
+      return `${base}${r > 0 ? ` + ${r}` : ''}${wk ? ` + ${(KIND_LABEL[wk] ?? 'out').toLowerCase()}` : ''}`;
     }
     default: return a.type;
   }

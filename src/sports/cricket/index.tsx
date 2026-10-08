@@ -27,8 +27,9 @@ import {
   init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
+  NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
 } from './engine';
-import type { CricketState, DismissalKind, Innings } from './engine';
+import type { CricketState, DismissalKind, Innings, RunsAs } from './engine';
 import { resourcePct, revisedTarget } from './dls';
 import { OverEditor } from './OverEditor';
 import {
@@ -189,9 +190,24 @@ function SetupPanel({
 }
 const roster0 = (r: Player[]) => r.length > 0;
 
-const DISMISSALS: DismissalKind[] = ['bowled', 'caught', 'lbw', 'stumped', 'runout', 'hitwicket', 'retired', 'timedout'];
+/** The six everyday dismissals; the rare ones fold under "More ▾" (parity #16). */
+const MAIN_DISMISSALS: DismissalKind[] = ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket'];
+const MORE_DISMISSALS: DismissalKind[] = ['obstruct', 'hittwice', 'mankad', 'retired', 'retiredout', 'timedout'];
+/** On a free hit only these can happen (UI-only — the engine doesn't police it). */
+const FREE_HIT_DISMISSALS: DismissalKind[] = ['runout', 'obstruct', 'hittwice', 'mankad', 'retired', 'retiredout'];
 const needsFielder = (k: DismissalKind) => k === 'caught' || k === 'runout';
-const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'retired' || k === 'timedout';
+const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'obstruct' || k === 'retired' || k === 'retiredout' || k === 'timedout';
+/** Inline law hints (no modal). */
+const DISMISSAL_HINT: Partial<Record<DismissalKind, string>> = {
+  mankad: 'Bowler ran out the non-striker for leaving early. Not a ball; not the bowler\u2019s wicket.',
+  obstruct: 'Includes handling the ball. Completed runs count; not the bowler\u2019s wicket.',
+  hittwice: 'Striker only. Not the bowler\u2019s wicket.',
+  retiredout: 'Retired without the umpire\u2019s consent: a wicket, no ball bowled, can\u2019t bat again.',
+  retired: 'Not a wicket — they can resume their innings later.',
+};
+/** "Runs were" on a run out / obstruction: how the completed runs are scored. */
+const RUNS_WERE = [['bat', 'Off the bat'], ['bye', 'Byes'], ['legbye', 'Leg byes'], ['wide', 'Wide'], ['noball', 'No ball']] as const;
+type RunsWere = (typeof RUNS_WERE)[number][0];
 
 /** A rare run value (parity #15): digits-only field + Add, 0–99. Common values
  *  stay one-tap buttons; this is only for the odd 9 or Wd+7. */
@@ -219,7 +235,19 @@ function RunsInput({ onAdd, min = 0, placeholder, addLabel }: {
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
-  const [wf, setWf] = useState<{ kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number; offExtra?: 'wide' | 'noball' } | null>(null);
+  const [wf, setWf] = useState<{
+    kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number;
+    /** the extra this wicket fell on (from the extras pad, or the Off a wide / no-ball toggle) */
+    offExtra?: 'wide' | 'noball';
+    /** rare kinds unfolded */
+    more?: boolean;
+    /** run out / obstructing: how the completed runs were scored (+ the no-ball's runs) */
+    runsAs?: RunsWere; nbRunsAs?: 'bat' | 'bye' | 'legbye';
+    /** run out: 2nd fielder; null = skipped */
+    fielder2?: Player | null;
+    /** run out / obstructing: where the wicket was broken */
+    end?: 'striker' | 'bowler';
+  } | null>(null);
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | 'more' | null>(null);
   // Overthrows builder (parity #15): runs completed + overthrows.
   const [otRan, setOtRan] = useState(0);
@@ -302,91 +330,145 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const allOut = wf?.kind !== 'retired' && cur.wickets + 1 >= state.wicketsLimit;
   const newBatOptions = battingRoster.filter((p) => !isOut(p.id) && !atCrease(p.id) && !isUnavailable(p.id));
   const keeper = state.keepers[other(state.battingSide)];
-  // Credit the fielder: a catch, a stumping (the keeper), or a run-out.
-  const fielderCredit = () => {
-    if (!wf) return undefined;
-    if (wf.kind === 'caught' && wf.fielder) return { playerId: wf.fielder.id, stat: 'catches', playerName: wf.fielder.fullName };
-    if (wf.kind === 'stumped' && keeper?.id) return { playerId: keeper.id, stat: 'stumpings', playerName: keeper.name };
-    if (wf.kind === 'runout' && wf.fielder) return { playerId: wf.fielder.id, stat: 'runouts', playerName: wf.fielder.fullName };
-    return undefined;
-  };
+  // Fielder pickers list the keeper first (marked †) — most run-outs end there.
+  const keeperFirst = (r: Player[]) => (keeper ? [...r.filter((p) => p.id === keeper.id), ...r.filter((p) => p.id !== keeper.id)] : r);
   const finishWicket = (newBat?: Player) => {
     if (!wf?.kind) return;
-    const common = {
+    const kind = wf.kind;
+    const takesRuns = RUNS_KINDS.includes(kind);
+    // The extra this wicket fell on: the "Runs were" pick (run out / obstructing),
+    // or the "Off a wide" / "Off a no-ball" toggle (stumped, hit wicket, hit twice).
+    const onExtra = takesRuns ? (wf.runsAs === 'wide' ? 'wide' : wf.runsAs === 'noball' ? 'noball' : undefined) : wf.offExtra;
+    const runsN = takesRuns ? (wf.runs ?? 0) : 0;
+    const runsAs: RunsAs = takesRuns ? (wf.runsAs === 'bye' || wf.runsAs === 'legbye' ? wf.runsAs : onExtra === 'noball' ? (wf.nbRunsAs ?? 'bat') : 'bat') : 'bat';
+    const batterOut = kind === 'mankad' ? 'nonstriker' : kind === 'hittwice' || kind === 'stumped' || kind === 'hitwicket' ? 'striker' : (wf.batterOut ?? 'striker');
+    const payload: Record<string, unknown> = {
       strikerId, strikerName, bowlerId, bowlerName,
       fielderId: wf.fielder?.id, fielderName: wf.fielder?.fullName,
-      batterOut: wf.batterOut ?? 'striker', runs: wf.runs ?? 0,
+      batterOut, runs: runsN,
       newBatId: newBat?.id, newBatName: newBat?.fullName,
     };
-    if (wf.offExtra) {
-      // A run-out that happened ON a wide/no-ball — routed through EXTRA so the
-      // over doesn't advance and the +1 penalty is applied.
-      dispatch({
-        type: 'EXTRA', side: state.battingSide,
-        payload: { ...common, kind: wf.offExtra === 'wide' ? 'Wide' : 'No ball', runout: true },
-        attribution: wf.fielder ? { playerId: wf.fielder.id, stat: 'runouts', playerName: wf.fielder.fullName } : undefined,
-      });
-      setWf(null);
-      return;
-    }
-    dispatch({
-      type: 'WICKET',
-      side: state.battingSide,
-      payload: { ...common, kind: wf.kind },
-      // bowler's wicket (not on a run-out) + the fielder's catch/stumping as a 2nd credit
-      attribution: wf.kind === 'runout'
-        ? fielderCredit()
-        : bowlerId ? { playerId: bowlerId, stat: 'wickets', by: 1, playerName: bowlerName } : undefined,
-      attribution2: wf.kind === 'runout' ? undefined : fielderCredit(),
+    if (kind === 'runout' && wf.fielder2) { payload.fielder2Id = wf.fielder2.id; payload.fielder2Name = wf.fielder2.fullName; }
+    if (takesRuns && wf.end) payload.end = wf.end;
+    if (takesRuns && runsAs !== 'bat') payload.runsAs = runsAs;
+    // One credit rule for the live UI and the ball editor (engine `wicketAttribution`).
+    const credits = wicketAttribution({
+      kind,
+      bowler: { id: bowlerId, name: bowlerName },
+      fielder: { id: wf.fielder?.id, name: wf.fielder?.fullName },
+      keeper,
+      striker: { id: strikerId, name: strikerName },
+      runs: runsN, runsAs, wide: onExtra === 'wide',
     });
+    if (onExtra) {
+      // A wicket ON a wide / no-ball — routed through EXTRA so the over doesn't
+      // advance and the penalty in force is applied.
+      dispatch({ type: 'EXTRA', side: state.battingSide, payload: { ...payload, kind: onExtra === 'wide' ? 'Wide' : 'No ball', wicket: kind }, ...credits });
+    } else {
+      dispatch({ type: 'WICKET', side: state.battingSide, payload: { ...payload, kind }, ...credits });
+    }
     setWf(null);
   };
 
   if (wf) {
     const k = wf.kind;
-    // On a free hit the batter can only be run out.
-    const options = state.freeHit ? (['runout'] as DismissalKind[]) : DISMISSALS;
-    const runsStep = k === 'runout' && wf.runs === undefined;
+    // Kinds on offer: a wicket off a wide / no-ball; a free hit (only these can
+    // happen on one — UI-only, replays don't change); otherwise all, the rare
+    // ones folded under "More ▾".
+    const options: DismissalKind[] = wf.offExtra === 'wide' ? WIDE_WICKETS
+      : wf.offExtra === 'noball' ? NOBALL_WICKETS
+      : state.freeHit ? FREE_HIT_DISMISSALS
+      : wf.more ? [...MAIN_DISMISSALS, ...MORE_DISMISSALS] : MAIN_DISMISSALS;
+    const showMore = !wf.offExtra && !state.freeHit && !wf.more;
+    const takesRuns = !!k && RUNS_KINDS.includes(k);
+    const runsStep = takesRuns && wf.runs === undefined;
     const fielderStep = !!k && needsFielder(k) && !wf.fielder && !runsStep;
-    const batterStep = !!k && needsBatter(k) && !wf.batterOut && !runsStep && (!needsFielder(k) || !!wf.fielder);
-    const newBatStep = !!k && !runsStep && (!needsFielder(k) || !!wf.fielder) && (!needsBatter(k) || !!wf.batterOut);
+    const fielder2Step = k === 'runout' && !!wf.fielder && wf.fielder2 === undefined;
+    const fieldDone = !!k && (!needsFielder(k) || !!wf.fielder) && (k !== 'runout' || wf.fielder2 !== undefined);
+    const batterStep = !!k && needsBatter(k) && !wf.batterOut && !runsStep && fieldDone;
+    const batterKnown = !!k && (!needsBatter(k) || !!wf.batterOut);
+    const endStep = takesRuns && !runsStep && fieldDone && batterKnown && !wf.end;
+    const newBatStep = !!k && !runsStep && fieldDone && batterKnown && (!takesRuns || !!wf.end);
     // Live scorecard-style recap of the dismissal as the scorer builds it, so the
     // wicket reads back ("c Fielder b Bowler") before the final confirming tap.
-    const keeperNm = state.keepers[other(state.battingSide)]?.name;
-    const haveFielder = !needsFielder(k as DismissalKind) || !!wf.fielder;
-    const batterKnown = !needsBatter(k as DismissalKind) || !!wf.batterOut;
-    const outName = (wf.batterOut === 'nonstriker' ? nonStrikerName : strikerName) ?? 'Batter';
-    const descriptor = !k ? '' : haveFielder ? composeDismissal(k, bowlerName, wf.fielder?.fullName, keeperNm) : WICKET_LABEL[k].toLowerCase();
-    const runsTail = k === 'runout' && wf.runs != null ? ` · ${wf.runs} run${wf.runs === 1 ? '' : 's'}` : '';
-    const wktRecap = k ? `${batterKnown ? `${outName} ` : ''}${descriptor}${runsTail}` : '';
+    const keeperNm = keeper?.name;
+    const haveFielder = !k || !needsFielder(k) || !!wf.fielder;
+    const outWho = k === 'mankad' ? 'nonstriker' : !k || !needsBatter(k) ? 'striker' : wf.batterOut;
+    const outName = (outWho === 'nonstriker' ? nonStrikerName : strikerName) ?? 'Batter';
+    const descriptor = !k ? '' : haveFielder ? composeDismissal(k, bowlerName, wf.fielder?.fullName, keeperNm, wf.fielder2?.fullName) : WICKET_LABEL[k].toLowerCase();
+    // e.g. "1 run", "2 byes", "1 leg bye", "2 run(s) off a wide", "1 bye off a no-ball"
+    const unitOf = (x: string | undefined, n: number) => (x === 'bye' ? `bye${n === 1 ? '' : 's'}` : x === 'legbye' ? `leg bye${n === 1 ? '' : 's'}` : `run${n === 1 ? '' : 's'}`);
+    const runsTail = takesRuns && wf.runs != null
+      ? ` · ${wf.runs} ${unitOf(wf.runsAs === 'noball' ? wf.nbRunsAs : wf.runsAs, wf.runs)}${wf.runsAs === 'wide' ? ' off a wide' : wf.runsAs === 'noball' ? ' off a no-ball' : ''}`
+      : '';
+    const offTail = !takesRuns && wf.offExtra ? ` · off a ${wf.offExtra === 'wide' ? 'wide' : 'no-ball'}` : '';
+    const wktRecap = k ? `${batterKnown ? `${outName} ` : ''}${descriptor}${runsTail}${offTail}` : '';
+    // "Next ball: X faces" — from where the wicket was broken (run out /
+    // obstructing), else the new batter takes the vacated end; then the over end.
+    const onExtraNow = takesRuns ? (wf.runsAs === 'wide' || wf.runsAs === 'noball' ? wf.runsAs : undefined) : wf.offExtra;
+    const legalNow = !onExtraNow || (onExtraNow === 'wide' ? R.wideLegal : R.noBallLegal);
+    const ballsNow = state.ballsInOver >= state.ballsPerOver ? 0 : state.ballsInOver;
+    const overEndNow = !!k && !NO_DELIVERY.includes(k) && legalNow && ballsNow + 1 >= state.ballsPerOver;
+    const outEnd = k && takesRuns && wf.end ? wf.end : outWho === 'nonstriker' ? 'bowler' : 'striker';
+    const nextFaces = k ? creaseAfterWicket({ strikerId, strikerName, nonStrikerId, nonStrikerName }, outWho === 'nonstriker' ? 'nonstriker' : 'striker', outEnd, { id: '__new', name: 'the new batter' }, overEndNow) : undefined;
+    // Legacy (no `end`) rotation isn't previewed for odd runs; every new wicket sends `end`.
+    const facesText = nextFaces?.strikerName ? `Next ball: ${nextFaces.strikerName} faces${overEndNow ? ' (over ends)' : ''}` : '';
+    const hint = k ? DISMISSAL_HINT[k] : undefined;
+    const extraToggle = k === 'stumped' || k === 'hitwicket' ? 'wide' : k === 'hittwice' ? 'noball' : undefined;
     return (
       <View style={ctrl.wktPanel}>
         <View style={ctrl.creaseHead}>
           <Text style={ctrl.label}>🎯 Wicket{bowlerName ? ` — ${bowlerName}` : ''}</Text>
           <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setWf(null)} />
         </View>
-        {state.freeHit && <Text style={ctrl.freeHit}>🟢 FREE HIT — only a run out counts</Text>}
+        {state.freeHit && !wf.offExtra && <Text style={ctrl.freeHit}>🟢 FREE HIT — no bowler's wicket counts</Text>}
         {wktRecap ? <View style={ctrl.wktRecap}><Text style={ctrl.wktRecapText}>{wktRecap}</Text></View> : null}
+        {hint ? <Text style={ctrl.meta}>ⓘ {hint}</Text> : null}
 
         {!k && (
           <>
-            <Text style={ctrl.meta}>How was {strikerName ?? 'the batter'} out?</Text>
+            <Text style={ctrl.meta}>{wf.offExtra ? `Wicket off the ${wf.offExtra === 'wide' ? 'wide' : 'no-ball'} — how?` : `How was ${strikerName ?? 'the batter'} out?`}</Text>
             <View style={ctrl.chips}>
               {options.map((d) => (
-                <SelectChip key={d} label={WICKET_LABEL[d]} active={false} onPress={() => setWf({ kind: d })} />
+                <SelectChip key={d} label={WICKET_LABEL[d]} active={false}
+                  onPress={() => setWf({ kind: d, offExtra: wf.offExtra, runsAs: RUNS_KINDS.includes(d) ? (wf.offExtra ?? 'bat') : undefined })} />
               ))}
+              {showMore && <SelectChip label="More ▾" active={false} onPress={() => setWf({ ...wf, more: true })} />}
             </View>
           </>
         )}
 
+        {/* Stumped / hit wicket can fall off a wide; hit twice off a no-ball. */}
+        {extraToggle && (
+          <View style={ctrl.chips}>
+            <SelectChip label={extraToggle === 'wide' ? 'Off a wide' : 'Off a no-ball'} active={wf.offExtra === extraToggle}
+              onPress={() => setWf({ ...wf, offExtra: wf.offExtra === extraToggle ? undefined : extraToggle })} />
+          </View>
+        )}
+
         {runsStep && (
           <>
-            <Text style={ctrl.meta}>Runs completed before the run out?</Text>
+            <Text style={ctrl.meta}>Runs were</Text>
+            <View style={ctrl.chips}>
+              {RUNS_WERE.filter(([v]) => (v !== 'bye' || R.byes) && (v !== 'legbye' || R.legByes)).map(([v, label]) => (
+                <SelectChip key={v} label={label} active={(wf.runsAs ?? 'bat') === v} onPress={() => setWf({ ...wf, runsAs: v })} />
+              ))}
+            </View>
+            {wf.runsAs === 'noball' && (R.byes || R.legByes) && (
+              <View style={[ctrl.chips, { alignItems: 'center' }]}>
+                <Text style={ctrl.moreLabel}>No-ball runs</Text>
+                {([['bat', 'Off the bat'], ['bye', 'Byes'], ['legbye', 'Leg byes']] as const).filter(([v]) => (v !== 'bye' || R.byes) && (v !== 'legbye' || R.legByes)).map(([v, label]) => (
+                  <SelectChip key={v} label={label} active={(wf.nbRunsAs ?? 'bat') === v} onPress={() => setWf({ ...wf, nbRunsAs: v })} />
+                ))}
+              </View>
+            )}
+            <Text style={ctrl.meta}>Runs completed before the {k === 'obstruct' ? 'obstruction' : 'run out'}?</Text>
             <View style={ctrl.chips}>
               {[0, 1, 2, 3].map((n) => (
                 <SelectChip key={n} label={String(n)} active={false} onPress={() => setWf({ ...wf, runs: n })} />
               ))}
             </View>
+            <RunsInput placeholder="Other runs completed (0–99)" addLabel={(n) => `${n} run${n === 1 ? '' : 's'}`} onAdd={(n) => setWf({ ...wf, runs: n })} />
           </>
         )}
 
@@ -394,19 +476,41 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <>
             <Text style={ctrl.meta}>{k === 'caught' ? 'Caught by?' : 'Run out by? (fielder)'}</Text>
             <View style={ctrl.chips}>
-              {bowlingRoster.map((p) => (
-                <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setWf({ ...wf, fielder: p })} />
+              {keeperFirst(bowlingRoster).map((p) => (
+                <SelectChip key={p.id} label={`${p.fullName}${p.id === keeper?.id ? ' †' : ''}`} active={false} onPress={() => setWf({ ...wf, fielder: p })} />
               ))}
+            </View>
+          </>
+        )}
+
+        {fielder2Step && (
+          <>
+            <Text style={ctrl.meta}>2nd fielder (optional)</Text>
+            <View style={ctrl.chips}>
+              {keeperFirst(bowlingRoster).filter((p) => p.id !== wf.fielder?.id).map((p) => (
+                <SelectChip key={p.id} label={`${p.fullName}${p.id === keeper?.id ? ' †' : ''}`} active={false} onPress={() => setWf({ ...wf, fielder2: p })} />
+              ))}
+              <SelectChip label="Skip" active={false} onPress={() => setWf({ ...wf, fielder2: null })} />
             </View>
           </>
         )}
 
         {batterStep && (
           <>
-            <Text style={ctrl.meta}>{k === 'retired' ? 'Which batsman is retiring hurt?' : k === 'timedout' ? 'Which batsman timed out?' : 'Which batsman is out?'}</Text>
+            <Text style={ctrl.meta}>{k === 'retired' ? 'Which batsman is retiring hurt?' : k === 'retiredout' ? 'Which batsman is retiring out?' : k === 'timedout' ? 'Which batsman timed out?' : 'Which batsman is out?'}</Text>
             <View style={ctrl.chips}>
               <SelectChip label={strikerName ?? 'Striker'} active={false} onPress={() => setWf({ ...wf, batterOut: 'striker' })} />
               <SelectChip label={`${nonStrikerName ?? 'Non-striker'} (NS)`} active={false} onPress={() => setWf({ ...wf, batterOut: 'nonstriker' })} />
+            </View>
+          </>
+        )}
+
+        {endStep && (
+          <>
+            <Text style={ctrl.meta}>Wicket broken at</Text>
+            <View style={ctrl.chips}>
+              <SelectChip label="Striker's end" active={false} onPress={() => setWf({ ...wf, end: 'striker' })} />
+              <SelectChip label="Bowler's end" active={false} onPress={() => setWf({ ...wf, end: 'bowler' })} />
             </View>
           </>
         )}
@@ -416,6 +520,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <Button label="Confirm wicket — all out" variant="danger" onPress={() => finishWicket(undefined)} />
           ) : (
             <>
+              {facesText ? <Text style={ctrl.hint}>{facesText}</Text> : null}
               <Text style={ctrl.meta}>Next batsman in</Text>
               {newBatOptions.length > 0 ? (
                 <View style={ctrl.chips}>
@@ -541,7 +646,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
       {state.freeHit && (
         <View style={ctrl.freeHitBox}>
-          <Text style={ctrl.freeHitText}>🟢 FREE HIT — {strikerName ?? 'the batter'} can’t be out (run out only)</Text>
+          <Text style={ctrl.freeHitText}>🟢 FREE HIT — {strikerName ?? 'the batter'} can’t be out bowled, caught, lbw or stumped</Text>
         </View>
       )}
 
@@ -667,8 +772,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', byes: n } }); setExtraMode(null); }} />
               ))}
             </View>
-            <Button label="🎯 …or a RUN OUT off the no-ball" variant="danger" disabled={!canScore}
-              onPress={() => { setExtraMode(null); setWf({ kind: 'runout', offExtra: 'noball' }); }} />
+            <Button label="🎯 …or a WICKET off the no-ball" variant="danger" disabled={!canScore}
+              onPress={() => { setExtraMode(null); setWf({ offExtra: 'noball' }); }} />
           </>
         )}
         {extraMode === 'wd' && (
@@ -683,8 +788,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             </View>
             <RunsInput placeholder="Other runs on the wide (0–99)" addLabel={(n) => `Add Wd+${n} (=${penalty('wide', R) + n})`}
               onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
-            <Button label="🎯 …or a RUN OUT off the wide" variant="danger" disabled={!canScore}
-              onPress={() => { setExtraMode(null); setWf({ kind: 'runout', offExtra: 'wide' }); }} />
+            <Button label="🎯 …or a WICKET off the wide" variant="danger" disabled={!canScore}
+              onPress={() => { setExtraMode(null); setWf({ offExtra: 'wide' }); }} />
           </>
         )}
       </View>
@@ -735,7 +840,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       )}
 
       <View style={ctrl.row}>
-        <Button label={state.freeHit ? 'RUN OUT' : 'WICKET'} variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf(state.freeHit ? { kind: 'runout' } : {})} />
+        <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf({})} />
         <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
         <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
       </View>
@@ -815,7 +920,7 @@ const nameInitials = (name?: string): string =>
  *    strike-rate context, duck penalty.
  *  • Bowling: wickets (×18) + dot balls + 3/5-fer bonus + economy + a top-order
  *    bonus (dismissing a top-3 bat is worth more than a tail-ender).
- *  • Fielding: catch +8, run out +8, stumping +10.
+ *  • Fielding: catch +8, run out +8 (incl. a Mankad, to the bowler), stumping +10.
  * Returns players sorted by total, plus the MVP / best bat / best bowl.
  */
 export function matchRatings(s: CricketState): {
@@ -877,7 +982,7 @@ export function matchRatings(s: CricketState): {
       if (d.fielderId === id) {
         if (d.kind === 'caught') field += 8;
         else if (d.kind === 'stumped') field += 10;
-        else if (d.kind === 'runout') field += 8;
+        else if (d.kind === 'runout' || d.kind === 'mankad') field += 8; // a Mankad counts like a run-out
       }
     }
     const total = bat + bowl + field;

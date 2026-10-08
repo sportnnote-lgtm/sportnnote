@@ -51,6 +51,9 @@ interface DismissalRecord {
   bowlerId?: string;
   fielderId?: string;
   fielderName?: string;
+  /** a run-out's 2nd fielder (parity #16) — scorecard text & record only, no stat */
+  fielder2Id?: string;
+  fielder2Name?: string;
 }
 
 export interface CricketState {
@@ -131,7 +134,15 @@ export interface SuperOverState {
   state: CricketState;
 }
 
-export type DismissalKind = 'bowled' | 'caught' | 'lbw' | 'stumped' | 'runout' | 'hitwicket' | 'retired' | 'timedout';
+export type DismissalKind = 'bowled' | 'caught' | 'lbw' | 'stumped' | 'runout' | 'hitwicket' | 'retired' | 'timedout'
+  // parity #16 — none of these is the bowler's wicket
+  | 'retiredout' | 'mankad' | 'hittwice' | 'obstruct';
+
+/** How a run-out's / obstruction's completed runs are scored (parity #16):
+ *  off the bat (default — legacy), or as byes / leg byes (team extras). */
+export type RunsAs = 'bat' | 'bye' | 'legbye';
+/** Where the wicket was broken (parity #16) — the new batter takes that end. */
+export type WicketEnd = 'striker' | 'bowler';
 
 const blankInnings = (): Innings => ({ runs: 0, wickets: 0, balls: 0, extras: 0 });
 
@@ -216,6 +227,15 @@ export const penalty = (kind: 'wide' | 'noball', rules?: Pick<CricketRules, 'wid
  *  'W'/'0'→0). `rules`: the penalties in force (#14; default standard). A wide
  *  with runs already carries its total ('3wd'); a no-ball carries the runs only. */
 export function ballRuns(sym: string, rules?: Pick<CricketRules, 'wideRuns' | 'noBallRuns'>): number {
+  // A wicket on an extra (parity #16): 'wd+W' / '1wd+W' / '2nb+W' carry the runs
+  // completed only (the penalty is implied); '2b+W' / '2lb+W' are byes; '2+W' off the bat.
+  if (sym.endsWith('+W')) {
+    const base = sym.slice(0, -2);
+    const n = parseInt(base, 10) || 0;
+    if (base.endsWith('wd')) return penalty('wide', rules) + n;
+    if (base.endsWith('nb')) return penalty('noball', rules) + n;
+    return n;
+  }
   if (sym.endsWith('nb')) return penalty('noball', rules) + (parseInt(sym, 10) || 0);
   if (sym === 'wd') return penalty('wide', rules);
   if (sym.startsWith('lb')) return parseInt(sym.slice(2), 10) || 1;
@@ -232,8 +252,9 @@ export function symbolTone(sym: string): 'wicket' | 'boundary' | 'extra' | 'plai
   return 'plain';
 }
 
-/** Scorecard dismissal text, e.g. "c Veer b Ishaan", "lbw b Ishaan", "run out (Veer)". */
-function composeDismissal(kind: DismissalKind, bowler?: string, fielder?: string, keeper?: string): string {
+/** Scorecard dismissal text, e.g. "c Veer b Ishaan", "lbw b Ishaan", "run out (Veer)",
+ *  "run out (Veer/Dev)" with a 2nd fielder, "run out (Ishaan)" for a Mankad. */
+function composeDismissal(kind: DismissalKind, bowler?: string, fielder?: string, keeper?: string, fielder2?: string): string {
   const b = bowler ?? 'bowler';
   switch (kind) {
     case 'bowled': return `b ${b}`;
@@ -241,20 +262,95 @@ function composeDismissal(kind: DismissalKind, bowler?: string, fielder?: string
     case 'hitwicket': return `hit wkt b ${b}`;
     case 'stumped': return `st ${keeper ?? '†wk'} b ${b}`;
     case 'caught': return fielder && fielder === bowler ? `c & b ${b}` : `c ${fielder ?? 'fielder'} b ${b}`;
-    case 'runout': return `run out${fielder ? ` (${fielder})` : ''}`;
+    case 'runout': {
+      const fs = [fielder, fielder2].filter(Boolean);
+      return `run out${fs.length ? ` (${fs.join('/')})` : ''}`;
+    }
+    // A Mankad is a run-out by the bowler (2022 Laws) — never the bowler's wicket.
+    case 'mankad': return `run out (${b})`;
     case 'retired': return 'retired hurt';
+    case 'retiredout': return 'retired out';
     case 'timedout': return 'timed out';
+    case 'hittwice': return 'hit the ball twice';
+    case 'obstruct': return 'obstructing the field';
     default: return 'out';
   }
 }
 const WICKET_LABEL: Record<DismissalKind, string> = {
   bowled: 'BOWLED', caught: 'CAUGHT', lbw: 'LBW', stumped: 'STUMPED', runout: 'RUN OUT', hitwicket: 'HIT WICKET',
   retired: 'RETIRED HURT', timedout: 'TIMED OUT',
+  retiredout: 'RETIRED OUT', mankad: 'MANKAD', hittwice: 'HIT TWICE', obstruct: 'OBSTRUCTING',
 };
 /** Dismissals that aren't credited to the bowler. */
-const NO_BOWLER: DismissalKind[] = ['runout', 'retired', 'timedout'];
+const NO_BOWLER: DismissalKind[] = ['runout', 'retired', 'timedout', 'retiredout', 'mankad', 'hittwice', 'obstruct'];
 /** "Dismissals" that involve no delivery (happen between balls). */
-const NO_DELIVERY: DismissalKind[] = ['retired', 'timedout'];
+const NO_DELIVERY: DismissalKind[] = ['retired', 'timedout', 'retiredout', 'mankad'];
+/** Wickets that can fall on a wide / a no-ball (parity #16), routed through EXTRA. */
+export const WIDE_WICKETS: DismissalKind[] = ['runout', 'stumped', 'hitwicket', 'obstruct'];
+export const NOBALL_WICKETS: DismissalKind[] = ['runout', 'hittwice', 'obstruct'];
+/** Kinds whose completed runs count (and so take `runsAs`). */
+export const RUNS_KINDS: DismissalKind[] = ['runout', 'obstruct'];
+
+type Crease = Pick<CricketState, 'strikerId' | 'strikerName' | 'nonStrikerId' | 'nonStrikerName'>;
+/** Who is where after a wicket broken at `end` (parity #16): the new batter
+ *  takes the end where the wicket was broken, the survivor the other; then the
+ *  ends swap if the over just ended. `s` is the crease the ball was bowled
+ *  with. The live UI previews "Next ball: X faces" with this too. */
+export function creaseAfterWicket(
+  s: Crease, batterOut: 'striker' | 'nonstriker', end: WicketEnd,
+  newBat: { id?: string; name?: string } | undefined, overEnd: boolean,
+): Crease {
+  const survivor = batterOut === 'nonstriker'
+    ? { id: s.strikerId, name: s.strikerName }
+    : { id: s.nonStrikerId, name: s.nonStrikerName };
+  const nb = { id: newBat?.id, name: newBat?.name };
+  const [atStriker, atBowler] = end === 'striker' ? [nb, survivor] : [survivor, nb];
+  const [st, ns] = overEnd ? [atBowler, atStriker] : [atStriker, atBowler];
+  return { strikerId: st.id, strikerName: st.name, nonStrikerId: ns.id, nonStrikerName: ns.name };
+}
+
+/** Over-strip chip for a wicket ball with completed runs (parity #16):
+ *  'W', '2+W' (off the bat), '2b+W' / '2lb+W' (byes / leg byes). */
+export const wicketSymbol = (completed: number, runsAs: RunsAs = 'bat'): string =>
+  completed > 0 ? `${completed}${runsAs === 'bye' ? 'b' : runsAs === 'legbye' ? 'lb' : ''}+W` : 'W';
+const asRunsAs = (v: unknown): RunsAs => (v === 'bye' || v === 'legbye' ? v : 'bat');
+const asEnd = (v: unknown): WicketEnd | undefined => (v === 'striker' || v === 'bowler' ? v : undefined);
+const runsText = (n: number, runsAs: RunsAs) =>
+  `${n} ${runsAs === 'bye' ? `bye${n === 1 ? '' : 's'}` : runsAs === 'legbye' ? `leg bye${n === 1 ? '' : 's'}` : `run${n === 1 ? '' : 's'}`}`;
+
+type Attr = NonNullable<ScoreAction['attribution']>;
+/** The stat credits for a wicket (parity #16) — one rule shared by the live UI
+ *  and the #06 ball editor. `attribution`: the bowler's wicket (bowler kinds),
+ *  fielder 1's run-out, or the bowler's run-out for a Mankad. `attribution2`:
+ *  the catch / stumping, or — the ONLY owner of it (REVIEW Decision 6) — the
+ *  striker's completed runs off the bat on a run-out / obstruction. Fielder 2
+ *  gets no stat. */
+export function wicketAttribution(o: {
+  kind: DismissalKind;
+  bowler?: { id?: string; name?: string };
+  fielder?: { id?: string; name?: string };
+  keeper?: { id?: string; name?: string };
+  striker?: { id?: string; name?: string };
+  runs?: number;
+  runsAs?: RunsAs;
+  /** on a wide, completed runs are wides — never the batter's */
+  wide?: boolean;
+}): { attribution?: Attr; attribution2?: Attr } {
+  const { kind, bowler, fielder, keeper, striker } = o;
+  const credit = (p: { id?: string; name?: string } | undefined, stat: string, by?: number): Attr | undefined =>
+    p?.id ? { playerId: p.id, stat, ...(by !== undefined ? { by } : {}), playerName: p.name } : undefined;
+  const runs = o.runs ?? 0;
+  const strikerRuns = RUNS_KINDS.includes(kind) && !o.wide && (o.runsAs ?? 'bat') === 'bat' && runs > 0
+    ? credit(striker, 'runs', runs) : undefined;
+  if (kind === 'runout') return { attribution: credit(fielder, 'runouts'), attribution2: strikerRuns };
+  if (kind === 'obstruct') return { attribution2: strikerRuns };
+  if (kind === 'mankad') return { attribution: credit(bowler, 'runouts') };
+  if (NO_BOWLER.includes(kind)) return {};
+  return {
+    attribution: credit(bowler, 'wickets', 1),
+    attribution2: kind === 'caught' ? credit(fielder, 'catches') : kind === 'stumped' ? credit(keeper, 'stumpings') : undefined,
+  };
+}
 
 // Overs bowled, e.g. 6 balls → "1.0" (used for over counts: totals, RR, figures).
 export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.${balls % bpo}`;
@@ -515,9 +611,15 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     }
     case 'WICKET': {
       const kind = (String(a.payload?.kind ?? 'bowled') as DismissalKind);
-      const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
+      // Hit the ball twice: only the striker. A Mankad: always the non-striker,
+      // whoever the payload names (parity #16).
+      const batterOut: 'striker' | 'nonstriker' = kind === 'mankad' ? 'nonstriker'
+        : kind === 'hittwice' ? 'striker'
+        : a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
       const keeper = s.keepers[other(bat)]?.name;
-      const dismissal = composeDismissal(kind, info.bowlerName, a.payload?.fielderName as string | undefined, keeper);
+      const fielder2Id = kind === 'runout' ? (a.payload?.fielder2Id as string | undefined) : undefined;
+      const fielder2Name = kind === 'runout' ? (a.payload?.fielder2Name as string | undefined) : undefined;
+      const dismissal = composeDismissal(kind, info.bowlerName, a.payload?.fielderName as string | undefined, keeper, fielder2Name);
       const outId = batterOut === 'nonstriker' ? s.nonStrikerId : strikerId;
       const outName = batterOut === 'nonstriker' ? s.nonStrikerName : strikerName;
       const newBatId = a.payload?.newBatId as string | undefined;
@@ -526,7 +628,27 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const creaseFor = (id?: string, name?: string) =>
         batterOut === 'nonstriker' ? { nonStrikerId: id, nonStrikerName: name } : { strikerId: id, strikerName: name };
 
-      // Retired hurt / timed out — no delivery is bowled, no bowler involved.
+      // Mankad (parity #16): the bowler runs out the non-striker before
+      // delivering — a wicket, NOT a ball and not the bowler's wicket. A 'W'
+      // chip in the over strip; a pending free hit is kept.
+      if (kind === 'mankad') {
+        seq += 1;
+        let batting = applyBat(s.batting, outId, outName, { out: true, dismissal });
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        const overReset = s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver;
+        return settle({
+          ...s,
+          scores: { ...s.scores, [bat]: { ...cur, wickets: cur.wickets + 1 } },
+          batting,
+          dismissals: [...s.dismissals, { kind, outId, bowlerId: info.bowlerId, fielderId: info.bowlerId, fielderName: info.bowlerName }],
+          thisOver: [...overReset, 'W'],
+          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal} — left the crease early`, side: other(bat), tone: 'wicket' }],
+          seq,
+          ...creaseFor(newBatId, newBatName),
+        });
+      }
+
+      // Retired hurt / retired out / timed out — no delivery is bowled, no bowler involved.
       if (NO_DELIVERY.includes(kind)) {
         const isWicket = kind !== 'retired'; // retired hurt doesn't count as a wicket
         seq += 1;
@@ -537,41 +659,55 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           scores: { ...s.scores, [bat]: { ...cur, wickets: cur.wickets + (isWicket ? 1 : 0) } },
           batting,
           dismissals: isWicket ? [...s.dismissals, { kind, outId }] : s.dismissals,
-          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat), tone: 'wicket' }],
+          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: kind === 'retiredout' ? '🚶' : '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat), tone: 'wicket' }],
           seq,
           ...creaseFor(newBatId, newBatName),
         };
         return settle(next);
       }
 
-      // Deliveries (bowled/caught/lbw/stumped/hit wicket/run out).
-      const isRunOut = kind === 'runout';
-      const completed = isRunOut ? Math.max(0, Number(a.payload?.runs ?? 0)) : 0; // runs off the bat before a run-out
+      // Deliveries (bowled/caught/lbw/stumped/hit wicket/run out/hit twice/obstructing).
+      // Run-outs and obstructions count the runs completed before the wicket.
+      const takesRuns = RUNS_KINDS.includes(kind);
+      const completed = takesRuns ? clampRuns(a.payload?.runs) : 0;
+      // …off the bat (default, legacy), or as byes / leg byes (team extras).
+      const runsAs = asRunsAs(a.payload?.runsAs);
+      const offBat = runsAs === 'bat' ? completed : 0;
+      // `end` matters only when the batters may have crossed (run-out / obstruction).
+      const end = takesRuns ? asEnd(a.payload?.end) : undefined;
       const balls = cur.balls + 1;
       seq += 1;
-      // The striker faces the delivery (and is credited any completed runs); the
+      // The striker faces the delivery (and is credited any runs off the bat); the
       // dismissed batsman (striker, or a run-out non-striker) is marked out.
-      let batting = applyBat(s.batting, strikerId, strikerName, { balls: 1, runs: completed });
+      let batting = applyBat(s.batting, strikerId, strikerName, { balls: 1, runs: offBat });
       batting = applyBat(batting, outId, outName, { out: true, dismissal });
       if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
 
       // A stumping is credited to the keeper; otherwise to the named fielder.
       const fielderId = kind === 'stumped' ? s.keepers[other(bat)]?.id : (a.payload?.fielderId as string | undefined);
       const fielderName = kind === 'stumped' ? keeper : (a.payload?.fielderName as string | undefined);
+      const record: DismissalRecord = { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName };
+      if (fielder2Id || fielder2Name) { record.fielder2Id = fielder2Id; record.fielder2Name = fielder2Name; }
 
       const next: CricketState = {
         ...s,
-        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + completed, wickets: cur.wickets + 1, balls } },
+        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + completed, wickets: cur.wickets + 1, balls, ...(offBat !== completed ? { extras: cur.extras + completed } : {}) } },
         batting,
-        bowling: bumpBowl({ balls: 1, runs: completed, wickets: NO_BOWLER.includes(kind) ? 0 : 1 }),
-        dismissals: [...s.dismissals, { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName }],
-        thisOver: [...baseOver, completed > 0 ? `${completed}+W` : 'W'],
+        // byes / leg byes aren't charged to the bowler
+        bowling: bumpBowl({ balls: 1, runs: offBat, wickets: NO_BOWLER.includes(kind) ? 0 : 1 }),
+        dismissals: [...s.dismissals, record],
+        thisOver: [...baseOver, wicketSymbol(completed, runsAs)],
         ballsInOver: baseBalls + 1,
-        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
+        events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${runsText(completed, runsAs)})` : ''}`, side: other(bat), tone: 'wicket' }],
         seq,
         ...creaseFor(newBatId, newBatName),
       };
-      // Completed-run parity and over-end both swap strike (run-out crossing approximated).
+      // Where the wicket was broken settles who faces next (parity #16).
+      if (end) {
+        const crease = creaseAfterWicket({ strikerId, strikerName, nonStrikerId: s.nonStrikerId, nonStrikerName: s.nonStrikerName }, batterOut, end, { id: newBatId, name: newBatName }, overEnd);
+        return afterLegalBall({ ...next, ...crease }, false);
+      }
+      // Legacy: completed-run parity and over-end both swap strike (run-out crossing approximated).
       return afterLegalBall(next, (completed % 2 === 1) !== overEnd);
     }
     case 'PENALTY': {
@@ -603,39 +739,68 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const legalBits = (next: CricketState): CricketState =>
         legal ? { ...next, scores: { ...next.scores, [bat]: { ...next.scores[bat], balls: cur.balls + 1 } }, ballsInOver: baseBalls + 1 } : next;
 
-      // Run-out off the extra: a wicket falls (no legal ball unless local rules
-      // count it). The penalty stands; any completed runs count (off the bat on a
-      // no-ball, as extras on a wide); no bowler credit.
-      if (a.payload?.runout) {
-        const completed = clampRuns(a.payload?.runs);
-        const batterOut: 'striker' | 'nonstriker' = a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
+      // A wicket off the extra (parity #16): `wicket` names the kind; a legacy
+      // `runout: true` still means a run-out. A wide allows run out / stumped /
+      // hit wicket / obstructing; a no-ball run out / hit twice / obstructing.
+      // No legal ball unless local rules count it; the penalty stands; completed
+      // runs count (on a wide as wides; on a no-ball off the bat, or as byes /
+      // leg byes with `runsAs`). Stumped / hit wicket are the bowler's wicket.
+      const wk = (a.payload?.wicket ? String(a.payload.wicket) : a.payload?.runout ? 'runout' : undefined) as DismissalKind | undefined;
+      if (wk) {
+        if (!(isNoBall ? NOBALL_WICKETS : WIDE_WICKETS).includes(wk)) return s;
+        const legacy = !a.payload?.wicket; // `runout: true` — replays exactly as before
+        const completed = RUNS_KINDS.includes(wk) ? clampRuns(a.payload?.runs) : 0;
+        const runsAs = isNoBall ? asRunsAs(a.payload?.runsAs) : 'bat';
+        const offBat = isNoBall && runsAs === 'bat' ? completed : 0; // the batter's runs
+        const batterOut: 'striker' | 'nonstriker' = wk === 'stumped' || wk === 'hitwicket' || wk === 'hittwice' ? 'striker'
+          : a.payload?.batterOut === 'nonstriker' ? 'nonstriker' : 'striker';
         const outId = batterOut === 'nonstriker' ? s.nonStrikerId : strikerId;
         const outName = batterOut === 'nonstriker' ? s.nonStrikerName : strikerName;
         const newBatId = a.payload?.newBatId as string | undefined;
         const newBatName = a.payload?.newBatName as string | undefined;
-        const fielderId = a.payload?.fielderId as string | undefined;
-        const fielderName = a.payload?.fielderName as string | undefined;
-        const dismissal = composeDismissal('runout', undefined, fielderName);
+        const keeper = s.keepers[other(bat)];
+        const fielderId = wk === 'stumped' ? keeper?.id : (a.payload?.fielderId as string | undefined);
+        const fielderName = wk === 'stumped' ? keeper?.name : (a.payload?.fielderName as string | undefined);
+        const fielder2Id = wk === 'runout' ? (a.payload?.fielder2Id as string | undefined) : undefined;
+        const fielder2Name = wk === 'runout' ? (a.payload?.fielder2Name as string | undefined) : undefined;
+        const dismissal = legacy ? composeDismissal('runout', undefined, fielderName) : composeDismissal(wk, info.bowlerName, fielderName, keeper?.name, fielder2Name);
+        const bowlersWicket = !NO_BOWLER.includes(wk);
         let batting = s.batting;
-        if (isNoBall) batting = applyBat(batting, strikerId, strikerName, { runs: completed, balls: 1 });
+        if (isNoBall) batting = applyBat(batting, strikerId, strikerName, { runs: offBat, balls: 1 });
         batting = applyBat(batting, outId, outName, { out: true, dismissal });
         if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
-        const crease = batterOut === 'nonstriker'
-          ? { nonStrikerId: newBatId, nonStrikerName: newBatName }
-          : { strikerId: newBatId, strikerName: newBatName };
+        const end = RUNS_KINDS.includes(wk) ? asEnd(a.payload?.end) : undefined;
+        const crease = end
+          ? creaseAfterWicket({ strikerId, strikerName, nonStrikerId: s.nonStrikerId, nonStrikerName: s.nonStrikerName }, batterOut, end, { id: newBatId, name: newBatName }, legal && overEnd)
+          : batterOut === 'nonstriker'
+            ? { nonStrikerId: newBatId, nonStrikerName: newBatName }
+            : { strikerId: newBatId, strikerName: newBatName };
         const sym = `${completed > 0 ? completed : ''}${isNoBall ? 'nb' : 'wd'}+W`;
+        // extras: the penalty + wides run (wide) or byes / leg byes (no-ball)
+        const extras = pen + completed - offBat;
+        const record: DismissalRecord = legacy
+          ? { kind: 'runout', outId, fielderId, fielderName }
+          : { kind: wk, outId, bowlerId: info.bowlerId, fielderId, fielderName };
+        if (fielder2Id || fielder2Name) { record.fielder2Id = fielder2Id; record.fielder2Name = fielder2Name; }
+        const tail = completed > 0 ? ` (${runsText(completed, isNoBall ? runsAs : 'bat')})` : '';
         let next: CricketState = legalBits({
           ...s,
-          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + pen + completed, extras: cur.extras + (isNoBall ? pen : pen + completed), wickets: cur.wickets + 1 } },
+          scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + pen + completed, extras: cur.extras + extras, wickets: cur.wickets + 1 } },
           batting,
-          bowling: bumpBowl({ runs: pen + completed, extras: isNoBall ? pen : pen + completed, ...(legal ? { balls: 1 } : {}) }),
-          dismissals: [...s.dismissals, { kind: 'runout', outId, fielderId, fielderName }],
+          // the bowler is charged the penalty + wides / off-bat runs, not byes
+          bowling: bumpBowl({ runs: pen + (isNoBall ? offBat : completed), extras: isNoBall ? pen : pen + completed, ...(bowlersWicket ? { wickets: 1 } : {}), ...(legal ? { balls: 1 } : {}) }),
+          dismissals: [...s.dismissals, record],
           thisOver: [...overReset, sym],
-          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '🎯', label: `${isNoBall ? 'No ball' : 'Wide'}${penTag} — RUN OUT`, detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${completed} run${completed === 1 ? '' : 's'})` : ''}`, side: other(bat), tone: 'wicket' }],
+          events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '🎯', label: `${isNoBall ? 'No ball' : 'Wide'}${penTag} — ${WICKET_LABEL[wk]}`, detail: `${outName ?? 'Batter'} ${dismissal}${tail}`, side: other(bat), tone: 'wicket' }],
           seq,
           freeHit: fhAfter,
           ...crease,
         });
+        if (end) {
+          // creaseAfterWicket already settled the ends (incl. a legal over end)
+          if (legal) return afterLegalBall(next, false, fhAfter);
+          return settle(next);
+        }
         if (legal) return afterLegalBall(next, (completed % 2 === 1) !== overEnd, fhAfter);
         if (completed % 2 === 1) next = swapStrike(next);
         return settle(next);
@@ -849,11 +1014,12 @@ function resultLine(s: CricketState): string {
   return `Won by ${margin} run${margin === 1 ? '' : 's'}`;
 }
 
-export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal };
-export type { Innings };
+export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, NO_DELIVERY, composeDismissal };
+export type { Innings, DismissalRecord };
 
 /** Everyone who has taken part so far (parity #13 squad lock): batted, was out,
- *  retired or is at the crease, bowled, or took a catch / run-out / stumping.
+ *  retired or is at the crease, bowled, or took a catch / run-out / stumping
+ *  (incl. a run-out's 2nd fielder; a Mankad's fielder is the bowler).
  *  Includes a Super Over's players. These can't be dropped from the squad. */
 export function involvedPlayerIds(s: CricketState): string[] {
   const ids = new Set<string>();
@@ -861,7 +1027,7 @@ export function involvedPlayerIds(s: CricketState): string[] {
     Object.keys(x.batting ?? {}).forEach((id) => ids.add(id));
     Object.keys(x.bowling ?? {}).forEach((id) => ids.add(id));
     for (const id of [x.strikerId, x.nonStrikerId]) if (id) ids.add(id);
-    for (const d of x.dismissals ?? []) for (const id of [d.outId, d.bowlerId, d.fielderId]) if (id) ids.add(id);
+    for (const d of x.dismissals ?? []) for (const id of [d.outId, d.bowlerId, d.fielderId, d.fielder2Id]) if (id) ids.add(id);
     if (x.superOver?.state) walk(x.superOver.state);
   };
   walk(s);
