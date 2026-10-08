@@ -13,9 +13,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../core/theme';
 import { EmptyState, Card, Button, Pill, ScreenTitle, textStyles, plural } from '../components/ui';
 import { getSport } from '../sports/registry';
-import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders } from '../data/repos';
+import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, getMyPlayerId } from '../data/repos';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
-import { useCaptainships } from '../data/hooks';
+import { useCaptainships, useTeamPermission } from '../data/hooks';
+import { nextLeaders } from '../core/teamPermissions';
+import { confirmAction } from '../core/confirm';
+import { useAuth } from '../core/auth';
 import { RemindInstall } from '../components/RemindInstall';
 import type { Player, TeamLeadership, TeamSummary } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -31,6 +34,11 @@ export default function SquadScreen() {
   const [leaders, setLeaders] = useState<TeamLeadership>({});
   const { isCaptain } = useCaptainships();
   const captain = isCaptain(teamId);
+  // The server decides who may edit; null = still checking (stay read-only).
+  const { canManage, refresh } = useTeamPermission(teamId);
+  const { profile } = useAuth();
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  useEffect(() => { void getMyPlayerId(profile?.id).then(setMyPlayerId); }, [profile?.id]);
 
   const load = useCallback(() => {
     let on = true;
@@ -53,13 +61,27 @@ export default function SquadScreen() {
     if (team) nav.setOptions({ title: team.name });
   }, [nav, team?.name]);
 
-  const assignLeader = (role: 'captainId' | 'viceCaptainId', playerId: string) => {
-    // setting a player as captain clears them from vice (and vice versa)
-    const next: TeamLeadership = { ...leaders, [role]: leaders[role] === playerId ? undefined : playerId };
-    if (role === 'captainId' && next.viceCaptainId === playerId) next.viceCaptainId = undefined;
-    if (role === 'viceCaptainId' && next.captainId === playerId) next.captainId = undefined;
+  const assignLeader = async (role: 'captainId' | 'viceCaptainId', playerId: string) => {
+    const prev = leaders;
+    const next = nextLeaders(prev, role, playerId); // captain ≠ VC
+    const nameOf = (id?: string) => squad.find((p) => p.id === id)?.fullName ?? 'They';
+    // Confirm only when someone loses a role.
+    if (role === 'captainId' && prev.captainId && next.captainId && prev.captainId !== next.captainId) {
+      if (!(await confirmAction('Change captain?', `Make ${nameOf(next.captainId)} captain? ${nameOf(prev.captainId)} will no longer be captain.`, 'Make captain'))) return;
+    }
+    const wasLeader = !!myPlayerId && (prev.captainId === myPlayerId || prev.viceCaptainId === myPlayerId);
+    const stillLeader = !!myPlayerId && (next.captainId === myPlayerId || next.viceCaptainId === myPlayerId);
+    if (wasLeader && !stillLeader) {
+      if (!(await confirmAction('Step down?', `You'll stop managing ${team?.name ?? 'this team'} unless you're also an admin. Continue?`, 'Continue', true))) return;
+    }
     setLeaders(next);
-    void setTeamLeaders(teamId, next);
+    try {
+      await setTeamLeaders(teamId, next);
+      if (wasLeader && !stillLeader) refresh();
+    } catch (e) {
+      setLeaders(prev);
+      notice('Couldn’t update captain', e instanceof Error ? e.message : 'Please try again.');
+    }
   };
 
   if (!team) {
@@ -76,19 +98,20 @@ export default function SquadScreen() {
         <ScreenTitle title={`${team.name} squad`} subtitle={`${plural(squad.length, 'player')} · ${team.sports.map((s) => getSport(s).icon).join(' ')}`} />
 
         {captain && <Text style={st.captain}>✓ You’re the captain of {team.name}</Text>}
+        {canManage === false && <Text style={textStyles.muted}>Only the captain, vice-captain or team admins can edit this squad.</Text>}
 
         {/* Adding players is this page's main job — first, and already open. */}
-        <AddInvitePlayer
+        {canManage && <AddInvitePlayer
           fixedSide="home" defaultOpen
           title={squad.length === 0 ? '＋ Add players to this team' : '＋ Add more players'}
           homeTeamId={team.id} awayTeamId={team.id} homeTeamName={team.name} awayTeamName={team.name}
           sport={team.sports[0]} invited={squad.filter((p) => p.invited)} existingIds={squad.map((p) => p.id)}
           onChanged={load}
-        />
+        />}
 
         <Text style={[textStyles.h3, st.section]}>Squad</Text>
         {squad.length === 0 ? (
-          <EmptyState icon="👥" title="No players yet" hint="Add them above by mobile number or from your contacts." compact />
+          <EmptyState icon="👥" title="No players yet" hint={canManage ? "Add them above by mobile number or from your contacts." : undefined} compact />
         ) : (
           squad.map((p) => {
             const isCap = leaders.captainId === p.id;
@@ -113,10 +136,10 @@ export default function SquadScreen() {
                 </View>
                 {/* Always-available re-share so a captain/coach can remind anyone who
                     hasn't installed yet — WhatsApp or SMS, from the team squad. */}
-                {p.invited ? (
+                {p.invited && canManage ? (
                   <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={team.name} captain={isCap} />
                 ) : null}
-                <View style={st.leaderBtns}>
+                {canManage && <View style={st.leaderBtns}>
                   <Text
                     accessibilityRole="button"
                     accessibilityState={{ selected: isCap }}
@@ -133,13 +156,13 @@ export default function SquadScreen() {
                   >
                     {isVice ? '★ Vice-captain' : 'Make vice-captain'}
                   </Text>
-                </View>
+                </View>}
               </Card>
             );
           })
         )}
 
-        <Card style={{ gap: theme.spacing(2) }}>
+        {canManage && <Card style={{ gap: theme.spacing(2) }}>
           <Text style={textStyles.body}>📨 Invite the captain / coach</Text>
           <Text style={textStyles.muted}>Generate a code/link they redeem under “Join a team” to manage this squad.</Text>
           <Button
@@ -162,7 +185,7 @@ export default function SquadScreen() {
               Code: {inviteCode}{'\n'}sportnnote.in/join/{inviteCode}
             </Text>
           )}
-        </Card>
+        </Card>}
 
       </ScrollView>
     </SafeAreaView>

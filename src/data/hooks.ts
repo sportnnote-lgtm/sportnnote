@@ -29,11 +29,15 @@ import {
   getTeamSummary,
   getListings,
   getOrganizations,
+  canManageTeam,
+  getMyPlayerId,
 } from './repos';
 import { aggregate, type PlayerStats } from './stats';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
 import { followStore, type FollowType } from './followStore';
 import { captainStore } from './captainStore';
+import { useAuth } from '../core/auth';
+import type { Role } from '../core/types';
 import { notifyStore } from './notifyStore';
 import type {
   AppNotification,
@@ -199,6 +203,43 @@ export function useFollow(profileId?: string) {
 export function useCaptainships() {
   const ids = useSyncExternalStore(captainStore.subscribe, captainStore.getSnapshot, captainStore.getSnapshot);
   return { ids, isCaptain: useCallback((teamId: string) => ids.includes(teamId), [ids]) };
+}
+
+/* Dev only (web): `__sportfolioPerm.as('player')` previews screens as a plain
+   viewer in demo mode, where the demo user is support; `.as(null)` restores. */
+let permRoleOverride: Role | null = null;
+const permListeners = new Set<() => void>();
+if (typeof __DEV__ !== 'undefined' && __DEV__ && typeof window !== 'undefined') {
+  (window as unknown as { __sportfolioPerm?: object }).__sportfolioPerm = {
+    as(role: Role | null) { permRoleOverride = role; permListeners.forEach((f) => f()); return `previewing as ${role ?? 'yourself'}`; },
+  };
+}
+
+/** May I manage this team's squad (players, captain/VC, roles, invite link)?
+ *  null while it's being worked out — render read-only until then. */
+export function useTeamPermission(teamId?: string): { canManage: boolean | null; refresh: () => void } {
+  const { profile } = useAuth();
+  const { isCaptain } = useCaptainships();
+  const [canManage, setCanManage] = useState<boolean | null>(null);
+  const [tick, setTick] = useState(0);
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  useEffect(() => {
+    const f = () => setTick((t) => t + 1);
+    permListeners.add(f);
+    return () => { permListeners.delete(f); };
+  }, []);
+  useEffect(() => {
+    if (!teamId) { setCanManage(null); return; }
+    let on = true;
+    const role = permRoleOverride ?? profile?.role;
+    (async () => {
+      const myPlayerId = await getMyPlayerId(profile?.id);
+      const ok = await canManageTeam(teamId, { profileId: profile?.id, myPlayerId, role, isCaptainStore: !permRoleOverride && isCaptain(teamId) });
+      if (on) setCanManage(ok);
+    })().catch(() => on && setCanManage(false));
+    return () => { on = false; };
+  }, [teamId, profile?.id, profile?.role, isCaptain, tick]);
+  return { canManage, refresh };
 }
 
 /** The in-app notification feed + unread count. */

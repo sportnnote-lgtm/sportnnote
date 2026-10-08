@@ -10,6 +10,7 @@ import type { PickedDoc } from '../core/document';
 import type { PickedImage } from '../core/photo';
 import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
 import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
+import { canManageTeamLocal } from '../core/teamPermissions';
 import { MATCHES } from '../core/mockData';
 import {
   demo,
@@ -47,6 +48,7 @@ import { joinBlockReason } from '../core/registration';
 import { getSport } from '../sports/registry';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
+  Role,
   AcademicYear,
   Club,
   ClubInvite,
@@ -404,12 +406,36 @@ export async function getTeamLeaders(teamId: string): Promise<TeamLeadership> {
   return { captainId: data?.captain_id ?? undefined, viceCaptainId: data?.vice_captain_id ?? undefined };
 }
 
+/** A team change the server refused (not a captain / VC / admin of it). */
+export class TeamPermissionError extends Error {
+  constructor() { super('Only this team’s captain, vice-captain or admins can change that.'); this.name = 'TeamPermissionError'; }
+}
+
+/** Throw for a refused team write: RLS denies an UPDATE silently (no error, 0
+ *  rows); the guard trigger raises 42501. `expectRows` is false for deletes,
+ *  where 0 rows can simply mean "nothing to delete". */
+function assertTeamWrite(res: { error: { code?: string; message: string } | null; data?: unknown[] | null }, expectRows = true): void {
+  if (res.error?.code === '42501') throw new TeamPermissionError();
+  if (res.error) throw new Error(res.error.message);
+  if (expectRows && (!res.data || res.data.length === 0)) throw new TeamPermissionError();
+}
+
+/** May the current user manage this team's squad? The server decides
+ *  (`can_manage_team`); the local rule covers demo mode and RPC failures. */
+export async function canManageTeam(teamId: string, ctx: { profileId?: string; myPlayerId?: string | null; role?: Role; isCaptainStore?: boolean; isClubAdmin?: boolean }): Promise<boolean> {
+  const local = async () => canManageTeamLocal({ ...ctx, leaders: await getTeamLeaders(teamId) });
+  if (!isSupabaseConfigured || !supabase) return local();
+  const { data, error } = await supabase.rpc('can_manage_team', { p_team: teamId });
+  if (error) return local();
+  return data === true;
+}
+
 export async function setTeamLeaders(teamId: string, leaders: TeamLeadership): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     demoSetTeamLeaders(teamId, leaders);
     return;
   }
-  await supabase.from('teams').update({ captain_id: leaders.captainId ?? null, vice_captain_id: leaders.viceCaptainId ?? null }).eq('id', teamId);
+  assertTeamWrite(await supabase.from('teams').update({ captain_id: leaders.captainId ?? null, vice_captain_id: leaders.viceCaptainId ?? null }).eq('id', teamId).select('id'));
 }
 
 /* -------------------------------- Players ---------------------------------- */
@@ -1260,7 +1286,8 @@ export async function invitePlayer(args: {
   const maybeSetCaptain = async (playerId: string): Promise<boolean> => {
     const leaders = await getTeamLeaders(args.teamId);
     if (leaders.captainId || leaders.viceCaptainId) return false;
-    await setTeamLeaders(args.teamId, { captainId: playerId });
+    // Only a manager may set a captain — anyone else still adds the player.
+    try { await setTeamLeaders(args.teamId, { captainId: playerId }); } catch { return false; }
     return true;
   };
 
@@ -3026,7 +3053,7 @@ export async function setTeamRoster(teamId: string, roster: string[]): Promise<v
     if (t) t.roster = roster;
     return;
   }
-  await supabase.from('teams').update({ roster }).eq('id', teamId);
+  assertTeamWrite(await supabase.from('teams').update({ roster }).eq('id', teamId).select('id'));
 }
 
 /* -------------------------------- Clubs ("teams") -------------------------- */
@@ -3352,10 +3379,10 @@ export async function setTeamPlayerRoles(teamId: string, playerId: string, roles
     return;
   }
   if (!roles.length) {
-    await supabase.from('team_player_roles').delete().eq('team_id', teamId).eq('player_id', playerId);
+    assertTeamWrite(await supabase.from('team_player_roles').delete().eq('team_id', teamId).eq('player_id', playerId).select('team_id'), false);
     return;
   }
-  await supabase.from('team_player_roles').upsert({ team_id: teamId, player_id: playerId, roles }, { onConflict: 'team_id,player_id' });
+  assertTeamWrite(await supabase.from('team_player_roles').upsert({ team_id: teamId, player_id: playerId, roles }, { onConflict: 'team_id,player_id' }).select('team_id'));
 }
 
 /* -------------------------- Tournament participants ------------------------ */

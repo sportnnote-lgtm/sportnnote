@@ -37,6 +37,7 @@ import { notify } from '../core/notifications';
 import type { Organization, OrgMember, OrgRole, OrgRequest, House, ActivityEvent, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
+import { notice } from '../core/confirm';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -1129,7 +1130,7 @@ function RosterEditor({
   const toggle = (id: string) => {
     const next = roster.includes(id) ? roster.filter((x) => x !== id) : [...roster, id];
     setRoster(next);
-    void setTeamRoster(team.id, next).then(onChanged);
+    setTeamRoster(team.id, next).then(onChanged, (e: unknown) => notice('Couldn’t update the squad', e instanceof Error ? e.message : 'Please try again.'));
   };
 
   return (

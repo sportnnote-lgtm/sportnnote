@@ -20,6 +20,8 @@ import {
 } from '../data/repos';
 import type { Club, ClubMemberView, Team, TeamLeadership, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { useTeamPermission } from '../data/hooks';
+import { notice } from '../core/confirm';
 
 export default function ClubSportScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'ClubSport'>>();
@@ -47,7 +49,10 @@ export default function ClubSportScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const amAdmin = members.some((m) => m.playerId === myId && m.role === 'admin') || (!!club && club.createdBy === profile?.id);
+  // Club admins and creators, plus this sport's captain/VC (the server allows them too).
+  const { canManage: teamManager } = useTeamPermission(team?.id);
+  const amAdmin = members.some((m) => m.playerId === myId && m.role === 'admin') || (!!club && club.createdBy === profile?.id) || !!teamManager;
+  const failed = (what: string, e: unknown) => notice(`Couldn’t ${what}`, e instanceof Error ? e.message : 'Please try again.');
   const squadIds = team?.roster ?? [];
   const inSquad = (pid: string) => squadIds.includes(pid);
   const squad = members.filter((m) => inSquad(m.playerId));
@@ -67,6 +72,9 @@ export default function ClubSportScreen() {
         if (patch.captainId !== leaders.captainId || patch.viceCaptainId !== leaders.viceCaptainId) await setTeamLeaders(team.id, patch);
       }
       await load();
+    } catch (e) {
+      failed('update the squad', e);
+      await load(); // back to what the server has
     } finally { setBusy(false); }
   }
 
@@ -80,6 +88,8 @@ export default function ClubSportScreen() {
       if (kind === 'viceCaptainId' && next.viceCaptainId && next.viceCaptainId === next.captainId) next.captainId = undefined;
       await setTeamLeaders(team.id, next);
       setLeaders(next);
+    } catch (e) {
+      failed('update captain', e);
     } finally { setBusy(false); }
   }
 
@@ -88,7 +98,12 @@ export default function ClubSportScreen() {
     const cur = roles[pid] ?? [];
     const next = cur.includes(role) ? cur.filter((r) => r !== role) : [...cur, role];
     setRoles((r) => ({ ...r, [pid]: next }));
-    await setTeamPlayerRoles(team.id, pid, next);
+    try {
+      await setTeamPlayerRoles(team.id, pid, next);
+    } catch (e) {
+      setRoles((r) => ({ ...r, [pid]: cur }));
+      failed('update roles', e);
+    }
   }
 
   if (loading) return <SafeAreaView style={st.safe}><LoadingState /></SafeAreaView>;

@@ -14,7 +14,7 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
-import { useTeamSummary, useMatches, usePlayers, useFollow } from '../data/hooks';
+import { useTeamSummary, useMatches, usePlayers, useFollow, useTeamPermission } from '../data/hooks';
 import { getRoster, getMatchStatLines, getMatchSquads } from '../data/repos';
 import { computeTeamStats, resultFor, type Result } from '../data/teamStats';
 import { SPORT_AWARDS, statLabel } from '../data/ratings';
@@ -37,6 +37,7 @@ export default function TeamProfileScreen() {
   const [showSquad, setShowSquad] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
   const [squad, setSquad] = useState<Player[]>([]);
+  const { canManage: canManageSquad } = useTeamPermission(teamId);
   const [lines, setLines] = useState<StatLine[]>([]);
   const [playedFor, setPlayedFor] = useState<Record<string, string[]>>({});
   // Stats are per sport (goals and runs don't add up) — a multi-sport team picks one.
@@ -157,7 +158,7 @@ export default function TeamProfileScreen() {
         />
         <View style={st.actions}>
           <View style={{ flex: 1 }}><Button label="📊 Stats" variant="ghost" onPress={() => scrollRef.current?.scrollTo({ y: statsY, animated: true })} /></View>
-          <View style={{ flex: 1 }}><Button label="👥 Squad · ＋ Add" variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} /></View>
+          <View style={{ flex: 1 }}><Button label={canManageSquad ? '👥 Squad · ＋ Add' : '👥 Squad'} variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} /></View>
         </View>
 
         {/* ── Stats ── */}

@@ -13,6 +13,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Squad permission gates + honest errors on captain/roster/role changes (parity #02)
+
+- **Ask (parity queue #02):** every viewer of a team squad saw "Make captain", "Generate invite
+  link" and the add box; a refused change looked saved, then quietly reverted.
+- **Fix:** `repos.canManageTeam(teamId, ctx)` asks the server (`rpc can_manage_team`), falling back
+  to the pure `core/teamPermissions.canManageTeamLocal` (organiser/support, captain/VC, captain
+  store, club admin) in demo or on RPC error. `useTeamPermission(teamId)` → `{canManage|null,
+  refresh}` (dev: `__sportfolioPerm.as('player')` previews as a viewer). `setTeamLeaders`,
+  `setTeamRoster`, `setTeamPlayerRoles` now `.select()` and throw `TeamPermissionError` on 42501 or
+  0 rows (deletes: error only). invitePlayer's auto-captain swallows a refusal (the add still
+  works).
+- **SquadScreen:** non-managers get a read-only squad (C/VC pills kept) + "Only the captain,
+  vice-captain or team admins can edit this squad."; add box, leader buttons, Invite again and
+  the invite card only for managers. `assignLeader` uses pure `nextLeaders`, confirms when a
+  captain is replaced or you step down yourself, reverts + notice on failure.
+  **ClubSportScreen:** captains/VCs can manage too; squad/captain/role changes revert + notice
+  on failure. **TeamProfile:** "👥 Squad · ＋ Add" only for managers. OrganizationScreen roster
+  errors surface.
+- No migration (server rules already exist).
+- Verified in demo (8093): support sees all controls; `as('player')` hides them with the hint;
+  replacing a captain asks first, Cancel changes nothing, OK applies. `tests/team-permissions`
+  (5). 397 tests.
+
+---
+
 ### 2026-10-09 — Real image uploads: logos, banners, player photos (CricHeroes parity #01)
 
 - **Ask (parity queue #01):** logos/photos were saved as device-local URIs (`file://`, `blob:`) —
