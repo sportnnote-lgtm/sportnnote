@@ -13,6 +13,22 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-08 — Minimise keeps your place, close starts fresh; lookups never hang
+
+- **Founder report:** a closed-and-reopened app still came back on the old page (wrong — only
+  minimise should), and Add players sat on "Checking this number…" forever.
+- **Restore rule now matches every mainstream app:** minimise → same screen; close → Home.
+  iPhone web app: nav state in **sessionStorage** (survives iOS's background unload/reload,
+  wiped when the app is swiped away) instead of localStorage; old key removed on load.
+  Android: no storage restore at all (the OS keeps a minimised app in memory; a closed app
+  starts fresh) — the AsyncStorage restore from the previous entry is reverted.
+  Verified: same-tab reload → back on tournament Stats tab; new tab → Home.
+- **Lookups:** `find_player_by_phone/email` + `discover_player_by_contact` calls time out
+  after 8 s (`withTimeout`), so no screen waits forever; the squad add-player box then lets you
+  type a name and invite. Root cause of the failures is migration 0036 (previous entry).
+
+---
+
 ### 2026-10-08 — Fix "Couldn't check that number"; consistent people pickers; every tab survives an unload
 
 - **Founder report:** typing a mobile number in Add scorer / Add host always showed
@@ -36,8 +52,8 @@ verified. **Maintained continuously — new work is appended here as it ships.**
     open in place. Fixes invites from co-host / team / tournament-team forms on iPhone.
 - **Unload-proof screens everywhere:** new `useParamState` hook keeps a screen's tab/view in
   route params (saved + restored with the nav state). Used by Live scoring (tab, Add scorer
-  panel), Tournament, Golf round, Organization, Matches, Calendar, Discover. Restore now works
-  on **Android** too (AsyncStorage; skipped when opened from a link/notification).
+  panel), Tournament, Golf round, Organization, Matches, Calendar, Discover. (An Android
+  AsyncStorage restore added here was reverted in the next entry.)
   Verified in demo: tournament on Teams + match on Info → reload "/" → both restored.
 
 ---

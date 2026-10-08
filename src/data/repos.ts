@@ -591,7 +591,7 @@ export async function searchPlayers(opts: PlayerSearch): Promise<Player[]> {
   }
   let ids: string[] | null = null;
   if (contact) {
-    const { data, error } = await supabase.rpc('discover_player_by_contact', { p_query: q });
+    const { data, error } = await withTimeout(supabase.rpc('discover_player_by_contact', { p_query: q }));
     if (error) throw new Error(error.message.includes('Too many') ? 'Too many contact searches — try again in an hour.' : 'Couldn’t search by contact just now.');
     ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
     if (!ids.length) return [];
@@ -1029,6 +1029,15 @@ export async function createReplacementPlayer(name: string, sport: SportId, hous
 /** The canonical identity lookup: the one person a contact number belongs to
  *  (or null). Phone is the primary key across the platform — one number ⇒ one
  *  person — so every profile-creating path resolves through here first. */
+/** A lookup a person is waiting on must never spin forever (weak signal): give
+ *  up after `ms` so the screen can move on. */
+function withTimeout<T>(p: PromiseLike<T>, ms = 8000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Lookup timed out')), ms);
+    Promise.resolve(p).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export async function findPlayerByPhone(phone: string): Promise<Player | null> {
   if (!isValidPhone(phone)) return null;
   if (!isSupabaseConfigured || !supabase) {
@@ -1036,7 +1045,7 @@ export async function findPlayerByPhone(phone: string): Promise<Player | null> {
   }
   // Live: phone is a private column — an exact-match server lookup returns just
   // the person's id (rate-limited), then we read their public profile.
-  const { data, error } = await supabase.rpc('find_player_by_phone', { p_phone: normalizePhone(phone) });
+  const { data, error } = await withTimeout(supabase.rpc('find_player_by_phone', { p_phone: normalizePhone(phone) }));
   if (error) throw new Error(error.message);
   const id = (data as { id: string }[] | null)?.[0]?.id;
   return id ? getPlayer(id) : null;
@@ -1064,7 +1073,7 @@ export async function findPlayerByEmail(email: string): Promise<Player | null> {
   const e = email.trim().toLowerCase();
   if (!e.includes('@')) return null;
   if (!isSupabaseConfigured || !supabase) return demo.players.find((p) => (p.email ?? '').toLowerCase() === e) ?? null;
-  const { data, error } = await supabase.rpc('find_player_by_email', { p_email: e });
+  const { data, error } = await withTimeout(supabase.rpc('find_player_by_email', { p_email: e }));
   if (error) throw new Error(error.message);
   const id = (data as { id: string }[] | null)?.[0]?.id;
   return id ? getPlayer(id) : null;
