@@ -46,7 +46,7 @@ You're added as a scorer and can start scoring. Only one phone scores at a time.
 2. Tap **＋ Add scorer**.
 3. Pick from **Tournament scorers** (listed first), choose yourself, or add anyone by mobile number or name.
 
-A host can also tap **▶ Score this match** at the top of a match that has no scorer yet, to score it from their own phone.
+Hosts don't need to add themselves. A host of the match or its tournament can score it straight away from the **Scoring** tab, and is added to **Match scorers** when they start. On a match with no scorer yet, a host also sees **▶ Score this match** at the top, which opens the scoring buttons.
 
 ## Step by step: record match officials
 1. Open the match → **Info** tab → **Match officials**.

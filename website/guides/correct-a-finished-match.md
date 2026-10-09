@@ -13,7 +13,7 @@ After full time, a scorer may notice a goal credited to the wrong player, or a p
 ## Before you start
 - Scorers and match hosts can correct a match for 24 hours after it ends. The button shows how long is left, for example "Open for 17 h 40 m more".
 - Tournament hosts can correct their tournament's matches at any time. They own the points table.
-- All taps from the scoring phone must have uploaded. While some are still waiting, the button is greyed out and says "Waiting for unsynced taps to upload."
+- All taps from the scoring phone must have uploaded. While some are still waiting, the button is greyed out and says, for example, "Waiting for 2 taps to upload…".
 - Cricket has its own ball-by-ball editor. See [Fix a past ball, bowler or batter](/guides/cricket-edit-a-past-ball/).
 
 ## Step by step

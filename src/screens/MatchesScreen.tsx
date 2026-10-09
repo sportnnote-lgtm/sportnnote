@@ -11,7 +11,9 @@ import { theme } from '../core/theme';
 import { EmptyState, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { useScopedMatches } from '../data/hooks';
-import { getMyPlayerId } from '../data/repos';
+import { getMyPlayerId, getOrganizations, getTournaments } from '../data/repos';
+import { canScoreMatch } from '../core/scoringAccess';
+import { tournamentHostPlayerIds } from '../core/org';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { SPORT_LIST } from '../sports/registry';
@@ -43,14 +45,27 @@ export default function MatchesScreen() {
   const { mine, loading } = useScopedMatches(profile?.id);
   const matches = filter === 'all' ? mine : mine.filter((m) => m.sport === filter);
   const canScore = canScoreByRole(profile?.role);
-  // Which of these I'm a scorer for → a "▶ Start scoring" shortcut on the card.
+  // Which of these I can score (scorer or host) → a "▶ Start scoring" shortcut on the card.
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   useEffect(() => {
     let on = true;
     void getMyPlayerId(profile?.id).then((id) => on && setMyPlayerId(id));
     return () => { on = false; };
   }, [profile?.id]);
-  const iScore = (m: Match) => !!myPlayerId && (m.scorerIds ?? (m.scorerId ? [m.scorerId] : [])).includes(myPlayerId);
+  // Tournament hosts (incl. an org-hosted event's Owner/Admin/Organizer) score its matches too.
+  const [tourHosts, setTourHosts] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    let on = true;
+    void Promise.all([getTournaments(), getOrganizations()]).then(([ts, orgs]) => {
+      if (on) setTourHosts(Object.fromEntries(ts.map((t) => [t.id, tournamentHostPlayerIds(t, orgs)])));
+    }).catch(() => {});
+    return () => { on = false; };
+  }, [profile?.id]);
+  // Listed scorers AND hosts get the shortcut — hosts score by default.
+  const iScore = (m: Match) => canScoreMatch({
+    myPlayerId, scorerIds: m.scorerIds, scorerId: m.scorerId, hostIds: m.hostIds,
+    tournamentHostIds: m.tournamentId ? tourHosts[m.tournamentId] : undefined,
+  });
 
   // Live = in progress; Upcoming = scheduled (soonest first); Completed = most recent first.
   // Postponed / cancelled games are still pre-match, so they stay under Upcoming

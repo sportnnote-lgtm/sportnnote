@@ -240,7 +240,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
             shape="circle"
             size={72}
             placeholder={initials}
-            label={asAdmin ? 'Add photo' : 'Add your photo'}
+            label="Add photo"
             onPick={(url) => setPhotoUrl(url)}
           />
           {asAdmin && (

@@ -295,3 +295,20 @@ describe('#19 — absolute stat sync planner', () => {
     assert.deepEqual(z!.stats, { catches: 0, mvp: 2 });
   });
 });
+
+describe('Leg byes off a no-ball (`runsAs: legbye` on the no-ball\'s byes)', () => {
+  test('same total and strike as Nb+byes; scorecard splits nb + lb; label says leg byes', () => {
+    const s0 = bowl(opened(), 'X');
+    const asByes = ball(s0, 'EXTRA', { kind: 'No ball', byes: 2 });
+    const asLeg = ball(s0, 'EXTRA', { kind: 'No ball', byes: 2, runsAs: 'legbye' });
+    assert.equal(asLeg.scores.home.runs, asByes.scores.home.runs);
+    assert.equal(asLeg.scores.home.extras, asByes.scores.home.extras);
+    assert.equal(asLeg.strikerId, asByes.strikerId);
+    assert.deepEqual(asLeg.bowling.X, asByes.bowling.X); // not charged to the bowler either way
+    assert.deepEqual(extrasBreakdown(asByes, 'home'), { b: 2, lb: 0, wd: 0, nb: 1, pen: 0 });
+    assert.deepEqual(extrasBreakdown(asLeg, 'home'), { b: 0, lb: 2, wd: 0, nb: 1, pen: 0 });
+    assert.equal(asByes.events[asByes.events.length - 1].label, 'No ball + 2 byes — free hit');
+    assert.equal(asLeg.events[asLeg.events.length - 1].label, 'No ball + 2 leg byes — free hit');
+    assert.equal(asLeg.thisOver[asLeg.thisOver.length - 1], '2nb');
+  });
+});

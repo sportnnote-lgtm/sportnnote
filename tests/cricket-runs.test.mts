@@ -199,14 +199,59 @@ describe('#15 — symbol helpers', () => {
 });
 
 describe('#15 — editing a ball keeps the new keys', () => {
-  test('editBall changing runs keeps boundary and overthrows (spread payload)', () => {
+  // Changed deliberately (guide-writer feedback): overthrows belong to the old
+  // run count, so a "5ot" edited to 6 no longer keeps them unless restated.
+  test('editBall changing runs keeps boundary but clears overthrows unless kept explicitly', () => {
     const rec: MatchEventRecord = { seq: 7, type: 'RUNS', side: 'home', payload: { runs: 5, boundary: false, overthrows: 4, strikerId: 's1', strikerName: 'A', bowlerId: 'b1', bowlerName: 'Bowler' } } as MatchEventRecord;
     const out = editBall(rec, { runs: 6 }) as ScoreAction;
     assert.ok(!('error' in out));
     assert.equal(out.payload!.runs, 6);
     assert.equal(out.payload!.boundary, false);
-    assert.equal(out.payload!.overthrows, 4);
+    assert.equal(out.payload!.overthrows, undefined);
+    assert.equal(ballSymbol(out), '6r');
     assert.equal(out.attribution?.by, 6);
+    const kept = editBall(rec, { runs: 6, overthrows: 4 }) as ScoreAction;
+    assert.equal(kept.payload!.overthrows, 4);
+    assert.equal(ballSymbol(kept), '6ot');
+  });
+  test('an unchanged "5ot" (e.g. striker change only) keeps its overthrows', () => {
+    const rec: MatchEventRecord = { seq: 7, type: 'RUNS', side: 'home', payload: { runs: 5, boundary: false, overthrows: 4, strikerId: 's1', strikerName: 'A', bowlerId: 'b1', bowlerName: 'Bowler' } } as MatchEventRecord;
+    const out = editBall(rec, { strikerId: 's2', strikerName: 'B' }) as ScoreAction;
+    assert.equal(out.payload!.overthrows, 4);
+    assert.equal(ballSymbol(out), '5ot');
+  });
+  test('editing to 4 / 6: Boundary vs All run sends the boundary flag', () => {
+    const rec: MatchEventRecord = { seq: 4, type: 'RUNS', side: 'home', payload: { runs: 2, strikerId: 's1', strikerName: 'A', bowlerId: 'b1', bowlerName: 'Bowler' } } as MatchEventRecord;
+    const four = editBall(rec, { runs: 4, boundary: true }) as ScoreAction;
+    assert.equal(four.payload!.boundary, true);
+    assert.equal(ballSymbol(four), '4');
+    const allRun = editBall(rec, { runs: 4, boundary: false }) as ScoreAction;
+    assert.equal(allRun.payload!.boundary, false);
+    assert.equal(ballSymbol(allRun), '4r');
+    // replays: an all-run 4 is no four for the batter
+    const s = ball(opened(), 'RUNS', allRun.payload as Record<string, unknown>);
+    assert.equal(s.batting.s1.fours, 0);
+    assert.equal(home(s).runs, 4);
+    // a "5ot" made a boundary 4 drops its overthrows
+    const ot: MatchEventRecord = { seq: 5, type: 'RUNS', side: 'home', payload: { runs: 5, boundary: false, overthrows: 4, strikerId: 's1', bowlerId: 'b1' } } as MatchEventRecord;
+    const b4 = editBall(ot, { runs: 4, boundary: true, overthrows: 4 }) as ScoreAction;
+    assert.equal(b4.payload!.overthrows, undefined);
+    assert.equal(ballSymbol(b4), '4');
+  });
+  test('runs 0–7 off the bat are accepted; 8 is not', () => {
+    const rec: MatchEventRecord = { seq: 4, type: 'RUNS', side: 'home', payload: { runs: 1, strikerId: 's1', bowlerId: 'b1' } } as MatchEventRecord;
+    assert.equal((editBall(rec, { runs: 7 }) as ScoreAction).payload!.runs, 7);
+    assert.ok('error' in editBall(rec, { runs: 8 }));
+  });
+  test('a no-ball edited to +6 off the bat (live allows Nb+6), boundary or all run', () => {
+    const rec: MatchEventRecord = { seq: 4, type: 'EXTRA', side: 'home', payload: { kind: 'No ball', runs: 1, strikerId: 's1', strikerName: 'A', bowlerId: 'b1' } } as MatchEventRecord;
+    const six = editBall(rec, { extraKind: 'noball', extraRuns: 6, boundary: true }) as ScoreAction;
+    assert.ok(!('error' in six));
+    assert.equal(six.payload!.runs, 6);
+    assert.equal(six.payload!.boundary, true);
+    assert.equal(ball(opened(), 'EXTRA', six.payload as Record<string, unknown>).batting.s1.sixes, 1);
+    const allRun = editBall(rec, { extraKind: 'noball', extraRuns: 4, boundary: false }) as ScoreAction;
+    assert.equal(ball(opened(), 'EXTRA', allRun.payload as Record<string, unknown>).batting.s1.fours, 0);
   });
   test('a recorded 9 off the bat can still be edited (e.g. striker change)', () => {
     const rec: MatchEventRecord = { seq: 3, type: 'RUNS', payload: { runs: 9, boundary: false, strikerId: 's1', bowlerId: 'b1' } } as MatchEventRecord;

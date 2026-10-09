@@ -11,7 +11,7 @@ updated: 2026-10-09
 In a T20, nobody may bowl more than 4 overs, and nobody may bowl two overs in a row. When a bowler limps off mid-over, someone else finishes the over, and the Laws say neither of them may bowl the next one. The app keeps track of all of this for you. Each bowler's name shows how many overs they've bowled, and anyone who can't bowl right now is greyed out with the reason.
 
 ## Before you start
-- You're the scorer for the match, on the **Scoring** tab.
+- You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
 - To set your own overs-per-bowler limit, you need to be able to edit the match format. You can only do this before the match goes live.
 
 ## The overs-per-bowler limit
@@ -40,7 +40,7 @@ A greyed-out name tells you why that bowler can't bowl:
 - **· quota done**: they've used all their overs.
 - **· suspended**: an umpire suspended them earlier in this innings.
 - **· this over**: they already bowled part of this over.
-- **⚡**: they were replaced by an Impact Player or concussion substitute.
+- **⚡**: they were replaced by an Impact Player or concussion substitute. A line under the names explains it: "⚡ = replaced by an Impact Player or concussion sub — can't bowl." Batters show the same mark.
 
 ## Step by step: a bowler is injured mid-over
 Once the first ball of an over is bowled, the bowler is locked in, so a mis-tap can't change bowlers halfway through.

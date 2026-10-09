@@ -277,7 +277,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
           {hasNr && <Text style={[st.num, st.headText]}>NR</Text>}
           {hasNrr && <Text style={[st.num, st.headText, { width: 48 }]}>NRR</Text>}
           <Text style={[st.num, st.headText]}>Pts</Text>
-          {canManage && <View style={{ width: 24 }} />}
+          {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
         </View>
         {shown.map((t, i) => {
           const tier = podiumColor(i);
@@ -300,8 +300,12 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
                   {hasNrr && <Text style={[st.num, { width: 48 }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
                   <Text style={[st.num, st.pts]}>{t.points}{t.adjust ? '*' : ''}</Text>
                   {canManage && (
-                    <Text style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
-                      onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>±</Text>
+                    <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
+                      accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
+                      onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>
+                      <Text style={st.adjBtnIcon}>±</Text>
+                      <Text style={st.adjBtnText}>Adjust</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               </TouchableOpacity>
@@ -342,8 +346,15 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
   );
 }
 
+/** Width of the "± Adjust" button column (and its header spacer). */
+const ADJ_W = 40;
 const st = StyleSheet.create({
-  adjBtn: { width: 24, textAlign: 'center', color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.body },
+  adjBtn: {
+    width: ADJ_W, minHeight: 40, marginLeft: 2, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: theme.colors.primary + '66', borderRadius: theme.radius.sm,
+  },
+  adjBtnIcon: { color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.body, lineHeight: theme.font.body + 2 },
+  adjBtnText: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.tiny },
   adjPanel: { gap: theme.spacing(2), padding: theme.spacing(3), marginVertical: theme.spacing(1), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt },
   adjStepper: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   adjValue: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900', minWidth: 40, textAlign: 'center' },

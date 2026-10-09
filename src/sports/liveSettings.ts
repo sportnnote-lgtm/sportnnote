@@ -43,7 +43,7 @@ export function liveSettingsAccess(opts: {
 }): { editable: boolean; note?: string } {
   if (opts.complete) return { editable: false };
   if (opts.mode === 'event' && !opts.beforeStart) {
-    return opts.canScore ? { editable: true } : { editable: false, note: 'Only the scorer can change rules during play.' };
+    return opts.canScore ? { editable: true } : { editable: false, note: 'Only scorers and hosts can change rules during play.' };
   }
   return { editable: opts.canScore || opts.canManage };
 }

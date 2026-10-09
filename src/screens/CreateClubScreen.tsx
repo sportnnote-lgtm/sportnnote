@@ -74,7 +74,7 @@ export default function CreateClubScreen() {
 
         <Card style={{ gap: theme.spacing(3) }}>
           <View style={{ alignItems: 'center' }}>
-            <LogoPicker logoUrl={logoUrl} canManage onPick={setLogoUrl} kind="club-logo" size={72} placeholder="🛡️" label="Add team logo" />
+            <LogoPicker logoUrl={logoUrl} canManage onPick={setLogoUrl} kind="club-logo" size={72} placeholder="🛡️" label="Add logo" />
           </View>
           <View style={st.row}>
             <View style={st.flex2}>

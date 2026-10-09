@@ -17,9 +17,11 @@ import {
   ballDiffLine, bowlerDiffLine, swapDiffLine, describeBall, CATEGORY_HINT,
   type EditableBall, type EditableInnings, type EditableOver, type BallEdit,
 } from './editOvers';
+import { DISMISSAL_NAME, isBoundaryHit } from './engine';
 
 type Staged = { key: string; ops: AmendOp[]; line: string };
-const WICKET_KINDS = [['bowled', 'Bowled'], ['caught', 'Caught'], ['lbw', 'LBW'], ['stumped', 'Stumped'], ['runout', 'Run out'], ['hitwicket', 'Hit wicket'], ['hittwice', 'Hit twice'], ['obstruct', 'Obstructing']] as const;
+/** Same names (sentence case) as the live wicket panel. */
+const WICKET_KINDS = (['bowled', 'caught', 'lbw', 'stumped', 'runout', 'hitwicket', 'hittwice', 'obstruct'] as const).map((k) => [k, DISMISSAL_NAME[k]] as const);
 /** Kinds whose completed runs count (parity #16): run out and obstructing. */
 const takesRuns = (k: string) => k === 'runout' || k === 'obstruct';
 
@@ -91,7 +93,7 @@ export function OverEditor({ log, config, onOps, homeName, awayName, homeRoster,
                   );
                 })}
               </View>
-              {isOver(editing, inn, ov) && editing && <BallCard key={editing.ball.seq} ball={editing.ball} log={log}
+              {isOver(editing, inn, ov) && editing && <BallCard key={editing.ball.seq} ball={editing.ball} log={log} bowlerName={ov.bowler.name}
                 fielders={rosterOf(other(inn.side))} keeper={undefined}
                 onCancel={() => setEditing(null)}
                 onSave={(edit) => {
@@ -174,38 +176,74 @@ export function OverEditor({ log, config, onOps, homeName, awayName, homeRoster,
 }
 
 /** The inline "Edit ball" card — same category only (legal / wicket / extra). */
-function BallCard({ ball, log, fielders, onSave, onCancel }: {
-  ball: EditableBall; log: MatchEventRecord[]; fielders: Player[]; keeper?: { id: string; name: string };
+function BallCard({ ball, log, bowlerName, fielders, onSave, onCancel }: {
+  ball: EditableBall; log: MatchEventRecord[]; bowlerName?: string; fielders: Player[]; keeper?: { id: string; name: string };
   onSave: (edit: BallEdit) => void; onCancel: () => void;
 }) {
   const p = (ball.action.payload ?? {}) as Record<string, unknown>;
   const t = ball.action.type;
-  const [runs, setRuns] = useState<number>(Number(p.runs ?? p.byes ?? 0) || 0);
+  const recNbByes = ball.category === 'noball' && !p.wicket && !p.runout && Number(p.byes ?? 0) > 0 && !Number(p.runs ?? 0);
+  const recRuns = (recNbByes ? Number(p.byes) : Number(p.runs ?? p.byes ?? 0)) || 0;
+  const [runs, setRuns] = useState<number>(recRuns);
   const [type, setType] = useState<'bat' | 'bye' | 'legbye'>(t === 'BYES' ? 'bye' : t === 'LEGBYES' ? 'legbye' : 'bat');
   const [striker, setStriker] = useState<string>(String(p.strikerId ?? ball.crease[0]));
   const [kind, setKind] = useState<string>(String(p.kind ?? 'bowled'));
   const [fielder, setFielder] = useState<string | undefined>(p.fielderId as string | undefined);
   const [out, setOut] = useState<string>(String(p.batterOut ?? 'striker') === 'nonstriker' ? 'nonstriker' : 'striker');
   const [extraKind, setExtraKind] = useState<'wide' | 'noball'>(ball.category === 'wide' ? 'wide' : 'noball');
+  // #15 run detail: a 4 / 6 is a boundary or all run; overthrows stay only if kept.
+  const recOt = t === 'RUNS' ? Math.min(recRuns, Number(p.overthrows ?? 0) || 0) : 0;
+  const recBoundary = isBoundaryHit(recRuns, p.boundary, recOt);
+  const [boundary, setBoundary] = useState<boolean>(recRuns === 4 || recRuns === 6 ? recBoundary : true);
+  const [keepOt, setKeepOt] = useState(recOt > 0);
+  // A no-ball's runs: off the bat, byes or leg byes (not for a wicket on the extra).
+  const extraWkt = !!(p.wicket || p.runout);
+  const recNbAs: 'bat' | 'bye' | 'legbye' = recNbByes ? (p.runsAs === 'legbye' ? 'legbye' : 'bye') : 'bat';
+  const [nbAs, setNbAs] = useState<'bat' | 'bye' | 'legbye'>(recNbAs);
+  const fourOrSix = runs === 4 || runs === 6;
   const nameOf = (id: string) => (log.find((r) => (r.payload as Record<string, unknown> | null)?.strikerId === id)?.payload as Record<string, unknown> | undefined)?.strikerName as string | undefined;
+  // Send the boundary flag only when it's a real choice that changed something.
+  const boundaryEdit = (offBat: boolean) => (offBat && fourOrSix && (runs !== recRuns || boundary !== recBoundary) ? boundary : undefined);
   const save = () => {
-    if (ball.category === 'legal') onSave({ runs, type, strikerId: striker, strikerName: nameOf(striker) });
+    if (ball.category === 'legal') {
+      onSave({
+        runs, type, strikerId: striker, strikerName: nameOf(striker),
+        boundary: boundaryEdit(type === 'bat'),
+        ...(recOt > 0 && type === 'bat' ? { overthrows: keepOt && !(fourOrSix && boundary) ? recOt : 0 } : {}),
+      });
+    }
     else if (ball.category === 'wicket') {
       const f = fielders.find((x) => x.id === fielder);
       onSave({ kind, fielderId: f?.id, fielderName: f?.fullName, runs: takesRuns(kind) ? runs : undefined, batterOut: takesRuns(kind) ? out : undefined });
-    } else onSave({ extraKind, extraRuns: runs });
+    } else {
+      const as = extraKind === 'noball' && !extraWkt ? nbAs : undefined;
+      onSave({ extraKind, extraRuns: runs, ...(as ? { extraRunsAs: as } : {}), boundary: boundaryEdit(extraKind === 'noball' && !extraWkt && nbAs === 'bat') });
+    }
   };
+  const who = [bowlerName, ball.strikerName ?? nameOf(ball.crease[0])].filter(Boolean);
   return (
     <View style={st.card}>
-      <Text style={textStyles.body}>{ball.stamp} · {describeBall(ball.action)}</Text>
+      {/* "2.3 · Arjun to Ravi · 1 run" — bowler to batter (#06). */}
+      <Text style={textStyles.body}>{ball.stamp} · {who.length === 2 ? `${who[0]} to ${who[1]} · ` : ''}{describeBall(ball.action)}</Text>
       {ball.category === 'legal' && (
         <>
-          <View style={st.chips}>{[0, 1, 2, 3, 4, 5, 6].map((n) => <SelectChip key={n} label={`${n} run${n === 1 ? '' : 's'}`} active={runs === n} onPress={() => setRuns(n)} />)}</View>
+          <View style={st.chips}>{[0, 1, 2, 3, 4, 5, 6, 7].map((n) => <SelectChip key={n} label={`${n} run${n === 1 ? '' : 's'}`} active={runs === n} onPress={() => setRuns(n)} />)}</View>
           <View style={st.chips}>
             <SelectChip label="Off bat" active={type === 'bat'} onPress={() => setType('bat')} />
             <SelectChip label="Bye" active={type === 'bye'} onPress={() => setType('bye')} />
             <SelectChip label="Leg bye" active={type === 'legbye'} onPress={() => setType('legbye')} />
           </View>
+          {type === 'bat' && fourOrSix && (
+            <View style={st.chips}>
+              <SelectChip label="Boundary" active={boundary} onPress={() => setBoundary(true)} />
+              <SelectChip label="All run" active={!boundary} onPress={() => setBoundary(false)} />
+            </View>
+          )}
+          {type === 'bat' && recOt > 0 && !(fourOrSix && boundary) && (
+            <View style={st.chips}>
+              <SelectChip label={`Incl. ${recOt} overthrow${recOt === 1 ? '' : 's'}`} active={keepOt} onPress={() => setKeepOt(!keepOt)} />
+            </View>
+          )}
           <Text style={textStyles.muted}>Who faced?</Text>
           <View style={st.chips}>{ball.crease.filter(Boolean).map((id) => <SelectChip key={id} label={nameOf(id) ?? 'Batter'} active={striker === id} onPress={() => setStriker(id)} />)}</View>
         </>
@@ -233,7 +271,21 @@ function BallCard({ ball, log, fielders, onSave, onCancel }: {
             <SelectChip label="Wide" active={extraKind === 'wide'} onPress={() => setExtraKind('wide')} />
             <SelectChip label="No ball" active={extraKind === 'noball'} onPress={() => setExtraKind('noball')} />
           </View>
-          <View style={st.chips}>{[0, 1, 2, 3, 4].map((n) => <SelectChip key={n} label={`+${n}`} active={runs === n} onPress={() => setRuns(n)} />)}</View>
+          {extraKind === 'noball' && !extraWkt && (
+            <View style={st.chips}>
+              <SelectChip label="Off bat" active={nbAs === 'bat'} onPress={() => setNbAs('bat')} />
+              <SelectChip label="Byes" active={nbAs === 'bye'} onPress={() => setNbAs('bye')} />
+              <SelectChip label="Leg byes" active={nbAs === 'legbye'} onPress={() => setNbAs('legbye')} />
+            </View>
+          )}
+          {/* No ball +0–6 (as the live pad); a wide +0–4. */}
+          <View style={st.chips}>{(extraKind === 'noball' ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4]).map((n) => <SelectChip key={n} label={`+${n}`} active={runs === n} onPress={() => setRuns(n)} />)}</View>
+          {extraKind === 'noball' && !extraWkt && nbAs === 'bat' && fourOrSix && (
+            <View style={st.chips}>
+              <SelectChip label="Boundary" active={boundary} onPress={() => setBoundary(true)} />
+              <SelectChip label="All run" active={!boundary} onPress={() => setBoundary(false)} />
+            </View>
+          )}
         </>
       )}
       <Text style={textStyles.muted}>{CATEGORY_HINT}</Text>

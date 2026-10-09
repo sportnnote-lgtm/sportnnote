@@ -29,7 +29,7 @@ The bell shows your choice at a glance:
 
 ## What each switch does
 ### For a player you follow
-- **Before they play**: a reminder before their match. It uses your reminder times under **Settings** → **Match reminders** (by default a day, an hour and 15 minutes before).
+- **Before they play**: a reminder before their match, at your own reminder times. The app says "At your reminder times (Settings → Match reminders)". You set those times under **Settings** → **Match reminders** (by default a day, an hour and 15 minutes before).
 - **Match starts**: when their match goes live.
 - **Result**: who won, when the match ends.
 - **Goals, wickets & big moments**: each time they score, in any sport.

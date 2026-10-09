@@ -151,7 +151,7 @@ export default function AssignScorersScreen() {
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <ScrollView contentContainerStyle={st.body}>
           <ScreenTitle title="Assign scorers" subtitle={tournament?.name} />
-          <EmptyState icon="🎽" title="Add scorers first" hint="Add the tournament’s scorers under Settings → Scorers & officials, then come back to share out the fixtures." />
+          <EmptyState icon="🎽" title="Add scorers first" hint="Add the tournament’s scorers under Manage → Scorers & officials, then come back to share out the fixtures." />
           <Button label="Back to the tournament" variant="ghost" onPress={() => nav.goBack()} />
         </ScrollView>
       </SafeAreaView>

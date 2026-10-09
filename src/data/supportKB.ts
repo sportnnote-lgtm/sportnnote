@@ -203,12 +203,14 @@ If a table looks wrong, check you're viewing the right tournament and that the f
     title: 'Join a team with a code',
     category: 'Teams & players',
     summary: 'Settings → "Join a team with a code" to add yourself to a team you were invited to.',
-    keywords: ['join', 'code', 'invite code', 'team invite'],
+    keywords: ['join', 'code', 'invite code', 'team invite', 'tournament code', 'T-'],
     body: `If someone gives you a team invite code:
 - Go to Settings → "Join a team with a code".
 - Enter the code to add yourself to that team.
 
-You can also open an invite link directly, which fills the code in for you.`,
+You can also open an invite link directly, which fills the code in for you.
+
+The same box takes a tournament code (it starts with T-, e.g. T-ABC123): enter it to enter your team in that tournament.`,
   },
   {
     id: 'follow-players',

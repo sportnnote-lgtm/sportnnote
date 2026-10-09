@@ -23,12 +23,12 @@ A meet looks much more real when the house crests, the tournament banner and the
 3. Choose a photo. On a phone you can crop it to a square.
 4. Wait a moment while it uploads. The photo looks faded until the upload finishes.
 
-You can also change it from **Edit profile**: tap **Add your photo** at the top of the form, then tap **Save profile**.
+You can also change it from **Edit profile**: tap **Add photo** (or your current photo) at the top of the form, then tap **Save profile**.
 
 ## Step by step: a team logo
 1. Open the team, then tap **👥 Squad · ＋ Add**.
 2. Tap **✎ Edit team**.
-3. Tap **Add team logo** (or the current logo) and pick an image.
+3. Tap **Add logo** (or the current logo, to change it) and pick an image.
 4. Tap **Save** to keep any other changes, such as the name or city. The logo is saved as soon as the upload finishes.
 
 > **Note:** Teams that belong to a club take their name and logo from the club. On those teams, **Edit team** shows a link to the club page instead. Change the logo there.
@@ -44,7 +44,7 @@ You can also add both when you create the tournament, or later from **⚙ Manage
 
 ## Step by step: a match logo
 1. Open the match.
-2. In the score header, tap the small square next to the sport name (it reads **Add** when empty).
+2. In the score header, tap the small square next to the sport name (it reads **Add logo** when empty, or tap the current logo to change it).
 3. Pick an image.
 
 ## Common questions

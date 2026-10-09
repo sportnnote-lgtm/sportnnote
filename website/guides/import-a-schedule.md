@@ -41,7 +41,7 @@ Each row shows **✓ Created** as it's saved. When it's done, you'll see "Schedu
 
 ## Fixing rows
 Rows with a red ✕ won't import. Rows with an amber ⚠ will import, but check them first. Common messages:
-- "did you mean Red House?": a team name is close to one of your teams. Tap the "Use Red House" chip under it to fix it. Even if you don't tap it, a clear single match is used.
+- "did you mean Red House? Will import as Red House.": a team name is close to one of your teams. Even if you don't tap anything, the row imports with Red House, and the summary above the rows counts how many rows will import with a suggested name. Tap the "Use Red House" chip to confirm it, or skip the row if the guess is wrong.
 - "No team called … add it under Participating teams first": the team isn't in SportnNote. Tap **Add teams to the tournament →**, add it, then come back.
 - "isn't in this tournament yet — will be added": the team exists but isn't entered. It will be added when you create.
 - "Can't read the date" or "Can't read the time": use `12/10/2026` and `4:30 pm`.

@@ -11,7 +11,7 @@ updated: 2026-10-09
 A school T20 starts late, or rain stops play in the middle of the chase. The umpires agree a shorter match, and someone has to work out the new target. The app does this for you. You can change the overs at any time, let the app work out a fair rain-revised target using the DLS method, or type in a target the officials give you.
 
 ## Before you start
-- You're the scorer for the match, on the **Scoring** tab.
+- You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
 - For rain-revised targets, the match needs DLS switched on. It's on by default for the T20, ODI, T10 and The Hundred formats, and off for Sixes, Box cricket and Test. To switch it on, tap **⚙ Customize this format** before the match goes live and set **DLS (rain-revised targets)** to **On**.
 - Changing overs or typing a target works whether DLS is on or off.
 - These tools aren't available in a Test or timeless match, or during a Super Over.
@@ -52,7 +52,7 @@ When the app has revised the target, you'll see "(DLS)" next to it, so everyone 
 - The timeline shows, for example, "Rain — overs cut to 10 · target 91 (DLS)".
 - The result reads, for example, "Won by 16 runs (DLS)".
 
-A target you typed in shows "(revised)", and the result says "(revised target)".
+A target you typed in shows "(revised target)", both on the score and in the result.
 
 ## Common questions
 ### The bowling limit changed after rain. Why?

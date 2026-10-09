@@ -58,7 +58,7 @@ export default function JoinTeamScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title="Join a team" subtitle="Enter the invite code your organizer shared" />
+        <ScreenTitle title="Join a team" subtitle="Enter a squad invite code, or a tournament code (T-…) to enter your team in a tournament" />
 
         <TextField label="Invite code" value={code} onChange={setCode} placeholder="JOIN-1001" autoCapitalize="characters" />
         <FormError message={error} />

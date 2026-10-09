@@ -11,14 +11,14 @@ updated: 2026-10-09
 Once a tournament exists, organisers need to add teams, set the format, schedule matches, assign scorers and fix the table. These tools live in one place: the **⚙ Manage** hub. A short checklist at the top tells a new organiser what to do next.
 
 ## Before you start
-- You must be a host of the tournament. Only hosts see **⚙ Manage** and the **Settings** tab.
+- You must be a host of the tournament. Only hosts see **⚙ Manage** and the **Manage** tab.
 - If you haven't created the tournament yet, start with [Create a tournament](/guides/create-a-tournament/).
 
 ## Open the hub
 1. Open the tournament.
 2. Tap **⚙ Manage** at the top right.
 
-This opens the tournament's **Settings** tab. You land here automatically right after you create a tournament.
+This opens the tournament's **Manage** tab (you can also tap the tab itself). You land here automatically right after you create a tournament.
 
 ## Step by step: follow the setup checklist
 At the top of the hub, a card says "Tournament created — 3 quick steps". Tap a step to go straight to the right screen:
@@ -28,7 +28,7 @@ At the top of the hub, a card says "Tournament created — 3 quick steps". Tap a
 
 Steps tick off by themselves as you do them, in any order. The checklist disappears once all three are done. To put it away sooner, tap **Hide**. Hiding only applies on that phone or browser.
 
-While setup isn't finished, hosts also see a link on the **Info** tab that shows how many steps are done and ends in "Continue ›". It takes you back to the hub.
+While setup isn't finished, hosts also see a link on the **Info** tab that shows how many steps are done out of how many, for example "Setup 1/3 · Continue ›". It takes you back to the hub.
 
 ## What's in the hub
 The hub is grouped so you can find things quickly.
@@ -71,4 +71,4 @@ Hiding is saved on that device only. Open the tournament on another phone or bro
 Yes. Opening the sport's settings and saving means you accepted the format shown, usually a league. You can change it later from the sport's row in the hub. It's best to settle it before you generate fixtures.
 
 ### Where do I record walkovers or end a match early?
-On the match itself, not in the hub. See [End a match early](/guides/end-a-match-early/).
+On the match itself, not in the hub: **🏁 End match…** on the **Scoring** tab has a **🏳 Walkover** choice for hosts. See [End a match early](/guides/end-a-match-early/).

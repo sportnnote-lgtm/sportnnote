@@ -12,7 +12,7 @@ School and gully matches often use their own rules. A wide is worth 2 runs, a no
 
 ## Before you start
 - Before ball 1, the match scorer or a match host can set the rules.
-- Once play has started, only the scorer can change them. Everyone else sees the rules but can't edit them, with the note "Only the scorer can change rules during play."
+- Once play has started, only the match's scorers and hosts can change them. Everyone else sees the rules but can't edit them, with the note "Only scorers and hosts can change rules during play."
 - The rules are for this match only. They don't change the format for the rest of a tournament.
 
 ## The rules you can set

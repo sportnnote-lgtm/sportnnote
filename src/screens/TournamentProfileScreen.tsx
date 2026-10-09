@@ -194,8 +194,8 @@ export default function TournamentProfileScreen() {
   const activeSport = sport ?? sports[0];
 
   // The page is split into tabs so it never becomes an endless scroll: Info (the
-  // overview + how to enter), Settings (organizer-only management), Matches, Stats
-  // (standings + leaders), Awards and Teams. Settings only exists for people who
+  // overview + how to enter), Manage (key 'Settings'; organizer-only), Matches, Stats
+  // (standings + leaders), Awards and Teams. Manage only exists for people who
   // can manage; Awards for them always, for everyone else once published (#21).
   type Tab = 'Info' | 'Settings' | 'Matches' | 'Stats' | 'Awards' | 'Teams';
   const [tab, setTab] = useParamState<Tab>('tab', 'Info');
@@ -399,7 +399,11 @@ export default function TournamentProfileScreen() {
   const TABS: Tab[] = [
     'Info', ...(canManageHosts ? ['Settings' as const] : []), 'Matches', 'Stats', ...(showAwards ? ['Awards' as const] : []), 'Teams',
   ];
-  const activeTab: Tab = TABS.includes(tab) ? tab : 'Info';
+  // The admin tab is labelled "Manage" (same as the header's ⚙ Manage); its
+  // param key stays 'Settings' so old links keep working, and 'Manage' works too.
+  const tabKey: Tab = (tab as string) === 'Manage' ? 'Settings' : tab;
+  const activeTab: Tab = TABS.includes(tabKey) ? tabKey : 'Info';
+  const tabLabel = (t: Tab) => (t === 'Settings' ? 'Manage' : t);
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -438,7 +442,7 @@ export default function TournamentProfileScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabBar}>
           {TABS.map((t) => (
             <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === t }} key={t} onPress={() => setTab(t)} style={[st.tabBtn, activeTab === t && st.tabBtnActive]} activeOpacity={0.8}>
-              <Text style={[st.tabText, activeTab === t && st.tabTextActive]}>{t}</Text>
+              <Text style={[st.tabText, activeTab === t && st.tabTextActive]}>{tabLabel(t)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -460,7 +464,7 @@ export default function TournamentProfileScreen() {
           <>
             {canManageHosts && !setupHidden && setupSteps.some((x) => !x.done) && (
               <Text style={st.link} accessibilityRole="button" onPress={() => setTab('Settings')}>
-                Setup {setupSteps.filter((x) => x.done).length}/3 · Continue ›
+                Setup {setupSteps.filter((x) => x.done).length}/{setupSteps.length} · Continue ›
               </Text>
             )}
             {myEligibleTeams.length > 0 && (() => {
@@ -949,7 +953,7 @@ export default function TournamentProfileScreen() {
               expanded={showTeams}
             />
             {tourneyTeams.length === 0 ? (
-              <EmptyState icon="🛡️" title="No teams yet" hint={canManageHosts ? 'Add participating teams from the Settings tab.' : undefined} compact />
+              <EmptyState icon="🛡️" title="No teams yet" hint={canManageHosts ? 'Add participating teams from the Manage tab.' : undefined} compact />
             ) : (
               (showTeams ? tourneyTeams : tourneyTeams.slice(0, SECTION_CAP)).map((t) => (
                 <TouchableOpacity accessibilityRole="button" key={t.id} activeOpacity={0.85} onPress={() => nav.navigate('Team', { teamId: t.id })}>

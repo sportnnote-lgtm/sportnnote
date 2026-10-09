@@ -259,7 +259,7 @@ export default function SquadScreen() {
 
         {canManage && <Card style={{ gap: theme.spacing(2) }}>
           <Text style={textStyles.body}>📨 Invite the captain / coach</Text>
-          <Text style={textStyles.muted}>Generate a code/link they redeem under “Join a team” to manage this squad.</Text>
+          <Text style={textStyles.muted}>Generate a code/link they redeem under Settings → “Join a team with a code” to manage this squad.</Text>
           <Button
             label={busy && !inviteCode ? 'Generating…' : inviteCode ? 'New invite code' : 'Generate invite link'}
             variant="ghost"

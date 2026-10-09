@@ -421,7 +421,7 @@ export function validateImport(rows: readonly RawRow[], ctx: ImportContext): Imp
         if (!raw?.trim()) { err(field, `No ${label}`); return undefined; }
         const m = matchTeam(raw, entered, all);
         if (m.status === 'missing') { err(field, `No team called “${raw}” — add it under Participating teams first`); return undefined; }
-        if (m.status === 'suggest') warn(field, `“${raw}” — did you mean ${m.team.name}?`, m.team);
+        if (m.status === 'suggest') warn(field, `“${raw}” — did you mean ${m.team.name}? Will import as ${m.team.name}.`, m.team);
         const notIn = m.status === 'notEntered' || (m.status === 'suggest' && !m.entered);
         if (notIn) {
           if (m.status === 'notEntered') warn(field, `${m.team.name} isn't in this tournament yet — will be added`);
@@ -519,14 +519,16 @@ export function importFromText(text: string, ctx: ImportContext, overrides: Reco
   return { rows: validateImport(withFixes, ctx), hasHeader, unknownColumns };
 }
 
-/** Count rows by outcome for the summary pills. */
+/** Count rows by outcome for the summary pills. `guessed`: rows that will
+ *  import with a "Did you mean X?" team accepted as X (not yet confirmed). */
 export function importSummary(rows: readonly ImportRow[], skip: ReadonlySet<number> = new Set()) {
-  let ok = 0, warn = 0, error = 0;
+  let ok = 0, warn = 0, error = 0, guessed = 0;
   for (const r of rows) {
     if (skip.has(r.line)) continue;
     if (r.status === 'ok') ok++; else if (r.status === 'warn') warn++; else error++;
+    if (r.status === 'warn' && r.issues.some((i) => i.level === 'warn' && !!i.fix)) guessed++;
   }
-  return { ok, warn, error };
+  return { ok, warn, error, guessed };
 }
 
 /* --------------------------------- Template ------------------------------- */

@@ -27,7 +27,7 @@ const RESULT: AlertOption = { key: 'result', label: 'Result', hint: 'Who won, wh
  *  listed — `award` stays out until #21's follower fan-out exists. */
 export const ALERTS: Record<FollowType, AlertOption[]> = {
   player: [
-    { key: 'reminder', label: 'Before they play', hint: 'A day, an hour and 15 minutes before' },
+    { key: 'reminder', label: 'Before they play', hint: 'At your reminder times (Settings → Match reminders)' },
     { ...START, hint: 'When their match goes live' },
     { ...RESULT },
     { key: 'scores', label: 'Goals, wickets & big moments', hint: 'Each time they score, in any sport' },

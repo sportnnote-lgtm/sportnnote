@@ -31,7 +31,7 @@ A school meet can have 30 to 60 house and class teams. You can add them yourself
 4. When every team is in, turn the switch off. Anyone who opens the old link then sees "This link is turned off".
 
 ## Step by step: enter your team as a captain
-1. Open the link the organiser sent. Or go to **Settings** → **Join a team with a code** and type the `T-` code.
+1. Open the link the organiser sent. Or go to **Settings** → **Join a team with a code** and type the `T-` code. The same box takes squad invite codes too.
 2. On the **Enter a tournament** screen, check the tournament name. If you're asked, sign in. The app brings you back here.
 3. Under **Your teams**, tap the team you want to enter. If you haven't made it yet, tap **＋ New team**, fill in the **Team name** and **Short**, and tap **Create team**.
 4. If the tournament has divisions, pick yours.

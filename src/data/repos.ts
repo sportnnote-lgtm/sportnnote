@@ -1130,7 +1130,14 @@ export async function claimScoring(matchId: string, opts: { takeover?: boolean; 
     const l = demoLocks[matchId];
     if (!l?.holderId || l.device === device || opts.takeover) {
       demoLocks[matchId] = { holderId: opts.playerId ?? 'me', holderName: opts.playerName ?? 'You', device, at: new Date().toISOString() };
-      return { ok: true };
+      // As claim_scoring does: whoever takes the lock (e.g. a host scoring by
+      // default) joins the allowed scorer list.
+      const m = demo.matches.find((x) => x.id === matchId);
+      if (m && opts.playerId) {
+        const ids = m.scorerIds?.length ? m.scorerIds : m.scorerId ? [m.scorerId] : [];
+        if (!ids.includes(opts.playerId)) { m.scorerIds = [...ids, opts.playerId]; m.scorerId = m.scorerIds[0]; }
+      }
+      return { ok: true, holderId: opts.playerId ?? undefined };
     }
     return { ok: false, holderId: l.holderId, holderName: l.holderName ?? undefined, at: l.at };
   }

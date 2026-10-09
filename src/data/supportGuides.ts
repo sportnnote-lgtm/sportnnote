@@ -157,7 +157,9 @@ A player is identified by their **phone number**, so the same number is always t
 2. Enter the code you were given.
 3. You're added to that team — their matches and this team now show up for you.
 
-You can also open an invite link directly, which fills the code in for you. Invite codes are the quickest way to bring a known group together without searching for each person.`,
+You can also open an invite link directly, which fills the code in for you. Invite codes are the quickest way to bring a known group together without searching for each person.
+
+The same box also takes a **tournament code** (it starts with \`T-\`): captains enter it to enter their team in that tournament.`,
 
   'follow-players': `Following keeps the people and teams you care about in front of you.
 

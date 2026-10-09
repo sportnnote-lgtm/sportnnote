@@ -11,7 +11,7 @@ updated: 2026-10-09
 At a school final, two teachers may both be allowed to score. If both tap the same goal, the score goes wrong. So SportnNote lets several people be scorers, but only one phone scores at any moment. Everyone else watches live. When the scoring phone's battery dies, another scorer takes over in two taps.
 
 ## Before you start
-- You must be listed as one of the match's scorers. Scorers are added on the match's **Info** tab under **Match scorers**. See [Scorers and officials](/guides/scorers-and-officials/).
+- You must be one of the match's scorers, or a host of the match or its tournament. Hosts can score without being added as a scorer. Other scorers are added on the match's **Info** tab under **Match scorers**. See [Scorers and officials](/guides/scorers-and-officials/).
 - The lock only applies while a match is about to start or is live. Once the match ends, it's released.
 
 ## How you get the lock
@@ -58,7 +58,7 @@ The second phone shows "You are scoring on another device". Tap **Take over scor
 Yes. Each browser tab counts as its own device, so two tabs can't both score. Use one tab.
 
 ### Can the organiser take over?
-Yes. Any listed scorer can take over. A host who isn't a scorer yet first adds themselves on the **Info** tab: tap **＋ Add scorer**, then their own name ("This device"). After that, the **Take over scoring** button appears on the Scoring tab.
+Yes. Any listed scorer can take over, and so can any host of the match or its tournament. A host doesn't need to add themselves first: open the **Scoring** tab and tap **Take over scoring**. Once a host starts scoring, their name is added to **Match scorers** on the Info tab.
 
 ### What happens when the match ends?
 The lock is released. After full time, scorers and hosts can fix mistakes from the Info tab. See [Correct a finished match](/guides/correct-a-finished-match/).

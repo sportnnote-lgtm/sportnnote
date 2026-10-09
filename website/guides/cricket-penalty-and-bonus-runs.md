@@ -8,10 +8,10 @@ order: 60
 updated: 2026-10-09
 ---
 
-Sometimes runs change hands without a ball being hit. The ball hits a fielder's helmet left on the ground, a batter runs on the pitch, or your inter-house league gives 2 bonus runs for hitting the net. Coaches also want to know who dropped a catch. Three buttons on the **Scoring** tab cover these: **⚖️ Penalty**, **± Bonus** and **🧤 Fielding**. Each one shows a preview of the new score before you apply it.
+Sometimes runs change hands without a ball being hit. The ball hits a fielder's helmet left on the ground, a batter runs on the pitch, or your inter-house league gives 2 bonus runs for hitting the net. Coaches also want to know who dropped a catch. Three buttons on the **Scoring** tab cover these: **⚖️ Penalty**, **± Runs** and **🧤 Fielding**. Each one shows a preview of the new score before you apply it.
 
 ## Before you start
-- You're the scorer for the match, on the **Scoring** tab.
+- You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
 - The three buttons are in the row under **WICKET**, **Wide** and **No ball**.
 
 ## Step by step: penalty runs
@@ -26,12 +26,12 @@ Penalty runs go to the other team as extras. They don't count as a ball and aren
 
 If the batting side is penalised, the runs go to the fielding side's own innings. In the second innings that is the team that batted first, so the target goes up by the same amount, and the preview says "target becomes …".
 
-> **Important:** Reasons marked with * mean the ball itself shouldn't count. The app reminds you: "This ball shouldn't count — Undo it if already entered."
+> **Important:** Reasons marked with * mean the ball itself doesn't count as one of the over. If you already entered it, tap **↶ Undo** to remove it, then apply the penalty. Runs the batters completed before the offence (plus the one in progress if they had crossed) still count, so add them with **± Runs**. The app shows the same reminder when you pick a starred reason.
 
 ## Step by step: bonus or minus runs
 Use this for local rules, such as +2 for hitting the net or −5 for every dismissal in box cricket.
 
-1. Tap **± Bonus**.
+1. Tap **± Runs**. The panel is titled "± Bonus / minus runs".
 2. Tap **➕ Bonus** or **➖ Minus**.
 3. Tap the team. It can be the batting or the bowling side.
 4. Tap **1** to **5**, or type another number under "Other runs".

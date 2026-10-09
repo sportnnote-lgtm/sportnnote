@@ -11,7 +11,7 @@ updated: 2026-10-09
 On school grounds the ball doesn't always reach the rope. Batters run four on a big outfield, a wild throw gives away 4 more, or a wide beats the keeper and they run two. Each of these is scored differently in the book. The run pad gives you one tap for the common runs and a small panel for the rare ones, and it tells you how each one is credited.
 
 ## Before you start
-- You're the scorer for the match, on the **Scoring** tab.
+- You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
 - A striker, non-striker and bowler are picked.
 - If the match uses local rules (for example, a wide worth 2), set them first. See [Set local rules](/guides/cricket-local-rules/).
 
@@ -53,9 +53,9 @@ A wide isn't a legal ball unless your local rules say so, and all its runs are w
 ## No-balls
 1. Tap **No ball**.
 2. If the batter hit it, tap the runs off the bat: **Nb** for none, or **+1** to **+6**. A **+4** or **+6** counts as a boundary. For an all-run 4 off a no-ball, type 4 in the box below and tap **Add Nb+4**.
-3. If the ball missed the bat and they ran byes, tap **Nb+1b** to **Nb+5b** instead.
+3. If the ball missed the bat and they ran, tap **Byes** or **Leg byes** (if leg byes are allowed), then **Nb+1b** to **Nb+5b** (or **Nb+1lb** to **Nb+5lb** for leg byes) instead.
 
-Runs off the bat on a no-ball are the batter's runs, and the batter is credited with a ball faced. The no-ball penalty is an extra charged to the bowler. If free hits are on, the next ball shows a **FREE HIT** banner.
+Runs off the bat on a no-ball are the batter's runs, and the batter is credited with a ball faced. The no-ball penalty is an extra charged to the bowler. Byes or leg byes off a no-ball are team extras, not charged to the bowler, and the scorecard lists them under b or lb. If free hits are on, the next ball shows a **FREE HIT** banner.
 
 > **Tip:** A wicket can fall on a wide or a no-ball. Tap **🎯 …or a WICKET off the wide** (or off the no-ball) in the same panel. See [Record every kind of dismissal](/guides/cricket-dismissals/).
 

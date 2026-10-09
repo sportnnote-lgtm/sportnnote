@@ -8,7 +8,7 @@ import { shortName, type TickerChip, type TickerDetail, type TickerFlash } from 
 /** The innings the ticker follows: the Super Over's while one is in play. */
 const active = (s: CricketState): CricketState => (s.superOver && !s.ended ? s.superOver.state : s);
 
-const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised)' : '');
+const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised target)' : '');
 const lowerFirst = (t: string) => (t ? t[0].toLowerCase() + t.slice(1) : t);
 
 /** Has this side batted (or is it batting) in this innings state? */

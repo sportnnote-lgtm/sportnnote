@@ -405,6 +405,14 @@ const WICKET_LABEL: Record<DismissalKind, string> = {
   retired: 'RETIRED HURT', timedout: 'TIMED OUT',
   retiredout: 'RETIRED OUT', mankad: 'MANKAD', hittwice: 'HIT TWICE', obstruct: 'OBSTRUCTING',
 };
+/** The same kinds in sentence case — the button / chip names everywhere a
+ *  scorer picks a dismissal (live panel and over editor). WICKET_LABEL stays
+ *  upper case: it's the timeline headline. */
+export const DISMISSAL_NAME: Record<DismissalKind, string> = {
+  bowled: 'Bowled', caught: 'Caught', lbw: 'LBW', stumped: 'Stumped', runout: 'Run out', hitwicket: 'Hit wicket',
+  retired: 'Retired hurt', timedout: 'Timed out',
+  retiredout: 'Retired out', mankad: 'Mankad', hittwice: 'Hit twice', obstruct: 'Obstructing',
+};
 /** Dismissals that aren't credited to the bowler. */
 const NO_BOWLER: DismissalKind[] = ['runout', 'retired', 'timedout', 'retiredout', 'mankad', 'hittwice', 'obstruct'];
 /** "Dismissals" that involve no delivery (happen between balls). */
@@ -1214,7 +1222,10 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
         const nbBoundary = isBoundaryHit(offBat, a.payload?.boundary);
         const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: nbBoundary && offBat === 4 ? 1 : 0, sixes: nbBoundary && offBat === 6 ? 1 : 0 });
         const sym = `${ran > 0 ? ran : ''}nb`;
-        const label = `No ball${penTag}${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''}${R.freeHit ? ' — free hit' : ''}`;
+        // `runsAs: 'legbye'` on a no-ball's byes = leg byes off the no-ball (the
+        // scorecard's ball record already splits b / lb by it); legacy = byes.
+        const byeWord = asRunsAs(a.payload?.runsAs) === 'legbye' ? 'leg bye' : 'bye';
+        const label = `No ball${penTag}${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} ${byeWord}${byes === 1 ? '' : 's'}` : ''}${R.freeHit ? ' — free hit' : ''}`;
         let next: CricketState = legalBits(touchBowler({
           ...s,
           // extras conceded = the penalty + any byes (off-bat runs are the batter's)

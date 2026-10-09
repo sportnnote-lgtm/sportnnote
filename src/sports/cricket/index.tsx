@@ -25,7 +25,7 @@ import type { ScoreAction, SportPlugin, QuickOptionsProps } from '../types';
 import { Tile } from '../../components/QuickOptionsSheet';
 import { cricketVoice } from '../voiceParsers';
 import {
-  init, reducer, other, resultLine, outcome, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
+  init, reducer, other, resultLine, outcome, superOverWinner, WICKET_LABEL, DISMISSAL_NAME, NO_BOWLER, composeDismissal,
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
@@ -210,6 +210,7 @@ const DISMISSAL_HINT: Partial<Record<DismissalKind, string>> = {
   hittwice: 'Striker only. Not the bowler\u2019s wicket.',
   retiredout: 'Retired without the umpire\u2019s consent: a wicket, no ball bowled, can\u2019t bat again.',
   retired: 'Not a wicket — they can resume their innings later.',
+  timedout: 'The incoming batter wasn\u2019t ready to face within the time limit (3 minutes under the Laws; 2 in some competitions). A wicket, no ball bowled; not the bowler\u2019s wicket.',
 };
 /** "Runs were" on a run out / obstruction: how the completed runs are scored. */
 const RUNS_WERE = [['bat', 'Off the bat'], ['bye', 'Byes'], ['legbye', 'Leg byes'], ['wide', 'Wide'], ['noball', 'No ball']] as const;
@@ -238,8 +239,9 @@ function RunsInput({ onAdd, min = 0, placeholder, addLabel }: {
   );
 }
 
-/** " (DLS)" / " (revised)" after a revised target (parity #18). */
-const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised)' : '');
+/** " (DLS)" / " (revised target)" after a revised target (parity #18) — the
+ *  same words as the result line (engine resultLine). */
+const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised target)' : '');
 
 type OversMode = 'overs' | 'rain' | 'target';
 /** Parity #18 — "⏱ Overs & target": change the overs (any innings, up or down,
@@ -445,7 +447,7 @@ function MoreRunsPanel({
           ))}
         </View>
         {reason === 'Other' ? <TextField label="" value={other_} onChange={setOther} placeholder="What happened?" /> : null}
-        {starred ? <Text style={ctrl.ovWarn}>This ball shouldn’t count — Undo it if already entered.</Text> : null}
+        {starred ? <Text style={ctrl.ovWarn}>This ball doesn’t count as one of the over. If you already entered it, Undo it. Runs the batters completed before the offence (plus the one in progress if they had crossed) still count — add them with ± Runs.</Text> : null}
         {ok && next ? (
           <Text style={ctrl.rainPreview}>
             → {nameOf(to)} will be {next.scores[to].runs} ({before}+{r}){next.target !== state.target ? ` · target becomes ${next.target}` : ''}{chaseLine(next)}
@@ -547,6 +549,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     end?: 'striker' | 'bowler';
   } | null>(null);
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | 'more' | null>(null);
+  // No-ball panel: runs run without hitting it are byes or leg byes (`runsAs`).
+  const [nbByesAs, setNbByesAs] = useState<'bye' | 'legbye'>('bye');
   // Overthrows builder (parity #15): runs completed + overthrows.
   const [otRan, setOtRan] = useState(0);
   const [otOver, setOtOver] = useState<number | null>(null);
@@ -740,7 +744,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <Text style={ctrl.meta}>{wf.offExtra ? `Wicket off the ${wf.offExtra === 'wide' ? 'wide' : 'no-ball'} — how?` : `How was ${strikerName ?? 'the batter'} out?`}</Text>
             <View style={ctrl.chips}>
               {options.map((d) => (
-                <SelectChip key={d} label={WICKET_LABEL[d]} active={false}
+                <SelectChip key={d} label={DISMISSAL_NAME[d]} active={false}
                   onPress={() => setWf({ kind: d, offExtra: wf.offExtra, runsAs: RUNS_KINDS.includes(d) ? (wf.offExtra ?? 'bat') : undefined })} />
               ))}
               {showMore && <SelectChip label="More ▾" active={false} onPress={() => setWf({ ...wf, more: true })} />}
@@ -934,6 +938,9 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <SelectChip key={p.id} label={isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName} active={atCrease(p.id)} disabled={isOut(p.id) || isUnavailable(p.id)} onPress={() => pickBat(p)} />
           ))}
         </View>
+        {battingRoster.some((p) => isUnavailable(p.id)) && (
+          <Text style={ctrl.hint}>⚡ = replaced by an Impact Player or concussion sub — can’t bat.</Text>
+        )}
         {need && <Text style={ctrl.hint}>Pick {need} to start scoring.</Text>}
       </View>
 
@@ -1042,12 +1049,23 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             </View>
             <RunsInput placeholder="Other off the bat, all run (0–99)" addLabel={(n) => `Add Nb+${n}`}
               onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: false }, attribution: nbRuns(n) }); setExtraMode(null); }} />
-            <Text style={ctrl.meta}>…or byes run off the no-ball (missed the bat)?</Text>
+            <Text style={ctrl.meta}>…or runs off the no-ball without the bat?</Text>
+            {R.legByes && (
+              <View style={ctrl.chips}>
+                <SelectChip label="Byes" active={nbByesAs === 'bye'} onPress={() => setNbByesAs('bye')} />
+                <SelectChip label="Leg byes" active={nbByesAs === 'legbye'} onPress={() => setNbByesAs('legbye')} />
+              </View>
+            )}
             <View style={ctrl.row}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Button key={n} label={`Nb+${n}b`} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
-                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', byes: n } }); setExtraMode(null); }} />
-              ))}
+              {[1, 2, 3, 4, 5].map((n) => {
+                const legs = R.legByes && nbByesAs === 'legbye';
+                const tag = legs ? 'lb' : 'b';
+                return (
+                  <Button key={n} label={`Nb+${n}${tag}`} accessibilityLabel={`No ball plus ${n} ${legs ? 'leg ' : ''}bye${n === 1 ? '' : 's'}`} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
+                    // leg byes ride on `runsAs: 'legbye'` (absent = byes, as before)
+                    onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', byes: n, ...(legs ? { runsAs: 'legbye' } : {}) } }); setExtraMode(null); setNbByesAs('bye'); }} />
+                );
+              })}
             </View>
             <Button label="🎯 …or a WICKET off the no-ball" variant="danger" disabled={!canScore}
               onPress={() => { setExtraMode(null); setWf({ offExtra: 'noball' }); }} />
@@ -1121,6 +1139,9 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
               ))}
             </View>
             {!locked && !bowlRepl && quotaOut(checks)}
+            {checks.some(({ p, c }) => p.id !== bowlerId && c.reason === 'unavailable') && (
+              <Text style={ctrl.hint}>⚡ = replaced by an Impact Player or concussion sub — can’t bowl.</Text>
+            )}
             {!bowlerId && <Text style={ctrl.hint}>Bowlers of the last over (any part of it) can't bowl this one.</Text>}
             {locked && !bowlRepl && (
               <Button label="🚑 Replace bowler mid-over" variant="ghost" onPress={() => setBowlRepl('injury')} />
@@ -1182,8 +1203,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       </View>
       {/* Parity #20 — penalty to either side, bonus / minus runs, fielding notes. */}
       <View style={ctrl.row}>
-        {/* "± Bonus" (not "Bonus / minus"): the longer label wraps at 375 px. */}
-        {([['pen', '⚖️ Penalty', 'Penalty runs'], ['adj', '± Bonus', 'Bonus or minus runs'], ['field', '🧤 Fielding', 'Fielding: dropped catch, runs saved or missed']] as const).map(([k, l, a11y]) => (
+        {/* "± Runs" (not "Bonus / minus"): the longer label wraps at 375 px. */}
+        {([['pen', '⚖️ Penalty', 'Penalty runs'], ['adj', '± Runs', 'Bonus or minus runs'], ['field', '🧤 Fielding', 'Fielding: dropped catch, runs saved or missed']] as const).map(([k, l, a11y]) => (
           <Button key={k} label={l} accessibilityLabel={a11y} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
             onPress={() => setMorePanel((m) => (m === k ? null : k))} />
         ))}

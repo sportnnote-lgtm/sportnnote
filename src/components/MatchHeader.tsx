@@ -57,7 +57,7 @@ export function MatchHeader({
             kind="match-logo"
             size={36}
             placeholder={sportIcon}
-            label="Add"
+            label="Add logo"
           />
         )}
         <Text style={st.sport} numberOfLines={1}>{sportIcon} {sportName}</Text>

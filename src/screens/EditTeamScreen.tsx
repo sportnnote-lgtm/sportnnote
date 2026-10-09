@@ -132,7 +132,7 @@ export default function EditTeamScreen() {
                 kind="club-logo"
                 size={72}
                 placeholder="🛡️"
-                label="Add team logo"
+                label="Add logo"
                 onPick={async (url) => { await updateTeam(team.id, { logoUrl: url }); setLogoUrl(url); }}
               />
             ) : null}

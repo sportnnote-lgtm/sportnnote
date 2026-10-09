@@ -52,6 +52,7 @@ import { VenueField } from '../components/VenueField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { tournamentHostPlayerIds } from '../core/org';
+import { canScoreMatch, isListedScorer, isMatchHost } from '../core/scoringAccess';
 import { seriesMetaFromFormat } from '../data/series';
 import { canFieldPlayer } from '../core/eligibility';
 import { useAuth } from '../core/auth';
@@ -161,10 +162,14 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     }, [matchId, sport, reloadTick])
   );
 
-  // Only the designated scorer's device can score a real match. Ad-hoc local
-  // games (no matchId) fall back to the caller's role-based capability.
+  // A real match is scored by its listed scorers OR its hosts (match / tournament
+  // hosts score by default — core/scoringAccess mirrors can_manage_match). Ad-hoc
+  // local games (no matchId) fall back to the caller's role-based capability.
   const hasMatch = !!matchId;
-  const canScore = hasMatch ? !!myPlayerId && scorerIds.includes(myPlayerId) : routeCanScore;
+  const iAmListedScorer = isListedScorer({ myPlayerId, scorerIds });
+  const canScore = hasMatch
+    ? canScoreMatch({ myPlayerId, scorerIds, hostIds: matchHostIds, tournamentHostIds: meta.tournamentHostIds })
+    : routeCanScore;
   // The scorer taps "Start the match" before scoring begins; a match with events
   // is already underway. (Timer sports then expose their clock-start control.)
   const [localStarted, setLocalStarted] = useState(false);
@@ -182,6 +187,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [endReason, setEndReason] = useState('');
   const [endNrr, setEndNrr] = useState(true);
   const [endBusy, setEndBusy] = useState(false);
+  const [endWo, setEndWo] = useState(false); // End match → 🏳 Walkover (hosts)
   // Editable live-stream link (organizer/scorer); seeded from the saved value.
   const [streamInput, setStreamInput] = useState('');
   const [editingStream, setEditingStream] = useState(false);
@@ -414,7 +420,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     () => Array.from(new Set([...matchHostIds, ...(meta.tournamentHostIds ?? [])])),
     [matchHostIds, meta.tournamentHostIds]
   );
-  const isHost = !!myPlayerId && allHostIds.includes(myPlayerId);
+  const isHost = isMatchHost({ myPlayerId, hostIds: matchHostIds, tournamentHostIds: meta.tournamentHostIds });
   const canManage = isHost && hasMatch && !complete;
   // A team's captain / vice-captain can set their own matchday squad.
   const iLeadHome = !!myPlayerId && (homeLeaders.captainId === myPlayerId || homeLeaders.viceCaptainId === myPlayerId);
@@ -447,7 +453,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     id ? [...homeFull, ...awayFull, ...scorerCandidates, ...allPlayers, ...extraPeople].find((p) => p.id === id) : undefined;
   const scorerNames = scorerIds.map((id) => nameOf(id) ?? 'Scorer');
   const scorerName = scorerNames[0];
-  const iAmScorer = !!myPlayerId && scorerIds.includes(myPlayerId);
+  const iAmScorer = iAmListedScorer;
 
   // Per-team captain/squad helpers for the matchday-squad reminders.
   const leadersFor = (sd: 'home' | 'away') => (sd === 'home' ? homeLeaders : awayLeaders);
@@ -506,14 +512,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     [scorerIds, saveScorers]
   );
 
-  // One-tap for a host who lands on a scorer-less match: add themselves as a scorer
-  // and jump straight to the controls — the discoverable answer to "how do I score
-  // this?" without hunting through the Info tab.
-  const scoreThisMatch = useCallback(async () => {
-    if (!myPlayerId) return;
-    await saveScorers(Array.from(new Set([...scorerIds, myPlayerId])));
-    setTab('scoring');
-  }, [myPlayerId, scorerIds, saveScorers]);
+  // One-tap for a host who lands on a scorer-less match: jump straight to the
+  // controls. Hosts score by default — opening Scoring takes the lock, which adds
+  // them to the scorer list (claim_scoring), so there's nothing to set up first.
+  const scoreThisMatch = useCallback(() => { setTab('scoring'); }, []);
 
   // Parity #11: a tournament scorer can take any of its open matches themself
   // (server-checked by join_match_as_scorer) — "a colleague's phone died".
@@ -859,7 +861,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const knockout = isEliminationStage(meta.stage);
   const drawLabel = plugin.manualEnd?.drawLabel ?? 'Draw';
   const endKinds: { kind: ResultKind; label: string }[] = [
-    { kind: 'awarded', label: 'Win' }, { kind: 'conceded', label: 'Conceded' },
+    // "Awarded" — the result line reads "X awarded the match" (manualResultLine).
+    { kind: 'awarded', label: 'Awarded' }, { kind: 'conceded', label: 'Conceded' },
     ...(knockout ? [] : [
       { kind: (drawLabel === 'Tie' ? 'tie' : 'draw') as ResultKind, label: drawLabel },
       { kind: 'no_result' as ResultKind, label: 'No result' }, { kind: 'abandoned' as ResultKind, label: 'Abandoned' },
@@ -896,7 +899,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       : `${draftResult.winner === 'home' ? fullHome : fullAway} +${cfg.win}`;
     return `${line} · Points table: ${table}`;
   })();
-  const closeEnd = () => { setRetireOpen(false); setEndKind(null); setEndWinner(null); setEndReason(''); setEndNrr(true); };
+  const closeEnd = () => { setRetireOpen(false); setEndKind(null); setEndWinner(null); setEndReason(''); setEndNrr(true); setEndWo(false); };
   const endMatch = async () => {
     if (!draftResult || !endReady) return;
     const sm = plugin.summary(state);
@@ -962,12 +965,24 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       <View style={st.retirePanel}>
         <Text style={st.retirePrompt}>How did it end?</Text>
         <View style={st.endChips}>
-          {endKinds.map((k) => <SelectChip key={k.kind} label={k.label} active={endKind === k.kind} onPress={() => setEndKind(k.kind)} />)}
+          {endKinds.map((k) => <SelectChip key={k.kind} label={k.label} active={endKind === k.kind} onPress={() => { setEndKind(k.kind); setEndWo(false); }} />)}
+          {/* Walkover (hosts): also kept on the Info tab's Match scorers card for before the start. */}
+          {canManage && matchId ? <SelectChip label="🏳 Walkover" active={endWo} onPress={() => { setEndWo(true); setEndKind(null); setEndWinner(null); }} /> : null}
         </View>
         {knockout ? <Text style={textStyles.muted}>Knockout: pick who goes through.</Text> : null}
+        {endWo && matchId && (
+          <>
+            <Text style={st.retirePrompt}>Who takes the walkover win?</Text>
+            <Text style={textStyles.muted}>For a team that didn’t turn up or can’t play. No score is shown — if play had started, use Conceded instead.</Text>
+            <View style={st.retireRow}>
+              <Button label={homeName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'home'); closeEnd(); navigation.goBack(); }} />
+              <Button label={awayName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'away'); closeEnd(); navigation.goBack(); }} />
+            </View>
+          </>
+        )}
         {needsWinner && (
           <>
-            <Text style={st.retirePrompt}>{endKind === 'conceded' ? 'Who wins? (the other side conceded)' : 'Who wins?'}</Text>
+            <Text style={st.retirePrompt}>{endKind === 'conceded' ? 'Who wins? (the other side conceded)' : 'Awarded to?'}</Text>
             <View style={st.retireRow}>
               <Button label={homeName} variant={endWinner === 'home' ? 'home' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('home')} />
               <Button label={awayName} variant={endWinner === 'away' ? 'away' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('away')} />
@@ -989,7 +1004,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         ) : null}
         {endPreview ? <Text style={textStyles.muted}>{endPreview}</Text> : null}
         <View style={st.retireRow}>
-          <Button label={endBusy ? 'Ending…' : 'End match'} variant="danger" style={{ flex: 1 }} disabled={!endReady || endBusy} onPress={() => void endMatch()} />
+          {!endWo ? <Button label={endBusy ? 'Ending…' : 'End match'} variant="danger" style={{ flex: 1 }} disabled={!endReady || endBusy} onPress={() => void endMatch()} /> : null}
           <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={closeEnd} />
         </View>
       </View>
@@ -1040,10 +1055,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   }, [state, strikeAsk]);
   const liveEditBar = plugin.CorrectionEditor && matchId && liveCanWrite && !complete && eventCount > 0 ? (
     !liveEditOpen ? (
-      <Text style={[st.editLink, pendingTaps > 0 && { color: theme.colors.textMuted }]} accessibilityRole="button"
-        onPress={() => { if (pendingTaps === 0) void openLiveEdit(); }}>
-        {pendingTaps > 0 ? '✎ Edit a past ball — waiting for unsynced taps to upload' : '✎ Edit a past ball'}
-      </Text>
+      <View>
+        <Text style={[st.editLink, pendingTaps > 0 && { color: theme.colors.textMuted }]} accessibilityRole="button"
+          accessibilityState={{ disabled: pendingTaps > 0 }}
+          accessibilityHint={pendingTaps > 0 ? `Waiting for ${pendingTaps} tap${pendingTaps === 1 ? '' : 's'} to upload` : undefined}
+          onPress={() => { if (pendingTaps === 0) void openLiveEdit(); }}>
+          ✎ Edit a past ball
+        </Text>
+        {pendingTaps > 0 ? (
+          <Text style={textStyles.muted}>Waiting for {pendingTaps} tap{pendingTaps === 1 ? '' : 's'} to upload… you can edit once they’re saved.</Text>
+        ) : null}
+      </View>
     ) : (
       <View style={st.retirePanel}>
         <plugin.CorrectionEditor log={liveEditLog} config={meta.config} ops={liveOps.ops}
@@ -1089,7 +1111,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         <View style={{ gap: theme.spacing(1) }}>
           <Button label="✏️ Correct this match" variant="ghost" disabled={unsynced > 0} onPress={() => void openCorrection()} />
           <Text style={textStyles.muted}>
-            {unsynced > 0 ? 'Waiting for unsynced taps to upload.' : timeLeft ? `Open for ${timeLeft} more` : 'Fix a wrongly credited player or an entry that never happened.'}
+            {unsynced > 0 ? `Waiting for ${unsynced} tap${unsynced === 1 ? '' : 's'} to upload…` : timeLeft ? `Open for ${timeLeft} more` : 'Fix a wrongly credited player or an entry that never happened.'}
           </Text>
         </View>
       ) : null}
@@ -1140,7 +1162,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         </View>
       ) : !started ? (
         <View style={{ gap: theme.spacing(3), alignItems: 'center' }}>
-          <Text style={[textStyles.muted, { textAlign: 'center' }]}>You're the scorer for this match.</Text>
+          <Text style={[textStyles.muted, { textAlign: 'center' }]}>{iAmListedScorer ? 'You’re a scorer for this match.' : 'You can score this match as a host.'}</Text>
           {unevenAsk ? (
             <View style={[st.retirePanel, { alignSelf: 'stretch' }]}>
               <Text style={st.retirePrompt}>Squads look uneven — {unevenAsk}. Start anyway?</Text>
@@ -1283,27 +1305,39 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     { key: 'summary', label: 'Summary' },
     ...(canScore ? [{ key: 'scoring', label: 'Scoring' }] : []),
   ];
-  const defaultTab = canScore ? 'scoring' : contentViews[0].key;
+  // Listed scorers land on Scoring; a host does too when nobody else is down to
+  // score. Otherwise a host lands on the match view with Scoring one tap away.
+  const defaultTab = canScore && (iAmListedScorer || scorerIds.length === 0) ? 'scoring' : contentViews[0].key;
   const activeTab = TABS.some((tb) => tb.key === tab) ? tab : defaultTab;
 
   // Scoring lock: read it on focus and every 15 s on the Scoring tab; an allowed
   // scorer opening a match nobody is scoring takes it silently (resume = no dialog).
   useFocusEffect(useCallback(() => { void refreshLock(); }, [refreshLock]));
+  // Taking the lock adds me to scorer_ids server-side (claim_scoring) — mirror it.
+  const joinScorerList = useCallback(() => {
+    if (myPlayerId) setScorerIds((ids) => (ids.includes(myPlayerId) ? ids : [...ids, myPlayerId]));
+  }, [myPlayerId]);
   useEffect(() => {
     if (!matchId || activeTab !== 'scoring') return;
     const id = setInterval(() => { void refreshLock(); }, 15_000);
     return () => clearInterval(id);
   }, [matchId, activeTab, refreshLock]);
   useEffect(() => {
+    // A host who isn't a listed scorer only takes the lock once they open Scoring
+    // (just looking at their match shouldn't sign them up to score it).
     if (!matchId || !canScore || complete || lockStat !== 'free' || !deviceId) return;
-    void claimScoring(matchId, { playerId: myPlayerId, playerName: profile?.fullName }).then(() => refreshLock()).catch(() => {});
-  }, [matchId, canScore, complete, lockStat, deviceId, myPlayerId, profile?.fullName, refreshLock]);
+    if (!iAmListedScorer && activeTab !== 'scoring') return;
+    void claimScoring(matchId, { playerId: myPlayerId, playerName: profile?.fullName })
+      .then((r) => { if (r.ok) joinScorerList(); return refreshLock(); })
+      .catch(() => {});
+  }, [matchId, canScore, iAmListedScorer, activeTab, complete, lockStat, deviceId, myPlayerId, profile?.fullName, refreshLock, joinScorerList]);
   const takeOver = async () => {
     if (!matchId) return;
     const who = lock?.holderName ?? 'the other scorer';
     if (!(await confirmAction(`Take over from ${who}?`, 'Their device will stop scoring; any taps they haven’t synced won’t be saved.', 'Take over'))) return;
     try {
       await claimScoring(matchId, { takeover: true, playerId: myPlayerId, playerName: profile?.fullName });
+      joinScorerList();
       setLostTo(null);
       await refreshLock();
     } catch (e) {
@@ -1610,7 +1644,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         )}
 
         {/* A tournament scorer who isn't on this match yet takes it in one tap. */}
-        {!!myPlayerId && !iAmScorer && !complete && meta.status !== 'cancelled' && tourScorerIds.includes(myPlayerId) && (
+        {!!myPlayerId && !canScore && !complete && meta.status !== 'cancelled' && tourScorerIds.includes(myPlayerId) && (
           <Button label={joining ? 'Joining…' : '🎯 Score this match'} onPress={() => void joinAsScorer()} disabled={joining} />
         )}
 
@@ -1983,7 +2017,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {/* No scorer yet + I can manage → surface the primary action up front so a
               host isn't left wondering how to score their own match. One tap makes me
               the scorer and opens the controls; the scorer is still changeable in Info. */}
-          {canManage && !complete && scorerIds.length === 0 && !!myPlayerId && (
+          {canManage && !complete && scorerIds.length === 0 && !!myPlayerId && activeTab !== 'scoring' && (
             <TouchableOpacity style={st.scoreCta} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Score this match from this device" onPress={scoreThisMatch}>
               <Text style={st.scoreCtaText}>▶ Score this match</Text>
               <Text style={st.scoreCtaHint}>No scorer assigned yet. Tap to score from this device — you can hand off to someone else anytime from Info.</Text>

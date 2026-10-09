@@ -60,6 +60,8 @@ export function LogoPicker({
   if (!shown && !canManage) return null; // viewers see nothing when there's no image
 
   const banner = shape === 'banner';
+  // "Add logo" → "Change logo", "Add photo" → "Change photo", "Add banner" → "Change banner".
+  const changeLabel = label.startsWith('Add ') ? `Change ${label.slice(4)}` : `Change ${banner ? 'banner' : 'logo'}`;
   const box = banner
     ? shown
       ? { width: '100%' as const, aspectRatio: 3, maxHeight: 220, borderRadius: theme.radius.md }
@@ -67,7 +69,7 @@ export function LogoPicker({
     : { width: size, height: size, borderRadius: shape === 'circle' ? size / 2 : theme.radius.md };
 
   return (
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={canManage ? (shown ? `Change ${banner ? 'banner' : 'logo'}` : label) : undefined}
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={canManage ? (shown ? changeLabel : label) : undefined}
       disabled={!canManage || uploading}
       activeOpacity={canManage ? 0.8 : 1}
       onPress={change}

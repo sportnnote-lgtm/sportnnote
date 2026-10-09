@@ -10,7 +10,7 @@ import { init, reducer, type CricketState } from '../src/sports/cricket/engine.t
 import { effectiveLog, statDeltas, type AmendOp } from '../src/sports/amend.ts';
 import {
   editableOvers, editBall, remapPlayer, changeBowlerOps, swapBattersOps, applyOps, replayCricket,
-  recordToAction, ballDiffLine, bowlerDiffLine, swapDiffLine, chipLabel, overSymbolTone, ballRuns, CATEGORY_HINT,
+  recordToAction, ballDiffLine, bowlerDiffLine, swapDiffLine, chipLabel, overSymbolTone, ballRuns, CATEGORY_HINT, describeBall,
   type EditableInnings,
 } from '../src/sports/cricket/editOvers.ts';
 import type { MatchEventRecord } from '../src/core/types.ts';
@@ -96,6 +96,33 @@ describe('engine fix — alignCrease', () => {
     s = reducer(s, { type: 'BYES', payload: { runs: 1 } });
     assert.equal(s.batting.ravi.balls, 1);
     assert.equal(s.strikerId, 'dev');
+  });
+});
+
+describe('editBall — no-ball byes / leg byes (guide-writer feedback)', () => {
+  const nbByes: MatchEventRecord = { seq: 6, type: 'EXTRA', side: 'home', payload: { kind: 'No ball', byes: 2, strikerId: 'ravi', strikerName: 'Ravi', bowlerId: 'arjun', bowlerName: 'Arjun' } };
+  test('Nb+2b → leg byes keeps the runs as byes with runsAs legbye, no batter runs', () => {
+    const a = editBall(nbByes, { extraKind: 'noball', extraRuns: 2, extraRunsAs: 'legbye' }) as ScoreAction;
+    assert.equal(a.payload!.byes, 2);
+    assert.equal(a.payload!.runsAs, 'legbye');
+    assert.equal(a.payload!.runs, undefined);
+    assert.equal(a.attribution, undefined);
+    assert.equal(describeBall(a), 'No ball + 2 leg byes');
+  });
+  test('saving an Nb+2b unchanged is a no-op (no doubled runs)', () => {
+    const a = editBall(nbByes, { extraKind: 'noball', extraRuns: 2, extraRunsAs: 'bye' }) as ScoreAction;
+    assert.deepEqual(a, recordToAction(nbByes));
+  });
+  test('Nb+2b → off the bat moves the runs to the batter', () => {
+    const a = editBall(nbByes, { extraKind: 'noball', extraRuns: 2, extraRunsAs: 'bat' }) as ScoreAction;
+    assert.equal(a.payload!.runs, 2);
+    assert.equal(a.payload!.byes, undefined);
+    assert.deepEqual(a.attribution, { playerId: 'ravi', stat: 'runs', by: 2, playerName: 'Ravi' });
+  });
+  test('describeBall says who-neutral run detail: all run, overthrows', () => {
+    assert.equal(describeBall({ type: 'RUNS', payload: { runs: 4, boundary: false } }), '4 runs, all run');
+    assert.equal(describeBall({ type: 'RUNS', payload: { runs: 5, boundary: false, overthrows: 4 } }), '5 runs incl. 4 overthrows');
+    assert.equal(describeBall({ type: 'RUNS', payload: { runs: 4 } }), '4 runs');
   });
 });
 

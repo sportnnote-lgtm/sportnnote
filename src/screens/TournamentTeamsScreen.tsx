@@ -388,7 +388,7 @@ export default function TournamentTeamsScreen() {
         {tournament && <RegistrationBanner tournament={tournament} enteredCount={enteredCount} />}
 
         {/* Join link: captains enter their own team from one WhatsApp link (or
-            type its code under "Join a team"). Entries are confirmed at once. */}
+            type its code under Settings → "Join a team with a code"). Entries are confirmed at once. */}
         {pMode === 'team' && (inviteNeedsDb ? (
           <Text style={textStyles.muted}>Join by link · Needs the latest database update</Text>
         ) : inviteToken !== undefined && (
@@ -399,7 +399,7 @@ export default function TournamentTeamsScreen() {
             </View>
             {inviteToken ? (
               <>
-                <Text style={textStyles.muted}>Captains open the link (or type the code under “Join a team”) and pick their team — it’s in at once.</Text>
+                <Text style={textStyles.muted}>Captains open the link (or type the code under Settings → “Join a team with a code”) and pick their team — it’s in at once.</Text>
                 <Text style={st.code} selectable>{inviteToken}</Text>
                 <View style={st.chips}>
                   <Button label="💬 WhatsApp" variant="ghost" onPress={() => shareInviteWhatsApp(inviteToken)} />

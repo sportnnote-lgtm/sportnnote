@@ -293,7 +293,7 @@ describe('live settings Apply (generic card decisions)', () => {
   });
   test('who can edit: scorer only while live; scorer or manager before play', () => {
     assert.deepEqual(liveSettingsAccess({ mode: 'event', beforeStart: false, canScore: false, canManage: true, complete: false }),
-      { editable: false, note: 'Only the scorer can change rules during play.' });
+      { editable: false, note: 'Only scorers and hosts can change rules during play.' });
     assert.equal(liveSettingsAccess({ mode: 'event', beforeStart: false, canScore: true, canManage: false, complete: false }).editable, true);
     assert.equal(liveSettingsAccess({ mode: 'event', beforeStart: true, canScore: false, canManage: true, complete: false }).editable, true);
     assert.equal(liveSettingsAccess({ mode: 'event', beforeStart: true, canScore: false, canManage: false, complete: false }).editable, false);

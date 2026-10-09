@@ -73,6 +73,14 @@ export interface BallEdit {
   batterOut?: 'striker' | 'nonStriker' | string;
   extraKind?: 'wide' | 'noball';
   extraRuns?: number;
+  /** a 4 or 6 off the bat (legal ball or no-ball): true = boundary, false = all
+   *  run (#15). Omitted → the recorded flag is kept. */
+  boundary?: boolean;
+  /** overthrows within `runs` (#15). Omitted → kept only while the runs are
+   *  unchanged; changing the runs clears them. */
+  overthrows?: number;
+  /** a no-ball's runs: off the bat, byes or leg byes (`byes` + `runsAs`). */
+  extraRunsAs?: 'bat' | 'bye' | 'legbye';
 }
 
 /** Optional context for `editBall`: the fielding side's keeper, needed only to
@@ -305,7 +313,17 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
     // A value already recorded (e.g. a 9 entered live, #15) is kept as-is.
     if (!Number.isInteger(r) || r < 0 || (r > 7 && r !== num(op.runs, -1))) return { error: 'Runs must be 0–7.' };
     if (t !== 'bat' && r < 1) return { error: `A ${t === 'bye' ? 'bye' : 'leg bye'} needs at least 1 run.` };
+    const runsChanged = r !== num(op.runs, t === 'bat' ? 0 : 1);
     p.runs = r;
+    if (t === 'bat') {
+      // Overthrows (#15) belong to the old run count: changing the runs clears
+      // them unless the edit restates them; a boundary never has overthrows.
+      const ot = edit.overthrows !== undefined ? edit.overthrows : runsChanged ? 0 : num(op.overthrows);
+      if (ot > 0 && edit.boundary !== true) p.overthrows = Math.min(ot, r); else delete p.overthrows;
+      if (edit.boundary !== undefined && (r === 4 || r === 6)) p.boundary = edit.boundary;
+    } else {
+      delete p.boundary; delete p.overthrows; // byes / leg byes have neither
+    }
     const type = t === 'bat' ? 'RUNS' : t === 'bye' ? 'BYES' : 'LEGBYES';
     const a: ScoreAction = { type, payload: cleanUndef(p) };
     if (orig.side) a.side = orig.side;
@@ -372,13 +390,29 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
   const switching = ek !== cat;
   // A wicket on a wide (stumped…) can't move to a no-ball unless it can fall there too.
   if (wk && !(ek === 'noball' ? NOBALL_WICKETS : WIDE_WICKETS).includes(wk)) return { error: CATEGORY_HINT };
-  let r = edit.extraRuns ?? edit.runs ?? num(op.runs);
-  if (switching && ek === 'wide' && !wk && edit.extraRuns === undefined && edit.runs === undefined) r += num(op.byes);
-  const unchanged = !switching && r === num(op.runs, -1); // a recorded Wd+7 / Nb+9 (#15) survives
+  // A no-ball's runs are off the bat (`runs`), or byes / leg byes (`byes`, with
+  // `runsAs: 'legbye'` for leg byes). Recorded live as one or the other.
+  const recByes = !wk && cat === 'noball' && num(op.byes) > 0 && num(op.runs) === 0;
+  const recAs: 'bat' | 'bye' | 'legbye' = recByes ? (op.runsAs === 'legbye' ? 'legbye' : 'bye') : 'bat';
+  const nbAs = !wk && ek === 'noball' ? (edit.extraRunsAs ?? recAs) : 'bat';
+  let r = edit.extraRuns ?? edit.runs ?? (recByes ? num(op.byes) : num(op.runs));
+  if (switching && ek === 'wide' && !wk && edit.extraRuns === undefined && edit.runs === undefined && !recByes) r += num(op.byes);
+  const unchanged = !switching && nbAs === recAs && r === (recByes ? num(op.byes, -1) : num(op.runs, -1)); // a recorded Wd+7 / Nb+9 (#15) survives
   if (!Number.isInteger(r) || r < 0 || (!unchanged && r > (ek === 'noball' ? 6 : 4))) return { error: ek === 'noball' ? 'No-ball runs must be 0–6.' : 'Wide runs must be 0–4.' };
   p.kind = ek === 'noball' ? 'No ball' : 'Wide';
   p.runs = r;
-  if (ek === 'wide') { delete p.byes; delete p.runsAs; } // a wide has no off-bat/bye split — all runs are wides
+  if (ek === 'wide') { delete p.byes; delete p.runsAs; delete p.boundary; } // a wide has no off-bat/bye split — all runs are wides
+  else if (!wk && nbAs !== 'bat' && r > 0) {
+    // byes / leg byes off the no-ball: no runs off the bat, no boundary
+    p.byes = r; delete p.boundary;
+    if (op.runs === undefined) delete p.runs; else p.runs = 0;
+    if (nbAs === 'legbye') p.runsAs = 'legbye'; else delete p.runsAs;
+  } else if (!wk && nbAs !== 'bat') {
+    delete p.byes; delete p.runsAs; delete p.boundary; // Nb + 0 = a plain no-ball
+  } else if (!wk) {
+    if (recByes) { delete p.byes; delete p.runsAs; } // was byes, now off the bat
+    if (edit.boundary !== undefined && (r === 4 || r === 6)) p.boundary = edit.boundary;
+  }
   if (wk) {
     if (RUNS_KINDS.includes(wk)) {
       const bo = edit.batterOut ?? op.batterOut ?? 'striker';
@@ -407,7 +441,7 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
     });
     if (credits.attribution) a.attribution = credits.attribution;
     if (credits.attribution2) a.attribution2 = credits.attribution2;
-  } else if (ek === 'noball' && r > 0 && strikerId) {
+  } else if (ek === 'noball' && nbAs === 'bat' && r > 0 && strikerId) {
     // Nb+n: the runs off the bat are the striker's (parity #19, as the live keypad)
     a.attribution = { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName };
   }
@@ -523,7 +557,14 @@ const KIND_LABEL: Record<string, string> = {
 export function describeBall(a: Pick<ScoreAction, 'type' | 'payload'>): string {
   const p = a.payload ?? {};
   switch (a.type) {
-    case 'RUNS': return plural(num(p.runs), 'run');
+    case 'RUNS': {
+      // '4 runs' (boundary) · '4 runs, all run' · '5 runs incl. 4 overthrows'
+      const r = num(p.runs);
+      const ot = Math.min(r, num(p.overthrows));
+      if (ot > 0) return `${plural(r, 'run')} incl. ${plural(ot, 'overthrow')}`;
+      if ((r === 4 || r === 6) && !isBoundaryHit(r, p.boundary)) return `${plural(r, 'run')}, all run`;
+      return plural(r, 'run');
+    }
     case 'BYES': { const r = Math.max(1, num(p.runs, 1)); return r === 1 ? 'Bye' : plural(r, 'bye'); }
     case 'LEGBYES': { const r = Math.max(1, num(p.runs, 1)); return r === 1 ? 'Leg bye' : plural(r, 'leg bye'); }
     case 'WICKET': {
@@ -537,8 +578,10 @@ export function describeBall(a: Pick<ScoreAction, 'type' | 'payload'>): string {
     }
     case 'EXTRA': {
       const base = p.kind === 'No ball' ? 'No ball' : 'Wide';
-      const r = num(p.runs) + (p.kind === 'No ball' ? num(p.byes) : 0);
       const wk = extraWicket(p);
+      const byes = p.kind === 'No ball' && !wk ? num(p.byes) : 0;
+      if (byes > 0 && num(p.runs) === 0) return `${base} + ${plural(byes, p.runsAs === 'legbye' ? 'leg bye' : 'bye')}`;
+      const r = num(p.runs) + (p.kind === 'No ball' ? num(p.byes) : 0);
       return `${base}${r > 0 ? ` + ${r}` : ''}${wk ? ` + ${(KIND_LABEL[wk] ?? 'out').toLowerCase()}` : ''}`;
     }
     default: return a.type;

@@ -148,7 +148,7 @@ export default function ImportScheduleScreen() {
         done++;
         setProgress({ done, total });
       }
-      notice('Schedule imported', `${done} match${done === 1 ? '' : 'es'} added to ${tournament?.name}. Assign scorers from Settings → Scorers & officials.`);
+      notice('Schedule imported', `${done} match${done === 1 ? '' : 'es'} added to ${tournament?.name}. Assign scorers from Manage → Scorers & officials.`);
       nav.goBack();
     } catch (e) {
       setError(`Created ${done} of ${total}. ${e instanceof Error ? e.message : String(e)}`);
@@ -214,6 +214,11 @@ export default function ImportScheduleScreen() {
               <Pill label={`✕ ${summary.error} won't import`} color={theme.colors.danger + '22'} textColor={theme.colors.danger} />
               {skip.size > 0 && <Pill label={`${skip.size} skipped`} />}
             </View>
+            {summary.guessed > 0 && (
+              <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
+                ⚠ {summary.guessed} row{summary.guessed === 1 ? '' : 's'} will import with the suggested team name (“Did you mean…?”). Tap “Use …” to confirm, or skip the row.
+              </Text>
+            )}
             <View style={st.chips}>
               <SelectChip label="All" active={!onlyProblems} onPress={() => setOnlyProblems(false)} />
               <SelectChip label={`Problems (${summary.warn + summary.error})`} active={onlyProblems} onPress={() => setOnlyProblems(true)} />

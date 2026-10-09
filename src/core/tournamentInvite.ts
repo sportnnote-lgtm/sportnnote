@@ -1,5 +1,5 @@
 /** Tournament join link (parity #10): one link per tournament whose code
- *  (`T-XXXXXX`) doubles as a PIN typed into "Join a team". Pure + unit-tested. */
+ *  (`T-XXXXXX`) doubles as a PIN typed into "Join a team with a code". Pure + unit-tested. */
 import { SHARE_BASE } from './shareText.ts';
 
 /** The https link that opens JoinTournament on web / in the app. */
@@ -22,11 +22,11 @@ export function parseTournamentToken(input: string | null | undefined): string |
   return pick(s);
 }
 
-/** Does this typed code look like a tournament code (so "Join a team" forwards it)? */
+/** Does this typed code look like a tournament code (so "Join a team with a code" forwards it)? */
 export const isTournamentToken = (input: string | null | undefined) => parseTournamentToken(input) !== null;
 
 /** The WhatsApp / share message: carries the link and the code. */
 export function tournamentInviteMessage(opts: { tournamentName: string; inviterName?: string; token: string }): string {
   const by = opts.inviterName?.trim() ? ` ${opts.inviterName.trim()} invited your team 🏆` : '';
-  return `Enter your team in ${opts.tournamentName} on SportnNote!${by}\n\nOpen this to enter: ${tournamentJoinLink(opts.token)}\n\nOr in the app, go to Join a team and enter code: ${opts.token}`;
+  return `Enter your team in ${opts.tournamentName} on SportnNote!${by}\n\nOpen this to enter: ${tournamentJoinLink(opts.token)}\n\nOr in the app, go to Settings → Join a team with a code and enter code: ${opts.token}`;
 }

@@ -35,6 +35,9 @@ Invite codes are the quickest way to bring a known group together without
 searching for each person. A team manager can find/share the code from the team's
 management screen.
 
+The same box also takes a **tournament code** (it starts with `T-`): captains
+enter it to enter their team in that tournament.
+
 ### Related
 
 - **Set the playing XI / squad** — pick who's playing from the roster.

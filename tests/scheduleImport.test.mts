@@ -214,6 +214,9 @@ describe('validateImport', () => {
     assert.equal(sug.status, 'warn');
     assert.equal(sug.issues[0].fix?.id, RED.id);
     assert.match(sug.issues[0].msg, /did you mean Red House/);
+    // the row says outright what an unconfirmed suggestion imports as
+    assert.match(sug.issues[0].msg, /Will import as Red House\./);
+    assert.equal(sug.draft?.home.id, RED.id);
     assert.equal(out.status, 'warn');
     assert.deepEqual(out.draft?.addTeamIds, [OUTSIDE.id]);
   });
@@ -260,10 +263,11 @@ describe('validateImport', () => {
       '32/10/2026\t9:00 am\tBlue House\tGreen House\tMain Ground',
     ].join('\n');
     const first = importFromText(text, ctx());
-    assert.deepEqual(importSummary(first.rows), { ok: 2, warn: 2, error: 1 });
+    // row #4's "Red Huose" will import as Red House unless fixed or skipped
+    assert.deepEqual(importSummary(first.rows), { ok: 2, warn: 2, error: 1, guessed: 1 });
     const fixed = importFromText(text, ctx(), { 4: { home_team: 'Red House' } });
     assert.equal(fixed.rows.find((r) => r.line === 4)?.status, 'ok');
-    assert.deepEqual(importSummary(fixed.rows, new Set([6])), { ok: 3, warn: 1, error: 0 });
+    assert.deepEqual(importSummary(fixed.rows, new Set([6])), { ok: 3, warn: 1, error: 0, guessed: 0 });
   });
 });
 

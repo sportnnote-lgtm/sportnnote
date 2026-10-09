@@ -31,7 +31,7 @@ Teams and parents always ask the same things: where are the grounds, who do we c
 14. Choose the **Registration** type: **🔓 Open — teams can find & request to join**, or **🔒 Invite only**.
 15. Tap **Create tournament**.
 
-You land on the tournament's **Settings** tab with a short checklist: add teams, choose the format, and schedule matches. See [The tournament admin hub](/guides/tournament-admin-hub/).
+You land on the tournament's **Manage** tab with a short checklist: add teams, choose the format, and schedule matches. See [The tournament admin hub](/guides/tournament-admin-hub/).
 
 > **Tip:** Write the rules in short lines. Players read them on a phone between matches.
 

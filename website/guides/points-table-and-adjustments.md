@@ -44,7 +44,7 @@ Below the tables, **Top performers** lists the players leading the main stat for
 
 ## Step by step: add bonus or penalty points
 1. Open the points table.
-2. Tap the **±** at the end of the team's row. A small panel opens under the row.
+2. Tap the **± Adjust** button at the end of the team's row. A small panel opens under the row.
 3. Tap **−** or **+** to set the points. You can go from −20 to +20.
 4. Type the **Reason (shown publicly)**, for example "late arrival" or "fielded an ineligible player".
 5. Tap **Save adjustment**.
@@ -54,7 +54,7 @@ The team's points and position update straight away, and the reason appears unde
 > **Important:** Write the reason as if the parents of both teams will read it, because they will. Keep it factual and short.
 
 ## Step by step: remove an adjustment
-1. Tap **±** on the team's row.
+1. Tap **± Adjust** on the team's row.
 2. Under the **Save adjustment** button, find the adjustment and tap the **✕** next to it.
 3. Confirm with **Remove**.
 

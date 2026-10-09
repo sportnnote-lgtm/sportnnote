@@ -17,7 +17,7 @@ export interface QuickOptionsSheetProps {
   onBreak?: (kind: BreakKind, note?: string) => void;
   /** 👥 Change squad — which side */
   onSquad?: (side: 'home' | 'away') => void;
-  /** 🎙 Change scorer — goes to the Info tab */
+  /** 🎯 Change scorer — goes to the Info tab */
   onScorer?: () => void;
   /** 📋 Full scorecard — goes to the first live view */
   onScorecard?: () => void;
@@ -58,7 +58,7 @@ export function QuickOptionsSheet({ visible, onClose, homeName, awayName, onBrea
                 <View style={st.grid}>
                   {onBreak && <Tile icon="⏸" label="Match break" hint="Drinks, rain, stumps…" onPress={() => setPanel('break')} />}
                   {onSquad && <Tile icon="👥" label="Change squad" hint="Add or bench players" onPress={() => setPanel('squad')} />}
-                  {onScorer && <Tile icon="🎙" label="Change scorer" hint="Scorers & officials" onPress={() => { onClose(); onScorer(); }} />}
+                  {onScorer && <Tile icon="🎯" label="Change scorer" hint="Scorers & officials" onPress={() => { onClose(); onScorer(); }} />}
                   {onScorecard && <Tile icon="📋" label="Full scorecard" hint="See the whole card" onPress={() => { onClose(); onScorecard(); }} />}
                   {settingsPanel ? <Tile icon="⚙️" label="Match settings" hint="This match only" onPress={() => setPanel('settings')} /> : null}
                 </View>

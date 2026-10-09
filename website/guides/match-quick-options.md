@@ -11,12 +11,12 @@ updated: 2026-10-09
 During play, a scorer needs a few things fast: pause for drinks or rain, bring on a late player, check the full scorecard. Before and after play, organisers sometimes need to set up a rematch or get rid of a test match. This guide covers all of these housekeeping jobs.
 
 ## Before you start
-- **Quick options** are for the match's scorer, once the match has started.
+- **Quick options** are for the match's scorers and hosts, once the match has started.
 - **Clone match** is for hosts and scorers.
 - Deleting and resetting a match are for hosts of the match or tournament only.
 
 ## Start scoring from the match card
-If you're the scorer, match cards in your lists show **▶ Start scoring** (or **▶ Continue scoring** once the match is live). Tap it to go straight to the scoring buttons.
+If you're a scorer or a host of the match, its card in your **Matches** list shows **▶ Start scoring** (or **▶ Continue scoring** once the match is live). Tap it to go straight to the scoring buttons.
 
 When you tap **▶ Start the match** and the two squads look uneven, the app asks "Squads look uneven … Start anyway?". Tap **Fix squads** to sort them out, or **Start anyway** if it's deliberate.
 

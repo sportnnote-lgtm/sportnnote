@@ -13,21 +13,21 @@ You tapped 1 for a 4 in over 3, and only noticed in over 7. **↶ Undo** would w
 ## Before you start
 - During the match, only the phone that is scoring can edit past balls. See [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - After the match, scorers and match hosts can correct it for 24 hours, and tournament hosts at any time. See [Correct a finished match](/guides/correct-a-finished-match/).
-- If some taps haven't uploaded yet, the link reads "✎ Edit a past ball — waiting for unsynced taps to upload". Wait until you have signal again.
+- If some taps haven't uploaded yet, **✎ Edit a past ball** is greyed out with "Waiting for 2 taps to upload…" under it. Wait until you have signal again.
 
 ## Step by step: during the match
 1. On the **Scoring** tab, tap **✎ Edit a past ball** just under **↶ Undo**.
 2. Each innings has a header, for example "Red House 87/4 (11.3)". Tap it to open or close it. Overs are listed newest first, as "Ov 7", the bowler, and the batters who faced.
-3. Tap the ball you want to fix. A card opens under that over, for example "2.3 · 1 run".
+3. Tap the ball you want to fix. A card opens under that over, naming the bowler and batter, for example "2.3 · Arjun to Ravi · 1 run".
 4. Make the change and tap **Save**. The ball gets an outline, and the change is listed under "Staged". Tap **↺** next to a staged change to drop it.
 5. Fix any other balls the same way.
 6. Tap **Update score (1)**. The number is how many changes you're making. **Cancel** throws them all away.
 7. If the fix changed who should be on strike, you'll see "Who's on strike now?". Tap the batter who will face the next ball.
 
 ## What you can change on a ball
-- A normal ball: the runs (**0 runs** to **6 runs**), whether they were **Off bat**, **Bye** or **Leg bye**, and "Who faced?" (either batter at the crease).
+- A normal ball: the runs (**0 runs** to **7 runs**), whether they were **Off bat**, **Bye** or **Leg bye**, and "Who faced?" (either batter at the crease). For a 4 or 6 off the bat, choose **Boundary** or **All run**. A ball that had overthrows shows an **Incl. 4 overthrows** chip: changing the runs drops the overthrows unless you leave that chip on.
 - A wicket: the kind of dismissal, the fielder for a catch or run out, and for a run out or obstructing, the runs completed and whether the **Striker out** or **Non-striker out**.
-- A wide or no-ball: switch between **Wide** and **No ball**, and the runs taken (**+0** to **+4**).
+- A wide or no-ball: switch between **Wide** and **No ball**, and the runs taken (**+0** to **+4** on a wide, **+0** to **+6** on a no-ball). On a no-ball, choose whether the runs were **Off bat**, **Byes** or **Leg byes**, and for a 4 or 6 off the bat, **Boundary** or **All run**.
 
 A ball can't change type. A normal ball can't become a wicket or a wide, because that would move every later ball into a different over. The card reminds you: "To make it a wicket or a wide, undo back to that ball." Mankads, retirements, penalties and Super Over balls can't be edited here either.
 

@@ -13,6 +13,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Hosts can score and end matches by default; 20 wording/UX fixes from the guide writers
+
+- **Hosts score by default (founder ask):** new `core/scoringAccess.ts` (`canScoreMatch`: a listed scorer, or a host of the match or its tournament; mirrors the server's `can_manage_match`). It drives the Scoring tab, End match, Take over, Quick options, live settings, POTM and Matches-card "Start scoring". Opening a match doesn't add a host as a scorer; claiming the lock does (as the RPC already did; mirrored in demo). Viewers stay read-only. **No migration**: PGlite hostscoring 26/26 (a host not in `scorer_ids` claims, appends, undoes, snapshots, writes stat lines and ends; a stranger is refused everything). Edge: a host account with several player rows may be recorded as scoring under its first player (`my_scoring_player`).
+- **Wording / UX fixes (all 20 from PROGRESS):**
+  - "Manage" for the tournament admin tab and its notices (old `tab=Settings` links still work);
+  - 🏳 Walkover in the End match panel;
+  - End-match chip "Awarded";
+  - 🎯 Change scorer;
+  - "Add logo" / "Add photo" everywhere;
+  - join box hint mentions tournament T- codes;
+  - computed setup count;
+  - labelled "± Adjust" on the points table;
+  - accurate "Before they play" hint;
+  - import rows say "Will import as X" (+ warning count);
+  - cricket: sentence-case dismissal names; edit-ball card "bowler to batter"; over editor 0–7, no-ball +0–6, Boundary vs All run, overthrows chip and clearing, no-ball off bat / byes / leg byes (and fixed a no-op re-save doubling no-ball byes); Nb + leg byes pad buttons; clearer penalty-reason hint; "(revised target)" everywhere; ⚡ legend; Timed out hint; "± Runs"; an upload-wait hint on Edit a past ball.
+- In-app help and 19 public guides updated to match.
+- **Verified:** tsc + 816 tests; website builds (25 guides); demo 8093 at 375 px.
+
+---
+
 ### 2026-10-09 — Public feature guides on sportnnote.in/guides/ (25 guides) + web publish + APK 36
 
 - **Ask:** every feature gets a public page explaining it, with a step-by-step guide, written by

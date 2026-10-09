@@ -1,6 +1,6 @@
 /** Enter your team in a tournament from its join link (parity #10). The organiser
  *  turns on "Teams can join by link" and shares one WhatsApp link; a captain opens
- *  it (or types the T- code under "Join a team"), picks one of the teams they
+ *  it (or types the T- code under "Join a team with a code"), picks one of the teams they
  *  manage — or makes one — and it's in the tournament at once (confirmed).
  *  Guests see the tournament name and a sign-in button that brings them back. */
 import React, { useEffect, useState } from 'react';
