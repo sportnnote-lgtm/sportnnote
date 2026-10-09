@@ -65,7 +65,7 @@ Public how-to pages, one Markdown file per guide in `website/guides/`.
 `wrangler.jsonc`, which serves `website/dist` as static assets. Settings:
 - Build command: `node --experimental-strip-types scripts/build-website.mjs`.
 - Deploy command: `npx wrangler deploy`.
-- Production branch: `feat/sport-formats-and-scoring`.
+- Production branch: `main` (the site redeploys about 2 minutes after a push to `main`; pushing only the feature branch does NOT update sportnnote.in).
 - The Worker name must be `sportnnote`, matching `wrangler.jsonc`.
 
 **Older Pages flow steps** (once, about 15 minutes, needs your Cloudflare sign-up):
