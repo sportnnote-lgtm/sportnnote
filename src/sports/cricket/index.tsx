@@ -37,6 +37,7 @@ import {
 } from './scorecard';
 import type { CricketState, DismissalKind, Innings, RunsAs, FieldNoteKind } from './engine';
 import { OverEditor } from './OverEditor';
+import { cricketTickerDetail, cricketTickerFlash } from './ticker';
 import {
   LOCAL_RULE_FIELDS, CRICKET_LIVE_SETTINGS, rulesOf, effectiveRules, inStandardWindow, isStandard,
   rulesChip, STANDARD_RULES,
@@ -1873,6 +1874,9 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   isComplete: (s) => s.ended,
   statTotals,
   snapshot: snapshotState,
+  // Score overlay (parity #25): batters, bowler, this over, chase; WICKET!/FOUR/SIX.
+  tickerDetail: cricketTickerDetail,
+  tickerFlash: cricketTickerFlash,
   result: (s) => {
     if (!s.ended) return null;
     const score = { home: s.scores.home.runs, away: s.scores.away.runs };

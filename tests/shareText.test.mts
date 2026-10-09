@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchShareText, tournamentShareText, golfShareText, matchLink, awardsShareText } from '../src/core/shareText.ts';
+import { matchShareText, tournamentShareText, golfShareText, matchLink, awardsShareText, overlayLink } from '../src/core/shareText.ts';
 
 describe('share messages', () => {
   test('live match: score, status, follow link', () => {
@@ -47,5 +47,12 @@ test('profile: record across sports + link', () => {
       ],
     });
     assert.equal(t, '🏆 Awards · Inter-house Cup\n\n🏆 Player of the Tournament: Arjun Rao (Red House)\n   5 m · 212 runs · 3 wkts\n🏅 Fair play: Bilal Khan\n\nFull results: https://app.sportnnote.in/t/t1');
+  });
+  test('overlay link (parity #25): theme, position, optional sponsor path', () => {
+    assert.equal(overlayLink('m1'), 'https://app.sportnnote.in/o/m1?t=bar&pos=bottom');
+    assert.equal(overlayLink('m1', { theme: 'corner', pos: 'top' }), 'https://app.sportnnote.in/o/m1?t=corner&pos=top');
+    const sp = '0f8b6a3e-1c2d-4e5f-9a8b-7c6d5e4f3a2b/sponsor-logo/1-a.png';
+    assert.equal(overlayLink('m1', { theme: 'pill', sponsorPath: sp }), `https://app.sportnnote.in/o/m1?t=pill&pos=bottom&sp=${sp}`);
+    assert.equal(overlayLink('m1', { flash: false }, 'http://localhost:8093/'), 'http://localhost:8093/o/m1?t=bar&pos=bottom&flash=0');
   });
 });

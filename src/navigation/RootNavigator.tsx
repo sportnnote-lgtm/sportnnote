@@ -24,6 +24,9 @@ const InviteScreen = lazyScreen(() => import('../screens/InviteScreen'));
 const CorrectMatchScreen = lazyScreen(() => import('../screens/CorrectMatchScreen'));
 const EditTeamScreen = lazyScreen(() => import('../screens/EditTeamScreen'));
 const JoinTournamentScreen = lazyScreen(() => import('../screens/JoinTournamentScreen'));
+// The OBS score overlay (parity #25) — rendered outside the navigator, see below.
+const OverlayScreen = lazyScreen(() => import('../screens/OverlayScreen'));
+const IS_OVERLAY = Platform.OS === 'web' && typeof window !== 'undefined' && /^\/o\/[^/]+/.test(window.location.pathname);
 import AuthScreen from '../screens/AuthScreen';
 import OrganizeScreen from '../screens/OrganizeScreen';
 const CreateTournamentScreen = lazyScreen(() => import('../screens/CreateTournamentScreen'));
@@ -214,6 +217,7 @@ export default function RootNavigator() {
 
   // On sign-in: load existing follows into the store and register for push.
   useEffect(() => {
+    if (IS_OVERLAY) return; // the overlay page never registers push or loads follows
     if (!authed) { setCurrentPlayerId(null); return; }
     Promise.all([getFollows(profile?.id), getFollowPrefs(profile?.id)]).then(([keys, prefs]) => followStore.hydrate(keys, prefs));
     getCaptainTeams(profile?.id).then((ids) => captainStore.hydrate(ids));
@@ -237,10 +241,20 @@ export default function RootNavigator() {
 
   // Warm the on-demand screens once the app has settled, so later taps are instant.
   useEffect(() => {
-    if (loading) return;
+    if (loading || IS_OVERLAY) return;
     const t = setTimeout(prefetchScreens, 2500);
     return () => clearTimeout(t);
   }, [loading]);
+
+  // `/o/<matchId>` (web): the transparent score overlay for OBS — no navigator
+  // chrome, guest bar, auth wait or app banners; it only reads public match data.
+  if (IS_OVERLAY) {
+    return (
+      <Suspense fallback={null}>
+        <OverlayScreen />
+      </Suspense>
+    );
+  }
 
   if (loading) {
     return (

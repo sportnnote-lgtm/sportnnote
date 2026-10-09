@@ -27,6 +27,7 @@ import type { FootballEvent, GoalType, BodyPart } from './events';
 import { type StatEvent, type StatKind, STAT_META, EVENT_META, GOAL_TYPE_LABEL, BODY_PART_LABEL } from './events';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
+import { footballTickerDetail, footballTickerFlash } from './ticker';
 
 /** How a level result at full time is settled. */
 import {
@@ -1250,6 +1251,9 @@ export const footballPlugin: SportPlugin<FootballState> = {
   name: 'Football',
   icon: '⚽',
   archetype: 'goal-time',
+  // Score overlay (parity #25): goal scorers per side; GOAL! flash.
+  tickerDetail: footballTickerDetail,
+  tickerFlash: footballTickerFlash,
   createInitialState: init,
   reducer,
   // A level knockout tie isn't complete until the shootout produces a winner.

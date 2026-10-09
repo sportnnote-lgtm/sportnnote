@@ -366,6 +366,12 @@ export interface SportPlugin<S = unknown> {
   /** Parity #19 — the state to persist in `matches.state` (e.g. cricket drops
    *  its derived ball log, which replay rebuilds). Omitted = the state as is. */
   snapshot?: (state: S) => S;
+  /** Parity #25 — richer score-ticker cells (batters, bowler, this over…),
+   *  merged over the summary by `buildTicker`. `names` = the short team names. */
+  tickerDetail?: (state: S, names: { home: string; away: string }) => import('./ticker').TickerDetail;
+  /** Parity #25 — the overlay's big-moment banner for the newest event (a
+   *  wicket, a four, a goal), or null. Only called on a realtime INSERT. */
+  tickerFlash?: (prev: S, next: S) => import('./ticker').TickerFlash | null;
 }
 
 /** Props for a sport's Quick-options tiles. */

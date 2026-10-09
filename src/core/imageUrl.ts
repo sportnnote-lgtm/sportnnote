@@ -4,7 +4,7 @@
  * only the picking device can show; uploads turn it into a public https URL.
  */
 
-export type ImageKind = 'tournament-logo' | 'tournament-banner' | 'match-logo' | 'club-logo' | 'org-logo' | 'player-photo';
+export type ImageKind = 'tournament-logo' | 'tournament-banner' | 'match-logo' | 'club-logo' | 'org-logo' | 'player-photo' | 'sponsor-logo';
 
 /** A URI only the device that picked it can open. */
 export function isLocalImageUri(u?: string | null): boolean {
@@ -33,4 +33,16 @@ export function extForMime(mime?: string): string {
   if (m.endsWith('/webp')) return 'webp';
   if (m.endsWith('/gif')) return 'gif';
   return 'jpg';
+}
+
+/** Public URL of a `media` bucket object (parity #25's overlay sponsor `sp`). */
+export function mediaPublicUrl(supabaseUrl: string, path: string): string {
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/media/${path}`;
+}
+
+/** The bucket path inside a `media` public URL, or undefined (another host, a
+ *  device-local URI, a demo upload). */
+export function mediaPathFromUrl(url?: string | null): string | undefined {
+  const m = /\/storage\/v1\/object\/public\/media\/([^?#]+)$/.exec(url ?? '');
+  return m ? decodeURIComponent(m[1]) : undefined;
 }

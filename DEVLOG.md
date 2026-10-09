@@ -13,6 +13,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Score ticker / OBS overlay page at a public URL (parity #25)
+
+- **Ask (parity queue #25):** a college media club streams the inter-house final from OBS and
+  viewers can't see the score; organisers need one free, no-login link that lays a live score bar
+  over the video, for any sport.
+- **Model (pure):** `sports/ticker.ts` `buildTicker` from each plugin's `summary()` (every sport works),
+  optional `SportPlugin.tickerDetail?` / `tickerFlash?`; cricket (batters, bowler, this-over chips by
+  `symbolTone`, Need/RRR · Innings break · CRR banner, "(DLS)" tag, Super Over state; flashes only on
+  wickets and real boundaries — never penalties, adjustments, all-run 4s or overthrows) and football
+  (scorers, "GOAL! Name 34'"). `core/overlayParams.ts` (theme / pos / flash / sponsor path whitelist),
+  shareText `overlayLink`.
+- **Route:** web `/o/<matchId>` short-circuits the navigator (no chrome, auth wait or banners) →
+  `OverlayScreen` (transparent page, meta refresh 120 s, read-only `useLiveMatch` — no outbox flush,
+  never writes). `useLiveMatch` gains `onRemoteEvent` on the realtime INSERT fast path only (no flash
+  on load / reconnect / undo) and now bumps viewers' `eventCount` on inserts.
+- **UI:** `components/overlay/ScoreOverlay.tsx` (bar / pill / corner at 1920×1080, pre / live / done,
+  sponsor, 1.6 s flash); host-only `OverlayPanel` on Info (theme chips, live 16:9 preview, Test flash,
+  sponsor logo via #01, Copy / Open link, OBS steps).
+- **Verified:** tsc + 803 tests (25 new); cricket logs replay identically; demo 8093: panel host-only,
+  live preview + Test flash, `/o/` transparent in all themes for football and cricket, corner clock,
+  pre-match and not-found states, no flash on reload, `/m/` still routes. Not verified: cross-device
+  realtime (demo has none), guest session, sponsor upload, OBS itself. No migration.
+
+---
+
 ### 2026-10-09 — Bulk schedule import from CSV / pasted spreadsheet (parity #24)
 
 - **Ask (parity queue #24):** a sports secretary with 40 fixtures in a spreadsheet had to retype

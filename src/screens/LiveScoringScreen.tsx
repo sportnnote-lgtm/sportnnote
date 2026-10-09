@@ -41,6 +41,8 @@ import { AwardPickerSheet, type PickerRow } from '../components/AwardPickerSheet
 import { deleteVerdict, breakLabel, type BreakKind, type MatchBreak } from '../data/matchHousekeeping';
 import { QuickOptionsSheet } from '../components/QuickOptionsSheet';
 import { LiveSettingsCard } from '../components/LiveSettingsCard';
+import { OverlayPanel } from '../components/OverlayPanel';
+import type { TickerMeta } from '../sports/ticker';
 import { slotsFor, officialsLine, isCommentarySlot, type MatchOfficial } from '../data/matchOfficials';
 import { LiveStream } from '../components/LiveStream';
 import { DisputeMaskProvider } from '../core/disputeMask';
@@ -107,6 +109,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     result?: MatchResult; stage?: string;
     /** play paused (parity #13) — `format.__break` */
     onBreak?: MatchBreak;
+    /** team logos — the score overlay (parity #25) */
+    homeLogo?: string; awayLogo?: string;
   }>({});
   const lastConfigJson = useRef<{ json: string; obj: Record<string, unknown> | undefined }>({ json: '', obj: undefined });
   // Parity #11: the tournament's scorer/referee pool + this match's officials.
@@ -146,6 +150,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               tournamentHostIds: tour ? tournamentHostPlayerIds(tour, orgs) : [],
               status: m.status, score: m.score, winner: m.winner, logoUrl: m.logoUrl, managers: m.managers,
               result: m.result, stage: m.stage, onBreak: m.onBreak as MatchBreak | undefined,
+              homeLogo: m.homeTeam.logoUrl, awayLogo: m.awayTeam.logoUrl,
             });
           }
         })();
@@ -869,6 +874,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   } : null;
   const fullHome = homeTeamName ?? homeName;
   const fullAway = awayTeamName ?? awayName;
+  // The score overlay's preview (parity #25) — the same meta /o/<id> builds.
+  const tickerMeta = useMemo<TickerMeta>(() => ({
+    home: { name: fullHome, short: homeName, color: homeColor, logo: meta.homeLogo },
+    away: { name: fullAway, short: awayName, color: awayColor, logo: meta.awayLogo },
+    startsLabel: meta.startsAt ? formatTime(meta.startsAt, viewerTz) : undefined,
+    resultLine: meta.result ? manualResultLine(meta.result, homeName, awayName) : undefined,
+    status: meta.status,
+    breakLabel: meta.onBreak && !complete ? breakLabel(meta.onBreak) : undefined,
+  }), [fullHome, fullAway, homeName, awayName, homeColor, awayColor, meta.homeLogo, meta.awayLogo, meta.startsAt, meta.result, meta.status, meta.onBreak, complete, viewerTz]);
   const endPreview = (() => {
     if (!draftResult || !endReady) return null;
     const line = manualResultLine(draftResult, fullHome, fullAway);
@@ -2147,6 +2161,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               {hasMatch && scorerCard}
               {hasMatch && officialsCard}
               {hasMatch && streamSettingsCard}
+              {hasMatch && isHost && matchId && (
+                <OverlayPanel matchId={matchId} tournamentId={meta.tournamentId} plugin={plugin} state={state}
+                  eventCount={eventCount} syncing={syncing} meta={tickerMeta} />
+              )}
               {liveSettingsCard((msg) => setToast(msg))}
               {hasMatch && (
                 <HostsCard

@@ -78,8 +78,16 @@ export function useLiveMatch(params: {
   config?: Record<string, unknown>;
   /** the scoring lock for this device (parity #03); only the holder writes */
   lockStatus?: LockStatus;
+  /** Parity #25 — called with the state before/after each event that arrives
+   *  over realtime and wasn't applied here yet (the INSERT fast path ONLY):
+   *  a load, reconnect, undo or correction rebuild never calls it. */
+  onRemoteEvent?: (prev: unknown, next: unknown) => void;
+  /** a pure viewer (the OBS overlay): never flush this device's outbox */
+  readOnly?: boolean;
 }): UseLiveMatch {
-  const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config, lockStatus = 'unsupported' } = params;
+  const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config, lockStatus = 'unsupported', readOnly = false } = params;
+  const onRemoteRef = useRef(params.onRemoteEvent);
+  onRemoteRef.current = params.onRemoteEvent;
   // Allowed to score AND (holding the lock, or nobody holds it, or no lock yet).
   const canWrite = canScore && canWriteWith(lockStatus);
   const plugin = getSport(sport);
@@ -164,7 +172,7 @@ export function useLiveMatch(params: {
       if (cancelled) return;
       await rebuildFromLog();
       if (!cancelled) setSyncing(false);
-      void matchOutbox.flush(matchId); // push anything left over from a previous session
+      if (!readOnly) void matchOutbox.flush(matchId); // push anything left over from a previous session
     })();
 
     // 2) Live mode: apply future events as they arrive (scorer echo AND viewers).
@@ -186,7 +194,11 @@ export function useLiveMatch(params: {
             if (appliedRef.current.has(key)) return; // already applied locally (optimistic)
             appliedRef.current.add(key);
             seqRef.current = Math.max(seqRef.current, e.seq);
-            setBoth(plugin.reducer(stateRef.current, toAction(e)));
+            const prev = stateRef.current;
+            const next = plugin.reducer(prev, toAction(e));
+            setBoth(next);
+            setEventCount((c) => c + 1); // a viewer's count follows the log too (#25's pre → live)
+            try { onRemoteRef.current?.(prev, next); } catch { /* a viewer's callback never breaks sync */ }
           } else {
             // DELETE (the scorer undid) or UPDATE → re-derive from the truncated
             // log so viewers don't keep an event that was removed upstream.

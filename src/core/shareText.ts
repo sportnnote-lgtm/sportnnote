@@ -12,6 +12,20 @@ export const tournamentLink = (tournamentId: string) => `${SHARE_BASE}/t/${tourn
 export const golfLink = (eventId: string) => `${SHARE_BASE}/g/${eventId}`;
 export const profileLink = (playerId: string) => `${SHARE_BASE}/p/${playerId}`;
 
+/** The OBS score-overlay link (parity #25): `/o/<id>?t=bar&pos=bottom[&sp=…]`.
+ *  `sp` = the sponsor logo's `media` path (validated again by the overlay);
+ *  `base` lets a dev/demo build point at its own origin. */
+export function overlayLink(
+  matchId: string,
+  opts: { theme?: 'bar' | 'pill' | 'corner'; pos?: 'bottom' | 'top'; sponsorPath?: string; flash?: boolean } = {},
+  base: string = SHARE_BASE,
+): string {
+  const q = [`t=${opts.theme ?? 'bar'}`, `pos=${opts.pos ?? 'bottom'}`];
+  if (opts.sponsorPath) q.push(`sp=${encodeURIComponent(opts.sponsorPath).replace(/%2F/g, '/')}`);
+  if (opts.flash === false) q.push('flash=0');
+  return `${base.replace(/\/+$/, '')}/o/${encodeURIComponent(matchId)}?${q.join('&')}`;
+}
+
 export interface MatchShareInput {
   sportIcon: string;
   status: 'live' | 'final' | 'upcoming';
