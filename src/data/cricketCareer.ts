@@ -92,6 +92,10 @@ export function cricketCareer(all: StatLine[]): CricketCareer {
     { key: 'catches', label: 'Catches', value: String(sum(lines, 'catches')) },
     { key: 'stumpings', label: 'Stumpings', value: String(sum(lines, 'stumpings')) },
     { key: 'runouts', label: 'Run outs', value: String(sum(lines, 'runouts')) },
+    // parity #20 — fielding notes
+    { key: 'dropped', label: 'Drops', value: String(sum(lines, 'dropped')) },
+    { key: 'runsSaved', label: 'Runs saved', value: String(sum(lines, 'runsSaved')) },
+    { key: 'runsMissed', label: 'Runs missed', value: String(sum(lines, 'runsMissed')) },
   ];
   return { batting, bowling, fielding };
 }

@@ -28,12 +28,13 @@ import {
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
-  canBowl, midOver, oversUsed, snapshotState,
+  canBowl, midOver, oversUsed, snapshotState, lastBall,
 } from './engine';
 import {
   hasLog, extrasBreakdown, extrasText, fallOfWickets, fowText, partnerships, overHistory, bowlerSplits, statTotals,
+  adjustmentsText, fieldingNotesText,
 } from './scorecard';
-import type { CricketState, DismissalKind, Innings, RunsAs } from './engine';
+import type { CricketState, DismissalKind, Innings, RunsAs, FieldNoteKind } from './engine';
 import { OverEditor } from './OverEditor';
 import {
   LOCAL_RULE_FIELDS, CRICKET_LIVE_SETTINGS, rulesOf, effectiveRules, inStandardWindow, isStandard,
@@ -346,6 +347,187 @@ function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispat
   );
 }
 
+/* ---- Penalty · Bonus / minus · Fielding (parity #20) ---- */
+
+type MorePanel = 'pen' | 'adj' | 'field';
+/** Reasons offered per penalised side; a starred one means "this ball shouldn't count". */
+const PEN_REASONS: Record<'batting' | 'fielding', readonly (readonly [string, boolean])[]> = {
+  batting: [
+    ['Short run', false], ['Time wasting', false], ['Damaging pitch', false], ['Practice on field', false],
+    ['Stealing a run', false], ['Unfair action', false], ['Striker in protected area', false], ['Other', false],
+  ],
+  fielding: [
+    ['Ball hit helmet', false], ['Damaging pitch', false], ['Time wasting', false], ['Illegal fielding', true],
+    ['Ball tampering', false], ['Returned without permission', true], ['Distracting striker', true],
+    ['Obstructing batter', true], ['Practice on field', false],
+  ],
+};
+const digits2 = (t: string) => t.replace(/[^0-9]/g, '').slice(0, 2);
+
+/**
+ * One inline panel for the three score-side tools. Every preview is the
+ * reducer's own result for the action Apply would send (no second copy of the
+ * maths). `state` is the live (possibly Super-Over) innings, like the controls.
+ */
+function MoreRunsPanel({
+  mode, state, dispatch, battingName, bowlingName, homeName, awayName, fielders, keeperId, inSuperOver, onClose,
+}: {
+  mode: MorePanel; state: CricketState; dispatch: (a: ScoreAction) => void;
+  battingName: string; bowlingName: string; homeName: string; awayName: string;
+  /** the fielding side's roster */
+  fielders: Player[]; keeperId?: string; inSuperOver: boolean; onClose: () => void;
+}) {
+  const bat = state.battingSide;
+  const nameOf = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
+  // penalty
+  const [against, setAgainst] = useState<'batting' | 'fielding'>('fielding');
+  const [penRuns, setPenRuns] = useState('5');
+  const [reason, setReason] = useState<string | null>(null);
+  const [other_, setOther] = useState('');
+  // bonus / minus
+  const [sign, setSign] = useState<1 | -1>(1);
+  const [adjSide, setAdjSide] = useState<'home' | 'away'>(bat);
+  const [adjRuns, setAdjRuns] = useState('');
+  const [adjWhy, setAdjWhy] = useState('');
+  // fielding
+  const [fKind, setFKind] = useState<FieldNoteKind>('drop');
+  const [fRuns, setFRuns] = useState<number | null>(null);
+  const [fielder, setFielder] = useState<Player | null>(null);
+
+  const chaseLine = (next: CricketState) => {
+    if (next.innings !== 2 || next.target === undefined) return '';
+    const c = next.scores[next.battingSide];
+    if (next.ended) return c.runs >= next.target ? ' · chase won' : '';
+    const left = Math.max(0, next.oversLimit * next.ballsPerOver - c.balls);
+    return ` · need ${Math.max(0, next.target - c.runs)} off ${left}`;
+  };
+  const head = (title: string) => (
+    <View style={ctrl.creaseHead}>
+      <Text style={ctrl.label}>{title}</Text>
+      <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={onClose} />
+    </View>
+  );
+  const apply = (a: ScoreAction | null, ok: boolean, label = 'Apply') => (
+    <Button label={label} disabled={!ok} onPress={() => { if (a && ok) { dispatch(a); onClose(); } }} />
+  );
+
+  if (mode === 'pen') {
+    const to = against === 'fielding' ? bat : other(bat);
+    const r = parseInt(penRuns, 10);
+    const why = reason === 'Other' ? other_.trim() : reason ?? '';
+    const action: ScoreAction | null = !r || r < 1 ? null
+      : { type: 'PENALTY', side: to, payload: { runs: r, against, ...(why ? { reason: why } : {}), teamName: nameOf(to) } };
+    const next = action ? reducer(state, action) : null;
+    const ok = !!next && next !== state;
+    const before = state.scores[to].runs;
+    const starred = PEN_REASONS[against].find(([l]) => l === reason)?.[1];
+    return (
+      <View style={ctrl.wktPanel}>
+        {head('⚖️ Penalty runs')}
+        <Text style={ctrl.meta}>Who is penalised?</Text>
+        <View style={ctrl.chips}>
+          <SelectChip label={`${battingName} (batting)`} active={against === 'batting'} onPress={() => { setAgainst('batting'); setReason(null); }} />
+          <SelectChip label={`${bowlingName} (fielding)`} active={against === 'fielding'} onPress={() => { setAgainst('fielding'); setReason(null); }} />
+        </View>
+        <Text style={ctrl.meta}>Runs go to {nameOf(to)} as extras — not a ball, not charged to anyone.</Text>
+        <View style={[ctrl.row, { alignItems: 'center' }]}>
+          <SelectChip label="5" active={penRuns === '5'} onPress={() => setPenRuns('5')} />
+          <View style={ctrl.flex}>
+            <TextField label="" value={penRuns} onChange={(v) => setPenRuns(digits2(v))} placeholder="Runs" autoCapitalize="none" />
+          </View>
+        </View>
+        <Text style={ctrl.meta}>Reason</Text>
+        <View style={ctrl.chips}>
+          {PEN_REASONS[against].map(([l, star]) => (
+            <SelectChip key={l} label={`${l}${star ? '*' : ''}`} active={reason === l} onPress={() => setReason(reason === l ? null : l)} />
+          ))}
+        </View>
+        {reason === 'Other' ? <TextField label="" value={other_} onChange={setOther} placeholder="What happened?" /> : null}
+        {starred ? <Text style={ctrl.ovWarn}>This ball shouldn’t count — Undo it if already entered.</Text> : null}
+        {ok && next ? (
+          <Text style={ctrl.rainPreview}>
+            → {nameOf(to)} will be {next.scores[to].runs} ({before}+{r}){next.target !== state.target ? ` · target becomes ${next.target}` : ''}{chaseLine(next)}
+          </Text>
+        ) : null}
+        {apply(action, ok)}
+      </View>
+    );
+  }
+
+  if (mode === 'adj') {
+    const r = parseInt(adjRuns, 10);
+    const why = adjWhy.trim();
+    const action: ScoreAction | null = !r ? null
+      : { type: 'ADJUST', side: adjSide, payload: { side: adjSide, runs: sign * r, ...(why ? { reason: why } : {}), teamName: nameOf(adjSide) } };
+    const next = action ? reducer(state, action) : null;
+    const ok = !!next && next !== state;
+    const before = state.scores[adjSide].runs;
+    return (
+      <View style={ctrl.wktPanel}>
+        {head('± Bonus / minus runs')}
+        <View style={ctrl.chips}>
+          <SelectChip label="➕ Bonus" active={sign === 1} onPress={() => setSign(1)} />
+          <SelectChip label="➖ Minus" active={sign === -1} onPress={() => setSign(-1)} />
+        </View>
+        <View style={ctrl.chips}>
+          <SelectChip label={`${battingName} (batting)`} active={adjSide === bat} onPress={() => setAdjSide(bat)} />
+          <SelectChip label={`${bowlingName} (bowling)`} active={adjSide !== bat} onPress={() => setAdjSide(other(bat))} />
+        </View>
+        <View style={ctrl.chips}>
+          {[1, 2, 3, 4, 5].map((n) => <SelectChip key={n} label={String(n)} active={adjRuns === String(n)} onPress={() => setAdjRuns(String(n))} />)}
+        </View>
+        <TextField label="" value={adjRuns} onChange={(v) => setAdjRuns(digits2(v))} placeholder="Other runs" autoCapitalize="none" />
+        <TextField label="" value={adjWhy} onChange={setAdjWhy} placeholder="Reason (optional)" />
+        <Text style={ctrl.meta}>Not extras — shown on its own line under the total.</Text>
+        {ok && next ? (
+          <Text style={ctrl.rainPreview}>
+            → {nameOf(adjSide)} will be {next.scores[adjSide].runs} ({before}{sign > 0 ? '+' : '−'}{r}){next.target !== state.target ? ` · target becomes ${next.target}` : ''}{chaseLine(next)}
+          </Text>
+        ) : null}
+        {apply(action, ok)}
+      </View>
+    );
+  }
+
+  // Fielding note — tied to the last ball of THIS innings.
+  const ref = lastBall(state);
+  const here = !!ref && ref.inn === state.innings && ref.side === bat;
+  const stat = fKind === 'drop' ? 'dropped' : fKind === 'saved' ? 'runsSaved' : 'runsMissed';
+  const by = fKind === 'drop' ? 1 : fRuns ?? 0;
+  const action: ScoreAction | null = !fielder || (fKind !== 'drop' && !fRuns) ? null : {
+    type: 'FIELD_NOTE', side: other(bat),
+    payload: { kind: fKind, fielderId: fielder.id, fielderName: fielder.fullName, ...(fRuns ? { runs: fRuns } : {}) },
+    // A Super Over isn't counted in careers (statTotals skips it) — no stat there.
+    ...(inSuperOver ? {} : { attribution: { playerId: fielder.id, stat, by, playerName: fielder.fullName } }),
+  };
+  const ordered = keeperId ? [...fielders.filter((p) => p.id === keeperId), ...fielders.filter((p) => p.id !== keeperId)] : fielders;
+  return (
+    <View style={ctrl.wktPanel}>
+      {head('🧤 Fielding')}
+      {here && ref ? (
+        <Text style={ctrl.meta}>For ball {ref.at} — {ref.batterName ?? 'the batter'} facing {ref.bowlerName ?? 'the bowler'}</Text>
+      ) : <Text style={ctrl.hint}>Bowl a ball first — a note attaches to the last ball.</Text>}
+      <View style={ctrl.chips}>
+        {([['drop', 'Dropped catch'], ['saved', 'Runs saved'], ['missed', 'Runs missed']] as const).map(([k, l]) => (
+          <SelectChip key={k} label={l} active={fKind === k} onPress={() => setFKind(k)} />
+        ))}
+      </View>
+      <Text style={ctrl.meta}>{fKind === 'drop' ? 'Runs it cost (optional)' : 'Runs'}</Text>
+      <View style={ctrl.chips}>
+        {[1, 2, 3, 4, 5, 6].map((n) => <SelectChip key={n} label={String(n)} active={fRuns === n} onPress={() => setFRuns(fRuns === n ? null : n)} />)}
+      </View>
+      <Text style={ctrl.meta}>Fielder</Text>
+      <View style={ctrl.chips}>
+        {ordered.map((p) => (
+          <SelectChip key={p.id} label={`${p.fullName}${p.id === keeperId ? ' †' : ''}`} active={fielder?.id === p.id} onPress={() => setFielder(p)} />
+        ))}
+        {ordered.length === 0 && <Text style={ctrl.meta}>No {bowlingName} squad set.</Text>}
+      </View>
+      {apply(action, here && !!action, 'Save')}
+    </View>
+  );
+}
+
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
@@ -372,6 +554,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   // and the "Allow anyway" quota override.
   const [bowlRepl, setBowlRepl] = useState<'injury' | 'suspended' | 'other' | null>(null);
   const [forceQuota, setForceQuota] = useState(false);
+  // Parity #20 — the Penalty / Bonus-minus / Fielding panel (one at a time).
+  const [morePanel, setMorePanel] = useState<MorePanel | null>(null);
 
   // While a Super Over is live, ALL the live-scoring UI below operates on the
   // nested mini-match; dispatched actions are routed there by the reducer. The
@@ -994,9 +1178,20 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
         <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
       </View>
+      {/* Parity #20 — penalty to either side, bonus / minus runs, fielding notes. */}
       <View style={ctrl.row}>
-        <Button label="⚖️ Penalty +5" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => ball({ type: 'PENALTY', payload: { runs: 5 } })} />
+        {/* "± Bonus" (not "Bonus / minus"): the longer label wraps at 375 px. */}
+        {([['pen', '⚖️ Penalty', 'Penalty runs'], ['adj', '± Bonus', 'Bonus or minus runs'], ['field', '🧤 Fielding', 'Fielding: dropped catch, runs saved or missed']] as const).map(([k, l, a11y]) => (
+          <Button key={k} label={l} accessibilityLabel={a11y} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
+            onPress={() => setMorePanel((m) => (m === k ? null : k))} />
+        ))}
       </View>
+      {morePanel && (
+        <MoreRunsPanel key={`${morePanel}:${state.innings}`} mode={morePanel} state={state} dispatch={dispatch}
+          battingName={battingName} bowlingName={bowlingName} homeName={homeName} awayName={awayName}
+          fielders={bowlingRoster.filter((p) => !isUnavailable(p.id))} keeperId={keeper?.id} inSuperOver={soActive}
+          onClose={() => setMorePanel(null)} />
+      )}
 
       {/* Ending an innings/match is a big, easy-to-mis-tap action — confirm it,
           and show the key facts (score, overs, resulting target) first. */}
@@ -1352,6 +1547,8 @@ function InningsCard({
   const splits = logged ? bowlerSplits(s, side) : {};
   const parts = logged ? partnerships(s, side) : [];
   const overs = logged ? overHistory(s, side) : [];
+  const adjLine = adjustmentsText(s, side);
+  const fieldLine = fieldingNotesText(s, side);
   const [showParts, setShowParts] = useState(false);
   const [showOvers, setShowOvers] = useState(false);
   const [pickedOver, setPickedOver] = useState<number | null>(null);
@@ -1410,6 +1607,7 @@ function InningsCard({
             <Text style={ctrl.totalLabel}>Total</Text>
             <Text style={ctrl.totalVal}>{inn.runs}/{inn.wickets} ({oversStr(inn.balls, s.ballsPerOver)} ov) · CRR {runRate(inn.runs, inn.balls, s.ballsPerOver)}</Text>
           </View>
+          {adjLine ? <Text style={ctrl.meta}>Bonus/deductions {adjLine}</Text> : null}
           {fow.length > 0 && (
             <View style={ctrl.fow}>
               <Text style={ctrl.th}>Fall of wickets</Text>
@@ -1456,6 +1654,7 @@ function InningsCard({
               })}
             </>
           )}
+          {fieldLine ? <Text style={ctrl.meta}>Fielding: {fieldLine}</Text> : null}
 
           {parts.length > 0 && (
             <>

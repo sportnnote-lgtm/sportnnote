@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket penalty, bonus & minus runs to either side; dropped catches, runs saved/missed (parity #20)
+
+- **Ask (parity queue #20):** local rules (bonus for hitting the net, −5 per dismissal) and umpire
+  penalties against either side; only "Penalty +5" to the batting side existed, with no reason;
+  coaches want to know who dropped catches.
+- **Engine:** `PENALTY {against?, reason?, teamName?}` (default against the fielding side = old
+  behaviour, old events replay identically); runs go to the other side as extras, raising the chase
+  target when they go to the side that batted first (even after a #18 revision). New `ADJUST`
+  (± runs, not extras, may go negative, can win a chase) and `FIELD_NOTE` (drop / saved / missed,
+  tied to the last ball's batter and bowler via `lastBall()`). Ball log gains `adj` and `cross`
+  records so extras, Manhattan and partnerships stay right; `statTotals` adds `dropped`,
+  `runsSaved`, `runsMissed`.
+- **UI:** "⚖️ Penalty" (who's penalised, Law-based reason chips, dead-ball hint), "± Bonus" (bonus /
+  minus, team, runs, reason) and "🧤 Fielding" (caption "For ball 4.3 — Asha facing Varun") inline
+  panels with reducer previews; scorecard "Bonus/deductions" and "Fielding:" lines; profile Drops /
+  Runs saved / Runs missed.
+- **Also:** demo store's stat-line id counter now moves past restored `sl-N` ids (a reload mid-match
+  could reuse an id and silently drop a line).
+- **Verified:** tsc + 708 tests (18 new cricket-penalty); legacy replay identical (20,690 steps vs
+  HEAD); demo 8093 box preset: +2 / −5 previews = results, innings-2 penalty raises the target, drop
+  in timeline, scorecard and profile ("Drops 1"); 375 px. No migration.
+
+---
+
 ### 2026-10-09 — Cricket scorecard depth (FoW, partnerships, extras, maidens, overs) + complete profile stats (parity #19)
 
 - **Ask (parity queue #19):** coaches want fall of wickets and partnerships, parents want strike

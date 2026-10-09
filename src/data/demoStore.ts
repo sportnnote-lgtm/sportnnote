@@ -913,6 +913,12 @@ function bumpCounterPastRestored() {
   const hay = JSON.stringify(demo);
   for (let m = re.exec(hay); m; m = re.exec(hay)) { const n = Number(m[1]); if (n > max) max = n; }
   if (max >= counter) counter = max + 1;
+  // Stat lines mint `sl-N` from their own counter — move it past restored ones too,
+  // or a line added after a reload reuses an id and dedupeById drops one.
+  let maxSl = -1;
+  const reSl = /"sl-(\d+)"/g;
+  for (let m = reSl.exec(hay); m; m = reSl.exec(hay)) { const n = Number(m[1]); if (n > maxSl) maxSl = n; }
+  if (maxSl >= sl) sl = maxSl + 1;
 }
 
 /** Drop any array rows that repeat an id (collision damage from the old counter),

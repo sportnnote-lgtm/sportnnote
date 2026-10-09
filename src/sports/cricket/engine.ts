@@ -150,6 +150,37 @@ export interface CricketState {
    *  rebuilt by replaying the event log, never persisted (`snapshot` drops it),
    *  so an older or persisted state has none — selectors then return nothing. */
   log?: BallRec[];
+  /** parity #20 — bonus / negative runs (ADJUST), in order. Not extras. Older states: `?? []`. */
+  adj?: Adjustment[];
+  /** parity #20 — dropped catches and runs saved / missed (FIELD_NOTE). Score-neutral. Older states: `?? []`. */
+  fieldNotes?: FieldNote[];
+}
+
+/** A bonus (+) or deduction (−) to one side's total (parity #20). */
+export interface Adjustment {
+  side: 'home' | 'away';
+  runs: number;
+  reason?: string;
+  /** overs of the batting innings when it was applied, e.g. "4.3" */
+  at: string;
+}
+
+export type FieldNoteKind = 'drop' | 'saved' | 'missed';
+/** A fielding note tied to the last ball (parity #20): a dropped catch, or runs
+ *  saved / missed in the field. Credits one fielder stat; never the score. */
+export interface FieldNote {
+  kind: FieldNoteKind;
+  fielderId: string;
+  fielderName?: string;
+  /** runs saved / missed (a drop's optional "runs it cost") */
+  runs?: number;
+  /** the batter who faced (was dropped) and the bowler, from the last ball */
+  batterId?: string;
+  bowlerId?: string;
+  /** the fielding side (the fielder's team) */
+  side: 'home' | 'away';
+  /** the ball it belongs to, e.g. "4.3" */
+  at: string;
 }
 
 /** One scored ball (or penalty / no-delivery dismissal) — parity #19. Pushed by
@@ -170,6 +201,11 @@ export interface BallRec {
   b: number;
   lb: number;
   pen?: number;
+  /** parity #20 — a bonus / deduction (ADJUST): team runs, not extras */
+  adj?: number;
+  /** parity #20 — a penalty / adjustment to the side NOT batting at the time
+   *  (its innings' totals; no crease, no bowler) */
+  cross?: true;
   /** team runs / wickets / legal balls of this innings AFTER the ball */
   tr: number;
   tw: number;
@@ -258,6 +294,8 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   r2Lost: 0,
   inn1Overs: Number(config?.overs ?? 20),
   log: [],
+  adj: [],
+  fieldNotes: [],
   events: [],
   seq: 0,
   ended: false,
@@ -599,6 +637,35 @@ function rainV2(s: CricketState, newOvers: number): CricketState {
     ...next, seq: s.seq + 1,
     events: [...s.events, { id: s.seq + 1, stamp: '☔', icon: '☔', label: `Rain — overs cut to ${newOvers}${s.innings === 2 ? ` · target ${next.target} (DLS)` : ''}`, detail: undefined, side: s.battingSide }],
   };
+}
+
+/** A trimmed non-empty string (≤ 80 chars), else undefined. */
+const textOf = (v: unknown): string | undefined => {
+  const x = typeof v === 'string' ? v.trim().slice(0, 80) : '';
+  return x || undefined;
+};
+/** "the batting side" / "the fielding side" — event text when no team name rides along. */
+const sideWord = (side: 'home' | 'away', bat: 'home' | 'away') => (side === bat ? 'the batting side' : 'the fielding side');
+
+/** The last DELIVERY (parity #20) — what a fielding note attaches to: its stamp
+ *  ("4.3"; a wide / no-ball shares the next legal ball's), the batter who faced,
+ *  the bowler, and the side batting. From the ball log; null without one / before
+ *  any ball (a persisted snapshot has no log — FIELD_NOTE then uses the crease). */
+export function lastBall(s: Pick<CricketState, 'log' | 'batting' | 'ballsPerOver'>): {
+  at: string; side: 'home' | 'away'; inn: 1 | 2;
+  batterId?: string; batterName?: string; bowlerId?: string; bowlerName?: string;
+} | null {
+  const log = s.log ?? [];
+  for (let i = log.length - 1; i >= 0; i--) {
+    const r = log[i];
+    if (r.sym === undefined || r.cross || r.out?.kind === 'mankad') continue;
+    return {
+      at: ballStamp(r.legal ? r.lb6 : r.lb6 + 1, s.ballsPerOver), side: r.side, inn: r.inn,
+      batterId: r.strikerId, batterName: r.strikerId ? s.batting[r.strikerId]?.name : undefined,
+      bowlerId: r.bowlerId, bowlerName: r.bowlerName,
+    };
+  }
+  return null;
 }
 
 const step = (s: CricketState, a: ScoreAction): CricketState => {
@@ -959,16 +1026,97 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       return afterLegalBall(next, (completed % 2 === 1) !== overEnd);
     }
     case 'PENALTY': {
-      // A 5-run penalty (illegal fielding, ball hitting a helmet, slow over-rate…):
-      // runs added to the batting side, not a ball, not charged to any bowler.
+      // A penalty (illegal fielding, ball hitting a helmet, short run…): runs to
+      // the side NOT penalised, as extras — not a ball, not charged to any bowler.
+      // `against` (parity #20) defaults to 'fielding' = today: to the batting side.
+      // Runs against the batting side go to the fielding side's innings, even if
+      // it hasn't batted yet; in innings 2 that is the side that batted first —
+      // the target rises by the same runs (even after a #18 revision).
       const r = Math.max(1, Number(a.payload?.runs ?? 5));
+      const against = a.payload?.against === 'batting' ? 'batting' : 'fielding';
+      const to = against === 'fielding' ? bat : other(bat);
+      const inn = s.scores[to];
+      const reason = textOf(a.payload?.reason);
+      const team = textOf(a.payload?.teamName);
+      // A legacy payload (no `against` / reason / name) keeps today's event exactly.
+      const legacy = a.payload?.against === undefined && !reason && !team;
+      const raise = s.innings === 2 && to !== bat && s.target !== undefined;
+      const target = raise ? s.target! + r : s.target;
       seq += 1;
       return settle({
         ...s,
-        scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, extras: cur.extras + r } },
-        events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '➕', label: `Penalty — ${r} runs`, detail: undefined, side: bat, tone: 'extra' }],
+        scores: { ...s.scores, [to]: { ...inn, runs: inn.runs + r, extras: inn.extras + r } },
+        ...(raise ? { target } : {}),
+        events: [...s.events, legacy
+          ? { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '➕', label: `Penalty — ${r} runs`, detail: undefined, side: bat, tone: 'extra' }
+          : { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '⚖️', label: `${r} penalty run${r === 1 ? '' : 's'} to ${team ?? sideWord(to, bat)}${reason ? ` — ${reason}` : ''}`, detail: raise ? `Target now ${target}` : undefined, side: to, tone: 'extra' }],
         seq,
       });
+    }
+    case 'ADJUST': {
+      // Bonus / negative runs (parity #20) — local rules such as +2 for hitting
+      // the net or −5 per dismissal. Added to the side's total (may go below 0);
+      // NOT extras. Same target rule as a penalty; settle() — a bonus can win a chase.
+      const side = a.payload?.side;
+      if (side !== 'home' && side !== 'away') return s;
+      const r = Math.trunc(Number(a.payload?.runs));
+      if (!Number.isFinite(r) || r === 0 || Math.abs(r) > 999) return s;
+      const inn = s.scores[side];
+      const reason = textOf(a.payload?.reason);
+      const team = textOf(a.payload?.teamName) ?? sideWord(side, bat);
+      const raise = s.innings === 2 && side !== bat && s.target !== undefined;
+      const target = raise ? s.target! + r : s.target;
+      const at = oversStr(cur.balls, s.ballsPerOver);
+      seq += 1;
+      return settle({
+        ...s,
+        scores: { ...s.scores, [side]: { ...inn, runs: inn.runs + r } },
+        adj: [...(s.adj ?? []), { side, runs: r, ...(reason ? { reason } : {}), at }],
+        ...(raise ? { target } : {}),
+        events: [...s.events, {
+          id: seq, stamp: at, icon: r > 0 ? '➕' : '➖',
+          label: `${r > 0 ? `Bonus ${r}` : `${-r} deducted`} — ${team}${reason ? ` (${reason})` : ''}`,
+          detail: raise ? `Target now ${target}` : undefined, side,
+        }],
+        seq,
+      });
+    }
+    case 'FIELD_NOTE': {
+      // A dropped catch / runs saved / runs missed (parity #20): one fielder,
+      // tied to the last ball (its batter & bowler). Never changes the score.
+      const kind = a.payload?.kind as FieldNoteKind;
+      if (kind !== 'drop' && kind !== 'saved' && kind !== 'missed') return s;
+      const fielderId = textOf(a.payload?.fielderId);
+      if (!fielderId) return s;
+      const fielderName = textOf(a.payload?.fielderName);
+      const runs = clampRuns(a.payload?.runs);
+      if (kind !== 'drop' && runs < 1) return s;
+      const ref = lastBall(s);
+      const note: FieldNote = {
+        kind, fielderId, ...(fielderName ? { fielderName } : {}), ...(runs > 0 ? { runs } : {}),
+        batterId: ref ? ref.batterId : s.strikerId,
+        bowlerId: ref ? ref.bowlerId : s.bowlerId,
+        side: ref ? other(ref.side) : other(bat),
+        at: ref ? ref.at : oversStr(cur.balls, s.ballsPerOver),
+      };
+      const batterName = ref ? ref.batterName : s.strikerName;
+      const bowlerName = ref ? ref.bowlerName : s.bowlerName;
+      const who = fielderName ?? 'Fielder';
+      const runsTxt = `${runs} run${runs === 1 ? '' : 's'}`;
+      seq += 1;
+      return {
+        ...s,
+        fieldNotes: [...(s.fieldNotes ?? []), note],
+        events: [...s.events, {
+          id: seq, stamp: note.at, icon: '🧤',
+          label: kind === 'drop'
+            ? `Dropped — ${who}${batterName ? ` (${batterName}${bowlerName ? ` off ${bowlerName}` : ''})` : ''}`
+            : `${runsTxt} ${kind === 'saved' ? 'saved' : 'missed'} — ${who}`,
+          detail: kind === 'drop' && runs > 0 ? `Cost ${runsTxt}` : undefined,
+          side: note.side, playerName: fielderName,
+        }],
+        seq,
+      };
     }
     case 'EXTRA': {
       const kind = String(a.payload?.kind ?? 'Wide');
@@ -1232,7 +1380,7 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
 
 // ─── Ball log (parity #19) ────────────────────────────────────────────────────
 
-const LOGGED = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA', 'PENALTY']);
+const LOGGED = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA', 'PENALTY', 'ADJUST']);
 
 /** The over-strip chip a logged action produced — the same symbols the reducer
  *  pushes to `thisOver` (which an innings end clears, so it is rebuilt here). */
@@ -1276,11 +1424,28 @@ function logSymbol(a: ScoreAction, wd: number): string | undefined {
 /** Build the BallRec for an action `step` just applied (`s` → `next`), from the
  *  innings / card deltas — so the record can never disagree with the scorecard. */
 function ballRec(s: CricketState, a: ScoreAction, next: CricketState): BallRec {
-  const side = s.battingSide;
+  // A penalty / adjustment may go to the side NOT batting (parity #20): its
+  // record belongs to that side's innings, with no crease or bowler.
+  const scoreOnly = a.type === 'PENALTY' || a.type === 'ADJUST';
+  const fielding = other(s.battingSide);
+  const cross = scoreOnly && next.scores[fielding].runs !== s.scores[fielding].runs;
+  const side = cross ? fielding : s.battingSide;
   const pre = s.scores[side];
   const post = next.scores[side];
+  if (cross) {
+    const d = post.runs - pre.runs;
+    const dExt = post.extras - pre.extras;
+    const rec: BallRec = {
+      inn: s.innings === 1 ? 2 : 1, side, legal: false, bat: 0, wd: 0, nb: 0, b: 0, lb: 0,
+      tr: post.runs, tw: post.wickets, lb6: post.balls, cross: true,
+    };
+    if (dExt) rec.pen = dExt;
+    if (d - dExt) rec.adj = d - dExt;
+    return rec;
+  }
   const dRuns = post.runs - pre.runs;
   const dExt = post.extras - pre.extras;
+  const adj = a.type === 'ADJUST' ? dRuns : 0;
   let wd = 0, nb = 0, b = 0, lb = 0, pen = 0;
   let ext: BallRec['ext'];
   const runsAs = asRunsAs(a.payload?.runsAs);
@@ -1306,7 +1471,7 @@ function ballRec(s: CricketState, a: ScoreAction, next: CricketState): BallRec {
   }
   const rec: BallRec = {
     inn: s.innings, side, legal: post.balls > pre.balls,
-    bat: dRuns - dExt, wd, nb, b, lb,
+    bat: dRuns - dExt - adj, wd, nb, b, lb,
     tr: post.runs, tw: post.wickets, lb6: post.balls,
     strikerId: info.strikerId ?? s.strikerId,
     nonStrikerId: s.nonStrikerId,
@@ -1314,6 +1479,7 @@ function ballRec(s: CricketState, a: ScoreAction, next: CricketState): BallRec {
     bowlerName: info.bowlerId ? (info.bowlerName ?? s.bowlerName) : s.bowlerName,
   };
   if (pen) rec.pen = pen;
+  if (adj) rec.adj = adj;
   if (out) rec.out = out;
   const sym = logSymbol(a, wd);
   if (sym !== undefined) rec.sym = sym;
@@ -1414,8 +1580,8 @@ export type { Innings, DismissalRecord };
 
 /** Everyone who has taken part so far (parity #13 squad lock): batted, was out,
  *  retired or is at the crease, bowled, or took a catch / run-out / stumping
- *  (incl. a run-out's 2nd fielder; a Mankad's fielder is the bowler).
- *  Includes a Super Over's players. These can't be dropped from the squad. */
+ *  (incl. a run-out's 2nd fielder; a Mankad's fielder is the bowler), or has a
+ *  fielding note (parity #20). Includes a Super Over's players. These can't be dropped from the squad. */
 export function involvedPlayerIds(s: CricketState): string[] {
   const ids = new Set<string>();
   const walk = (x: CricketState) => {
@@ -1423,6 +1589,7 @@ export function involvedPlayerIds(s: CricketState): string[] {
     Object.keys(x.bowling ?? {}).forEach((id) => ids.add(id));
     for (const id of [x.strikerId, x.nonStrikerId]) if (id) ids.add(id);
     for (const d of x.dismissals ?? []) for (const id of [d.outId, d.bowlerId, d.fielderId, d.fielder2Id]) if (id) ids.add(id);
+    for (const n of x.fieldNotes ?? []) ids.add(n.fielderId);
     if (x.superOver?.state) walk(x.superOver.state);
   };
   walk(s);

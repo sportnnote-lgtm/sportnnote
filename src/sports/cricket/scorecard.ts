@@ -9,7 +9,7 @@
  * so every selector degrades to an empty result and the UI hides those rows.
  * No React Native imports — node tests load this file (note the `.ts` imports).
  */
-import { oversStr, other, type BallRec, type CricketState } from './engine.ts';
+import { oversStr, other, type BallRec, type CricketState, type FieldNote } from './engine.ts';
 
 type Side = 'home' | 'away';
 
@@ -27,8 +27,9 @@ const isDelivery = (r: BallRec) => r.sym !== undefined && r.out?.kind !== 'manka
 /** Runs the bowler is charged on this ball (mirrors BowlCard: never byes, leg byes or penalties). */
 export const charged = (r: BallRec) => r.bat + r.wd + r.nb;
 
-/** Team runs on this ball, extras included. */
-const teamRuns = (r: BallRec) => r.bat + r.wd + r.nb + r.b + r.lb + (r.pen ?? 0);
+/** Team runs on this ball, extras included (and a #20 bonus / deduction, so an
+ *  over's runs always add up to the worm's `cum`). */
+const teamRuns = (r: BallRec) => r.bat + r.wd + r.nb + r.b + r.lb + (r.pen ?? 0) + (r.adj ?? 0);
 
 export interface Extras { b: number; lb: number; wd: number; nb: number; pen: number }
 
@@ -85,6 +86,9 @@ export function partnerships(s: Pick<CricketState, 'log' | 'batting'>, side: Sid
     return ids.has(r.strikerId) && ids.has(r.nonStrikerId);
   };
   for (const r of recs(s, side)) {
+    // A bonus / deduction, or a penalty awarded while the other side batted
+    // (parity #20), belongs to no partnership.
+    if (r.adj !== undefined || r.cross) continue;
     if (cur && !samePair(cur, r)) { out.push(cur); cur = null; } // a substitution without a dismissal
     if (!cur) cur = start(r);
     cur.runs += teamRuns(r);
@@ -188,12 +192,45 @@ export const CRICKET_TOTAL_KEYS = [
   'runs', 'ballsFaced', 'fours', 'sixes', 'innings', 'notOut',
   'wickets', 'ballsBowled', 'runsConceded', 'maidens', 'dots', 'wides', 'noBalls',
   'catches', 'stumpings', 'runouts',
+  // parity #20 — only on fielders with a fielding note
+  'dropped', 'runsSaved', 'runsMissed',
 ] as const;
+
+/** FIELD_NOTE kind → the fielder stat it credits (parity #20). */
+export const FIELD_NOTE_STAT = { drop: 'dropped', saved: 'runsSaved', missed: 'runsMissed' } as const;
+/** What a note credits: one per drop; the runs for saved / missed. */
+export const fieldNoteCredit = (n: Pick<FieldNote, 'kind' | 'runs'>): number => (n.kind === 'drop' ? 1 : n.runs ?? 0);
+
+/** "+2, −5 (hit the net; out-of-arena)" — `side`'s bonus / deductions ('' when none). */
+export function adjustmentsText(s: Pick<CricketState, 'adj'>, side: Side): string {
+  const list = (s.adj ?? []).filter((x) => x.side === side);
+  if (!list.length) return '';
+  const nums = list.map((x) => (x.runs > 0 ? `+${x.runs}` : `\u2212${-x.runs}`)).join(', ');
+  const why = list.map((x) => x.reason).filter(Boolean).join('; ');
+  return `${nums}${why ? ` (${why})` : ''}`;
+}
+
+/** "Ravi 1 drop · Asha 6 saved · Veer 4 missed" — fielding notes by the side
+ *  fielding against `side`'s innings ('' when none). */
+export function fieldingNotesText(s: Pick<CricketState, 'fieldNotes'>, side: Side): string {
+  const by = new Map<string, { name: string; drop: number; saved: number; missed: number }>();
+  for (const n of s.fieldNotes ?? []) {
+    if (n.side !== other(side)) continue;
+    const e = by.get(n.fielderId) ?? { name: n.fielderName || 'Fielder', drop: 0, saved: 0, missed: 0 };
+    e[n.kind] += fieldNoteCredit(n);
+    by.set(n.fielderId, e);
+  }
+  return [...by.values()].map((e) => [
+    e.drop ? `${e.drop} drop${e.drop === 1 ? '' : 's'}` : '',
+    e.saved ? `${e.saved} saved` : '',
+    e.missed ? `${e.missed} missed` : '',
+  ].filter(Boolean).map((p, i) => (i === 0 ? `${e.name} ${p}` : p)).join(', ')).join(' \u00b7 ');
+}
 
 /** Absolute per-player match figures (regulation innings only — a Super Over is
  *  a tie-breaker and isn't counted in careers). Batting from BatCard (no-ball
  *  and run-out runs already right; `runsAs` respected), bowling from BowlCard
- *  plus `bowlerSplits`, fielding from `dismissals`. Maidens / wides / no-balls
+ *  plus `bowlerSplits`, fielding from `dismissals` (+ #20 fielding notes). Maidens / wides / no-balls
  *  need the log; without it those keys are left out (never zeroed). */
 export function statTotals(s: CricketState): Record<string, { side: Side; stats: Record<string, number> }> {
   const out: Record<string, { side: Side; stats: Record<string, number> }> = {};
@@ -227,6 +264,13 @@ export function statTotals(s: CricketState): Record<string, { side: Side; stats:
     const side = out[id]?.side ?? f.side ?? s.bowling[id]?.side;
     if (!side) continue;
     Object.assign(entry(id, side).stats, { catches: f.catches, stumpings: f.stumpings, runouts: f.runouts });
+  }
+  // Fielding notes (parity #20): a fielder with any note carries all three
+  // keys (absolute, so they agree with the FIELD_NOTE attribution increments).
+  for (const n of s.fieldNotes ?? []) {
+    const st = entry(n.fielderId, out[n.fielderId]?.side ?? n.side).stats;
+    for (const k of Object.values(FIELD_NOTE_STAT)) st[k] ??= 0;
+    st[FIELD_NOTE_STAT[n.kind]] += fieldNoteCredit(n);
   }
   // Every involved player carries the fielding keys (0 when none), so a
   // correction that moves a catch away zeroes it.

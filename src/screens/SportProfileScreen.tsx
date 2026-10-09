@@ -35,6 +35,8 @@ const LABELS: Record<string, string> = {
   ballsFaced: 'Balls faced', fours: '4s', sixes: '6s', innings: 'Innings', notOut: 'Not out',
   ballsBowled: 'Balls bowled', runsConceded: 'Runs conceded', maidens: 'Maidens', dots: 'Dots',
   wides: 'Wides', noBalls: 'No balls', catches: 'Catches', stumpings: 'Stumpings', runouts: 'Run outs',
+  // cricket fielding notes (parity #20)
+  dropped: 'Drops', runsSaved: 'Runs saved', runsMissed: 'Runs missed',
 };
 const label = (k: string) => LABELS[k] ?? k;
 
