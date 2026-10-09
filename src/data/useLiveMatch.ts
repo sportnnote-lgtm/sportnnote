@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
-import { recordStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch } from './repos';
+import { recordStatLine as writeStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch, syncMatchStatLines } from './repos';
 import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
@@ -96,6 +96,29 @@ export function useLiveMatch(params: {
   const appliedRef = useRef<Set<string>>(new Set());
   useSyncExternalStore(matchOutbox.subscribe, matchOutbox.getSnapshot, matchOutbox.getSnapshot);
   const rejectedCount = matchId && matchOutbox.isRejected(matchId) ? matchOutbox.pendingCount(matchId) : 0;
+
+  // Stat-line increments still in flight — the absolute sync (parity #19) waits
+  // for them so a late `+=` can't land on top of the synced value.
+  const statWritesRef = useRef<Set<Promise<void>>>(new Set());
+  const recordStatLine = (args: Parameters<typeof writeStatLine>[0]): Promise<void> => {
+    const p = writeStatLine(args).catch(() => {});
+    statWritesRef.current.add(p);
+    void p.finally(() => statWritesRef.current.delete(p));
+    return p;
+  };
+  // Persist the snapshot the plugin wants stored (cricket drops its derived ball log).
+  const persist = (s: unknown) =>
+    updateMatchSnapshot(matchId!, (plugin.snapshot?.(s as never) ?? s) as object, plugin.isComplete(s as never));
+  // Parity #19: at completion (and after an undo / correction that leaves the
+  // match complete) write the ABSOLUTE figures, then the snapshot — so `won`
+  // covers any line the sync inserted. Otherwise just the snapshot.
+  const syncThenPersist = async (s: unknown) => {
+    if (matchId && plugin.statTotals && plugin.isComplete(s as never)) {
+      await Promise.all([...statWritesRef.current]);
+      await syncMatchStatLines(matchId, sport, plugin.statTotals(s as never), { home: homeTeamName, away: awayTeamName }).catch(() => 0);
+    }
+    await persist(s);
+  };
 
   const setBoth = (next: unknown) => {
     stateRef.current = next;
@@ -262,7 +285,7 @@ export function useLiveMatch(params: {
       // outbox sync it to the backend with retry. The snapshot is derived state,
       // so a best-effort update is fine — it catches up on the next synced event.
       matchOutbox.enqueue(matchId, rec);
-      void updateMatchSnapshot(matchId, next as object, plugin.isComplete(next)).catch(() => {});
+      void syncThenPersist(next).catch(() => {});
     },
     [plugin, matchId, canWrite, sport, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId]
   );
@@ -290,9 +313,9 @@ export function useLiveMatch(params: {
     // Re-derive from the truncated log. In live mode this DELETE also reaches
     // viewers' realtime subscriptions, which rebuild the same way.
     await rebuildFromLog();
-    void updateMatchSnapshot(matchId, stateRef.current as object, plugin.isComplete(stateRef.current));
+    void syncThenPersist(stateRef.current).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId, canWrite, plugin, sport, rebuildFromLog]);
+  }, [matchId, canWrite, plugin, sport, rebuildFromLog, homeTeamName, awayTeamName]);
 
   // Wipe the match back to "not started" — for a game started/scored by mistake.
   // Drops unsynced taps, deletes the backend log + blanks stat lines, then rebuilds
@@ -320,10 +343,15 @@ export function useLiveMatch(params: {
     if (!matchId || !canWrite || !ops.length || matchOutbox.pendingCount(matchId) > 0) return;
     const plan = await planAmendment(matchId, sport, config, ops, lines, byName);
     matchOutbox.enqueue(matchId, { ...plan.record, seq: seqRef.current + 1 });
-    for (const d of plan.deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+    // A sport with absolute totals, on a finished match: the sync below sets the
+    // corrected values (Decision 6) — writing the deltas too would only add a
+    // second write per row. The AMEND row still stores the deltas (undo).
+    const absolute = !!plugin.statTotals && plugin.isComplete(plan.afterState as never);
+    if (!absolute) for (const d of plan.deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
     await rebuildFromLog();
-    void updateMatchSnapshot(matchId, stateRef.current as object, plugin.isComplete(stateRef.current)).catch(() => {});
-  }, [matchId, canWrite, sport, config, plugin, rebuildFromLog]);
+    void syncThenPersist(stateRef.current).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId, canWrite, sport, config, plugin, rebuildFromLog, homeTeamName, awayTeamName]);
 
   return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend };
 }

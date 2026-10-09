@@ -407,8 +407,9 @@ export function editBall(rec: MatchEventRecord, edit: BallEdit, ctx: BallEditCon
     });
     if (credits.attribution) a.attribution = credits.attribution;
     if (credits.attribution2) a.attribution2 = credits.attribution2;
-  } else if (orig.attribution) {
-    a.attribution = orig.attribution; // live extras carry none; keep anything a later spec added
+  } else if (ek === 'noball' && r > 0 && strikerId) {
+    // Nb+n: the runs off the bat are the striker's (parity #19, as the live keypad)
+    a.attribution = { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName };
   }
   return a;
 }

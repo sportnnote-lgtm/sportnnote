@@ -13,6 +13,31 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket scorecard depth (FoW, partnerships, extras, maidens, overs) + complete profile stats (parity #19)
+
+- **Ask (parity queue #19):** coaches want fall of wickets and partnerships, parents want strike
+  rate and economy; profiles showed only runs and wickets, and Nb+n runs never reached them.
+- **Engine:** derived `BallRec` log (one record per delivery / penalty, built from the change in
+  totals so it can't disagree with the scorecard; local-rule legal wides, penalties, #16 kinds),
+  never persisted — generic `SportPlugin.snapshot?` drops it from `matches.state`; the scorecard
+  rebuilds it by replay. Pure `sports/cricket/scorecard.ts`: extras breakdown, FoW, partnerships,
+  over history, bowler splits (maidens; a shared over is no maiden), `statTotals`.
+- **Stat lines:** generic `SportPlugin.statTotals?`; pure `data/statSync.ts` `planStatSync` (maps
+  through disputes via the shared `mapThroughDisputes`/`disputeMapper`, absolute values, writes only
+  changed rows — REVIEW must-fixes); repos `syncMatchStatLines` (live + demo). `useLiveMatch` syncs
+  on completion, undo and live amend (waiting for in-flight increments), then snapshots. For a
+  finished match with `statTotals`, #05 corrections run the absolute sync instead of deltas (no
+  double writes / pushes). `Nb+n` now credits the striker (pad, typed, voice, #06 edits).
+- **UI:** InningsCard extras "(lb 1, wd 1, nb 1)", FoW line, bowling O M R W 0s Eco with "1wd 1nb",
+  collapsible partnerships with bars, collapsible Manhattan (tap a bar → its ball chips);
+  `data/cricketCareer.ts` + Sport profile Batting / Bowling / Fielding grids (Avg, SR, Econ, Best).
+- **Verified:** tsc + 690 tests (27 new); demo 8093: the spec's over on m9 → 10/1, FoW "1-10 (Aarav
+  Mehta, 0.4 ov)", 1.0-0-9-1, maiden, partnership 10; stat lines written once, undo/re-score not
+  doubled; profile SR / Econ; 375 px. Not verified: live Supabase writes / pushes. No migration —
+  but **#05's notify-followers diff must be deployed before this ships** (sync updates rows).
+
+---
+
 ### 2026-10-09 — Cricket overs & target: change overs anytime, manual target, correct DLS, "(DLS)" result (parity #18)
 
 - **Ask (parity queue #18):** overs could only be reduced and only with DLS on at setup; revised

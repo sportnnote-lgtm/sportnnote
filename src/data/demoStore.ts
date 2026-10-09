@@ -1445,6 +1445,11 @@ export function addPlayer(p: Omit<Player, 'id'>): Player {
   return created;
 }
 
+/** A fresh demo stat line (parity #19 absolute sync inserts) — the caller pushes it. */
+export function newDemoStatLine(args: { matchId: string; playerId: string; sport: StatLine['sport']; stats: Record<string, number>; opponent?: string }): StatLine {
+  return { id: `sl-${sl++}`, matchId: args.matchId, playerId: args.playerId, sport: args.sport, stats: { ...args.stats }, won: false, opponent: args.opponent };
+}
+
 /** Increment a player's stat for a match, creating the stat line if needed. */
 export function recordStat(args: {
   matchId: string;

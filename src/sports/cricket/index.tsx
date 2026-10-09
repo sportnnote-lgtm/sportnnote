@@ -28,8 +28,11 @@ import {
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
-  canBowl, midOver, oversUsed,
+  canBowl, midOver, oversUsed, snapshotState,
 } from './engine';
+import {
+  hasLog, extrasBreakdown, extrasText, fallOfWickets, fowText, partnerships, overHistory, bowlerSplits, statTotals,
+} from './scorecard';
 import type { CricketState, DismissalKind, Innings, RunsAs } from './engine';
 import { OverEditor } from './OverEditor';
 import {
@@ -441,6 +444,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   // (parity #15). A missing flag (old clients, voice) is read as a legacy event.
   const runs = (r: number, extra: { boundary?: boolean; overthrows?: number } = {}) =>
     ball({ type: 'RUNS', payload: { runs: r, ...extra }, attribution: strikerId ? { playerId: strikerId, stat: 'runs', by: r, playerName: strikerName } : undefined });
+  // Runs off the bat on a no-ball are the striker's (parity #19 — they used to
+  // reach the scorecard but never the profile).
+  const nbRuns = (n: number): ScoreAction['attribution'] =>
+    (n > 0 && strikerId ? { playerId: strikerId, stat: 'runs', by: n, playerName: strikerName } : undefined);
   const closeMore = () => { setExtraMode(null); setOtRan(0); setOtOver(null); };
 
   // ----- wicket flow ----- (retired hurt isn't a wicket, so it never "all out")
@@ -844,11 +851,11 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
               {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                 <Button key={n} label={n === 0 ? 'Nb' : `+${n}`} accessibilityLabel={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
                   // 4 and 6 are boundaries; an all-run 4 off a no-ball goes in the field below.
-                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: n === 4 || n === 6 } }); setExtraMode(null); }} />
+                  onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: n === 4 || n === 6 }, attribution: nbRuns(n) }); setExtraMode(null); }} />
               ))}
             </View>
             <RunsInput placeholder="Other off the bat, all run (0–99)" addLabel={(n) => `Add Nb+${n}`}
-              onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: false } }); setExtraMode(null); }} />
+              onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: false }, attribution: nbRuns(n) }); setExtraMode(null); }} />
             <Text style={ctrl.meta}>…or byes run off the no-ball (missed the bat)?</Text>
             <View style={ctrl.row}>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -1337,6 +1344,17 @@ function InningsCard({
   const keeperId = s.keepers[side]?.id;
   const role = (id: string) => (id === captainId ? ' (c)' : '') + (id === keeperId ? ' †' : '');
   const eco = (runs: number, balls: number) => (balls ? (runs / (balls / s.ballsPerOver)).toFixed(2) : '-');
+  // Parity #19 — depth from the replayed ball log (a persisted snapshot has none:
+  // those rows simply don't show).
+  const logged = hasLog(s);
+  const extrasParts = logged ? extrasText(extrasBreakdown(s, side)) : '';
+  const fow = logged ? fallOfWickets(s, side) : [];
+  const splits = logged ? bowlerSplits(s, side) : {};
+  const parts = logged ? partnerships(s, side) : [];
+  const overs = logged ? overHistory(s, side) : [];
+  const [showParts, setShowParts] = useState(false);
+  const [showOvers, setShowOvers] = useState(false);
+  const [pickedOver, setPickedOver] = useState<number | null>(null);
 
   return (
     <View style={ctrl.card}>
@@ -1386,12 +1404,18 @@ function InningsCard({
 
           <View style={ctrl.totalRow}>
             <Text style={ctrl.meta}>Extras</Text>
-            <Text style={ctrl.totalVal}>{inn.extras}</Text>
+            <Text style={ctrl.totalVal}>{inn.extras}{extrasParts ? <Text style={ctrl.extrasParts}> ({extrasParts})</Text> : null}</Text>
           </View>
           <View style={ctrl.totalRow}>
             <Text style={ctrl.totalLabel}>Total</Text>
             <Text style={ctrl.totalVal}>{inn.runs}/{inn.wickets} ({oversStr(inn.balls, s.ballsPerOver)} ov) · CRR {runRate(inn.runs, inn.balls, s.ballsPerOver)}</Text>
           </View>
+          {fow.length > 0 && (
+            <View style={ctrl.fow}>
+              <Text style={ctrl.th}>Fall of wickets</Text>
+              <Text style={ctrl.fowText}>{fowText(fow)}</Text>
+            </View>
+          )}
           {toBat.length > 0 && (
             <Text style={ctrl.toBat}>
               Yet to bat: {toBat.map((p, i) => (
@@ -1404,23 +1428,95 @@ function InningsCard({
             <>
               <View style={[ctrl.thead, { marginTop: theme.spacing(2) }]}>
                 <Text style={[ctrl.cName, ctrl.th]}>Bowler</Text>
-                <Text style={[ctrl.cNum, ctrl.th]}>O</Text>
-                <Text style={[ctrl.cNum, ctrl.th]}>R</Text>
-                <Text style={[ctrl.cNum, ctrl.th]}>W</Text>
-                <Text style={[ctrl.cWide, ctrl.th]}>Eco</Text>
+                <Text style={[ctrl.cNumS, ctrl.th]}>O</Text>
+                <Text style={[ctrl.cNumS, ctrl.th]}>M</Text>
+                <Text style={[ctrl.cNumS, ctrl.th]}>R</Text>
+                <Text style={[ctrl.cNumS, ctrl.th]}>W</Text>
+                <Text style={[ctrl.cNumS, ctrl.th]}>0s</Text>
+                <Text style={[ctrl.cEco, ctrl.th]}>Eco</Text>
               </View>
               {bowlers.map((b) => {
                 const live = atCrease && b.id === s.bowlerId;
+                const sp = splits[b.id];
+                const wdnb = [sp?.wides ? `${sp.wides}wd` : '', sp?.noBalls ? `${sp.noBalls}nb` : ''].filter(Boolean).join(' ');
                 return (
                 <View key={b.id} style={[ctrl.trow, live && ctrl.trowLive]}>
-                  <Text style={[ctrl.cName, ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1} {...playerLink(b.id, b.name || 'Bowler', onPlayer)}>{b.name || 'Bowler'}{live ? ' 🎯' : ''}</Text>
-                  <Text style={ctrl.cNum}>{oversStr(b.balls, s.ballsPerOver)}</Text>
-                  <Text style={ctrl.cNum}>{b.runs}</Text>
-                  <Text style={[ctrl.cNum, live && ctrl.cNumLive]}>{b.wickets}</Text>
-                  <Text style={ctrl.cWide}>{eco(b.runs, b.balls)}</Text>
+                  <View style={ctrl.cName}>
+                    <Text style={[ctrl.bName, live && ctrl.bNameLive]} numberOfLines={1} {...playerLink(b.id, b.name || 'Bowler', onPlayer)}>{b.name || 'Bowler'}{live ? ' 🎯' : ''}</Text>
+                    {wdnb ? <Text style={ctrl.bDismiss}>{wdnb}</Text> : null}
+                  </View>
+                  <Text style={ctrl.cNumS}>{oversStr(b.balls, s.ballsPerOver)}</Text>
+                  <Text style={ctrl.cNumS}>{logged ? sp?.maidens ?? 0 : '-'}</Text>
+                  <Text style={ctrl.cNumS}>{b.runs}</Text>
+                  <Text style={[ctrl.cNumS, live && ctrl.cNumLive]}>{b.wickets}</Text>
+                  <Text style={ctrl.cNumS}>{b.dots}</Text>
+                  <Text style={ctrl.cEco}>{eco(b.runs, b.balls)}</Text>
                 </View>
                 );
               })}
+            </>
+          )}
+
+          {parts.length > 0 && (
+            <>
+              <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => setShowParts((v) => !v)} style={[ctrl.innHead, ctrl.subHead]}>
+                <Text style={[ctrl.label, { flex: 1 }]}>Partnerships</Text>
+                <Text style={ctrl.caret}>{showParts ? '⌃' : '⌄'}</Text>
+              </TouchableOpacity>
+              {showParts && (() => {
+                const top = Math.max(1, ...parts.map((p) => p.runs));
+                return parts.map((p, i) => (
+                  <View key={i} style={ctrl.partRow}>
+                    <View style={ctrl.partLine}>
+                      <Text style={ctrl.partNames} numberOfLines={2}>
+                        {p.a.name} {p.a.runs} ({p.a.balls}) · {p.b.name} {p.b.runs} ({p.b.balls})
+                      </Text>
+                      <Text style={ctrl.partTotal}>{p.runs}{p.unbroken ? '*' : ''} ({p.balls})</Text>
+                    </View>
+                    <View style={ctrl.partTrack}>
+                      <View style={[ctrl.partBar, { width: `${Math.round((p.runs / top) * 100)}%`, backgroundColor: color }]} />
+                    </View>
+                  </View>
+                ));
+              })()}
+            </>
+          )}
+
+          {overs.length > 0 && (
+            <>
+              <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => setShowOvers((v) => !v)} style={[ctrl.innHead, ctrl.subHead]}>
+                <Text style={[ctrl.label, { flex: 1 }]}>Overs</Text>
+                <Text style={ctrl.caret}>{showOvers ? '⌃' : '⌄'}</Text>
+              </TouchableOpacity>
+              {showOvers && (() => {
+                const top = Math.max(1, ...overs.map((o) => o.runs));
+                const every = overs.length > 25 ? 10 : overs.length > 10 ? 5 : 1;
+                const picked = overs.find((o) => o.over === pickedOver);
+                return (
+                  <>
+                    <View style={ctrl.manhattan}>
+                      {overs.map((o) => (
+                        <TouchableOpacity key={o.over} accessibilityRole="button" accessibilityLabel={`Over ${o.over}, ${o.runs} runs${o.wkts ? `, ${o.wkts} wicket${o.wkts === 1 ? '' : 's'}` : ''}`}
+                          activeOpacity={0.7} style={ctrl.mCol} onPress={() => setPickedOver((cur) => (cur === o.over ? null : o.over))}>
+                          <View style={ctrl.mPlot}>
+                            {o.wkts > 0 && <View style={ctrl.mWkt} />}
+                            <View style={[ctrl.mBar, { height: Math.max(2, Math.round((o.runs / top) * 64)), backgroundColor: color }, pickedOver === o.over && ctrl.mBarOn]} />
+                          </View>
+                          <Text style={ctrl.mNum} numberOfLines={1}>{o.over % every === 0 || o.over === 1 ? o.over : ''}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {picked ? (
+                      <View style={{ gap: theme.spacing(1) }}>
+                        <View style={ctrl.overRow}>{picked.syms.map((sym, i) => <BallChip key={i} sym={sym} />)}</View>
+                        <Text style={ctrl.meta}>Over {picked.over} · {picked.bowlerName || 'Bowler'} · {picked.runs} run{picked.runs === 1 ? '' : 's'} · {picked.cum}/{picked.cumW}</Text>
+                      </View>
+                    ) : (
+                      <Text style={ctrl.meta}>Tap a bar to see that over.</Text>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
         </View>
@@ -1442,6 +1538,21 @@ const chipParts = (sym: string): { main: string; cap?: string } => {
   return { main: sym === '0' ? '·' : sym };
 };
 
+/** One over-strip chip (live "This over" strip and the Manhattan's over detail). */
+function BallChip({ sym }: { sym: string }) {
+  const bg = overSymbolColor(sym);
+  const neutral = bg === theme.colors.surfaceAlt;
+  const { main, cap } = chipParts(sym);
+  return (
+    <View style={[ctrl.ballDot, { backgroundColor: bg }, neutral && ctrl.ballDotNeutral]}
+      accessibilityLabel={cap === 'ot' ? `${main} including overthrows` : cap === 'r' ? `${main} all run` : undefined}>
+      <Text style={[ctrl.ballSym, neutral && ctrl.ballSymNeutral]}>
+        {main}{cap ? <Text style={ctrl.ballCap}>{cap}</Text> : null}
+      </Text>
+    </View>
+  );
+}
+
 const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], dispatch, canScore, onPlayer }) => {
   const s = state as CricketState;
   // Default the open innings to whoever is batting (or the chase, post-match).
@@ -1459,19 +1570,7 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
               <Text style={ctrl.meta}>—</Text>
             ) : (
               <>
-                {s.thisOver.map((sym, i) => {
-                  const bg = overSymbolColor(sym);
-                  const neutral = bg === theme.colors.surfaceAlt;
-                  const { main, cap } = chipParts(sym);
-                  return (
-                    <View key={i} style={[ctrl.ballDot, { backgroundColor: bg }, neutral && ctrl.ballDotNeutral]}
-                      accessibilityLabel={cap === 'ot' ? `${main} including overthrows` : cap === 'r' ? `${main} all run` : undefined}>
-                      <Text style={[ctrl.ballSym, neutral && ctrl.ballSymNeutral]}>
-                        {main}{cap ? <Text style={ctrl.ballCap}>{cap}</Text> : null}
-                      </Text>
-                    </View>
-                  );
-                })}
+                {s.thisOver.map((sym, i) => <BallChip key={i} sym={sym} />)}
                 <Text style={ctrl.overRuns}>{s.thisOver.reduce((a, x) => a + ballRuns(x, effectiveRules(s)), 0)} runs</Text>
               </>
             )}
@@ -1550,6 +1649,8 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  statTotals,
+  snapshot: snapshotState,
   result: (s) => {
     if (!s.ended) return null;
     const score = { home: s.scores.home.runs, away: s.scores.away.runs };
@@ -1757,6 +1858,26 @@ const ctrl = StyleSheet.create({
   totalLabel: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   totalVal: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   toBat: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontStyle: 'italic', marginTop: theme.spacing(1) },
+  // parity #19 — scorecard depth
+  cNumS: { width: 28, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
+  cEco: { width: 44, textAlign: 'right', color: theme.colors.textMuted, fontSize: theme.font.small },
+  extrasParts: { color: theme.colors.textMuted, fontWeight: '400' },
+  fow: { gap: 2, marginTop: theme.spacing(1) },
+  fowText: { color: theme.colors.textMuted, fontSize: theme.font.tiny, lineHeight: 16 },
+  subHead: { marginTop: theme.spacing(3), paddingTop: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
+  partRow: { gap: 4, paddingVertical: theme.spacing(1) },
+  partLine: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing(2) },
+  partNames: { flex: 1, color: theme.colors.text, fontSize: theme.font.tiny },
+  partTotal: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  partTrack: { height: 4, borderRadius: 2, backgroundColor: theme.colors.surfaceAlt, overflow: 'hidden' },
+  partBar: { height: 4, borderRadius: 2 },
+  manhattan: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  mCol: { flex: 1, maxWidth: 22, alignItems: 'center' },
+  mPlot: { height: 76, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
+  mBar: { width: '100%', borderTopLeftRadius: 2, borderTopRightRadius: 2, opacity: 0.85 },
+  mBarOn: { opacity: 1, borderWidth: 1, borderColor: theme.colors.text },
+  mWkt: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.danger, marginBottom: 2 },
+  mNum: { color: theme.colors.textMuted, fontSize: 9, marginTop: 2 },
 });
 
 const sum = StyleSheet.create({

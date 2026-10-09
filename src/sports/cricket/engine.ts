@@ -145,6 +145,44 @@ export interface CricketState {
   /** local rules (parity #14) — from the format, changed mid-match by SET_RULES.
    *  Optional so older saved states still read; use `rulesOf(s)`. */
   rules?: CricketRules;
+  /** parity #19 — one record per scored delivery / penalty, for the scorecard
+   *  (FoW, partnerships, overs, maidens) and the absolute stat sync. DERIVED:
+   *  rebuilt by replaying the event log, never persisted (`snapshot` drops it),
+   *  so an older or persisted state has none — selectors then return nothing. */
+  log?: BallRec[];
+}
+
+/** One scored ball (or penalty / no-delivery dismissal) — parity #19. Pushed by
+ *  the reducer for RUNS, BYES/LEGBYES, WICKET, EXTRA and PENALTY; ids are the
+ *  crease as the ball was bowled (before any strike swap). Run splits mirror the
+ *  innings / BowlCard accounting: `bat + wd + nb` is exactly what the bowler is
+ *  charged; `b`, `lb`, `pen` are team extras the bowler isn't. */
+export interface BallRec {
+  inn: 1 | 2;
+  side: 'home' | 'away';
+  /** counted as a ball of the over (incl. a wide / no-ball made legal by local rules) */
+  legal: boolean;
+  /** runs off the bat (credited to the striker) */
+  bat: number;
+  /** wide runs (penalty + any run) / the no-ball penalty */
+  wd: number;
+  nb: number;
+  b: number;
+  lb: number;
+  pen?: number;
+  /** team runs / wickets / legal balls of this innings AFTER the ball */
+  tr: number;
+  tw: number;
+  lb6: number;
+  strikerId?: string;
+  nonStrikerId?: string;
+  bowlerId?: string;
+  bowlerName?: string;
+  out?: { id: string; name: string; kind: DismissalKind };
+  /** the over-strip chip (absent for a penalty / retired / timed out) */
+  sym?: string;
+  /** a wide / no-ball delivery (counted even when its penalty is 0) */
+  ext?: 'wd' | 'nb';
 }
 
 /** A Super Over: a self-contained 1-over, 2-wicket mini-match run through this
@@ -219,6 +257,7 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   r1Lost: 0,
   r2Lost: 0,
   inn1Overs: Number(config?.overs ?? 20),
+  log: [],
   events: [],
   seq: 0,
   ended: false,
@@ -562,7 +601,7 @@ function rainV2(s: CricketState, newOvers: number): CricketState {
   };
 }
 
-const reducer = (s: CricketState, a: ScoreAction): CricketState => {
+const step = (s: CricketState, a: ScoreAction): CricketState => {
   if (s.ended && a.type !== 'END' && a.type !== 'POTM') return s;
 
   // ── Change overs (parity #18) ─────────────────────────────────────────────
@@ -1190,6 +1229,116 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       return s;
   }
 };
+
+// ─── Ball log (parity #19) ────────────────────────────────────────────────────
+
+const LOGGED = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA', 'PENALTY']);
+
+/** The over-strip chip a logged action produced — the same symbols the reducer
+ *  pushes to `thisOver` (which an innings end clears, so it is rebuilt here). */
+function logSymbol(a: ScoreAction, wd: number): string | undefined {
+  const p = a.payload ?? {};
+  switch (a.type) {
+    case 'RUNS': {
+      const r = clampRuns(p.runs);
+      const ot = Math.min(r, clampRuns(p.overthrows));
+      return runSymbol(r, isBoundaryHit(r, p.boundary, ot), ot);
+    }
+    case 'BYES':
+    case 'LEGBYES': {
+      const r = Math.max(1, p.runs === undefined ? 1 : clampRuns(p.runs));
+      return (a.type === 'LEGBYES' ? 'lb' : 'b') + (r > 1 ? r : '');
+    }
+    case 'WICKET': {
+      const kind = String(p.kind ?? 'bowled') as DismissalKind;
+      if (kind === 'mankad') return 'W';
+      if (NO_DELIVERY.includes(kind)) return undefined;
+      return wicketSymbol(RUNS_KINDS.includes(kind) ? clampRuns(p.runs) : 0, asRunsAs(p.runsAs));
+    }
+    case 'EXTRA': {
+      const isNoBall = String(p.kind ?? 'Wide') === 'No ball';
+      const wk = (p.wicket ? String(p.wicket) : p.runout ? 'runout' : undefined) as DismissalKind | undefined;
+      if (wk) {
+        const completed = RUNS_KINDS.includes(wk) ? clampRuns(p.runs) : 0;
+        return `${completed > 0 ? completed : ''}${isNoBall ? 'nb' : 'wd'}+W`;
+      }
+      if (isNoBall) {
+        const ran = clampRuns(p.runs) + clampRuns(p.byes);
+        return `${ran > 0 ? ran : ''}nb`;
+      }
+      return clampRuns(p.runs) > 0 ? `${wd}wd` : 'wd';
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Build the BallRec for an action `step` just applied (`s` → `next`), from the
+ *  innings / card deltas — so the record can never disagree with the scorecard. */
+function ballRec(s: CricketState, a: ScoreAction, next: CricketState): BallRec {
+  const side = s.battingSide;
+  const pre = s.scores[side];
+  const post = next.scores[side];
+  const dRuns = post.runs - pre.runs;
+  const dExt = post.extras - pre.extras;
+  let wd = 0, nb = 0, b = 0, lb = 0, pen = 0;
+  let ext: BallRec['ext'];
+  const runsAs = asRunsAs(a.payload?.runsAs);
+  if (a.type === 'BYES') b = dExt;
+  else if (a.type === 'LEGBYES') lb = dExt;
+  else if (a.type === 'PENALTY') pen = dExt;
+  else if (a.type === 'WICKET') { if (runsAs === 'legbye') lb = dExt; else b = dExt; }
+  else if (a.type === 'EXTRA') {
+    if (String(a.payload?.kind ?? 'Wide') === 'No ball') {
+      ext = 'nb';
+      nb = Math.min(dExt, penalty('noball', effectiveRules(s)));
+      if (runsAs === 'legbye') lb = dExt - nb; else b = dExt - nb;
+    } else { ext = 'wd'; wd = dExt; }
+  }
+  const info = ballInfo(a);
+  let out: BallRec['out'];
+  if (next.dismissals.length > s.dismissals.length) {
+    const d = next.dismissals[next.dismissals.length - 1];
+    if (d.outId) out = { id: d.outId, name: next.batting[d.outId]?.name ?? '', kind: d.kind };
+  } else {
+    const id = Object.keys(next.batting).find((k) => next.batting[k].retired && !s.batting[k]?.retired);
+    if (id) out = { id, name: next.batting[id].name, kind: 'retired' };
+  }
+  const rec: BallRec = {
+    inn: s.innings, side, legal: post.balls > pre.balls,
+    bat: dRuns - dExt, wd, nb, b, lb,
+    tr: post.runs, tw: post.wickets, lb6: post.balls,
+    strikerId: info.strikerId ?? s.strikerId,
+    nonStrikerId: s.nonStrikerId,
+    bowlerId: info.bowlerId ?? s.bowlerId,
+    bowlerName: info.bowlerId ? (info.bowlerName ?? s.bowlerName) : s.bowlerName,
+  };
+  if (pen) rec.pen = pen;
+  if (out) rec.out = out;
+  const sym = logSymbol(a, wd);
+  if (sym !== undefined) rec.sym = sym;
+  if (ext) rec.ext = ext;
+  return rec;
+}
+
+/** The cricket reducer: `step` plus one BallRec per scored action. A Super Over
+ *  (routed into the nested state) and an `alignCrease` re-entry log in their
+ *  own recursive call, so a record is never pushed twice. A state without a
+ *  `log` (a persisted snapshot) gets none — a partial log would mislead. */
+const reducer = (s: CricketState, a: ScoreAction): CricketState => {
+  const next = step(s, a);
+  if (next === s || !s.log || !LOGGED.has(a.type) || next.seq <= s.seq || next.log !== s.log) return next;
+  return { ...next, log: [...s.log, ballRec(s, a, next)] };
+};
+
+/** The state to persist in `matches.state` (parity #19): without the derived
+ *  `log` (incl. a Super Over's) — `getMatches` reads every match's state. */
+export function snapshotState(s: CricketState): CricketState {
+  const { log: _log, ...rest } = s;
+  if (!rest.superOver) return rest;
+  const { log: _inner, ...inner } = rest.superOver.state;
+  return { ...rest, superOver: { ...rest.superOver, state: inner } };
+}
 
 /** Winner of a completed Super-Over round (more runs wins); null = still level. */
 function superOverWinner(inn: CricketState): 'home' | 'away' | null {

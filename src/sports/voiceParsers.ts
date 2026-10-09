@@ -98,7 +98,8 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
     const nb = runsOffText ?? 0;
     // a 4/6 off the no-ball is a boundary unless "all run" was said (parity #15)
     const allRun = /\ball run\b|\bran\b/.test(q);
-    return [wrap('EXTRA', { kind: 'No ball', runs: nb, ...(nb === 4 || nb === 6 ? { boundary: !allRun } : {}) })];
+    // runs off the bat are the striker's (parity #19, as the tap flow)
+    return [{ ...wrap('EXTRA', { kind: 'No ball', runs: nb, ...(nb === 4 || nb === 6 ? { boundary: !allRun } : {}) }), attribution: nb > 0 && s.strikerId ? { playerId: s.strikerId, stat: 'runs', by: nb, playerName: s.strikerName } : undefined }];
   }
   if (/\bwide\b/.test(q)) return [wrap('EXTRA', { kind: 'Wide' })];
   if (/\bleg ?bye/.test(q)) return [wrap('LEGBYES', { runs: runsOffText ?? 1 })];

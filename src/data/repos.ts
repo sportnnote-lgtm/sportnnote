@@ -16,6 +16,7 @@ import { parseTournamentToken } from '../core/tournamentInvite';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
+import { planStatSync, applyStatWrites, type MatchTotals } from './statSync';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
 import { normalizeOfficials, type MatchOfficial } from './matchOfficials';
@@ -30,6 +31,7 @@ import {
   addTeam,
   addMatch,
   recordStat,
+  newDemoStatLine,
   setLineup as demoSetLineup,
   setFootballProfile as demoSetFootballProfile,
   appendDemoMatchEvent,
@@ -1484,7 +1486,36 @@ export async function getMatchDisputes(matchId: string): Promise<MatchDispute[]>
  *  (after resolved disputes) — the ONE shared helper for corrections (#05) and
  *  the completion stat sync (#19). */
 export async function mapThroughDisputes(matchId: string, playerId: string): Promise<string> {
-  return followDisputes(await getMatchDisputes(matchId), playerId);
+  return (await disputeMapper(matchId))(playerId);
+}
+/** `mapThroughDisputes` for many ids with ONE disputes read (the #19 sync). */
+export async function disputeMapper(matchId: string): Promise<(playerId: string) => string> {
+  const disputes = await getMatchDisputes(matchId);
+  return (playerId) => followDisputes(disputes, playerId);
+}
+
+/** Parity #19 — write a sport's ABSOLUTE match figures (`plugin.statTotals`)
+ *  to the match's stat lines: ids mapped through resolved disputes, values set
+ *  (not added), missing lines inserted with the opponent's name, and only rows
+ *  whose stats change are written (the follower-push webhook fires per write).
+ *  Run at completion and after a correction; then `updateMatchSnapshot` so
+ *  `won` covers inserted lines. Returns how many rows were written. */
+export async function syncMatchStatLines(
+  matchId: string, sport: SportId, totals: MatchTotals, names: { home?: string; away?: string } = {},
+): Promise<number> {
+  const mapId = await disputeMapper(matchId);
+  const existing = (await getMatchStatLines(matchId)).filter((l) => l.sport === sport && !l.eventId);
+  const writes = planStatSync(existing, totals, mapId, names);
+  if (!writes.length) return 0;
+  if (!isSupabaseConfigured || !supabase) {
+    applyStatWrites(demo.statLines, writes, (w) => newDemoStatLine({ matchId, playerId: w.playerId, sport, stats: w.stats, opponent: w.opponent }));
+    return writes.length;
+  }
+  for (const w of writes) {
+    if (w.kind === 'update') await supabase.from('stat_lines').update({ stats: w.stats }).eq('id', w.id);
+    else await supabase.from('stat_lines').insert({ match_id: matchId, player_id: w.playerId, sport, stats: w.stats, opponent: w.opponent ?? null });
+  }
+  return writes.length;
 }
 
 /** The public "Score edits" log of a match (parity #05): every published

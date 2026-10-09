@@ -7,7 +7,7 @@
  */
 import { getSport } from '../sports/registry';
 import { effectiveLog, replayLog, statDeltas, type AmendOp, type StatDelta } from '../sports/amend';
-import { appendMatchEvent, endMatchManually, getMatch, getMatchEvents, mapThroughDisputes, recordStatLine, updateMatchSnapshot } from './repos';
+import { appendMatchEvent, endMatchManually, getMatch, getMatchEvents, mapThroughDisputes, recordStatLine, syncMatchStatLines, updateMatchSnapshot } from './repos';
 import { newUuid } from '../core/deviceId';
 import type { MatchEventRecord, SportId } from '../core/types';
 
@@ -42,13 +42,23 @@ export async function planAmendment(matchId: string, sport: SportId, config: Rec
 export async function publishAmendment(matchId: string, sport: SportId, config: Record<string, unknown> | undefined, ops: AmendOp[], lines: string[], byName: string): Promise<void> {
   const plan = await planAmendment(matchId, sport, config, ops, lines, byName);
   await appendMatchEvent(matchId, plan.record);
-  for (const d of plan.deltas) await recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
-  await updateMatchSnapshot(matchId, plan.afterState as object, plan.plugin.isComplete(plan.afterState as never));
+  const { plugin, afterState } = plan;
+  const m = await getMatch(matchId);
+  // Decision 6 / parity #19: a sport with absolute totals re-syncs the whole
+  // match from the corrected state (ids mapped through disputes, only changed
+  // rows written) INSTEAD of adding the deltas — writing both would update each
+  // row twice. The deltas stay on the AMEND row so an undo can reverse it.
+  // (A match closed by hand — `result` set — is finished too.)
+  if (plugin.statTotals && (plugin.isComplete(afterState as never) || !!m?.result)) {
+    await syncMatchStatLines(matchId, sport, plugin.statTotals(afterState as never), { home: m?.homeTeam.name, away: m?.awayTeam.name });
+  } else {
+    for (const d of plan.deltas) await recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+  }
+  await updateMatchSnapshot(matchId, (plugin.snapshot?.(afterState as never) ?? afterState) as object, plugin.isComplete(afterState as never));
   // A match ended by hand stores its final score in the result — keep it true to
   // the corrected log (endMatchManually is the only writer of results).
-  const m = await getMatch(matchId);
   if (m?.result?.score) {
-    const sm = plan.plugin.summary(plan.afterState as never);
+    const sm = plugin.summary(afterState as never);
     const h = parseInt(String(sm.homeScore), 10), a = parseInt(String(sm.awayScore), 10);
     if (Number.isFinite(h) && Number.isFinite(a) && (h !== m.result.score.home || a !== m.result.score.away)) {
       await endMatchManually(matchId, { ...m.result, score: { home: h, away: a } });

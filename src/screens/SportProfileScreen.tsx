@@ -14,6 +14,7 @@ import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
 import { statCoverage } from '../data/stats';
+import { cricketCareer, cricketMatchLine } from '../data/cricketCareer';
 import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
 import type { EditAccess } from '../core/playerEditAccess';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
@@ -30,6 +31,10 @@ const LABELS: Record<string, string> = {
   shots: 'Shots', shotsOnTarget: 'Shots on target', tackles: 'Tackles', interceptions: 'Interceptions',
   saves: 'Saves', passes: 'Passes', passesComplete: 'Passes completed', offsides: 'Offsides', corners: 'Corners',
   attackingContributions: 'Attacking plays', defensiveContributions: 'Defensive plays',
+  // cricket (parity #19)
+  ballsFaced: 'Balls faced', fours: '4s', sixes: '6s', innings: 'Innings', notOut: 'Not out',
+  ballsBowled: 'Balls bowled', runsConceded: 'Runs conceded', maidens: 'Maidens', dots: 'Dots',
+  wides: 'Wides', noBalls: 'No balls', catches: 'Catches', stumpings: 'Stumpings', runouts: 'Run outs',
 };
 const label = (k: string) => LABELS[k] ?? k;
 
@@ -173,7 +178,25 @@ export default function SportProfileScreen() {
             </View>
             {/* Counting stats — a second, quieter tier so they read as detail,
                 not as more headline numbers. */}
-            {Object.keys(bySport.totals).length > 0 && (
+            {sport === 'cricket' ? (() => {
+              // Batting / bowling / fielding figures computed from the lines (parity #19).
+              const c = cricketCareer(stats.recent);
+              const section = (title: string, rows: { key: string; label: string; value: string }[]) => (
+                <>
+                  <Text style={st.totalsLabel}>{title}</Text>
+                  <View style={st.statGrid}>
+                    {rows.map((r) => <Stat key={r.key} value={r.value} label={r.label} tone="neutral" />)}
+                  </View>
+                </>
+              );
+              return (
+                <>
+                  {section('Batting', c.batting)}
+                  {section('Bowling', c.bowling)}
+                  {section('Fielding', c.fielding)}
+                </>
+              );
+            })() : Object.keys(bySport.totals).length > 0 && (
               <>
                 <Text style={st.totalsLabel}>Totals · this sport</Text>
                 <View style={st.statGrid}>
@@ -261,7 +284,7 @@ export default function SportProfileScreen() {
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
                     </Text>
                   </View>
                   <Pill

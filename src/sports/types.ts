@@ -351,6 +351,14 @@ export interface SportPlugin<S = unknown> {
   /** Players who have already taken part (parity #13): they can't be removed
    *  from the matchday squad. Omitted → anyone with a non-zero stat line. */
   involvedPlayerIds?: (state: S) => string[];
+  /** Parity #19 — the ABSOLUTE per-player figures for this match, keyed by the
+   *  player id recorded in the state (`side` = the team they played for). When
+   *  present, completion and corrections sync stat lines to these values
+   *  (`repos.syncMatchStatLines`) instead of relying on live increments alone. */
+  statTotals?: (state: S) => Record<string, { side: 'home' | 'away'; stats: Record<string, number> }>;
+  /** Parity #19 — the state to persist in `matches.state` (e.g. cricket drops
+   *  its derived ball log, which replay rebuilds). Omitted = the state as is. */
+  snapshot?: (state: S) => S;
 }
 
 /** Props for a sport's Quick-options tiles. */
