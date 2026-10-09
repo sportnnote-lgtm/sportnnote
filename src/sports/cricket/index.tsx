@@ -19,6 +19,7 @@ import { playerLink, idByName } from '../playerLink';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
 import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
+import { resolvePotm, type ResolvedPotm } from '../../data/ratings';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin, QuickOptionsProps } from '../types';
 import { Tile } from '../../components/QuickOptionsSheet';
@@ -1341,14 +1342,25 @@ export function matchRatings(s: CricketState): {
   return { players, mvp, bestBat, bestBowl };
 }
 
-const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer, manualResultLine }) => {
+/** The Player of the Match shown before any stored override: the legacy
+ *  chip-picked name (old event logs), then the computed MVP (parity #21). */
+function cricketAutoPotm(s: CricketState, players: PlayerRating[], mvp?: PlayerRating): ResolvedPotm | undefined {
+  const legacy = s.potm ? { id: players.find((p) => p.name === s.potm)?.id, name: s.potm } : undefined;
+  return resolvePotm(undefined, legacy, mvp);
+}
+
+const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ state, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, onPlayer, manualResultLine, potm }) => {
   const s = state as CricketState;
   const mask = useMask();
   const { players, mvp, bestBat, bestBowl } = matchRatings(s);
   const teamName = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
   const teamColor = (side: 'home' | 'away') => (side === 'home' ? homeColor : awayColor);
+  // REVIEW Decision 10: stored override → legacy s.potm → computed MVP.
+  const auto = cricketAutoPotm(s, players, mvp);
+  const potmPick = resolvePotm(potm, auto?.source === 'legacy' ? auto : undefined, mvp);
+  const potmP = potmPick ? (players.find((p) => p.id === potmPick.id) ?? players.find((p) => p.name === potmPick.name)) : undefined;
 
-  const Award = ({ icon, label, p, detail }: { icon: string; label: string; p?: PlayerRating; detail: string }) => {
+  const Award = ({ icon, label, p, detail, note }: { icon: string; label: string; p?: PlayerRating; detail: string; note?: string }) => {
     if (!p) return null;
     const nm = mask.byId(p.id, p.name);
     return (
@@ -1361,8 +1373,30 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
           <Text style={sum.awardLabel} numberOfLines={1}>{label}</Text>
           <Text style={sum.awardName} numberOfLines={1}>{nm}</Text>
           <Text style={sum.awardDetail} numberOfLines={1}>{detail} · {teamName(p.side)}</Text>
+          {note ? <Text style={sum.awardNote} numberOfLines={1}>{note}</Text> : null}
         </View>
         <Text style={[sum.awardPts, { color: teamColor(p.side) }]} numberOfLines={1}>★{p.rating.toFixed(1)}</Text>
+      </TouchableOpacity>
+    );
+  };
+  /** The Player of the Match card — the rated player, or (an override for
+   *  someone with no figures) just the name. */
+  const PotmCard = () => {
+    if (!potmPick) return null;
+    const note = potmPick.changed ? 'Chosen by officials' : undefined;
+    if (potmP) return <Award icon="🏅" label="Player of the Match" p={potmP} detail={mvpDetail(potmP)} note={note} />;
+    const nm = potmPick.id ? mask.byId(potmPick.id, potmPick.name) : potmPick.name;
+    return (
+      <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => potmPick.id && onPlayer?.(potmPick.id)} style={sum.award}>
+        <View style={[sum.awardAvatar, { backgroundColor: theme.colors.surfaceAlt }]}>
+          <Text style={sum.awardAvatarText}>{nameInitials(nm)}</Text>
+          <Text style={sum.awardBadge}>🏅</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={sum.awardLabel} numberOfLines={1}>Player of the Match</Text>
+          <Text style={sum.awardName} numberOfLines={1}>{nm}</Text>
+          {note ? <Text style={sum.awardNote} numberOfLines={1}>{note}</Text> : null}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -1416,7 +1450,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
           <Text style={ctrl.label}>🏁 Result</Text>
           <Text style={sum.awardName}>{manualResultLine}</Text>
         </View>
-        {mvp ? <Award icon="👑" label="Most valuable player" p={mvp} detail={mvpDetail(mvp)} /> : null}
+        {potm ? <PotmCard /> : mvp ? <Award icon="👑" label="Most valuable player" p={mvp} detail={mvpDetail(mvp)} /> : null}
       </View>
     );
   }
@@ -1504,7 +1538,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
           : <Text style={sum.drawn}>{resultTail}</Text>}
       </View>
 
-      {mvp && <Award icon="🏅" label="Player of the Match" p={mvp} detail={mvpDetail(mvp)} />}
+      <PotmCard />
       <View style={sum.row}>
         <View style={sum.half}>{bestBat && <Award icon="🏏" label="Best bat" p={bestBat} detail={batLine(bestBat)} />}</View>
         <View style={sum.half}>{bestBowl && <Award icon="🎯" label="Best bowl" p={bestBowl} detail={bowlLine(bestBowl)} />}</View>
@@ -1788,17 +1822,6 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
 
       {s.potm ? <Text style={ctrl.potm} {...playerLink(idByName(s.potm, homeRoster, awayRoster), s.potm, onPlayer)}>🏅 Player of the Match: {s.potm}</Text> : null}
 
-      {s.ended && canScore && dispatch && !s.potm && (homeRoster.length > 0 || awayRoster.length > 0) && (
-        <View style={ctrl.card}>
-          <Text style={ctrl.label}>🏅 Player of the Match</Text>
-          <View style={ctrl.chips}>
-            {[...homeRoster, ...awayRoster].map((p) => (
-              <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => dispatch({ type: 'POTM', payload: { name: p.fullName } })} />
-            ))}
-          </View>
-        </View>
-      )}
-
       <Text style={ctrl.label}>Ball by ball</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No balls bowled yet." />
     </View>
@@ -1888,6 +1911,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   LiveClock,
   LiveExtras,
   Summary: CricketSummary,
+  autoPotm: (st) => { const { players, mvp } = matchRatings(st); const a = cricketAutoPotm(st, players, mvp); return a ? { id: a.id, name: a.name } : undefined; },
   hideScoreboard: true,
   voice: { hints: ['four', 'six', 'dot', 'wicket', 'wide', 'two runs', 'five', 'all run four'], parse: cricketVoice },
   formatFields: [
@@ -2121,6 +2145,7 @@ const sum = StyleSheet.create({
   awardLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   awardName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   awardDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  awardNote: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 1 },
   awardPts: { fontSize: theme.font.h3, fontWeight: '900' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },

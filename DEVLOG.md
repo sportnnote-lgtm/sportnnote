@@ -13,6 +13,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Tournament awards (Awards tab) + change Player of the Match once (parity #21)
+
+- **Ask (parity queue #21):** organisers worked out best player / top scorer / best bowler by hand
+  at the closing ceremony; scorers couldn't correct an auto POTM when officials picked someone else.
+- **Migration 0046** `20261019122100_awards_and_potm.sql` (bundle `2026-10-awards-potm-0046.sql`)
+  — founder to run: `tournaments.awards jsonb`, `matches.potm jsonb` (existing RLS covers both;
+  PGlite 11/11). Before it: suggestions render, Publish / Change show the migration notice.
+- **Data:** `ratings.ts` `TOURNAMENT_AWARD_SLOTS` per sport, `rankAwardCandidates` (MVP-weighted or
+  `leadersByKey`; cricket weights gain catches), `defaultAwards`, `resolvePotm` (stored override →
+  legacy `s.potm` → computed MVP, so a #05 correction never replaces an official POTM — REVIEW
+  Decision 10). repos get/save awards, get/set POTM ("once" via `by`), each in its own select.
+- **UI:** Awards tab after Stats (hosts always; viewers once published) — pre-filled
+  "Auto-suggested" slots, `AwardPickerSheet` (ranked, "How is this ranked?"), custom awards (Fair
+  play…), publish confirm → activity log + notify new/changed winners, published cards + "📤 Share
+  awards" (`awardsShareText`). Summary "Change Player of the Match" (every sport) → home/away picker
+  → once-only confirm → "Chosen by officials". Cricket's old POTM chip picker removed (reducer kept).
+- **Verified:** tsc + 728 tests (20 new); demo 8093: t1 suggestions, change slot, Fair play,
+  publish, viewer gating on t5, POTM change on football f1 and cricket ck1 (survives reload); 375 px.
+  Not verified: live pre/post-migration path, notification delivery.
+
+---
+
 ### 2026-10-09 — Cricket penalty, bonus & minus runs to either side; dropped catches, runs saved/missed (parity #20)
 
 - **Ask (parity queue #20):** local rules (bonus for hitting the net, −5 per dismissal) and umpire

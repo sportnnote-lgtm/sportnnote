@@ -161,6 +161,9 @@ export interface SummaryProps {
   /** set when the match was closed by hand (parity #04): the final word, which
    *  replaces the sport's own result line and LIVE treatment */
   manualResultLine?: string;
+  /** the stored Player of the Match override (matches.potm, parity #21) — it
+   *  beats the legacy cricket `s.potm` and the computed MVP (resolvePotm) */
+  potm?: { id: string; name: string; changed: boolean };
 }
 
 /**
@@ -322,6 +325,10 @@ export interface SportPlugin<S = unknown> {
    * the live screen splits into Info / Score / Summary tabs.
    */
   Summary?: React.FC<SummaryProps>;
+  /** With a Summary: the Player of the Match it shows when there is no stored
+   *  override (legacy name, then its computed MVP) — the "old" side of the
+   *  change-POTM confirm (parity #21). */
+  autoPotm?: (state: S) => { id?: string; name: string } | undefined;
   /** Organizer-configurable format options for this sport. */
   formatFields?: FormatField[];
   /** Settings changeable on a live match (parity #14); see LiveSettings. */

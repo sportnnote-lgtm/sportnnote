@@ -26,10 +26,11 @@ import { formatDate, formatTime, zoneAbbrev } from '../core/time';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial } from '../data/repos';
+import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
+import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
-import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole } from '../core/types';
+import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole, TournamentAwards } from '../core/types';
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
@@ -92,6 +93,13 @@ export default function TournamentProfileScreen() {
   useEffect(() => {
     let on = true;
     void getTournamentBanner(params.tournamentId).then((b) => on && setBanner(b));
+    return () => { on = false; };
+  }, [params.tournamentId]);
+  // Awards (parity #21) — read on their own select (none before the migration).
+  const [awards, setAwards] = useState<TournamentAwards | undefined>(undefined);
+  useEffect(() => {
+    let on = true;
+    void getTournamentAwards(params.tournamentId).then((a) => on && setAwards(a));
     return () => { on = false; };
   }, [params.tournamentId]);
 
@@ -185,8 +193,9 @@ export default function TournamentProfileScreen() {
 
   // The page is split into tabs so it never becomes an endless scroll: Info (the
   // overview + how to enter), Settings (organizer-only management), Matches, Stats
-  // (standings + leaders), and Teams. Settings only exists for people who can manage.
-  type Tab = 'Info' | 'Settings' | 'Matches' | 'Stats' | 'Teams';
+  // (standings + leaders), Awards and Teams. Settings only exists for people who
+  // can manage; Awards for them always, for everyone else once published (#21).
+  type Tab = 'Info' | 'Settings' | 'Matches' | 'Stats' | 'Awards' | 'Teams';
   const [tab, setTab] = useParamState<Tab>('tab', 'Info');
   // Admin hub (parity #08): one inline panel open at a time; the gear jumps here.
   const [panel, setPanel] = useParamState<string>('panel', '');
@@ -391,7 +400,10 @@ export default function TournamentProfileScreen() {
   // Fixtures still waiting for a scorer (drives "Assign scorers to fixtures").
   const unscoredCount = assignableMatches(matches).length;
 
-  const TABS: Tab[] = canManageHosts ? ['Info', 'Settings', 'Matches', 'Stats', 'Teams'] : ['Info', 'Matches', 'Stats', 'Teams'];
+  const showAwards = canManageHosts || !!awards?.publishedAt;
+  const TABS: Tab[] = [
+    'Info', ...(canManageHosts ? ['Settings' as const] : []), 'Matches', 'Stats', ...(showAwards ? ['Awards' as const] : []), 'Teams',
+  ];
   const activeTab: Tab = TABS.includes(tab) ? tab : 'Info';
 
   return (
@@ -437,6 +449,16 @@ export default function TournamentProfileScreen() {
         </ScrollView>
       </View>
 
+      {/* ------------------------------ AWARDS ------------------------------ */}
+      {activeTab === 'Awards' ? (
+        <TournamentAwardsTab
+          tournament={tournament} matches={matches} lines={lines} players={players}
+          canManage={canManageHosts} myId={myId} myName={profile?.fullName}
+          activeSport={activeSport} onSport={setSport}
+          awards={awards} onSaved={setAwards}
+          onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })}
+        />
+      ) : (
       <ScrollView ref={scrollRef} contentContainerStyle={st.content}>
         {/* ------------------------------- INFO ------------------------------- */}
         {activeTab === 'Info' && (
@@ -945,6 +967,7 @@ export default function TournamentProfileScreen() {
           </>
         )}
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

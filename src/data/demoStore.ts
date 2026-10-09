@@ -32,6 +32,8 @@ import type {
   OwnershipEvent,
   TournamentOfficial,
   ActivityEvent,
+  TournamentAwards,
+  MatchPotm,
   MatchLineup,
   LineupSlot,
   MatchSquad,
@@ -814,6 +816,10 @@ export const demo = {
   tournamentOfficials: [] as TournamentOfficial[],
   /** general activity/audit trail for orgs & tournaments (see migration 0024). */
   activityLog: [] as ActivityEvent[],
+  /** tournament awards by tournament id — mirrors tournaments.awards (parity #21). */
+  awards: {} as Record<string, TournamentAwards>,
+  /** Player of the Match overrides by match id — mirrors matches.potm (parity #21). */
+  potm: {} as Record<string, MatchPotm>,
   matches: ALL_MATCHES.map((m) => ({ ...m, startsAt: anchorDate(m.startsAt) })) as Match[],
   teams: deriveTeams(ALL_MATCHES),
   players: [...players, ...WC_PLAYERS, ...BN_PLAYERS, ...PE_PLAYERS, ...AE_PLAYERS],

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchShareText, tournamentShareText, golfShareText, matchLink } from '../src/core/shareText.ts';
+import { matchShareText, tournamentShareText, golfShareText, matchLink, awardsShareText } from '../src/core/shareText.ts';
 
 describe('share messages', () => {
   test('live match: score, status, follow link', () => {
@@ -38,4 +38,14 @@ test('profile: record across sports + link', () => {
   const t = profileShareText({ name: 'Hrudhay', matches: 20, wins: 13, sports: ['🏏 Cricket · 12 matches · 340 runs', '🏸 Badminton · 8 matches · 5 wins'], playerId: 'p1' });
   assert.equal(t, '🏅 Hrudhay on SportnNote\n20 matches · 13 wins (65%)\n\n🏏 Cricket · 12 matches · 340 runs\n🏸 Badminton · 8 matches · 5 wins\n\nFull stats: https://app.sportnnote.in/p/p1');
   assert.doesNotMatch(profileShareText({ name: 'New', matches: 0, wins: 0, sports: [], playerId: 'x' }), /NaN/);
+  test('awards: one line per award, team in brackets, detail indented, link', () => {
+    const t = awardsShareText({
+      tournament: ' Inter-house  Cup ', tournamentId: 't1',
+      awards: [
+        { icon: '🏆', label: 'Player of the Tournament', playerName: 'Arjun Rao', teamName: 'Red House', detail: '5 m · 212 runs · 3 wkts' },
+        { label: 'Fair play', playerName: 'Bilal Khan' },
+      ],
+    });
+    assert.equal(t, '🏆 Awards · Inter-house Cup\n\n🏆 Player of the Tournament: Arjun Rao (Red House)\n   5 m · 212 runs · 3 wkts\n🏅 Fair play: Bilal Khan\n\nFull results: https://app.sportnnote.in/t/t1');
+  });
 });

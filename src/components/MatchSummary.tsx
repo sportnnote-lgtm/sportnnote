@@ -7,7 +7,7 @@ import { theme } from '../core/theme';
 import { Card, EmptyState, textStyles } from './ui';
 import { RankBadge, podiumColor } from './Rank';
 import { useMask } from '../core/disputeMask';
-import { matchRatings, awardsFor, ratingStars, statLabel, type MatchRating } from '../data/ratings';
+import { matchRatings, awardsFor, ratingStars, statLabel, resolvePotm, type MatchRating, type PotmProp } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
 import type { ScoreSummary } from '../sports/types';
 
@@ -17,7 +17,7 @@ const initials = (name?: string): string =>
 
 export function MatchSummary({
   statLines, sport, homeRoster, awayRoster, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away,
-  summary, complete, live, onPlayer,
+  summary, complete, live, onPlayer, potm,
 }: {
   statLines: StatLine[];
   sport: SportId;
@@ -32,8 +32,16 @@ export function MatchSummary({
   /** match is underway (not just "not complete") — drives the result live dot */
   live?: boolean;
   onPlayer?: (id: string) => void;
+  /** the stored Player of the Match override (parity #21) — beats the computed MVP */
+  potm?: PotmProp;
 }) {
-  const { players, mvp } = matchRatings(statLines, sport, homeRoster, awayRoster);
+  const { players, mvp: computedMvp } = matchRatings(statLines, sport, homeRoster, awayRoster);
+  // REVIEW Decision 10: a stored override always wins over the (re)computed MVP.
+  const pick = resolvePotm(complete ? potm : undefined, undefined, computedMvp);
+  const sideOf = (id?: string): 'home' | 'away' => (id && awayRoster.some((p) => p.id === id) ? 'away' : 'home');
+  const mvp: (MatchRating & { changed?: boolean }) | undefined = !pick ? undefined
+    : pick.source === 'mvp' ? computedMvp
+    : { ...(players.find((p) => p.id === pick.id) ?? { id: pick.id ?? '', name: pick.name, side: sideOf(pick.id), points: 0, rating: 0, detail: '', stats: {} }), changed: pick.changed };
   const awards = awardsFor(players, sport);
   const mask = useMask();
   const teamColor = (s: 'home' | 'away') => (s === 'home' ? homeColor : awayColor);
@@ -74,7 +82,7 @@ export function MatchSummary({
       </View>
 
       {mvp && (
-        <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => onPlayer?.(mvp.id)} style={st.mvp}>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={() => mvp.id && onPlayer?.(mvp.id)} style={st.mvp}>
           <View style={[st.mvpAvatar, { backgroundColor: teamColor(mvp.side) }]}>
             <Text style={st.mvpAvatarText}>{initials(mask.byId(mvp.id, mvp.name))}</Text>
             <Text style={st.mvpBadge}>{complete ? '🏅' : '🔥'}</Text>
@@ -82,9 +90,10 @@ export function MatchSummary({
           <View style={{ flex: 1 }}>
             <Text style={st.mvpLabel}>{complete ? 'Player of the Match' : 'Top performer'}</Text>
             <Text style={st.mvpName} numberOfLines={1}>{mask.byId(mvp.id, mvp.name)}</Text>
-            <Text style={st.mvpDetail} numberOfLines={1}>{mvp.detail} · {teamName(mvp.side)}</Text>
+            <Text style={st.mvpDetail} numberOfLines={1}>{[mvp.detail, teamName(mvp.side)].filter(Boolean).join(' · ')}</Text>
+            {mvp.changed ? <Text style={st.mvpNote} numberOfLines={1}>Chosen by officials</Text> : null}
           </View>
-          <Text style={[st.mvpRating, { color: teamColor(mvp.side) }]}>★{mvp.rating.toFixed(1)}</Text>
+          {mvp.rating > 0 ? <Text style={[st.mvpRating, { color: teamColor(mvp.side) }]}>★{mvp.rating.toFixed(1)}</Text> : null}
         </TouchableOpacity>
       )}
 
@@ -179,6 +188,7 @@ const st = StyleSheet.create({
   mvpLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   mvpName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   mvpDetail: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  mvpNote: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 1 },
   mvpRating: { fontSize: theme.font.h3, fontWeight: '900' },
   awardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   award: {

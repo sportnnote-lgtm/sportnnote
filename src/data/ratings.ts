@@ -5,7 +5,9 @@
  * relative to the best performer in that match. Cricket ships its own richer,
  * state-based summary; every other sport uses this.
  */
-import type { Player, SportId, StatLine } from '../core/types';
+import type { Player, SportId, StatLine, TournamentAward } from '../core/types';
+import { leadersByKey } from './standings.ts';
+import { cricketCareer } from './cricketCareer.ts';
 
 /** Points per unit of each stat, per sport. Negatives penalise (cards, fouls). */
 export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
@@ -22,7 +24,9 @@ export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
   badminton: { points: 1 },
   tennis: { points: 1, aces: 2 },
   kabaddi: { raidPoints: 2, tacklePoints: 2 },
-  cricket: { runs: 1, wickets: 18, cleanSheets: 0 }, // cricket uses its own Summary
+  // Per match, cricket uses its own Summary; these weights drive the tournament
+  // "Player of the Tournament" ranking (catch +8 = the per-match fielding weight).
+  cricket: { runs: 1, wickets: 18, catches: 8, cleanSheets: 0 },
   pickleball: { points: 1 },
   padel: { points: 1 },
   squash: { points: 1 },
@@ -40,7 +44,7 @@ export const STAT_LABELS: Record<string, string> = {
   crosses: 'crosses', dribbles: 'dribbles', offsides: 'offside', handballs: 'handball',
   penaltiesWon: 'pen won', penaltiesMissed: 'pen missed',
   points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks',
-  raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', games: 'games',
+  raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', catches: 'catches', games: 'games',
   wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
   holesWon: 'holes won', birdies: 'birdies', eagles: 'eagles', rounds: 'rounds',
 };
@@ -56,7 +60,7 @@ const SINGULAR_LABELS: Record<string, string> = {
   goals: 'goal', assists: 'assist', cleanSheets: 'clean sheet', shots: 'shot', saves: 'save',
   tackles: 'tackle', interceptions: 'interception', attackingContributions: 'att. play',
   defensiveContributions: 'def. play', passesComplete: 'pass', crosses: 'cross', dribbles: 'dribble',
-  fouls: 'foul', aces: 'ace', blocks: 'block', runs: 'run', games: 'game',
+  fouls: 'foul', aces: 'ace', blocks: 'block', runs: 'run', games: 'game', catches: 'catch',
 };
 
 /** Count-aware stat label — "1 goal" / "2 goals", invariant labels unchanged. */
@@ -170,4 +174,179 @@ export function awardsFor(players: MatchRating[], sport: SportId): Award[] {
       return player ? { ...a, player, value: player.stats[a.stat] ?? 0 } : null;
     })
     .filter((a): a is Award => !!a);
+}
+
+/* ------------------------- Tournament awards (parity #21) ------------------------- */
+
+export interface AwardSlot {
+  /** 'mvp' or the stat key it ranks by */
+  slot: string;
+  label: string;
+  icon: string;
+  stat?: string;
+}
+
+const MVP_SLOT: AwardSlot = { slot: 'mvp', label: 'Player of the Tournament', icon: '🏆' };
+/** Tournament-only slots for sports whose per-match SPORT_AWARDS are empty. */
+const EXTRA_SLOTS: Partial<Record<SportId, AwardSlot[]>> = {
+  cricket: [
+    { slot: 'runs', label: 'Best batter', icon: '🏏', stat: 'runs' },
+    { slot: 'wickets', label: 'Best bowler', icon: '🎯', stat: 'wickets' },
+  ],
+  chess: [{ slot: 'wins', label: 'Most wins', icon: '♟️', stat: 'wins' }],
+};
+
+/** The fixed award slots per sport: Player of the Tournament + the sport's role awards. */
+export const TOURNAMENT_AWARD_SLOTS: Record<SportId, AwardSlot[]> = Object.fromEntries(
+  (Object.keys(SPORT_AWARDS) as SportId[]).map((sp) => [
+    sp,
+    [MVP_SLOT, ...(EXTRA_SLOTS[sp] ?? SPORT_AWARDS[sp].map((a) => ({ slot: a.stat, label: a.label, icon: a.icon, stat: a.stat })))],
+  ]),
+) as Record<SportId, AwardSlot[]>;
+
+/** Icon for an award (custom awards get a medal). */
+export const awardIcon = (sport: SportId, slot: string): string =>
+  TOURNAMENT_AWARD_SLOTS[sport]?.find((x) => x.slot === slot)?.icon ?? '🏅';
+
+/** How each slot is ranked — shown behind "How is this ranked?". */
+export function awardFormula(sport: SportId, slot: string): string {
+  if (slot === 'mvp') {
+    const w = Object.entries(STAT_WEIGHTS[sport] ?? {}).filter(([, v]) => v !== 0);
+    const parts = w.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k, v]) => `${statLabel(k, 2)} ${v > 0 ? '×' : '−'}${Math.abs(v)}`);
+    return `Points summed over every match in this tournament${parts.length ? `: ${parts.join(', ')}` : ''}. Ties go by name. You choose the winner.`;
+  }
+  return `Total ${statLabel(slot, 2)} in this tournament's matches. Ties go by name. You choose the winner.`;
+}
+
+export interface AwardCandidate {
+  playerId: string;
+  name: string;
+  teamName?: string;
+  teamColor?: string;
+  value: number;
+  /** matches with a stat line in this sport */
+  games: number;
+  detail: string;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const dashless = (parts: (string | false | undefined)[]) => parts.filter((p): p is string => !!p && !p.includes('–'));
+
+/** Ranked players for one award slot, from this tournament's stat lines.
+ *  'mvp' sums the sport's STAT_WEIGHTS over each player's lines; a stat slot
+ *  totals that stat (leadersByKey). Highest first, ties by name. Pass
+ *  `matchIds` to restrict to a tournament's matches. */
+export function rankAwardCandidates(
+  lines: StatLine[], players: Player[], sport: SportId, slot: string, limit = 10,
+  opts: { matchIds?: Iterable<string> } = {},
+): AwardCandidate[] {
+  const ids = opts.matchIds ? new Set(opts.matchIds) : null;
+  const mine = lines.filter((l) => l.sport === sport && (!ids || ids.has(l.matchId)));
+  const byId = new Map(players.map((p) => [p.id, p] as const));
+  const linesOf = new Map<string, StatLine[]>();
+  for (const l of mine) (linesOf.get(l.playerId) ?? linesOf.set(l.playerId, []).get(l.playerId)!).push(l);
+  const sum = (ls: StatLine[], k: string) => ls.reduce((a, l) => a + (Number(l.stats?.[k]) || 0), 0);
+  const career = (ls: StatLine[]) => {
+    const c = cricketCareer(ls);
+    const v = (sec: 'batting' | 'bowling', k: string) => c[sec].find((x) => x.key === k)?.value ?? '–';
+    return { inns: v('batting', 'innings'), avg: v('batting', 'avg'), sr: v('batting', 'sr'), econ: v('bowling', 'econ'), bowlAvg: v('bowling', 'bowlAvg') };
+  };
+
+  const detailFor = (pid: string, value: number, games: number): string => {
+    const ls = linesOf.get(pid) ?? [];
+    const m = `${games} m`;
+    if (sport === 'cricket' && slot === 'runs') {
+      const c = career(ls);
+      return dashless([`${value} ${statLabel('runs', value)}`, `${c.inns} inns`, `avg ${c.avg}`, `SR ${c.sr}`]).join(' · ');
+    }
+    if (sport === 'cricket' && slot === 'wickets') {
+      const c = career(ls);
+      return dashless([`${value} ${statLabel('wickets', value)}`, m, `econ ${c.econ}`, `avg ${c.bowlAvg}`]).join(' · ');
+    }
+    if (slot === 'mvp') {
+      const w = STAT_WEIGHTS[sport] ?? {};
+      const top = Object.keys(w)
+        .map((k) => [k, sum(ls, k)] as const)
+        .filter(([k, v]) => v > 0 && (w[k] ?? 0) > 0 && STAT_LABELS[k])
+        .sort((a, b) => b[1] * (w[b[0]] ?? 0) - a[1] * (w[a[0]] ?? 0))
+        .slice(0, 3)
+        .map(([k, v]) => `${v} ${statLabel(k, v)}`);
+      return [m, ...top].join(' · ');
+    }
+    return `${value} ${statLabel(slot, value)} · ${m}`;
+  };
+
+  let rows: { playerId: string; value: number; games: number }[];
+  if (slot === 'mvp') {
+    const w = STAT_WEIGHTS[sport] ?? {};
+    rows = [...linesOf.entries()].map(([pid, ls]) => ({
+      playerId: pid,
+      value: round1(ls.reduce((a, l) => a + Object.entries(l.stats ?? {}).reduce((s2, [k, v]) => s2 + (Number(v) || 0) * (w[k] ?? 0), 0), 0)),
+      games: ls.length,
+    }));
+  } else {
+    rows = leadersByKey(mine, players, sport, slot, Number.MAX_SAFE_INTEGER)
+      .map((l) => ({ playerId: l.playerId, value: l.value, games: l.totalGames ?? 0 }));
+  }
+  return rows
+    .filter((r) => r.value > 0)
+    .map((r) => {
+      const p = byId.get(r.playerId);
+      return {
+        playerId: r.playerId, name: p?.fullName ?? 'Player', teamName: p?.houseName, teamColor: p?.houseColor,
+        value: r.value, games: r.games, detail: detailFor(r.playerId, r.value, r.games),
+      };
+    })
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+/** Stable id for a fixed slot's award. */
+export const awardId = (sport: SportId, slot: string) => `${sport}:${slot}`;
+
+/** An award from a candidate (fills the label/sport/slot). */
+export function awardFrom(sport: SportId, slot: string, label: string, c: AwardCandidate, id = awardId(sport, slot)): TournamentAward {
+  return { id, slot, label, sport, playerId: c.playerId, playerName: c.name, teamName: c.teamName, value: c.value, detail: c.detail };
+}
+
+/** The suggested awards: the #1 candidate in each of the sport's slots (slots
+ *  with no candidate are left out). */
+export function defaultAwards(
+  lines: StatLine[], players: Player[], sport: SportId, opts: { matchIds?: Iterable<string> } = {},
+): TournamentAward[] {
+  return (TOURNAMENT_AWARD_SLOTS[sport] ?? []).flatMap((s) => {
+    const top = rankAwardCandidates(lines, players, sport, s.slot, 1, opts)[0];
+    return top ? [awardFrom(sport, s.slot, s.label, top)] : [];
+  });
+}
+
+/* ------------------------ Player of the Match precedence ------------------------ */
+
+export interface PotmProp {
+  id: string;
+  name: string;
+  /** changed by officials (an override with `by`) */
+  changed: boolean;
+}
+export interface ResolvedPotm {
+  id?: string;
+  name: string;
+  source: 'stored' | 'legacy' | 'mvp';
+  changed: boolean;
+}
+
+/** REVIEW Decision 10 — the stored matches.potm override, then the legacy
+ *  cricket `s.potm` (a name, resolved to an id by the caller where possible),
+ *  then the computed MVP. A #05/#06 correction that changes the MVP never
+ *  replaces a stored override. */
+export function resolvePotm(
+  stored: PotmProp | undefined | null,
+  legacy: { id?: string; name: string } | string | undefined | null,
+  mvp: { id: string; name: string } | undefined | null,
+): ResolvedPotm | undefined {
+  if (stored && stored.name) return { id: stored.id, name: stored.name, source: 'stored', changed: !!stored.changed };
+  const lg = typeof legacy === 'string' ? { name: legacy } : legacy;
+  if (lg && lg.name) return { id: lg.id, name: lg.name, source: 'legacy', changed: false };
+  if (mvp) return { id: mvp.id, name: mvp.name, source: 'mvp', changed: false };
+  return undefined;
 }

@@ -35,7 +35,9 @@ import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
-import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt } from '../data/repos';
+import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt, getMatchPotm, setMatchPotm, AWARDS_DB_MESSAGE } from '../data/repos';
+import { matchRatings as genericRatings, type PotmProp } from '../data/ratings';
+import { AwardPickerSheet, type PickerRow } from '../components/AwardPickerSheet';
 import { deleteVerdict, breakLabel, type BreakKind, type MatchBreak } from '../data/matchHousekeeping';
 import { QuickOptionsSheet } from '../components/QuickOptionsSheet';
 import { LiveSettingsCard } from '../components/LiveSettingsCard';
@@ -59,7 +61,7 @@ import { MatchSummary } from '../components/MatchSummary';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
-import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
+import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchPotm, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
@@ -659,6 +661,46 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [matchId, eventCount])
   );
+
+  // Player of the Match override (parity #21): the stored matches.potm beats the
+  // computed MVP (REVIEW Decision 10) and can be changed once (potm.by).
+  const [storedPotm, setStoredPotm] = useState<MatchPotm | undefined>(undefined);
+  const [potmOpen, setPotmOpen] = useState(false);
+  useEffect(() => {
+    let on = true;
+    if (matchId) void getMatchPotm(matchId).then((p) => on && setStoredPotm(p));
+    else setStoredPotm(undefined);
+    return () => { on = false; };
+  }, [matchId, reloadTick]);
+  const potmProp: PotmProp | undefined = storedPotm ? { id: storedPotm.playerId, name: storedPotm.name, changed: !!storedPotm.by } : undefined;
+  const canChangePotm = hasMatch && complete && (canScore || isHost) && !storedPotm?.by;
+  // The POTM shown right now, before any override: a sport's own (cricket:
+  // legacy pick, then its MVP), else the generic stat-line MVP.
+  const autoPotmNow = (): { id?: string; name: string } | undefined => {
+    if (plugin.Summary) return plugin.autoPotm?.(state);
+    const m = genericRatings(matchStats, sport, homeRoster, awayRoster).mvp;
+    return m ? { id: m.id, name: m.name } : undefined;
+  };
+  const potmRows = (roster: Player[], color?: string): PickerRow[] =>
+    roster.map((p) => ({ id: p.id, name: p.fullName, teamColor: color, detail: p.jerseyNo != null ? `#${p.jerseyNo}` : undefined }));
+  const changePotm = async (row: PickerRow) => {
+    if (!matchId) return;
+    const cur = storedPotm ? { playerId: storedPotm.playerId, name: storedPotm.name } : (() => { const a = autoPotmNow(); return a ? { playerId: a.id, name: a.name } : undefined; })();
+    if (cur?.playerId === row.id) { setPotmOpen(false); return; }
+    setPotmOpen(false);
+    const ok = await confirmAction('Change Player of the Match?', `From ${cur?.name ?? 'no one'} to ${row.name}. This can only be done once.`, 'Change');
+    if (!ok) return;
+    const next: MatchPotm = { playerId: row.id, name: row.name, ...(cur ? { auto: cur } : {}), by: myPlayerId ?? profile?.id ?? 'unknown', at: new Date().toISOString() };
+    try {
+      await setMatchPotm(matchId, next);
+      setStoredPotm(next);
+      setToast(`🏅 ${row.name} is Player of the Match`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Please try again.';
+      notice(msg === AWARDS_DB_MESSAGE ? 'Needs a database update' : 'Couldn’t change Player of the Match', msg);
+      if (matchId) void getMatchPotm(matchId).then(setStoredPotm);
+    }
+  };
 
   // The live screen splits into Info / Score / Summary tabs for every sport.
   const [tab, setTab] = useParamState<string>('tab', '');
@@ -2155,6 +2197,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
                 manualResultLine={meta.result ? manualResultLine(meta.result, fullHome, fullAway) : undefined}
+                potm={potmProp}
               />
             ) : (
               <MatchSummary
@@ -2162,8 +2205,22 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
                 summary={summary} complete={complete} live={matchLive}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
+                potm={potmProp}
               />
               )}
+              {canChangePotm && (homeRoster.length > 0 || awayRoster.length > 0) ? (
+                <Button variant="ghost" label="Change Player of the Match" onPress={() => setPotmOpen(true)} />
+              ) : null}
+              <AwardPickerSheet
+                visible={potmOpen} onClose={() => setPotmOpen(false)}
+                title="🏅 Player of the Match" subtitle="Pick the officials’ choice. You can change it only once."
+                ranked={false} selectedId={storedPotm?.playerId ?? autoPotmNow()?.id}
+                tabs={[
+                  { key: 'home', label: fullHome, color: homeColor, rows: potmRows(homeRoster, homeColor) },
+                  { key: 'away', label: fullAway, color: awayColor, rows: potmRows(awayRoster, awayColor) },
+                ]}
+                onPick={(r) => void changePotm(r)}
+              />
               {officials.available && officials.list.length > 0 && (
                 <Text style={[textStyles.muted, { textAlign: 'center' }]}>{officialsLine(officials.list, sport)}</Text>
               )}

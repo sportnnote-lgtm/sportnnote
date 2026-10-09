@@ -101,6 +101,8 @@ import type {
   TournamentOfficial,
   OfficialRole,
   ActivityEvent,
+  TournamentAwards,
+  MatchPotm,
   TournamentCategory,
   TournamentEntry,
   TournamentEntryStatus,
@@ -1077,6 +1079,7 @@ export async function resetMatch(matchId: string): Promise<void> {
       m.state = {}; m.status = 'scheduled'; m.winner = undefined; m.score = undefined;
       // Parity #13: everything derived goes too — result, POTM, break.
       m.result = undefined; m.walkover = undefined; m.onBreak = undefined; delete m.potm;
+      delete demo.potm[matchId];
       if (m.format && '__break' in m.format) {
         const { __break: _b, ...rest } = m.format as Record<string, unknown>;
         m.format = (Object.keys(rest).length ? rest : undefined) as Match['format'];
@@ -1418,6 +1421,67 @@ export async function getTournamentBanner(tournamentId: string): Promise<string 
   const { data, error } = await supabase.from('tournaments').select('banner_url').eq('id', tournamentId).maybeSingle();
   if (error) return undefined;
   return (data as { banner_url?: string | null } | null)?.banner_url ?? undefined;
+}
+
+/* ---------------- Tournament awards + POTM override (parity #21) ----------- */
+
+/** The migration that adds tournaments.awards and matches.potm. */
+export const AWARDS_MIGRATION = '20261019122100_awards_and_potm.sql';
+export const AWARDS_DB_MESSAGE = `Awards need a database update (migration ${AWARDS_MIGRATION})`;
+/** Thrown by setMatchPotm when the POTM was already changed once. */
+export const POTM_ONCE_MESSAGE = 'Player of the Match can only be changed once.';
+
+/** A tournament's awards (draft + published), read on its own select so a
+ *  database without the column just means "none yet". */
+export async function getTournamentAwards(tournamentId: string): Promise<TournamentAwards | undefined> {
+  if (!isSupabaseConfigured || !supabase) {
+    const a = demo.awards[tournamentId];
+    return a ? { ...a, items: a.items.map((i) => ({ ...i })) } : undefined;
+  }
+  const { data, error } = await supabase.from('tournaments').select('awards').eq('id', tournamentId).maybeSingle();
+  if (error) return undefined;
+  const a = (data as { awards?: TournamentAwards | null } | null)?.awards;
+  return a && Array.isArray(a.items) ? a : undefined;
+}
+
+/** Save a tournament's awards (hosts — the "manage tourneys" policy). Throws
+ *  AWARDS_DB_MESSAGE before the migration. */
+export async function saveTournamentAwards(tournamentId: string, awards: TournamentAwards): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    demo.awards[tournamentId] = { ...awards, items: awards.items.map((i) => ({ ...i })) };
+    return;
+  }
+  const res = await supabase.from('tournaments').update({ awards }).eq('id', tournamentId).select('id');
+  if (isMissingSchema(res.error)) throw new Error(AWARDS_DB_MESSAGE);
+  assertUpdated(res, 'tournament');
+}
+
+/** A match's stored Player of the Match override (own select; none pre-migration). */
+export async function getMatchPotm(matchId: string): Promise<MatchPotm | undefined> {
+  if (!isSupabaseConfigured || !supabase) {
+    const p = demo.potm[matchId];
+    return p ? { ...p } : undefined;
+  }
+  const { data, error } = await supabase.from('matches').select('potm').eq('id', matchId).maybeSingle();
+  if (error) return undefined;
+  const p = (data as { potm?: MatchPotm | null } | null)?.potm;
+  return p && p.name ? p : undefined;
+}
+
+/** Change the Player of the Match — ONCE: throws POTM_ONCE_MESSAGE when the
+ *  stored value already carries `by` (REVIEW 05/21: client/repo-enforced only).
+ *  Throws AWARDS_DB_MESSAGE before the migration. */
+export async function setMatchPotm(matchId: string, potm: MatchPotm): Promise<void> {
+  if (!potm.by) throw new Error('Who changed the Player of the Match is required.');
+  const current = await getMatchPotm(matchId);
+  if (current?.by) throw new Error(POTM_ONCE_MESSAGE);
+  if (!isSupabaseConfigured || !supabase) {
+    demo.potm[matchId] = { ...potm };
+    return;
+  }
+  const res = await supabase.from('matches').update({ potm }).eq('id', matchId).select('id');
+  if (isMissingSchema(res.error)) throw new Error(AWARDS_DB_MESSAGE);
+  assertUpdated(res, 'match');
 }
 
 /** Persist a per-match format override (scoring-aspect toggles, half length…),
@@ -2149,6 +2213,7 @@ export async function deleteMatch(matchId: string, opts?: { played?: boolean }):
       if (!ok) throw new Error('Couldn’t delete — past the window, or the server update isn’t installed yet.');
     }
     demo.matches.splice(idx, 1);
+    delete demo.potm[matchId];
     delete demo.lineups[matchId];
     delete demo.matchEvents[matchId];
     delete demo.matchSquads[matchId];

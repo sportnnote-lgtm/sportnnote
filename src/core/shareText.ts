@@ -117,3 +117,22 @@ export function profileShareText(p: ProfileShareInput): string {
   lines.push('', `Full stats: ${profileLink(p.playerId)}`);
   return lines.join('\n');
 }
+
+export interface AwardsShareInput {
+  tournament: string;
+  /** one per award */
+  awards: { icon?: string; label: string; playerName: string; teamName?: string; detail?: string }[];
+  tournamentId: string;
+}
+
+/** "🏆 Awards · <tournament>" then one line per award (parity #21). */
+export function awardsShareText(a: AwardsShareInput): string {
+  const lines = [`🏆 Awards · ${clean(a.tournament)}`, ''];
+  for (const w of a.awards) {
+    const who = [clean(w.playerName), w.teamName ? `(${clean(w.teamName)})` : ''].filter(Boolean).join(' ');
+    lines.push(`${w.icon ?? '🏅'} ${clean(w.label)}: ${who}`);
+    if (w.detail) lines.push(`   ${clean(w.detail)}`);
+  }
+  lines.push('', `Full results: ${tournamentLink(a.tournamentId)}`);
+  return lines.join('\n');
+}

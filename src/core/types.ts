@@ -666,6 +666,41 @@ export interface Tournament {
   scoring?: TournamentScoring;
 }
 
+/** One tournament award (parity #21): a fixed slot ('mvp' or a stat key such as
+ *  'runs' / 'goals') or a host-named 'custom' award, given to one player. */
+export interface TournamentAward {
+  id: string;
+  /** 'mvp' | a stat key from TOURNAMENT_AWARD_SLOTS | 'custom' */
+  slot: string;
+  label: string;
+  sport: SportId;
+  playerId: UUID;
+  playerName: string;
+  teamName?: string;
+  value?: number;
+  /** "5 m · 212 runs · 3 wkts" */
+  detail?: string;
+}
+
+/** tournaments.awards (migration 20261019122100): draft + published together.
+ *  Non-hosts only see it once `publishedAt` is set. */
+export interface TournamentAwards {
+  publishedAt?: string;
+  items: TournamentAward[];
+}
+
+/** matches.potm (migration 20261019122100): the official Player of the Match.
+ *  `by` set ⇒ already changed once (no further change). */
+export interface MatchPotm {
+  playerId: UUID;
+  name: string;
+  /** the auto POTM it replaced */
+  auto?: { playerId?: UUID; name: string };
+  /** player id of whoever changed it */
+  by?: UUID;
+  at: string;
+}
+
 export interface TournamentScoring {
   /** 'match' = overall table sums league points (default); 'position' = medal meet. */
   mode: 'match' | 'position';
