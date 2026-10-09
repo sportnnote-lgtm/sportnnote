@@ -26,6 +26,9 @@
  * `Authorization: Bearer <SERVICE_ROLE_KEY>` (as in the snippet above) or
  * `x-cron-secret: <CRON_SECRET>`. Anything else is refused.
  *
+ * Alert choices (#23): a follower whose follow row has `prefs.reminder = false`
+ * gets no "plays in 1 hour" reminders for that player (null prefs = all on).
+ *
  * Deploy:  supabase functions deploy notify-upcoming
  * Secrets: optional CRON_SECRET; SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are
  *          injected automatically.
@@ -149,13 +152,20 @@ Deno.serve(async (req) => {
   });
 
   // Player id → { profileId, fullName }; and followers of each player.
-  const [{ data: players }, { data: follows }] = await Promise.all([
+  const followQuery = (cols: string) =>
+    supabase.from('follows').select(cols).eq('target_type', 'player').in('target_id', [...allPlayerIds]);
+  const [{ data: players }, followsWithPrefs] = await Promise.all([
     supabase.from('players').select('id, profile_id, full_name').in('id', [...allPlayerIds]),
-    supabase.from('follows').select('follower_id, target_id').eq('target_type', 'player').in('target_id', [...allPlayerIds]),
+    followQuery('follower_id, target_id, prefs'),
   ]);
+  // Per-follow alert choices (#23). Before the follow_prefs migration the `prefs`
+  // column doesn't exist → fall back to the plain select (everyone wants everything).
+  const follows = (followsWithPrefs.error
+    ? (await followQuery('follower_id, target_id')).data
+    : followsWithPrefs.data) as { follower_id: string; target_id: string; prefs?: Record<string, boolean> | null }[] | null;
   const playerById = new Map((players ?? []).map((p) => [p.id, p]));
   const followersByPlayer = new Map<string, string[]>();
-  for (const f of follows ?? []) followersByPlayer.set(f.target_id as string, [...(followersByPlayer.get(f.target_id as string) ?? []), f.follower_id as string]);
+  for (const f of (follows ?? []).filter((f) => f.prefs?.reminder !== false)) followersByPlayer.set(f.target_id as string, [...(followersByPlayer.get(f.target_id as string) ?? []), f.follower_id as string]);
 
   const targets: Target[] = [];
   for (const { m, leads, playing } of perMatch) {

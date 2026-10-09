@@ -10,7 +10,7 @@ import { theme } from '../core/theme';
 import { useAuth } from '../core/auth';
 import { registerForPush, setCurrentPlayerId } from '../core/notifications';
 import { followStore } from '../data/followStore';
-import { getFollows, savePushToken, getCaptainTeams, getMyPlayerId } from '../data/repos';
+import { getFollows, getFollowPrefs, savePushToken, getCaptainTeams, getMyPlayerId } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
@@ -214,7 +214,7 @@ export default function RootNavigator() {
   // On sign-in: load existing follows into the store and register for push.
   useEffect(() => {
     if (!authed) { setCurrentPlayerId(null); return; }
-    getFollows(profile?.id).then((keys) => followStore.hydrate(keys));
+    Promise.all([getFollows(profile?.id), getFollowPrefs(profile?.id)]).then(([keys, prefs]) => followStore.hydrate(keys, prefs));
     getCaptainTeams(profile?.id).then((ids) => captainStore.hydrate(ids));
     // Know my own player id so notify() can tell "for me" (show locally) from "for
     // someone else" (deliver as a remote push to their device).

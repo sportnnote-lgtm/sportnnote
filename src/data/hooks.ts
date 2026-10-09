@@ -20,6 +20,7 @@ import {
   getPlayerStatLines,
   getAllStatLines,
   setFollow,
+  setFollowPrefs,
   getFootballProfile,
   searchPlayers,
   searchAll,
@@ -38,6 +39,8 @@ import { isSearchable, rankByName, type SearchResults, type SearchKind } from '.
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
 import { standingsPhases, type StandingsPhase } from './groups';
 import { followStore, type FollowType } from './followStore';
+import type { FollowPrefs } from './followPrefs';
+import { notice } from '../core/confirm';
 import { captainStore } from './captainStore';
 import { useAuth } from '../core/auth';
 import type { Role } from '../core/types';
@@ -201,7 +204,28 @@ export function useFollow(profileId?: string) {
     (type: FollowType) => keys.filter((k) => k.startsWith(`${type}:`)).map((k) => k.slice(type.length + 1)),
     [keys]
   );
-  return { keys, isFollowing, toggle, idsOfType };
+  /** Alert choices for a follow ({} = all on). `keys` changes on every store
+   *  emit (prefs included), so this re-evaluates when choices change. */
+  const prefsOf = useCallback(
+    (type: FollowType, id: string): FollowPrefs => followStore.prefsOf(type, id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [keys]
+  );
+  /** Save alert choices optimistically; on failure restore them and say why. */
+  const savePrefs = useCallback(
+    async (type: FollowType, id: string, prefs: FollowPrefs): Promise<boolean> => {
+      const before = followStore.prefsOf(type, id);
+      followStore.setPrefs(type, id, prefs);
+      const ok = await setFollowPrefs(type, id, prefs, profileId);
+      if (!ok) {
+        followStore.setPrefs(type, id, before);
+        notice('Couldn’t save alert choices', 'This needs a database update.');
+      }
+      return ok;
+    },
+    [profileId]
+  );
+  return { keys, isFollowing, toggle, idsOfType, prefsOf, savePrefs };
 }
 
 /** Teams the signed-in user captains (subscribes to the captain store). */

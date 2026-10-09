@@ -228,12 +228,15 @@ export function useLiveMatch(params: {
             void recordStatLine({ matchId, playerId, sport, stat: k, by: v, opponent, tracked });
           }
         }
-        if (followStore.has('player', playerId)) {
+        // Only if the follower still wants score alerts for this player (#23).
+        if (followStore.wants('player', playerId, 'scores')) {
           const verb = stat === 'goals' ? `scored${by > 1 ? ` ${by}` : ''}` : `+${by} ${stat}`;
+          // No `playerId`: notify() treats a playerId as the RECIPIENT and would
+          // push this to the goal scorer instead of showing it to the follower
+          // on this device. The tap opens the match (matchId) either way.
           void notify({
             title: `${playerName ?? 'A player you follow'} ${verb}!`,
             body: opponent ? `${getSport(sport).name} vs ${opponent}` : getSport(sport).name,
-            playerId,
             matchId,
           });
         }
@@ -259,15 +262,17 @@ export function useLiveMatch(params: {
 
       // Notify followers of either team or the tournament when the match goes
       // live (first event) or finishes.
-      const teamOrTourFollowed =
-        (homeTeamId && followStore.has('team', homeTeamId)) ||
-        (awayTeamId && followStore.has('team', awayTeamId)) ||
-        (tournamentId && followStore.has('tournament', tournamentId));
+      // Each follow's alert choices (#23) decide: any followed team/tournament
+      // that still wants this alert is enough.
+      const teamOrTourWants = (key: 'start' | 'result') =>
+        (!!homeTeamId && followStore.wants('team', homeTeamId, key)) ||
+        (!!awayTeamId && followStore.wants('team', awayTeamId, key)) ||
+        (!!tournamentId && followStore.wants('tournament', tournamentId, key));
       const matchLabel = `${homeTeamName ?? 'Home'} vs ${awayTeamName ?? 'Away'}`;
-      if (teamOrTourFollowed && seq === 1) {
+      if (seq === 1 && teamOrTourWants('start')) {
         void notify({ title: `🔴 ${matchLabel} is live`, body: getSport(sport).name, matchId });
       }
-      if (teamOrTourFollowed && plugin.isComplete(next)) {
+      if (plugin.isComplete(next) && teamOrTourWants('result')) {
         const sm = plugin.summary(next);
         void notify({ title: `Full time — ${matchLabel}`, body: `${getSport(sport).name} · ${sm.homeScore}–${sm.awayScore}`, matchId });
       }

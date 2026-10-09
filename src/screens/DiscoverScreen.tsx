@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, LoadingState, Pill, SelectChip, ScreenTitle, textStyles, plural } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { ConnectBoard } from '../components/ConnectBoard';
@@ -162,6 +163,7 @@ export default function DiscoverScreen() {
         >
           <Text style={[st.followText, following && st.followTextOn]}>{following ? '★ Following' : '☆ Follow'}</Text>
         </TouchableOpacity>
+        <FollowBell type="team" id={t.id} name={t.name} />
       </Card>
     );
   };

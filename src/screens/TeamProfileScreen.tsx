@@ -7,6 +7,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, Pill, Button, LoadingState, ScreenTitle, SelectChip, textStyles } from '../components/ui';
 import { useParamState } from '../navigation/useParamState';
 import { MatchCard } from '../components/MatchCard';
@@ -151,11 +152,15 @@ export default function TeamProfileScreen() {
           </View>
         </View>
 
-        <Button
-          label={following ? '✓ Following' : '+ Follow team'}
-          variant={following ? 'ghost' : 'primary'}
-          onPress={() => toggle('team', team.id)}
-        />
+        <View style={st.followRow}>
+          <Button
+            label={following ? '✓ Following' : '+ Follow team'}
+            variant={following ? 'ghost' : 'primary'}
+            onPress={() => toggle('team', team.id)}
+            style={{ flex: 1 }}
+          />
+          <FollowBell type="team" id={team.id} name={team.name} />
+        </View>
         <View style={st.actions}>
           <View style={{ flex: 1 }}><Button label="📊 Stats" variant="ghost" onPress={() => scrollRef.current?.scrollTo({ y: statsY, animated: true })} /></View>
           <View style={{ flex: 1 }}><Button label={canManageSquad ? '👥 Squad · ＋ Add' : '👥 Squad'} variant="ghost" onPress={() => nav.navigate('Squad', { teamId: team.id })} /></View>
@@ -310,6 +315,7 @@ const FORM_COLOR: Record<Result, string> = { W: theme.colors.primary, D: theme.c
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 const st = StyleSheet.create({
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   actions: { flexDirection: 'row', gap: theme.spacing(3) },
   formRow: { flexDirection: 'row', gap: theme.spacing(2) },
   formChip: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

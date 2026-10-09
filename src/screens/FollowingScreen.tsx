@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Pill, ScreenTitle, textStyles } from '../components/ui';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
+import { FollowBell } from '../components/FollowBell';
 import { useAuth } from '../core/auth';
 import { useFollow, usePlayers, useTeams, useTournament } from '../data/hooks';
 import { getSport } from '../sports/registry';
@@ -58,6 +59,7 @@ export default function FollowingScreen() {
                   <Text style={textStyles.muted}>{t.hostName}</Text>
                 </View>
                 <Unfollow onPress={() => toggle('tournament', t.id)} />
+                <FollowBell type="tournament" id={t.id} name={t.name} />
               </Card>
             ))}
           </>
@@ -74,6 +76,7 @@ export default function FollowingScreen() {
                   <Text style={textStyles.muted}>{getSport(t.sport).icon} {getSport(t.sport).name}</Text>
                 </View>
                 <Unfollow onPress={() => toggle('team', t.id)} />
+                <FollowBell type="team" id={t.id} name={t.name} />
               </Card>
             ))}
           </>
@@ -95,6 +98,7 @@ export default function FollowingScreen() {
                     <Text style={textStyles.muted}>{p.houseName ?? 'Independent'}{p.city ? ` · ${p.city}` : ''}</Text>
                   </View>
                   <Unfollow onPress={() => toggle('player', p.id)} />
+                  <FollowBell type="player" id={p.id} name={p.fullName} />
                 </Card>
               </TouchableOpacity>
             ))}
@@ -115,7 +119,7 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   section: { marginTop: theme.spacing(2) },
-  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   icon: { fontSize: 24 },
   dot: { width: 16, height: 16, borderRadius: 8 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

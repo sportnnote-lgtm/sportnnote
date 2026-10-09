@@ -314,9 +314,11 @@ async function gatherReminderInputs(now: number) {
   ]);
   const players = await getPlayers();
   const playerNameById = Object.fromEntries(players.map((p) => [p.id, p.fullName]));
-  // The viewer's followed players (follow keys look like "player:<id>").
+  // The viewer's followed players (follow keys look like "player:<id>") who
+  // still want "Before they play" reminders (#23 alert choices).
   const followedPlayerIds = new Set(
-    followStore.getSnapshot().filter((k) => k.startsWith('player:')).map((k) => k.slice('player:'.length)),
+    followStore.getSnapshot().filter((k) => k.startsWith('player:')).map((k) => k.slice('player:'.length))
+      .filter((id) => followStore.wants('player', id, 'reminder')),
   );
   return { matches, tournaments, orgs, leadersByTeam, squadsByMatch, players, playerNameById, followedPlayerIds };
 }

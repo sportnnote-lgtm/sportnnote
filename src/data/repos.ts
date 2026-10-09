@@ -5,6 +5,7 @@
  */
 import { ageOf } from '../core/age';
 import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
+import { serializePrefs, type FollowPrefs } from './followPrefs';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import type { PickedDoc } from '../core/document';
 import type { PickedImage } from '../core/photo';
@@ -2507,6 +2508,51 @@ export async function setFollow(
       .eq('follower_id', profileId)
       .eq('target_type', targetType)
       .eq('target_id', targetId);
+  }
+}
+
+/** Alert choices of every follow (#23), keyed "<type>:<id>". Only rows with OFF
+ *  switches are returned. Any error (e.g. the follow_prefs migration isn't run
+ *  yet) → {} so every alert stays on. */
+export async function getFollowPrefs(profileId?: string): Promise<Record<string, FollowPrefs>> {
+  if (!isSupabaseConfigured || !supabase || !profileId) return {};
+  try {
+    const { data, error } = await supabase
+      .from('follows')
+      .select('target_type, target_id, prefs')
+      .eq('follower_id', profileId)
+      .not('prefs', 'is', null);
+    if (error || !data) return {};
+    const out: Record<string, FollowPrefs> = {};
+    for (const r of data as { target_type: string; target_id: string; prefs: unknown }[]) {
+      const p = serializePrefs(r.prefs as FollowPrefs);
+      if (p) out[`${r.target_type}:${r.target_id}`] = p;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Save a follow's alert choices. All on is stored as null. Demo: the store only
+ *  (returns true). Returns false when the write fails (no migration, offline). */
+export async function setFollowPrefs(
+  targetType: FollowTargetType,
+  targetId: string,
+  prefs: FollowPrefs,
+  profileId?: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase || !profileId) return true; // demo: followStore only
+  try {
+    const { error } = await supabase
+      .from('follows')
+      .update({ prefs: serializePrefs(prefs) })
+      .eq('follower_id', profileId)
+      .eq('target_type', targetType)
+      .eq('target_id', targetId);
+    return !error;
+  } catch {
+    return false;
   }
 }
 

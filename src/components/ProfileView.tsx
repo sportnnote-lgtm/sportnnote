@@ -26,6 +26,7 @@ import { sportSummary, hasPartialCoverage } from '../data/stats';
 import type { Player, SportId } from '../core/types';
 import { displayableImage } from '../core/imageUrl';
 import { notice } from '../core/confirm';
+import { FollowBell } from './FollowBell';
 
 export function ProfileView({
   playerId,
@@ -43,7 +44,8 @@ export function ProfileView({
   onSignOut,
 }: {
   playerId: string | null;
-  follow?: { following: boolean; onToggle: () => void };
+  /** `name` labels the 🔔 alert-settings sheet (falls back to the player's name). */
+  follow?: { following: boolean; onToggle: () => void; name?: string };
   /** Share this profile (record across sports + link). */
   onShare?: () => void;
   /** someone else's profile: open a conversation (routed to the guardian for under-18s) */
@@ -194,11 +196,17 @@ export function ProfileView({
       )}
       {onShare && <Button label={ownProfile ? '📤 Share my profile' : '📤 Share profile'} variant="ghost" onPress={onShare} />}
       {follow && (
-        <Button
-          label={follow.following ? '✓ Following' : '+ Follow player'}
-          variant={follow.following ? 'ghost' : 'primary'}
-          onPress={follow.onToggle}
-        />
+        <View style={st.followRow}>
+          <Button
+            label={follow.following ? '✓ Following' : '+ Follow player'}
+            variant={follow.following ? 'ghost' : 'primary'}
+            onPress={follow.onToggle}
+            style={{ flex: 1 }}
+          />
+          {follow.following && playerId && (
+            <FollowBell type="player" id={playerId} name={follow.name ?? player?.fullName ?? 'this player'} />
+          )}
+        </View>
       )}
       {onMessage && !ownProfile && (
         <Button
@@ -585,6 +593,7 @@ function VerificationCard({ player, owner, reviewer }: { player: Player; owner: 
 }
 
 const st = StyleSheet.create({
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing(6) },
   emptyBlock: { gap: theme.spacing(3), paddingVertical: theme.spacing(8) },

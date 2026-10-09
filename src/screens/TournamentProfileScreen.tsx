@@ -9,6 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
 import { RankBadge, podiumColor } from '../components/Rank';
@@ -500,11 +501,15 @@ export default function TournamentProfileScreen() {
               </View>
             )}
 
-            <Button
-              label={following ? '✓ Following' : '+ Follow tournament'}
-              variant={following ? 'ghost' : 'primary'}
-              onPress={() => toggle('tournament', tournament.id)}
-            />
+            <View style={st.followRow}>
+              <Button
+                label={following ? '✓ Following' : '+ Follow tournament'}
+                variant={following ? 'ghost' : 'primary'}
+                onPress={() => toggle('tournament', tournament.id)}
+                style={{ flex: 1 }}
+              />
+              <FollowBell type="tournament" id={tournament.id} name={tournament.name} />
+            </View>
 
             <Text style={textStyles.muted}>
               Organized by {currentOwnerLabel}{creatorName ? ` · Created by ${creatorName}` : ''}
@@ -983,6 +988,7 @@ function HubRow({ icon, title, status, onPress, open }: { icon: string; title: s
 }
 
 const st = StyleSheet.create({
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   hubRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   hubIcon: { fontSize: 20, width: 28, textAlign: 'center' },
   safe: { flex: 1, backgroundColor: theme.colors.bg },

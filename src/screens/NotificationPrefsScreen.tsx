@@ -8,11 +8,15 @@ import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FieldLabel, textStyles } from '../components/ui';
 import { reminderPrefsStore, LEAD_PRESETS, formatLead } from '../data/reminderPrefs';
 import { WebPushCard } from '../components/WebPushCard';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 
 type Unit = 'min' | 'hour' | 'day';
 const UNIT_MINS: Record<Unit, number> = { min: 1, hour: 60, day: 1440 };
 
 export default function NotificationPrefsScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const selected = useSyncExternalStore(reminderPrefsStore.subscribe, reminderPrefsStore.getSnapshot);
   const [num, setNum] = useState('45');
   const [unit, setUnit] = useState<Unit>('min');
@@ -70,6 +74,12 @@ export default function NotificationPrefsScreen() {
             </View>
           </View>
           <Button label="＋ Add timer" variant="ghost" onPress={addCustom} disabled={!parseInt(num.trim(), 10)} />
+        </Card>
+
+        <Card style={{ gap: theme.spacing(2) }}>
+          <Text style={textStyles.h3}>⭐ Alerts for things you follow</Text>
+          <Text style={textStyles.muted}>Choose per player, team or tournament with the 🔔 next to Following.</Text>
+          <Button label="Open Following" variant="ghost" onPress={() => nav.navigate('Following')} />
         </Card>
 
         <Text style={textStyles.muted}>

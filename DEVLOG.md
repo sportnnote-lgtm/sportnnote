@@ -13,6 +13,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Alert choices per followed player, team or tournament (🔔 bell sheet) (parity #23)
+
+- **Ask (parity queue #23):** a parent wants "match starts" and "result" for the meet without a buzz
+  for every tackle; the only way to quieten alerts was to unfollow.
+- **Migration 0047** `20261019122300_follow_prefs.sql` (bundle `2026-10-follow-prefs-0047.sql`) —
+  founder to run: `follows.prefs jsonb` (only OFF switches; null = all on); `pg_net` + security-definer
+  `notify_match_status()` with a **status-only** trigger (`after update of status … when old.status
+  is distinct from new.status`, REVIEW row 23) posting to notify-followers with Vault secrets
+  (`notify_followers_url`, `webhook_secret`, optional `functions_anon_key`); no-ops if unset, never
+  blocks a status write. PGlite followprefs 25/25 (+ all suites green; harness gained pg_net/vault stubs).
+- **Data:** pure `data/followPrefs.ts` (`ALERTS` per type — player: before they play / starts /
+  result / goals-wickets-big-moments; team & tournament: starts / result; no `award` until #21's
+  fan-out exists), `followStore` prefs, repos get/set prefs, hydrated with follows; client gates in
+  `reminders.ts` and `useLiveMatch.ts`.
+- **Server (code only — founder deploys):** notify-followers `sendToProfiles` + `followersOf`
+  (prefs-aware with fallback); stat branch keeps #05's headline diff and drops `scores:false`; new
+  `match_status` branch (start/result to followers of both teams, the tournament and squad players,
+  filtered, de-duped via `reminder_sends`). notify-upcoming skips `reminder:false`.
+- **UI:** `FollowBell` (🔔 / 🔔• / 🔕, only while following) + `FollowAlertsSheet` on Following,
+  player profile, team, tournament and Discover team rows; Notification settings card.
+- **Fixed:** the scorer-device follower stat alert passed `playerId`, which `notify()` treats as the
+  recipient — it pushed to the goal scorer instead of showing to the follower.
+- **Verified:** tsc + 750 tests (10 new); Deno functions type-checked with shims; demo 8093: bell,
+  untick scores → dot, the muted player's goal gives no alert while another's does, re-follow resets,
+  team/tournament sheets show Start + Result only; 375 px.
+
+---
+
 ### 2026-10-09 — Global search: players, teams, matches, tournaments (parity #22)
 
 - **Ask (parity queue #22):** Discover could only search players by name; teams were an

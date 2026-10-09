@@ -63,7 +63,7 @@ export default function PlayerProfileScreen() {
       <ProfileView
         playerId={playerId}
         onShare={player && (age ?? 0) >= 18 || player?.profileId === profile?.id ? shareProfile : undefined}
-        follow={{ following: isFollowing('player', playerId), onToggle: () => toggle('player', playerId) }}
+        follow={{ following: isFollowing('player', playerId), onToggle: () => toggle('player', playerId), name: player?.fullName }}
         onMessage={player && player.profileId !== profile?.id ? () => {
           const viaGuardian = (ageOf(player) ?? 0) < 18;
           nav.navigate('Conversation', {
