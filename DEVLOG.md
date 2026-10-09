@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket overs & target: change overs anytime, manual target, correct DLS, "(DLS)" result (parity #18)
+
+- **Ask (parity queue #18):** overs could only be reduced and only with DLS on at setup; revised
+  targets were wrong outside 50 overs (a T20 chase of 160 cut to 10 showed 122 — correct is 91);
+  results never said "DLS".
+- **dls.ts:** Standard Edition table (`Z0` 0-wicket column + 8 anchor rows, interpolated);
+  old exponential fit kept as `resourcePctV1` for legacy replays.
+- **Engine:** gate per REVIEW Decision 8 — the first `v: 2` RAIN (or any SET_OVERS / SET_TARGET)
+  sets `dlsV = 2`; legacy RAIN replays byte-for-byte (1,500 fuzzed legacy matches + seeds identical
+  vs HEAD). New `SET_OVERS` (up or down, any innings, no DLS needed; recomputes #17's auto quota),
+  ball-accurate v2 RAIN, innings-switch target from both sides' resources, `SET_TARGET` (manual,
+  locks DLS), `outcome(s)` (margin vs the revised par + " (DLS)" / " (revised target)") used by the
+  result line, plugin result, summary winner and the tie check. A match already carrying a legacy
+  rain cut stays on the legacy maths (no unit mixing for matches live across the update).
+- **UI:** "⏱ Overs & target" card (Change overs / Rain (DLS) / Set target), previews run the
+  reducer (no duplicated maths), clock "7.3 / 15 ov · DLS", "Target 113 (DLS)"; help guides
+  rewritten.
+- **Verified:** tsc + 663 tests (cricket-dls 18, cricket-overs 28); spec cases A–F exact; demo 8093:
+  20 → 12 overs, manual target, rain preview "revised target 34 in 5 ov", banner "won by 15 runs (DLS)".
+  Known: the spec's interpolation dips slightly (≤ 0.26 pts) in u for 6–9 wickets down; losses are
+  clamped ≥ 0 so a target can't rise from it. No migration.
+
+---
+
 ### 2026-10-09 — Cricket bowling rules: per-bowler quota, mid-over replacement, next-over rule (parity #17)
 
 - **Ask (parity queue #17):** nothing stopped a star bowler's fifth over in a T20; an injured

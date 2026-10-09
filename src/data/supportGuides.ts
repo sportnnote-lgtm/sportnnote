@@ -97,16 +97,21 @@ Tap **⚙ Customize this format** to set individual rules yourself — players p
 
 If a format or street-rule variant you need isn't offered, tell us from **Settings → Help & support** — we track those requests.`,
 
-  'rain-dls': `When weather or time cuts a limited-overs cricket match short:
+  'rain-dls': `When weather or time cuts a limited-overs cricket match short, or the teams agree a different length:
 
-## Reduce the overs
-1. In the live scorer, tap **☔ Rain — reduce overs**.
-2. Set the new number of overs.
-3. The chasing side's **target recalculates automatically** — no manual maths at the ground.
+## Change the overs
+1. In the live scorer, tap **⏱ Overs & target**.
+2. Pick **Change overs** and set the new total (up or down, in either innings). The target doesn't move.
 
-The scoreboard clearly shows the revised overs and target so everyone knows what's required.
+## Rain (DLS)
+1. With DLS switched on for the match, pick **☔ Rain (DLS)** and enter the new total overs.
+2. The preview shows the overs lost and the **revised target** before you apply — no manual maths at the ground.
+3. Repeat for each further interruption. The scoreboard shows "Target 113 (DLS)" and the result says "(DLS)".
 
-This uses a Duckworth-Lewis-Stern style resource calculation suitable for club/box cricket; it isn't the official ICC table.`,
+## Set a target by hand
+In the chase, pick **Set target** and type the runs and overs from the official sheet. Built-in DLS is then switched off for the rest of the match.
+
+DLS uses the ICC Standard Edition resource values (6-ball overs, so The Hundred counts as 16.4 overs).`,
 
   'create-tournament': `Run a whole competition from the **Organize** tab.
 

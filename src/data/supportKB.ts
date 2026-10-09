@@ -144,13 +144,11 @@ If a format or rule you want isn't offered yet, contact support and tell us the 
     id: 'rain-dls',
     title: 'Rain-reduced overs (cricket / DLS)',
     category: 'Live scoring',
-    summary: 'Use "Rain — reduce overs" and the target updates automatically.',
+    summary: 'Use "⏱ Overs & target" to change overs, apply a rain cut (DLS) or set a target.',
     keywords: ['rain', 'dls', 'duckworth', 'reduced overs', 'revised target', 'cricket'],
-    body: `If rain shortens a limited-overs match, tap "Rain — reduce overs" on the cricket scorer and set the new overs.
+    body: `Tap "⏱ Overs & target" on the cricket scorer. "Change overs" sets a new length (any innings, up or down; the target stays). With DLS on, "Rain (DLS)" cuts the overs and previews the revised target before you apply it. In the chase, "Set target" takes the runs and overs from the official sheet and switches built-in DLS off.
 
-The chasing side's target is revised automatically using a Duckworth-Lewis-Stern style resource calculation, so the score and target stay correct without any manual maths.
-
-This is an approximation suitable for club/box cricket; it isn't the official ICC table.`,
+DLS uses the ICC Standard Edition resource values; the result is marked "(DLS)".`,
   },
   {
     id: 'create-tournament',

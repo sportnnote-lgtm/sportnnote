@@ -11,7 +11,7 @@ import type { LiveEvent } from '../liveEvents';
 // NB: explicit .ts extension — lets Node's test runner load this engine (it does
 // not do extensionless resolution); tsc (bundler resolution) and Metro both
 // accept it too.
-import { resourcePct, revisedTarget } from './dls.ts';
+import { resourcePct, resourcePctV1, revisedTarget } from './dls.ts';
 import { rulesFromConfig, rulesOf, effectiveRules, patchRules, describeRulesChange, type CricketRules } from './rules.ts';
 
 interface Innings {
@@ -119,6 +119,19 @@ export interface CricketState {
   /** DLS resources lost (%) to interruptions in each innings — drives the revise. */
   r1Lost: number;
   r2Lost: number;
+  /** parity #18 — overs each innings was SCHEDULED for (changed only by an agreed
+   *  SET_OVERS / SET_TARGET; a RAIN cut moves `oversLimit` and is charged to rXLost).
+   *  Older states: `?? oversLimit`. `inn2Overs` is set when the chase starts. */
+  inn1Overs?: number;
+  inn2Overs?: number;
+  /** how the chase target was last revised: by DLS (rain) or typed in by hand. */
+  revision?: 'dls' | 'manual';
+  /** a manual target was set — built-in DLS is off for the rest of the match. */
+  dlsLocked?: boolean;
+  /** 2 once the match has seen a `v: 2` RAIN / SET_OVERS / SET_TARGET: the
+   *  Standard Edition table, ball-accurate losses and par-based margins. Absent =
+   *  legacy maths (REVIEW Decision 8), so stored DLS results replay identically. */
+  dlsV?: 2;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -205,6 +218,7 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   barredBowlers: [],
   r1Lost: 0,
   r2Lost: 0,
+  inn1Overs: Number(config?.overs ?? 20),
   events: [],
   seq: 0,
   ended: false,
@@ -487,18 +501,127 @@ const BALL_TYPES = new Set(['RUNS', 'BYES', 'LEGBYES', 'WICKET', 'EXTRA']);
 export const alignCrease = (s: CricketState, info: BallInfo): CricketState =>
   info.strikerId && s.nonStrikerId && info.strikerId === s.nonStrikerId && info.strikerId !== s.strikerId ? swapStrike(s) : s;
 
+// ─── Overs & target (parity #18) ──────────────────────────────────────────────
+
+/** Round away float dust (42.6 stays 42.6) so a target never floors a hair low. */
+const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
+/** 6-ball overs remaining in an innings of `overs` (×bpo balls) with `balls` bowled. */
+const uLeft = (overs: number, balls: number, bpo: number) => Math.max(0, (overs * bpo - balls) / 6);
+
+/** DLS resources (%) each side has — Standard Edition (v2 matches only):
+ *  scheduled overs' full resources less what interruptions took. */
+export function dlsResources(s: CricketState): { r1: number; r2: number } {
+  const bpo = s.ballsPerOver;
+  return {
+    r1: r6(resourcePct(((s.inn1Overs ?? s.oversLimit) * bpo) / 6, 0) - s.r1Lost),
+    r2: r6(resourcePct(((s.inn2Overs ?? s.oversLimit) * bpo) / 6, 0) - s.r2Lost),
+  };
+}
+
+/** The chase's target when innings 2 starts (`settle` / END_INNINGS). Legacy:
+ *  today's formula (team 2 assumed 100%). v2: DLS only if innings 1 was cut —
+ *  team 2's resources are its full (possibly reduced) allocation. */
+function chaseStart(s: CricketState, runs: number): Pick<CricketState, 'target' | 'inn2Overs'> {
+  const inn2Overs = s.oversLimit;
+  if (s.dlsV !== 2) return { inn2Overs, target: revisedTarget(runs, 100 - s.r1Lost, 100) };
+  if (!(s.dls && s.r1Lost !== 0)) return { inn2Overs, target: runs + 1 };
+  const { r1 } = dlsResources(s);
+  return { inn2Overs, target: revisedTarget(runs, r1, r6(resourcePct((inn2Overs * s.ballsPerOver) / 6, 0))) };
+}
+
+/** Overs / target changes are off while a Super Over (or the call on a tie) is pending. */
+const tieInPlay = (s: CricketState) => !!s.superOver || !!s.pendingTie || !!s.isSuperOver;
+
+/** A legacy (no-`v`) rain cut has already been booked in this match, in the old
+ *  resource units: a match live across the update keeps the legacy maths for
+ *  the rest of the match rather than mixing units (later RAINs go legacy, and
+ *  SET_OVERS only changes the length). */
+const legacyRainBooked = (s: CricketState) => s.revision === 'dls' && s.dlsV !== 2;
+
+/** A v:2 rain interruption: ball-accurate resources lost on the Standard Edition
+ *  table; in the chase the target is revised from both sides' resources. */
+function rainV2(s: CricketState, newOvers: number): CricketState {
+  if (!s.dls || s.dlsLocked || tieInPlay(s)) return s;
+  const bpo = s.ballsPerOver;
+  const inn = s.scores[s.battingSide];
+  if (!(newOvers * bpo > inn.balls && newOvers < s.oversLimit)) return s;
+  const loss = Math.max(0, resourcePct(uLeft(s.oversLimit, inn.balls, bpo), inn.wickets) - resourcePct(uLeft(newOvers, inn.balls, bpo), inn.wickets));
+  let next: CricketState = recomputeQuota({ ...s, oversLimit: newOvers, dlsV: 2, revision: 'dls' }, newOvers);
+  if (s.innings === 1) {
+    next = { ...next, r1Lost: r6(s.r1Lost + loss) };
+  } else {
+    next = { ...next, r2Lost: r6(s.r2Lost + loss) };
+    const { r1, r2 } = dlsResources(next);
+    next = { ...next, target: revisedTarget(s.scores[other(s.battingSide)].runs, r1, r2) };
+    // The revised target may already be reached — the chase is won.
+    if (inn.runs >= next.target!) next = { ...next, ended: true };
+  }
+  return {
+    ...next, seq: s.seq + 1,
+    events: [...s.events, { id: s.seq + 1, stamp: '☔', icon: '☔', label: `Rain — overs cut to ${newOvers}${s.innings === 2 ? ` · target ${next.target} (DLS)` : ''}`, detail: undefined, side: s.battingSide }],
+  };
+}
+
 const reducer = (s: CricketState, a: ScoreAction): CricketState => {
   if (s.ended && a.type !== 'END' && a.type !== 'POTM') return s;
 
+  // ── Change overs (parity #18) ─────────────────────────────────────────────
+  // An agreed new length, up or down, any innings, DLS or not. No resource
+  // credit and the target is unchanged. A new action type → no legacy gate;
+  // it always moves the match onto the v2 maths (the UI sends `v: 2` anyway).
+  if (a.type === 'SET_OVERS') {
+    if (tieInPlay(s)) return s;
+    const n = Math.floor(Number(a.payload?.overs));
+    const inn = s.scores[s.battingSide];
+    if (!Number.isFinite(n) || n < 1 || n > 999 || n * s.ballsPerOver <= inn.balls || n === s.oversLimit) return s;
+    // The innings' scheduled length becomes n. If rain has already cut THIS
+    // innings, its scheduled length stays and the change is booked at the
+    // current ball instead (a cut adds to the loss, an extension gives some
+    // back — the loss may go below 0), so R = used + remaining always holds;
+    // R(n) − (losses against the old length) could go negative. With no loss
+    // yet the two are the same thing.
+    const lostNow = s.innings === 1 ? s.r1Lost : s.r2Lost;
+    const bpo = s.ballsPerOver;
+    const legacy = legacyRainBooked(s);
+    const shift = legacy ? {}
+      : lostNow !== 0
+      ? { [s.innings === 1 ? 'r1Lost' : 'r2Lost']: r6(lostNow + resourcePct(uLeft(s.oversLimit, inn.balls, bpo), inn.wickets) - resourcePct(uLeft(n, inn.balls, bpo), inn.wickets)) }
+      : s.innings === 1 ? { inn1Overs: n } : { inn2Overs: n };
+    const next = recomputeQuota({ ...s, oversLimit: n, ...shift, ...(legacy ? {} : { dlsV: 2 as const }) }, n);
+    return {
+      ...next, seq: s.seq + 1,
+      events: [...s.events, { id: s.seq + 1, stamp: oversStr(inn.balls, s.ballsPerOver), icon: '⏱', label: `Overs changed to ${n}`, detail: s.innings === 2 && s.target !== undefined ? `Target stays ${s.target}` : undefined, side: s.battingSide }],
+    };
+  }
+
+  // ── Manual target (parity #18) ────────────────────────────────────────────
+  // The chase only: the scorer types runs + overs (e.g. an official's sheet).
+  // Built-in DLS is off for the rest of the match (later RAINs are ignored).
+  if (a.type === 'SET_TARGET') {
+    if (s.innings !== 2 || tieInPlay(s)) return s;
+    const runs = Math.floor(Number(a.payload?.runs));
+    const n = Math.floor(Number(a.payload?.overs));
+    const inn = s.scores[s.battingSide];
+    if (!Number.isFinite(runs) || !Number.isFinite(n) || runs < 1 || runs <= inn.runs || n < 1 || n > 999 || n * s.ballsPerOver <= inn.balls) return s;
+    const next = recomputeQuota({ ...s, target: runs, oversLimit: n, inn2Overs: n, revision: 'manual', dlsLocked: true, dlsV: 2 }, n);
+    return {
+      ...next, seq: s.seq + 1,
+      events: [...s.events, { id: s.seq + 1, stamp: oversStr(inn.balls, s.ballsPerOver), icon: '🎯', label: `Target set to ${runs} in ${n} ov`, detail: 'Revised target entered by hand — DLS off', side: s.battingSide }],
+    };
+  }
+
   // ── Rain (DLS) ────────────────────────────────────────────────────────────
   // Cut the overs; in the chase, revise the target by the resources lost.
+  // `v: 2` (or a match already on v2) → Standard Edition maths; otherwise the
+  // legacy path below, byte-for-byte, so stored results replay (Decision 8).
   if (a.type === 'RAIN') {
     const newOvers = Math.floor(Number(a.payload?.overs ?? s.oversLimit));
+    if ((a.payload?.v === 2 || s.dlsV === 2) && !legacyRainBooked(s)) return rainV2(s, newOvers);
     const inn = s.scores[s.battingSide];
     const oversDone = Math.floor(inn.balls / s.ballsPerOver);
     if (!s.dls || newOvers <= oversDone || newOvers >= s.oversLimit) return s;
-    const lost = Math.max(0, resourcePct(s.oversLimit - oversDone, inn.wickets) - resourcePct(newOvers - oversDone, inn.wickets));
-    let next: CricketState = recomputeQuota({ ...s, oversLimit: newOvers }, newOvers);
+    const lost = Math.max(0, resourcePctV1(s.oversLimit - oversDone, inn.wickets) - resourcePctV1(newOvers - oversDone, inn.wickets));
+    let next: CricketState = recomputeQuota({ ...s, oversLimit: newOvers, revision: 'dls' }, newOvers);
     if (s.innings === 1) {
       next = { ...next, r1Lost: s.r1Lost + lost };
     } else {
@@ -561,12 +684,15 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     if (state.innings === 2 && state.target !== undefined && c.runs >= state.target) return { ...state, ended: true };
     if (!inningsComplete(state, c)) return state;
     if (state.innings === 1) {
-      return { ...state, innings: 2, battingSide: other(state.battingSide), target: revisedTarget(c.runs, 100 - state.r1Lost, 100), thisOver: [], ballsInOver: 0, ...clearCrease };
+      return { ...state, innings: 2, battingSide: other(state.battingSide), ...chaseStart(state, c.runs), thisOver: [], ballsInOver: 0, ...clearCrease };
     }
     // Second innings done without reaching the target: a loss — or a level score.
     // A level regulation match pauses for the scorer's call (Super Over or accept
     // the tie); a level Super Over just ends so the parent can decide the next step.
-    const level = state.scores.home.runs === state.scores.away.runs;
+    // v2 (#18): level means level with PAR (target − 1) — a revised target moves it.
+    const level = state.dlsV === 2 && state.target !== undefined
+      ? c.runs === state.target - 1
+      : state.scores.home.runs === state.scores.away.runs;
     if (level && !state.isSuperOver) return { ...state, pendingTie: true };
     return { ...state, ended: true };
   };
@@ -1056,7 +1182,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     case 'POTM':
       return { ...s, potm: String(a.payload?.name ?? '') };
     case 'END_INNINGS':
-      if (s.innings === 1) return { ...s, innings: 2, battingSide: other(bat), target: revisedTarget(cur.runs, 100 - s.r1Lost, 100), thisOver: [], ballsInOver: 0, ...clearCrease };
+      if (s.innings === 1) return { ...s, innings: 2, battingSide: other(bat), ...chaseStart(s, cur.runs), thisOver: [], ballsInOver: 0, ...clearCrease };
       return { ...s, ended: true };
     case 'END':
       return { ...s, ended: true };
@@ -1099,27 +1225,40 @@ function resolveSuperOver(s: CricketState, inner: CricketState): CricketState {
   return { ...s, superOver: { ...s.superOver!, state: inner }, ended: decided };
 }
 
-function resultLine(s: CricketState): string {
-  // Decided by a Super Over.
-  if (s.superOver) {
+/**
+ * Who won and how (parity #18) — the ONE place the result is decided; the
+ * result line, `plugin.result`, the final banner and `settle`'s level check
+ * agree through it. A Super Over decides first. Reaching the target wins by
+ * wickets; otherwise the margin is from PAR (target − 1), 0 = tied. A revised
+ * target adds " (DLS)" / " (revised target)". Legacy matches (no `dlsV`) keep
+ * today's `defend − chase` and no suffix, so stored results read the same.
+ * `winner` null = tied / undecided.
+ */
+export function outcome(s: CricketState): { winner: 'home' | 'away' | null; text: string } {
+  const so = s.superOver ? superOverWinner(s.superOver.state) : null;
+  if (s.superOver && so) {
     const inn = s.superOver.state;
-    const w = superOverWinner(inn);
-    if (w) {
-      const margin = Math.abs(inn.scores.home.runs - inn.scores.away.runs);
-      const roundTag = s.superOver.round > 1 ? ` (Super Over ${s.superOver.round})` : '';
-      return `Won the Super Over by ${margin} run${margin === 1 ? '' : 's'}${roundTag}`;
-    }
+    const margin = Math.abs(inn.scores.home.runs - inn.scores.away.runs);
+    const roundTag = s.superOver.round > 1 ? ` (Super Over ${s.superOver.round})` : '';
+    return { winner: so, text: `Won the Super Over by ${margin} run${margin === 1 ? '' : 's'}${roundTag}` };
   }
-  const chase = s.scores[s.battingSide];
-  const defend = s.scores[other(s.battingSide)];
+  const v2 = s.dlsV === 2;
+  const tag = !v2 ? '' : s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised target)' : '';
+  const chaseSide = s.battingSide;
+  const chase = s.scores[chaseSide];
+  const defend = s.scores[other(chaseSide)];
   if (chase.runs >= (s.target ?? Infinity)) {
     const w = s.wicketsLimit - chase.wickets;
-    return `Won by ${w} wkt${w === 1 ? '' : 's'}`;
+    return { winner: s.superOver ? null : chaseSide, text: `Won by ${w} wkt${w === 1 ? '' : 's'}${tag}` };
   }
-  const margin = defend.runs - chase.runs;
-  if (margin === 0) return 'Match tied';
-  return `Won by ${margin} run${margin === 1 ? '' : 's'}`;
+  const par = v2 ? (s.target ?? defend.runs + 1) - 1 : defend.runs;
+  const margin = par - chase.runs;
+  if (margin === 0) return { winner: null, text: `Match tied${tag}` };
+  return { winner: s.superOver ? null : other(chaseSide), text: `Won by ${margin} run${margin === 1 ? '' : 's'}${tag}` };
 }
+
+/** The result text, e.g. "Won by 16 runs (DLS)". */
+const resultLine = (s: CricketState): string => outcome(s).text;
 
 export { init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, NO_DELIVERY, composeDismissal };
 export type { Innings, DismissalRecord };

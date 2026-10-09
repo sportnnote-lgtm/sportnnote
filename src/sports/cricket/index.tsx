@@ -24,14 +24,13 @@ import type { ScoreAction, SportPlugin, QuickOptionsProps } from '../types';
 import { Tile } from '../../components/QuickOptionsSheet';
 import { cricketVoice } from '../voiceParsers';
 import {
-  init, reducer, other, resultLine, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
+  init, reducer, other, resultLine, outcome, superOverWinner, WICKET_LABEL, NO_BOWLER, composeDismissal,
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
   canBowl, midOver, oversUsed,
 } from './engine';
 import type { CricketState, DismissalKind, Innings, RunsAs } from './engine';
-import { resourcePct, revisedTarget } from './dls';
 import { OverEditor } from './OverEditor';
 import {
   LOCAL_RULE_FIELDS, CRICKET_LIVE_SETTINGS, rulesOf, effectiveRules, inStandardWindow, isStandard,
@@ -233,6 +232,117 @@ function RunsInput({ onAdd, min = 0, placeholder, addLabel }: {
   );
 }
 
+/** " (DLS)" / " (revised)" after a revised target (parity #18). */
+const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised)' : '');
+
+type OversMode = 'overs' | 'rain' | 'target';
+/** Parity #18 — "⏱ Overs & target": change the overs (any innings, up or down,
+ *  DLS or not), a rain interruption (DLS cut), or a target typed in by hand.
+ *  Every preview is the reducer's own result for the action it would send, so
+ *  there is no second copy of the DLS maths here. Always sends `v: 2`. */
+function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispatch: (a: ScoreAction) => void; battingName: string }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<OversMode>('overs');
+  const [ov, setOv] = useState('');
+  const [tRuns, setTRuns] = useState('');
+  const bpo = s.ballsPerOver;
+  const cur = s.scores[s.battingSide];
+  const bowled = oversStr(cur.balls, bpo);
+  const chase = s.innings === 2;
+  const canRain = s.dls && !s.dlsLocked;
+  const m: OversMode = (mode === 'rain' && !canRain) || (mode === 'target' && !chase) ? 'overs' : mode;
+  const pick = (md: OversMode) => {
+    setMode(md);
+    setOv(md === 'rain' ? '' : String(s.oversLimit));
+    setTRuns(md === 'target' && s.target ? String(s.target) : '');
+  };
+  const close = () => { setOpen(false); setOv(''); setTRuns(''); setMode('overs'); };
+  if (!open) {
+    return (
+      <Button label="⏱ Overs & target" variant="ghost" style={ctrl.ovOpenBtn}
+        accessibilityLabel="Overs and target: change overs, rain (DLS) or set a target"
+        onPress={() => { setOpen(true); pick('overs'); }} />
+    );
+  }
+
+  const n = parseInt(ov, 10);
+  const runsN = parseInt(tRuns, 10);
+  const action: ScoreAction | null = ov === '' || isNaN(n) ? null
+    : m === 'overs' ? { type: 'SET_OVERS', payload: { overs: n, v: 2 } }
+    : m === 'rain' ? { type: 'RAIN', payload: { overs: n, v: 2 } }
+    : tRuns === '' || isNaN(runsN) ? null
+    : { type: 'SET_TARGET', payload: { runs: runsN, overs: n, v: 2 } };
+  const next = action ? reducer(s, action) : null;
+  const ok = !!next && next !== s;
+  const ballsLeft = (lim: number) => Math.max(0, lim * bpo - cur.balls);
+
+  // Unchanged overs (the prefilled value) is not an error — just nothing to apply.
+  const error = !action || ok || (m === 'overs' && n === s.oversLimit) ? null
+    : n * bpo <= cur.balls ? `Must be more than ${bowled} overs bowled.`
+    : n > 999 ? 'At most 999 overs.'
+    : m === 'rain' && n >= s.oversLimit ? `Rain only cuts overs — enter fewer than ${s.oversLimit} (use Change overs to add).`
+    : m === 'target' && runsN <= cur.runs ? `Target must be more than ${cur.runs} (the score now).`
+    : 'That can’t be applied right now.';
+
+  const preview = !ok || !next ? null
+    : m === 'overs'
+      ? chase && s.target !== undefined
+        ? `Target stays ${s.target} — need ${Math.max(0, s.target - cur.runs)} off ${ballsLeft(n)}`
+        : `Both innings now ${n} overs`
+    : m === 'rain'
+      ? chase
+        ? next.ended
+          ? `Overs lost ${s.oversLimit - n} · revised target ${next.target} — ${battingName} are already there: chase won`
+          : `Overs lost ${s.oversLimit - n} · revised target ${next.target} in ${n} ov — need ${Math.max(0, (next.target ?? 0) - cur.runs)} off ${ballsLeft(n)}`
+        : `Overs lost ${s.oversLimit - n} · innings now ${n} ov — the chase target is revised when it starts`
+    : `Target ${next.target} in ${n} ov — need ${Math.max(0, (next.target ?? 0) - cur.runs)} off ${ballsLeft(n)}`;
+
+  const step = (d: number) => {
+    const base = isNaN(n) ? s.oversLimit : n;
+    setOv(String(Math.max(1, Math.min(999, base + d))));
+  };
+  const digits = (t: string) => t.replace(/[^0-9]/g, '').slice(0, 3);
+
+  return (
+    <View style={ctrl.rainBox}>
+      <View style={ctrl.creaseHead}>
+        <Text style={ctrl.label}>⏱ Overs & target</Text>
+        <Button label="Close" variant="ghost" style={ctrl.swapBtn} onPress={close} />
+      </View>
+      <Text style={ctrl.meta}>
+        Now {s.oversLimit} ov · {bowled} bowled{chase && s.target !== undefined ? ` · target ${s.target}${targetTag(s)}` : ''}
+      </Text>
+      <View style={ctrl.chips}>
+        <SelectChip label="Change overs" active={m === 'overs'} onPress={() => pick('overs')} />
+        {canRain ? <SelectChip label="☔ Rain (DLS)" active={m === 'rain'} onPress={() => pick('rain')} /> : null}
+        {chase ? <SelectChip label="Set target" active={m === 'target'} onPress={() => pick('target')} /> : null}
+      </View>
+      {m === 'target' ? (
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}>
+            <TextField label="Target runs" value={tRuns} onChange={(t) => setTRuns(digits(t))} placeholder={`More than ${cur.runs}`} autoCapitalize="none" />
+          </View>
+          <View style={ctrl.flex}>
+            <TextField label="In overs" value={ov} onChange={(t) => setOv(digits(t))} placeholder={String(s.oversLimit)} autoCapitalize="none" />
+          </View>
+        </View>
+      ) : (
+        <View style={ctrl.row}>
+          <Button label="−" variant="ghost" style={ctrl.ovStep} accessibilityLabel="One over fewer" onPress={() => step(-1)} />
+          <View style={ctrl.flex}>
+            <TextField label="" value={ov} onChange={(t) => setOv(digits(t))}
+              placeholder={m === 'rain' ? `New total overs (fewer than ${s.oversLimit})` : 'Total overs'} autoCapitalize="none" />
+          </View>
+          <Button label="＋" variant="ghost" style={ctrl.ovStep} accessibilityLabel="One over more" onPress={() => step(1)} />
+        </View>
+      )}
+      {m === 'target' ? <Text style={ctrl.ovWarn}>⚠️ Built-in DLS will be switched off for this match.</Text> : null}
+      {error ? <Text style={ctrl.rainErr}>{error}</Text> : preview ? <Text style={ctrl.rainPreview}>→ {preview}</Text> : null}
+      <Button label="Apply" disabled={!ok} onPress={() => { if (action && ok) { dispatch(action); close(); } }} />
+    </View>
+  );
+}
+
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
 }) => {
@@ -254,7 +364,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const [otRan, setOtRan] = useState(0);
   const [otOver, setOtOver] = useState<number | null>(null);
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
-  const [rain, setRain] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
   // Bowling rules (parity #17): the mid-over replacement panel (with its reason)
   // and the "Allow anyway" quota override.
@@ -598,23 +707,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const oversLabel = state.oversLimit < 100 ? ` of ${state.oversLimit}` : ''; // hide for timeless/Test
   const overJustDone = !bowlerId && cur.balls > 0 && cur.balls % state.ballsPerOver === 0;
 
-  // Rain (DLS) input: validate against the reducer's own bounds (must be more than
-  // overs already bowled, fewer than the current limit) and preview the effect —
-  // the revised chase target — using the same dls helpers the reducer applies.
-  const rainN = parseInt(rain, 10);
-  const rainOversDone = Math.floor(cur.balls / state.ballsPerOver);
-  const rainValid = rain !== '' && !isNaN(rainN) && rainN > rainOversDone && rainN < state.oversLimit;
-  const rainPreview = (() => {
-    if (!rainValid) return null;
-    const lost = Math.max(0, resourcePct(state.oversLimit - rainOversDone, cur.wickets) - resourcePct(rainN - rainOversDone, cur.wickets));
-    if (state.innings === 2) {
-      const t1 = state.scores[other(state.battingSide)].runs;
-      const nt = revisedTarget(t1, 100 - state.r1Lost, 100 - (state.r2Lost + lost));
-      return `New target ${nt} — need ${Math.max(0, nt - cur.runs)} off the last ${rainN - rainOversDone} overs`;
-    }
-    return `Innings capped at ${rainN} overs`;
-  })();
-
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {soActive && (() => {
@@ -658,26 +750,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         </View>
       )}
 
-      {/* Rain (DLS): cut the overs; in the chase the target auto-revises. */}
-      {state.dls && !state.ended && !soActive && (
-        <View style={ctrl.rainBox}>
-          <Text style={ctrl.label}>☔ Rain — reduce overs</Text>
-          <Text style={ctrl.meta}>
-            Now {state.oversLimit} overs · {oversStr(cur.balls, state.ballsPerOver)} bowled
-            {state.innings === 2 ? ` · target ${state.target}` : ''}
-          </Text>
-          <View style={ctrl.row}>
-            <View style={ctrl.flex}>
-              <TextField label="" value={rain} onChange={(t) => setRain(t.replace(/[^0-9]/g, ''))} placeholder={`New total overs (${rainOversDone + 1}–${state.oversLimit - 1})`} autoCapitalize="none" />
-            </View>
-            <Button label="Apply" variant="ghost" disabled={!rainValid} onPress={() => { dispatch({ type: 'RAIN', payload: { overs: rainN } }); setRain(''); }} />
-          </View>
-          {rain !== '' && !rainValid ? (
-            <Text style={ctrl.rainErr}>Enter a whole number between {rainOversDone + 1} and {state.oversLimit - 1}.</Text>
-          ) : rainPreview ? (
-            <Text style={ctrl.rainPreview}>→ {rainPreview}</Text>
-          ) : null}
-        </View>
+      {/* Overs & target (parity #18): change overs, a rain cut (DLS) or a typed
+          target — one card. Not during a Super Over / the tie call, nor a Test. */}
+      {!soActive && !rootState.ended && !rootState.pendingTie && rootState.oversLimit < 100 && (
+        <OversTargetCard s={rootState} dispatch={dispatch} battingName={battingName} />
       )}
 
       {rulesNote ? (
@@ -952,7 +1028,7 @@ const LiveClock: NonNullable<SportPlugin<CricketState>['LiveClock']> = ({ state 
   return (
     <View style={ctrl.clockRow}>
       <View style={[ctrl.liveDot, { backgroundColor: s.ended ? theme.colors.textMuted : theme.colors.danger }]} />
-      <Text style={ctrl.clockTime}>{s.ended ? 'Result' : `${oversStr(inn.balls, s.ballsPerOver)} / ${s.oversLimit} ov`}</Text>
+      <Text style={ctrl.clockTime}>{s.ended ? 'Result' : `${oversStr(inn.balls, s.ballsPerOver)} / ${s.oversLimit} ov${s.revision === 'dls' ? ' · DLS' : ''}`}</Text>
       {inPowerplay(s) && <Text style={ctrl.ppTag}>🟡 PP</Text>}
     </View>
   );
@@ -1180,7 +1256,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
               {inChase ? (
                 <View style={sum.chaseStrip}>
                   <Text style={sum.chaseNeed}>Need {runsNeeded} off {ballsLeft}</Text>
-                  <Text style={sum.chaseMeta}>Target {s.target} · RRR {rrr}</Text>
+                  <Text style={sum.chaseMeta}>Target {s.target}{targetTag(s)} · RRR {rrr}</Text>
                 </View>
               ) : null}
             </>
@@ -1203,14 +1279,7 @@ const CricketSummary: NonNullable<SportPlugin<CricketState>['Summary']> = ({ sta
 
   // Who won — so the final banner can name the side and dim the loser's score
   // (resultLine only carries the margin, e.g. "Won by 26 runs").
-  const winnerSide: 'home' | 'away' | null = (() => {
-    if (s.superOver) return superOverWinner(s.superOver.state);
-    const chase = s.scores[s.battingSide];
-    if (chase.runs >= (s.target ?? Infinity)) return s.battingSide;
-    const margin = s.scores[other(s.battingSide)].runs - chase.runs;
-    return margin === 0 ? null : other(s.battingSide);
-  })();
-  const resultTail = resultLine(s);
+  const { winner: winnerSide, text: resultTail } = outcome(s);
   const FinalSide = ({ side }: { side: 'home' | 'away' }) => (
     <View style={[sum.finalSide, winnerSide && winnerSide !== side && sum.finalLost]}>
       <Text style={[sum.finalTeam, { color: teamColor(side) }]} numberOfLines={1}>{teamName(side)}</Text>
@@ -1484,18 +1553,8 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   result: (s) => {
     if (!s.ended) return null;
     const score = { home: s.scores.home.runs, away: s.scores.away.runs };
-    // Mirror the final banner's winner logic (super over → chase → runs margin).
-    let winner: 'home' | 'away' | 'draw';
-    if (s.superOver) winner = superOverWinner(s.superOver.state) ?? 'draw';
-    else {
-      const chase = s.scores[s.battingSide];
-      if (chase.runs >= (s.target ?? Infinity)) winner = s.battingSide;
-      else {
-        const margin = s.scores[other(s.battingSide)].runs - chase.runs;
-        winner = margin === 0 ? 'draw' : other(s.battingSide);
-      }
-    }
-    return { winner, ...score };
+    // The same decision as the final banner (super over → chase → par margin).
+    return { winner: outcome(s).winner ?? 'draw', ...score };
   },
   standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
   manualRate: (s) => manualNrrOvers(s),
@@ -1514,7 +1573,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
         : `Innings ${s.innings}`;
     const base =
       s.innings === 2 && s.target !== undefined && !s.ended && !s.pendingTie
-        ? `Target ${s.target}`
+        ? `Target ${s.target}${targetTag(s)}`
         : `${s.oversLimit} overs · RR ${runRate(s.scores[s.battingSide].runs, s.scores[s.battingSide].balls, s.ballsPerOver)}`;
     // Carry the toss through onto the card, the way a real scorecard notes it.
     const tossNote = s.toss ? ` · 🪙 ${(s.toss.winner === 'home' ? 'Home' : 'Away')} chose to ${s.toss.decision}` : '';
@@ -1637,6 +1696,9 @@ const ctrl = StyleSheet.create({
     padding: theme.spacing(3),
   },
   rainErr: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
+  ovWarn: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800' },
+  ovStep: { minWidth: 44, paddingHorizontal: theme.spacing(2) },
+  ovOpenBtn: { alignSelf: 'flex-start' },
   rainPreview: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   overDone: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   overDoneText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
