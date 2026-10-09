@@ -19,7 +19,8 @@
 **What it is:**
 - A static site built from this repository: `website/` (styles and config) plus
   `scripts/build-website.mjs`, which outputs `website/dist/`.
-- Pages: the home page, `/privacy/`, `/terms/` and a 404 page.
+- Pages: the home page, `/guides/` and one page per guide (see Guides below), `/privacy/`,
+  `/terms/` and a 404 page.
 - Privacy and Terms are generated from `src/data/legal.ts`, the same text the app shows, so
   they never drift apart.
 
@@ -31,6 +32,28 @@
 - `androidApkUrl`: set it to the APK install link when the build finishes, and the Android
   card switches from "add to home screen" to a download button.
 - `appUrl`, `contactEmail`, `city`.
+
+## Guides (`/guides/`)
+
+Public how-to pages, one Markdown file per guide in `website/guides/`.
+- **Add a guide:** create `website/guides/<slug>.md` (lowercase-with-dashes; the file name
+  is the URL `/guides/<slug>/`). Follow the content contract in `website/guides/README.md`:
+  all seven front-matter fields, an allowed `category` and `audience`, and only the Markdown
+  subset it lists. Screenshots go in `website/guides/img/` (copied to `/guides/img/`).
+- **Build:** `npm run website:build`. The build **fails** with the file name and the reason
+  on a missing field, unknown field, bad category/audience, non-integer `order`, bad
+  `updated` date, bad file name or duplicate slug. Over-long titles/descriptions only warn.
+- **What gets generated:** the `/guides/` index (filter box, category chips/sections in
+  README order, cards sorted by `order` then title), one article page per guide (breadcrumb,
+  "On this page", step cards, callouts, "Open SportnNote" CTA, previous/next and related
+  guides in the same category), sitemap entries, `BreadcrumbList` JSON-LD on every guide
+  page and `HowTo` JSON-LD when a numbered list sits under a heading containing "Step".
+- **Drafts:** files starting with `_` (e.g. `_sample-test.md`, the renderer test fixture)
+  are skipped. To preview them: `GUIDES_INCLUDE_DRAFTS=1 npm run website:build` (they get
+  `noindex` and stay out of the sitemap). `GUIDES_DIR=<folder>` builds from another folder
+  (for build tests only).
+- **Preview:** build, then the `website` entry in `.claude/launch.json`
+  (http://localhost:8095/guides/).
 
 ## Hosting (recommended: Cloudflare Pages, free)
 

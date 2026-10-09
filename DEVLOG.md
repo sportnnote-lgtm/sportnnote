@@ -13,6 +13,32 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Public feature guides on sportnnote.in/guides/ (25 guides) + web publish + APK 36
+
+- **Ask:** every feature gets a public page explaining it, with a step-by-step guide, written by
+  content and design agents in parallel with development.
+- **Content contract:** `website/guides/README.md` defines the front matter (title, description,
+  category, audience, sports, order, updated), the Markdown subset and the writing rules. Labels
+  are grep-verified against `src/`, and the PROGRESS choices win over the specs.
+- **Site:** `scripts/build-website.mjs` now builds `/guides/` and `/guides/<slug>/`.
+  - **`/guides/` index:** category sections plus a filter box that works without JS.
+  - **Article pages:** step cards, Tip / Note / Important callouts, "On this page" (a sticky
+    sidebar on desktop, collapsible on phones), related guides, previous / next, and an Open
+    SportnNote button.
+  - **SEO:** guide URLs in the sitemap, HowTo and BreadcrumbList JSON-LD, and og tags.
+  - **Strict validation:** a bad category or audience fails the build and names the file.
+  - **Drafts:** files starting with `_` never ship.
+  - "Guides" was added to the header, footer and home page.
+- **Guides:** 25 in total (17 general, 8 cricket), one per parity feature.
+- **Also live today:**
+  - the web app is republished at sportnnote.expo.app;
+  - Android APK versionCode 36 (contacts picker, new icon, parity 01–25), whose link is now the
+    site's Android download.
+- **Product feedback from the writers** (confusing wording, small gaps) is collected in
+  `docs/cricheroes-parity/PROGRESS.md`.
+
+---
+
 ### 2026-10-09 — LIVE: CricHeroes parity 01–25 shipped to Android
 
 - Migrations 0038–0047 run by the founder (17/17 objects verified; runbook
