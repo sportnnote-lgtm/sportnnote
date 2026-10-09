@@ -42,6 +42,9 @@ interface BowlCard {
   dots: number;
   /** wides + no-balls conceded — a small rating penalty */
   extras: number;
+  /** parity #17 — 0-based over indices this bowler delivered any ball of (a
+   *  part-over counts toward the quota). Absent on older states = []. */
+  overs?: number[];
 }
 
 /** A record of each dismissal, for the post-match performance ratings. */
@@ -77,6 +80,16 @@ export interface CricketState {
   bowlerName?: string;
   /** who bowled the previous over (can't bowl two in a row) */
   lastOverBowlerId?: string;
+  /** parity #17 — EVERY bowler who delivered any part of the previous over (an
+   *  interrupted over's starter and finisher both sit out the next). Older states: `?? []`. */
+  lastOverBowlerIds?: string[];
+  /** parity #17 — bowlers who delivered a ball of the current over so far. */
+  overBowlers?: string[];
+  /** parity #17 — bowlers suspended this innings (Law 41); can't bowl again. */
+  barredBowlers?: string[];
+  /** parity #17 — max overs per bowler (0 = none); `bowlerQuotaAuto` = from overs ÷ 5. */
+  bowlerQuota?: number;
+  bowlerQuotaAuto?: boolean;
   /** the next legal delivery is a free hit (set by a no-ball) */
   freeHit: boolean;
   /** captain & wicket-keeper per side, assigned before the game starts */
@@ -146,6 +159,22 @@ export type WicketEnd = 'striker' | 'bowler';
 
 const blankInnings = (): Innings => ({ runs: 0, wickets: 0, balls: 0, extras: 0 });
 
+/** The limited-overs bowling quota (parity #17): overs ÷ 5, rounded up (a part
+ *  over counts); none for a Test / timeless match (100+ overs). */
+export const autoQuota = (overs: number): number => (overs >= 100 ? 0 : Math.ceil(overs / 5));
+
+/** Re-derive an AUTO quota for a new overs limit (rain cut — and #18's SET_OVERS).
+ *  A quota fixed in the format (`bowlerMaxOvers`) is left alone. */
+export const recomputeQuota = (s: CricketState, newOvers: number): CricketState =>
+  (s.bowlerQuotaAuto ? { ...s, bowlerQuota: autoQuota(newOvers) } : s);
+
+const quotaFromConfig = (config?: Record<string, unknown>) => {
+  const fixed = Math.max(0, Math.floor(Number(config?.bowlerMaxOvers ?? 0) || 0));
+  return fixed > 0
+    ? { bowlerQuota: fixed, bowlerQuotaAuto: false }
+    : { bowlerQuota: autoQuota(Number(config?.overs ?? 20)), bowlerQuotaAuto: true };
+};
+
 const init = (config?: Record<string, unknown>): CricketState => ({
   oversLimit: Number(config?.overs ?? 20),
   // players/side − 1 wickets (box cricket / 7-a-side etc. fall out of this)
@@ -170,6 +199,10 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   ballType: (config?.ballType as CricketState['ballType']) ?? 'leather',
   dls: Boolean(config?.dls ?? false),
   rules: rulesFromConfig(config),
+  ...quotaFromConfig(config),
+  lastOverBowlerIds: [],
+  overBowlers: [],
+  barredBowlers: [],
   r1Lost: 0,
   r2Lost: 0,
   events: [],
@@ -396,7 +429,36 @@ const swapStrike = <T extends Pick<CricketState, 'strikerId' | 'strikerName' | '
 const clearCrease = {
   strikerId: undefined, strikerName: undefined, nonStrikerId: undefined, nonStrikerName: undefined,
   bowlerId: undefined, bowlerName: undefined, lastOverBowlerId: undefined, freeHit: false,
+  lastOverBowlerIds: [] as string[], overBowlers: [] as string[], barredBowlers: [] as string[],
 };
+
+// ─── Bowling rules (parity #17) ───────────────────────────────────────────────
+
+/** Has a ball of the current over been delivered? (Then the bowler is locked —
+ *  only a mid-over replacement may take over.) Older states: from the ball count. */
+export const midOver = (s: CricketState): boolean =>
+  s.overBowlers ? s.overBowlers.length > 0 : s.ballsInOver > 0 && s.ballsInOver < s.ballsPerOver;
+
+/** 0-based index of the over the next ball belongs to. */
+const currentOverIx = (s: CricketState) => Math.floor(s.scores[s.battingSide].balls / s.ballsPerOver);
+
+/** Overs (incl. part-overs) a bowler has bowled this innings. */
+export const oversUsed = (s: CricketState, id: string): number => s.bowling[id]?.overs?.length ?? 0;
+
+export type BowlBlock = 'last-over' | 'quota' | 'barred' | 'unavailable' | 'this-over';
+/** May `id` bowl (or take over) the current over? Order: hard blocks first, the
+ *  quota last — it is the only one a `force` can override. */
+export function canBowl(s: CricketState, id: string): { ok: boolean; reason?: BowlBlock } {
+  if (s.unavailable.includes(id)) return { ok: false, reason: 'unavailable' };
+  if ((s.barredBowlers ?? []).includes(id)) return { ok: false, reason: 'barred' };
+  const last = s.lastOverBowlerIds ?? [];
+  if (id === s.lastOverBowlerId || last.includes(id)) return { ok: false, reason: 'last-over' };
+  if (midOver(s) && id !== s.bowlerId && (s.overBowlers ?? []).includes(id)) return { ok: false, reason: 'this-over' };
+  const q = s.bowlerQuota ?? 0;
+  const overs = s.bowling[id]?.overs ?? [];
+  if (q > 0 && overs.length >= q && !overs.includes(currentOverIx(s))) return { ok: false, reason: 'quota' };
+  return { ok: true };
+}
 
 function inningsComplete(s: CricketState, inn: Innings): boolean {
   return inn.balls >= s.oversLimit * s.ballsPerOver || inn.wickets >= s.wicketsLimit;
@@ -436,7 +498,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     const oversDone = Math.floor(inn.balls / s.ballsPerOver);
     if (!s.dls || newOvers <= oversDone || newOvers >= s.oversLimit) return s;
     const lost = Math.max(0, resourcePct(s.oversLimit - oversDone, inn.wickets) - resourcePct(newOvers - oversDone, inn.wickets));
-    let next: CricketState = { ...s, oversLimit: newOvers };
+    let next: CricketState = recomputeQuota({ ...s, oversLimit: newOvers }, newOvers);
     if (s.innings === 1) {
       next = { ...next, r1Lost: s.r1Lost + lost };
     } else {
@@ -544,6 +606,23 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
     return { ...s.bowling, [info.bowlerId]: { ...prev, name: prev.name || info.bowlerName || '', side: prev.side ?? other(bat), runs: prev.runs + (delta.runs ?? 0), balls: prev.balls + (delta.balls ?? 0), wickets: prev.wickets + (delta.wickets ?? 0), dots: prev.dots + dot, extras: prev.extras + (delta.extras ?? 0) } };
   };
 
+  // Parity #17 — every delivery (legal or not) records that its bowler bowled
+  // part of this over: the over index on their card (quota) and `overBowlers`
+  // (next-over rule). Applied to the state a delivery branch builds, before
+  // `afterLegalBall` rolls the over.
+  const overIx = Math.floor(cur.balls / s.ballsPerOver);
+  const touchBowler = (next: CricketState): CricketState => {
+    const id = info.bowlerId;
+    if (!id) return next;
+    const card = next.bowling[id];
+    const overs = card?.overs ?? [];
+    const bowling = card && !overs.includes(overIx) ? { ...next.bowling, [id]: { ...card, overs: [...overs, overIx] } } : next.bowling;
+    // (Not reset on `newOver`: the over end already emptied it, and a wide that
+    // opens an over leaves `ballsInOver` at 6 — resetting then would forget its bowler.)
+    const base = s.overBowlers ?? [];
+    return { ...next, bowling, overBowlers: base.includes(id) ? base : [...base, id] };
+  };
+
   const overEnd = baseBalls + 1 >= s.ballsPerOver;
   // End-of-(legal)-ball housekeeping: strike rotation, over change (clear the
   // bowler & remember who bowled it so they can't bowl two in a row), and
@@ -552,7 +631,11 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
   // An innings end still clears it (settle → clearCrease).
   const afterLegalBall = (next: CricketState, rotate: boolean, freeHitAfter = false): CricketState => {
     let r = rotate ? swapStrike(next) : next;
-    if (overEnd) r = { ...r, lastOverBowlerId: s.bowlerId, bowlerId: undefined, bowlerName: undefined };
+    if (overEnd) {
+      // Everyone who bowled any part of this over sits out the next (Law 17.6/17.8).
+      const ids = [...new Set([...(r.overBowlers ?? []), ...(s.bowlerId ? [s.bowlerId] : [])])];
+      r = { ...r, lastOverBowlerId: s.bowlerId, lastOverBowlerIds: ids, overBowlers: [], bowlerId: undefined, bowlerName: undefined };
+    }
     return settle({ ...r, freeHit: freeHitAfter });
   };
   // Rules in force for THIS ball (local rules, or standard in the last N overs).
@@ -572,7 +655,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         : ot > 0 ? `${runsLabel} (incl. ${ot} overthrow${ot === 1 ? '' : 's'})`
         : r === 4 || r === 6 ? `${runsLabel} (all run)`
         : runsLabel;
-      const next: CricketState = {
+      const next: CricketState = touchBowler({
         ...s,
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, balls } },
         batting: bumpBat({ runs: r, balls: 1, fours: isBoundary && r === 4 ? 1 : 0, sixes: isBoundary && r === 6 ? 1 : 0 }),
@@ -581,7 +664,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         ballsInOver: baseBalls + 1,
         events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🏏', label, detail: commentary('runs', r, info.strikerName, info.bowlerName, isBoundary, ot, a.payload?.boundary === false && r >= 4), side: bat, tone: isBoundary ? 'boundary' : undefined }],
         seq,
-      };
+      });
       // Strike rotation: odd runs swap ends, and the end of an over swaps ends.
       // Both happening (a single off the last ball) cancel out — hence XOR.
       // (A boundary overthrow adds 4 — even — so parity = runs actually run.)
@@ -596,7 +679,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       if (isLeg ? !rulesOf(s).legByes : !rulesOf(s).byes) return s;
       const balls = cur.balls + 1;
       seq += 1;
-      const next: CricketState = {
+      const next: CricketState = touchBowler({
         ...s,
         // byes/leg-byes are team extras — not the batter's runs, not charged to the bowler
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + r, extras: cur.extras + r, balls } },
@@ -606,7 +689,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         ballsInOver: baseBalls + 1,
         events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '➕', label: `${isLeg ? 'Leg bye' : 'Bye'}${r > 1 ? ` ${r}` : ''}`, detail: undefined, side: bat, tone: 'extra' }],
         seq,
-      };
+      });
       return afterLegalBall(next, (r % 2 === 1) !== overEnd);
     }
     case 'WICKET': {
@@ -689,7 +772,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const record: DismissalRecord = { kind, outId, bowlerId: info.bowlerId, fielderId, fielderName };
       if (fielder2Id || fielder2Name) { record.fielder2Id = fielder2Id; record.fielder2Name = fielder2Name; }
 
-      const next: CricketState = {
+      const next: CricketState = touchBowler({
         ...s,
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + completed, wickets: cur.wickets + 1, balls, ...(offBat !== completed ? { extras: cur.extras + completed } : {}) } },
         batting,
@@ -701,7 +784,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         events: [...s.events, { id: seq, stamp: ballStamp(balls, s.ballsPerOver), icon: '🎯', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}${completed > 0 ? ` (${runsText(completed, runsAs)})` : ''}`, side: other(bat), tone: 'wicket' }],
         seq,
         ...creaseFor(newBatId, newBatName),
-      };
+      });
       // Where the wicket was broken settles who faces next (parity #16).
       if (end) {
         const crease = creaseAfterWicket({ strikerId, strikerName, nonStrikerId: s.nonStrikerId, nonStrikerName: s.nonStrikerName }, batterOut, end, { id: newBatId, name: newBatName }, overEnd);
@@ -783,7 +866,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           : { kind: wk, outId, bowlerId: info.bowlerId, fielderId, fielderName };
         if (fielder2Id || fielder2Name) { record.fielder2Id = fielder2Id; record.fielder2Name = fielder2Name; }
         const tail = completed > 0 ? ` (${runsText(completed, isNoBall ? runsAs : 'bat')})` : '';
-        let next: CricketState = legalBits({
+        let next: CricketState = legalBits(touchBowler({
           ...s,
           scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + pen + completed, extras: cur.extras + extras, wickets: cur.wickets + 1 } },
           batting,
@@ -795,7 +878,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           seq,
           freeHit: fhAfter,
           ...crease,
-        });
+        }));
         if (end) {
           // creaseAfterWicket already settled the ends (incl. a legal over end)
           if (legal) return afterLegalBall(next, false, fhAfter);
@@ -819,7 +902,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         const batting = applyBat(s.batting, strikerId, strikerName, { runs: offBat, balls: 1, fours: nbBoundary && offBat === 4 ? 1 : 0, sixes: nbBoundary && offBat === 6 ? 1 : 0 });
         const sym = `${ran > 0 ? ran : ''}nb`;
         const label = `No ball${penTag}${offBat > 0 ? ` + ${offBat}` : ''}${byes > 0 ? ` + ${byes} bye${byes === 1 ? '' : 's'}` : ''}${R.freeHit ? ' — free hit' : ''}`;
-        let next: CricketState = legalBits({
+        let next: CricketState = legalBits(touchBowler({
           ...s,
           // extras conceded = the penalty + any byes (off-bat runs are the batter's)
           scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + pen + byes } },
@@ -829,7 +912,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
           events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label, detail: undefined, side: bat, tone: 'extra' }],
           seq,
           freeHit: fhAfter,
-        });
+        }));
         if (legal) return afterLegalBall(next, (ran % 2 === 1) !== overEnd, fhAfter);
         if (ran % 2 === 1) next = swapStrike(next); // crossed an odd number of times
         return settle(next);
@@ -839,7 +922,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const wideRuns = clampRuns(a.payload?.runs);
       const total = pen + wideRuns;
       const sym = wideRuns > 0 ? `${total}wd` : 'wd';
-      let next: CricketState = legalBits({
+      let next: CricketState = legalBits(touchBowler({
         ...s,
         scores: { ...s.scores, [bat]: { ...cur, runs: cur.runs + total, extras: cur.extras + total } },
         bowling: bumpBowl({ runs: total, extras: total, ...(legal ? { balls: 1 } : {}) }),
@@ -847,7 +930,7 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
         events: [...s.events, { id: seq, stamp: ballStamp(cur.balls + 1, s.ballsPerOver), icon: '➕', label: `Wide${penTag}${wideRuns > 0 ? ` + ${wideRuns}` : ''}`, detail: undefined, side: bat, tone: 'extra' }],
         seq,
         freeHit: fhAfter,
-      });
+      }));
       if (legal) return afterLegalBall(next, (wideRuns % 2 === 1) !== overEnd, fhAfter);
       if (wideRuns % 2 === 1) next = swapStrike(next);
       return settle(next);
@@ -906,9 +989,33 @@ const reducer = (s: CricketState, a: ScoreAction): CricketState => {
       const id = String(a.payload?.id ?? '');
       const name = String(a.payload?.name ?? '');
       if (!id || id === s.lastOverBowlerId || s.unavailable.includes(id)) return s; // no bowling two in a row, no subbed-out players
+      // Parity #17 (REVIEW Decision 8): the quota / this-over / whole-last-over /
+      // suspended checks REJECT only a `v: 2` payload (the live UI). A legacy one
+      // (old logs, #06 rewrites that keep their `v`) replays exactly as before.
+      const check = canBowl(s, id);
+      const forced = a.payload?.v === 2 && !check.ok && check.reason === 'quota' && a.payload?.force === true;
+      if (a.payload?.v === 2 && !check.ok && !forced) return s;
       const card: BowlCard = { name, side: other(bat), runs: 0, balls: 0, wickets: 0, dots: 0, extras: 0 };
       const bowling = s.bowling[id] ? s.bowling : { ...s.bowling, [id]: card };
-      return { ...s, bowlerId: id, bowlerName: name, bowling };
+      let next: CricketState = { ...s, bowlerId: id, bowlerName: name, bowling };
+      const stamp = oversStr(cur.balls, s.ballsPerOver);
+      const events = [...s.events];
+      if (forced) {
+        seq += 1;
+        const q = s.bowlerQuota ?? 0;
+        events.push({ id: seq, stamp, icon: '⚠️', label: 'Quota override', detail: `${name} bowls beyond the ${q}-over quota`, side: other(bat) });
+      }
+      // A mid-over replacement (injury / suspension): the balls so far stay with
+      // the old bowler; the new one finishes the over. Both sit out the next.
+      const reason = a.payload?.reason;
+      const oldId = s.bowlerId;
+      if (midOver(s) && oldId && oldId !== id && (reason === 'injury' || reason === 'suspended' || reason === 'other')) {
+        seq += 1;
+        const oldName = s.bowlerName ?? s.bowling[oldId]?.name ?? 'the bowler';
+        events.push({ id: seq, stamp, icon: '🚑', label: 'BOWLER REPLACED', detail: `${name} completes ${oldName}'s over (${reason})`, side: other(bat) });
+        if (reason === 'suspended') next = { ...next, barredBowlers: [...(s.barredBowlers ?? []), oldId] };
+      }
+      return seq === s.seq ? next : { ...next, events, seq };
     }
     case 'SET_TOSS': {
       // The toss decides who bats first — only before ball one (innings 1, no

@@ -28,6 +28,7 @@ import {
   oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
+  canBowl, midOver, oversUsed,
 } from './engine';
 import type { CricketState, DismissalKind, Innings, RunsAs } from './engine';
 import { resourcePct, revisedTarget } from './dls';
@@ -255,12 +256,19 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
   const [rain, setRain] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // Bowling rules (parity #17): the mid-over replacement panel (with its reason)
+  // and the "Allow anyway" quota override.
+  const [bowlRepl, setBowlRepl] = useState<'injury' | 'suspended' | 'other' | null>(null);
+  const [forceQuota, setForceQuota] = useState(false);
 
   // While a Super Over is live, ALL the live-scoring UI below operates on the
   // nested mini-match; dispatched actions are routed there by the reducer. The
   // parent (tied) match stays frozen underneath.
   const soActive = !!rootState.superOver && !rootState.superOver.state.ended;
   const state = soActive ? rootState.superOver!.state : rootState;
+  // A new over (or innings) closes a stale replacement panel / quota override.
+  const overKey = `${soActive ? 'so' : ''}${state.innings}:${Math.floor(state.scores[state.battingSide].balls / state.ballsPerOver)}`;
+  useEffect(() => { setBowlRepl(null); setForceQuota(false); }, [overKey]);
 
   // Regulation ended level (or a Super Over just tied) — offer the tie-breaker.
   if (rootState.pendingTie && !soActive) {
@@ -794,25 +802,84 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         )}
       </View>
 
-      {/* Bowler — must be (re)named at the start of each over. */}
-      <View style={{ gap: theme.spacing(2) }}>
-        {overJustDone ? <View style={ctrl.overDone}><Text style={ctrl.overDoneText}>✓ Over {oversDone} complete — new bowler needed</Text></View> : null}
-        <Text style={ctrl.label}>
-          🎯 {bowlerId ? `Bowling: ${bowlerName}` : `Over ${nextOverNo}${oversLabel} — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
-        </Text>
-        <View style={ctrl.chips}>
-          {bowlingRoster.map((p) => (
-            <SelectChip
-              key={p.id}
-              label={p.id === state.lastOverBowlerId ? `${p.fullName} · last over` : isUnavailable(p.id) ? `${p.fullName} ⚡` : p.fullName}
-              active={bowlerId === p.id}
-              disabled={p.id === state.lastOverBowlerId || isUnavailable(p.id)}
-              onPress={() => dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName } })}
-            />
-          ))}
-        </View>
-        {!bowlerId && <Text style={ctrl.hint}>Pick the bowler for this over (last over's bowler can't bowl again).</Text>}
-      </View>
+      {/* Bowler — must be (re)named at the start of each over. Parity #17: the
+          engine's canBowl drives every chip (quota, last over, suspended); once a
+          ball of the over is bowled the bowler is locked — only an inline
+          mid-over replacement can take over. Every SET_BOWLER here sends v: 2. */}
+      {(() => {
+        const locked = midOver(state) && !!bowlerId;
+        const q = state.bowlerQuota ?? 0;
+        const checks = bowlingRoster.map((p) => ({ p, c: canBowl(state, p.id) }));
+        const tagFor = (reason?: string) => reason === 'last-over' ? ' · last over' : reason === 'quota' ? ' · quota done'
+          : reason === 'barred' ? ' · suspended' : reason === 'this-over' ? ' · this over' : reason === 'unavailable' ? ' ⚡' : '';
+        const chipLabel = (p: Player, reason?: string) => {
+          const used = oversUsed(state, p.id);
+          const tally = q > 0 ? ` · ${used}/${q}` : used > 0 ? ` · ${used} ov` : '';
+          return `${p.fullName}${tally}${tagFor(reason)}`;
+        };
+        // Pickable now: ok, or held back only by the quota while "Allow anyway" is on.
+        const pickable = (c: { ok: boolean; reason?: string }) => c.ok || (forceQuota && c.reason === 'quota');
+        const pick = (p: Player, c: { ok: boolean; reason?: string }, reason?: 'injury' | 'suspended' | 'other') => {
+          dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName, v: 2, ...(reason ? { reason } : {}), ...(!c.ok && c.reason === 'quota' ? { force: true } : {}) } });
+          setForceQuota(false);
+          setBowlRepl(null);
+        };
+        // Replacements: anyone but the current bowler (bowlers of THIS over are
+        // already blocked by canBowl).
+        const pool = checks.filter(({ p }) => p.id !== bowlerId);
+        const onlyQuota = (list: typeof checks) => list.length > 0 && !list.some(({ c }) => c.ok) && list.some(({ c }) => c.reason === 'quota');
+        const quotaOut = (list: typeof checks) => onlyQuota(list) && (
+          <View style={ctrl.rulesChip}>
+            <Text style={ctrl.rulesChipText}>Everyone has bowled their quota</Text>
+            {!forceQuota && <Button label="Allow anyway" variant="ghost" style={ctrl.swapBtn} onPress={() => setForceQuota(true)} />}
+          </View>
+        );
+        return (
+          <View style={{ gap: theme.spacing(2) }}>
+            {overJustDone ? <View style={ctrl.overDone}><Text style={ctrl.overDoneText}>✓ Over {oversDone} complete — new bowler needed</Text></View> : null}
+            <Text style={ctrl.label}>
+              🎯 {bowlerId ? `Bowling: ${bowlerName}` : `Over ${nextOverNo}${oversLabel} — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
+            </Text>
+            <View style={ctrl.chips}>
+              {checks.map(({ p, c }) => (
+                <SelectChip
+                  key={p.id}
+                  label={chipLabel(p, p.id === bowlerId ? undefined : c.reason)}
+                  active={bowlerId === p.id}
+                  disabled={locked ? p.id !== bowlerId : !pickable(c)}
+                  onPress={() => { if (!locked && p.id !== bowlerId) pick(p, c); }}
+                />
+              ))}
+            </View>
+            {!locked && !bowlRepl && quotaOut(checks)}
+            {!bowlerId && <Text style={ctrl.hint}>Bowlers of the last over (any part of it) can't bowl this one.</Text>}
+            {locked && !bowlRepl && (
+              <Button label="🚑 Replace bowler mid-over" variant="ghost" onPress={() => setBowlRepl('injury')} />
+            )}
+            {locked && bowlRepl && (
+              <View style={ctrl.morePanel}>
+                <View style={ctrl.creaseHead}>
+                  <Text style={[ctrl.label, ctrl.flex]}>Replace {bowlerName} at {oversStr(cur.balls, state.ballsPerOver)} — balls so far stay with them</Text>
+                  <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => { setBowlRepl(null); setForceQuota(false); }} />
+                </View>
+                <View style={ctrl.chips}>
+                  {([['injury', 'Injured'], ['suspended', 'Suspended'], ['other', 'Other']] as const).map(([v, l]) => (
+                    <SelectChip key={v} label={l} active={bowlRepl === v} onPress={() => setBowlRepl(v)} />
+                  ))}
+                </View>
+                {bowlRepl === 'suspended' && <Text style={ctrl.meta}>{bowlerName} can't bowl again this innings.</Text>}
+                <Text style={ctrl.meta}>Who finishes the over?</Text>
+                <View style={ctrl.chips}>
+                  {pool.map(({ p, c }) => (
+                    <SelectChip key={p.id} label={chipLabel(p, c.reason)} active={false} disabled={!pickable(c)} onPress={() => pick(p, c, bowlRepl)} />
+                  ))}
+                </View>
+                {quotaOut(pool)}
+              </View>
+            )}
+          </View>
+        );
+      })()}
 
       {/* Impact Player (IPL-style) — one substitution per side, format-gated. */}
       {(state.impactEnabled && (impactSides.length > 0 || state.impactUsed.home || state.impactUsed.away)) && (
@@ -1468,13 +1535,13 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 't20',
       options: [
-        { value: 't20', label: 'T20', set: { overs: 20, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 6, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
-        { value: 'odi', label: 'ODI (50)', set: { overs: 50, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 10, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
-        { value: 't10', label: 'T10', set: { overs: 10, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
-        { value: 'hundred', label: 'The Hundred (100 balls)', set: { overs: 10, ballsPerOver: 10, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true } },
-        { value: 'sixes', label: 'Sixes (6-a-side · 6 ov)', set: { overs: 6, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: false } },
-        { value: 'box', label: 'Box cricket', set: { overs: 5, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'tennis', dls: false } },
-        { value: 'test', label: 'Test / timeless', set: { overs: 999, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 0, impactPlayer: false, tieBreak: 'shared', ballType: 'leather', dls: false } },
+        { value: 't20', label: 'T20', set: { overs: 20, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 6, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true, bowlerMaxOvers: 0 } },
+        { value: 'odi', label: 'ODI (50)', set: { overs: 50, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 10, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true, bowlerMaxOvers: 0 } },
+        { value: 't10', label: 'T10', set: { overs: 10, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true, bowlerMaxOvers: 0 } },
+        { value: 'hundred', label: 'The Hundred (100 balls)', set: { overs: 10, ballsPerOver: 10, playersPerSide: 11, powerplayOvers: 3, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: true, bowlerMaxOvers: 0 } },
+        { value: 'sixes', label: 'Sixes (6-a-side · 6 ov)', set: { overs: 6, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'leather', dls: false, bowlerMaxOvers: 0 } },
+        { value: 'box', label: 'Box cricket', set: { overs: 5, ballsPerOver: 6, playersPerSide: 6, powerplayOvers: 0, impactPlayer: false, tieBreak: 'super_over', ballType: 'tennis', dls: false, bowlerMaxOvers: 0 } },
+        { value: 'test', label: 'Test / timeless', set: { overs: 999, ballsPerOver: 6, playersPerSide: 11, powerplayOvers: 0, impactPlayer: false, tieBreak: 'shared', ballType: 'leather', dls: false, bowlerMaxOvers: 0 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -1512,6 +1579,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
         { value: 10, label: '10 (The Hundred)' },
       ],
     },
+    { key: 'bowlerMaxOvers', label: 'Max overs per bowler', type: 'number', default: 0, min: 0, max: 999, advanced: true, hint: '0 = auto (overs ÷ 5, rounded up; none for Test)' },
     { key: 'powerplayOvers', label: 'Powerplay overs', type: 'number', default: 0, min: 0, max: 10, advanced: true, hint: '0 = none' },
     { key: 'dls', label: 'DLS (rain-revised targets)', type: 'toggle', default: false, advanced: true, hint: 'reduce overs on a rain break; the chase target auto-revises' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 0, min: 0, max: 5, advanced: true, hint: '12th man, etc.' },

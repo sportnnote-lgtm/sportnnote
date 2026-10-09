@@ -472,7 +472,12 @@ export function changeBowlerOps(
     if (o.setBowlerSeq !== undefined) {
       const rec = bySeq.get(o.setBowlerSeq);
       if (rec && rec.payload?.id === old.id) {
-        ops.push({ op: 'replace', seq: rec.seq, action: remapPlayer(recordToAction(rec), old.id, bowler.id, bowler.name) });
+        // A correction states what happened, so it mustn't be re-judged by #17's
+        // live-only checks (quota / this-over): drop `v` → legacy acceptance on
+        // replay. Consecutive overs are checked above.
+        const act = remapPlayer(recordToAction(rec), old.id, bowler.id, bowler.name);
+        const { v: _v, ...payload } = act.payload ?? {};
+        ops.push({ op: 'replace', seq: rec.seq, action: { ...act, payload } });
       }
     }
     for (const b of o.balls) {

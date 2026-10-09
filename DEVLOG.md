@@ -13,6 +13,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Cricket bowling rules: per-bowler quota, mid-over replacement, next-over rule (parity #17)
+
+- **Ask (parity queue #17):** nothing stopped a star bowler's fifth over in a T20; an injured
+  bowler's replacement was a silent chip tap, and the starter could then bowl the next over.
+- **Engine:** `bowlerMaxOvers` format field (0 = auto: overs ÷ 5 rounded up, none for Test) on all
+  presets; `autoQuota`, `recomputeQuota` (RAIN; #18 reuses it), `canBowl` (unavailable / suspended /
+  last over / this over / quota), `touchBowler` on every delivery (part-overs count; starter AND
+  finisher of an interrupted over sit out the next). SET_BOWLER's new rejections apply only to
+  `v: 2` payloads (REVIEW Decision 8) — the new UI always sends it; `force` overrides only the
+  quota ("Quota override"); a mid-over change with a reason logs "🚑 BOWLER REPLACED", suspended
+  bars the bowler for the innings. #06 "change this over's bowler" corrections drop `v` so a fix
+  is never re-judged by the live checks.
+- **UI:** chips "Name · 1/2", "· last over", "· quota done", "· this over"; chips lock once the
+  over has started; "🚑 Replace bowler mid-over" panel (Injured / Suspended / Other); "Everyone has
+  bowled their quota" → Allow anyway.
+- **Compat:** legacy logs identical vs HEAD (seed + 400 fuzzed logs, 42k states).
+- **Verified:** tsc + 627 tests (20 new cricket-bowling); demo 8093 T10 m9: 0/2 → 1/2, replacement at
+  2.1 splits 0.1 / 0.5, neither bowler offered next over, quota done disables. Not verified in UI:
+  Allow anyway, Suspended. No migration.
+
+---
+
 ### 2026-10-09 — Cricket dismissals: retired out, Mankad, hit twice, obstructing, stumped off a wide, run-out end/2nd fielder/byes (parity #16)
 
 - **Ask (parity queue #16):** retired-out, Mankads and stumpings off wides couldn't be recorded;
