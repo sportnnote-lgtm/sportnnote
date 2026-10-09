@@ -44,6 +44,8 @@ export type RootStackParamList = {
   Series: { seriesId: string };
   EditMatch: { matchId: string };
   GenerateFixtures: { tournamentId: string; sport?: SportId };
+  /** bulk schedule import from a spreadsheet (parity #24) */
+  ImportSchedule: { tournamentId: string };
   AssignScorers: { tournamentId: string };
   TournamentTeams: { tournamentId: string; sport?: SportId };
   Contingents: { tournamentId: string };

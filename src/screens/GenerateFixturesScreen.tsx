@@ -17,6 +17,7 @@ import { DivisionTabs } from '../components/DivisionTabs';
 import { createMatch, getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
 import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
 import { defaultsFor } from '../components/FormatEditor';
+import { matchFormatFor } from '../data/matchFormat';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { swissRound1, swissNextRound, pairKey, suggestedSwissRounds } from '../data/swiss';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
@@ -297,26 +298,9 @@ export default function GenerateFixturesScreen() {
     setError(null); setBusy(true);
     try {
       const myId = await getMyPlayerId(profile?.id);
-      let format: Record<string, unknown> = tournament?.formats?.[sport] ?? defaultsFor(getSport(sport).formatFields ?? []);
-      // The football knockout decider (extra time / penalties) must apply ONLY to
-      // real knockout ties — a football match with a decider is treated as a
-      // knockout (draws can't stand). So league/group/super football strips it,
-      // and knockout football keeps it (falling back to a pre-per-sport
-      // tournament's old tournament-wide knockoutFormat).
+      // Football's knockout decider applies only when every draft is a knockout tie.
       const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super' && !String(d.stage).startsWith('swiss'));
-      if (sport === 'football') {
-        if (koLike) {
-          const kf = tournament?.knockoutFormat;
-          if (format.decider == null && kf) {
-            format = { ...format, decider: kf.decider,
-              ...(kf.extraTimeMinutes != null ? { extraTimeMinutes: kf.extraTimeMinutes } : {}),
-              ...(kf.extraTimeSubs != null ? { extraTimeSubs: kf.extraTimeSubs } : {}) };
-          }
-        } else {
-          const { decider, extraTimeMinutes, extraTimeSubs, ...rest } = format;
-          format = rest;
-        }
-      }
+      const format = matchFormatFor(tournament, sport, koLike, defaultsFor(getSport(sport).formatFields ?? []));
       for (const d of drafts) {
         await createMatch({
           tournamentId: params.tournamentId, sport,
@@ -325,7 +309,7 @@ export default function GenerateFixturesScreen() {
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
           hostIds: myId ? [myId] : [],
-          format: format as Record<string, number | string | boolean>,
+          format,
         });
       }
       // Persist the intended structure so the generator remembers it and the

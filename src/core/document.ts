@@ -38,3 +38,35 @@ export async function pickDocument(): Promise<PickedDoc | null> {
   const uri = await pickPhoto();
   return uri ? { name: uri.split('/').pop() ?? 'document', uri } : null;
 }
+
+export interface PickedText {
+  name: string;
+  text: string;
+}
+
+/** Pick a text file (CSV / TSV) and read it — web only (a file input +
+ *  `file.text()`). Native returns null: there the organiser pastes the cells
+ *  instead. Resolves null when nothing is chosen. A binary spreadsheet (.xlsx)
+ *  still resolves with its name so the caller can explain what to do. */
+export async function pickTextFile(accept = '.csv,.tsv,.txt,text/csv'): Promise<PickedText | null> {
+  if (Platform.OS !== 'web') return null;
+  const doc = (globalThis as { document?: Document }).document;
+  if (!doc) return null;
+  return new Promise<PickedText | null>((resolve) => {
+    const input = doc.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.style.display = 'none';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      if (!file) { resolve(null); return; }
+      // Don't decode a binary workbook as text — the name is enough to explain.
+      if (/\.(xlsx?|xlsm|ods|numbers)$/i.test(file.name)) { resolve({ name: file.name, text: '' }); return; }
+      try { resolve({ name: file.name, text: await file.text() }); } catch { resolve(null); }
+    };
+    doc.body.appendChild(input);
+    input.click();
+    setTimeout(() => input.isConnected && input.remove(), 120000);
+  });
+}

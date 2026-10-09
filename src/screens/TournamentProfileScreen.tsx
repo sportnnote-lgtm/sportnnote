@@ -675,6 +675,7 @@ export default function TournamentProfileScreen() {
                   <>
                     <HubRow icon="📅" title="Schedule a match" status="One fixture at a time" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
                     <HubRow icon="⚡" title="Auto-generate fixtures" status="League, groups or knockout" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
+                    <HubRow icon="📥" title="Import schedule (spreadsheet)" status="Paste from Excel / Sheets or a CSV" onPress={() => nav.navigate('ImportSchedule', { tournamentId: tournament.id })} />
                   </>
                 );
             })()}

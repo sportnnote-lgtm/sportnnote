@@ -97,3 +97,41 @@ export function zoneAbbrev(z: string = zone): string {
     return parts.find((p) => p.type === 'timeZoneName')?.value ?? z;
   } catch { return z; }
 }
+
+/** The zone's UTC offset (ms, east positive) at a given instant, read off
+ *  `formatToParts` — DST-aware wherever the engine has full Intl. */
+function zoneOffsetMs(utcMs: number, z: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: z, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(utcMs));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return asUtc - Math.floor(utcMs / 1000) * 1000;
+}
+
+/** A wall-clock date + time IN A ZONE ('2026-10-12', '16:30', 'Asia/Kolkata')
+ *  → the absolute UTC ISO instant ('2026-10-12T11:00:00.000Z'). DST-safe: the
+ *  offset is re-read at the candidate instant, so a time just after a switch
+ *  lands on the right side of it. A wall time skipped by a spring-forward gap
+ *  resolves to the instant after the gap. Engines without IANA zones fall back
+ *  to the device clock. */
+export function wallTimeToIso(date: string, time: string, z: string = zone): string {
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  const wall = Date.UTC(y, mo - 1, d, h || 0, mi || 0);
+  try {
+    const off1 = zoneOffsetMs(wall, z);
+    let t = wall - off1;
+    const off2 = zoneOffsetMs(t, z);
+    if (off2 !== off1) {
+      const t2 = wall - off2;
+      // Only accept the re-read when it round-trips (otherwise we're in a gap:
+      // keep the earlier-offset reading, which falls after the gap).
+      t = zoneOffsetMs(t2, z) === off2 ? t2 : t;
+    }
+    return new Date(t).toISOString();
+  } catch {
+    return new Date(y, mo - 1, d, h || 0, mi || 0).toISOString();
+  }
+}

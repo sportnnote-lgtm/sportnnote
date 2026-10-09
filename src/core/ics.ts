@@ -4,7 +4,8 @@
  *
  *  A first-class native integration could instead use expo-calendar to write
  *  directly into a chosen calendar; .ics keeps it cross-platform & verifiable. */
-import { Platform, Share } from 'react-native';
+import { Share } from 'react-native';
+import { downloadText } from './download';
 
 export interface CalEvent {
   uid: string;
@@ -65,19 +66,6 @@ export function buildICS(events: CalEvent[]): string {
 export async function exportToCalendar(filename: string, events: CalEvent[]): Promise<void> {
   if (events.length === 0) return;
   const ics = buildICS(events);
-  if (Platform.OS === 'web') {
-    // Use globals via `any` so we don't pull DOM types into the RN build.
-    const g: any = globalThis;
-    const blob = new g.Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = g.URL.createObjectURL(blob);
-    const a = g.document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.ics') ? filename : `${filename}.ics`;
-    g.document.body.appendChild(a);
-    a.click();
-    a.remove();
-    g.URL.revokeObjectURL(url);
-    return;
-  }
+  if (downloadText(filename.endsWith('.ics') ? filename : `${filename}.ics`, 'text/calendar;charset=utf-8', ics)) return;
   await Share.share({ title: filename, message: ics });
 }

@@ -13,7 +13,7 @@ export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'parti
   return [
     { key: 'teams', label: individual ? 'Add players' : 'Add teams', hint: individual ? 'At least 2 players take part.' : 'At least 2 teams take part.', done: teamCount >= 2 },
     { key: 'format', label: 'Choose the format — league, groups or knockout', hint: 'Sets the points table and how fixtures are drawn.', done: formatDone },
-    { key: 'schedule', label: 'Schedule matches', hint: 'Auto-generate fixtures or add matches one by one.', done: matchCount > 0 },
+    { key: 'schedule', label: 'Schedule matches', hint: 'Auto-generate fixtures, import a spreadsheet, or add matches one by one.', done: matchCount > 0 },
   ];
 }
 

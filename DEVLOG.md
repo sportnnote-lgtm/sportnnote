@@ -13,6 +13,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Bulk schedule import from CSV / pasted spreadsheet (parity #24)
+
+- **Ask (parity queue #24):** a sports secretary with 40 fixtures in a spreadsheet had to retype
+  them one by one.
+- **Data (pure):** `data/scheduleImport.ts` — header aliases, `parseDelimited` (BOM, tab > comma >
+  semicolon, quoted cells, `#` comments, line numbers kept), day-first `parseDateCell` (+ month names,
+  Excel serials), `parseTimeCell` (am/pm, hhmm, Excel fractions), `matchTeam` (ok / not entered →
+  auto-add / suggestion / missing; never creates teams), `stageFrom`, `validateImport` (home = away,
+  out-of-window date, duplicates, venue/team clashes vs existing matches and earlier rows),
+  `templateCsv`. `core/time.ts` `wallTimeToIso` (DST-safe), `core/download.ts` (factored out of
+  ics.ts), `core/document.ts` `pickTextFile`, `data/matchFormat.ts` `matchFormatFor` (extracted from
+  GenerateFixtures — output proven identical).
+- **UI:** `ImportScheduleScreen` (route `ImportSchedule`) from a "📥 Import schedule (spreadsheet)"
+  HubRow in #08's Matches group: template download with real team names, CSV pick (web) or paste
+  from Excel / Sheets, preview with ✓ ready / ⚠ to check / ✕ won't import, one-tap "Use Red House"
+  fixes, skip, sticky "Create n matches" (sequential, progress, partial failure without duplicates).
+- **Verified:** tsc + 778 tests (28 new); demo 8093 on t7: template, 5 pasted rows → 2 / 2 / 1, chip
+  fix → 3 / 1 / 1, 4 matches created at the right local times; 375 px. Not verified: partial-failure
+  retry, real file dialog, native Share fallback. No migration.
+
+---
+
 ### 2026-10-09 — Alert choices per followed player, team or tournament (🔔 bell sheet) (parity #23)
 
 - **Ask (parity queue #23):** a parent wants "match starts" and "result" for the meet without a buzz
