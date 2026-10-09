@@ -13,6 +13,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — LIVE: CricHeroes parity 01–25 shipped to Android
+
+- Migrations 0038–0047 run by the founder (17/17 objects verified; runbook
+  `supabase/release/2026-10-parity-0038-0047-RUNBOOK.md`).
+- Vault secrets `notify_followers_url` / `webhook_secret` / `functions_anon_key` set;
+  `WEBHOOK_SECRET` regenerated to match.
+- `notify-followers` and `notify-upcoming` deployed; a call without the secret is refused (403).
+- `git push --all` (branch + main at dbb0e21) and Android OTA to channel `preview`: update group
+  `056ef4d3`. `expo-contacts` isn't in older APKs, but it's loaded optionally, so the OTA is safe
+  there.
+- Not yet: the staging alert-count check, the web publish, and a new APK (contacts picker, new icon).
+
+---
+
 ### 2026-10-09 — Score ticker / OBS overlay page at a public URL (parity #25)
 
 - **Ask (parity queue #25):** a college media club streams the inter-house final from OBS and
