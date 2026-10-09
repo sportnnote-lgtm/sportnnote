@@ -22,6 +22,7 @@ import {
   setFollow,
   getFootballProfile,
   searchPlayers,
+  searchAll,
   type PlayerSearch,
   getCities,
   getStatLinesForPlayers,
@@ -33,6 +34,7 @@ import {
   getMyPlayerId,
 } from './repos';
 import { aggregate, type PlayerStats } from './stats';
+import { isSearchable, rankByName, type SearchResults, type SearchKind } from './search';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
 import { standingsPhases, type StandingsPhase } from './groups';
 import { followStore, type FollowType } from './followStore';
@@ -337,6 +339,66 @@ export function usePlayerSearch(opts: PlayerSearch) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return { results, loading, error };
+}
+
+const NO_RESULTS: SearchResults<PlayerSummary> = { players: [], teams: [], matches: [], tournaments: [] };
+
+/** Global search (parity #22): players, teams, matches and tournaments for one
+ *  query, debounced like `usePlayerSearch`. `active` is false for a query too
+ *  short to search (the screen shows browse content instead). While a new query
+ *  loads, the previous results stay up so the list doesn't flicker. Players
+ *  keep their filters; picked sports also narrow the other three types. */
+export function useGlobalSearch(q: string, filters: Omit<PlayerSearch, 'query'> = {}) {
+  const [results, setResults] = useState<SearchResults<PlayerSummary>>(NO_RESULTS);
+  const [errors, setErrors] = useState<Partial<Record<SearchKind, string>>>({});
+  const [loading, setLoading] = useState(false);
+  const active = isSearchable(q);
+  const key = JSON.stringify([q.trim(), filters]);
+  useEffect(() => {
+    let on = true;
+    if (!active) {
+      setResults(NO_RESULTS);
+      setErrors({});
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const t = setTimeout(() => {
+      searchAll(q, filters).then(
+        async (r) => {
+          const lines = await getStatLinesForPlayers(r.players.map((p) => p.id)).catch(() => []);
+          if (!on) return;
+          const byPlayer = new Map<string, typeof lines>();
+          for (const l of lines) {
+            const arr = byPlayer.get(l.playerId) ?? [];
+            arr.push(l);
+            byPlayer.set(l.playerId, arr);
+          }
+          // Name match first; within a tier, the more active player first.
+          const players = rankByName(
+            r.players
+              .map((player) => ({ player, stats: aggregate(byPlayer.get(player.id) ?? []) }))
+              .sort((a, b) => b.stats.matches - a.stats.matches),
+            q, (s) => s.player.fullName,
+          );
+          setResults({ players, teams: r.teams, matches: r.matches, tournaments: r.tournaments });
+          setErrors(r.errors);
+          setLoading(false);
+        },
+        (e: unknown) => {
+          if (!on) return;
+          setErrors({ players: e instanceof Error ? e.message : 'Search failed' });
+          setLoading(false);
+        },
+      );
+    }, 300);
+    return () => {
+      on = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return { results, errors, loading, active };
 }
 
 export function useTeamSummaries() {

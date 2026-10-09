@@ -139,6 +139,8 @@ export type TabParamList = {
   /** Optional entry state when opened via a "See all" link. */
   Matches: { initialTab?: 'live' | 'upcoming' | 'completed'; initialSport?: SportId } | undefined;
   Organize: undefined;
-  Discover: undefined;
+  /** mode: 'people' is Search (key kept for saved URLs); focus: put the cursor in
+   *  the search box (Home 🔍); in: the open result tab (parity #22). */
+  Discover: { mode?: 'connect' | 'people'; focus?: boolean; in?: 'all' | 'players' | 'teams' | 'matches' | 'tournaments' } | undefined;
   Profile: undefined;
 };

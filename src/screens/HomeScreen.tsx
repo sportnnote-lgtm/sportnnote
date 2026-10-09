@@ -4,7 +4,7 @@
  *  matches below, and a sport row jumps into each sport's section (schedule,
  *  organize, standings & stats). Deep standings/stats live on those pages. */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +32,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const nav = useNavigation<Nav>();
+  // Three header buttons (🔍 🔔 ▾) leave a phone's wordmark ~140px — step it down so it isn't clipped.
+  const narrow = useWindowDimensions().width < 420;
   const { profile } = useAuth();
   const tournaments = useMyTournaments(profile?.id);
   // Home is a personal feed: matches from what you follow (players/teams/
@@ -112,13 +114,22 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ScrollView contentContainerStyle={st.content}>
-        {/* Header: wordmark · notifications · quick-actions toggle */}
+        {/* Header: wordmark · search · notifications · quick-actions toggle */}
         <View style={st.header}>
           <Logo size={40} />
           <View style={st.brand}>
-            <Text style={st.wordmark} numberOfLines={1}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
+            <Text style={[st.wordmark, narrow && st.wordmarkNarrow]} numberOfLines={1}>Sport<Text style={st.wordmarkAccent}>nNote</Text></Text>
             <Text style={textStyles.muted} numberOfLines={1}>Play a Sport, Make a Note.</Text>
           </View>
+          <TouchableOpacity
+            style={st.iconBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Search players, teams, matches and tournaments"
+            onPress={() => nav.navigate('Tabs', { screen: 'Discover', params: { mode: 'people', focus: true } })}
+          >
+            <Text style={st.icon}>🔍</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={st.iconBtn}
             activeOpacity={0.8}
@@ -305,6 +316,7 @@ const st = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
   brand: { flex: 1, gap: theme.spacing(1) },
   wordmark: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: '900', letterSpacing: -0.5 },
+  wordmarkNarrow: { fontSize: 23 },
   wordmarkAccent: { color: theme.colors.primary },
   iconBtn: {
     width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',

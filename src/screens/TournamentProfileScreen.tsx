@@ -40,6 +40,7 @@ import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
+import { openMatchViewer } from '../navigation/openMatch';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -283,14 +284,7 @@ export default function TournamentProfileScreen() {
     setTimeout(() => w.print(), 300);
   };
 
-  const openMatch = (m: (typeof matches)[number]) =>
-    nav.navigate('LiveScoring', {
-      matchId: m.id, sport: m.sport,
-      homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
-      homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,
-      homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
-      canScore: false,
-    });
+  const openMatch = (m: (typeof matches)[number]) => openMatchViewer(nav, m);
 
   // For a school/college host: which class each member was in during this event
   // (resolved from each student's class timeline at the tournament's start date).

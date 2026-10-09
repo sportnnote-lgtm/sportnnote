@@ -19,6 +19,10 @@ import { followDisputes } from './eventLog';
 import { planStatSync, applyStatWrites, type MatchTotals } from './statSync';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
+import {
+  orSafe, parseVsQuery, rankByName, filterByName, capIds, collapseTeams, liveOnly, selectMatchHits, matchNames, narrowBySports,
+  isSearchable, SEARCH_LIMIT, SEARCH_ID_CAP, type TeamHit, type SearchResults, type SearchKind,
+} from './search';
 import { normalizeOfficials, type MatchOfficial } from './matchOfficials';
 import { readBreak, type MatchBreak } from './matchHousekeeping';
 import type { PointsAdjustment } from './standings';
@@ -824,6 +828,123 @@ export async function searchPlayers(opts: PlayerSearch): Promise<Player[]> {
   const { data, error } = await req;
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
+}
+
+/* ------------------------- Global search (parity #22) ------------------------
+ * One box over players, teams, matches and tournaments. `ilike` per type, 20
+ * hits each, every list ranked by `rankByName`. Teams, matches and tournaments
+ * are publicly readable; players stay on the privacy-safe players view. */
+
+/** Demo team rows keyed like match data: the mock gives each house one id across
+ *  sports, so that id doubles as the club id (one hit per house, and its match
+ *  ids line up). Teams that haven't played keep their own id. */
+function demoSearchTeamRows(): Team[] {
+  const raw = new Map<string, Team>();
+  for (const m of demo.matches) for (const t of [m.homeTeam, m.awayTeam]) if (t) raw.set(`${t.sport}-${t.shortName}`, t);
+  return demo.teams.map((t) => {
+    const r = raw.get(t.id);
+    return r ? { ...t, id: r.id, clubId: t.clubId ?? r.id } : t;
+  });
+}
+
+const TEAM_SEARCH_COLS = 'id,name,short_name,sport,color_hex,org_id';
+
+/** Team rows whose name or short name contains `q`, best-ranked first. */
+async function searchTeamRows(q: string, limit: number): Promise<Team[]> {
+  const s = orSafe(q);
+  if (!s) return [];
+  const names = (t: Team) => [t.name, t.shortName];
+  if (!isSupabaseConfigured || !supabase) return filterByName(demoSearchTeamRows(), s, names).slice(0, limit);
+  const run = (cols: string) => supabase!.from('teams').select(cols)
+    .or(`name.ilike.%${s}%,short_name.ilike.%${s}%`).order('name').limit(limit);
+  // club_id arrives with migration 0018 — read it when it's there, so club teams collapse.
+  let res = await run(`${TEAM_SEARCH_COLS},club_id`);
+  if (res.error) res = await run(TEAM_SEARCH_COLS);
+  if (res.error) throw new Error('Couldn’t search teams just now.');
+  return rankByName(((res.data ?? []) as unknown as TeamRow[]).map(toTeam), s, names);
+}
+
+/** Teams matching `q` (name or short name). A Club's per-sport rows collapse
+ *  into one hit listing every sport. */
+export async function searchTeams(q: string, limit = SEARCH_LIMIT): Promise<TeamHit[]> {
+  if (!isSearchable(q) || looksLikeContact(q)) return [];
+  return collapseTeams(await searchTeamRows(q, SEARCH_ID_CAP)).slice(0, limit);
+}
+
+/** Tournaments matching `q` by name or host, newest first, never a deleted one. */
+export async function searchTournaments(q: string, limit = SEARCH_LIMIT): Promise<Tournament[]> {
+  const s = orSafe(q);
+  if (!isSearchable(q) || looksLikeContact(q) || !s) return [];
+  const names = (t: Tournament) => [t.name, t.hostName];
+  if (!isSupabaseConfigured || !supabase) {
+    const newest = [...demo.tournaments].sort((x, y) => (y.startDate ?? '').localeCompare(x.startDate ?? ''));
+    return filterByName(liveOnly(newest), s, names).slice(0, limit);
+  }
+  const { data, error } = await withTournamentCols<any[]>((cols) => supabase!.from('tournaments').select(cols)
+    .or(`name.ilike.%${s}%,host_name.ilike.%${s}%`).order('start_date', { ascending: false }).limit(SEARCH_ID_CAP));
+  if (error) throw new Error('Couldn’t search tournaments just now.');
+  return rankByName(liveOnly((data ?? []).map(toTournament)), s, names).slice(0, limit);
+}
+
+/** Matches by team ("Red", or "Red vs Blue" for that pairing only) or by
+ *  tournament name. Newest first; a deleted tournament's matches never show. */
+export async function searchMatches(q: string, limit = SEARCH_LIMIT): Promise<Match[]> {
+  if (!isSearchable(q) || looksLikeContact(q)) return [];
+  const [a, b] = parseVsQuery(q);
+  const [aRows, bRows, tours] = await Promise.all([
+    searchTeamRows(a, SEARCH_ID_CAP),
+    b ? searchTeamRows(b, SEARCH_ID_CAP) : Promise.resolve([] as Team[]),
+    // "A vs B" is a pairing — tournament names don't widen it.
+    b ? Promise.resolve([] as Tournament[]) : searchTournaments(a, SEARCH_ID_CAP),
+  ]);
+  const aIds = capIds(aRows.map((t) => t.id));
+  const bIds = b ? capIds(bRows.map((t) => t.id)) : undefined;
+  const tIds = capIds(tours.map((t) => t.id));
+  if (b && (!aIds.length || !bIds!.length)) return [];
+  if (!aIds.length && !tIds.length) return [];
+  const deleted = await deletedTournamentIds();
+  let pool: Match[];
+  if (!isSupabaseConfigured || !supabase) pool = demo.matches;
+  else {
+    const list = (ids: string[]) => `(${ids.map((id) => `"${id}"`).join(',')})`;
+    const ors = aIds.length ? [`home_team_id.in.${list(aIds)}`, `away_team_id.in.${list(aIds)}`] : [];
+    if (tIds.length) ors.push(`tournament_id.in.${list(tIds)}`);
+    const { data, error } = await withMatchCols<unknown[]>((cols) => supabase!.from('matches').select(cols)
+      .or(ors.join(',')).order('starts_at', { ascending: false }).limit(200));
+    if (error) throw new Error('Couldn’t search matches just now.');
+    pool = ((data ?? []) as unknown as MatchRow[]).map(toMatch);
+  }
+  const hits = selectMatchHits(pool, { a: aIds, b: bIds, tournamentIds: tIds, deletedTournamentIds: deleted });
+  return rankByName(hits, a, matchNames).slice(0, limit);
+}
+
+/** Every type at once. A failed type contributes [] (and its message in
+ *  `errors`) — the others still show. Under 2 letters searches nothing, unless
+ *  it's a whole phone number or email (players only). */
+export async function searchAll(q: string, filters: Omit<PlayerSearch, 'query'> = {}): Promise<SearchResults<Player> & { errors: Partial<Record<SearchKind, string>> }> {
+  const empty = { players: [], teams: [], matches: [], tournaments: [], errors: {} };
+  if (!isSearchable(q)) return empty;
+  const query = q.trim();
+  const settled = await Promise.allSettled([
+    searchPlayers({ ...filters, query }),
+    searchTeams(query),
+    searchMatches(query),
+    searchTournaments(query),
+  ]);
+  const errors: Partial<Record<SearchKind, string>> = {};
+  const pick = <T,>(i: number, kind: SearchKind): T[] => {
+    const r = settled[i];
+    if (r.status === 'fulfilled') return r.value as T[];
+    errors[kind] = r.reason instanceof Error ? r.reason.message : 'Search failed';
+    return [];
+  };
+  const out = narrowBySports<Player>({
+    players: rankByName(pick<Player>(0, 'players'), query, (p) => p.fullName),
+    teams: pick<TeamHit>(1, 'teams'),
+    matches: pick<Match>(2, 'matches'),
+    tournaments: pick<Tournament>(3, 'tournaments'),
+  }, filters.sports);
+  return { ...out, errors };
 }
 
 /** Cities for the discovery filter, most players first. Case/spacing variants

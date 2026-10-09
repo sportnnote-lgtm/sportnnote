@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-09 — Global search: players, teams, matches, tournaments (parity #22)
+
+- **Ask (parity queue #22):** Discover could only search players by name; teams were an
+  unsearchable list and matches/tournaments couldn't be searched at all.
+- **Data:** pure `data/search.ts` (`parseVsQuery` "Red vs Blue", `orSafe`, `rankByName` exact →
+  starts-with → word-start → contains, id-list cap at 50, deleted-tournament filtering); repos
+  `searchTeams` (club teams collapse into one hit; `club_id` read tolerantly), `searchTournaments`
+  (soft-deleted excluded), `searchMatches` (teams + tournaments, "A vs B" both sides either order,
+  all matches of deleted tournaments dropped), `searchAll` (`Promise.allSettled` — a failed type
+  shows a note, the rest render), demo branches; `useGlobalSearch` (debounced, keeps previous
+  results). `teamSearch.filterTeams` shares the name matcher.
+- **UI:** Discover "🔍 Search" mode — one box (✕, autofocus), count chips All · Players · Teams ·
+  Matches · Tournaments, All tab with 3 per type (exact hit's section first, see all), "Not on app
+  yet" pill, empty state, browse content when empty, sport chips narrow every type; Home 🔍 button;
+  shared `navigation/openMatch.ts`.
+- **Verified:** tsc + 740 tests (12 new); demo 8093 at 375 px: "re" counts, "Red vs Blue" only
+  Red–Blue (11), hits open the right screens, Home 🔍 focuses, phone/email + filters work. Not
+  verified: live PostgREST filters / partial-failure path. No migration.
+
+---
+
 ### 2026-10-09 — Tournament awards (Awards tab) + change Player of the Match once (parity #21)
 
 - **Ask (parity queue #21):** organisers worked out best player / top scorer / best bowler by hand
