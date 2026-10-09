@@ -13,6 +13,24 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Match start/result alerts verified on the live project (#23 staging check)
+
+- **Test:** the founder ran a throwaway football match (no teams or followers; created and deleted
+  in one SQL block). Responses were read from `net._http_response`.
+- **Result:** three state-only updates, a same-status update and a post-live state update caused
+  **0 calls**. scheduled → live → completed caused **exactly 2** (`start` and `result`), both 200.
+- **Gotcha:**
+  - **What happened:** the `functions_anon_key` Vault secret had been stored as the dashboard's
+    *masked* value (ends in "••", no dots). The functions gateway answered 401
+    `UNAUTHORIZED_INVALID_JWT_FORMAT`.
+  - **Why pasting didn't fix it:** pasting the key from chat was masked again.
+  - **Fix:** copy it inside SQL from the reminders cron job,
+    `vault.update_secret(<id>, (select substring(command from 'Bearer ([A-Za-z0-9_.-]+)') from cron.job where jobname = 'notify-upcoming'))`.
+- **Read-only checks:** `npx supabase db query --linked --project-ref mpgbvbylmkwasjgupsbq "<sql>"`
+  works with the CLI login. Writes to live go through the founder.
+
+---
+
 ### 2026-10-09 — Hosts can score and end matches by default; 20 wording/UX fixes from the guide writers
 
 - **Hosts score by default (founder ask):** new `core/scoringAccess.ts` (`canScoreMatch`: a listed scorer, or a host of the match or its tournament; mirrors the server's `can_manage_match`). It drives the Scoring tab, End match, Take over, Quick options, live settings, POTM and Matches-card "Start scoring". Opening a match doesn't add a host as a scorer; claiming the lock does (as the RPC already did; mirrored in demo). Viewers stay read-only. **No migration**: PGlite hostscoring 26/26 (a host not in `scorer_ids` claims, appends, undoes, snapshots, writes stat lines and ends; a stranger is refused everything). Edge: a host account with several player rows may be recorded as scoring under its first player (`my_scoring_player`).
