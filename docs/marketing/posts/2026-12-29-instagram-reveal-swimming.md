@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 5 of 7: swimming 🏊
+Reveal 5 of 10: swimming 🏊
 
 Run your school swim meet the World Aquatics way:
 • Heats seeded fastest-last, fastest swimmer in the centre lane
@@ -45,7 +45,7 @@ Tag your swim coach.
 | 0:08–0:12 | 100 m race: type the 50 m split under the time; the results sheet shows each lap. | 50 m splits |
 | 0:12–0:15 | A relay: pick 4 swimmers; the legs are labelled Back / Breast / Fly / Free. Tap **DQ** → **SW 10.13 · Early take-off**. | Relays + DQ codes |
 | 0:15–0:18 | **🏁 Finish & lock results** → the house table + "Meet records" marked SC. | Records per pool length |
-| 0:18–0:20 | End card. | Reveal 5 of 7 · 11.01 |
+| 0:18–0:20 | End card. | Reveal 5 of 10 · 11.01 |
 
 ## Shot list and demo data
 - **Tournament:** SportnNote Demo Meet 2026 with Swimming added; **Swimming basics**: Pool 25 m, Lanes 6, **Manual timing** on.

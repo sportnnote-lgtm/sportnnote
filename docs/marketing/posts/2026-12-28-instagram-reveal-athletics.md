@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 4 of 7: athletics 🏃
+Reveal 4 of 10: athletics 🏃
 
 Your whole sports day, track and field, on one phone:
 ⏱ Type 1085 and it's 10.85. Hand times, wind and reaction time handled.
@@ -45,7 +45,7 @@ Tag your athletics coach.
 | 0:10–0:15 | The long jump U16 Girls card: "up next", trial 4. Type 4.85, wind +1.2 → **✓ Mark**. The ★ top-8 markers are shown. | Field events, trial by trial |
 | 0:15–0:19 | The high jump grid: tap **O clear**, **X fail**; the grid fills with O / X / –. | High jump O / X grid |
 | 0:19–0:23 | **🏁 Finish & lock results** → the house table on the Stats tab updates; "MR" next to a time. | House medal table, live |
-| 0:23–0:25 | End card. | Reveal 4 of 7 · 11.01 · @sportnnote |
+| 0:23–0:25 | End card. | Reveal 4 of 10 · 11.01 · @sportnnote |
 
 **Audio:** licensed track; a starter's pistol sound effect at 0:00.
 

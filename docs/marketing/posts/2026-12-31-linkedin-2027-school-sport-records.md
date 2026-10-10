@@ -22,7 +22,7 @@ House tables stop being argued about. Every point comes from a scored match, wit
 
 Every sport counts the same. The chess Swiss and the carrom doubles get the same records as the cricket final.
 
-That's what SportnNote does, for 17 sports, from 11 January. Ten schools are running their January sports days on it with us. If your school would like to be next, my messages are open.
+That's what SportnNote does, for 20 sports, from 11 January. Ten schools are running their January sports days on it with us. If your school would like to be next, my messages are open.
 
 Happy new year to everyone who runs, coaches, scores and organises school sport. You make it happen.
 

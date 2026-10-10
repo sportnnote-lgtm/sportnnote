@@ -16,7 +16,7 @@ SportnNote: a 3-minute tour | We're live
 ```text
 SportnNote is open to everyone from today. In three minutes: create a match, score it live from one phone, fix a mistake, finish with every player's stats, and see it all on a player's career page. Then a tournament: fixtures, a points table that follows each sport's own rules, and a live score bar for your stream.
 
-17 sports, every one scored to its international rules: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+20 sports, every one scored to its international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -68,7 +68,7 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 
 | Time | Screen (what to record) | On-screen text | VO |
 |---|---|---|---|
-| 0:00 | Presenter full frame. Behind them, a quick montage (1 s each) of live scoring screens: cricket, football, kabaddi, badminton, athletics, chess. | We're live. 17 sports. | SportnNote is open to everyone, from today. Seventeen sports, each scored to its own international rules, from one phone. Here's the tour. Three minutes. |
+| 0:00 | Presenter full frame. Behind them, a quick montage (1 s each) of live scoring screens: cricket, football, kabaddi, badminton, athletics, chess. | We're live. 20 sports. | SportnNote is open to everyone, from today. Twenty sports, each scored to its own international rules, from one phone. Here's the tour. Three minutes. |
 | 0:15 | Bottom bar → **Organize** tab. Start a friendly (button label to confirm in the build). Pick **Football**, then **7-a-side**. Home **Red House**, away **Blue House**. Create. | Organize → start a friendly | First, a match. On the Organize tab, start a friendly. Pick the sport and the format, here seven-a-side football, then the two teams. |
 | 0:27 | **Lineups** tab → **Set lineup & formation**; tick starters (sped up 4×). | Lineups first | Set the lineups. That's where every player's minutes come from. |
 | 0:35 | **Scoring** tab → **Kick off**. Tap **Goal — Red House** → **Ravi** → **Header** → **Arjun**. Score 1–0, timeline "11' Goal". | Kick off · Goal → scorer → assist | Tap Kick off, and the clock starts. A goal is a few taps: Goal, the scorer, the type, the assist. Every moment gets the right match minute. |
@@ -94,11 +94,11 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 8. **Overlay label:** "Demo data" in small text, top left, for the whole video.
 
 ## YouTube Short
-- **Publish:** Mon 11 Jan, 18:00. 9:16, 30 s. A montage: one 1.5-second clip per sport, all 17, each showing a live scoring screen with its sport name as a caption, then the presenter.
-- **Title:** We're live: 17 sports, one app #shorts
-- **On-screen text:** each sport's name as it appears ("Cricket", "Football", "Hockey", "Basketball", "Volleyball", "Kabaddi", "Tennis", "Badminton", "Table tennis", "Squash", "Padel", "Pickleball", "Carrom", "Chess", "Golf", "Athletics", "Swimming") … "17 sports. One app." … "app.sportnnote.in".
-- **VO:** "Cricket, football, hockey, basketball, volleyball, kabaddi. Tennis, badminton, table tennis, squash, padel, pickleball. Carrom, chess, golf, athletics and swimming. Seventeen sports, every one scored to its own rules, from one phone. SportnNote is live today. Open app dot sportnnote dot in. Free while we're new; a small fee later, with thirty days' notice."
-- **Description:** "SportnNote is live: 17 sports, one app. Open https://app.sportnnote.in · Android app: https://sportnnote.in · Free while we're new; a small fee later, announced well in advance (30 days' notice). AI-generated voice; real app screens with demo data. #SportnNote #SchoolSports #SportsDay"
+- **Publish:** Mon 11 Jan, 18:00. 9:16, 30 s. A montage: one 1.2-second clip per sport, all 20, each showing a live scoring screen with its sport name as a caption, then the presenter.
+- **Title:** We're live: 20 sports, one app #shorts
+- **On-screen text:** each sport's name as it appears ("Cricket", "Football", "Hockey", "Handball", "Basketball", "Volleyball", "Kabaddi", "Tennis", "Badminton", "Table tennis", "Squash", "Padel", "Pickleball", "Carrom", "Chess", "Golf", "Athletics", "Swimming", "Weightlifting", "Shooting") … "20 sports. One app." … "app.sportnnote.in".
+- **VO:** "Cricket, football, hockey, handball, basketball, volleyball, kabaddi. Tennis, badminton, table tennis, squash, padel, pickleball. Carrom, chess, golf, athletics, swimming, weightlifting and shooting. Twenty sports, every one scored to its own rules, from one phone. SportnNote is live today. Open app dot sportnnote dot in. Free while we're new; a small fee later, with thirty days' notice."
+- **Description:** "SportnNote is live: 20 sports, one app. Open https://app.sportnnote.in · Android app: https://sportnnote.in · Free while we're new; a small fee later, announced well in advance (30 days' notice). AI-generated voice; real app screens with demo data. #SportnNote #SchoolSports #SportsDay"
 - **Disclosure:** "Altered or synthetic content" = Yes.
 
 ## Pre-post checks
@@ -107,5 +107,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - Confirm the **End Match** check sheet shows **Yes, end match** (match-safety confirms, built Oct 2026); if not in the frozen build, cut "The app asks first" from the 1:10 VO.
 - Confirm the app is actually open to everyone at 10:00 IST on 11 Jan before this goes out. If launch slips, hold the video and the Short.
 - Confirm the Android app link on sportnnote.in is live, and the Play Store listing (if used) is approved.
-- The Short shows all 17 sports: check there is a clean demo match for each one, with demo names only.
+- The Short shows all 20 sports: check there is a clean demo match for each one, with demo names only.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line (description, VO and Short).

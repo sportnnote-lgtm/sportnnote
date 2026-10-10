@@ -16,7 +16,7 @@ Run an athletics sports day: heats, finals and the house table | SportnNote how-
 ```text
 Run a whole athletics sports day from one phone: build the programme by age group, enter athletes and relay teams, draw lanes, run heats, see who goes through (Q and q), seed the final and lock the results. Then the field: long jump trials, the high jump O/X grid and a jump-off for gold. Every final adds points to the house table, with meet records and every athlete's personal bests kept for you.
 
-Every sport on SportnNote is scored to its international rules: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+Every sport on SportnNote is scored to its international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

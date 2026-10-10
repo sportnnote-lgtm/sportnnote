@@ -16,7 +16,7 @@ Create a tournament and generate fixtures | SportnNote how-to #2
 ```
 Set up a school or college tournament in SportnNote: name, grounds, sports, rules and organiser contact; add your houses or teams (or let captains join with one link); choose league, groups or knockout; and generate every fixture in one go.
 
-Works for an inter-house meet, a college fest or an open tournament, in any of our 17 sports.
+Works for an inter-house meet, a college fest or an open tournament, in any of our 20 sports.
 
 SportnNote opens to everyone on 11 January 2027. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

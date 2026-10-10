@@ -16,7 +16,7 @@ Score a cricket match ball by ball | SportnNote how-to #3
 ```text
 Score a cricket match ball by ball from one phone: pick the openers, tap runs and extras the way the paper book has them, record a catch and a run out, change bowlers inside the limits, and fix a wrong ball from four overs ago without undoing everything. The scorecard, partnerships, overs chart and every player's career figures are done for you.
 
-The same idea works for every sport on SportnNote: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+The same idea works for every sport on SportnNote: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 SportnNote opens to everyone on 11 January 2027. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

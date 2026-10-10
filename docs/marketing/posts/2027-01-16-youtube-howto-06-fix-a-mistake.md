@@ -16,7 +16,7 @@ Fix a mistake and correct a finished match | SportnNote how-to #6
 ```text
 Every scorer makes a wrong tap. Here are all the ways to fix one on SportnNote: Undo for the last tap, Correct the timeline for an older moment, Edit a past ball in cricket, and Correct this match after full time. Plus: why only one phone scores at a time, how to take over or hand over, and how every End and Restart now asks first, so nobody ends a match by accident. Every correction is listed publicly, so both teams can trust the score.
 
-Every sport on SportnNote works this way: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+Every sport on SportnNote works this way: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

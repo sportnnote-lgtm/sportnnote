@@ -41,7 +41,7 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - never full name + school + face together;
   - without both consents, show hands, phone screens and scoreboards only.
 - **No competitor names.**
-- **Every sport is equal.** 17 sports are live: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics (track and field) and swimming. Cricket is never the lead by default.
+- **Every sport is equal.** 20 sports are live: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics (track and field), swimming, weightlifting and shooting (the site's sport list, 11 Oct 2026). Archery is being built: don't announce it until it's live. Cricket is never the lead by default.
 - **One call to action per post.**
 
 ## Demo data for recordings
@@ -63,3 +63,10 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - 6 new post files with full copy (`2027-01-21-linkedin-match-day-mistakes`, `2027-02-04-linkedin-racket-who-serves-first`, `2027-02-11-linkedin-one-tap-shouldnt-decide-a-match`, `2027-02-18-linkedin-a-typo-isnt-a-record`, `2027-02-25-instagram-check-this-mark`, `2027-03-11-instagram-racket-right-side-every-point`).
   - SD-106, SD-107 and SD-108 are live, so their posts are no longer "only if shipped" (21 Jan, 28 Jan ×2, 11 Feb, plus the notes in the 27 Dec carousel and how-tos #2 and #6). The QR posts keep one caveat: the Android app shares the QR image only from the next APK. Also corrected "on Android it opens straight in the app" to "the page offers to open it in the app".
   - Totals recounted: 148 rows (the first batch was 139, not 140), 54 copy-ready in 42 files.
+- **2026-10-11:** third batch: three new sports, 20 sports live, cricket SD-113, golf admin, built for match day.
+  - **Sport count:** 17 → 20 everywhere (README, calendar, and every post that gives the count or the list): handball, weightlifting and shooting added. The trailer grid, the 11 Dec "Name a sport" Reel and the launch-day Short now show 20 sport clips (shorter per-clip timings). The reveals are renumbered "Reveal N of 10"; the hockey reveal (3 Jan) no longer says it's the last one.
+  - `content-calendar.md`: 15 new rows in free slots (one post a day per platform at most): LinkedIn 29 Dec ("20 sports, one scoring standard") and 4 Mar (golf admin and stats); Instagram reveals 8–10 on 5, 7 and 9 Jan (handball, weightlifting, shooting); Instagram Reel + Short on 19 Jan (built for match day: screen on, tap buzz, 60 s result hold) and 2 Feb (cricket SD-113); YouTube sport how-tos + Shorts on Mon 1 Feb (handball), Mon 22 Feb (weightlifting) and Mon 1 Mar (shooting).
+  - 10 new post files with full copy: `2026-12-29-linkedin-20-sports-one-standard`, `2027-01-05-instagram-reveal-handball`, `2027-01-07-instagram-reveal-weightlifting`, `2027-01-09-instagram-reveal-shooting`, `2027-01-19-instagram-built-for-match-day`, `2027-02-01-youtube-howto-handball`, `2027-02-02-instagram-cricket-match-day`, `2027-02-22-youtube-howto-weightlifting`, `2027-03-01-youtube-howto-shooting`, `2027-03-04-linkedin-golf-wd-dq-and-stats`. The three how-tos have full transcripts.
+  - The 30 Dec team-sports reveal got pre-post checks for the SD-117 basketball and volleyball label changes.
+  - The match-day post is gated for the phone app: screen-on and buzz need the APK built after 11 Oct 2026 (the web app already has them).
+  - Totals: 163 rows (28 LinkedIn, 71 Instagram, 64 YouTube: 27 long, 37 Shorts), 69 copy-ready in 52 files.

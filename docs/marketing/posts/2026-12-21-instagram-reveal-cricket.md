@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 1 of 7: cricket 🏏
+Reveal 1 of 10: cricket 🏏
 
 Ball by ball, from one phone.
 • Overthrows, all-run 4s and every kind of extra, credited the way the Laws say
@@ -43,7 +43,7 @@ Follow; more sports this week.
 | 0:06–0:10 | Tap **5·7·+** → Overthrows: **Ran 1** + **4 (boundary)**. The line reads "= 5 to Ravi · not a four". Tap **Add 5 runs**. | 1 + 4 overthrows = 5, not a four | Overthrows go to the batter, but they're never a boundary. Just like the Laws. |
 | 0:10–0:15 | Tap **✎ Edit a past ball** → Ov 3 → the ball "1 run" → change it to **4 runs**, **Boundary** → **Save** → **Update score (1)**. | Fix a ball from 4 overs ago | Got one wrong four overs ago? Fix that one ball. The rest stays. |
 | 0:15–0:20 | Tap **⏱ Overs & target** → **☔ Rain (DLS)** → set overs → **Apply**. The banner reads "revised target 113 in 15 ov". | Rain? DLS target, done | Rain cut? The DLS target is worked out for you. |
-| 0:20–0:25 | **Scorecard** tab → scroll Fall of wickets → tap **Partnerships**. End card: the S:N logo. | Reveal 1 of 7 · 11.01 | And a full scorecard, partnerships and all. SportnNote. Eleventh of January. |
+| 0:20–0:25 | **Scorecard** tab → scroll Fall of wickets → tap **Partnerships**. End card: the S:N logo. | Reveal 1 of 10 · 11.01 | And a full scorecard, partnerships and all. SportnNote. Eleventh of January. |
 
 ## Shot list and demo data
 - **Match:** a T20 friendly, Red House v Blue House, from the marketing demo account. Demo batters Ravi and Dev, demo bowler Arjun.

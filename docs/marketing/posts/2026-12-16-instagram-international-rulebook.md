@@ -35,7 +35,7 @@ Coming 11.01 · @sportnnote
 | 6 | Athletics · World Athletics | Q and q | Q = through on place. q = through as one of the fastest losers. |
 | 7 | Chess · FIDE | Buchholz | Tied on points? The sum of your opponents' scores breaks it. |
 | 8 | Cricket · ICC | Net run rate | Worked out the ICC way, including all-out innings. |
-| 9 | — | School sport, played by the real rules. | 17 sports · 11.01 · @sportnnote |
+| 9 | — | School sport, played by the real rules. | 20 sports · 11.01 · @sportnnote |
 
 ## Alt text
 A nine-slide carousel of scoring rules:
@@ -47,7 +47,7 @@ A nine-slide carousel of scoring rules:
 6. Athletics, World Athletics: Q for place, q for fastest losers.
 7. Chess, FIDE: Buchholz tie-break.
 8. Cricket, ICC: net run rate.
-9. School sport, played by the real rules, 17 sports, 11 January.
+9. School sport, played by the real rules, 20 sports, 11 January.
 
 ## Call to action
 Save it.

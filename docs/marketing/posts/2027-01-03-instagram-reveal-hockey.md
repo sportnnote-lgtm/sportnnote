@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 7 of 7: hockey 🏑
+Reveal 7 of 10: hockey 🏑
 
 Scored the FIH way, from one phone:
 • A game clock that stops by itself after a goal and for a penalty corner
@@ -21,7 +21,7 @@ Scored the FIH way, from one phone:
 • Shoot-outs with sudden death
 • Formats from FIH 4 × 15 to School 2 × 25 and Hockey5s
 
-That's all 7 reveals: 17 sports, 8 days to go.
+Three new sports still to reveal. 8 days to go.
 Launching 11.01 · Share with your hockey team.
 
 #SportnNote #Hockey #FieldHockey #SchoolHockey #SchoolSports #IndianSports
@@ -45,7 +45,7 @@ Share with your hockey team.
 | 0:06–0:09 | Team stats: "PC conversion 1/1". | PC conversion, done |
 | 0:09–0:13 | Tap **🟨 Card** → **🟨 Yellow 5′** → Dev. Under the clock: "⏱️ Suspended: Dev (4:59 left)" · "10 v 11 on the field". | Timed on playing time |
 | 0:13–0:18 | Full time, level → "Level — the match goes to a shoot-out" → **✓ Scored** / **✗ Missed / saved** → the result "2–2 · SO 4–3". | Shoot-out, sudden death |
-| 0:18–0:20 | End card. | 17 sports · 11.01 |
+| 0:18–0:20 | End card. | 20 sports · 11.01 |
 
 ## Shot list and demo data
 - **Match:** a demo match, Red House v Blue House, format **FIH 4 × 15**, **If level at full time**: **Shoot-out**. Set squads with the keeper in the GK spot.

@@ -21,7 +21,7 @@ Thank you. One thing stood out to me: in most schools, cricket is the only sport
 
 But a kabaddi raider's super raids, a chess player's tie-break score, a carrom player's boards, a swimmer's 50 m split: these are records too. Federations keep them for every sport. School sport keeps them for none.
 
-So we built SportnNote on one principle: every sport gets equal depth. All 17 sports are scored by their own international rules, from FIVB set points to FIDE tie-breaks, with the same live scoring, tables and player careers.
+So we built SportnNote on one principle: every sport gets equal depth. All 20 sports are scored by their own international rules, from FIVB set points to FIDE tie-breaks, with the same live scoring, tables and player careers.
 
 We open to everyone on 11 January. Follow the page to see each sport revealed over the next few weeks.
 

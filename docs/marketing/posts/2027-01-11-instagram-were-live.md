@@ -12,8 +12,8 @@
 ```
 SportnNote is LIVE. 🚀
 
-17 sports. Scored live from one phone. Every result kept.
-Cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+20 sports. Scored live from one phone. Every result kept.
+Cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 Free while we're new: a small fee later, announced well in advance (30 days' notice).
 
@@ -24,7 +24,7 @@ Score your first match today, and tag us when you do.
 ```
 
 ## Reel alt text
-A clipboard scoresheet flies away. Then a goal is scored on a phone, a points table updates, a player's career page appears, and a grid of 17 sport icons lights up. Text reads: SportnNote is live, free while we're new.
+A clipboard scoresheet flies away. Then a goal is scored on a phone, a points table updates, a player's career page appears, and a grid of 20 sport icons lights up. Text reads: SportnNote is live, free while we're new.
 
 ## Reel script
 
@@ -35,7 +35,7 @@ A clipboard scoresheet flies away. Then a goal is scored on a phone, a points ta
 | 0:08–0:13 | Phone screen: the points table re-ranks after the result. | Tables update themselves |
 | 0:13–0:18 | Phone screen: the house medal table after an athletics final. | Your whole sports day |
 | 0:18–0:22 | Phone screen: a player career page with PBs. | A career for every player |
-| 0:22–0:27 | The 17-sport grid lights up. | 17 sports. One app. |
+| 0:22–0:27 | The 20-sport grid lights up. | 20 sports. One app. |
 | 0:27–0:30 | End card. | LIVE NOW · Free while we're new · link in bio |
 
 **Audio:** licensed, celebratory track.

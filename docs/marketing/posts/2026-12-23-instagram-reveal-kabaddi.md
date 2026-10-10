@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 2 of 7: kabaddi 🤼
+Reveal 2 of 10: kabaddi 🤼
 
 A whole raid in 3 taps: raider, touches, bonus. The app does the rest.
 • Touch, bonus and tackle points go to the right player

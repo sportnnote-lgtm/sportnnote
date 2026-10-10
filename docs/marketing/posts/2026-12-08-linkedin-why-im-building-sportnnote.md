@@ -16,7 +16,7 @@ The 100 m heats, the relay that went to a photo finish, the house points that to
 
 It isn't only cricket that deserves a scorecard. Kabaddi, athletics, chess, carrom, swimming, hockey: every sport a child plays deserves the same records the pros get. Box scores. Personal bests. Tables with real tie-breakers. A career that follows the player.
 
-That's what we've been building. It has a name, it covers 17 sports, and it goes live on 11 January.
+That's what we've been building. It has a name, it covers 20 sports, and it goes live on 11 January.
 
 Before that, I want to hear from the people who run school sport every day: how does your school record results today?
 

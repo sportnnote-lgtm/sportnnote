@@ -15,7 +15,7 @@ SportnNote: every sport, every match, scored live (launches 11 January)
 ```
 School and college sport in India finally gets the scoring, tables and player records international events take for granted.
 
-SportnNote scores 17 sports live from one phone, each by its own international rules: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+SportnNote scores 20 sports live from one phone, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 • Live, point-by-point scoring with undo and public corrections
 • Whole meets in one place: fixtures, points tables with official tie-breakers, a house medal table, awards
@@ -53,7 +53,7 @@ A clipboard on the left half, crossed out; a phone with a live scoreboard on the
 | 0:29–0:35 | Screen: the athletics house table updating after a final; "MR" next to a time. | House medal table | …a house medal table, meet records and awards. |
 | 0:35–0:41 | Screen: a player's career page with PBs and a season filter chip. | A career for every player | Every player gets a career page: personal bests, records, every match. |
 | 0:41–0:45 | Screen: OBS with the score bar overlay; a GOAL! flash. | Free stream overlay | And put a live score bar on your school's stream. |
-| 0:45–1:05 | A 17-sport grid; each tile lights up with a 0.4 s clip of its scoring screen (cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming). | 17 sports. Their own international rules. | Seventeen sports, each scored by its own international rules. Not a cricket app with extras. Every sport, with equal depth. |
+| 0:45–1:05 | A 20-sport grid; each tile lights up with a 0.35 s clip of its scoring screen (cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting). | 20 sports. Their own international rules. | Twenty sports, each scored by its own international rules. Not a cricket app with extras. Every sport, with equal depth. |
 | 1:05–1:15 | End card: the S:N logo. | 11 January · Free while we're new · sportnnote.in | SportnNote. Opens on the eleventh of January. Free while we're new; a small fee later, with thirty days' notice. |
 
 ## Shot list
@@ -64,9 +64,9 @@ A clipboard on the left half, crossed out; a phone with a live scoreboard on the
 
 ## YouTube Short
 - **Publish:** Sat 19 Dec, 18:00. 9:16, 15 s.
-- **Title:** 17 sports. One app. 11 January. #shorts
-- **Visual:** the 17-sport grid lighting up tile by tile, then "11.01".
-- **On-screen text:** "Name a sport…" → "We score it." → "17 sports · one app · 11.01".
-- **VO (AI):** "Cricket to carrom, kabaddi to the relay. Seventeen sports, scored live. SportnNote, eleventh of January."
+- **Title:** 20 sports. One app. 11 January. #shorts
+- **Visual:** the 20-sport grid lighting up tile by tile, then "11.01".
+- **On-screen text:** "Name a sport…" → "We score it." → "20 sports · one app · 11.01".
+- **VO (AI):** "Cricket to carrom, kabaddi to the relay. Twenty sports, scored live. SportnNote, eleventh of January."
 - **Description:** "Every sport, scored live. Launches 11 January 2027. https://sportnnote.in · AI-generated voice; real app screens with demo data. #SportnNote #SchoolSports"
 - **Disclosure:** "Altered or synthetic content" = Yes.

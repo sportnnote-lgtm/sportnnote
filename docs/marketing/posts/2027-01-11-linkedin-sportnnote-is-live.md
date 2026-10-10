@@ -14,7 +14,7 @@ SportnNote is live.
 
 School and college sport in India has never had proper records. Thousands of matches every year, and almost none of them kept. From today, that changes.
 
-SportnNote scores 17 sports live from one phone, each by its own international rules: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+SportnNote scores 20 sports live from one phone, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 It does three things:
 1. Live scoring: point by point and ball by ball, with undo and public corrections.
@@ -43,13 +43,13 @@ If you run sport at a school or college, I'd love for you to try it this week an
 |---|---|---|---|
 | 0:00–0:05 | The founder at the edge of a school ground (with the school's written permission; no identifiable students in frame), phone in hand. | "School sport in India has never had records. Today it does." | School sport has never had records. Today it does. |
 | 0:05–0:15 | Medium shot, walking. | "Every year our schools play thousands of matches: athletics, kabaddi, football, chess. And when the day ends, the results go in a bin." | Thousands of matches. Almost none kept. |
-| 0:15–0:30 | Over-the-shoulder: the founder scores one real point on a live demo match on the phone; the screen is readable. | "This is SportnNote. Seventeen sports, each scored by its own international rules. One tap, and the score is live for everyone following." | 17 sports · scored live |
+| 0:15–0:30 | Over-the-shoulder: the founder scores one real point on a live demo match on the phone; the screen is readable. | "This is SportnNote. Twenty sports, each scored by its own international rules. One tap, and the score is live for everyone following." | 20 sports · scored live |
 | 0:30–0:42 | Insert: phone screen recordings (2 s each): the points table, the house medal table, a career page. | "It runs the whole meet: fixtures, tables, the house medal table. And every player gets a career page that follows them." | Whole meets · career pages |
 | 0:42–0:52 | Back to the founder, to camera. | "It's free while we're new. Later there'll be a small fee, and we'll tell you well in advance." | Free while we're new · small fee later, 30 days' notice |
 | 0:52–0:60 | To camera, then the end card. | "Open the app at app dot sportnnote dot in, and score your first match this week." | app.sportnnote.in |
 
 ## Alt text / video description
-The SportnNote founder stands at a school ground holding a phone and announces the launch. They score a point live in the app, then quick screen clips show a points table, a house medal table and a player's career page. Captions: school sport has never had records, 17 sports scored live, free while we're new, app.sportnnote.in.
+The SportnNote founder stands at a school ground holding a phone and announces the launch. They score a point live in the app, then quick screen clips show a points table, a house medal table and a player's career page. Captions: school sport has never had records, 20 sports scored live, free while we're new, app.sportnnote.in.
 
 ## Call to action
 Open app.sportnnote.in.

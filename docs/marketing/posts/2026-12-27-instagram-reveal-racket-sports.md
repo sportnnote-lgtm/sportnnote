@@ -11,7 +11,7 @@
 
 ## Caption (post exactly)
 ```
-Reveal 3 of 7: racket sports 🎾🏸🏓
+Reveal 3 of 10: racket sports 🎾🏸🏓
 
 Six sports, one tap per point. You tap who won it; the app knows the rest:
 🎾 Tennis: deuce, tiebreaks, 7-6(4), even a Grand Slam final set

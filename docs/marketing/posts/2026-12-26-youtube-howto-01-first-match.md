@@ -16,7 +16,7 @@ Score your first match in 5 minutes | SportnNote how-to #1
 ```
 Score a football match live from one phone: start a friendly, kick off, log goals, shots and subs with the right minute (45+2'), fix a mistake with Undo and finish with player stats, minutes and clean sheets worked out for you.
 
-The same taps work for every sport on SportnNote: cricket, football, hockey, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics and swimming.
+The same taps work for every sport on SportnNote: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
 
 SportnNote opens to everyone on 11 January 2027. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -62,7 +62,7 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 | Time | Screen (what to record) | On-screen text | VO |
 |---|---|---|---|
 | 0:00 | Hook: the finished match. The Summary tab shows Red House 2 – 1 Blue House, the box score and a 45+2' goal in the timeline. | Your first match. 5 minutes. | In five minutes you'll go from an empty app to this: a live football match scored from one phone, with every goal at the right minute and every player's stats done for you. |
-| 0:12 | Presenter full frame, a short intro. | How-to #1 | I'm your SportnNote guide. We'll use football today, but the same idea works for all seventeen sports in the app. Let's go. |
+| 0:12 | Presenter full frame, a short intro. | How-to #1 | I'm your SportnNote guide. We'll use football today, but the same idea works for all twenty sports in the app. Let's go. |
 | 0:20 | Bottom bar → the **Organize** tab. Tap **🤝 Start a friendly**. | Organize → Start a friendly | Open the Organize tab and tap Start a friendly. A friendly is a one-off game. You don't need a tournament. |
 | 0:32 | The "Start a friendly" screen ("A quick game — no tournament needed"). Pick **Football**. | Pick the sport | Pick the sport. We'll take football. |
 | 0:40 | The format chips: tap **7-a-side**. Show the **If level at full time** choice; leave the default. | Format: 7-a-side | Choose the format. School matches are often seven-a-side, so tap that. You also choose what happens if it's level at full time. For a friendly, a draw is fine. |
