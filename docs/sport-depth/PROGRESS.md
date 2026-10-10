@@ -2,9 +2,43 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-19 + SD-29: absolute racket statTotals with the D2 backfill tool; on-field tracker — DONE (3ad046a, 2026-10-10)
+- **SD-29:**
+  - Built: `onField.ts` (minutes, starts, +/-, sets played, timed suspensions, short-handed count), football minutes for all and an optional sin-bin, basketball MIN / +/-, volleyball setsPlayed.
+  - Hockey and handball rules are tested ahead of their plugins.
+  - Limits: name-only legacy subs get no minutes; basketball MIN is approximate (whole-minute clock); volleyball without a lineup counts the whole squad as on court.
+- **SD-19:**
+  - Built: the statTotals contract and harness; `racketTotals.ts` for tennis / badminton / TT / squash / padel / pickleball (+ volleyball sets W-L).
+  - `doubleFaults` stays on live increments (partial).
+  - `partnerId` is derived but **not stored** — it needs a column or SD-24 pairing.
+- **D2 backfill (founder, when you want past matches healed):** open the live web app signed in as an organiser/host, then in the devtools console run `await __sportnnoteAdmin.resyncSportLines('tennis', undefined, { dryRun: true })` to preview and `await __sportnnoteAdmin.resyncSportLines('tennis')` to write. Repeat per sport. Only rows your account can update (RLS) are written.
+- No migration. Tests: 75 new · 1342 total · demo 8093.
+- **Small issues noted:**
+  - tennis history rows read "0 aces";
+  - the Win % tile truncates at 375 px;
+  - the demo localStorage store is last-writer-wins across tabs (affects parallel demo checks only).
+
 ## 2026-10-10: migrations 0050 + 0051 run live (founder); Wave 0 + Wave 1 so far pushed
 - Verified read-only: `stat_lines.result` + check exist (live has 0 stat lines, so the backfill had nothing to do); `field_entries.team_id` exists, `player_id` is nullable, and the marker rule is golf-only.
 - Pushed to GitHub and `main` (the website redeploys). The app publish (web + OTA) waits until SD-19 and SD-29 are committed, since builds use the working tree.
+
+## SD-19: absolute statTotals — contract, harness, racket implementation, D2 backfill — DONE (commit pending, 2026-10-10)
+- **Contract** (documented on `SportPlugin.statTotals`, `src/sports/types.ts`): pure; owned live keys equal the sum of live increments (attribution / extra / attribution2, STAT_ADJUST incl.) per player, zeros included; survives EDIT_LOG, AMEND and undo (every prefix); a missing owned key reads 0; derived keys ≥ 0; a non-partial plugin owns every live key. New optional `ctx` (`StatTotalsContext`: each side's players) and `statTotalsNeedsPlayers`; entries may carry a derived `partnerId`.
+- **Harness:** `tests/statTotalsHarness.mts` (`assertContract`, `assertSameAsClean`, `amendRecord`, `toRecords`, `liveSums`) — later items add a case to `tests/stat-totals-contract.test.mts`.
+- **Racket implementation:** one `src/sports/racketTotals.ts` for tennis, padel, badminton and the rally engine (table tennis, squash, pickleball). Point events now keep the credited `playerId` (and `pointRows` carries it into EDIT_LOG lists); old logs resolve names through ctx. Wired as `statTotals` + `statTotalsPartial` + `statTotalsNeedsPlayers` on all six plugins; schema keys declared (`racketRecordStats`, group `record`, hidden from the history row).
+- **Keys per player:**
+  - all six: `points` (existing), `ptsWon` / `ptsLost` (side's rally points), `gamesWon` / `gamesLost`, `decidersPlayed` / `decidersWon` (deciding game, or set for tennis / padel);
+  - tennis / padel also: `setsWon` / `setsLost`, `tiebreaksPlayed` / `tiebreaksWon` (set + match tiebreaks; a match tiebreak counts as 1 game, as SD-17);
+  - tennis also: `aces`. `doubleFaults` stays on increments (partial) — an EDIT_LOG point list can't carry it;
+  - volleyball: `setsWon` / `setsLost` (merged with SD-29's `setsPlayed`).
+  - Singles / doubles = the SD-25 line context (no key). **Partner:** `partnerId` on the totals entry only — `stat_lines` has no column and `stats` is numbers-only, so storing it needs a migration (or SD-24 pairs lines by match + side).
+- **Wiring:** `repos.matchStatTotals` (loads `statTotalsContext`: squad starters, else a ≤ 2-player entry roster, with names) used by useLiveMatch completion / correction and `publishAmendment`. Cricket / football unchanged (no ctx, no extra reads).
+- **D2 backfill — `repos.resyncSportLines(sport, matchIds?, { dryRun? })`**: replays each completed match's stored log (AMENDs applied; tournament format merged; snapshot fallback when there is no log), recomputes the totals and writes only changed `stat_lines` rows (dispute-mapped). Never touches the match row, snapshot, tournament settings or awards. Not run automatically. **How to run (founder):** open the web app signed in as an account allowed to update those stat lines, open devtools → Console:
+  - `await __sportnnoteAdmin.resyncSportLines('tennis', undefined, { dryRun: true })` — reports rows it would write;
+  - `await __sportnnoteAdmin.resyncSportLines('tennis')` — writes; repeat per sport (`badminton`, `padel`, `tabletennis`, `squash`, `pickleball`, `volleyball`; also `cricket` / `football` to heal past lines); pass `['<matchId>', …]` to limit it. A second run writes 0.
+- No migration. Tests: 33 new (18 contract + 15 racket) · 1343 total · tsc clean.
+- **Demo 8093 (375 px):** badminton doubles (3-1, 0-3, 3-1) — Sana Iyer's profile: Points 3, Points won 6 / lost 5, Games 2-1, Deciders 1 / won 1; tennis Fast4 (4-0, 3-4(2), 4-0) — Wren Kapoor: Sets 1-2, Games 4-11, Points 17 won / 46 lost, Tiebreaks 1 / won 1, Deciders 1 / won 0. Backfill dry-run on a finished match: 0 rows (already absolute).
+- **Notes / not verified:** live Supabase path and RLS for the founder's backfill account; the history row now shows "0 aces" for a tennis line without aces (totals write the zero); Win % still truncates "100%" at 375 px (SD-25 note); the console handle is set at module load (a Fast Refresh in dev can leave it pointing at a fresh demo store — reload first).
 
 ## SD-18: standings columns per sport — DONE (a232b7b, 2026-10-10)
 - **Built:** pure `standingsColumns.ts` (`tableColumns`, `columnsConfig`, `tieBreakNote`); PhaseTable rebuilt on it; a "Player" / "Pair" / "Team" header; on phones, a fixed name column with scrolling numbers below 64 px of name width; a column key and tie-break note under the table; the compact LeagueTable gains an extras line.
