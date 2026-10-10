@@ -5,7 +5,7 @@
  */
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction, ScoreSummary } from './types';
-import { scoreLine as lineOf, finalSummary } from './scoreline.ts';
+import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from './scoreline.ts';
 import { pointRows, replayPoints, type EditRow, type PointInput } from './rallyEdit.ts';
 
 export interface RallyState {
@@ -235,6 +235,10 @@ export function serverId(s: RallyState, rosters: { home: string[]; away: string[
 export function rallyScoreLine(s: RallyState, perspective?: 'home' | 'away'): string {
   return lineOf(s?.games, { perspective });
 }
+
+/** SD-20 — the line score: every game + the one in play (LineScoreboard, "ret."). */
+export const rallyLineScore = (s: RallyState): LineScore | null =>
+  pointsLineScore('game', s && { games: s.games, current: s.current, won: s.gamesWon, ended: s.ended, toWin: s.gamesToWin });
 
 /** Scoreboard summary for pickleball / squash / table tennis. Live = the current
  *  game's points; once ended = games won + every game's score (not the reset 0–0). */

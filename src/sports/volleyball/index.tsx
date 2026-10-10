@@ -17,9 +17,9 @@ import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
 import { volleyballTotals } from './fieldTime';
 import { mergeTotals, volleyballSetRecord } from '../racketTotals';
-import { LineScoreboard } from '../../components/LineScoreboard';
+import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, type VolleyballState, type VbOutcome } from './engine';
+import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, lineScore, type VolleyballState, type VbOutcome } from './engine';
 
 export { isDecider, setTarget } from './engine';
 export type { VolleyballState } from './engine';
@@ -146,22 +146,12 @@ const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ s
 
 /** Broadcast-style board: SETS won + a column of points per set, the live set
  *  highlighted — the layout volleyball TV graphics use. */
-const VolleyballScoreboard: NonNullable<SportPlugin<VolleyballState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+const VolleyballScoreboard: NonNullable<SportPlugin<VolleyballState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
   const s = state as VolleyballState;
-  const setNo = s.setsWon.home + s.setsWon.away + 1;
-  const nSets = Math.max(1, s.ended ? s.sets.length : setNo);
-  const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
-  const cell = (side: 'home' | 'away', i: number) =>
-    i < s.sets.length ? String(s.sets[i][side === 'home' ? 0 : 1]) : String(s.current[side]);
   return (
-    <LineScoreboard
-      status={`${s.ended ? 'Match Over' : `Set ${setNo}${isDecider(s) ? ' · Decider' : ''}`} · best of ${s.setsToWin * 2 - 1}`}
-      live={live}
-      leadLabel="SETS"
-      columns={columns}
-      winner={s.ended ? (s.setsWon.home > s.setsWon.away ? 'home' : 'away') : undefined}
-      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.setsWon.home), cells: columns.map((_, i) => cell('home', i)) }}
-      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.setsWon.away), cells: columns.map((_, i) => cell('away', i)) }}
+    <SetLineBoard
+      ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+      status={`Set ${s.setsWon.home + s.setsWon.away + 1}${isDecider(s) ? ' · Decider' : ''}`} bestOf={`best of ${s.setsToWin * 2 - 1}`}
     />
   );
 };
@@ -187,6 +177,8 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   Scoreboard: VolleyballScoreboard,
   // SD-01: once ended → sets won + "25-21, 23-25, 15-12" (never the reset 0–0).
   scoreLine: (s, perspective) => scoreLine(s?.sets, { perspective }),
+  // SD-20: the line score (a match closed by hand: "25-21, 12-8 conceded").
+  lineScore,
   summary: (s) => s.ended ? finalSummary(s.setsWon, scoreLine(s.sets)) : ({
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),

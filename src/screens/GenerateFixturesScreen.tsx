@@ -19,9 +19,10 @@ import { structureFromFormat, mergeStructure, structureFieldFor, type StructureC
 import { defaultsFor } from '../components/FormatEditor';
 import { matchFormatFor } from '../data/matchFormat';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
-import { swissRound1, swissNextRound, pairKey, suggestedSwissRounds } from '../data/swiss';
+import { swissRound1, swissPairRound, suggestedSwissRounds } from '../data/swiss';
+import { swissField } from '../data/swissField';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
-import { teamStandings, standingsConfigFromFormat, byePointsFor } from '../data/standings';
+import { teamStandings, standingsConfigFromFormat, byePointsFor, FIDE_SWISS_ORDER } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
@@ -32,7 +33,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Structure = 'league' | 'knockout' | 'groups' | 'swiss' | 'advance';
 
 
-interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[] }
+/** `white` (SD-26): who has White — chess Swiss pairings write it into the
+ *  fixture's format (the game opens with it; old fixtures default to home). */
+interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[]; white?: 'home' | 'away' }
 
 // Human labels for the knockout stages seedKnockout/knockoutRoundLabel emit.
 const STAGE_LABEL: Record<string, string> = { final: 'Final', sf: 'Semi-final', qf: 'Quarter-final', r16: 'Round of 16', r32: 'Round of 32' };
@@ -93,6 +96,8 @@ export default function GenerateFixturesScreen() {
   }, [tournament?.grounds]);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // SD-26: said when the Swiss pairing had to bend a rule (rematch / colours).
+  const [pairNote, setPairNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Keep the sport valid once the tournament resolves (single-sport meets skip the picker).
@@ -215,17 +220,15 @@ export default function GenerateFixturesScreen() {
   const swissRoundNo = (stage?: string) => parseInt(String(stage).replace('swiss', ''), 10) || 0;
   const swissRoundsPlayed = swissMatches.length ? Math.max(...swissMatches.map((m) => swissRoundNo(m.stage))) : 0;
   const swissAllDone = swissMatches.length > 0 && swissMatches.every((m) => m.status === 'completed');
-  const swissPlayedPairs = useMemo(() => new Set(swissMatches.map((m) => pairKey(m.homeTeam.id, m.awayTeam.id))), [swissMatches]);
   const swissEntrants = useMemo(() => {
     const s = new Set<string>();
     for (const m of swissMatches) { s.add(m.homeTeam.id); s.add(m.awayTeam.id); (m.byes ?? []).forEach((b) => s.add(b)); }
     return s;
   }, [swissMatches]);
-  const swissOrder = useMemo(() => {
-    const ranked = teamStandings(swissMatches, sport, stCfg).map((r) => r.teamId);
-    const missing = [...swissEntrants].filter((id) => !ranked.includes(id)); // bye-only entrants with no result yet
-    return [...ranked, ...missing];
-  }, [swissMatches, sport, stCfg, swissEntrants]);
+  // SD-26: the field for the next round — scores, pairing numbers (the seed
+  // list's order), opponents met, colour history and byes.
+  const swissPlayers = useMemo(() => swissField(swissMatches, sport, stCfg, selected), [swissMatches, sport, stCfg, selected]);
+  const isChess = sport === 'chess';
   const swissTargetRounds = savedStruct?.swissRounds ?? suggestedSwissRounds(selected.length || swissEntrants.size);
   const swissNextNo = swissRoundsPlayed + 1;
   const swissByePts = byePointsFor(sport, stCfg); // SD-10: shown with the drawn bye
@@ -264,17 +267,20 @@ export default function GenerateFixturesScreen() {
       if (swissMatches.length === 0) {
         if (selected.length < 2) return setError('Pick at least two entrants.');
         setError(null);
-        const { pairings, byeId } = swissRound1(selected);
-        setDrafts(pairings.map((p, i) => ({ ...p, stage: 'swiss1', byes: byeId ? [byeId] : undefined, when: at(i) })));
+        // Round 1: seed order; a coin toss gives the top seed's colour (chess).
+        const { pairings, byeId } = swissRound1(selected, Math.random() < 0.5 ? 'W' : 'B');
+        setPairNote(null);
+        setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, when: at(i) })));
         return;
       }
       if (!swissAllDone) return setError('Finish the current Swiss round before generating the next.');
       if (swissDone) return setError(`All ${swissTargetRounds} Swiss rounds are done.`);
       setError(null);
-      const priorByes = new Set(swissMatches.flatMap((m) => m.byes ?? []));
-      const { pairings, byeId } = swissNextRound(swissOrder, swissPlayedPairs, swissNextNo, priorByes);
+      const { pairings, byeId, relaxed } = swissPairRound(swissPlayers, swissNextNo);
       if (!pairings.length) return setError('Couldn’t pair a further round.');
-      setDrafts(pairings.map((p, i) => ({ ...p, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, when: at(i) })));
+      setPairNote(relaxed === 'repeat' ? 'Every pairing left repeats a game — the fewest rematches are shown.'
+        : relaxed === 'colours' ? 'No pairing kept every colour rule — someone gets a third colour in a row or a 3-game imbalance.' : null);
+      setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, when: at(i) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
@@ -310,7 +316,8 @@ export default function GenerateFixturesScreen() {
           startsAt: d.when.toISOString(),
           venueName: venue.trim() || undefined,
           hostIds: myId ? [myId] : [],
-          format,
+          // SD-26: the pairing's colours ride on the fixture (`white`).
+          format: d.white ? { ...(format ?? {}), white: d.white } : format,
         });
       }
       // Persist the intended structure so the generator remembers it and the
@@ -325,7 +332,12 @@ export default function GenerateFixturesScreen() {
         const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
         const field = structureFieldFor(cfg.shape);
         const before = tournament?.formats?.[sport] as Record<string, unknown> | undefined;
-        await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, mergeStructure(tournament?.formats?.[sport], cfg) as Record<string, unknown>));
+        const merged = mergeStructure(tournament?.formats?.[sport], cfg) as Record<string, unknown>;
+        // SD-26: a chess Swiss without a saved tie-break order takes FIDE's
+        // Swiss order (Buchholz Cut-1, Buchholz, SB, …); the organiser can
+        // change it in the points settings. Round robins keep SB, wins, h2h.
+        if (structure === 'swiss' && isChess && !before?.tieBreak) merged.tieBreak = FIDE_SWISS_ORDER.join(',');
+        await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, merged));
         await updateTournament(params.tournamentId, {
           // Keep the coarse label representative in a multi-sport meet (never downgrade).
           structure: rank(field) >= rank(tournament?.structure) ? field : tournament?.structure,
@@ -399,12 +411,18 @@ export default function GenerateFixturesScreen() {
         {structure === 'swiss' && (
           <Text style={textStyles.muted}>
             {swissMatches.length === 0
-              ? `Round 1 of ${swissTargetRounds} — entrants are seeded top-half vs bottom-half. Generate each next round from the standings after the current one finishes.`
+              ? `Round 1 of ${swissTargetRounds} — entrants are seeded top-half vs bottom-half${isChess ? '; a coin toss gives the top seed’s colour' : ''}. Generate each next round after the current one finishes.`
               : swissDone
                 ? `All ${swissTargetRounds} Swiss rounds have been generated.`
                 : swissAllDone
-                  ? `Round ${swissNextNo} of ${swissTargetRounds} — paired from the current standings, avoiding rematches.`
+                  ? `Round ${swissNextNo} of ${swissTargetRounds} — paired within score groups, top half v bottom half, no rematches${isChess ? ', colours balanced' : ''}.`
                   : `Finish round ${swissRoundsPlayed} before generating round ${swissNextNo}.`}
+          </Text>
+        )}
+        {structure === 'swiss' && (
+          // Decision D7: say plainly this isn't a certified pairing program.
+          <Text style={st.notCertified} accessibilityLabel="In-app Swiss pairing, not FIDE-certified">
+            ⓘ In-app Swiss pairing — not FIDE-certified. For a rated event, pair in a FIDE-endorsed program (e.g. Swiss-Manager).
           </Text>
         )}
         {(structure === 'league' || structure === 'groups') && (
@@ -528,6 +546,7 @@ export default function GenerateFixturesScreen() {
           ) : (
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
               <Text style={textStyles.h3}>{drafts.length} match{drafts.length === 1 ? '' : 'es'} — review &amp; adjust</Text>
+              {structure === 'swiss' && pairNote ? <Text style={textStyles.muted}>⚠ {pairNote}</Text> : null}
               {structure === 'swiss' && drafts[0]?.byes?.length ? (
                 // SD-10: say who sits out, and what the bye is worth in the table.
                 <Text style={textStyles.muted}>
@@ -537,7 +556,16 @@ export default function GenerateFixturesScreen() {
               {drafts.map((d, i) => (
                 <View key={i} style={st.draftCard}>
                   <View style={st.rowBetween}>
-                    <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
+                    {d.white ? (
+                      // Chess: White first, as on a pairing sheet.
+                      <Text style={[textStyles.body, st.flex]}>
+                        <Text accessibilityLabel="White">♔ </Text>{teamName[d.white === 'home' ? d.homeId : d.awayId] ?? (d.white === 'home' ? d.homeId : d.awayId)}
+                        <Text style={textStyles.muted}>  –  </Text>
+                        <Text accessibilityLabel="Black">♚ </Text>{teamName[d.white === 'home' ? d.awayId : d.homeId] ?? (d.white === 'home' ? d.awayId : d.homeId)}
+                      </Text>
+                    ) : (
+                      <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
+                    )}
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
                   <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? d.stage.toUpperCase() : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
@@ -561,6 +589,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },
   draftCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
+  notCertified: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
   groupHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
 });

@@ -2,7 +2,8 @@
  * SD-10 — chess Swiss bye point and unplayed games (FIDE C.04 / C.07; founder
  * decision D7). A pairing-allocated bye scores 1 by default (organiser: ½ or 0)
  * but isn't a played game; forfeits keep their points but stay out of the
- * played-game stats and Sonneborn-Berger. Round robin is unchanged.
+ * played-game stats. (SD-26: Sonneborn-Berger now follows FIDE C.07 for
+ * unplayed rounds — see chess-swiss.test.mts.) Round robin is unchanged.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -136,15 +137,17 @@ describe('forfeits (chess)', () => {
     assert.deepEqual([g.kind, g.unplayed, g.result], ['forfeit', true, 'win']);
   });
 
-  test('a forfeit is out of Sonneborn-Berger', () => {
+  test('round robin: a forfeit counts in Sonneborn-Berger as a regular game (FIDE C.07 15.2, SD-26)', () => {
     // a beats b over the board and c by forfeit; c beats b. Final: a 2, c 1, b 0.
+    // (SD-10 left forfeits out of SB; C.07 (2023) 15.2 treats them as regular
+    // games when the pairings are pre-determined. Swiss: see chess-swiss.test.)
     const games = [chess('a', 'b', 1), chess('a', 'c', 1, { walkover: true }), chess('c', 'b', 1)];
     const t = teamStandings(games, 'chess');
-    // a's SB counts only the played win over b (0 points) — not c's 1.
-    assert.equal(row(t, 'a').sb, 0);
-    // Played as normal games it would have been 1.
+    assert.equal(row(t, 'a').sb, 1);
     const played = teamStandings([chess('a', 'b', 1), chess('a', 'c', 1), chess('c', 'b', 1)], 'chess');
     assert.equal(row(played, 'a').sb, 1);
+    // …while played / W / L still leave it out
+    assert.deepEqual([row(t, 'a').played, row(t, 'a').won], [1, 1]);
   });
 
   test('"number of wins" still counts a forfeit win (FIDE C.07 WIN)', () => {

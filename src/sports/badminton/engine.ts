@@ -6,7 +6,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
-import { scoreLine as lineOf, finalSummary } from '../scoreline.ts';
+import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
 
 const TARGET = 21;
 const CAP = 30;
@@ -120,6 +120,10 @@ export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
 export function scoreLine(s: BadmintonState, perspective?: 'home' | 'away'): string {
   return lineOf(s?.games, { perspective });
 }
+
+/** SD-20 — the line score: every game + the one in play. */
+export const lineScore = (s: BadmintonState): LineScore | null =>
+  pointsLineScore('game', s && { games: s.games, current: s.current, won: s.gamesWon, ended: s.ended, toWin: s.gamesToWin });
 
 /** Scoreboard summary: live = the current game's points; once ended = games won
  *  + every game's score (not the reset 0–0). */

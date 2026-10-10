@@ -19,6 +19,7 @@ import { planAmendment, publishAmendment } from '../data/amendments';
 import { getMatch, getMatchEvents, getRoster, getTournaments } from '../data/repos';
 import { mergeMatchConfig } from '../core/matchConfig';
 import { manualResultLine } from '../core/matchResult';
+import { finalBoard } from '../sports/scoreline';
 import type { Match, MatchEventRecord, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -64,13 +65,16 @@ export default function CorrectMatchScreen() {
   const home = match?.homeTeam.name ?? 'Home';
   const away = match?.awayTeam.name ?? 'Away';
   const resultText = (state: unknown) => {
-    if (match?.result) return manualResultLine(match.result, home, away);
+    if (match?.result) return manualResultLine(match.result, home, away, { retireTerms: !!plugin.retireTerms });
     const r = plugin.result?.(state as never);
     if (!r) return 'Unfinished';
     return r.winner === 'draw' ? 'Draw' : `${r.winner === 'home' ? home : away} won`;
   };
   // SD-01: set/game sports show the per-set line too ("2 – 1 · 6-4, 3-6, 7-6(4)").
+  // SD-20: a match closed by hand → sets won + "6-4, 3-2 ret.".
   const score = (state: unknown) => {
+    const fb = match?.result ? finalBoard(plugin, state, { result: match.result }) : null;
+    if (fb) return `${fb.homeScore} – ${fb.awayScore}${fb.line ? ` · ${fb.line}` : ''}`;
     const s = plugin.summary(state as never);
     const line = plugin.scoreLine?.(state as never);
     return `${s.homeScore} – ${s.awayScore}${line ? ` · ${line}` : ''}`;

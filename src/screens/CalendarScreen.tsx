@@ -16,6 +16,7 @@ import { useAuth } from '../core/auth';
 import { getSport } from '../sports/registry';
 import { exportToCalendar, type CalEvent } from '../core/ics';
 import { formatDay, formatDayShort } from '../core/dates';
+import { matchLine } from '../sports/matchLine';
 import type { Match, Tournament, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
@@ -137,8 +138,10 @@ export default function CalendarScreen() {
                   <Text style={m.score.home > m.score.away ? st.win : undefined}>{m.score.home}</Text>
                   –
                   <Text style={m.score.away > m.score.home ? st.win : undefined}>{m.score.away}</Text>
+                  {/* SD-20: + the set/game line ("6-4, 3-2 ret.") */}
+                  {matchLine(m) ? ` (${matchLine(m)})` : ''}
                 </Text>
-              ) : null}
+              ) : done && m.walkover ? ' · w/o' : null}
             </Text>
           </View>
           {live ? <Pill label="LIVE" color={theme.colors.danger + '22'} textColor={theme.colors.danger} />

@@ -17,7 +17,8 @@ import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { useTeamSummary, useMatches, usePlayers, useFollow, useTeamPermission } from '../data/hooks';
 import { getRoster, getMatchStatLines, getMatchSquads } from '../data/repos';
-import { computeTeamStats, resultFor, type Result } from '../data/teamStats';
+import { computeTeamStats, h2hLastText, resultFor, type Result } from '../data/teamStats';
+import { matchLineFor } from '../sports/matchLine';
 import { SPORT_AWARDS, statLabel } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
 import { teamStandings, tableLabels } from '../data/standings';
@@ -114,7 +115,7 @@ export default function TeamProfileScreen() {
   }
 
   const following = isFollowing('team', team.id);
-  const stats = computeTeamStats(team.id, matches.filter((m) => m.sport === sport), lines, playedFor, SPORT_AWARDS);
+  const stats = computeTeamStats(team.id, matches.filter((m) => m.sport === sport), lines, playedFor, SPORT_AWARDS, (m) => matchLineFor(m, team.id));
   const nameOf = (id: string) => squad.find((p) => p.id === id)?.fullName ?? players.find((p) => p.id === id)?.fullName ?? 'Player';
   const openMatch = (m: (typeof matches)[number]) => nav.navigate('LiveScoring', {
     matchId: m.id, sport: m.sport,
@@ -194,7 +195,7 @@ export default function TeamProfileScreen() {
                 <Text style={textStyles.muted}>Form · latest first  ·  {recordText(stats.won, stats.drawn, stats.lost, stats.nr, labels)}</Text>
                 <View style={st.formRow}>
                   {stats.form.map((f) => (
-                    <TouchableOpacity key={f.matchId} accessibilityRole="button" accessibilityLabel={`${RESULT_WORD[f.result]} vs ${f.opponentName}`} onPress={() => { const m = matches.find((x) => x.id === f.matchId); if (m) openMatch(m); }}>
+                    <TouchableOpacity key={f.matchId} accessibilityRole="button" accessibilityLabel={`${RESULT_WORD[f.result]} vs ${f.opponentName}${f.line ? `, ${f.line}` : ''}`} onPress={() => { const m = matches.find((x) => x.id === f.matchId); if (m) openMatch(m); }}>
                       <View style={[st.formChip, { backgroundColor: FORM_COLOR[f.result] }]}><Text style={[st.formText, f.result === 'NR' && { fontSize: theme.font.small }]}>{f.result}</Text></View>
                     </TouchableOpacity>
                   ))}
@@ -232,10 +233,14 @@ export default function TeamProfileScreen() {
                 <Card style={{ gap: theme.spacing(2) }}>
                   <Text style={textStyles.muted}>Head-to-head</Text>
                   {stats.headToHead.map((h) => (
-                    <TouchableOpacity key={h.opponentId} accessibilityRole="button" style={st.leaderRow} onPress={() => nav.push('Team', { teamId: h.opponentId })}>
-                      <Text style={st.leaderName} numberOfLines={1}>vs {h.opponentName}</Text>
-                      <Text style={textStyles.muted}>{h.played}P · {recordText(h.won, h.drawn, h.lost, h.nr, labels)}</Text>
-                      <Text style={st.leaderVal}>{h.for}–{h.against}</Text>
+                    <TouchableOpacity key={h.opponentId} accessibilityRole="button" onPress={() => nav.push('Team', { teamId: h.opponentId })}>
+                      <View style={st.leaderRow}>
+                        <Text style={st.leaderName} numberOfLines={1}>vs {h.opponentName}</Text>
+                        <Text style={textStyles.muted}>{h.played}P · {recordText(h.won, h.drawn, h.lost, h.nr, labels)}</Text>
+                        <Text style={st.leaderVal}>{h.for}–{h.against}</Text>
+                      </View>
+                      {/* SD-20: the latest meeting with its set/game line. */}
+                      {h.last?.line ? <Text style={[textStyles.muted, st.h2hLast]} numberOfLines={1}>{h2hLastText(h)}</Text> : null}
                     </TouchableOpacity>
                   ))}
                 </Card>
@@ -333,6 +338,7 @@ const st = StyleSheet.create({
   formChip: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   formText: { color: '#06120D', fontWeight: '900', fontSize: theme.font.body },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
+  h2hLast: { fontSize: theme.font.small, fontVariant: ['tabular-nums'] },
   leaderIcon: { fontSize: 18, width: 24 },
   leaderName: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700', flex: 1 },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800' },

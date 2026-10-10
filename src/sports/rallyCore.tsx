@@ -25,7 +25,8 @@ import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer } from './tabletennis/serve';
 import { rallyTotals } from './racketTotals';
-import { makeRallyEngine, rallySummary, rallyScoreLine, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
+import { SetLineBoard } from './SetLineBoard';
+import { makeRallyEngine, rallySummary, rallyScoreLine, rallyLineScore, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
 
@@ -196,6 +197,24 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     );
   };
 
+  /** SD-20 (TT-02) — the LineScoreboard: GAMES won + a column of points per game,
+   *  the live game highlighted, a serve dot on the serving side (table tennis by
+   *  ITTF rotation, side-out by who holds serve, else the last rally winner). */
+  const Scoreboard: SportPlugin<RallyState>['Scoreboard'] = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
+    const s = state as RallyState;
+    const serving: 'home' | 'away' = s.sideOut ? s.serving : opts.serveRule === 'tt'
+      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home')
+      : rallyServingSide(s);
+    return (
+      <SetLineBoard
+        ls={rallyLineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+        status={rallySummary(s, opts.serveTag).statusLine ?? `Game ${s.games.length + 1}`}
+        bestOf={s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}
+        serving={s.ended ? null : serving} serveIcon={opts.icon}
+      />
+    );
+  };
+
   return {
     id: opts.id,
     name: opts.name,
@@ -214,6 +233,10 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // SD-01: once ended → games won + "11-7, 9-11, 11-5" (never the reset 0–0).
     summary: (s) => rallySummary(s, opts.serveTag),
     scoreLine: rallyScoreLine,
+    // SD-20: the line score (LineScoreboard, "11-7, 5-3 ret.") + ITTF/WSF result marks.
+    lineScore: rallyLineScore,
+    retireTerms: true,
+    Scoreboard,
     // SD-19: absolute games / points / deciders per player (and the doubles
     // partner), synced at completion and on correction.
     statTotals: rallyTotals,

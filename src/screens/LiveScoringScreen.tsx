@@ -12,7 +12,8 @@
 import { notice, confirmAction } from '../core/confirm';
 import { getDeviceId } from '../core/deviceId';
 import { mergeMatchConfig } from '../core/matchConfig';
-import { manualResultLine, isNoResult } from '../core/matchResult';
+import { manualResultLine as baseResultLine, isNoResult } from '../core/matchResult';
+import { matchScoreLine, finalBoard, resultMark } from '../sports/scoreline';
 import { isEliminationStage } from '../data/bracket';
 import { completedAt, effectiveLog, type AmendOp } from '../sports/amend';
 import { canCorrectMatch, correctionHoursLeft, formatTimeLeft } from '../core/roles';
@@ -108,6 +109,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     logoUrl?: string; managers?: { home?: string; away?: string };
     /** closed by hand (parity #04) */
     result?: MatchResult; stage?: string;
+    /** decided without play (SD-20: "w/o" on the share / summary) */
+    walkover?: boolean;
     /** play paused (parity #13) — `format.__break` */
     onBreak?: MatchBreak;
     /** team logos — the score overlay (parity #25) */
@@ -150,7 +153,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               // org-hosted tournaments → every org member is a tournament host
               tournamentHostIds: tour ? tournamentHostPlayerIds(tour, orgs) : [],
               status: m.status, score: m.score, winner: m.winner, logoUrl: m.logoUrl, managers: m.managers,
-              result: m.result, stage: m.stage, onBreak: m.onBreak as MatchBreak | undefined,
+              result: m.result, walkover: m.walkover, stage: m.stage, onBreak: m.onBreak as MatchBreak | undefined,
               homeLogo: m.homeTeam.logoUrl, awayLogo: m.awayTeam.logoUrl,
             });
           }
@@ -348,6 +351,20 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   );
 
   const summary = useMemo(() => plugin.summary(state), [plugin, state]);
+  // SD-20: a racket sport says "retired" / "by default" for Conceded / Awarded.
+  const manualResultLine = (r: MatchResult, h: string, a: string) => baseResultLine(r, h, a, { retireTerms: !!plugin.retireTerms });
+  // SD-20: the set/game line every result surface shows — "6-4, 3-2 ret." for a
+  // match closed by hand, "w/o", else the completed sets.
+  const resultOpts = { result: meta.result, walkover: meta.walkover };
+  const fullLine = plugin.scoreLine ? matchScoreLine(plugin, state, resultOpts) : '';
+  // Closed by hand before the engine's own end → the board reads as final.
+  const closedBoard = (meta.result || meta.walkover) && !plugin.isComplete(state)
+    ? { mark: resultMark(resultOpts, plugin.retireTerms ? 'racket' : 'generic'), winner: meta.result?.winner ?? (meta.winner === 'home' || meta.winner === 'away' ? meta.winner : undefined) }
+    : undefined;
+  // …and the summary card reads sets/games won + the marked line, not the
+  // points the match stopped at ("30 : 15").
+  const closedFb = closedBoard ? finalBoard(plugin, state, resultOpts) : null;
+  const shownSummary = closedFb ? { homeScore: closedFb.homeScore, awayScore: closedFb.awayScore, statusLine: 'Match Over' } : summary;
   // A match is complete if the live state says so, or it's an archived result.
   const complete = plugin.isComplete(state) || meta.status === 'completed';
   // Historical matches recorded only as a final result (no ball-by-ball log):
@@ -368,15 +385,18 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     const share = () => {
       const status = complete ? 'final' : matchLive ? 'live' : 'upcoming';
       const final = showFinalOnly && meta.score;
+      // SD-20: a finished set/game match shares sets won + the marked line
+      // ("2–0 · 6-4, 6-3", "1–0 · 6-4, 3-2 ret."), never the live points.
+      const fb = complete && !final ? finalBoard(plugin, state, resultOpts) : null;
       void shareMessage(matchShareText({
         sportIcon: plugin.icon,
         status,
         home: hName,
         away: aName,
-        homeScore: final ? String(meta.score!.home) : summary.homeScore,
-        awayScore: final ? String(meta.score!.away) : summary.awayScore,
-        statusLine: final ? undefined : summary.statusLine,
-        detailLine: final ? undefined : summary.detailLine,
+        homeScore: final ? String(meta.score!.home) : fb ? fb.homeScore : summary.homeScore,
+        awayScore: final ? String(meta.score!.away) : fb ? fb.awayScore : summary.awayScore,
+        statusLine: final ? undefined : fb ? 'Match Over' : summary.statusLine,
+        detailLine: final ? undefined : fb ? fb.line : summary.detailLine,
         winner: complete ? (meta.winner ?? plugin.result?.(state)?.winner ?? undefined) : undefined,
         resultLine: complete && meta.result ? manualResultLine(meta.result, hName, aName) : undefined,
         tournamentName: meta.tournamentName,
@@ -862,7 +882,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const drawLabel = plugin.manualEnd?.drawLabel ?? 'Draw';
   const endKinds: { kind: ResultKind; label: string }[] = [
     // "Awarded" — the result line reads "X awarded the match" (manualResultLine).
-    { kind: 'awarded', label: 'Awarded' }, { kind: 'conceded', label: 'Conceded' },
+    // SD-20: racket sports use the ITF / BWF words — Retired (= conceded, "ret.")
+    // and Default ("def.").
+    ...(plugin.retireTerms
+      ? [{ kind: 'conceded' as ResultKind, label: 'Retired' }, { kind: 'awarded' as ResultKind, label: 'Default' }]
+      : [{ kind: 'awarded' as ResultKind, label: 'Awarded' }, { kind: 'conceded' as ResultKind, label: 'Conceded' }]),
     ...(knockout ? [] : [
       { kind: (drawLabel === 'Tie' ? 'tie' : 'draw') as ResultKind, label: drawLabel },
       { kind: 'no_result' as ResultKind, label: 'No result' }, { kind: 'abandoned' as ResultKind, label: 'Abandoned' },
@@ -883,12 +907,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     away: { name: fullAway, short: awayName, color: awayColor, logo: meta.awayLogo },
     startsLabel: meta.startsAt ? formatTime(meta.startsAt, viewerTz) : undefined,
     resultLine: meta.result ? manualResultLine(meta.result, homeName, awayName) : undefined,
+    result: meta.result ?? null,
     status: meta.status,
     breakLabel: meta.onBreak && !complete ? breakLabel(meta.onBreak) : undefined,
   }), [fullHome, fullAway, homeName, awayName, homeColor, awayColor, meta.homeLogo, meta.awayLogo, meta.startsAt, meta.result, meta.status, meta.onBreak, complete, viewerTz]);
   const endPreview = (() => {
     if (!draftResult || !endReady) return null;
-    const line = manualResultLine(draftResult, fullHome, fullAway);
+    // SD-20: the scoreline it will be published with ("6-4, 3-2 ret.").
+    const sl = plugin.scoreLine ? matchScoreLine(plugin, state, { result: draftResult }) : '';
+    const line = `${manualResultLine(draftResult, fullHome, fullAway)}${sl ? ` · ${sl}` : ''}`;
     if (!meta.tournamentId) return line;
     const cfg = standingsConfigFromFormat(sport, meta.config);
     const nr = noResultPoints(sport, cfg);
@@ -903,7 +930,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const endMatch = async () => {
     if (!draftResult || !endReady) return;
     const sm = plugin.summary(state);
-    const h = parseInt(String(sm.homeScore), 10), a = parseInt(String(sm.awayScore), 10);
+    // SD-20: a set/game sport records the sets/games won (not the live "40"/"Ad").
+    const won = plugin.lineScore?.(state)?.won;
+    const h = won ? won.home : parseInt(String(sm.homeScore), 10), a = won ? won.away : parseInt(String(sm.awayScore), 10);
     const r: MatchResult = {
       ...draftResult,
       ...(Number.isFinite(h) && Number.isFinite(a) ? { score: { home: h, away: a } } : {}),
@@ -982,7 +1011,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         )}
         {needsWinner && (
           <>
-            <Text style={st.retirePrompt}>{endKind === 'conceded' ? 'Who wins? (the other side conceded)' : 'Awarded to?'}</Text>
+            <Text style={st.retirePrompt}>{endKind === 'conceded' ? (plugin.retireTerms ? 'Who wins? (the other side retired)' : 'Who wins? (the other side conceded)') : plugin.retireTerms ? 'Who wins by default?' : 'Awarded to?'}</Text>
             <View style={st.retireRow}>
               <Button label={homeName} variant={endWinner === 'home' ? 'home' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('home')} />
               <Button label={awayName} variant={endWinner === 'away' ? 'away' : 'ghost'} style={{ flex: 1 }} onPress={() => setEndWinner('away')} />
@@ -1236,7 +1265,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // The top scoreboard — a sport supplies its own, else the universal one. Cricket
   // hides it (its scorecard shows the score).
   const scoreboardNode = plugin.hideScoreboard ? null : plugin.Scoreboard ? (
-    <plugin.Scoreboard state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={matchLive} />
+    <plugin.Scoreboard state={state} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={matchLive} closed={closedBoard} />
   ) : (
     <Scoreboard
       summary={summary} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
@@ -2255,7 +2284,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               <MatchSummary
                 statLines={matchStats} sport={sport} homeRoster={homeRoster} awayRoster={awayRoster}
                 homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-                summary={summary} scoreLine={plugin.scoreLine?.(state)} complete={complete} live={matchLive}
+                summary={shownSummary} scoreLine={fullLine || undefined} complete={complete} live={matchLive}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
                 potm={potmProp}
               />

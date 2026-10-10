@@ -466,7 +466,7 @@ describe('replay: padel short sets + match tiebreak (synthetic FIP short-set for
   test('home wins 2-1: 4-1, 4-5(5), [10-8]', () => {
     assert.equal(s.ended, true);
     assert.deepEqual(s.setsWon, { home: 2, away: 1 });
-    assert.deepEqual(s.sets, [[4, 1], [4, 5], [0, 0]]);
+    assert.deepEqual(s.sets, [[4, 1], [4, 5], [10, 8]]); // SD-20: match-TB points in the set entry
     assert.deepEqual(s.tb, [null, [5, 7], [10, 8]]);
     assert.equal(padel.scoreLine(s), '4-1, 4-5(5), [10-8]');
   });
@@ -493,6 +493,6 @@ describe('replay: padel short sets + match tiebreak (synthetic FIP short-set for
     assert.equal(nine.ended, false); // 9-8
   });
   test('fingerprint pinned', () => {
-    assert.equal(L.fingerprint(s as never, L.TENNIS_KEYS), 'c93bf2679874');
+    assert.equal(L.fingerprint(s as never, L.TENNIS_KEYS), '4dbc0f862f01'); // SD-20: match-TB set stored as [10-8]
   });
 });

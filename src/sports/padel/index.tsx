@@ -21,9 +21,10 @@ import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
-import { init, reducer, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, standingsUnits, type PadelState } from './engine';
+import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type PadelState } from './engine';
 import { padelTotals } from '../racketTotals';
-import { setScore } from '../scoreline';
+import { cellText } from '../scoreline';
+import { SetLineBoard } from '../SetLineBoard';
 export type { PadelState } from './engine';
 
 const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Player[]; onPick: (p?: Player) => void; fallback?: string }) => (
@@ -89,7 +90,7 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
         {s.sets.length === 0 ? (
           <Text style={textStyles.muted}>{matchTbActive(s) ? 'Match tiebreak in progress' : `Set 1 in progress · games ${s.games.home}-${s.games.away}`}</Text>
         ) : (
-          s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {setScore(g, { tb: setTiebreaks(s)[i], matchTb: !!s.matchTbDecider && i === s.setsToWin * 2 - 2 })}</Text>)
+          (lineScore(s)?.done ?? []).map((c, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {cellText(c)}</Text>)
         )}
       </View>
       <Text style={ctrl.label}>Box score</Text>
@@ -97,6 +98,23 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
+  );
+};
+
+/** SD-20 — broadcast board (as tennis): current-game POINTS + a column of games
+ *  per set, the live set highlighted, 7 / 6⁴ for a set tiebreak and the match
+ *  tiebreak as its own "TB" column (10 / 7). */
+const PadelScoreboard: NonNullable<SportPlugin<PadelState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
+  const s = state as PadelState;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  return (
+    <SetLineBoard
+      ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+      status={matchTbActive(s) ? 'Match tiebreak' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}${s.goldenPoint ? ' · golden pt' : ''}`}
+      bestOf={s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}
+      leadLabel="POINTS" lead={{ home: disp(s, 'home'), away: disp(s, 'away') }}
+      serving={s.ended ? null : serveInfo(s).side} serveIcon="🟡"
+    />
   );
 };
 
@@ -120,6 +138,10 @@ export const padelPlugin: SportPlugin<PadelState> = {
   // SD-01: once ended → sets won + "6-4, 3-6, [10-7]" (never the reset 0–0).
   summary,
   scoreLine,
+  // SD-20: the line score (board grid, "6-4, 3-2 ret.", [10-7]) + FIP/ITF result marks.
+  lineScore,
+  retireTerms: true,
+  Scoreboard: PadelScoreboard,
   ScoringControls,
   LiveExtras,
   formation: () => courtFormation('padel'),

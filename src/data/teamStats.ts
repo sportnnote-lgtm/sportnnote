@@ -16,6 +16,19 @@ export interface HeadToHead {
   drawn: number; lost: number; for: number; against: number;
   /** no results / abandoned (SD-12) */
   nr: number;
+  /** SD-20 — the latest meeting, from this team's side: result, score and the
+   *  set/game line ("6-4, 3-2 ret.") when the sport has one */
+  last?: { matchId: string; result: Result; for?: number; against?: number; line?: string };
+}
+
+/** SD-20 — the head-to-head row's latest meeting: "Last: W 2–1 · 6-4, 3-6, [10-7]",
+ *  "Last: W w/o", "Last: L 0–1 · 3-6, 1-2 ret.", "Last: NR". '' when unknown. */
+export function h2hLastText(h: Pick<HeadToHead, 'last'>): string {
+  const l = h.last;
+  if (!l) return '';
+  if (l.line === 'w/o') return `Last: ${l.result} w/o`;
+  const score = l.for != null && l.against != null ? ` ${l.for}–${l.against}` : '';
+  return `Last: ${l.result}${score}${l.line ? ` · ${l.line}` : ''}`;
 }
 export interface Leader { icon: string; label: string; stat: string; playerId: string; total: number }
 export interface TeamStats {
@@ -25,7 +38,7 @@ export interface TeamStats {
   /** no results / abandoned — included in `played` (SD-12) */
   nr: number;
   /** most recent first, up to 5 */
-  form: { matchId: string; result: Result; opponentName: string }[];
+  form: { matchId: string; result: Result; opponentName: string; line?: string }[];
   scored: number; conceded: number;
   /** what the score counts in this sport, e.g. "goals"; undefined = mixed / generic */
   unit?: string;
@@ -56,6 +69,9 @@ export function computeTeamStats(
   playedFor: Record<string, string[]> = {},
   /** "best in role" stats per sport (ratings.SPORT_AWARDS) */
   awardsBySport: Partial<Record<SportId, { icon: string; label: string; stat: string }[]>> = {},
+  /** SD-20 — the set/game line of a match read from this team's side (the team
+   *  page passes `matchLineFor`); omitted = no lines */
+  lineOf?: (m: Match) => string,
 ): TeamStats {
   const done = matches
     .filter((m) => (m.homeTeam.id === teamId || m.awayTeam.id === teamId) && resultFor(m, teamId))
@@ -73,7 +89,9 @@ export function computeTeamStats(
       if (r === 'W') t.won++; else if (r === 'D' || r === 'T') t.drawn++; else if (r === 'NR') t.nr++; else t.lost++;
     };
     tally(out);
-    if (out.form.length < 5) out.form.push({ matchId: m.id, result: r, opponentName: opp.name });
+    let line = '';
+    try { line = lineOf?.(m) ?? ''; } catch { line = ''; }
+    if (out.form.length < 5) out.form.push({ matchId: m.id, result: r, opponentName: opp.name, ...(line ? { line } : {}) });
     // A no result has no score to count (the table leaves it out of for/against too).
     const noScore = m.walkover || !m.score || r === 'NR';
     const f = noScore ? 0 : home ? m.score!.home : m.score!.away;
@@ -81,6 +99,8 @@ export function computeTeamStats(
     out.scored += f; out.conceded += a;
     const row = h2h.get(opp.id) ?? { opponentId: opp.id, opponentName: opp.name, played: 0, won: 0, drawn: 0, lost: 0, for: 0, against: 0, nr: 0 };
     row.played++; row.for += f; row.against += a;
+    // `done` is newest first → the first meeting seen is the latest.
+    if (!row.last) row.last = { matchId: m.id, result: r, ...(noScore ? {} : { for: f, against: a }), ...(line ? { line } : {}) };
     tally(row);
     h2h.set(opp.id, row);
   }

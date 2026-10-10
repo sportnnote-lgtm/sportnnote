@@ -13,15 +13,11 @@ import type { SportPlugin } from '../types';
 import { tennisVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { TennisBoxScore } from './BoxScore';
-import { LineScoreboard } from '../../components/LineScoreboard';
+import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, standingsUnits, type TennisState } from './engine';
+import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type TennisState } from './engine';
 import { tennisTotals } from '../racketTotals';
-import { setScore } from '../scoreline';
-
-/** Small superscript digits for a tiebreak score on the board (6⁴). */
-const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-const sup = (n: number) => String(n).split('').map((d) => SUP[Number(d)] ?? d).join('');
+import { cellText } from '../scoreline';
 
 
 const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Player[]; onPick: (p?: Player) => void; fallback?: string }) => (
@@ -96,7 +92,7 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
         {s.sets.length === 0 ? (
           <Text style={textStyles.muted}>Set 1 in progress · games {s.games.home}-{s.games.away}</Text>
         ) : (
-          s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {setScore(g, { tb: setTiebreaks(s)[i] })}</Text>)
+          (lineScore(s)?.done ?? []).map((c, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {cellText(c)}</Text>)
         )}
       </View>
       <Text style={ctrl.label}>Player stats</Text>
@@ -108,40 +104,21 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
 };
 
 /** Broadcast-style board: current-game POINTS + a column of games per set, the
- *  live set highlighted — the layout tennis TV graphics use. */
-const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+ *  live set highlighted — the layout tennis TV graphics use. A set won in a
+ *  tiebreak shows the loser's tiebreak points as a superscript (7 / 6⁴); a match
+ *  tiebreak is its own "TB" column. SD-20: the shared SetLineBoard. */
+const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
   const s = state as TennisState;
   const setNo = s.setsWon.home + s.setsWon.away + 1;
-  const nSets = Math.max(1, s.ended ? s.sets.length : setNo); // sets played + the one in progress
-  const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
-  // A set won in a tiebreak shows the loser's tiebreak points as a superscript
-  // (7 / 6⁴) — the broadcast convention. A match tiebreak shows its points as is.
-  const tbs = setTiebreaks(s);
-  const cell = (side: 'home' | 'away', i: number) => {
-    if (i >= s.sets.length) return String(s.games[side]);
-    const g = s.sets[i][side === 'home' ? 0 : 1];
-    const t = tbs[i];
-    const mine = t ? t[side === 'home' ? 0 : 1] : 0;
-    const theirs = t ? t[side === 'home' ? 1 : 0] : 0;
-    const matchTb = t && t[0] === s.sets[i][0] && t[1] === s.sets[i][1];
-    return t && !matchTb && mine < theirs ? `${g}${sup(mine)}` : String(g);
-  };
-  // After the match the current-game POINTS are meaningless (0-0), so the headline
-  // becomes SETS won — the result a fan reads off a final board.
-  const winner = s.ended ? (s.setsWon.home > s.setsWon.away ? 'home' : 'away') : undefined;
-  const lead = (side: 'home' | 'away') => (s.ended ? String(s.setsWon[side]) : disp(s, side));
-  // Serve dot next to the serving side's name (broadcast standard), while live.
-  const serving = s.ended ? undefined : serveInfo(s).side;
-  const withServe = (side: 'home' | 'away', name: string) => (serving === side ? `${name} 🎾` : name);
   return (
-    <LineScoreboard
-      status={`${s.ended ? 'Match Over' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}`} · best of ${s.setsToWin * 2 - 1}`}
-      live={live}
-      leadLabel={s.ended ? 'SETS' : 'POINTS'}
-      columns={columns}
-      winner={winner}
-      home={{ name: withServe('home', homeName), color: homeColor ?? theme.colors.home, lead: lead('home'), cells: columns.map((_, i) => cell('home', i)) }}
-      away={{ name: withServe('away', awayName), color: awayColor ?? theme.colors.away, lead: lead('away'), cells: columns.map((_, i) => cell('away', i)) }}
+    <SetLineBoard
+      ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+      status={`Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}`} bestOf={`best of ${s.setsToWin * 2 - 1}`}
+      // After the match the current-game POINTS are meaningless (0-0), so the
+      // headline becomes SETS won — the result a fan reads off a final board.
+      leadLabel="POINTS" lead={{ home: disp(s, 'home'), away: disp(s, 'away') }}
+      // Serve dot next to the serving side's name (broadcast standard), while live.
+      serving={s.ended ? null : serveInfo(s).side} serveIcon="🎾"
     />
   );
 };
@@ -167,6 +144,9 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   // SD-01: once ended → sets won + "6-4, 3-6, 7-6(4)" (never the reset 0–0).
   summary,
   scoreLine,
+  // SD-20: the line score (board grid, "6-4, 3-2 ret.") + ITF result marks.
+  lineScore,
+  retireTerms: true,
   ScoringControls,
   LiveExtras,
   formation: () => courtFormation('tennis'),

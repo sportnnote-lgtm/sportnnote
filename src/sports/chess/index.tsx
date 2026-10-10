@@ -35,6 +35,7 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
         <Text style={textStyles.body}>
           {s.winner === 'draw' ? 'Draw' : `${nameOf(s.winner as Side)} won`}{s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}{s.moves ? ` · ${s.moves} moves` : ''}
         </Text>
+        <Text style={textStyles.muted}>♔ {nameOf(s.white)} had White</Text>
       </View>
     );
   }

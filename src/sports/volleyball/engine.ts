@@ -16,6 +16,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { Attribution, ScoreAction } from '../types';
 import { replayPoints, type PointCredits, type PointInput, type PointKind } from '../rallyEdit.ts';
+import { pointsLineScore, type LineScore } from '../scoreline.ts';
 
 const TARGET = 25;
 const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
@@ -221,3 +222,7 @@ export function standingsUnits(s: VolleyballState): { points: { home: number; aw
   const points = s.sets.reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: s.current?.home ?? 0, away: s.current?.away ?? 0 });
   return { points };
 }
+
+/** SD-20 — the line score: every set + the one in play. */
+export const lineScore = (s: VolleyballState): LineScore | null =>
+  pointsLineScore('set', s && { games: s.sets, current: s.current, won: s.setsWon, ended: s.ended, toWin: s.setsToWin });

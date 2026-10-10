@@ -15,6 +15,8 @@ import { theme } from '../core/theme';
 import { SelectChip, Button, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { PODIUM } from '../components/Rank';
 import { getSport } from '../sports/registry';
+import { matchLine } from '../sports/matchLine';
+import { bracketCellText, compactResult } from '../sports/scoreline';
 import { useAuth } from '../core/auth';
 import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams, useDivisions } from '../data/hooks';
 import { matchesInDivision } from '../data/groups';
@@ -339,7 +341,8 @@ function PairingCard({ p }: { p: KnockoutPairing }) {
       <View style={st.legList}>
         {s.legs.map((m, i) => {
           const w = matchWinnerId(m);
-          const res = m.score ? `${m.score.home}–${m.score.away}` : m.status === 'live' ? 'live' : '—';
+          // SD-20: set/game legs carry their line ("2–1 (6-4, 3-6, [10-7])").
+          const res = m.score || m.walkover ? compactResult(m.walkover ? null : m.score, matchLine(m)) || '—' : m.status === 'live' ? 'live' : '—';
           return (
             <Text key={m.id} style={st.legRow} numberOfLines={1}>
               <Text style={st.legNo}>L{i + 1}  </Text>
@@ -358,10 +361,12 @@ function StagedMatchCard({ m }: { m: Match }) {
   const winnerId = matchWinnerId(m);
   const state = (id: string): SlotState => (!winnerId ? 'neutral' : winnerId === id ? 'won' : 'lost');
   const live = m.status === 'live';
+  const line = matchLine(m);
   return (
     <View style={[st.matchCard, live && st.matchCardLive]}>
       <StagedSide name={m.homeTeam.name} color={m.homeTeam.colorHex} score={m.score?.home} state={state(m.homeTeam.id)} />
-      <View style={st.vsRow}><Text style={st.vs}>{live ? '● LIVE' : winnerId ? '' : 'vs'}</Text></View>
+      {/* SD-20: the decided scoreline between the sides ("6-4, 3-2 ret.", "w/o"). */}
+      <View style={st.vsRow}><Text style={[st.vs, !live && !!line && st.cellLine]} numberOfLines={1}>{bracketCellText({ live, decided: !!winnerId, line })}</Text></View>
       <StagedSide name={m.awayTeam.name} color={m.awayTeam.colorHex} score={m.score?.away} state={state(m.awayTeam.id)} />
     </View>
   );
@@ -394,6 +399,7 @@ const st = StyleSheet.create({
   legRow: { color: theme.colors.text, fontSize: theme.font.small },
   legNo: { color: theme.colors.textMuted, fontWeight: '800' },
   legScore: { fontWeight: '800' },
+  cellLine: { color: theme.colors.text, fontSize: theme.font.small, textTransform: 'none', letterSpacing: 0, fontVariant: ['tabular-nums'] },
   champ: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),
     backgroundColor: PODIUM[0] + '1F', borderRadius: theme.radius.md, padding: theme.spacing(3),

@@ -13,6 +13,47 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-26: chess Swiss done properly (FIDE C.07 tie-breaks, Dutch-style pairing, colours)
+
+- **Tie-breaks:** pure `swissTiebreaks.ts` gives BH, BH-C1, BH-M1, SB, SB-C1, PS, PS-C1, BPG,
+  BWG, WIN and WON under FIDE C.07 (2023).
+  - **Your own unplayed rounds** count as a dummy opponent on your final score.
+  - **Opponents' byes** count at face value.
+  - **A withdrawal's missing rounds** count as draws.
+  - **Cut modifiers** cut voluntary unplayed rounds first.
+  - **Round robins** treat a forfeit as a regular game.
+  - Registered as standings columns.
+  - **Default Swiss order** (C.02 §13.16.4): BH-C1, BH, SB, PS, direct encounter, wins, wins with
+    Black.
+  - **Checked against** the FIDE Arbiters' Commission tie-break exercises (16 players, 5 rounds).
+- **Pairing:** `swiss.ts` is a Dutch approximation.
+  - Score groups, S1 v S2 with transpositions and exchanges, floaters, no repeats.
+  - Absolute / strong / mild colour preferences; the bye goes to the lowest-ranked player without
+    one.
+  - Round 1 by seed with a coin toss; relaxation only as a last resort, and flagged.
+  - Fixtures store `white`; the game opens with that colour.
+  - UI label: "In-app Swiss pairing — not FIDE-certified" (D7).
+  - **Simulated:** 200 events of 9–20 players over 7–9 rounds — no repeats, colours within ±2.
+- **Tests:** tsc + 1390. **Guide:** run-a-chess-tournament rewritten.
+
+---
+
+### 2026-10-10 — Sport depth SD-20: the game/set score line everywhere, retirements, LineScoreboard
+
+- **One scoreline for every result surface** (`src/sports/scoreline.ts` `matchScoreLine`,
+  `src/sports/matchLine.ts`): match cards, bracket cells and series legs, sport results lists,
+  calendar, team head-to-head ("Last: W 2–1 · 6-4, 3-6, [10-7]") and form, profile history,
+  Correct match, share text, the ticker / OBS overlay.
+- **Retirements per ITF / BWF / ITTF:** racket End-match chips read **Retired** / **Default**; the line
+  keeps the unfinished set and adds "ret." / "def." / "w/o" / "abandoned" ("6-4, 3-2 ret."). The
+  board, summary and share show sets won (1–0), not the live points.
+- **LineScoreboard for all set/game sports** (`src/sports/SetLineBoard.tsx`, pure `lineGrid`):
+  new for table tennis, squash, pickleball, padel and carrom; tennis / badminton / volleyball moved
+  onto it. Tiebreak superscripts (6⁴), padel / tennis match tiebreak as a "TB" column.
+- **Padel:** match-tiebreak points stored in the set entry ([10-7]); older snapshots unchanged.
+- **Tests:** `tests/scoreline-everywhere.test.mts` (24). Demo 8093 at 375 px (TT live + retired,
+  tennis retired, share text). Guides: end-a-match-early, live-score-overlay.
+
 ### 2026-10-10 — Sport depth SD-19 + SD-29: absolute stats for racket sports; on-field time, minutes, +/-, sets played, timed suspensions
 
 - **SD-29 (on-field tracker):** pure `src/sports/onField.ts` covers subs, permanent "off", timed

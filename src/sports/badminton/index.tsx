@@ -13,9 +13,9 @@ import type { SportPlugin } from '../types';
 import { courtFormation, makeCourt } from '../courts';
 import { pointVoice } from '../voiceParsers';
 import { BadmintonBoxScore } from './BoxScore';
-import { LineScoreboard } from '../../components/LineScoreboard';
+import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, serve, summary, scoreLine, standingsUnits, type BadmintonState } from './engine';
+import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, type BadmintonState } from './engine';
 import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
 
@@ -94,22 +94,12 @@ const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ st
 
 /** Broadcast-style board: GAMES won + a column of points per game, the live game
  *  highlighted — the layout badminton TV graphics use. */
-const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live }) => {
+const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
   const s = state as BadmintonState;
-  const gameNo = s.games.length + 1;
-  const nGames = Math.max(1, s.ended ? s.games.length : gameNo);
-  const columns = Array.from({ length: nGames }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === gameNo }));
-  const cell = (side: 'home' | 'away', i: number) =>
-    i < s.games.length ? String(s.games[i][side === 'home' ? 0 : 1]) : String(s.current[side]);
   return (
-    <LineScoreboard
-      status={`${s.ended ? 'Match Over' : `Game ${gameNo}`} · best of ${s.gamesToWin * 2 - 1}`}
-      live={live}
-      leadLabel="GAMES"
-      columns={columns}
-      winner={s.ended ? (s.gamesWon.home > s.gamesWon.away ? 'home' : 'away') : undefined}
-      home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.gamesWon.home), cells: columns.map((_, i) => cell('home', i)) }}
-      away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.gamesWon.away), cells: columns.map((_, i) => cell('away', i)) }}
+    <SetLineBoard
+      ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+      status={`Game ${s.games.length + 1}`} bestOf={`best of ${s.gamesToWin * 2 - 1}`}
     />
   );
 };
@@ -135,6 +125,9 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   // SD-01: once ended → games won + "21-18, 19-21, 21-15" (never the reset 0–0).
   summary,
   scoreLine,
+  // SD-20: the line score + BWF result marks ("21-15, 8-3 ret.").
+  lineScore,
+  retireTerms: true,
   ScoringControls,
   LiveExtras,
   formation: () => courtFormation('badminton'),

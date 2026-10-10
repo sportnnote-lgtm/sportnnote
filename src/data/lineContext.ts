@@ -227,7 +227,8 @@ export function lineContext(
   if (sport === 'chess' && match) {
     const tc = strOf(state.timeControl) ?? strOf(cfg.timeControl);
     if (tc) ctx.timeControl = v(tc, TIME_CONTROLS[tc] ?? tc);
-    const white = state.white === 'away' ? 'away' : 'home'; // the engine's default: home has White
+    // the game's colour, else the fixture's (SD-26 Swiss pairing), else home (the engine default)
+    const white = state.white === 'away' || state.white === 'home' ? state.white : cfg.white === 'away' ? 'away' : 'home';
     if (side) ctx.colour = side === white ? v('white', 'White') : v('black', 'Black');
   }
   // Opponent: the other side's team (id) when the side is known, else the label.

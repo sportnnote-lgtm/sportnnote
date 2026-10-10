@@ -9,6 +9,7 @@
  * `onRemoteEvent`), so a reload never replays old wickets.
  */
 import type { SportPlugin } from './types';
+import { finalBoard, type ResultLike } from './scoreline.ts';
 
 export type TickerTone = 'wicket' | 'boundary' | 'extra';
 export interface TickerChip { text: string; tone?: TickerTone }
@@ -78,12 +79,15 @@ export interface TickerMeta {
   startsLabel?: string;
   /** a match closed by hand (#04 manualResultLine) — the final word */
   resultLine?: string;
+  /** SD-20 — that result itself: a set/game sport then shows sets won + the
+   *  marked line ("6-4, 3-2 ret."), not the live points it stopped at */
+  result?: ResultLike | null;
   status?: 'scheduled' | 'live' | 'completed' | string;
   /** play paused (#13), e.g. "Rain break" */
   breakLabel?: string;
 }
 
-type TickerPlugin = Pick<SportPlugin<any>, 'summary' | 'isComplete' | 'tickerDetail'>;
+type TickerPlugin = Pick<SportPlugin<any>, 'summary' | 'isComplete' | 'tickerDetail'> & Partial<Pick<SportPlugin<any>, 'scoreLine' | 'lineScore' | 'retireTerms'>>;
 
 const HOME_FALLBACK = '#4DA3FF';
 const AWAY_FALLBACK = '#FF8A5C';
@@ -96,10 +100,12 @@ export function buildTicker(plugin: TickerPlugin, state: unknown, meta: TickerMe
   const homeShort = meta.home.short || meta.home.name;
   const awayShort = meta.away.short || meta.away.name;
   const d: TickerDetail = pre ? {} : plugin.tickerDetail?.(state as never, { home: homeShort, away: awayShort }) ?? {};
+  // SD-20: closed by hand mid-set → the final board (sets won + "6-4, 3-2 ret.").
+  const fb = done && !complete && meta.result ? finalBoard(plugin, state, { result: meta.result }) : null;
 
   const team = (side: 'home' | 'away'): TickerTeam => {
     const m = meta[side];
-    const score = pre ? '' : (side === 'home' ? d.homeScore ?? sm.homeScore : d.awayScore ?? sm.awayScore);
+    const score = pre ? '' : fb ? (side === 'home' ? fb.homeScore : fb.awayScore) : (side === 'home' ? d.homeScore ?? sm.homeScore : d.awayScore ?? sm.awayScore);
     const sub = pre ? undefined : side === 'home' ? d.homeSub : d.awaySub;
     return {
       short: side === 'home' ? homeShort : awayShort,
@@ -119,7 +125,7 @@ export function buildTicker(plugin: TickerPlugin, state: unknown, meta: TickerMe
 
   const model: TickerModel = { home: team('home'), away: team('away'), status, phase: pre ? 'pre' : done ? 'done' : 'live' };
   if (pre) return model;
-  const detail = d.detail ?? sm.detailLine;
+  const detail = fb ? fb.line : d.detail ?? sm.detailLine;
   if (detail) model.detail = detail;
   if (done) return model; // the result line says it all — no live cells
   if (d.batting) model.batting = d.batting;

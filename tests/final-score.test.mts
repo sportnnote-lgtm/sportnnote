@@ -149,7 +149,7 @@ describe('legacy replay identity (pinned to the pre-SD-01 engines)', () => {
   });
   test('padel', () => {
     assert.equal(fp(run(padel, {}, [...L.PADEL_TWO_SETS, ...L.tSet(6, 3)]) as never, L.TENNIS_KEYS), 'eb32f132ad2f');
-    assert.equal(fp(run(padel, { decider: 'match10' }, [...L.PADEL_TWO_SETS, ...L.tbPts('away', 7), ...L.tbPts('home', 10)]) as never, L.TENNIS_KEYS), 'be3656e14c13');
+    assert.equal(fp(run(padel, { decider: 'match10' }, [...L.PADEL_TWO_SETS, ...L.tbPts('away', 7), ...L.tbPts('home', 10)]) as never, L.TENNIS_KEYS), '13a726602245'); // SD-20: the match tiebreak's points now stored in its set entry ([10-7], as tennis)
   });
   test('badminton', () => {
     assert.equal(fp(run(badminton, {}, L.BADMINTON_LOG) as never, L.RALLY_KEYS), '97bb601bd390');

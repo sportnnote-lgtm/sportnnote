@@ -11,7 +11,7 @@ import { getSport } from '../sports/registry';
 import { openVenue } from '../core/venue';
 import { formatShort, useUserTimeZone } from '../core/time';
 import type { Match } from '../core/types';
-import { manualResultLine } from '../core/matchResult';
+import { matchLine, resultWords } from '../sports/matchLine';
 
 /** A small dot that gently pulses — the universal "live" signal. */
 function LiveBadge() {
@@ -34,11 +34,6 @@ function LiveBadge() {
   );
 }
 
-/** A stored snapshot may predate the current engine — never let it break a card. */
-function safeLine(f: () => string | undefined): string {
-  try { return f() ?? ''; } catch { return ''; }
-}
-
 /** `onStart` (parity #13): the scorer's one-tap "▶ Start scoring" / "Continue
  *  scoring" straight into the Scoring tab. */
 export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: () => void; onStart?: () => void }) {
@@ -53,9 +48,10 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
   const cancelled = match.status === 'cancelled';
   const walkover = done && match.walkover;
   const showScore = (live || done) && !!match.score && !walkover;
-  // SD-01: a finished set/game match shows its per-set line under the sets/games
-  // score ("21-18, 19-21, 21-15"; tennis "6-4, 3-6, 7-6(4)").
-  const setLine = done && showScore && match.state ? safeLine(() => plugin.scoreLine?.(match.state as never)) : '';
+  // SD-01/SD-20: a finished set/game match shows its per-set line under the
+  // sets/games score ("21-18, 19-21, 21-15"; tennis "6-4, 3-6, 7-6(4)"; closed by
+  // hand "6-4, 3-2 ret."). A walkover already reads W/O in the middle.
+  const setLine = done && showScore ? matchLine(match) : '';
 
   return (
     // The start button sits beside (not inside) the card's touchable — a button
@@ -121,7 +117,7 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
         {live ? (
           <Text style={s.cta}>tap to score ›</Text>
         ) : done ? (
-          match.result ? manualResultLine(match.result, match.homeTeam.name, match.awayTeam.name) : walkover ? 'Walkover' : 'Full time'
+          match.result ? resultWords({ sport: match.sport, result: match.result }, match.homeTeam.name, match.awayTeam.name) : walkover ? 'Walkover' : 'Full time'
         ) : (
           time
         )}

@@ -10,7 +10,8 @@ import { theme } from '../../core/theme';
 import { Button, SelectChip, textStyles } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
-import { init, reducer, result, boardPoints, summary, scoreLine, standingsUnits, type CarromState, type Side } from './engine';
+import { SetLineBoard } from '../SetLineBoard';
+import { init, reducer, result, boardPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side } from './engine';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
@@ -93,6 +94,19 @@ const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state
   );
 };
 
+/** SD-20 — the LineScoreboard: GAMES won + a column of board points per game,
+ *  the live game highlighted. */
+const CarromScoreboard: NonNullable<SportPlugin<CarromState>['Scoreboard']> = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
+  const s = state as CarromState;
+  return (
+    <SetLineBoard
+      ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
+      status={`Game ${s.games.length + 1} · board ${s.boardsInGame + 1}`}
+      bestOf={s.gamesToWin === 1 ? `single game to ${s.target}` : `best of ${s.gamesToWin * 2 - 1} · to ${s.target}`}
+    />
+  );
+};
+
 export const carromPlugin: SportPlugin<CarromState> = {
   id: 'carrom',
   name: 'Carrom',
@@ -108,6 +122,9 @@ export const carromPlugin: SportPlugin<CarromState> = {
   // SD-01: once ended → games won + "25-18, 12-25, 25-20" (never the reset 0 : 0).
   summary,
   scoreLine,
+  // SD-20: the line score (board grid, a game closed by hand).
+  lineScore,
+  Scoreboard: CarromScoreboard,
   ScoringControls,
   LiveExtras,
   formatFields: [

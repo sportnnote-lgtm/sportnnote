@@ -9,6 +9,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Card, Pill, SelectChip, ScreenTitle, textStyles, Button } from '../components/ui';
+import { matchLine } from '../sports/matchLine';
 import { getSport } from '../sports/registry';
 import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
@@ -350,7 +351,8 @@ export default function SportProfileScreen() {
               const res = golfRound ? undefined : lineResult(l, hm);
               const persp: 'home' | 'away' = hm && l.opponent && l.opponent === hm.homeTeam.name ? 'away' : 'home';
               let setLine = '';
-              try { setLine = !golfRound && hm?.status === 'completed' && hm.state ? plugin.scoreLine?.(hm.state as never, persp) ?? '' : ''; } catch { setLine = ''; }
+              // SD-20: + "6-4, 3-2 ret." / "w/o" for a match closed by hand.
+              try { setLine = !golfRound && hm && (hm.status === 'completed' || hm.walkover) ? matchLine(hm, persp) : ''; } catch { setLine = ''; }
               const row = (
                 <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: (golfRound ? l.won : res === 'W') ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>

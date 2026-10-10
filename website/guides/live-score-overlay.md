@@ -40,7 +40,7 @@ These steps are also printed on the card under **Add it in OBS**.
 - The team names, colours and the live score, with sport detail such as overs in cricket or the match clock in football.
 - Flashes for big moments: **WICKET!**, **FOUR!** and **SIX!** in cricket, and **GOAL!** with the scorer and minute in football.
 - During a break, the break is shown, for example "Rain break".
-- After the match, the final result. In set and game sports such as tennis, badminton, table tennis, squash, pickleball, padel, volleyball and carrom, that's the sets or games won plus each set's score, for example 2–1 with 6-4, 3-6, 7-6(4).
+- After the match, the final result. In set and game sports such as tennis, badminton, table tennis, squash, pickleball, padel, volleyball and carrom, that's the sets or games won plus each set's score, for example 2–1 with 6-4, 3-6, 7-6(4). A padel match tiebreak shows in brackets, such as [10-7]. A match ended early shows the score where play stopped, with a mark such as "6-4, 3-2 ret.".
 
 The overlay follows the live score a few seconds behind the scorer's taps.
 

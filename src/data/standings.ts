@@ -7,6 +7,7 @@ import type { Match, Player, SportId, StatLine } from '../core/types';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
 import { STAT_SPORTS, leaderCategories, eligibilityOf, statSchema } from '../sports/statSchemas.ts';
 import { rankPlayers, statDefIn, qualifierOf, qualifierText, type Qualifier, type StatDef } from '../sports/statSchema.ts';
+import { fideTieBreaks, type FideTieBreaks, type XRound } from './swissTiebreaks.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -46,6 +47,10 @@ export interface TeamStanding {
    *  point): one entry per game or bye, with `unplayed` set for a bye or a
    *  forfeit. The data Buchholz / Swiss tie-breaks read (Wave 1). */
   games?: GameRecord[];
+  /** FIDE C.07 crosstable tie-breaks (SD-26: Buchholz, Cut-1, Median,
+   *  progressive score, games with Black …) — present only when the chain
+   *  uses one of them (or Sonneborn-Berger) and the rows keep `games`. */
+  fide?: FideTieBreaks;
   /** rally points won / lost over the team's matches (table tennis: every
    *  game's points) — the overall analog of the ITTF "points ratio", used to
    *  seed across groups (SD-12). Present only when the order uses `h2hPoints`. */
@@ -78,7 +83,30 @@ export interface GameRecord {
   stage?: string;
   result: 'win' | 'draw' | 'loss' | 'nr';
   points: number;
+  /** Swiss round number (from the stage 'swissN'), when known (SD-26) */
+  round?: number;
+  /** chess: the colour this side had over the board (played games only;
+   *  the fixture's / game's `white`, else home — SD-26) */
+  colour?: 'white' | 'black';
 }
+
+/** Which side has White in a chess game: the game state's `white`, else the
+ *  fixture's `white` key (SD-26 pairing writes it into the match format),
+ *  else home (the engine default, so old matches read as before). */
+export function chessWhiteSide(m: Pick<Match, 'state' | 'format'>): 'home' | 'away' {
+  const st = m.state as { white?: unknown } | null | undefined;
+  const w = st && typeof st === 'object' ? st.white : undefined;
+  if (w === 'home' || w === 'away') return w;
+  const f = (m.format as Record<string, unknown> | undefined)?.white;
+  return f === 'away' ? 'away' : 'home';
+}
+
+/** The Swiss round of a stage ('swiss3' → 3), else undefined. */
+export const swissRoundOf = (stage?: string): number | undefined => {
+  if (typeof stage !== 'string' || !stage.startsWith('swiss')) return undefined;
+  const n = parseInt(stage.slice(5), 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
 
 /** An organiser's signed points bonus/penalty for one team (parity #07), with
  *  a public reason. Stored as a JSON array in `formats[sport].pointsAdj`.
@@ -358,10 +386,22 @@ const BODY_PRESETS: Record<string, PointsPreset[]> = {
   ],
 };
 
+/** Chess (SD-26): the FIDE Swiss order and the elite round-robin order, both
+ *  1 / ½ / 0. Not a body preset, so a new tournament stores nothing (a Swiss
+ *  stores the Swiss order when its round 1 is drawn). Lazy: the Swiss keys
+ *  are registered further down the module. */
+const CHESS_PRESETS = (): PointsPreset[] => [
+  preset('fide-swiss', 'FIDE Swiss', '1-½-0; ties: Buchholz Cut-1, Buchholz, Sonneborn-Berger, progressive score, direct encounter, wins, wins with Black',
+    { winPoints: 1, drawPoints: 0.5, lossPoints: 0, tieBreak: FIDE_SWISS_ORDER.join(',') }),
+  preset('fide-rr', 'FIDE round robin', '1-½-0; ties: Sonneborn-Berger, wins, direct encounter',
+    { winPoints: 1, drawPoints: 0.5, lossPoints: 0, tieBreak: 'sb,wins,h2h' }),
+];
+
 /** One-tap points presets for the PointsEditor: the body's system(s), then the
  *  "Simple 2-1-0" fallback (D1). Chess has none (Swiss / round-robin
  *  tie-breaks are their own item, SD-26); golf has no table. */
 export function standingsPresets(sport: SportId | string): PointsPreset[] {
+  if (sport === 'chess') return CHESS_PRESETS();
   const body = BODY_PRESETS[sport];
   return body ? [...body, simplePreset(sport)] : [];
 }
@@ -437,6 +477,8 @@ export function noResultPoints(sport: SportId, cfg?: StandingsConfig | null): nu
  *  advanced order), most useful first. */
 export function availableTieBreakers(sport: SportId): TieBreaker[] {
   if (sport === 'chess') return ['sb', 'wins', 'h2h', ...customTB.keys(), 'lots'];
+  // (chess: the FIDE Buchholz family, progressive score and Black counts are
+  // registered tie-breakers — SD-26)
   if (sport === 'cricket') return ['h2h', 'nrr', 'for', 'wins', 'played', 'lots'];
   switch (scoreUnit(sport)) {
     case 'sets':
@@ -461,7 +503,7 @@ export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): strin
   const unit = u === 'goals' ? 'goal' : u === 'runs' ? 'run' : u === 'sets' ? 'set' : u === 'games' ? 'games' : 'points';
   const scored = u === 'goals' ? 'goals scored' : u === 'runs' ? 'runs scored' : u === 'sets' ? 'sets won' : u === 'games' ? 'games won' : 'points scored';
   switch (tb) {
-    case 'h2h': return 'head-to-head';
+    case 'h2h': return sport === 'chess' ? 'direct encounter' : 'head-to-head';
     case 'h2hDiff': return `head-to-head ${unit} difference`;
     case 'h2hFor': return `head-to-head ${scored}`;
     case 'h2hRatio': return 'games ratio (among tied)';
@@ -681,7 +723,8 @@ export function teamStandings(
   for (const m of played) {
     const h = ensure(m.homeTeam.id, m.homeTeam.name, m.homeTeam.colorHex);
     const a = ensure(m.awayTeam.id, m.awayTeam.name, m.awayTeam.colorHex);
-    const base = { matchId: m.id, stage: m.stage };
+    const rnd = swissRoundOf(m.stage);
+    const base = { matchId: m.id, stage: m.stage, ...(rnd ? { round: rnd } : {}) };
     // No result / abandoned: played and the NR points, but nothing towards
     // for/against or the rate.
     if (isNoResultMatch(m)) {
@@ -734,17 +777,21 @@ export function teamStandings(
     const kind: GameRecord['kind'] = forfeit ? 'forfeit' : 'played';
     const mp = matchPoints(m, cfg);
     h.points += mp.home; a.points += mp.away;
+    // SD-26: the colours over the board (chess, played games only).
+    const white = sport === 'chess' && !forfeit ? chessWhiteSide(m) : undefined;
+    const col = (side: 'home' | 'away') => (white ? { colour: side === white ? 'white' as const : 'black' as const } : {});
     if (m.winner === 'draw') {
       if (!forfeit) { h.drawn += 1; a.drawn += 1; }
-      log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: mp.home });
-      log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: mp.away });
+      log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: mp.home, ...col('home') });
+      log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: mp.away, ...col('away') });
     } else {
       const [w, l] = m.winner === 'home' ? [h, a] : [a, h];
+      const [ws, ls] = m.winner === 'home' ? ['home', 'away'] as const : ['away', 'home'] as const;
       if (forfeit) { w.forfeitWins = (w.forfeitWins ?? 0) + 1; l.forfeitLosses = (l.forfeitLosses ?? 0) + 1; }
       else { w.won += 1; l.lost += 1; }
       const [wp, lp] = m.winner === 'home' ? [mp.home, mp.away] : [mp.away, mp.home];
-      log(w, { ...base, kind, unplayed: forfeit, opponentId: l.teamId, result: 'win', points: wp });
-      log(l, { ...base, kind, unplayed: forfeit, opponentId: w.teamId, result: 'loss', points: lp });
+      log(w, { ...base, kind, unplayed: forfeit, opponentId: l.teamId, result: 'win', points: wp, ...col(ws) });
+      log(l, { ...base, kind, unplayed: forfeit, opponentId: w.teamId, result: 'loss', points: lp, ...col(ls) });
     }
   }
   // Swiss byes: once per (round, entrant), from any drawn (not cancelled)
@@ -769,7 +816,8 @@ export function teamStandings(
         const t = ensure(id, n?.name ?? 'Entrant', n?.colorHex);
         t.byes = (t.byes ?? 0) + 1;
         t.points += byePts;
-        log(t, { kind: 'bye', unplayed: true, stage: m.stage, result: resultOf(byePts), points: byePts });
+        const rnd = swissRoundOf(m.stage);
+        log(t, { kind: 'bye', unplayed: true, stage: m.stage, ...(rnd ? { round: rnd } : {}), result: resultOf(byePts), points: byePts });
       }
     }
   }
@@ -790,11 +838,22 @@ export function teamStandings(
     t.adjust += a.points;
     t.points += a.points;
   }
-  // Sonneborn-Berger needs everyone's final points, so it's a second pass.
-  // Played games only: a forfeit (and a bye, which has no opponent) is
-  // unplayed and stays out (FIDE C.07). Opponents' totals include their own
-  // bye / forfeit points (Wave 1 refines that with the C.07 unplayed rules).
-  if (cfg.order.includes('sb')) {
+  // SD-26: the crosstable tie-breaks (FIDE C.07 2023) — Buchholz & co. and,
+  // wherever per-round records are kept, Sonneborn-Berger with the C.07
+  // unplayed-round rules: in a Swiss, your own bye / forfeit is a game against
+  // a dummy on your own final score; an opponent's bye or forfeit counts at
+  // face value; a withdrawn opponent's missing rounds count as draws. In a
+  // round robin a forfeit is a regular game (C.07 15.2).
+  const chain = new Set<string>([...cfg.order, ...(cfg.pairOrder ?? [])]);
+  if (keepGames && (chain.has('sb') || [...chain].some((k) => FIDE_KEYS.has(k)))) {
+    const fide = fideFor([...table.values()], matches, sport, cfg);
+    for (const t of table.values()) {
+      t.fide = fide.get(t.teamId);
+      if (chain.has('sb')) t.sb = t.fide?.sb ?? 0;
+    }
+  } else if (cfg.order.includes('sb')) {
+    // Sonneborn-Berger without per-round records (not chess, no bye point):
+    // played games only, opponents' final game points.
     for (const t of table.values()) t.sb = 0;
     for (const m of played) {
       if (isNoResultMatch(m) || isChessForfeit(m)) continue;
@@ -808,6 +867,65 @@ export function teamStandings(
   }
   return rankTeams([...table.values()], played, cfg);
 }
+
+/** The tie-breaks that read the FIDE crosstable (registered below). */
+const FIDE_KEYS = new Set(['bh', 'bhc1', 'bhm1', 'ps', 'bpg', 'bwg']);
+
+/** Build each row's C.07 crosstable from its `games` and compute the
+ *  tie-breaks. Swiss when the records carry Swiss rounds: a round with no game
+ *  and no bye is an absence (not if that player's game is still to be
+ *  finished). Scores are game points (an organiser adjustment is not a result). */
+function fideFor(rows: TeamStanding[], matches: Match[], sport: SportId, cfg: StandingsConfig): Map<string, FideTieBreaks> {
+  const swiss = rows.some((t) => (t.games ?? []).some((g) => g.round !== undefined));
+  const pending = new Set<string>();
+  let rounds = 0;
+  for (const t of rows) for (const g of t.games ?? []) rounds = Math.max(rounds, g.round ?? 0);
+  if (swiss) {
+    for (const m of matches) {
+      const r = swissRoundOf(m.stage);
+      if (m.sport !== sport || !r || m.status === 'cancelled') continue;
+      const done = m.status === 'completed' && (!!m.winner || isNoResultMatch(m));
+      if (!done) { pending.add(`${m.homeTeam.id}|${r}`); pending.add(`${m.awayTeam.id}|${r}`); }
+    }
+  }
+  const records = new Map<string, XRound[]>();
+  for (const t of rows) {
+    records.set(t.teamId, (t.games ?? []).map((g, i): XRound => ({
+      round: swiss ? g.round ?? 0 : i + 1,
+      kind: g.kind === 'bye' ? 'pab' : g.kind === 'forfeit' ? (g.result === 'win' ? 'forfeitWin' : 'forfeitLoss') : g.result === 'nr' ? 'nr' : 'played',
+      opponentId: g.opponentId, points: g.points, result: g.result, colour: g.colour,
+    })).filter((r) => r.round > 0));
+  }
+  const score = new Map(rows.map((t) => [t.teamId, t.points - t.adjust]));
+  return fideTieBreaks(records, { swiss, draw: cfg.draw, rounds, pending }, (id) => score.get(id));
+}
+
+// SD-26: the FIDE crosstable tie-breaks, registered so a saved chain can name
+// them and the table shows a column for each one in the active chain (SD-18).
+// Registration order = the PointsEditor's offer order.
+for (const [key, label, short, pick] of [
+  ['bhc1', 'Buchholz Cut-1', 'BH-C1', (f: FideTieBreaks) => f.bhc1],
+  ['bh', 'Buchholz', 'BH', (f: FideTieBreaks) => f.bh],
+  ['bhm1', 'Median Buchholz', 'BH-M1', (f: FideTieBreaks) => f.bhm1],
+  ['ps', 'progressive score', 'PS', (f: FideTieBreaks) => f.ps],
+  ['bwg', 'wins with Black', 'BWG', (f: FideTieBreaks) => f.bwg],
+  ['bpg', 'games with Black', 'BPG', (f: FideTieBreaks) => f.bpg],
+] as const) {
+  registerTieBreaker(key, {
+    label,
+    value: (t) => (t.fide ? pick(t.fide) : 0),
+    seed: (t) => (t.fide ? pick(t.fide) : null),
+    column: { short, value: (t) => (t.fide ? pick(t.fide) : null) },
+  });
+}
+
+/** FIDE's tie-break order for an individual Swiss (Handbook C.02 13.16.4,
+ *  events where not all ratings are consistent — the school / club case):
+ *  Buchholz Cut-1, Buchholz, Sonneborn-Berger, progressive score, direct
+ *  encounter, number of wins (forfeits and a full-point bye included), wins
+ *  with Black. C.07 (2023) leaves the list to the organiser; this is the
+ *  default a new Swiss chess event stores (SD-26). */
+export const FIDE_SWISS_ORDER: TieBreaker[] = ['bhc1', 'bh', 'sb', 'ps', 'h2h', 'wins', 'bwg'];
 
 /** Rank rows: by points (FIVB `rankBy: 'wins'`: by wins, then points), then
  *  break each still-tied cluster with the config's ordered tie-breakers

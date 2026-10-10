@@ -108,7 +108,8 @@ function LiveOverlay({ match, config, params }: { match: Match; config?: Record<
       home: { name: h.name, short: h.shortName || h.name, color: h.colorHex, logo: h.logoUrl },
       away: { name: a.name, short: a.shortName || a.name, color: a.colorHex, logo: a.logoUrl },
       startsLabel: match.startsAt ? formatTime(match.startsAt) : undefined,
-      resultLine: match.result ? manualResultLine(match.result, h.shortName || h.name, a.shortName || a.name) : undefined,
+      resultLine: match.result ? manualResultLine(match.result, h.shortName || h.name, a.shortName || a.name, { retireTerms: !!plugin.retireTerms }) : undefined,
+      result: match.result ?? null,
       status: match.status,
       breakLabel: brk && match.status !== 'completed' ? breakLabel(brk) : undefined,
     };

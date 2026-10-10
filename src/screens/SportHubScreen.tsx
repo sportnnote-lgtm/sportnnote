@@ -23,6 +23,7 @@ import { canScoreByRole, canOrganize } from '../core/roles';
 import { teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
 import { matchesInDivision, standingsPhases } from '../data/groups';
 import type { Match } from '../core/types';
+import { matchLine } from '../sports/matchLine';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -138,6 +139,7 @@ export default function SportHubScreen() {
               const awayWon = !!m.score && m.score.away > m.score.home;
               return (
                 <TouchableOpacity accessibilityRole="button" key={m.id} activeOpacity={0.85} onPress={() => openScorer(m)}>
+                  <View style={st.resultCard}>
                   <View style={st.resultRow}>
                     <View style={[st.dot, { backgroundColor: m.homeTeam.colorHex }]} />
                     <Text style={[textStyles.body, st.rTeam, homeWon && st.winnerName]} numberOfLines={1}>{m.homeTeam.name}</Text>
@@ -153,6 +155,9 @@ export default function SportHubScreen() {
                     <Text style={[textStyles.body, st.rTeamRight, awayWon && st.winnerName]} numberOfLines={1}>{m.awayTeam.name}</Text>
                     <View style={[st.dot, { backgroundColor: m.awayTeam.colorHex }]} />
                   </View>
+                  {/* SD-20: the set/game line under a racket result ("11-7, 9-11, 11-5"). */}
+                  {matchLine(m) ? <Text style={st.rLine} numberOfLines={1}>{matchLine(m)}</Text> : null}
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -167,11 +172,13 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   section: { marginTop: theme.spacing(2) },
-  resultRow: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),
+  rLine: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
+  resultCard: {
+    gap: theme.spacing(1),
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md,
     borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3),
   },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dot: { width: 10, height: 10, borderRadius: 5 },
   rTeam: { flex: 1 },
   rTeamRight: { flex: 1, textAlign: 'right' },

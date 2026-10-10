@@ -9,7 +9,7 @@
  * after the limit → an extra (tie-break) board. A match is best of 1 or 3 games.
  */
 import type { ScoreSummary } from '../types';
-import { scoreLine as lineOf, finalSummary } from '../scoreline.ts';
+import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
 
 export type Side = 'home' | 'away';
 
@@ -86,6 +86,10 @@ export function result(s: CarromState): { winner: Side | 'draw'; home: number; a
 export function scoreLine(s: CarromState, perspective?: Side): string {
   return lineOf(s?.games, { perspective });
 }
+
+/** SD-20 — the line score: every game + the one in play (board points). */
+export const lineScore = (s: CarromState): LineScore | null =>
+  pointsLineScore('game', s && { games: s.games, current: s.current, won: s.gamesWon, ended: s.ended, toWin: s.gamesToWin });
 
 /** Scoreboard summary: live = this game's points; once ended = games won + every
  *  game's score (the board no longer reads the reset 0 : 0). */

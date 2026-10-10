@@ -1,6 +1,6 @@
 ---
 title: Run a chess tournament (Swiss or round-robin)
-description: Set up a chess event, draw Swiss or round-robin rounds, record results, and read standings that count byes and forfeits the FIDE way.
+description: Set up a chess event, pair Swiss rounds with colours, record results, and read standings with Buchholz and FIDE tie-breaks.
 category: Tournaments
 audience: Organisers, Players, Parents & fans
 sports: chess
@@ -8,65 +8,73 @@ order: 70
 updated: 2026-10-10
 ---
 
-Most school and open chess events are Swiss: everyone plays every round, nobody is knocked out, and each round pairs players on similar scores. Small events often play a round-robin, where everyone meets everyone. SportnNote runs both. It scores 1 for a win, ½ for a draw and 0 for a loss, and ranks the table for you.
+Most school and open chess events are Swiss: everyone plays every round, nobody is knocked out, and each round pairs players on similar scores. Small events often play a round-robin, where everyone meets everyone. SportnNote runs both, scores 1, ½ and 0, and ranks the table with FIDE tie-breaks.
 
 ## Before you start
 - You must be a host of the tournament.
 - Create it from **Organize** → **🏆 New tournament**. Under **Contested by**, pick **👤 Individuals**, and under **Sports**, pick **♟️ Chess**.
-- Add the players from the tournament's first step, **Add players**: tap **＋ New player**, type the name and a short code, then **Add & select**. Add them in seed order, strongest first.
+- In **Add players**, tap **＋ New player**, type the name and a short code, then **Add & select**. Add them in seed order, strongest first.
 
 ## Step by step: choose the format
-1. Open the tournament → **⚙ Manage** → **Chess — format & points**. (While creating the tournament, the same screen is **⚙️ ♟️ Chess settings ›**.)
-2. Under **Structure**, pick **🇨🇭 Swiss** and set the number of **Rounds**, or pick **🔁 League** for a round-robin.
-3. Pick the **Time control**. It is for the record only; the clock is on the board.
+1. Open the tournament → **⚙ Manage** → **Chess — format & points**.
+2. Under **Structure**, pick **🇨🇭 Swiss** and set the **Rounds**, or pick **🔁 League** for a round-robin.
+3. Pick the **Time control** (for the record only).
 4. For a Swiss, set the **Swiss bye**: **1** (the usual rule), **½** or **0**.
-5. Choose what to **Break ties first by**: **Sonneborn-Berger**, **number of wins** or **head-to-head**.
+5. Under **Points system**, pick **FIDE Swiss** or **FIDE round robin**. To change the order, open **Tie-break order (advanced)**.
 6. Tap **Save**.
 
-> **Note:** The **Swiss bye** row only shows once the structure is Swiss.
+> **Note:** A Swiss with no saved order gets the **FIDE Swiss** order when you create round 1.
 
 ## Step by step: draw the rounds
 1. In **⚙ Manage**, tap **Auto-generate fixtures**.
 2. Under **Format**, pick **🇨🇭 Swiss** or **🔁 Round-robin (league)**.
-3. Tap **⚡ Generate preview**. Check the pairings and the start times.
-4. Tap **✅ Create** to schedule the games.
+3. Tap **⚡ Generate preview**. Each Swiss game shows ♔ White first, then ♚ Black.
+4. Tap **✅ Create** to schedule the games. Each game opens with its colours already set.
 
-For a Swiss, round 1 pairs the top half against the bottom half. Come back after every game in the round has a result, and generate the next round. It pairs players on similar scores and avoids rematches. The app's Swiss pairing is a simple score-based pairing. It is not FIDE-certified, so use certified pairing software for a rated event.
+Generate the next Swiss round once every game in the current round has a result.
+
+## How the Swiss pairing works
+- Round 1 follows your seed order: the top half plays the bottom half (1 v 5, 2 v 6 … with 8 players). A coin toss gives the top seed's colour, and colours alternate down the boards.
+- Later rounds pair players on the same score: the top half of each score group plays its bottom half. In an odd group, the lowest player moves down to the next group.
+- Nobody plays the same opponent twice.
+- Nobody gets one colour three times in a row, or more than two extra Whites (or Blacks). Otherwise colours alternate where they can.
+- If no pairing keeps every rule, the preview says so.
+
+The screen says **In-app Swiss pairing — not FIDE-certified**. It follows the main ideas of FIDE's Dutch system, not every rule. For a rated event, pair in FIDE-endorsed software such as Swiss-Manager.
 
 ## Byes
-With an odd number of players, one player sits out each Swiss round. In round 1 that is the middle seed. After that, it is the lowest-ranked player who has not had a bye yet. Nobody gets two byes while someone else has none. The preview names the player under the match count, for example "Bye this round: Arjun Erigaisi — 1 point in the standings (not a game played)."
-
-A bye counts the way FIDE counts it:
-- The player gets the bye points (1 unless you chose ½ or 0) as soon as the round is drawn.
-- It is not a game played. It does not add to **P**, **W**, **D** or **L**.
-- It does not add to Sonneborn-Berger, because there was no opponent.
-- The table shows it on a second line, for example "1 bye".
+With an odd number of players, one player sits out each Swiss round: the lowest-ranked player who has not had a bye (or a forfeit win) yet. The preview names them.
+- The bye points count as soon as the round is drawn.
+- It is not a game played, so it is not in **P**, **W**, **D** or **L**.
+- For your own tie-breaks, it counts as a game against an imaginary opponent who finished on your score (FIDE 2023 rules). For your opponents' tie-breaks, your bye points count like any others.
 
 ## Step by step: record a result
 1. Open the game from the tournament's **Matches** tab.
-2. Under **♔ White pieces**, tap the player who had White.
-3. Under **Result**, tap who won, or **Draw**.
-4. Optionally pick **How (optional)**, such as **Checkmate**, **Resignation**, **On time** or **Draw agreed**, and type the number of moves.
-5. Tap **✓ Record result**.
+2. Check **♔ White pieces**. Tap the other player if colours were swapped at the board.
+3. Under **Result**, tap who won, or **Draw**, and optionally **How (optional)**.
+4. Tap **✓ Record result**.
 
-If a player doesn't turn up, a host can tap **🏳 Award a walkover** before the game starts. You can also record the result with the **Forfeit** method.
+If a player doesn't turn up, a host can tap **🏳 Award a walkover**, or record the result with the **Forfeit** method. A forfeit scores the full point but is not a game played. In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops. In a round-robin it counts as a normal game.
 
-## Forfeits
-A forfeit win scores the full point, but it is not a game played:
-- It is left out of **P**, **W**, **D** and **L**, and the table says "1 won by forfeit" or "1 lost by forfeit" instead.
-- It is left out of Sonneborn-Berger.
-- It still counts for **number of wins**, because FIDE counts rounds won with or without playing.
+## Tie-breaks
+Players level on points are split by the **FIDE Swiss** order, one tie-break after another:
+1. **Buchholz Cut-1 (BH-C1)**: your opponents' scores added up, without the lowest.
+2. **Buchholz (BH)**: the same, with nothing cut.
+3. **Sonneborn-Berger (SB)**: the score of each opponent you beat, plus half of each one you drew with.
+4. **Progressive score (PS)**: your running score after each round, added up.
+5. **Direct encounter** between the tied players.
+6. **Number of wins**, including forfeit wins and a full-point bye.
+7. **Wins with Black (BWG)**.
+
+This is FIDE's recommended order for a Swiss where not every player has a rating, as in most school events. If a player withdraws, the rounds they missed count as draws in their past opponents' Buchholz. A round-robin keeps Sonneborn-Berger, wins, then direct encounter. **Median Buchholz** and **games with Black** are also under **Tie-break order (advanced)**.
 
 ## Read the standings
-Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss event shows one table called **Swiss**. Under it, "Not games played (the points count)" lists every bye and forfeit. See [Read the points table and adjust points](/guides/points-table-and-adjustments/) for the columns and for adjusting points by hand.
+Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss shows one table called **Swiss**, with a column for each tie-break in use, such as **BH-C1**, **BH** and **SB**. "Not games played (the points count)" lists every bye and forfeit. See [Read the points table and adjust points](/guides/points-table-and-adjustments/).
 
 ## Common questions
 
-### A player had a bye, and now they lead the table. Is that right?
-Yes. A bye is worth 1 point by default, the same as a win. Older Swiss events that never recorded the point now show it.
-
 ### Our rules give only half a point for a bye.
-Open **Chess — format & points** and set the **Swiss bye** to **½**. The table updates straight away, including earlier rounds.
+Set the **Swiss bye** to **½** in **Chess — format & points**. The table updates straight away.
 
 ### Does a round-robin change?
-No. Without byes or forfeits, a round-robin table is the same as before.
+Only with forfeits: a forfeit now counts in Sonneborn-Berger as a normal game, as FIDE says for round-robins.

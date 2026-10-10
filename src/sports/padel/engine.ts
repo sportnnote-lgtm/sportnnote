@@ -6,7 +6,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
-import { scoreLine as lineOf, finalSummary, type Pair } from '../scoreline.ts';
+import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 
 const SETS_TO_WIN = 2;
@@ -111,9 +111,10 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
     const target = tbTarget(s);
     const tbWon = pts[side] >= target && pts[side] - pts[o] >= 2;
     if (!tbWon) return { ...s, pts, events, seq };
-    // A normal set's tiebreak makes the set 7-6; a match tiebreak ends the match
-    // without games on the board.
-    const games = matchTb ? { ...s.games } : { ...s.games, [side]: s.gamesPerSet + 1 };
+    // A normal set's tiebreak makes the set 7-6; a match tiebreak records its own
+    // points as the set ([10-7], SD-20 — as tennis; older snapshots stored 0-0 and
+    // keep their points in `tb`).
+    const games = matchTb ? { home: pts.home, away: pts.away } : { ...s.games, [side]: s.gamesPerSet + 1 };
     return winSet(s, side, games, events, seq, [pts.home, pts.away]);
   }
 
@@ -179,6 +180,24 @@ export function scoreLine(s: PadelState, perspective?: 'home' | 'away'): string 
   if (!s || !Array.isArray(s.sets)) return '';
   const matchTb = s.sets.map((_, i) => !!s.matchTbDecider && i === s.setsToWin * 2 - 2);
   return lineOf(s.sets, { tb: setTiebreaks(s), matchTb, perspective });
+}
+
+/** SD-20 — the line score: completed sets (tiebreak points; a match tiebreak's
+ *  points) + the set in play (its games; a match tiebreak's points). */
+export function lineScore(s: PadelState): LineScore | null {
+  if (!s || !Array.isArray(s.sets)) return null;
+  const tbs = setTiebreaks(s);
+  const ended = !!s.ended;
+  return {
+    unit: 'set',
+    won: { home: s.setsWon?.home ?? 0, away: s.setsWon?.away ?? 0 },
+    done: s.sets.map(([home, away], i) => ({ home, away, tb: tbs[i] ?? null, ...(!!s.matchTbDecider && i === s.setsToWin * 2 - 2 ? { matchTb: true } : {}) })),
+    current: ended ? null : matchTbActive(s)
+      ? { home: s.pts?.home ?? 0, away: s.pts?.away ?? 0, matchTb: true }
+      : { home: s.games?.home ?? 0, away: s.games?.away ?? 0 },
+    ended,
+    toWin: s.setsToWin,
+  };
 }
 
 /** Scoreboard summary: live = current-game points; ended = sets won + the set line. */

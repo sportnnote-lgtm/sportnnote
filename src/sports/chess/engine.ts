@@ -30,8 +30,12 @@ export interface ChessState {
   seq: number;
 }
 
+/** `config.white` (SD-26) is the fixture's colour from the Swiss pairing;
+ *  absent (every older fixture) = home has White, as before. The scorer can
+ *  still switch it with SET_WHITE before the result. */
 export function init(config?: Record<string, unknown>): ChessState {
-  return { white: 'home', timeControl: String(config?.timeControl ?? 'rapid'), ended: false, seq: 0 };
+  const white: Side = config?.white === 'away' ? 'away' : 'home';
+  return { white, timeControl: String(config?.timeControl ?? 'rapid'), ended: false, seq: 0 };
 }
 
 /** Actions: SET_WHITE {side}, RESULT {winner, method, moves?}. PLAYED is a no-op

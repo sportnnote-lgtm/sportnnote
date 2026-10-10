@@ -148,6 +148,10 @@ export interface ScoreboardProps {
   awayColor?: string;
   /** match is in progress (not yet complete) */
   live?: boolean;
+  /** SD-20 — a match closed by hand (retired / default / abandoned): the board
+   *  reads as final (no highlighted set, the winner's row marked) with the mark
+   *  ("ret.") in the status line, even though the state never ended. */
+  closed?: { mark: string | null; winner?: 'home' | 'away' };
 }
 
 /** Props for a sport's post-match summary (best performers, ratings, MVP). */
@@ -285,6 +289,14 @@ export interface SportPlugin<S = unknown> {
    *  ends. `perspective: 'away'` reads it from the away side (history rows). Must
    *  tolerate a stored snapshot (`matches.state`) from an older engine version. */
   scoreLine?: (state: S, perspective?: 'home' | 'away') => string;
+  /** SD-20 — set/game sports: the line score as data (completed sets/games, the
+   *  one in play, sets/games won) → the LineScoreboard grid and a retirement's
+   *  "6-4, 3-2 ret." (`matchScoreLine` in scoreline.ts). Tolerates old snapshots. */
+  lineScore?: (state: S) => import('./scoreline').LineScore | null;
+  /** SD-20 — mark a match closed by hand the ITF / BWF / ITTF way: "ret." (retired
+   *  = Conceded), "def." (default = Awarded), "w/o", "abandoned"; and label the
+   *  End-match chips Retired / Default. Racket sports. */
+  retireTerms?: boolean;
   /** Has the match reached its end condition? */
   isComplete: (state: S) => boolean;
   /** The decided outcome once the match is complete: the winning side (or 'draw')

@@ -8,7 +8,7 @@ import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
-import { scoreLine as lineOf, finalSummary, type Pair } from '../scoreline.ts';
+import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import type { ScoreSummary } from '../types';
 
 export const SETS_TO_WIN = 2;
@@ -211,6 +211,25 @@ export const matchTbSets = (s: TennisState): boolean[] =>
 export function scoreLine(s: TennisState, perspective?: 'home' | 'away'): string {
   if (!s || !Array.isArray(s.sets)) return '';
   return lineOf(s.sets, { tb: setTiebreaks(s), matchTb: matchTbSets(s), perspective });
+}
+
+/** SD-20 — the line score: completed sets (tiebreak points, a match tiebreak's
+ *  points) + the set in play (its games; a match tiebreak's points). */
+export function lineScore(s: TennisState): LineScore | null {
+  if (!s || !Array.isArray(s.sets)) return null;
+  const tbs = setTiebreaks(s);
+  const mtb = matchTbSets(s);
+  const ended = !!s.ended;
+  return {
+    unit: 'set',
+    won: { home: s.setsWon?.home ?? 0, away: s.setsWon?.away ?? 0 },
+    done: s.sets.map(([home, away], i) => ({ home, away, tb: tbs[i] ?? null, ...(mtb[i] ? { matchTb: true } : {}) })),
+    current: ended ? null : isMatchTB(s)
+      ? { home: s.pts?.home ?? 0, away: s.pts?.away ?? 0, matchTb: true }
+      : { home: s.games?.home ?? 0, away: s.games?.away ?? 0 },
+    ended,
+    toWin: s.setsToWin,
+  };
 }
 
 /** Scoreboard summary: live = current-game points; ended = sets won + the set line. */

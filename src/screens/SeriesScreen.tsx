@@ -17,6 +17,7 @@ import { useMatches } from '../data/hooks';
 import { getMyPlayerId, deleteSeries } from '../data/repos';
 import { deriveSeries, resolveSeries, type SeriesFormat } from '../data/series';
 import type { Match } from '../core/types';
+import { matchLine } from '../sports/matchLine';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -129,6 +130,8 @@ export default function SeriesScreen() {
                 {m.score ? <Text style={st.legScore}>{m.score.home}–{m.score.away}</Text> : <Text style={st.legVs}>vs</Text>}
                 <Text style={[st.legTeam, st.legTeamRight, wId === m.awayTeam.id && st.winner]} numberOfLines={1}>{m.awayTeam.name}</Text>
               </View>
+              {/* SD-20: a set/game leg's line ("6-4, 3-6, 7-6(4)", "6-4, 3-2 ret."). */}
+              {done && matchLine(m) ? <Text style={st.legLine} numberOfLines={1}>{matchLine(m)}</Text> : null}
             </TouchableOpacity>
           );
         })}
@@ -190,6 +193,7 @@ const st = StyleSheet.create({
   legTeam: { flex: 1, color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
   legTeamRight: { textAlign: 'right' },
   legScore: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  legLine: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
   legVs: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   danger: { gap: theme.spacing(2), marginTop: theme.spacing(3), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing(4) },
   confirmText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },

@@ -5,10 +5,10 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: all
 order: 40
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
-Rain, bad light, a team walking off or a slot running out can stop a school-meet match. When that happens, the scorer needs to close the match honestly and say why. SportnNote lets you end a match by hand with a result and a reason. The reason is shown to everyone, and the points table updates the right way.
+Rain, bad light, a team walking off or a slot running out can stop a school-meet match. SportnNote lets you end it by hand with a result and a reason. The reason is shown to everyone, and the points table updates the right way.
 
 ## Before you start
 - To end a match that has started, you must be one of its scorers, or a host of the match or its tournament. Hosts can do this without adding themselves as a scorer first. The button is on the **Scoring** tab.
@@ -18,7 +18,7 @@ Rain, bad light, a team walking off or a slot running out can stop a school-meet
 ## Step by step: end a match that has started
 1. Open the match → **Scoring** tab.
 2. Tap **🏁 End match…** below the scoring buttons.
-3. Under "How did it end?", pick **Awarded**, **Conceded**, **Draw** (**Tie** in cricket), **No result** or **Abandoned**. Hosts also see **🏳 Walkover**. The list below explains each one.
+3. Under "How did it end?", pick **Awarded**, **Conceded**, **Draw** (**Tie** in cricket), **No result** or **Abandoned**. Racket sports show **Retired** and **Default** instead of Conceded and Awarded. Hosts also see **🏳 Walkover**. The list below explains each one.
 4. For **Awarded**, tap the team under "Awarded to?". For **Conceded**, tap the team that wins.
 5. Type a reason, or tap a quick reason: **Rain**, **Bad light**, **Ground unfit**, **Time up**, **Injury** or **Team left**.
 6. Read the preview line. In a tournament, it shows the result and what the points table will do, for example "Points table: both teams +1 (no result)".
@@ -35,6 +35,11 @@ The choices mean:
 - **🏳 Walkover** (hosts only): a team didn't turn up or can't play. See "Record a walkover" below.
 
 > **Note:** Knockout matches (quarter-finals, semis, finals and so on) only offer **Awarded** and **Conceded** (plus **🏳 Walkover** for hosts), because someone has to go through. The panel says "Knockout: pick who goes through."
+
+## Racket sports: retired, default and the score line
+In tennis, padel, badminton, table tennis, squash and pickleball the choices use umpires' words. **Retired** means a player or pair stopped, for example through injury: "Asha won — Bina retired". **Default** means one side was put out, for example for conduct.
+
+The score line keeps the games played, including the unfinished set, plus a mark: "6-4, 3-2 ret.", "21-15, 8-3 def." or "11-7 abandoned". A walkover, or a retirement before the first point, shows "w/o". The line shows on match cards, brackets, results, head-to-head rows, player history and shared links.
 
 ## Cricket: net run rate
 In cricket, **Awarded**, **Conceded** or **Tie** shows an extra chip, **Count in NRR (all overs)**. It's on by default, so both teams are charged their full overs for net run rate. Turn it off if your tournament rules say a shortened match shouldn't affect NRR. The points are still awarded either way. For overs cut by rain, see [Rain, fewer overs and DLS targets](/guides/cricket-rain-and-dls/).
@@ -63,9 +68,6 @@ The match is marked finished with the other side conceded, and the card shows **
 
 ### I ended the match by mistake. Can I undo it?
 Not with **↶ Undo**. A host can reset a tournament fixture to not started, or delete a friendly, from the **Danger zone** on the Info tab. This is only open for 30 minutes after the last scoring tap. See [Match quick options](/guides/match-quick-options/). To fix a wrongly scored goal or point after the end, see [Correct a finished match](/guides/correct-a-finished-match/).
-
-### Why is the End match button greyed out?
-Pick how the match ended, pick a winner if needed, and type a reason. The button turns on when all three are done.
 
 ### What's the difference between No result and Abandoned?
 They count the same in the table. Use **No result** when play happened but couldn't finish with a result. Use **Abandoned** when the match was called off. The words show on the public result.

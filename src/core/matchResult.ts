@@ -1,8 +1,17 @@
 /** The public text for a match closed by hand (parity #04). Pure. */
 import type { MatchResult } from './types';
 
-export function manualResultLine(r: MatchResult, home: string, away: string): string {
+/** `retireTerms` (racket sports, SD-20): Conceded reads as a retirement and
+ *  Awarded as a default — "Asha won — Bina retired", "Asha won by default". */
+export function manualResultLine(r: MatchResult, home: string, away: string, opts: { retireTerms?: boolean } = {}): string {
   const reason = r.reason?.trim();
+  if (opts.retireTerms && (r.kind === 'conceded' || r.kind === 'awarded')) {
+    const w = r.winner === 'home' ? home : away;
+    const l = r.winner === 'home' ? away : home;
+    const retired = r.kind === 'conceded' || /retir/i.test(reason ?? '');
+    if (retired) return `${w} won — ${l} retired${reason && !/^retired?$/i.test(reason) ? ` (${reason})` : ''}`;
+    return `${w} won by default${reason ? ` — ${reason}` : ''}`;
+  }
   const winner = r.winner === 'home' ? home : r.winner === 'away' ? away : '';
   const loser = r.winner === 'home' ? away : r.winner === 'away' ? home : '';
   switch (r.kind) {

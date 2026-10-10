@@ -309,10 +309,10 @@ describe('D1: new tournaments store the body preset; old ones read as before', (
     assert.deepEqual([c.win, c.draw, c.loss, c.setPoints, c.rankBy, c.lossBonus, c.pairOrder, c.restart], [2, 1, 0, undefined, undefined, undefined, undefined, undefined]);
     assert.equal(pointsSystemLabel('volleyball', { winPoints: 3, lossPoints: 1 }), '3/1/1');
   });
-  test('presets per sport include the body system and Simple; chess has none', () => {
+  test('presets per sport include the body system and Simple; chess has the FIDE pair', () => {
     assert.deepEqual(standingsPresets('football').map((p) => p.id), ['fifa', 'fifa22', 'simple']);
     assert.equal(standingsPresets('football').at(-1)!.label, 'Simple 3-1-0');
-    assert.deepEqual(standingsPresets('chess'), []);
+    assert.deepEqual(standingsPresets('chess').map((p) => p.id), ['fide-swiss', 'fide-rr'], 'chess: FIDE Swiss + round robin (SD-26), no body preset');
   });
 });
 
