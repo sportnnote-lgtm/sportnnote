@@ -104,4 +104,4 @@ sportnnote, how to create a tournament, tournament fixture generator, round robi
 
 ## Pre-post checks
 - **Labels:** recheck against the frozen build, especially the fixture-generator labels (taken from the app source on 11 Oct, not from a guide): **⚡ Generate preview**, **✅ Create N matches**, **Single — each pair once**.
-- **Invite QR:** if SD-108 has shipped, the join-link step also shows a QR code and **Share QR + message**. Show it at 3:55 and add one VO line: "Or share the QR. Captains scan it with their phone camera."
+- **Invite QR:** SD-108 is live (11 Oct 2026), so the join-link step also shows a QR code and **Share QR + message**. Show it at 3:55 and add one VO line: "Or share the QR. Captains scan it with their phone camera."

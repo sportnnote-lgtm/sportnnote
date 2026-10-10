@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 28 Jan 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 15 s, 9:16 |
-| Pillar | New feature (SD-108 invite QR sharing; built 11 Oct 2026, uncommitted at the time of writing) |
-| Guide | https://sportnnote.in/guides/teams-join-a-tournament/ (add the QR steps when SD-108 ships) |
-| Status | Draft – **only if SD-108 is in the live build** |
+| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, except the Android in-app QR image share, which needs a new APK) |
+| Guide | https://sportnnote.in/guides/teams-join-a-tournament/ (already has the QR steps) |
+| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat:** in the Android app, Share QR + message sends the QR image only from the next APK; until then it shares text only. Record the organiser phone on the web app (app.sportnnote.in) or the new APK. |
 | AI | None. Real screen recordings on two phones, text and music. |
 
 ## Caption (post exactly)
@@ -16,7 +16,7 @@ Captains, no more "send me the link again". 📲
 Organisers: Manage → Participating teams → turn on "Teams can join by link". You get a QR code. Tap "📤 Share QR + message" and the QR image goes out with the WhatsApp message, or just hold the QR up at the captains' meeting.
 
 Captains: scan it with your phone camera, pick your team, tap Enter. You're in.
-On Android it opens straight in the SportnNote app.
+On Android the page offers to open it in the SportnNote app.
 
 Run your inter-house meet the easy way.
 
@@ -48,5 +48,6 @@ Engagement (save and share with your organiser). The bio link stays.
 - **Hands only;** no faces.
 
 ## Pre-post checks
-- **Build:** SD-108 is shipped; check the button label "📤 Share QR + message" and the Android "Open in the SportnNote app" banner.
+- **Build:** SD-108 is live (11 Oct 2026); recheck the button label "📤 Share QR + message" and the Android "Open in the SportnNote app" banner.
 - **On iPhone** the join page continues on the web (no app hand-off). Don't show an iPhone handing off to an app.
+- **Android app QR image:** the organiser's "📤 Share QR + message" sends the QR picture from the Android app only once the new APK (with react-native-share) is out. If it isn't by recording day, record the organiser phone on the web app, where the QR image already goes with the message.

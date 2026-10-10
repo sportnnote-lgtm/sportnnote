@@ -100,6 +100,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 20 Jan | 12:30 | Instagram | Carousel, 7 slides | 6 ways to correct a match | How-to | Draft – outline | — |
 | Wed 20 Jan | 10:00 | YouTube | Long video, ~5 min (#7) | Add scorers and officials | How-to | Draft – outline | — |
 | Wed 20 Jan | 18:00 | YouTube | Short | Hand over scoring in two taps | How-to | Draft – outline | — |
+| Thu 21 Jan | 09:30 | LinkedIn | Text post + 2 screenshots | Match-day mistakes happen. Losing the goal shouldn't. (football, hockey, basketball, kabaddi corrections) | New feature | Draft – copy ready | [file](posts/2027-01-21-linkedin-match-day-mistakes.md) |
 | Thu 21 Jan | 19:00 | Instagram | Reel, 15 s | Every "End" asks first (scoring safety) | New feature | Draft – copy ready | [file](posts/2027-01-21-instagram-every-end-asks-first.md) |
 | Fri 22 Jan | 19:00 | Instagram | Reel, 25 s | Update #1: what shipped since launch | New feature | Draft – needs data | — |
 | Sat 23 Jan | 10:00 | YouTube | Long video, ~5 min (#8) | Import a schedule from Excel or Google Sheets | How-to | Draft – outline | — |
@@ -123,6 +124,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 3 Feb | 12:30 | Instagram | Carousel, 8 slides | Points-table rules per sport: FIFA, FIBA, FIVB, PKL, BWF, ITTF, ICC | Sport spotlight | Draft – outline | — |
 | Wed 3 Feb | 10:00 | YouTube | Long video, ~6 min (#11) | How to score a badminton match | How-to | Draft – outline | — |
 | Wed 3 Feb | 18:00 | YouTube | Short | Badminton: who serves from which court | Sport spotlight | Draft – outline | — |
+| Thu 4 Feb | 09:30 | LinkedIn | Text post + 2 screenshots | Who serves first? The app stopped guessing (racket point buttons) | New feature | Draft – copy ready | [file](posts/2027-02-04-linkedin-racket-who-serves-first.md) |
 | Thu 4 Feb | 19:00 | Instagram | Reel, 20 s | Pickleball, scored right: side-outs and the right-court server | Sport spotlight | Draft – outline | — |
 | Fri 5 Feb | 19:00 | Instagram | Reel, 25 s | Swimming: heats, splits, relays, records per pool | Sport spotlight | Draft – outline | — |
 | Sat 6 Feb | 10:00 | YouTube | Long video, ~5 min (#12) | Read and filter career stats | How-to | Draft – outline | — |
@@ -134,6 +136,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 10 Feb | 12:30 | Instagram | Carousel, 5 slides | Chess Swiss in 5 slides | Sport spotlight | Draft – outline | — |
 | Wed 10 Feb | 10:00 | YouTube | Long video, ~5 min (#13) | Tournament awards | How-to | Draft – outline | — |
 | Wed 10 Feb | 18:00 | YouTube | Short | Who gets Player of the Tournament? | How-to | Draft – outline | — |
+| Thu 11 Feb | 09:30 | LinkedIn | Text post + 3 screenshots | One tap shouldn't decide a match (chess, golf, carrom, hockey, basketball) | New feature | Draft – copy ready | [file](posts/2027-02-11-linkedin-one-tap-shouldnt-decide-a-match.md) |
 | Thu 11 Feb | 19:00 | Instagram | Reel, 20 s | How the point was won: winners and errors | New feature | Draft – copy ready | [file](posts/2027-02-11-instagram-how-the-point-was-won.md) |
 | Fri 12 Feb | 19:00 | Instagram | Reel, 25 s | Hockey: cards, penalty corners, shoot-outs | Sport spotlight | Draft – outline | — |
 | Sat 13 Feb | 10:00 | YouTube | Long video, ~6 min (#14) | How to score a table tennis match | How-to | Draft – outline | — |
@@ -145,6 +148,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 17 Feb | 12:30 | Instagram | Carousel, 6 slides | PB, SB, MR, SR: personal bests and records explained | How-to | Draft – outline | — |
 | Wed 17 Feb | 10:00 | YouTube | Long video, ~7 min (#15) | How to score a kabaddi match | How-to | Draft – outline | — |
 | Wed 17 Feb | 18:00 | YouTube | Short | Super tackle: worth 2 | Sport spotlight | Draft – outline | — |
+| Thu 18 Feb | 09:30 | LinkedIn | Text post + 2 screenshots | A typo shouldn't become a meet record (athletics and swimming) | New feature | Draft – copy ready | [file](posts/2027-02-18-linkedin-a-typo-isnt-a-record.md) |
 | Thu 18 Feb | 19:00 | Instagram | Reel, 20 s | Carrom: boards, the queen and the 25-point cap | Sport spotlight | Draft – outline | — |
 | Fri 19 Feb | 19:00 | Instagram | Reel, 25 s | Update #2: what shipped in January | New feature | Draft – needs data | — |
 | Sat 20 Feb | 10:00 | YouTube | Long video, ~7 min (#16) | How to score a football match | How-to | Draft – outline | — |
@@ -156,6 +160,8 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 24 Feb | 12:30 | Instagram | Carousel, 7 slides | Your athletics day, step by step | How-to | Draft – outline | — |
 | Wed 24 Feb | 10:00 | YouTube | Long video, ~6 min (#17) | How to score a volleyball match | How-to | Draft – outline | — |
 | Wed 24 Feb | 18:00 | YouTube | Short | Attack, block, ace: one tap each | Sport spotlight | Draft – outline | — |
+| Thu 25 Feb | 19:00 | Instagram | Reel, 20 s | 1053 isn't 10.53: Check this mark (athletics and swimming) | New feature | Draft – copy ready | [file](posts/2027-02-25-instagram-check-this-mark.md) |
+| Thu 25 Feb | 18:00 | YouTube | Short | Typed 2153 for an 800 m? It asks first | New feature | Draft – copy ready | [file](posts/2027-02-25-instagram-check-this-mark.md#youtube-short) |
 | Fri 26 Feb | 19:00 | Instagram | Reel, 25 s | A real sports day on SportnNote | Real story | Draft – if consented | — |
 | Sat 27 Feb | 10:00 | YouTube | Long video, ~7 min (#18) | How to score a basketball match | How-to | Draft – outline | — |
 | Sat 27 Feb | 18:00 | YouTube | Short | FG% that never guesses | Sport spotlight | Draft – outline | — |
@@ -177,6 +183,8 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 10 Mar | 12:30 | Instagram | Carousel, 6 slides | Most-scored sports this season | Proof | Draft – needs data | — |
 | Wed 10 Mar | 10:00 | YouTube | Long video, ~4 min (#21) | Follow teams and choose your alerts | How-to | Draft – outline | — |
 | Wed 10 Mar | 18:00 | YouTube | Short | Only the alerts you want | How-to | Draft – outline | — |
+| Thu 11 Mar | 19:00 | Instagram | Reel, 20 s | Right side, every point: racket scoring for match day | New feature | Draft – copy ready | [file](posts/2027-03-11-instagram-racket-right-side-every-point.md) |
+| Thu 11 Mar | 18:00 | YouTube | Short | Score a badminton final without a wrong-side point | New feature | Draft – copy ready | [file](posts/2027-03-11-instagram-racket-right-side-every-point.md#youtube-short) |
 | Fri 12 Mar | 19:00 | Instagram | Reel, 20 s | Thank you, pilot schools | Pilot and community | Draft – if consented | — |
 | Sat 13 Mar | 10:00 | YouTube | Long video, ~8 min | Run a swim meet (from the always-on queue) | How-to | Draft – outline | — |
 | Sat 13 Mar | 18:00 | YouTube | Short | Three stopwatches, one official time | Sport spotlight | Draft – outline | — |
@@ -208,4 +216,10 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
   - racket point detail, "how the point was won" (27 Dec, 13 Jan, 11 Feb);
   - End / Restart safety confirms (21 Jan, YT #6);
   - invite QR sharing (28 Jan on LinkedIn and Instagram).
-- **Totals:** 140 rows: 22 LinkedIn, 64 Instagram and 54 YouTube (24 long videos and 30 Shorts), plus daily Stories. 46 rows are copy-ready, in 36 post files; each Short sits in the file of the video or Reel it is cut from.
+- **Match-day safety posts (SD-112 to SD-116, live 11 Oct 2026), one or more per sport family:**
+  - football, hockey, basketball and kabaddi corrections, SD-114 (21 Jan LinkedIn);
+  - racket point buttons, who serves first, match/set/break point chip, named Undo, SD-115 (4 Feb LinkedIn; 11 Mar Instagram + Short);
+  - chess, golf and carrom deciders that ask first, plus hockey Full time and basketball Eject, SD-116 (11 Feb LinkedIn);
+  - athletics and swimming "Check this mark", hand times, reopen final, SD-112 (18 Feb LinkedIn; 25 Feb Instagram + Short).
+- **Feature status:** SD-106, SD-107 and SD-108 are live since 11 Oct 2026, so their posts are no longer gated. One caveat: the Android app shares the invite QR image only from the next APK (the web app already does).
+- **Totals:** 148 rows: 26 LinkedIn, 66 Instagram and 56 YouTube (24 long videos and 32 Shorts), plus daily Stories. 54 rows are copy-ready, in 42 post files (recounted 11 Oct 2026: the first batch was 139 rows, not 140); each Short sits in the file of the video or Reel it is cut from.

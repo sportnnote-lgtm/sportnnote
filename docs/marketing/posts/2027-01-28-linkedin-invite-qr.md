@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 28 Jan 2027, 09:30 IST |
 | Platform / format | LinkedIn text post + 2 screenshots, company page |
-| Pillar | New feature (SD-108 invite QR sharing) |
+| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, except the Android in-app QR image share, which needs a new APK) |
 | Guide | https://sportnnote.in/guides/teams-join-a-tournament/ |
-| Status | Draft – **only if SD-108 is in the live build** |
+| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat:** the Android app shares the QR image only from the next APK; take screenshot 1 on the web app or the new APK. |
 | AI | None |
 
 ## Post text (post exactly)
@@ -16,7 +16,7 @@ A school meet can have 30 to 60 house and class teams. Typing each one in, or ch
 New in SportnNote: every tournament's join link now comes with a QR code.
 
 • Organisers turn on "Teams can join by link" and share the QR with the WhatsApp message in one tap, or put it on the notice board and the captains' meeting slide.
-• Captains scan it with their phone camera, pick their team and tap Enter. On Android it opens straight in the app.
+• Captains scan it with their phone camera, pick their team and tap Enter. On Android the page offers to open it in the app.
 • When every team is in, switch the link off. Registration deadlines and team limits still apply.
 
 The same QR works for club squads: players join your team by scanning instead of typing a code.
@@ -40,5 +40,6 @@ How it works, step by step: https://sportnnote.in/guides/teams-join-a-tournament
 Read the guide.
 
 ## Pre-post checks
-- **Guide:** teams-join-a-tournament has been updated with the QR steps before this goes out.
+- **Guide:** teams-join-a-tournament already has the QR steps (11 Oct 2026); recheck them against the frozen build.
+- **Android APK:** if the new APK with in-app QR image sharing is not out by posting day, the post is still accurate (web shares the QR image; the Android app shares the text and link).
 - **Club line:** keep "same QR works for club squads" only if the ClubHomeScreen QR shipped in the same release.

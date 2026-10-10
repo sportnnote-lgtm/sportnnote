@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 21 Jan 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 15 s, 9:16 |
-| Pillar | New feature (SD-106 match safety; built 11 Oct 2026, uncommitted at the time of writing) |
-| Guide | https://sportnnote.in/guides/end-a-match-early/ (update the guide when SD-106 ships) |
-| Status | Draft – **only if SD-106 is in the live build**; recheck the copy on screen |
+| Pillar | New feature (SD-106 match safety; shipped and live since 11 Oct 2026) |
+| Guide | https://sportnnote.in/guides/end-a-match-early/ (already updated for SD-106) |
+| Status | Draft – copy ready (SD-106 is live; awaiting founder approval). Recheck the copy on screen. |
 | AI | None. Real screen recording, text and music. |
 
 ## Caption (post exactly)
@@ -47,7 +47,7 @@ None beyond engagement ("keep the stories coming"). The bio link stays.
 - **Optional extra clip:** the walkover confirmation "Walkover to Red House?" with **Yes, walkover to Red House** / **No, go back**.
 
 ## Pre-post checks
-- **Build:** SD-106 is committed and in the live build. The section name ("Match controls") and button copy match the app exactly. Copy as of 11 Oct 2026, from src/core/matchSafety.ts:
+- **Build:** SD-106 is live (11 Oct 2026). Recheck in the frozen launch build that the section name ("Match controls") and button copy match the app exactly. Copy as of 11 Oct 2026, from src/core/matchSafety.ts:
   - "End this match?" / "Yes, end match" / "No, keep scoring";
   - "Restart this match?" / "Yes, restart match".
 - **Founder:** OK to reference "a scorer told us" (true: the founder's report of 11 Oct 2026 about a tennis scorer). Don't name the scorer.

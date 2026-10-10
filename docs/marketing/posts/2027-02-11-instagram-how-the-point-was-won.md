@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 11 Feb 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 20 s, 9:16 |
-| Pillar | New feature (SD-107 racket point detail; built 11 Oct 2026, uncommitted at the time of writing) |
-| Guides | https://sportnnote.in/guides/score-tennis/ (+ badminton, table tennis, squash, padel, pickleball guides; add a Point detail section when SD-107 ships) |
-| Status | Draft – **only if SD-107 is in the live build** |
+| Pillar | New feature (SD-107 racket point detail; shipped and live since 11 Oct 2026) |
+| Guides | https://sportnnote.in/guides/score-tennis/ (+ badminton, table tennis, squash, padel, pickleball guides; each already has a Point detail section) |
+| Status | Draft – copy ready (SD-107 is live; awaiting founder approval) |
 | AI | None. Real screen recording, text and music. |
 
 ## Caption (post exactly)
@@ -42,7 +42,7 @@ Tag your doubles partner.
 | Time | Screen (demo tennis match, Asha Rao v Priya) | On-screen text |
 |---|---|---|
 | 0:00–0:03 | Toggle **🔎 Point detail (optional)** → **On**. | Point detail: on |
-| 0:03–0:07 | Tap the point for Asha. The row "How was it won? · Asha Rao" appears; tap **Winner** → **Forehand**; "✓" confirms. | Winner → Forehand |
+| 0:03–0:07 | Tap Asha's big point button. The row "How was it won? · Asha Rao" appears; tap **Winner** → **Forehand**; "✓" confirms. | Winner → Forehand |
 | 0:07–0:10 | Next point to Priya; tap **Unforced error**, then the erring player (By: Asha) → **Net**. | Unforced error → Net |
 | 0:10–0:12 | Next point: tap **Skip**. | Skip any time |
 | 0:12–0:17 | After the match: the player stats / career section shows Winners, Unforced errors, and Winners by forehand. | Winners and UEs, on the career page |
@@ -52,5 +52,5 @@ Tag your doubles partner.
 - **Matches:** a demo tennis match (Best of 3) with Point detail on, pre-played to show a career line with real winner and UE counts. Plus 2 s clips from a demo squash match and a demo padel match with Point detail on.
 
 ## Pre-post checks
-- **Build:** SD-107 is shipped, and these labels match the app: "🔎 Point detail (optional)", "How was it won?", **Winner**, **Forced error**, **Unforced error**, **Skip**.
+- **Build:** SD-107 is live (11 Oct 2026); recheck that these labels match the frozen build: "🔎 Point detail (optional)", "How was it won?", **Winner**, **Forced error**, **Unforced error**, **Skip**.
 - **Career keys:** confirm where winners and unforced errors show on the career page in the shipped build, and adjust the 0:12 shot.

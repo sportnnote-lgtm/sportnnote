@@ -6,7 +6,7 @@
 | Platform / format | Instagram carousel, 9 slides, 1080×1350 (screenshot in a phone frame + one line per slide) |
 | Pillar | Sport spotlight + New feature (point detail, SD-107) |
 | Guides | https://sportnnote.in/guides/score-tennis/ · /score-badminton/ · /score-table-tennis/ · /score-squash/ · /score-padel/ · /score-pickleball/ |
-| Status | Draft – awaiting founder approval. Slide 8 shows SD-107: confirm it's in the launch build. |
+| Status | Draft – awaiting founder approval. Slide 8 shows SD-107, live since 11 Oct 2026. |
 | AI | None. Real screenshots. |
 
 ## Caption (post exactly)
