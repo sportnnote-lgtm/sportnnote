@@ -39,9 +39,13 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'penaltyGoals', label: 'Penalties', short: 'penalties', one: 'penalty', group: 'attack' },
     { key: 'freekickGoals', label: 'Free-kick goals', short: 'free-kick goals', one: 'free-kick goal', group: 'attack' },
     { key: 'passes', label: 'Passes', short: 'passes', one: 'pass', group: 'passing', ...opt('passes') },
-    // SD-09 keeper lines (statTotals): minutes in goal and goals let in
+    // SD-09 keeper lines (statTotals): goals let in
     { key: 'goalsConceded', label: 'Goals conceded', short: 'conceded', group: 'goalkeeping', format: { unit: 'count', better: 'lower' } },
-    { key: 'minutes', label: 'Minutes', short: 'mins', group: 'goalkeeping', format: { unit: 'minutes' } },
+    // SD-29: minutes on the pitch for every player (statTotals; regulation
+    // minutes — added time not counted, FIFA / Opta)
+    { key: 'minutes', label: 'Minutes', short: 'mins', group: 'playing', format: { unit: 'minutes' } },
+    // SD-29: optional grassroots sin-bin (format `sinBinMinutes`)
+    { key: 'sinBins', label: 'Sin-bins', short: 'sin-bins', one: 'sin-bin', group: 'discipline' },
     // team-level match stat (match stats panel), never on a player line
     { key: 'corners', label: 'Corners', short: 'corners', one: 'corner', source: 'team' },
   ],
@@ -49,8 +53,9 @@ export const footballStats: SportStatSchema<'football'> = {
     { id: 'attack', title: 'Attack', rows: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'shots', 'shotsOnTarget', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed'].map((stat) => ({ stat })) },
     { id: 'passing', title: 'Passing', rows: [{ stat: 'passes' }, { stat: 'passesComplete' }] },
     { id: 'defence', title: 'Defence', rows: [{ stat: 'tackles' }, { stat: 'interceptions' }, { stat: 'blocks' }, { stat: 'defensiveContributions' }] },
-    { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'minutes' }] },
-    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }] },
+    { id: 'playing', title: 'Playing time', rows: [{ stat: 'minutes' }] },
+    { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }] },
+    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }] },
   ],
   careerView: 'totals',
   leaders: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'cleanSheets', 'shots', 'shotsOnTarget', 'tackles', 'interceptions', 'saves', 'passes', 'attackingContributions', 'defensiveContributions'],

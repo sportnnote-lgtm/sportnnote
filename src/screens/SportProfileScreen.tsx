@@ -128,6 +128,9 @@ export default function SportProfileScreen() {
     : hasSplit && scope === 'official' ? `No official ${plugin.name.toLowerCase()} matches yet.`
     : `No ${plugin.name.toLowerCase()} matches recorded yet.`;
   const history = stats.recent.filter((l) => l.sport === sport);
+  // SD-19: the match-record keys (games / sets won, deciders…) are career
+  // totals — a history row's set line already tells that match's story.
+  const recordKeys = new Set((statSchema(sport)?.stats ?? []).filter((d) => d.group === 'record').map((d) => d.key));
   const detail = player.sportDetails?.[sport];
 
   // History rows open the full match page when they link to a real match.
@@ -356,7 +359,7 @@ export default function SportProfileScreen() {
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k)).map(([k, v]) => `${v} ${labelLong(k, sport).toLowerCase()}`)].filter(Boolean).join(' · ')}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k) && !recordKeys.has(k)).map(([k, v]) => `${v} ${labelLong(k, sport).toLowerCase()}`)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pill

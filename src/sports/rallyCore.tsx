@@ -24,6 +24,7 @@ import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer } from './tabletennis/serve';
+import { rallyTotals } from './racketTotals';
 import { makeRallyEngine, rallySummary, rallyScoreLine, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
@@ -213,6 +214,11 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // SD-01: once ended → games won + "11-7, 9-11, 11-5" (never the reset 0–0).
     summary: (s) => rallySummary(s, opts.serveTag),
     scoreLine: rallyScoreLine,
+    // SD-19: absolute games / points / deciders per player (and the doubles
+    // partner), synced at completion and on correction.
+    statTotals: rallyTotals,
+    statTotalsPartial: true,
+    statTotalsNeedsPlayers: true,
     ScoringControls,
     LiveExtras,
     voice: { hints: ['rally home', 'rally away', 'point home'], parse: pointVoice },

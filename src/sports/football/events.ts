@@ -1,5 +1,6 @@
 /** A single timeline event during a football match. */
-export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub' | 'stoppage';
+/** `sinbin` (SD-29): a timed suspension — only when the format sets a sin-bin. */
+export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub' | 'stoppage' | 'sinbin';
 
 export type GoalType = 'open' | 'penalty' | 'freekick' | 'header';
 
@@ -33,6 +34,10 @@ export interface FootballEvent {
    *  older logs carry names only and resolve by name). */
   playerId?: string;
   secondId?: string;
+  /** SD-29: a sin-bin's length in minutes */
+  suspendMinutes?: number;
+  /** SD-29: a sin-bin's exact match-clock second (the live countdown) */
+  sec?: number;
 }
 
 export const GOAL_TYPE_LABEL: Record<GoalType, string> = {
@@ -49,6 +54,7 @@ export const EVENT_META: Record<FootballEventType, { icon: string; label: string
   red: { icon: '🟥', label: 'Red card' },
   sub: { icon: '🔄', label: 'Substitution' },
   stoppage: { icon: '⏸️', label: 'Stoppage' },
+  sinbin: { icon: '⏱️', label: 'Sin-bin' },
 };
 
 /**

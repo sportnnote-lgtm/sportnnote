@@ -116,3 +116,42 @@ export function fingerprint(state: Record<string, unknown>, keys: string[]): str
 export const TENNIS_KEYS = ['pts', 'games', 'sets', 'setsWon', 'ended'];
 export const RALLY_KEYS = ['current', 'games', 'gamesWon', 'ended', 'serving', 'serverNo'];
 export const CARROM_KEYS = ['current', 'games', 'gamesWon', 'ended', 'boards'];
+
+// ------------------------------------------------- SD-19 · credited logs --
+
+/** SD-19 — the log as the live controls would dispatch it: every action that
+ *  SCORES a point (or ace) carries an attribution to a player of the scoring
+ *  side (rotating through `players[side]`), exactly like ScoringControls; a
+ *  side-out rally that scores nothing carries none. Player names are the ids
+ *  upper-cased (so name-only resolution can be tested). */
+export function credited<S extends { events: Array<{ kind?: string; side?: Side }> }>(
+  reducer: (s: S, a: ScoreAction) => S,
+  start: S,
+  actions: ScoreAction[],
+  players: { home: string[]; away: string[] },
+): ScoreAction[] {
+  let s = start;
+  const turn = { home: 0, away: 0 };
+  const out: ScoreAction[] = [];
+  for (const a of actions) {
+    const next = reducer(s, a);
+    const fresh = next.events.slice(s.events.length).find((e) => e.kind === 'point' || e.kind === 'ace');
+    let act = a;
+    if (fresh?.side && players[fresh.side].length && (a.type === 'POINT' || a.type === 'ACE')) {
+      const list = players[fresh.side];
+      const id = list[turn[fresh.side]++ % list.length];
+      act = { ...a, attribution: { playerId: id, stat: a.type === 'ACE' ? 'aces' : 'points', playerName: id.toUpperCase() } };
+    }
+    out.push(act);
+    s = reducer(s, act);
+  }
+  return out;
+}
+
+/** ctx players for `credited` logs (names = ids upper-cased). */
+export const ctxOf = (players: { home: string[]; away: string[] }) => ({
+  players: {
+    home: players.home.map((id) => ({ id, name: id.toUpperCase() })),
+    away: players.away.map((id) => ({ id, name: id.toUpperCase() })),
+  },
+});

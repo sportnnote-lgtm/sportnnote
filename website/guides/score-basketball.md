@@ -8,7 +8,7 @@ order: 56
 updated: 2026-10-10
 ---
 
-Basketball moves fast, so the app keeps every tap short. You log baskets, free throws, fouls, rebounds and the rest as they happen. The app keeps the score by quarter, each player's stats and the team fouls, and tells you when a team is in the bonus.
+Basketball moves fast, so every tap is short. You log baskets, free throws, fouls and the rest as they happen; the app keeps the score by quarter, player stats and team fouls, and tells you when a team is in the bonus.
 
 ## Before you start
 - You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -33,13 +33,19 @@ Basketball moves fast, so the app keeps every tap short. You log baskets, free t
 Above the scoring panels you see the team fouls for this quarter, for example "Team fouls Q2 · Red House 3 · Blue House 4". Under FIBA rules, once a team has 4 team fouls in a quarter, every further foul gives the other team free throws. So from the 5th foul a "BONUS" line appears to remind you.
 
 - FIBA counts a player's technical foul as a team foul. The NBA format doesn't.
-- Team fouls start again at 0 each quarter.
 - A player who reaches the foul limit (5 in FIBA) is greyed out. You can also tap "Eject" in the foul panel to remove a player for the rest of the game.
 
 > **Note:** Matches set up before this update keep the old count, where the bonus showed from the 6th foul and technicals didn't count. Their scores and stats don't change.
 
+## Minutes and plus/minus
+Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app then follows the five through every **🔀 Substitute**, and the box score adds **MIN** and **+/-**, with a dot by whoever is on court now.
+- +/- is the team's points minus the other team's while that player was on court, as in the FIBA box score.
+- MIN is approximate: each sub is placed at the whole minute the scorer clock showed.
+- A player who fouls out or is ejected stops there.
+- Both go on each player's stats at the end. Without a five set there are neither; a first-to-21 game has +/- only.
+
 ## Overtime
-If the scores are level at the end of the last quarter, tap the "Start Overtime" button. Each overtime is 5 minutes in FIBA, and the score carries on. Tap **End as a draw** only if your event allows draws.
+If the scores are level at the end of the last quarter, tap the "Start Overtime" button. The score carries on. Tap **End as a draw** only if your event allows draws.
 
 Under FIBA rules, overtime team fouls carry on from the 4th quarter. If a team had 3 fouls in Q4, its first overtime foul is its 4th, and the next one is in the bonus. The line reads "Team fouls OT (carried from Q4)". The NBA format starts each overtime from 0.
 
@@ -53,11 +59,8 @@ For a tournament created from now on, basketball uses FIBA points: 2 for a win a
 ## Fix a mistake
 - Tap **Undo** to step back one action. It also takes the stats back off the player.
 - To fix an older play, tap **Edit** next to **🗓 Correct the timeline**. Tap **✎ Edit** to pick a different player or points, or **✕** to remove it. The score and stats recalculate.
-- Missed a play? Under **⏪ Backfill a missed play**, pick the quarter, log the play, then tap **Back to live scoring**.
+- Missed a play? Use **⏪ Backfill a missed play**, then **Back to live scoring**.
 
 ## Common questions
-### Why does +1 log a free throw?
-In a full-court game the only way to score 1 point is a free throw. Logging it as a free throw keeps each player's free throws made and attempted correct.
-
 ### Can I score by voice?
-Yes. Open **🎤 Voice scoring** and say things like "two Rohan", "three Rohan", "free throw Rohan" or "foul Rohan". In a full-court game, "one Rohan" is a made free throw. Each call waits for you to tap Apply.
+Yes. Open **🎤 Voice scoring** and say things like "two Rohan", "free throw Rohan" or "foul Rohan". Each call waits for you to tap Apply.

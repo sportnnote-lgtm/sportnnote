@@ -17,6 +17,9 @@ export const basketballStats: SportStatSchema<'basketball'> = {
     { key: 'freeThrowsMade', label: 'Free throws made', short: 'FT made', abbr: 'FTM', group: 'scoring' },
     { key: 'freeThrowsAtt', label: 'Free throws attempted', short: 'FT att', abbr: 'FTA', group: 'scoring' },
     { key: 'ejections', label: 'Ejections', short: 'ejections', one: 'ejection', group: 'discipline' },
+    // SD-29 (BK-10): from the starting five + subs (only when the five was set)
+    { key: 'minutes', label: 'Minutes', short: 'mins', abbr: 'MIN', group: 'scoring', format: { unit: 'minutes' } },
+    { key: 'plusMinus', label: 'Plus / minus', short: '+/-', abbr: '+/-', group: 'scoring', format: { unit: 'count' } },
     // SD-16 — per-game averages and double-doubles (data only: the career /
     // leaders that show them are SD-44 / SD-27; FIBA's minimum to rank is SD-27)
     { key: 'ppg', label: 'Points per game', abbr: 'PPG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'points', dp: 1 } },

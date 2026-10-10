@@ -53,11 +53,11 @@ function halves(s: FootballState) {
   });
 }
 
-interface Pos { reg: number; exact: number }
+export interface Pos { reg: number; exact: number }
 
 /** Where an event sits on the match clock: regulation minutes elapsed (added
  *  time clamps to the half's end) and added-time-inclusive minutes. */
-function position(s: FootballState, minute: number, half: 1 | 2 | 3 | 4 | undefined): Pos {
+export function position(s: FootballState, minute: number, half: 1 | 2 | 3 | 4 | undefined): Pos {
   const hs = halves(s);
   const h = half ?? halfOfMinute(minute, { halfMinutes: s.halfMinutes, etMinutes: s.etMinutes });
   let exactBefore = 0;
@@ -71,7 +71,7 @@ function position(s: FootballState, minute: number, half: 1 | 2 | 3 | 4 | undefi
   // An event stamped in a half the match never reached: the end of the match.
   return end(s);
 }
-function end(s: FootballState): Pos {
+export function end(s: FootballState): Pos {
   const hs = halves(s);
   return {
     reg: hs.reduce((a, x) => a + x.reg, 0),

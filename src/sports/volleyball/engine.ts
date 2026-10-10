@@ -36,7 +36,13 @@ export interface VolleyballState {
   events: LiveEvent[];
   seq: number;
   ended: boolean;
+  /** SD-29: who was on court when the match started, per side (stamped from
+   *  the lineup / matchday squad before the first point — `LINEUP`). Absent on
+   *  older logs, which then write no sets played. */
+  lineup?: { home?: CourtPlayer[]; away?: CourtPlayer[] };
 }
+
+export interface CourtPlayer { id: string; name: string }
 
 export const init = (config?: Record<string, unknown>): VolleyballState => ({
   current: { home: 0, away: 0 },
@@ -143,6 +149,15 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
     const setNo = s.setsWon.home + s.setsWon.away + 1;
     return { ...s, seq: s.seq + 1, events: [...s.events, { id: s.seq + 1, stamp: `Set ${setNo}`, icon: '⏱️', label: 'Timeout', detail: undefined, side: a.side, kind: 'timeout', set: setNo }] };
   }
+  if (a.type === 'LINEUP') {
+    // SD-29: the court at the start (a state stamp, not a timeline event — it
+    // survives an EDIT_LOG replay). The latest stamp for a side wins.
+    const team = a.payload?.team;
+    const players = a.payload?.players as CourtPlayer[] | undefined;
+    if ((team !== 'home' && team !== 'away') || !Array.isArray(players)) return s;
+    const list = players.filter((p) => p?.id).map((p) => ({ id: String(p.id), name: String(p.name ?? '') }));
+    return { ...s, lineup: { ...s.lineup, [team]: list } };
+  }
   const def = KIND_OF[a.type];
   if (s.ended || !a.side || !def) return s;
   const { kind, icon, label } = def;
@@ -155,7 +170,10 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   const events = [...s.events];
   // Structured fields (kind/playerName/set/points) let the per-set box score
   // aggregate points/aces/blocks per player, filtered by set — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind, playerName: who, set: setNo, points: 1 });
+  // SD-29: the player's id rides on the point only once a court is stamped
+  // (older logs replay to exactly their old state).
+  const pid = who && s.lineup && a.attribution?.playerId ? { playerId: a.attribution.playerId } : {};
+  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind, playerName: who, ...pid, set: setNo, points: 1 });
 
   const h = current.home;
   const v = current.away;

@@ -16,6 +16,7 @@ import { TennisBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, standingsUnits, type TennisState } from './engine';
+import { tennisTotals } from '../racketTotals';
 import { setScore } from '../scoreline';
 
 /** Small superscript digits for a tiebreak score on the board (6⁴). */
@@ -157,6 +158,11 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   // SD-17: games won (ATP % games) — a match tiebreak counts as one game.
   standingsUnits,
+  // SD-19: absolute games / sets / points / deciders / tiebreaks per player (and the
+  // doubles partner), synced at completion and on correction. Partial: double faults stay on increments.
+  statTotals: tennisTotals,
+  statTotalsPartial: true,
+  statTotalsNeedsPlayers: true,
   Scoreboard: TennisScoreboard,
   // SD-01: once ended → sets won + "6-4, 3-6, 7-6(4)" (never the reset 0–0).
   summary,

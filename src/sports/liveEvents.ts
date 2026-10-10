@@ -16,6 +16,9 @@ export interface LiveEvent {
   kind?: string; // e.g. 'raid' | 'tackle' | 'sub' | 'point' | 'ace'
   points?: number;
   playerName?: string;
+  /** SD-29: the credited player's id (volleyball points once the court six is
+   *  stamped) — sets played reach the right stat line */
+  playerId?: string;
   minute?: number;
   half?: number;
   set?: number; // volleyball: which set this point belongs to (per-set stats)

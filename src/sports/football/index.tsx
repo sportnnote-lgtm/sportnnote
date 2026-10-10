@@ -23,7 +23,9 @@ import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
 import { emptyFormation } from './formation';
-import { keeperTotals, isGoalkeeper } from './keepers';
+import { isGoalkeeper } from './keepers';
+import { footballTotals, footballLiveField, liveClockMinutes } from './fieldTime';
+import { FieldBanner } from '../FieldBanner';
 import { useSpeech } from '../../core/speech';
 import { normalizeCommand as llmNormalize, enabled as llmEnabled } from '../../core/voiceLLM';
 import { parseIntent, parseGoalType, matchPlayer, matchTeam, isNoAssist, isYes, isNo, deburr } from './voiceCommands';
@@ -197,6 +199,14 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     }
   };
 
+  // SD-29: a sin-bin (when the format has one) — off for the minutes, the side
+  // a player down, back automatically. The exact clock second drives the
+  // live countdown; a backfilled one is placed by its minute.
+  const recordSinBin = (side: 'home' | 'away', p: Player) => {
+    const sec = pastMin == null && state.startedAt ? Math.round(liveClockMinutes(state, Date.now()) * 60) : undefined;
+    fire({ type: 'SUSPEND', side, payload: { minutes: state.sinBinMinutes, ...(sec !== undefined ? { sec } : {}) }, attribution: { playerId: p.id, stat: 'sinBins', playerName: p.fullName, tracked: trackedKeys() } });
+  };
+
   // Which side the ball goes to after each kind of action.
   const handover = (kind: StatKind, side: 'home' | 'away'): 'home' | 'away' | undefined => {
     if (kind === 'foul' || kind === 'offside' || kind === 'handball') return side === 'home' ? 'away' : 'home';
@@ -242,8 +252,9 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       }
     }
     const off = sentOff(side);
+    const binned = new Set(footballLiveField(state, Date.now()).suspended.filter((x) => x.side === side).map((x) => x.name));
     return names
-      .filter((n) => !off.has(n))
+      .filter((n) => !off.has(n) && !binned.has(n))
       .map((n) => byName.get(n))
       .filter((p): p is Player => !!p);
   };
@@ -305,6 +316,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     if (ev.type === 'goal' && pid) attribution = { playerId: pid, stat: 'goals', by: -1, playerName: ev.playerName, extra: { shots: -1, shotsOnTarget: -1, [GOAL_STAT[ev.goalType ?? 'open']]: -1 } };
     else if (ev.type === 'yellow' && pid) attribution = { playerId: pid, stat: 'yellowCards', by: -1, playerName: ev.playerName };
     else if (ev.type === 'red' && pid) attribution = { playerId: pid, stat: 'redCards', by: -1, playerName: ev.playerName };
+    else if (ev.type === 'sinbin' && (ev.playerId ?? pid)) attribution = { playerId: (ev.playerId ?? pid)!, stat: 'sinBins', by: -1, playerName: ev.playerName };
     dispatch({ type: 'REMOVE_EVENT', payload: { id: ev.id, target: 'event' }, attribution });
     // A goal's assist is a separate log entry keyed to the goal's `secondName` —
     // reverse the assister's tally too so an edit/remove leaves no phantom assist.
@@ -329,7 +341,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     setShowEdit(false);
     if (ev.type === 'goal') setFlow({ mode: 'goal', side: ev.side, step: 'scorer' });
     else if (ev.type === 'owngoal') setFlow({ mode: 'goal', side: ev.side, step: 'og' });
-    else if (ev.type === 'yellow' || ev.type === 'red') setFlow({ mode: 'stat', kind: 'card', step: 'player', side: ev.side });
+    else if (ev.type === 'yellow' || ev.type === 'red' || ev.type === 'sinbin') setFlow({ mode: 'stat', kind: 'card', step: 'player', side: ev.side });
     else if (ev.type === 'sub') setSub({ side: ev.side });
   };
   const editStat = (st: StatEvent) => {
@@ -850,6 +862,9 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       <View style={ctrl.row}>
         <Button label="🟨 Yellow" variant="home" style={[ctrl.flex, { backgroundColor: theme.colors.accent }]} onPress={() => { recordCard(side, 'yellow', player); setFlow(null); }} />
         <Button label="🟥 Red" variant="danger" style={ctrl.flex} onPress={() => { recordCard(side, 'red', player); setFlow(null); }} />
+        {(state.sinBinMinutes ?? 0) > 0 && (
+          <Button label={`⏱️ Sin-bin ${state.sinBinMinutes}'`} variant="ghost" style={ctrl.flex} onPress={() => { recordSinBin(side, player); setFlow(null); }} />
+        )}
       </View>
     ));
   }
@@ -1101,10 +1116,15 @@ const LiveClock: NonNullable<SportPlugin<FootballState>['LiveClock']> = ({ state
 
   const running = !!s.startedAt && !s.ended;
   const label = s.ended ? 'FT' : !s.startedAt ? (s.half === 2 ? 'HT' : '—') : clockTime(s);
+  // SD-29: sin-bins running now + players on the pitch when a side is short.
+  const live = s.ended ? null : footballLiveField(s, Date.now());
   return (
-    <View style={ctrl.clockRow}>
-      <View style={[ctrl.liveDot, { backgroundColor: running ? theme.colors.danger : theme.colors.textMuted }]} />
-      <Text style={ctrl.clockTime}>{label}</Text>
+    <View style={{ alignItems: 'center', gap: theme.spacing(1) }}>
+      <View style={ctrl.clockRow}>
+        <View style={[ctrl.liveDot, { backgroundColor: running ? theme.colors.danger : theme.colors.textMuted }]} />
+        <Text style={ctrl.clockTime}>{label}</Text>
+      </View>
+      {live && <FieldBanner suspended={live.suspended} onField={live.onPitch && (live.short.home || live.short.away) ? live.onPitch : null} unit="on the pitch" />}
     </View>
   );
 };
@@ -1310,10 +1330,11 @@ export const footballPlugin: SportPlugin<FootballState> = {
   tickerFlash: footballTickerFlash,
   createInitialState: init,
   reducer,
-  // SD-09: keepers' clean sheets, goals conceded and minutes, set absolutely at
+  // SD-09 + SD-29: every player's minutes (XI stamp + subs + reds + sin-bins)
+  // and the keepers' clean sheets and goals conceded, set absolutely at
   // completion (incl. a shootout) and after every correction; every other
   // football stat still moves by live increments / correction deltas.
-  statTotals: keeperTotals,
+  statTotals: footballTotals,
   // SD-17: FIFA fair-play points from the cards (the fairPlay tie-breaker).
   standingsUnits: (s) => ({ fairPlay: fairPlayScore(s.events ?? []) }),
   statTotalsPartial: true,
@@ -1384,6 +1405,8 @@ export const footballPlugin: SportPlugin<FootballState> = {
     },
     { key: 'extraTimeMinutes', label: 'Extra-time half length', type: 'number', default: 15, min: 1, max: 30, advanced: true, hint: 'used only when the decider is “Extra time, then penalties”' },
     { key: 'extraTimeSubs', label: 'Extra substitutions in extra time', type: 'count', default: 1, min: 0, max: 3, advanced: true },
+    // SD-29: grassroots / youth sin-bin (IFAB trial: 10 minutes). 0 = none.
+    { key: 'sinBinMinutes', label: 'Sin-bin (minutes)', type: 'number', default: 0, min: 0, max: 15, advanced: true, hint: '0 = none · the player returns by himself' },
   ],
 };
 

@@ -47,7 +47,19 @@ export interface BasketballState {
   /** who is currently on court per side, once the scorer sets a starting five.
    *  Undefined until set — subs are still recordable without it. */
   onCourt?: { home: string[]; away: string[] };
+  /** SD-29: player ids by name, from the SET_LINEUP / SUB payloads of newer
+   *  logs (events carry names only) — so minutes and +/- reach the right stat
+   *  line. Absent on older logs. */
+  ids?: Record<string, string>;
 }
+
+/** SD-29: merge name → id pairs into the state (only when a payload has any,
+ *  so older logs keep exactly their state shape). */
+const withIds = (s: BasketballState, pairs: [unknown, unknown][]): BasketballState => {
+  const add = pairs.filter(([n, id]) => typeof n === 'string' && n && typeof id === 'string' && id) as [string, string][];
+  if (!add.length) return s;
+  return { ...s, ids: { ...(s.ids ?? {}), ...Object.fromEntries(add) } };
+};
 
 export const init = (config?: Record<string, unknown>): BasketballState => ({
   home: 0, away: 0, quarter: 1, events: [], seq: 0, ended: false,
@@ -190,7 +202,8 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
     case 'SET_LINEUP': {
       const home = (a.payload?.home as string[] | undefined) ?? s.onCourt?.home ?? [];
       const away = (a.payload?.away as string[] | undefined) ?? s.onCourt?.away ?? [];
-      return { ...s, onCourt: { home, away } };
+      const ids = a.payload?.ids as Record<string, string> | undefined;
+      return withIds({ ...s, onCourt: { home, away } }, ids && typeof ids === 'object' ? Object.entries(ids) : []);
     }
     case 'SUB': {
       // Record a substitution (off → on). If a starting five is set, keep the
@@ -198,7 +211,7 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
       const offName = String(a.payload?.offName ?? '');
       const onName = String(a.payload?.onName ?? '');
       if (!a.side || !offName || !onName) return s;
-      return push(s, { minute, type: 'sub', side: a.side, playerName: offName, onName }, quarter);
+      return withIds(push(s, { minute, type: 'sub', side: a.side, playerName: offName, onName }, quarter), [[offName, a.payload?.offId], [onName, a.payload?.onId]]);
     }
     case 'REMOVE_EVENT': {
       // Surgically remove one logged play, reversing its effect on the score.

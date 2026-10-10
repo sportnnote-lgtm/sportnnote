@@ -59,6 +59,9 @@ export interface FootballState {
    *  the lineup / squad) — the input for keeper minutes and clean sheets.
    *  Absent on older logs. */
   xi?: { home?: XiStamp; away?: XiStamp };
+  /** SD-29: a grassroots sin-bin of this many minutes (format `sinBinMinutes`;
+   *  absent = no sin-bin — older matches and the default). */
+  sinBinMinutes?: number;
 }
 
 /** A side's starting keeper and players, plus the squad's keepers (so a
@@ -160,6 +163,8 @@ export const init = (config?: Record<string, unknown>): FootballState => ({
   stats: [],
   possession: { side: null, acc: { home: 0, away: 0 } },
   track: readTrack(config),
+  // SD-29: only on the state when the format sets one (old states keep their shape)
+  ...(Number(config?.sinBinMinutes) > 0 ? { sinBinMinutes: Number(config?.sinBinMinutes) } : {}),
 });
 
 /** Decide a penalty shootout: best-of-five (clinched early when a lead can't be
@@ -380,6 +385,18 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name }) : s;
     case 'RED':
       return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name, secondYellow: a.payload?.secondYellow as boolean | undefined }) : s;
+    case 'SUSPEND': {
+      // SD-29: a sin-bin — the player is off (his side a player down) for the
+      // minutes, then back automatically (derived by src/sports/onField.ts).
+      const mins = Number(a.payload?.minutes ?? s.sinBinMinutes ?? 0);
+      if (!a.side || !(mins > 0)) return s;
+      const sec = a.payload?.sec;
+      return push(s, {
+        minute, half: evHalf, type: 'sinbin', side: a.side, playerName: name,
+        ...(a.attribution?.playerId ? { playerId: a.attribution.playerId } : {}),
+        suspendMinutes: mins, ...(typeof sec === 'number' ? { sec } : {}),
+      });
+    }
     case 'SUB': {
       // Rolling subs (futsal / small-sided / friendlies) let a player return, so
       // the substitution count is unlimited — `maxSubs` there is just bench size.

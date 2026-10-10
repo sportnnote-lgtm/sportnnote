@@ -13,6 +13,34 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-19 + SD-29: absolute stats for racket sports; on-field time, minutes, +/-, sets played, timed suspensions
+
+- **SD-29 (on-field tracker):** pure `src/sports/onField.ts` covers subs, permanent "off", timed
+  suspensions (auto-return, consecutive, red supersedes) and `fieldAt` at any moment.
+  - **Football:** `minutes` for every player who took the field (regulation; extra time +30), an
+    optional sin-bin (`SUSPEND`) with a live banner and "10 v 11".
+  - **Basketball:** MIN and +/- in the box score and statTotals; foul-out ends time.
+  - **Volleyball:** a court `LINEUP` stamp gives `setsPlayed`, so per-set rates divide by sets
+    played.
+  - **Hockey / handball:** green / yellow / red, 2-minute and disqualification rules are modelled and
+    tested ahead of their plugins; kabaddi yellow is a rule constant (its UI comes with SD-72).
+- **SD-19 (absolute statTotals):**
+  - **Contract** documented on `SportPlugin.statTotals`, with a reusable harness over cricket,
+    football, volleyball and the 6 racket sports.
+  - **Racket sports:** shared `racketTotals.ts` writes `ptsWon` / `ptsLost`, games, sets, deciders,
+    tiebreaks and aces, absolute and written once at completion (no more lost or double increments).
+    Volleyball gets setsWon / setsLost.
+  - **Context:** squad-aware player context for totals.
+  - **D2 backfill tool** (never automatic): `await __sportnnoteAdmin.resyncSportLines('<sport>',
+    undefined, { dryRun: true })` in the signed-in web console, then without `dryRun` to write.
+    It recomputes from stored logs and writes changed stat lines only.
+- **Shared:** `statSync` zeroes a totals-owned key a player no longer has (e.g. an old defender
+  clean sheet).
+- **Tests:** tsc + 1342 (42 on-field, 18 contract, 15 racket-totals); legacy replays identical.
+- **Guides updated:** football (minutes, sin-bin), basketball (MIN, +/-), volleyball (sets played).
+
+---
+
 ### 2026-10-10 — Sport depth SD-18: each sport's standings columns
 
 - **Per-sport columns:** standings now show each sport's own columns (GD; PF/PA/±; Sets/SR/PR; SD;

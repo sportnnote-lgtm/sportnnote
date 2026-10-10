@@ -48,8 +48,11 @@ function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters
     case 'sub':
       detail = `${e.secondName ?? '—'} ◂ ${who}`;
       break;
+    case 'sinbin':
+      if (e.suspendMinutes) label = `${EVENT_META.sinbin.label} · ${e.suspendMinutes}'`;
+      break;
   }
-  const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' ? 'extra' : undefined;
+  const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' || e.type === 'sinbin' ? 'extra' : undefined;
   const playerId = idByName(e.type === 'sub' ? e.secondName ?? e.playerName : e.playerName, ...rosters);
   return { key: `e${e.id}`, minute: e.minute, half: eventHalf(e, f), order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone, playerId };
 }

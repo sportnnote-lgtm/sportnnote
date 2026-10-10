@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
-import { recordStatLine as writeStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch, syncMatchStatLines } from './repos';
+import { recordStatLine as writeStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch, syncMatchStatLines, matchStatTotals } from './repos';
 import { deltasBesideTotals } from './statSync';
 import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
@@ -126,7 +126,9 @@ export function useLiveMatch(params: {
     // in-flight stat increments land first so neither insert clashes.
     if (matchId && plugin.isComplete(s as never)) await Promise.all([...statWritesRef.current]);
     if (matchId && plugin.statTotals && plugin.isComplete(s as never)) {
-      await syncMatchStatLines(matchId, sport, plugin.statTotals(s as never), { home: homeTeamName, away: awayTeamName }).catch(() => 0);
+      // SD-19: racket sports get the match's players first (matchStatTotals).
+      const totals = await matchStatTotals(matchId, sport, s).catch(() => null);
+      if (totals) await syncMatchStatLines(matchId, sport, totals, { home: homeTeamName, away: awayTeamName }).catch(() => 0);
     }
     await persist(s);
   };
@@ -371,7 +373,7 @@ export function useLiveMatch(params: {
     const absolute = !!plugin.statTotals && plugin.isComplete(plan.afterState as never);
     // SD-09: partial totals (football keepers) — the other stats still need their deltas.
     const deltas = !absolute ? plan.deltas
-      : plugin.statTotalsPartial ? deltasBesideTotals(plan.deltas, plugin.statTotals!(plan.afterState as never))
+      : plugin.statTotalsPartial ? deltasBesideTotals(plan.deltas, (await matchStatTotals(matchId, sport, plan.afterState).catch(() => null)) ?? {})
       : [];
     for (const d of deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
     await rebuildFromLog();

@@ -23,8 +23,6 @@ Every volleyball rally ends with a point for one team. For the stats, what matte
 5. If the point came from the other team's mistake, tap **Opp. error** (an attack hit out, a net touch, a rotation fault and so on) or **Opp. serve error** (their serve went out or into the net). That is one tap, and no player gets credit.
 6. Not sure who scored? Tap **No player**. The team still gets the point.
 
-After every point the panel goes back to **Attack**, ready for the next rally.
-
 > **Tip:** If the match has no squads, each panel shows one button per outcome instead. Tap the outcome and the point is scored.
 
 ## What each point gives a player
@@ -33,21 +31,22 @@ After every point the panel goes back to **Attack**, ready for the next rally.
 - Ace: 1 point and 1 ace to the server.
 - Opp. error and Opp. serve error: the team's point, but nobody's stat.
 
-So a player's points always include their aces and blocks. The live player stats, their profile, the tournament leaders and the match's top scorer all use the same count.
+So a player's points always include their aces and blocks, everywhere in the app.
 
 > **Note:** Matches scored before this change counted aces and blocks separately from points. Those older totals will be corrected by a later update.
 
 ## Sets, timeouts and the end of the match
 - A set ends by itself when a team reaches the target and leads by two (unless the organiser chose first to the target). The next set starts at 0–0.
 - When both teams are one set from winning, the next set is the decider. It is a shorter race, to 15 in the standard formats. The scoreboard says "Decider".
-- Each team has two timeouts per set. Tap "Timeout — Red House (2 left)" to log one on the timeline.
+- Each team has two timeouts per set: tap "Timeout — Red House (2 left)".
 - When a team wins enough sets, the match ends and the result shows the sets won plus each set's score, for example 2–1 with 25-21, 23-25, 15-12.
-- To stop a match for rain, time or a team leaving, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
+- To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
 ## Reading the board and the stats
 On the **Score** tab, "Player stats" has PTS, ACE and BLK columns for each team. From the second set, tap **Overall**, **Set 1**, **Set 2** and so on to filter. Below that, the point log lists every rally with how it was won, the score after it and the player.
 
-The **Summary** tab shows player ratings, the top performer and the **Top scorer** while the match is live.
+## Sets played
+When you score the first point, the app notes who is on court: the six in the lineup, or the whole matchday squad if no lineup is set. At the end, each player's stats get **Sets played**: every set they were on court for, plus any set in which they scored. Points, aces and blocks per set divide by this, as the FIVB does. Older matches have no sets played, so they stay out of the per-set figures.
 
 ## Fix a mistake
 - Tapped the wrong team or player just now? Tap **Undo** to step back one action. It also takes the stats back off the player.
@@ -59,7 +58,7 @@ The **Summary** tab shows player ratings, the top performer and the **Top scorer
 
 ## Common questions
 ### Why not just tap a player for every point?
-Because about a third of volleyball points are the other team's mistakes. Crediting them to a player makes that player look like the best scorer when they weren't.
+About a third of volleyball points are the other team's mistakes. Crediting them to a player would make them look like the best scorer.
 
 ### Can I score by voice?
 Yes. Open **🎤 Voice scoring** and say things like "attack Rohan", "block Rohan" or "ace Rohan". Each call waits for you to tap Apply.

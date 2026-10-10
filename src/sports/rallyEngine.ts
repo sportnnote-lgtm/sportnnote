@@ -124,10 +124,12 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
 
     const scorer = s.sideOut ? s.serving : a.side; // side-out: only the server scores
     const who = a.attribution?.playerName;
+    // SD-19: keep the credited player's id on the point (absolute statTotals).
+    const pid = a.attribution?.playerId ? { playerId: a.attribution.playerId } : {};
     const current = { ...s.current, [scorer]: s.current[scorer] + 1 };
     let seq = s.seq;
     const events = [...s.events];
-    events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: scorer, kind: 'point', playerName: who, game: gameNo, points: 1 });
+    events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: scorer, kind: 'point', playerName: who, ...pid, game: gameNo, points: 1 });
 
     const winner = gameWinner(current.home, current.away, s.target, s.winBy);
     if (!winner) return { ...s, current, events, seq };

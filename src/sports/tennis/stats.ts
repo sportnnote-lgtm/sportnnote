@@ -1,6 +1,7 @@
 /** SD-15 — tennis's stat schema (see ../statSchema.ts). PURE. */
 import type { SportStatSchema } from '../statSchema.ts';
 import { ACES, POINTS } from '../sharedStats.ts';
+import { racketRecordStats } from '../rallyStats.ts';
 
 export const tennisStats: SportStatSchema<'tennis'> = {
   sport: 'tennis',
@@ -10,6 +11,8 @@ export const tennisStats: SportStatSchema<'tennis'> = {
     { ...POINTS, group: 'points', weight: 1 },
     { ...ACES, group: 'serve', weight: 2 },
     { key: 'doubleFaults', label: 'Double faults', short: 'double faults', one: 'double fault', abbr: 'DF', group: 'serve', format: { unit: 'count', better: 'lower' } },
+    // SD-19 — the match record from the absolute statTotals (racketTotals.ts)
+    ...racketRecordStats(true),
   ],
   sections: [
     { id: 'serve', title: 'Serve', rows: [{ stat: 'aces' }, { stat: 'doubleFaults' }] },

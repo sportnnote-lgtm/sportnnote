@@ -66,6 +66,9 @@ import { emptyFormation, defaultFormationFor } from '../sports/football/formatio
 import { isSoleActiveOwner } from '../core/org';
 import { joinBlockReason } from '../core/registration';
 import { getSport } from '../sports/registry';
+import { replayLog } from '../sports/amend';
+import type { StatTotalsContext } from '../sports/types';
+import { mergeMatchConfig } from '../core/matchConfig';
 import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
 import type {
   Role,
@@ -1703,6 +1706,94 @@ export async function syncMatchStatLines(
   }
   return writes.length;
 }
+
+/** SD-19 — the players each side fielded, for a sport whose `statTotals`
+ *  needs them (`statTotalsNeedsPlayers`, the racket sports): the matchday
+ *  squad's starters, else a 1–2 player entry's roster (as SD-11's appearance
+ *  lines), with names so name-only events resolve. Never throws. */
+export async function statTotalsContext(matchId: string, match?: Match | null): Promise<StatTotalsContext> {
+  try {
+    const m = match ?? await getMatch(matchId);
+    if (!m) return {};
+    const [squads, rosters] = await Promise.all([getMatchSquads(matchId), getTeamRosters([m.homeTeam.id, m.awayTeam.id])]);
+    const perSide = Number((m.format as Record<string, unknown> | undefined)?.playersPerSide) || 0;
+    const pick = (side: 'home' | 'away', teamId: string): string[] => {
+      const starters = squads[side]?.starters ?? [];
+      if (starters.length) return starters;
+      const roster = rosters.get(teamId) ?? [];
+      return roster.length && roster.length <= Math.max(2, perSide) ? roster : [];
+    };
+    const ids = { home: pick('home', m.homeTeam.id), away: pick('away', m.awayTeam.id) };
+    const names = new Map((await getPlayersByIds([...ids.home, ...ids.away])).map((p) => [p.id, p.fullName]));
+    const of = (list: string[]) => list.map((id) => ({ id, name: names.get(id) }));
+    return { players: { home: of(ids.home), away: of(ids.away) } };
+  } catch {
+    return {};
+  }
+}
+
+/** SD-19 — `plugin.statTotals` for a match, with the players loaded first when
+ *  the sport needs them. Cricket / football: exactly `statTotals(state)` as
+ *  before. Null when the sport has no totals. */
+export async function matchStatTotals(matchId: string, sport: SportId, state: unknown, match?: Match | null): Promise<MatchTotals | null> {
+  const plugin = getSport(sport);
+  if (!plugin.statTotals) return null;
+  if (!plugin.statTotalsNeedsPlayers) return plugin.statTotals(state as never);
+  return plugin.statTotals(state as never, await statTotalsContext(matchId, match));
+}
+
+/** SD-19 (founder decision D2) — the BACKFILL: re-derive the absolute totals of
+ *  completed `sport` matches from their stored event logs and write the stat
+ *  lines that change (ids through resolved disputes; values set, not added).
+ *  Touches stat_lines ONLY — never the match row / snapshot, tournament
+ *  settings or published awards. Not run automatically: call it by hand, e.g.
+ *  in the web app's console `await __sportnnoteAdmin.resyncSportLines('tennis')`
+ *  (see docs/sport-depth/PROGRESS.md, SD-19). `dryRun` reports without writing.
+ *  Matches with no stored log fall back to the saved snapshot. */
+export async function resyncSportLines(
+  sport: SportId,
+  matchIds?: string[],
+  opts: { dryRun?: boolean } = {},
+): Promise<{ matches: number; rowsWritten: number; perMatch: { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped' }[] }> {
+  const plugin = getSport(sport);
+  const out = { matches: 0, rowsWritten: 0, perMatch: [] as { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped' }[] };
+  if (!plugin.statTotals) return out;
+  const all = matchIds?.length
+    ? (await Promise.all(matchIds.map((id) => getMatch(id)))).filter((m): m is Match => !!m)
+    : await getMatches(sport);
+  const done = all.filter((m) => m.sport === sport && m.status === 'completed');
+  const tours = done.some((m) => m.tournamentId) ? await getTournaments({ includeDeleted: true }) : [];
+  for (const m of done) {
+    out.matches += 1;
+    const tour = tours.find((t) => t.id === m.tournamentId);
+    const config = mergeMatchConfig(tour?.formats?.[sport] as Record<string, unknown> | undefined, m.format as Record<string, unknown> | undefined);
+    const raw = await getMatchEvents(m.id);
+    let state: unknown;
+    let source: 'log' | 'snapshot' | 'skipped' = 'log';
+    if (raw.length) state = replayLog(plugin, config, raw);
+    else if (m.state) { state = m.state; source = 'snapshot'; }
+    else { out.perMatch.push({ matchId: m.id, rows: 0, source: 'skipped' }); continue; }
+    const totals = await matchStatTotals(m.id, sport, state, m);
+    if (!totals) continue;
+    let rows = 0;
+    if (opts.dryRun) {
+      const mapId = await disputeMapper(m.id);
+      const existing = (await getMatchStatLines(m.id)).filter((l) => l.sport === sport && !l.eventId);
+      rows = planStatSync(existing, totals, mapId, { home: m.homeTeam.name, away: m.awayTeam.name }).length;
+    } else {
+      rows = await syncMatchStatLines(m.id, sport, totals, { home: m.homeTeam.name, away: m.awayTeam.name });
+    }
+    out.rowsWritten += rows;
+    out.perMatch.push({ matchId: m.id, rows, source });
+  }
+  return out;
+}
+
+// SD-19: the founder's console handle for the D2 backfill (web: devtools).
+(globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin = {
+  ...(((globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin as object | undefined) ?? {}),
+  resyncSportLines,
+};
 
 /** SD-11 (GEN-01) — at completion: an appearance line for every player who
  *  took part (squad starters + subs who came on, or a 1–2 player entry's

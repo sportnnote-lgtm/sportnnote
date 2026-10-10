@@ -62,6 +62,10 @@ export function planStatSync(
       continue;
     }
     const stats = { ...line.stats, ...t.stats };
+    // SD-29: a key the totals own but don't give THIS player (football: a
+    // defender's legacy clean sheet, now that every player gets `minutes`) is
+    // stale — zeroed, exactly as for a player missing from the totals.
+    for (const k of owned) if (!(k in t.stats) && stats[k]) stats[k] = 0;
     if (!sameStats(stats, line.stats)) writes.push({ kind: 'update', id: line.id, playerId, stats });
   }
   for (const line of existing) {

@@ -12,6 +12,7 @@ import { theme } from '../../core/theme';
 import { Button, SelectChip } from '../../components/ui';
 import { Timeline } from './Timeline';
 import { BoxScore } from './BoxScore';
+import { basketballTotals, boxFieldByName } from './fieldTime';
 import { BB_META, FOUL_LABEL, pointsOf, type BBEvent, type FoulType, type ReboundType } from './events';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
@@ -149,12 +150,16 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   };
 
   const recordSub = (side: 'home' | 'away', offName: string, onName: string) => {
-    fire({ type: 'SUB', side, payload: { offName, onName } });
+    // SD-29: the ids ride along so minutes / +/- reach the right stat lines.
+    const offId = rosterOf(side).find((p) => p.fullName === offName)?.id;
+    const onId = rosterOf(side).find((p) => p.fullName === onName)?.id;
+    fire({ type: 'SUB', side, payload: { offName, onName, ...(offId ? { offId } : {}), ...(onId ? { onId } : {}) } });
     setFlow(null);
   };
 
   const confirmFive = (side: 'home' | 'away', picked: string[]) => {
-    dispatch({ type: 'SET_LINEUP', payload: { [side]: picked } });
+    const ids = Object.fromEntries(rosterOf(side).filter((p) => picked.includes(p.fullName)).map((p) => [p.fullName, p.id]));
+    dispatch({ type: 'SET_LINEUP', payload: { [side]: picked, ...(Object.keys(ids).length ? { ids } : {}) } });
     setFlow(null);
   };
 
@@ -590,7 +595,7 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
       <Text style={ctrl.label}>Play-by-play</Text>
       <Timeline events={s.events} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Box score</Text>
-      <BoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} onPlayer={onPlayer} />
+      <BoxScore events={s.events} field={boxFieldByName(s)} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} onPlayer={onPlayer} />
     </View>
   );
 };
@@ -624,6 +629,10 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  // SD-29 (BK-10): MIN and +/- from the starting five + subs, set absolutely
+  // at completion and after corrections; every other stat stays incremental.
+  statTotals: basketballTotals,
+  statTotalsPartial: true,
   result: (s) => (s.ended ? { winner: s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw', home: s.home, away: s.away } : null),
   Scoreboard: BasketballScoreboard,
   summary: (s) => ({

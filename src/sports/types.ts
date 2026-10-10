@@ -240,6 +240,22 @@ export interface LiveSettings<S = unknown> {
   defaults?: Record<string, FormatValue>;
 }
 
+/** SD-19 — one player's absolute figures for a match (`SportPlugin.statTotals`). */
+export interface StatTotalsEntry {
+  side: 'home' | 'away';
+  stats: Record<string, number>;
+  /** doubles: the partner's player id (derived; not stored on the line — a
+   *  stat line has no column for it, so readers pair lines by match + side) */
+  partnerId?: string;
+}
+
+/** SD-19 — what the data layer knows about a match that the state may not:
+ *  the players each side fielded (matchday squad, else a 1–2 player entry's
+ *  roster), with names so name-only events (older logs) resolve to ids. */
+export interface StatTotalsContext {
+  players?: { home: { id: string; name?: string }[]; away: { id: string; name?: string }[] };
+}
+
 export interface SportPlugin<S = unknown> {
   id: SportId;
   name: string;
@@ -378,11 +394,42 @@ export interface SportPlugin<S = unknown> {
   /** Players who have already taken part (parity #13): they can't be removed
    *  from the matchday squad. Omitted → anyone with a non-zero stat line. */
   involvedPlayerIds?: (state: S) => string[];
-  /** Parity #19 — the ABSOLUTE per-player figures for this match, keyed by the
-   *  player id recorded in the state (`side` = the team they played for). When
-   *  present, completion and corrections sync stat lines to these values
-   *  (`repos.syncMatchStatLines`) instead of relying on live increments alone. */
-  statTotals?: (state: S) => Record<string, { side: 'home' | 'away'; stats: Record<string, number> }>;
+  /** Parity #19 / SD-19 — the ABSOLUTE per-player figures for this match, keyed
+   *  by the player id recorded in the state (`side` = the team they played for).
+   *  When present, completion and corrections sync stat lines to these values
+   *  (`repos.syncMatchStatLines`: ids mapped through resolved disputes, values
+   *  SET not added, only changed rows written) instead of relying on the live
+   *  read-then-write increments alone (which two scorers or a retried upload
+   *  can lose or double).
+   *
+   *  THE CONTRACT (checked for every implementing sport by
+   *  tests/stat-totals-contract.test.mts via tests/statTotalsHarness.mts):
+   *   1. PURE and derived only from the state (+ the optional `ctx`): the same
+   *      log always gives the same totals, and an old log replays identically.
+   *   2. For every key the totals return that is also credited live (the
+   *      `attribution` / `extra` / `attribution2` of dispatched actions, incl.
+   *      STAT_ADJUST), the value equals the SUM of those live increments for a
+   *      log with no corrections — per player, zeros included.
+   *   3. It survives corrections: after an EDIT_LOG, an AMEND (#05) or an undo
+   *      (any prefix of the log), the totals still equal the live sum of the
+   *      effective log, and equal the totals of the same match scored cleanly.
+   *   4. An owned key (one the totals return for ANY player) that a player
+   *      lacks reads as 0 — the sync zeroes a stale value there (SD-29). So
+   *      leave a key out of every player only when it is unknown (cricket's
+   *      maidens without a ball log), never just for one player.
+   *   5. Keys only the totals can know (games / sets won, deciders, minutes…)
+   *      are "derived" keys: never credited live, always ≥ 0.
+   *   6. Without `statTotalsPartial`, every key credited live must be owned
+   *      (a correction then writes no deltas — the sync sets everything).
+   *  `ctx` (SD-19) gives the players each side fielded, for engines whose state
+   *  doesn't know them (the racket sports): a side's record keys go to every
+   *  player in it, and name-only point events resolve to ids. Optional — with
+   *  no ctx, the players credited in the log are used. */
+  statTotals?: (state: S, ctx?: StatTotalsContext) => Record<string, StatTotalsEntry>;
+  /** SD-19 — `statTotals` wants `ctx.players` (the data layer loads the
+   *  match's squads / entry rosters first). Absent = called with the state only
+   *  (cricket, football: unchanged). */
+  statTotalsNeedsPlayers?: boolean;
   /** SD-09 — `statTotals` covers only SOME keys (football: the keeper's clean
    *  sheets, goals conceded and minutes). The keys it returns are synced
    *  absolutely; every other stat keeps moving by live increments and #05

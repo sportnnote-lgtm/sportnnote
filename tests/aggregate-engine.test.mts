@@ -210,10 +210,12 @@ describe('SD-16 — basketball per-game and volleyball per-set (data only)', () 
     assert.equal(v('ppg'), '9.7'); assert.equal(v('rpg'), '5.0'); assert.equal(v('apg'), '4.3');
     assert.equal(v('doubleDoubles'), '1');
   });
-  test('volleyball points / aces / blocks per set — needs set counts (SD-19)', () => {
+  test('volleyball points / aces / blocks per set — over the sets the player played (SD-29 setsPlayed)', () => {
     const vb = STAT_SCHEMAS.volleyball;
     const V = (stats: Record<string, number>) => L('a', stats, { sport: 'volleyball' });
-    const ls = [V({ points: 14, aces: 2, blocks: 3, setsWon: 3, setsLost: 1 }), V({ points: 9, aces: 1, setsWon: 1, setsLost: 3 })];
+    // SD-29: the denominator is the player's sets played (FIVB), not the team's
+    // sets won + lost — a line with only the team's set counts stays out.
+    const ls = [V({ points: 14, aces: 2, blocks: 3, setsPlayed: 4 }), V({ points: 9, aces: 1, setsPlayed: 4 }), V({ points: 5, setsWon: 3, setsLost: 0 })];
     const v = (k: string) => aggregateStat(vb, statDefIn(vb, k)!, ls);
     assert.equal(v('pointsPerSet'), '2.88'); assert.equal(v('acesPerSet'), '0.38'); assert.equal(v('blocksPerSet'), '0.38');
     assert.equal(aggregateStat(vb, statDefIn(vb, 'pointsPerSet')!, [V({ points: 14 })]), '–'); // legacy line: no set count

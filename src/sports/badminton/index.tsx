@@ -16,6 +16,7 @@ import { BadmintonBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { init, reducer, serve, summary, scoreLine, standingsUnits, type BadmintonState } from './engine';
+import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
 
 const PointRow = ({ label, roster, side, name, onPoint }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string; onPoint: (side: 'home' | 'away', p?: Player) => void }) => (
@@ -125,6 +126,11 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   result: (s) => (s.ended ? { winner: s.gamesWon.home > s.gamesWon.away ? 'home' : s.gamesWon.away > s.gamesWon.home ? 'away' : 'draw', home: s.gamesWon.home, away: s.gamesWon.away } : null),
   // SD-17: rally points over every game (BWF points difference).
   standingsUnits,
+  // SD-19: absolute games / sets / points / deciders per player (and the
+  // doubles partner), synced at completion and on correction. Partial: any other live key stays on increments.
+  statTotals: badmintonTotals,
+  statTotalsPartial: true,
+  statTotalsNeedsPlayers: true,
   Scoreboard: BadmintonScoreboard,
   // SD-01: once ended → games won + "21-18, 19-21, 21-15" (never the reset 0–0).
   summary,

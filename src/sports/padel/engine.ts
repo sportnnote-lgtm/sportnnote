@@ -89,7 +89,7 @@ function winSet(s: PadelState, side: 'home' | 'away', games: { home: number; awa
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined): PadelState {
+function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined, whoId?: string): PadelState {
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -104,7 +104,7 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
     label: tb ? `${matchTb ? 'Match tiebreak' : 'Tiebreak'} ${pts.home}-${pts.away}` : 'Point',
     detail: who,
     side,
-    kind: 'point', playerName: who, set: setNo, points: 1,
+    kind: 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1,
   });
 
   if (tb) {
@@ -149,7 +149,8 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
     return { ...s, firstServer: side };
   }
   if (s.ended || !a.side) return s;
-  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName);
+  // SD-19: the credited player's id rides on the point (absolute statTotals).
+  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined);
   return s;
 };
 

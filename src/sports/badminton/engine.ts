@@ -94,13 +94,15 @@ export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
   }
   if (a.type !== 'POINT' || !a.side || s.ended) return s;
   const who = a.attribution?.playerName;
+  // SD-19: keep the credited player's id on the point (absolute statTotals).
+  const pid = a.attribution?.playerId ? { playerId: a.attribution.playerId } : {};
   const current = { ...s.current, [a.side]: s.current[a.side] + 1 };
   const gameNo = s.games.length + 1;
   let seq = s.seq;
   const events = [...s.events];
   // Structured fields (kind/playerName/game/points) let the per-game box score
   // aggregate points per player, filtered by game — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🏸', label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind: 'point', playerName: who, game: gameNo, points: 1 });
+  events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🏸', label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind: 'point', playerName: who, ...pid, game: gameNo, points: 1 });
 
   const winner = gameWinner(current.home, current.away, s.target, s.cap, s.goldenPoint ?? true);
   if (!winner) return { ...s, current, events, seq };

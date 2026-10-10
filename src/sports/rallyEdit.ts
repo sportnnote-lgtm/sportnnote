@@ -55,7 +55,9 @@ export const pointRows = (events: LiveEvent[]): EditRow[] =>
       e,
       p: e.kind === 'rally'
         ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const }
-        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName },
+        // SD-19: the credited player's id rides along when the event has one,
+        // so an EDIT_LOG keeps ids (absolute statTotals) instead of names only.
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}) },
     }));
 
 /** Reconstruct the ordered scoring inputs from a sport's point log, so replaying

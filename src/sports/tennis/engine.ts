@@ -124,7 +124,7 @@ function winSet(s: TennisState, side: 'home' | 'away', games: { home: number; aw
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean): TennisState {
+function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean, whoId?: string): TennisState {
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -133,7 +133,7 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   const setNo = s.setsWon.home + s.setsWon.away + 1;
   // Structured fields (kind/playerName/set/points) let the per-set box score tally
   // points & aces per player, filtered by set — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, set: setNo, points: 1 });
+  events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1 });
 
   if (tb) {
     // First to the tiebreak target, win by 2. A match tiebreak records its own
@@ -178,8 +178,9 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
     return { ...s, firstServer: side };
   }
   if (s.ended || !a.side) return s;
-  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false);
-  if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true);
+  // SD-19: the credited player's id rides on the point (absolute statTotals).
+  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false, a.attribution?.playerId || undefined);
+  if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true, a.attribution?.playerId || undefined);
   return s;
 };
 

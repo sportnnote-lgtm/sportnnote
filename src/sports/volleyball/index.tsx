@@ -15,6 +15,8 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { volleyballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
+import { volleyballTotals } from './fieldTime';
+import { mergeTotals, volleyballSetRecord } from '../racketTotals';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, type VolleyballState, type VbOutcome } from './engine';
@@ -64,8 +66,19 @@ function SidePoints({ side, name, color, roster, icon, blocks, dispatch }: {
 /** Point / timeout controls — volleyball's, parameterised so a future set-based
  *  net sport without blocks can reuse them. */
 export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet: number }): SportPlugin<VolleyballState>['ScoringControls'] {
-  const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+  const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [] }) => {
     const s = state as VolleyballState;
+    // SD-29: before the first point, stamp who is on court (the lineup's court
+    // players, else the matchday squad) — the base for sets played.
+    const dispatch = (a: ScoreAction) => {
+      if (!s.lineup && !s.events.length && a.type !== 'TIMEOUT') {
+        for (const [side, roster, lineup] of [['home', homeRoster, homeLineup], ['away', awayRoster, awayLineup]] as const) {
+          const players = courtPlayers(roster, lineup);
+          if (players.length) rawDispatch({ type: 'LINEUP', payload: { team: side, players } });
+        }
+      }
+      rawDispatch(a);
+    };
     const editorKinds = VB_OUTCOMES
       .filter((o) => opts.blocks || o.kind !== 'block')
       .map((o) => ({ kind: o.kind, label: `${o.icon} ${o.label}`, credited: o.credited }));
@@ -95,6 +108,14 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
     );
   };
   return Controls;
+}
+
+/** SD-29: the court at the start — lineup slots with a player, else the squad. */
+function courtPlayers(roster: Player[], lineup: { playerId?: string; playerName?: string }[]): { id: string; name: string }[] {
+  const byId = new Map(roster.map((p) => [p.id, p]));
+  const slots = lineup.filter((sl) => sl.playerId);
+  if (slots.length) return slots.map((sl) => ({ id: sl.playerId!, name: byId.get(sl.playerId!)?.fullName ?? sl.playerName ?? '' }));
+  return roster.map((p) => ({ id: p.id, name: p.fullName }));
 }
 
 // Timeouts this set: 2 per set in indoor volleyball.
@@ -153,6 +174,13 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
+  // SD-29: sets played per player (court stamp + credited points), set
+  // absolutely at completion — the per-set denominator (FIVB). Other stats
+  // stay incremental.
+  // SD-19: + the team's setsWon / setsLost on every player's line.
+  statTotals: (s, ctx) => mergeTotals(volleyballTotals(s), volleyballSetRecord(s, ctx)),
+  statTotalsPartial: true,
+  statTotalsNeedsPlayers: true,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   // SD-17: rally points over every set (FIVB point ratio).
   standingsUnits,
