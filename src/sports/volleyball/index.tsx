@@ -19,53 +19,113 @@ import { volleyballBox } from '../boxSources';
 import { volleyballStatTotals } from './totals';
 import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, lineScore, type VolleyballState, type VbOutcome } from './engine';
+import {
+  init, reducer, isDecider, setTarget, VB_OUTCOMES, VB_ERROR_TYPES, volleyballCredits, outcomeAction, outcomeChip, standingsUnits, lineScore,
+  servingSide, switchSidesDue, technicalTimeoutDue, timeoutsPerSet, type VolleyballState, type VbOutcome,
+} from './engine';
+import { pointPressure, pressureText } from '../pointStatus';
 
 export { isDecider, setTarget } from './engine';
 export type { VolleyballState } from './engine';
 
 /** One side's point panel. Pick HOW the point was won, then (for a credited
  *  outcome) WHO — the outcome defaults to Attack and resets after every point, so
- *  a kill is one tap on the attacker, an opponent's error is one tap, and a
- *  block/ace is two. Without a roster every outcome is a single button. */
-function SidePoints({ side, name, color, roster, icon, blocks, dispatch }: {
-  side: 'home' | 'away'; name: string; color?: string; roster: Player[]; icon: string; blocks: boolean;
+ *  a kill is one tap on the attacker, a missed serve is one tap, and a
+ *  block/ace/fault is two. Without a roster every outcome is a single button.
+ *
+ *  SD-117b: the court six come first (the bench folds away), chips carry the
+ *  team colour, Ace is offered only to the serving side (🏐) and a missed serve
+ *  only to the receiving side, and an "Opp. fault" can say what went wrong and
+ *  which opponent erred (both optional — "Not named" still scores it). */
+function SidePoints({ side, name, color, court, bench, opponents, oppColor, serving, icon, blocks, dispatch }: {
+  side: 'home' | 'away'; name: string; color: string; court: Player[]; bench: Player[];
+  opponents: Player[]; oppColor: string;
+  /** true = this side serves, false = it receives, null = not known */
+  serving: boolean | null;
+  icon: string; blocks: boolean;
   dispatch: (a: ScoreAction) => void;
 }) {
   const [how, setHow] = useState<VbOutcome>('attack');
-  const outcomes = VB_OUTCOMES.filter((o) => blocks || o.kind !== 'block');
-  const credited = outcomes.filter((o) => o.credited);
-  const errors = outcomes.filter((o) => !o.credited);
-  const score = (kind: VbOutcome, p?: Player) => { dispatch(outcomeAction(kind, side, p)); setHow('attack'); };
+  const [err, setErr] = useState<string | undefined>(undefined);
+  const [showBench, setShowBench] = useState(false);
+  const outcomes = VB_OUTCOMES.filter((o) => (blocks || o.kind !== 'block')
+    && !(o.kind === 'ace' && serving === false) // only the server can ace
+    && !(o.kind === 'serveerror' && serving === true)); // your own missed serve isn't your point
+  const roster = [...court, ...bench];
+  const reset = () => { setHow('attack'); setErr(undefined); };
+  const score = (kind: VbOutcome, p?: Player) => { dispatch(outcomeAction(kind, side, kind === 'opperror' ? undefined : p, kind === 'opperror' ? { err, by: p } : undefined)); reset(); };
+  const modes = outcomes.filter((o) => o.credited || o.kind === 'opperror');
+  const oneTap = outcomes.filter((o) => !o.credited && o.kind !== 'opperror');
+  const effHow = modes.some((o) => o.kind === how) ? how : 'attack';
+  const chip = (p: Player, dot: string, onPress: () => void) => <SelectChip key={p.id} label={p.fullName} active={false} dotColor={dot} onPress={onPress} />;
   return (
-    <View style={[ctrl.sideBox, { borderLeftColor: color ?? (side === 'home' ? theme.colors.home : theme.colors.away) }]}>
-      <Text style={ctrl.label}>{icon} Point — {name}</Text>
+    <View style={[ctrl.sideBox, { borderLeftColor: color }]}>
+      <View style={ctrl.headRow}>
+        <Text style={ctrl.label}>{icon} Point — {name}</Text>
+        {serving === true && <Text style={[ctrl.serveBadge, { backgroundColor: color }]} accessibilityLabel={`${name} serving`}>🏐 Serving</Text>}
+      </View>
       {roster.length > 0 ? (
         <>
           <View style={ctrl.chips}>
-            {credited.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={how === o.kind} onPress={() => setHow(o.kind)} />)}
+            {modes.map((o) => <SelectChip key={o.kind} label={outcomeChip(o)} active={effHow === o.kind} onPress={() => { setHow(o.kind); if (o.kind !== 'opperror') setErr(undefined); }} />)}
           </View>
-          <Text style={ctrl.hint}>{VB_OUTCOMES.find((o) => o.kind === how)!.label} by…</Text>
+          {effHow === 'opperror' ? (
+            <>
+              <Text style={ctrl.hint}>What went wrong? (optional)</Text>
+              <View style={ctrl.chips}>
+                {VB_ERROR_TYPES.map((t) => <SelectChip key={t.key} label={t.label} active={err === t.key} onPress={() => setErr(err === t.key ? undefined : t.key)} />)}
+              </View>
+              <Text style={ctrl.hint}>Who erred? (optional — tap to give {name} the point)</Text>
+              <View style={ctrl.chips}>
+                {opponents.map((p) => chip(p, oppColor, () => score('opperror', p)))}
+                <SelectChip label="Not named" active={false} onPress={() => score('opperror')} />
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={ctrl.hint}>{VB_OUTCOMES.find((o) => o.kind === effHow)!.label} by…</Text>
+              <View style={ctrl.chips}>
+                {court.map((p) => chip(p, color, () => score(effHow, p)))}
+                <SelectChip label="No player" active={false} onPress={() => score(effHow)} />
+                {bench.length > 0 && <SelectChip label={showBench ? `Hide bench ▴` : `Bench (${bench.length}) ▾`} active={false} onPress={() => setShowBench((v) => !v)} />}
+              </View>
+              {showBench && bench.length > 0 && (
+                <View style={ctrl.chips}>
+                  {bench.map((p) => chip(p, color, () => score(effHow, p)))}
+                </View>
+              )}
+            </>
+          )}
           <View style={ctrl.chips}>
-            {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => score(how, p)} />)}
-            <SelectChip label="No player" active={false} onPress={() => score(how)} />
-          </View>
-          <View style={ctrl.chips}>
-            {errors.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={false} onPress={() => score(o.kind)} />)}
+            {oneTap.map((o) => <SelectChip key={o.kind} label={outcomeChip(o)} active={false} onPress={() => score(o.kind)} />)}
           </View>
         </>
       ) : (
         <View style={ctrl.chips}>
-          {outcomes.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={false} onPress={() => score(o.kind)} />)}
+          {outcomes.map((o) => <SelectChip key={o.kind} label={outcomeChip(o)} active={false} onPress={() => score(o.kind)} />)}
         </View>
       )}
     </View>
   );
 }
 
+/** SD-117b: the side's court (lineup slots with a player, else the stamped
+ *  court when it's smaller than the squad) and the bench (the rest). With
+ *  neither, everyone is "court" — nothing to fold. */
+function splitCourt(roster: Player[], lineup: { playerId?: string }[], stamped?: { id: string }[]): { court: Player[]; bench: Player[] } {
+  const ids = lineup.filter((sl) => sl.playerId).map((sl) => sl.playerId!);
+  const pick = ids.length ? ids : stamped && stamped.length < roster.length ? stamped.map((p) => p.id) : [];
+  if (!pick.length) return { court: roster, bench: [] };
+  const byId = new Map(roster.map((p) => [p.id, p]));
+  const court = pick.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+  const on = new Set(court.map((p) => p.id));
+  return court.length ? { court, bench: roster.filter((p) => !on.has(p.id)) } : { court: roster, bench: [] };
+}
+
 /** Point / timeout controls — volleyball's, parameterised so a future set-based
- *  net sport without blocks can reuse them. */
-export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet: number }): SportPlugin<VolleyballState>['ScoringControls'] {
+ *  net sport without blocks can reuse them. `timeoutsPerSet` is the fallback
+ *  when the state doesn't carry the format's (SD-117b). */
+export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet?: number }): SportPlugin<VolleyballState>['ScoringControls'] {
   const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [] }) => {
     const s = state as VolleyballState;
     // SD-29: before the first point, stamp who is on court (the lineup's court
@@ -81,15 +141,30 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
     };
     const editorKinds = VB_OUTCOMES
       .filter((o) => opts.blocks || o.kind !== 'block')
-      .map((o) => ({ kind: o.kind, label: `${o.icon} ${o.label}`, credited: o.credited }));
+      .map((o) => ({ kind: o.kind, label: outcomeChip(o), credited: o.credited }));
+    const hc = homeColor ?? theme.colors.home;
+    const ac = awayColor ?? theme.colors.away;
+    const home = splitCourt(homeRoster, homeLineup, s.lineup?.home);
+    const away = splitCourt(awayRoster, awayLineup, s.lineup?.away);
+    const server = servingSide(s);
+    const servingOf = (side: 'home' | 'away') => (server ? server === side : null);
+    const perSet = s.timeoutsPerSet ?? opts.timeoutsPerSet ?? timeoutsPerSet(s);
+    const switchCue = switchSidesDue(s);
+    const tto = technicalTimeoutDue(s);
     return (
       <View style={{ gap: theme.spacing(4) }}>
-        <SidePoints side="home" name={homeName} color={homeColor} roster={homeRoster} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
-        <SidePoints side="away" name={awayName} color={awayColor} roster={awayRoster} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
-        {opts.timeoutsPerSet > 0 && (() => {
+        {(switchCue || tto) && (
+          <View style={ctrl.cue} accessibilityLiveRegion="polite">
+            {switchCue && <Text style={ctrl.cueText}>↔ {switchCue}</Text>}
+            {tto && <Text style={ctrl.cueText}>⏱️ Technical timeout — 21 points played (sets 1–2)</Text>}
+          </View>
+        )}
+        <SidePoints side="home" name={homeName} color={hc} court={home.court} bench={home.bench} opponents={away.court.length ? away.court : awayRoster} oppColor={ac} serving={servingOf('home')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        <SidePoints side="away" name={awayName} color={ac} court={away.court} bench={away.bench} opponents={home.court.length ? home.court : homeRoster} oppColor={hc} serving={servingOf('away')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        {perSet > 0 && (() => {
           const setNo = s.setsWon.home + s.setsWon.away + 1;
           const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
-          const left = (side: 'home' | 'away') => Math.max(0, opts.timeoutsPerSet - used(side));
+          const left = (side: 'home' | 'away') => Math.max(0, perSet - used(side));
           const label = (side: 'home' | 'away', nm: string) => `⏱️ Timeout — ${nm} (${left(side)} left)`;
           return (
             <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
@@ -118,8 +193,8 @@ function courtPlayers(roster: Player[], lineup: { playerId?: string; playerName?
   return roster.map((p) => ({ id: p.id, name: p.fullName }));
 }
 
-// Timeouts this set: 2 per set in indoor volleyball.
-const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, timeoutsPerSet: 2 });
+// Timeouts per set come from the format (2 indoor, 1 beach — SD-117b).
+const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true });
 
 const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as VolleyballState;
@@ -149,6 +224,10 @@ const VolleyballScoreboard: NonNullable<SportPlugin<VolleyballState>['Scoreboard
     <SetLineBoard
       ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
       status={`Set ${s.setsWon.home + s.setsWon.away + 1}${isDecider(s) ? ' · Decider' : ''}`} bestOf={`best of ${s.setsToWin * 2 - 1}`}
+      // SD-117b: 🏐 after the serving side (derived from the rallies) and the
+      // SET POINT / MATCH POINT chip (pointStatus.ts, the same as the racket sports)
+      serving={servingSide(s)} serveIcon="🏐"
+      alerts={pressureText(pointPressure(reducer, s, { unit: 'set' }), { home: homeName, away: awayName })}
     />
   );
 };
@@ -194,10 +273,10 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'indoor',
       options: [
-        { value: 'indoor', label: 'Indoor (25 · dec 15)', set: { playersPerSide: 6, substitutes: 6, setsToWin: 3, pointsPerSet: 25, deciderPoints: 15, winByTwo: true } },
-        { value: 'beach', label: 'Beach (21 · dec 15)', set: { playersPerSide: 2, substitutes: 0, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true } },
-        { value: 'nineaside', label: '9-a-side (21 · best of 3)', set: { playersPerSide: 9, substitutes: 3, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true } },
-        { value: 'single', label: 'Single set to 25', set: { playersPerSide: 6, substitutes: 6, setsToWin: 1, pointsPerSet: 25, deciderPoints: 25, winByTwo: true } },
+        { value: 'indoor', label: 'Indoor (25 · dec 15)', set: { playersPerSide: 6, substitutes: 6, setsToWin: 3, pointsPerSet: 25, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 2 } },
+        { value: 'beach', label: 'Beach (21 · dec 15)', set: { playersPerSide: 2, substitutes: 0, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 1 } },
+        { value: 'nineaside', label: '9-a-side (21 · best of 3)', set: { playersPerSide: 9, substitutes: 3, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 2 } },
+        { value: 'single', label: 'Single set to 25', set: { playersPerSide: 6, substitutes: 6, setsToWin: 1, pointsPerSet: 25, deciderPoints: 25, winByTwo: true, timeoutsPerSet: 2 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -220,6 +299,9 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
         { value: false, label: 'First to target (win by 1)' },
       ],
     },
+    // SD-117b: FIVB indoor 2 per team per set; beach 1 (+ a technical timeout
+    // at 21 points in sets 1–2, shown as a cue)
+    { key: 'timeoutsPerSet', label: 'Timeouts per team per set', type: 'count', default: 2, min: 0, max: 3, advanced: true, hint: '2 indoor · 1 beach' },
   ],
 };
 
@@ -227,6 +309,10 @@ const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   hint: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  headRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
+  serveBadge: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '800', borderRadius: theme.radius.pill, paddingVertical: 2, paddingHorizontal: theme.spacing(2), overflow: 'hidden' },
+  cue: { backgroundColor: theme.colors.accent + '22', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.accent, padding: theme.spacing(3), gap: theme.spacing(1) },
+  cueText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   sideBox: { gap: theme.spacing(2), borderLeftWidth: 3, paddingLeft: theme.spacing(3) },
   setsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   setChip: {

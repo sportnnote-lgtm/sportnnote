@@ -23,6 +23,7 @@ import { kabaddiTotals } from './totals.ts';
 
 import {
   init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints, defendersOnMat,
+  expectedRaider, outPlayers, clockPaused, timeoutsUsed, TIMEOUTS_PER_HALF, TACKLE_TYPES,
   type KabaddiState, type KabaddiEvent,
 } from './engine.ts';
 
@@ -52,7 +53,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   // `editOf` = re-entering a past guided raid (its id), stamped at its moment.
   const [raidFlow, setRaidFlow] = useState<{
     side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean; tackler?: Player;
-    editOf?: number; at?: { minute: number; half: number };
+    editOf?: number; at?: { minute: number; half: number }; tackleType?: string;
   } | null>(null);
 
   const hm = state.halfMinutes, et = state.extraTimeMinutes;
@@ -104,6 +105,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
       setRaidFlow({
         side: raid.side, touches: raid.touches, bonus: raid.bonus, tackled: raid.raiderOut,
         raider: byId(raid.raiderId, raid.raider), tackler: raid.raiderOut ? byId(raid.tacklerId, raid.tackler) : undefined,
+        tackleType: raid.raiderOut ? raid.tt : undefined,
         editOf: raid.eid, at: { minute: raid.minute ?? 0, half: raid.half ?? state.half },
       });
       return;
@@ -153,7 +155,8 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   if (sub) {
     const sideName = sub.side === 'home' ? homeName : awayName;
     const offOpts = onField(sub.side, rosterFor(sub.side));
-    const onOpts = rosterFor(sub.side).filter((p) => p.id !== sub.off?.id && !offNames(sub.side).includes(p.fullName));
+    // SD-117b (format: subReturn): a player substituted earlier may come back on.
+    const onOpts = rosterFor(sub.side).filter((p) => p.id !== sub.off?.id && (state.subReturn || !offNames(sub.side).includes(p.fullName)));
     return (
       <View style={{ gap: theme.spacing(3) }}>
       {backfillBar}
@@ -164,7 +167,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
         </View>
         {!sub.off ? (
           <>
-            <Text style={ctrl.meta}>Who comes off? (takes no further part)</Text>
+            <Text style={ctrl.meta}>{state.subReturn ? 'Who comes off? (may come back on later, within the limit)' : 'Who comes off? (takes no further part)'}</Text>
             <View style={ctrl.chips}>
               {offOpts.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setSub({ ...sub, off: p })} />)}
             </View>
@@ -210,6 +213,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   }
 
   const tied = state.home === state.away;
+  const paused = clockPaused(state);
+  const expected = expectedRaider(state);
+  const outNow = outPlayers(state);
 
   // 5-raid shootout tie-breaker: record each raid's points per side; the panel
   // decides the winner (best-of-5, then sudden death) and ends the match.
@@ -254,10 +260,47 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
         <Text style={ctrl.matChip}>🟢 {awayName} on mat: {kTeamSize - kOut.away}/{kTeamSize}</Text>
       </View>
 
+      {/* SD-117b: pause the clock for a timeout / injury / review; team timeouts */}
+      {!state.goldenRaid && (
+        <View style={{ gap: theme.spacing(2) }}>
+          {paused && (
+            <Text style={ctrl.pausedBanner} accessibilityLiveRegion="polite">⏸ Clock paused at {currentMinute(state)}′ — resume when play restarts.</Text>
+          )}
+          <View style={ctrl.row}>
+            <Button label={paused ? '▶ Resume clock' : '⏸ Pause clock'} variant={paused ? 'primary' : 'ghost'} style={ctrl.flex}
+              onPress={() => dispatch({ type: paused ? 'RESUME' : 'PAUSE', payload: { at: Date.now() } })} />
+          </View>
+          <View style={ctrl.row}>
+            {(['home', 'away'] as const).map((side) => {
+              const left = Math.max(0, TIMEOUTS_PER_HALF - timeoutsUsed(state, side));
+              return (
+                <Button key={side} label={`⏱️ Timeout — ${side === 'home' ? homeName : awayName} (${left} left)`} variant="ghost" style={ctrl.flex} disabled={left === 0}
+                  onPress={() => {
+                    fire({ type: 'TIMEOUT', side });
+                    // the clock stops for a timeout
+                    if (!paused && backfillMin == null) dispatch({ type: 'PAUSE', payload: { at: Date.now() } });
+                  }} />
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {!raidFlow ? (
         <View style={ctrl.row}>
-          <Button label={`🤼 ${homeName} raiding`} variant="home" style={ctrl.flex} onPress={() => setRaidFlow({ side: 'home', touches: 0, bonus: false, tackled: false })} />
-          <Button label={`🤼 ${awayName} raiding`} variant="away" style={ctrl.flex} onPress={() => setRaidFlow({ side: 'away', touches: 0, bonus: false, tackled: false })} />
+          {(['home', 'away'] as const).map((side) => {
+            // SD-117b: raids alternate — the side due to raid is highlighted, the
+            // other is a quiet button; ⚠ DoD when its next raid is do-or-die.
+            const dod = (state.proRules ?? true) && kEmpty[side] >= 2;
+            const due = expected === side;
+            const nm = side === 'home' ? homeName : awayName;
+            return (
+              <Button key={side} label={`🤼 ${nm} raiding${dod ? ' · ⚠ DoD' : ''}${due ? ' ◀ next' : ''}`}
+                variant={expected && !due ? 'ghost' : side} style={ctrl.flex}
+                accessibilityHint={due ? 'Expected to raid next' : undefined}
+                onPress={() => setRaidFlow({ side, touches: 0, bonus: false, tackled: false })} />
+            );
+          })}
         </View>
       ) : (
         <View style={ctrl.raidPanel}>
@@ -273,9 +316,13 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
             <>
               <Text style={ctrl.meta}>Raider (optional)</Text>
               <View style={ctrl.chips}>
-                {onField(raidFlow.side, raidFlow.side === 'home' ? homeRoster : awayRoster).map((p) => (
-                  <SelectChip key={p.id} label={p.fullName} active={raidFlow.raider?.id === p.id} onPress={() => setRaidFlow({ ...raidFlow, raider: p })} />
-                ))}
+                {onField(raidFlow.side, raidFlow.side === 'home' ? homeRoster : awayRoster).map((p) => {
+                  // SD-117b: tap again to clear; a player who's out can't raid (dimmed)
+                  const isOut = raidFlow.editOf == null && outNow[raidFlow.side].includes(p.fullName);
+                  const on = raidFlow.raider?.id === p.id;
+                  return <SelectChip key={p.id} label={isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
+                    onPress={() => setRaidFlow({ ...raidFlow, raider: on ? undefined : p })} />;
+                })}
               </View>
             </>
           )}
@@ -297,7 +344,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           })()}
           <View style={ctrl.chips}>
             <SelectChip label={`Bonus point: ${raidFlow.bonus ? 'Yes' : 'No'}`} active={raidFlow.bonus} onPress={() => setRaidFlow({ ...raidFlow, bonus: !raidFlow.bonus })} />
-            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler })} />
+            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler, tackleType: raidFlow.tackled ? undefined : raidFlow.tackleType })} />
           </View>
           {/* Who made the tackle? Credits the defender their tackle (or super-tackle) point. */}
           {raidFlow.tackled && (() => {
@@ -307,14 +354,27 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
               <>
                 <Text style={ctrl.meta}>Who made the tackle? (optional — credits the defender)</Text>
                 <View style={ctrl.chips}>
-                  {defenders.map((p) => (
-                    <SelectChip key={p.id} label={p.fullName} active={raidFlow.tackler?.id === p.id}
-                      onPress={() => setRaidFlow({ ...raidFlow, tackler: raidFlow.tackler?.id === p.id ? undefined : p })} />
-                  ))}
+                  {defenders.map((p) => {
+                    const isOut = raidFlow.editOf == null && outNow[defSide].includes(p.fullName);
+                    const on = raidFlow.tackler?.id === p.id;
+                    return <SelectChip key={p.id} label={isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
+                      onPress={() => setRaidFlow({ ...raidFlow, tackler: on ? undefined : p })} />;
+                  })}
                 </View>
               </>
             ) : null;
           })()}
+          {raidFlow.tackled && (
+            <>
+              <Text style={ctrl.meta}>How was the raider stopped? (optional)</Text>
+              <View style={ctrl.chips}>
+                {TACKLE_TYPES.map((t) => (
+                  <SelectChip key={t.key} label={t.label} active={raidFlow.tackleType === t.key}
+                    onPress={() => setRaidFlow({ ...raidFlow, tackleType: raidFlow.tackleType === t.key ? undefined : t.key })} />
+                ))}
+              </View>
+            </>
+          )}
           {(() => {
             // What the engine will score for this raid — what the raider / tackler get.
             const b = previewRaid(state, { side: raidFlow.side, touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled, v: 2 }, raidFlow.editOf);
@@ -420,15 +480,17 @@ const LiveClock: NonNullable<SportPlugin<KabaddiState>['LiveClock']> = ({ state 
   const s = state as KabaddiState;
   const [, tick] = useState(0);
   useEffect(() => {
-    if (!s.startedAt || s.ended) return;
+    if (!s.startedAt || s.ended || s.pausedAt != null) return;
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [s.startedAt, s.ended]);
-  const running = !!s.startedAt && !s.ended;
+  }, [s.startedAt, s.ended, s.pausedAt]);
+  const paused = clockPaused(s);
+  const running = !!s.startedAt && !s.ended && !paused;
   const label = s.ended
     ? (s.goldenRaid ? 'FT · GR' : s.half > 2 ? 'FT · ET' : 'FT')
     : s.goldenRaid ? '⚡ GR'
     : !s.startedAt ? (s.half === 1 ? '—' : 'HT')
+    : paused ? `${currentMinute(s)}' ⏸`
     : `${currentMinute(s)}'`;
   return (
     <View style={ctrl.clockRow}>
@@ -518,9 +580,9 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
     {
       key: 'preset', label: 'Rule set', type: 'preset', default: 'pro',
       options: [
-        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: true } },
-        { value: 'circle', label: 'Circle style (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', proRules: false } },
-        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: false } },
+        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: true, subReturn: true } },
+        { value: 'circle', label: 'Circle style (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', proRules: false, subReturn: true } },
+        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: false, subReturn: true } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -543,6 +605,8 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
     },
     { key: 'proRules', label: 'Pro rules (do-or-die, super tackle, bonus)', type: 'toggle', default: true },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
+    // SD-117b: AKFI / PKL let a substituted player come back on (within the limit)
+    { key: 'subReturn', label: 'Substituted players may return', type: 'toggle', default: true, advanced: true },
     { key: 'halfMinutes', label: 'Minutes per half', type: 'number', default: 20, min: 5, max: 30 },
     { key: 'extraTimeMinutes', label: 'Extra-time half (min)', type: 'number', default: 5, min: 1, max: 15, advanced: true, hint: 'used only for the “extra time” decider' },
   ],
@@ -558,6 +622,7 @@ const ctrl = StyleSheet.create({
   raidPanel: { gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(4) },
   matRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   matChip: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3) },
+  pausedBanner: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800', backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent, borderRadius: theme.radius.md, padding: theme.spacing(2) },
   doOrDie: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   subHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   clockRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },

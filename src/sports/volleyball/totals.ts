@@ -70,6 +70,34 @@ export function volleyballBoxTotals(s: VolleyballState, ctx?: StatTotalsContext)
   return out;
 }
 
-/** The plugin's `statTotals`: box keys, SD-29 sets played, SD-19 set record. */
-export const volleyballStatTotals = (s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> =>
-  mergeTotals(mergeTotals(volleyballBoxTotals(s, ctx), volleyballTotals(s)), volleyballSetRecord(s, ctx));
+/** SD-117b — `errors` per player id: each "Opp. fault" that names the erring
+ *  opponent charges them one. Written only for a match that named at least one
+ *  (coverage 'keyed': every other match reads "not tracked", never 0) — then on
+ *  every line of the match, 0 for the rest. Left out whole when a named player
+ *  can't be resolved (the same safeguard as the box keys). */
+export function volleyballErrorTotals(s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>): Record<string, StatTotalsEntry> {
+  const faults = (s?.events ?? []).filter((e) => e.kind === 'opperror' && e.oe?.playerName && (e.side === 'home' || e.side === 'away'));
+  if (!faults.length) return {};
+  const idx = nameIndex(s, ctx);
+  const count = new Map<string, { side: Side; n: number }>();
+  for (const e of faults) {
+    const side: Side = e.side === 'home' ? 'away' : 'home'; // the erring side
+    const id = e.oe!.playerId || idx[side].get(e.oe!.playerName!) || undefined;
+    if (!id) return {};
+    const c = count.get(id) ?? { side, n: 0 };
+    c.n += 1;
+    count.set(id, c);
+  }
+  const out: Record<string, StatTotalsEntry> = {};
+  for (const [id, e] of Object.entries(lines)) out[id] = { side: e.side, stats: { [VOLLEYBALL_ERROR_KEY]: 0 } };
+  for (const [id, c] of count) out[id] = { side: out[id]?.side ?? c.side, stats: { [VOLLEYBALL_ERROR_KEY]: c.n } };
+  return out;
+}
+export const VOLLEYBALL_ERROR_KEY = 'errors';
+
+/** The plugin's `statTotals`: box keys, SD-29 sets played, SD-19 set record,
+ *  SD-117b errors (only for a match that named an erring player). */
+export const volleyballStatTotals = (s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> => {
+  const base = mergeTotals(mergeTotals(volleyballBoxTotals(s, ctx), volleyballTotals(s)), volleyballSetRecord(s, ctx));
+  return mergeTotals(base, volleyballErrorTotals(s, ctx, base));
+};

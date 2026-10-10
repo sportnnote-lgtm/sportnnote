@@ -13,6 +13,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-117b volleyball + kabaddi scorer follow-ups
+- **Volleyball:** the six on court first (bench folded behind "Bench (n) ▾"), team-colour dots on every chip; 🏐 serving side derived from the rallies — Ace only offered to the server, "Opp. missed serve" only to the receiver; SET / MATCH POINT chip; "🚩 Opp. fault" takes an optional error type (net touch, foot fault, rotation, double/4 hits, attack out, block out) and the erring opponent → new `errors` stat ("not tracked" on old matches); `timeoutsPerSet` (beach 1) + technical-timeout note; "↔ Switch sides" cue (beach every 7 / 5 in the decider, indoor decider at 8).
+- **Kabaddi:** the side due to raid is highlighted ("◀ next", ⚠ DoD badge); clock Pause / Resume; substituted players may return (format toggle, on for new matches); team timeouts 2 per half (pauses the clock); optional tackle type ("Tackle +1 (ankle hold)"); Raider chip toggles and players who are out are dimmed.
+- **Files:** volleyball engine/index/stats/totals, kabaddi engine/index, `liveEvents.ts`, `rallyEdit.ts` (additive). Guides: score-volleyball, score-kabaddi.
+- **Verified:** `tests/sd117b-volleyball-kabaddi.test.mts` (23), legacy oracle + fingerprints unchanged; demo 8093 375 px — beach timeouts, serving badge, fault detail, switch-sides; kabaddi next raider, pause, timeout. Not built: volleyball serve-error credit + rotation (SD-58), SD-59/71/72/83.
+
+---
+
 ### 2026-10-11 — SD-117a football / hockey / basketball scorer follow-ups
 - **Football:** foul → "Skip victim" and "Card for {fouler}?" (🟨 / 🟥 / sin-bin / ✓ No card, voice too); shootout asks "🪙 Who kicks first?" (Law 10; old logs keep home first); team officials can be carded (Law 12) — kept out of player stats, box score, red count and fair play; added time has a Change button.
 - **Hockey:** penalty-corner outcome panel (Goal / Saved / Wide / Defended / Stroke awarded / Re-awarded / Later) linked to the PC; one-tap "⭕ Circle entries" per side → team stat `circleEntries` ("not tracked" on old matches); "⏸ Clock stopped (goal) — restart at the centre pass ▶ Resume" bar.

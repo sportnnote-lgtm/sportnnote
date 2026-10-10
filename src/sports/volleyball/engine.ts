@@ -41,6 +41,12 @@ export interface VolleyballState {
    *  the lineup / matchday squad before the first point — `LINEUP`). Absent on
    *  older logs, which then write no sets played. */
   lineup?: { home?: CourtPlayer[]; away?: CourtPlayer[] };
+  /** SD-117b: team timeouts per set (format: timeoutsPerSet). Absent = 2 (indoor);
+   *  only stamped when the format sets it (Beach = 1), so older states are unchanged. */
+  timeoutsPerSet?: number;
+  /** SD-117b: beach rules (Beach preset / 2 a side) — court switch every 7 points
+   *  (5 in the decider) and the technical timeout at 21. Only stamped when true. */
+  beach?: true;
 }
 
 export interface CourtPlayer { id: string; name: string }
@@ -56,7 +62,21 @@ export const init = (config?: Record<string, unknown>): VolleyballState => ({
   events: [],
   seq: 0,
   ended: false,
+  // SD-117b: format-only keys, added only when set (old states keep their shape)
+  ...formatExtras(config),
 });
+
+/** SD-117b — Beach is the Beach preset or a 2-a-side format. */
+const isBeachFormat = (config?: Record<string, unknown>) => config?.preset === 'beach' || Number(config?.playersPerSide) === 2;
+function formatExtras(config?: Record<string, unknown>): Pick<VolleyballState, 'timeoutsPerSet' | 'beach'> {
+  const beach = isBeachFormat(config);
+  const raw = config?.timeoutsPerSet;
+  const tps = raw != null && Number.isFinite(Number(raw)) ? Math.max(0, Math.floor(Number(raw))) : beach ? 1 : undefined;
+  return { ...(tps != null ? { timeoutsPerSet: tps } : {}), ...(beach ? { beach: true as const } : {}) };
+}
+
+/** Timeouts each team gets per set (2 indoor, 1 beach, or the format's). */
+export const timeoutsPerSet = (s: VolleyballState): number => s.timeoutsPerSet ?? 2;
 
 /** Are we in the deciding set? (both sides one set from the match — e.g. 2-2 in
  *  a best-of-5, 1-1 in a best-of-3). The decider is a shorter race to 15. */
@@ -83,6 +103,10 @@ export interface OutcomeDef {
   label: string;
   /** does a player of the scoring side get credit? (errors credit nobody) */
   credited: boolean;
+  /** SD-117b: the scorer's chip, when it differs from the timeline icon/label
+   *  (the two error chips must not look alike). The logged event keeps
+   *  `icon` / `label`, so recorded matches replay to the same timeline. */
+  chip?: string;
 }
 
 /** In the order the scorer sees them. Attack first — it's the commonest point. */
@@ -90,9 +114,27 @@ export const VB_OUTCOMES: OutcomeDef[] = [
   { kind: 'attack', type: 'ATTACK', icon: '⚡', label: 'Attack', credited: true },
   { kind: 'block', type: 'BLOCK', icon: '🧱', label: 'Block', credited: true },
   { kind: 'ace', type: 'ACE', icon: '🎯', label: 'Ace', credited: true },
-  { kind: 'opperror', type: 'OPP_ERROR', icon: '🎁', label: 'Opp. error', credited: false },
-  { kind: 'serveerror', type: 'SERVE_ERROR', icon: '🎁', label: 'Opp. serve error', credited: false },
+  { kind: 'opperror', type: 'OPP_ERROR', icon: '🎁', label: 'Opp. error', credited: false, chip: '🚩 Opp. fault' },
+  { kind: 'serveerror', type: 'SERVE_ERROR', icon: '🎁', label: 'Opp. serve error', credited: false, chip: '🥅 Opp. missed serve' },
 ];
+
+/** The chip text for an outcome (SD-117b: distinct error chips). */
+export const outcomeChip = (o: OutcomeDef) => o.chip ?? `${o.icon} ${o.label}`;
+
+/** SD-117b — what the opponent did wrong on an "Opp. fault" (optional). */
+export const VB_ERROR_TYPES: Array<{ key: string; label: string }> = [
+  { key: 'net', label: 'Net touch' },
+  { key: 'foot', label: 'Foot fault' },
+  { key: 'rotation', label: 'Rotation' },
+  { key: 'hits', label: 'Double / 4 hits' },
+  { key: 'attackout', label: 'Attack out' },
+  { key: 'blockout', label: 'Block out' },
+];
+const ERROR_LABEL = Object.fromEntries(VB_ERROR_TYPES.map((t) => [t.key, t.label]));
+export const errorTypeLabel = (k?: string) => (k ? ERROR_LABEL[k] ?? k : undefined);
+
+/** SD-117b — the player stat an erring opponent is charged with. */
+export const VB_ERROR_STAT = 'errors';
 
 /** Timeline icon/label per scored kind (legacy 'point' keeps its 🏐 "Point"). */
 const KIND_OF: Record<string, { kind: PointKind; icon: string; label: string }> = {
@@ -133,11 +175,72 @@ export function outcomeAttribution(kind: VbOutcome | 'point', player?: { id: str
   };
 }
 
-/** The scoring action for one outcome (player optional; ignored for errors). */
-export const outcomeAction = (kind: VbOutcome, side: 'home' | 'away', player?: { id: string; fullName: string }): ScoreAction => {
+/** The scoring action for one outcome (player optional; ignored for errors).
+ *  SD-117b: an "Opp. fault" may say what went wrong (`err`, VB_ERROR_TYPES)
+ *  and who erred — an OPPONENT, charged one `errors` (attribution2: a stat
+ *  line only, no follower alert). Both are new optional keys. */
+export const outcomeAction = (
+  kind: VbOutcome, side: 'home' | 'away', player?: { id: string; fullName: string },
+  fault?: { err?: string; by?: { id: string; fullName: string } },
+): ScoreAction => {
   const def = VB_OUTCOMES.find((o) => o.kind === kind)!;
-  return { type: def.type, side, attribution: def.credited ? outcomeAttribution(kind, player) : undefined };
+  const a: ScoreAction = { type: def.type, side, attribution: def.credited ? outcomeAttribution(kind, player) : undefined };
+  if (kind === 'opperror' && fault?.err) a.payload = { err: fault.err };
+  if (kind === 'opperror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_ERROR_STAT, playerName: fault.by.fullName };
+  return a;
 };
+
+/** SD-117b — who serves next, derived from the log (no serve tracking yet —
+ *  SD-58): the side that won the last rally of the set serves. At the start of
+ *  a set it's the side that RECEIVED first in the previous set (FIVB), known
+ *  only when that set's first serve is (its first point an ace or a serve
+ *  error); the decider is a fresh toss. null = unknown. */
+export function servingSide(s: VolleyballState): 'home' | 'away' | null {
+  if (!s || s.ended) return null;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  const pts = (n: number) => s.events.filter((e) => e.set === n && SCORED.has(e.kind ?? '') && (e.side === 'home' || e.side === 'away'));
+  const cur = pts(setNo);
+  if (cur.length) return cur[cur.length - 1].side!;
+  if (isDecider(s)) return null;
+  const first = (n: number): 'home' | 'away' | null => {
+    if (n < 1) return null;
+    const p = pts(n)[0];
+    if (p?.kind === 'ace') return p.side!;
+    if (p?.kind === 'serveerror') return p.side === 'home' ? 'away' : 'home';
+    const prev = first(n - 1);
+    return prev ? (prev === 'home' ? 'away' : 'home') : null;
+  };
+  const prev = first(setNo - 1);
+  return prev ? (prev === 'home' ? 'away' : 'home') : null;
+}
+const SCORED = new Set(['point', 'attack', 'block', 'ace', 'opperror', 'serveerror']);
+
+/** SD-117b — a non-blocking "Switch sides" cue at the current score: beach
+ *  every 7 points (every 5 in the decider), indoor once in the decider when a
+ *  side reaches 8. null = no switch now. */
+export function switchSidesDue(s: VolleyballState): string | null {
+  if (!s || s.ended) return null;
+  const { home: h, away: a } = s.current;
+  const total = h + a;
+  if (!total) return null;
+  const dec = isDecider(s);
+  if (s.beach) {
+    const every = dec ? 5 : 7;
+    return total % every === 0 ? `Switch sides — ${total} points played` : null;
+  }
+  if (!dec) return null;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  const last = [...s.events].reverse().find((e) => e.set === setNo && SCORED.has(e.kind ?? ''));
+  const lead = h === 8 && a < 8 ? 'home' : a === 8 && h < 8 ? 'away' : null;
+  return lead && last?.side === lead ? 'Switch sides — 8 points in the deciding set' : null;
+}
+
+/** SD-117b — beach technical timeout: sets 1–2 (not the decider) when the
+ *  points played reach 21. */
+export function technicalTimeoutDue(s: VolleyballState): boolean {
+  if (!s?.beach || s.ended || isDecider(s)) return false;
+  return s.current.home + s.current.away === 21;
+}
 
 export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => {
   // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
@@ -174,7 +277,11 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   // SD-29: the player's id rides on the point only once a court is stamped
   // (older logs replay to exactly their old state).
   const pid = who && s.lineup && a.attribution?.playerId ? { playerId: a.attribution.playerId } : {};
-  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind, playerName: who, ...pid, set: setNo, points: 1 });
+  // SD-117b: an "Opp. fault" may carry what went wrong + the erring opponent
+  // (new optional keys — older OPP_ERRORs carry neither and replay unchanged).
+  const oe = kind === 'opperror' ? faultOf(a) : undefined;
+  const oeText = oe ? [errorTypeLabel(oe.type), oe.playerName].filter(Boolean).join(' · ') : '';
+  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}${oeText ? ` · ${oeText}` : ''}`, side: a.side, kind, playerName: who, ...pid, set: setNo, points: 1, ...(oe ? { oe } : {}) });
 
   const h = current.home;
   const v = current.away;
@@ -189,6 +296,16 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${setsWon.home}-${setsWon.away} sets`, side: won });
   return { ...s, current: { home: 0, away: 0 }, setsWon, sets, events, seq, ended };
 };
+
+/** SD-117b — the fault detail an OPP_ERROR carries (payload.err + attribution2,
+ *  or the replayed `_attr2`). undefined when it carries none. */
+function faultOf(a: ScoreAction): VbFault | undefined {
+  const type = typeof a.payload?.err === 'string' && a.payload.err ? a.payload.err : undefined;
+  const by = (a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2'])) || undefined;
+  if (!type && !by?.playerName) return undefined;
+  return { ...(type ? { type } : {}), ...(by?.playerName ? { playerName: by.playerName, ...(by.playerId ? { playerId: by.playerId } : {}) } : {}) };
+}
+export interface VbFault { type?: string; playerId?: string; playerName?: string }
 
 export interface BoxLine { name: string; points: number; aces: number; blocks: number }
 

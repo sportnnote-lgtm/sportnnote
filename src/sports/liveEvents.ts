@@ -36,6 +36,12 @@ export interface LiveEvent {
   /** SD-107 — tennis 1st / 2nd serve, on points served while "1st / 2nd
    *  serve" tracking was on (absent = not tracked). A double fault is 2. */
   serve?: 1 | 2;
+  /** SD-117b — volleyball "Opp. fault" detail (optional): what went wrong
+   *  (VB_ERROR_TYPES key) and the erring OPPONENT (charged `errors`). Only on
+   *  faults logged with it. */
+  oe?: { type?: string; playerId?: string; playerName?: string };
+  /** SD-117b — kabaddi: how the raider was tackled (optional chip). */
+  tackleType?: string;
   /** Optional outcome accent for the timeline node/label — e.g. cricket colours a
    *  boundary green, a wicket red, an extra amber. Absent → node uses the side colour. */
   tone?: 'boundary' | 'wicket' | 'extra';

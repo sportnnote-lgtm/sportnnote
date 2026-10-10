@@ -48,7 +48,13 @@ export interface PointInput {
   pd?: PointDetail;
   /** SD-107 — tennis: served on the 1st or 2nd serve (serve tracking on). */
   serve?: 1 | 2;
+  /** SD-117b — volleyball: an "Opp. fault" point's optional detail (error
+   *  type + the erring opponent). Replayed with the fault; charges `errors`. */
+  oe?: { type?: string; playerId?: string; playerName?: string };
 }
+
+/** SD-117b — the stat an erring volleyball opponent is charged with. */
+const FAULT_STAT = 'errors';
 
 /** Every scored-point kind (skip game/set/match banner rows). Must match the
  *  editor's displayed rows so their indices stay aligned. */
@@ -68,7 +74,7 @@ export const pointRows = (events: LiveEvent[]): EditRow[] =>
         ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const, ...(e.pd ? { pd: { ...e.pd } } : {}) }
         // SD-19: the credited player's id rides along when the event has one,
         // so an EDIT_LOG keeps ids (absolute statTotals) instead of names only.
-        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}), ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.serve ? { serve: e.serve } : {}) },
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}), ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.serve ? { serve: e.serve } : {}), ...(e.oe ? { oe: { ...e.oe } } : {}) },
     }));
 
 /** Reconstruct the ordered scoring inputs from a sport's point log, so replaying
@@ -107,6 +113,14 @@ function replayAction(p: PointInput): ScoreAction {
     return {
       type: 'POINT', side: p.side, payload: { df: true, ...(p.serve ? { serve: p.serve } : {}) },
       attribution2: p.df.playerName ? { playerId: p.df.playerId ?? '', stat: DOUBLE_FAULT_STAT, playerName: p.df.playerName } : undefined,
+    };
+  }
+  // SD-117b — a volleyball fault keeps its type and erring opponent
+  if (p.kind === 'opperror' && p.oe) {
+    return {
+      type: 'OPP_ERROR', side: p.side,
+      ...(p.oe.type ? { payload: { err: p.oe.type } } : {}),
+      attribution2: p.oe.playerName ? { playerId: p.oe.playerId ?? '', stat: FAULT_STAT, playerName: p.oe.playerName } : undefined,
     };
   }
   return {
@@ -159,6 +173,16 @@ export function reconcileStatActions(
       if (!id) continue;
       const key = `${id}|${DOUBLE_FAULT_STAT}`;
       const cur = m.get(key) ?? { playerId: id, stat: DOUBLE_FAULT_STAT, name: p.df.playerName, n: 0 };
+      cur.n += 1;
+      m.set(key, cur);
+    }
+    // SD-117b — a volleyball fault charges the erring opponent's errors.
+    for (const p of pts) {
+      if (p.kind !== 'opperror' || !p.oe?.playerName) continue;
+      const id = p.oe.playerId || resolveId(p.oe.playerName);
+      if (!id) continue;
+      const key = `${id}|${FAULT_STAT}`;
+      const cur = m.get(key) ?? { playerId: id, stat: FAULT_STAT, name: p.oe.playerName, n: 0 };
       cur.n += 1;
       m.set(key, cur);
     }

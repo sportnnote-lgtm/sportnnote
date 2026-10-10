@@ -29,6 +29,10 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     // opponent's errors, and its own service errors
     { key: 'oppErrors', label: 'Opp. errors', short: 'opp. errors', one: 'opp. error', source: 'team' },
     { key: 'serveErrors', label: 'Serve errors', short: 'serve errors', one: 'serve error', source: 'team', format: { unit: 'count', better: 'lower' } },
+    // SD-117b — faults the player committed (an "Opp. fault" that named the
+    // erring player). Optional detail: tracked only in a match that named one
+    // (statTotals writes it on every line then), "not tracked" elsewhere.
+    { key: 'errors', label: 'Errors', short: 'errors', one: 'error', abbr: 'ERR', group: 'errors', coverage: 'keyed', format: { unit: 'count', better: 'lower' } },
     { key: 'pointsPerSet', label: 'Points per set', abbr: 'PTS/S', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'points', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'points', better: 'higher' }] },
     { key: 'acesPerSet', label: 'Aces per set', abbr: 'ACE/S', source: 'derived', group: 'serve', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'aces', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'aces', better: 'higher' }] },
     { key: 'blocksPerSet', label: 'Blocks per set', abbr: 'BLK/S', source: 'derived', group: 'block', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'blocks', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'blocks', better: 'higher' }] },
@@ -42,6 +46,7 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     { id: 'attack', title: 'Attack', rows: [{ stat: 'points' }, { stat: 'pointsPerSet' }, { stat: 'attackPoints' }, { stat: 'highPoints' }] },
     { id: 'serve', title: 'Serve', rows: [{ stat: 'aces' }, { stat: 'acesPerSet' }] },
     { id: 'block', title: 'Block', rows: [{ stat: 'blocks' }, { stat: 'blocksPerSet' }] },
+    { id: 'errors', title: 'Errors', rows: [{ stat: 'errors' }] },
     { id: 'record', title: 'Sets', rows: [{ stat: 'setsPlayed' }, { stat: 'setsWL' }, { stat: 'setsPct' }] },
   ],
   careerView: 'sections',

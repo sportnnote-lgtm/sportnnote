@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-117b volleyball + kabaddi follow-ups — DONE (2026-10-11)
+- See DEVLOG. Caveats: ✎ edit of a volleyball fault row drops its type/player (stats stay consistent via STAT_ADJUST); Undo label is plain "Undo" for kabaddi PAUSE/RESUME/TIMEOUT; volleyball with no lineup shows the whole squad. Remaining: SD-58 rotation + serve-error credit, SD-59, SD-71, SD-72, SD-83.
+
 ## SD-117a football / hockey / basketball follow-ups — DONE (f50d7a9, 2026-10-11)
 - P1 rows F10, F12, F13, H6, H7, B3, B6, B8, B9, B10, B12 + P2 F7, H5, B11 (FT prefill). See DEVLOG.
 - Remaining (SD-117): F6, F8, F9, F11, F14, F15, H3, H4, H8–H12, B5, B7, B13–B15, B11 sub-required banner + Q time-up nudge. Team-official cards excluded from fair play (agent's call, easy to flip). Hockey Goal → From PC isn't linked to the open corner (only the PC panel links). Football "added time is up — end the match" nudge wording in a level knockout.
