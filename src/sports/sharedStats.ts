@@ -17,6 +17,9 @@ export const ASSISTS = def({ key: 'assists', label: 'Assists', short: 'assists',
 export const FOULS = def({ key: 'fouls', label: 'Fouls', short: 'fouls', one: 'foul', abbr: 'PF', matchSummary: true });
 export const SAVES = def({ key: 'saves', label: 'Saves', short: 'saves', one: 'save', matchSummary: true });
 export const YELLOW_CARDS = def({ key: 'yellowCards', label: 'Yellow', short: 'yellow cards', one: 'yellow card', compact: 'yellow', matchSummary: true });
+/** SD-24 — the most points in one match (basketball career high, volleyball,
+ *  carrom best game) */
+export const HIGH_POINTS = def({ key: 'highPoints', label: 'Most points in a match', short: 'most points', source: 'derived', group: 'bests', agg: { kind: 'max', key: 'points' } });
 export const RED_CARDS = def({ key: 'redCards', label: 'Red', short: 'red cards', one: 'red card', compact: 'red', matchSummary: true });
 
 /**

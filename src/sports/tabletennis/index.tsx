@@ -1,7 +1,7 @@
 /**
  * Table tennis plugin — archetype: set-game-point. Built on the shared rally
  * engine with rally scoring (every rally is a point) and the ITTF service order
- * (2 serves each, alternate every point from 10-10; opening server alternates by
+ * (2 serves each, alternate every point from 10-10 — legacy 21: 5 each until 20-20; opening server alternates by
  * game — see ./serve.ts).
  *   • Games to 11, win by 2 (default) — or the legacy 21-point game.
  *   • Best of 5 (default) / 7 / 3.
@@ -22,6 +22,7 @@ export const tableTennisPlugin = makeRallyPlugin({
   serveTag: 'rally',
   defaults: { playersPerSide: 1, target: 11, winBy: 2, gamesToWin: 3 },
   hasCourt: false,
+  firstServePicker: true,
   serveRule: 'tt',
   formatFields: [
     {

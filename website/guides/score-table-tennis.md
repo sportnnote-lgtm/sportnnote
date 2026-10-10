@@ -1,6 +1,6 @@
 ---
 title: How to score a table tennis match
-description: Score table tennis point by point. The app runs games to 11, best of 5 or 7, and follows the ITTF service order, including one serve each at 10-all.
+description: Score table tennis point by point. The app runs games to 11, best of 5 or 7, and follows the ITTF service order, including one serve each at deuce.
 category: Live scoring
 audience: Scorers, Organisers
 sports: table tennis
@@ -14,18 +14,20 @@ The hard part of umpiring table tennis is the serve: two serves each, then one e
 - You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - The organiser picks the **Format** when scheduling: **Best of 5 (to 11)**, **Best of 7 (to 11)**, **Best of 3 (to 11)**, **Legacy (to 21 · best of 3)** or **Custom**.
 - A game is won at 11 by two clear points, so 10-all goes on to 12-10, 13-11 and so on.
-- Set **Serves first (toss)** to **Home** or **Away** when you schedule. The winner of the toss chooses to serve or receive, so pick the side that will serve first. It can't be changed from the scoring screen.
+- **Serves first (toss)** sets who serves first. You can also change it on the scoring screen before the first point.
 - Under **Players**, pick **Singles** or **Doubles**, and add the players. Tap **⚙ Customize this format** for **Points to win** and **Win by**.
 
 ## Step by step: score a point
 1. Open the match → **Scoring** tab.
-2. Check the serving line, for example "Serving: Asha Rao". In doubles it names the pair.
-3. After each point, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
-4. Repeat. When a game ends, the next one starts at 0-0.
+2. Under "Who serves first?", tap the side that won the toss to serve. You can change it until the first point.
+3. Check the serving line, for example "Serving: Asha Rao". In doubles it names the pair.
+4. After each point, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
+5. Repeat. When a game ends, the next one starts at 0-0.
 
 ## How the app follows the serve
 - Each side serves two points in a row, then the serve passes over.
 - From 10-all, the serve changes after every point.
+- In a **Legacy (to 21)** game each side serves five points in a row, and one each from 20-all.
 - The side that served first in a game receives first in the next game. That is the ITTF rule.
 
 The serving line and the 🏓 dot on the scoreboard both follow this, so you never need to tap who served.
@@ -57,13 +59,13 @@ The app replays the match from the first point, so the score, games, serve order
 The match ends by itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** and choose **Retired**. For a player put out by the umpire, choose **Default**. The result keeps the points played, such as "11-7, 5-3 ret.". See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-When the match ends, each player's table tennis page adds it to Apps and W-D-L. Under "Totals · this sport" you'll see the points credited to them, points won and lost by their side, games won and lost, deciding games played and won, and return points. Singles players also get service points. In doubles these are left out, because the server isn't named. You can split a career by singles or doubles; see [Filter a player's career stats](/guides/filter-career-stats/).
+When the match ends, each player's table tennis page adds it to **Apps**, **W-L** and **Win %**. **Match play** gives W-L and won % for games and points, plus deciding games. **Serve & return** has service and return points won %, from singles only, because the server isn't named in doubles. **Scoring** has points scored. Players with both formats also get **Singles / doubles**, and doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 In a tournament, the points from every game also feed the points-ratio tie-break. See [Points table and adjustments](/guides/points-table-and-adjustments/).
 
 ## Common questions
 ### The serving line says the wrong player. Why?
-The first server comes from **Serves first (toss)** in the match format. If that was set wrong, the whole order is off by one, so check it when you schedule the match.
+The first server was set wrong. Before the first point, tap the right side under "Who serves first?". After that it is locked, so check it before you start.
 
 ### Can I use win by 1?
 Yes. Choose **Custom**, or tap **⚙ Customize this format**, and set **Win by** to **Win by 1**. The first side to the target then wins the game.

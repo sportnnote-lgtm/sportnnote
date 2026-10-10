@@ -13,6 +13,37 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-24 + SD-104: a proper career for every sport; racket rule and UX fixes
+
+- **SD-24 (career framework):** pure `src/data/career.ts` renders every sport's career sections from
+  its schema (golf stays custom; cricket identical).
+  - **Header:** Apps · W-L or W-D-L · Win % · best win run · titles / finals.
+  - **Basketball:** per-game averages, FT %, career highs, double- and triple-doubles.
+  - **Football:** goals per game and per 90, conversion, hat-tricks, keeper save %.
+  - **Volleyball:** per-set rates and sets W-L.
+  - **Kabaddi:** per-match points, Super 10s, High 5s.
+  - **Racket:** match play, serve & return %, a singles/doubles split, partner records (paired by
+    match and side).
+  - **Chess:** score %. **Carrom:** boards and queens.
+  - **History rows:** score line + up to 3 key stats with correct plurals.
+  - **Fixed:** "100%" truncation, "0 aces", "1 draws".
+- **SD-104 (racket fixes from the guide writer):**
+  - **TT serve:** deuce at (target−1)-all, with 5 serves each in 21-point games (derived only;
+    11-point games unchanged).
+  - **Tennis Ace / Double fault:** only for the server ("⚠️ Double fault by X → point Y").
+  - **Double-fault corrections:** new double faults carry `df`, so corrections adjust the count
+    (old ones untouched).
+  - **First server:** a "Who serves first?" picker for squash and table tennis.
+  - **Serving icon:** squash's serving line uses its own icon.
+  - **Badminton serve dot.**
+  - **Doubles serving order:** per-set pick for tennis / padel (`SET_SERVE_ORDER`; tiebreak rotation
+    and serve stats follow it).
+- **Tests:** tsc + 1497.
+- **Guides:** filter-career-stats rewritten; the 5 racket guides updated (pickers, buttons, new
+  career sections).
+
+---
+
 ### 2026-10-10 — Sport depth SD-22 + SD-23: serve/return stats for racket sports; one shared box score for 11 sports
 
 - **Serve stats:** replaying each match's point list gives ATP/BWF-style serve and return stats —

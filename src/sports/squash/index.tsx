@@ -26,6 +26,7 @@ export const squashPlugin = makeRallyPlugin({
   serveTag: 'English',
   defaults: { playersPerSide: 1, target: 11, winBy: 2, gamesToWin: 3 },
   hasCourt: false,
+  firstServePicker: true,
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'psa',

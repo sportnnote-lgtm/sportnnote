@@ -48,13 +48,16 @@ export interface RallyOpts {
   hasCourt: boolean;
   formatFields: FormatField[];
   /** rally-scoring serve order: 'winner' = the rally winner serves next
-   *  (pickleball/squash); 'tt' = table tennis (2 serves each, 1 each from 10-10,
+   *  (pickleball/squash); 'tt' = table tennis (2 serves each, 1 each from 10-10 — 21-point: 5 each, 1 each from 20-20 —
    *  opening server alternates by game). */
   serveRule?: 'winner' | 'tt';
   /** SD-06 (pickleball): name the server by court position. Doubles: one
    *  pre-serve "who starts on the right" pick per team, then the right-court
    *  player by score parity; singles: right on an even score. */
   courtPositions?: boolean;
+  /** SD-104 — show "Who serves first?" on the scoring screen before the first
+   *  rally (squash, table tennis); dispatches SET_FIRST_SERVER. */
+  firstServePicker?: boolean;
 }
 
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
@@ -107,6 +110,20 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         </View>
       ) : null;
 
+    // SD-104 — "Who serves first?" before the match's first rally (the toss).
+    const firstPicker = opts.firstServePicker && !s.ended && s.events.length === 0 && s.games.length === 0
+      ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.label}>{opts.icon} Who serves first?</Text>
+          <View style={ctrl.chips}>
+            {(['home', 'away'] as const).map((t) => (
+              <SelectChip key={t} label={t === 'home' ? homeName : awayName} active={(s.opening ?? 'home') === t}
+                onPress={() => dispatch({ type: 'SET_FIRST_SERVER', payload: { side: t } })} />
+            ))}
+          </View>
+        </View>
+      ) : null;
+
     if (s.sideOut) {
       // The current server's player (for credit + display). With court positions
       // (pickleball) it's the right-court player at the start of the service
@@ -129,11 +146,12 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
               </>
             ) : (
               <Text style={ctrl.serve}>
-                🏓 Serving: {servingTeam}{serverP ? ` · ${serverP.fullName}` : ''}{s.doubles ? ` · server ${s.serverNo}` : ''}
+                {opts.icon} Serving: {servingTeam}{serverP ? ` · ${serverP.fullName}` : ''}{s.doubles ? ` · server ${s.serverNo}` : ''}
               </Text>
             )}
             <Text style={ctrl.meta}>Tap who won each rally — points and the handout sequence are figured out for you.</Text>
           </View>
+          {firstPicker}
           {startPicker}
           <View style={ctrl.row}>
             <Button label={`Rally won — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => rallyWon('home')} />
@@ -149,7 +167,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // opening server before the first point). Doubles names the side; singles the
     // player. No service-court shown here — that rule differs by sport.
     const serverSide: 'home' | 'away' = opts.serveRule === 'tt'
-      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home')
+      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home', s.target)
       : rallyServingSide(s);
     const serverSideName = serverSide === 'home' ? homeName : awayName;
     const serverName = spot
@@ -169,6 +187,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     );
     return (
       <View style={{ gap: theme.spacing(4) }}>
+        {firstPicker}
         <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>
         {startPicker}
         <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
@@ -206,7 +225,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
   const Scoreboard: SportPlugin<RallyState>['Scoreboard'] = ({ state, homeName, awayName, homeColor, awayColor, live, closed }) => {
     const s = state as RallyState;
     const serving: 'home' | 'away' = s.sideOut ? s.serving : opts.serveRule === 'tt'
-      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home')
+      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home', s.target)
       : rallyServingSide(s);
     return (
       <SetLineBoard

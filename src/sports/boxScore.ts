@@ -115,8 +115,10 @@ export function inputsOf(c: BoxColumn): string[] {
   if (c.def?.source === 'derived' && a) {
     const bare = (k: string | string[]) => (Array.isArray(k) ? k : [k]).map((x) => x.replace(/^-/, ''));
     if (a.kind === 'rate') return [...bare(a.num), ...bare(a.den)];
+    if (a.kind === 'sum' && a.keys) return bare(a.keys);
     if (a.kind === 'sum' && a.key) return [a.key];
-    if (a.kind === 'perGame' || a.kind === 'perSet') return [a.key];
+    if (a.kind === 'perGame' || a.kind === 'perSet') return bare(a.key);
+    if (a.kind === 'pair') return [...bare(a.a), ...bare(a.b)];
   }
   return [c.key];
 }

@@ -17,6 +17,7 @@
  */
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
+import { DOUBLE_FAULT_STAT } from './tennis/doubleFault.ts';
 
 /** Kinds of scored point a rally sport logs — each is a single point for `side`.
  *  'point' = a point whose outcome wasn't recorded (every legacy point). The rest
@@ -37,6 +38,10 @@ export interface PointInput {
   /** resolved when the scorer picks a player in the editor; reconstructed events
    *  only carry the name, so profile reconciliation resolves the id by name. */
   playerId?: string;
+  /** SD-104 — tennis: the point was the opponent's double fault (the faulting
+   *  server, if named). Replays as a double fault, so a correction that keeps,
+   *  changes or drops it moves the server's `doubleFaults` with it. */
+  df?: { playerId?: string; playerName?: string };
 }
 
 /** Every scored-point kind (skip game/set/match banner rows). Must match the
@@ -57,7 +62,7 @@ export const pointRows = (events: LiveEvent[]): EditRow[] =>
         ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const }
         // SD-19: the credited player's id rides along when the event has one,
         // so an EDIT_LOG keeps ids (absolute statTotals) instead of names only.
-        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}) },
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}) },
     }));
 
 /** Reconstruct the ordered scoring inputs from a sport's point log, so replaying
@@ -81,18 +86,27 @@ export const defaultCredits: PointCredits = (kind) => (kind === 'rally' ? {} : {
  *  downstream game/set boundary recomputes correctly. `cleared` = the match reset
  *  to 0-0 with its format/config kept. */
 export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S, points: PointInput[]): S {
-  return points.reduce(
-    (s, p) =>
-      reducer(s, {
-        type: ACTION_OF[p.kind],
-        side: p.side,
-        // Only a creditable kind carries a player (an opponent's error never does).
-        attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror' && p.kind !== 'rally'
-          ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }
-          : undefined,
-      }),
-    cleared,
-  );
+  return points.reduce((s, p) => reducer(s, replayAction(p)), cleared);
+}
+
+/** The action one corrected point replays as. */
+function replayAction(p: PointInput): ScoreAction {
+  // SD-104 — a double-fault point replays as one (point to the receiver, the
+  // fault marked on the server); the reducer re-records the marker.
+  if (p.df) {
+    return {
+      type: 'POINT', side: p.side, payload: { df: true },
+      attribution2: p.df.playerName ? { playerId: p.df.playerId ?? '', stat: DOUBLE_FAULT_STAT, playerName: p.df.playerName } : undefined,
+    };
+  }
+  return {
+    type: ACTION_OF[p.kind],
+    side: p.side,
+    // Only a creditable kind carries a player (an opponent's error never does).
+    attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror' && p.kind !== 'rally'
+      ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }
+      : undefined,
+  };
 }
 
 /** The primary stat a point credits to a player profile, mirroring how it was
@@ -125,6 +139,16 @@ export function reconcileStatActions(
         cur.n += by;
         m.set(key, cur);
       }
+    }
+    // SD-104 — a double-fault point debits the faulting server's doubleFaults.
+    for (const p of pts) {
+      if (!p.df?.playerName) continue;
+      const id = p.df.playerId || resolveId(p.df.playerName);
+      if (!id) continue;
+      const key = `${id}|${DOUBLE_FAULT_STAT}`;
+      const cur = m.get(key) ?? { playerId: id, stat: DOUBLE_FAULT_STAT, name: p.df.playerName, n: 0 };
+      cur.n += 1;
+      m.set(key, cur);
     }
     return m;
   };

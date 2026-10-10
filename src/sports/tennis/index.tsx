@@ -17,6 +17,7 @@ import { tennisBox } from '../boxSources';
 import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
+import { ServeOrderPicker } from '../ServeOrderPicker';
 import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type TennisState } from './engine';
 import { tennisTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
@@ -39,20 +40,25 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
     dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
   // A double fault: the OPPONENT wins the point (a normal POINT, so the score &
   // replay stay correct); the faulting server is credited a doubleFault via the
-  // 2nd-attribution channel (reversed on undo).
-  const doubleFault = (side: 'home' | 'away', p?: Player) =>
-    dispatch({ type: 'POINT', side: other(side), attribution2: p ? { playerId: p.id, stat: 'doubleFaults', playerName: p.fullName } : undefined });
+  // 2nd-attribution channel (reversed on undo). SD-104: `payload.df` marks the
+  // point in the log, so a later correction moves the doubleFaults with it.
+  const doubleFault = (server: 'home' | 'away', p?: Player) =>
+    dispatch({ type: 'POINT', side: other(server), payload: { df: true }, attribution2: p ? { playerId: p.id, stat: 'doubleFaults', playerName: p.fullName } : undefined });
 
   // Serve tracking. Who serves first is set before the first point; from there
-  // serve alternates each game (and, in doubles, rotates through the pair).
+  // serve alternates each game (and, in doubles, rotates through the pair in the
+  // serving order picked at the start of the set — SD-104).
   const serve = serveInfo(s);
   const serverSideName = serve.side === 'home' ? homeName : awayName;
+  const receiverSideName = serve.side === 'home' ? awayName : homeName;
   const serverRoster = serve.side === 'home' ? homeRoster : awayRoster;
-  const serverName = s.doubles
-    ? serverRoster[serve.slot]?.fullName ?? `Server ${serve.slot + 1}`
-    : serverRoster[0]?.fullName ?? serverSideName;
+  const serverP: Player | undefined = s.doubles ? serverRoster[serve.slot] : serverRoster[0];
+  const serverName = serverP?.fullName ?? (s.doubles ? `Server ${serve.slot + 1}` : serverSideName);
   const noPlayYet = gamesPlayed(s) === 0 && s.pts.home === 0 && s.pts.away === 0;
   const setFirstServer = (side: 'home' | 'away') => dispatch({ type: 'SET_FIRST_SERVER', payload: { side } });
+  // SD-104: only the server can hit an ace or double-fault — offer both for the
+  // serving side only, credited to the serving player.
+  const by = serverP ? serverP.fullName : serverSideName;
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
@@ -67,15 +73,18 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
       ) : (
         <Text style={ctrl.serveBanner}>🎾 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>
       )}
+      {s.doubles && (
+        <ServeOrderPicker state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} icon="🎾" />
+      )}
       <Row label={`🎾 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
       <Row label={`🎾 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
-      <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
-      <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
-      <Row label={`⚠️ Double fault — ${homeName}`} roster={homeRoster} onPick={(p) => doubleFault('home', p)} fallback={`Double fault ${homeName}`} />
-      <Row label={`⚠️ Double fault — ${awayName}`} roster={awayRoster} onPick={(p) => doubleFault('away', p)} fallback={`Double fault ${awayName}`} />
+      <View style={ctrl.row}>
+        <Button label={`🎯 Ace by ${by}`} variant={serve.side} style={ctrl.flex} onPress={() => act('ACE', serve.side, 'aces', serverP)} />
+        <Button label={`⚠️ Double fault by ${by} → point ${receiverSideName}`} variant="ghost" style={ctrl.flex} onPress={() => doubleFault(serve.side, serverP)} />
+      </View>
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾"
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾" doubleFault
         periodLabel={(e) => `Set ${e.set ?? 1}`}
       />
     </View>
@@ -219,6 +228,8 @@ export const tennisPlugin: SportPlugin<TennisState> = {
 };
 
 const ctrl = StyleSheet.create({
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  flex: { flexGrow: 1, flexBasis: 140 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   serveBanner: {

@@ -19,7 +19,7 @@ import { pointRows, correctionActions, defaultCredits, type EditRow, type PointC
 
 /** One choosable point type in the editor. `credited: false` = nobody on the
  *  scoring side gets credit (an opponent's error) → no player picker. */
-export interface EditorKind { kind: PointKind; label: string; credited: boolean }
+export interface EditorKind { kind: PointKind | 'df'; label: string; credited: boolean }
 
 /** Timeline-row icon per kind (a sport's normal point uses its own `pointIcon`). */
 const ROW_ICON: Partial<Record<PointKind, string>> = { ace: '🎯', block: '🧱', attack: '⚡', opperror: '🎁', serveerror: '🎁', rally: '🔁' };
@@ -28,7 +28,8 @@ interface Draft {
   mode: 'edit' | 'insert';
   index: number; // edit → the row; insert → splice AFTER this index (-1 = at start)
   side: 'home' | 'away';
-  kind: PointKind;
+  /** 'df' (SD-104, tennis) = the opponent's double fault; the player is the faulting server */
+  kind: PointKind | 'df';
   playerId?: string;
   playerName?: string;
 }
@@ -50,6 +51,7 @@ export function RallyPointEditor({
   creditsOf = defaultCredits,
   rowsOf = pointRows,
   normalize,
+  doubleFault = false,
 }: {
   events: LiveEvent[];
   homeName: string;
@@ -80,14 +82,20 @@ export function RallyPointEditor({
    *  server now loses becomes a hand-out and credits nobody). Dispatched as the
    *  EDIT_LOG and used for the STAT_ADJUST diff, so credits match the replay. */
   normalize?: (points: PointInput[]) => PointInput[];
+  /** SD-104 (tennis) — offer "Double fault" as a point type: the point goes to
+   *  the receiver and the faulting server's doubleFaults follow the correction. */
+  doubleFault?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
 
-  const choices: EditorKind[] = kinds ?? (hasAce
-    ? [{ kind: 'point', label: `${pointIcon} Point`, credited: true }, { kind: 'ace', label: '🎯 Ace', credited: true }]
-    : []);
-  const isCredited = (k: PointKind) => choices.find((c) => c.kind === k)?.credited ?? true;
+  const choices: EditorKind[] = [
+    ...(kinds ?? (hasAce
+      ? [{ kind: 'point', label: `${pointIcon} Point`, credited: true }, { kind: 'ace', label: '🎯 Ace', credited: true }] as EditorKind[]
+      : [])),
+    ...(doubleFault ? [{ kind: 'df', label: '⚠️ Double fault', credited: true } as EditorKind] : []),
+  ];
+  const isCredited = (k: PointKind | 'df') => choices.find((c) => c.kind === k)?.credited ?? true;
   const rows = rowsOf(events);
   const list = rows.map((r) => r.p); // forward order; index i ↔ rows[i]
   const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
@@ -105,7 +113,10 @@ export function RallyPointEditor({
     if (!draft) return;
     // An uncredited kind (an opponent's error) never carries a player.
     const credited = isCredited(draft.kind);
-    const item: PointInput = {
+    const item: PointInput = draft.kind === 'df' ? {
+      // the receiver wins the point; the named player is the faulting server
+      side: draft.side, kind: 'point', df: { ...(draft.playerId ? { playerId: draft.playerId } : {}), ...(draft.playerName ? { playerName: draft.playerName } : {}) },
+    } : {
       // no type choice → a plain "won the rally" point (the engine re-derives side-outs)
       side: draft.side, kind: choices.length && draft.kind !== 'rally' ? draft.kind : 'point',
       playerName: credited ? draft.playerName : undefined, playerId: credited ? draft.playerId : undefined,
@@ -121,7 +132,8 @@ export function RallyPointEditor({
 
   const beginEdit = (index: number) => {
     const p = list[index];
-    setDraft({ mode: 'edit', index, side: p.side, kind: p.kind, playerName: p.playerName, playerId: rosterId(p.playerName) });
+    if (p.df) setDraft({ mode: 'edit', index, side: p.side, kind: 'df', playerName: p.df.playerName, playerId: p.df.playerId ?? rosterId(p.df.playerName) });
+    else setDraft({ mode: 'edit', index, side: p.side, kind: p.kind, playerName: p.playerName, playerId: rosterId(p.playerName) });
   };
   const beginInsert = (afterIndex: number) =>
     setDraft({ mode: 'insert', index: afterIndex, side: 'home', kind: defaultKind, playerName: undefined, playerId: undefined });
@@ -157,16 +169,16 @@ export function RallyPointEditor({
                       <SelectChip label={`${pointIcon} Point`} active onPress={() => undefined} />
                     )}
                     {choices.map((c) => (
-                      <SelectChip key={c.kind} label={c.label} active={draft.kind === c.kind} onPress={() => setDraft({ ...draft, kind: c.kind })} />
+                      <SelectChip key={c.kind} label={c.label} active={draft.kind === c.kind} onPress={() => setDraft({ ...draft, kind: c.kind, ...((c.kind === 'df') !== (draft.kind === 'df') ? { playerId: undefined, playerName: undefined } : {}) })} />
                     ))}
                   </View>
                 </>
               )}
               {isCredited(draft.kind) ? (
                 <>
-                  <Text style={st.meta}>Which player? (optional)</Text>
+                  <Text style={st.meta}>{draft.kind === 'df' ? 'Who double-faulted? (the server, optional)' : 'Which player? (optional)'}</Text>
                   <View style={st.chips}>
-                    {rosterFor(draft.side).map((p) => (
+                    {rosterFor(draft.kind === 'df' ? (draft.side === 'home' ? 'away' : 'home') : draft.side).map((p) => (
                       <SelectChip key={p.id} label={p.fullName} active={draft.playerId === p.id}
                         onPress={() => setDraft({ ...draft, playerId: draft.playerId === p.id ? undefined : p.id, playerName: draft.playerId === p.id ? undefined : p.fullName })} />
                     ))}
@@ -196,7 +208,9 @@ export function RallyPointEditor({
                   <View style={[st.dot, { backgroundColor: side === 'home' ? homeColor : awayColor }]} />
                   <Text style={st.period}>{periodLabel(e)}</Text>
                   <Text style={st.rowLabel} numberOfLines={1}>
-                    {ROW_ICON[p.kind] ?? pointIcon} {side === 'home' ? homeName : awayName}{rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}
+                    {p.df
+                      ? `⚠️ Double fault${p.df.playerName ? ` by ${p.df.playerName}` : ''} → point ${side === 'home' ? homeName : awayName}`
+                      : `${ROW_ICON[p.kind] ?? pointIcon} ${side === 'home' ? homeName : awayName}${rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}`}
                   </Text>
                   {!draft && (
                     <>

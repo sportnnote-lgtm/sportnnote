@@ -1,6 +1,6 @@
 /** SD-15 — basketball's stat schema (see ../statSchema.ts). PURE. */
 import type { SportStatSchema } from '../statSchema.ts';
-import { ASSISTS, BLOCKS, FOULS, POINTS } from '../sharedStats.ts';
+import { ASSISTS, BLOCKS, FOULS, HIGH_POINTS, POINTS } from '../sharedStats.ts';
 
 export const basketballStats: SportStatSchema<'basketball'> = {
   sport: 'basketball',
@@ -28,15 +28,32 @@ export const basketballStats: SportStatSchema<'basketball'> = {
     // SD-23 — the team comparison's FT% (a rate recomputed over the side)
     { key: 'freeThrowPct', label: 'Free throw %', abbr: 'FT%', source: 'derived', group: 'scoring', format: { unit: 'percent', dp: 0 },
       agg: { kind: 'rate', num: 'freeThrowsMade', den: 'freeThrowsAtt', scale: 100, dp: 0 } },
+    // SD-24 (BK-06) — the rest of the per-game line, career highs, triple-doubles
+    { key: 'spg', label: 'Steals per game', abbr: 'SPG', source: 'derived', group: 'defence', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'steals', dp: 1 } },
+    { key: 'bpg', label: 'Blocks per game', abbr: 'BPG', source: 'derived', group: 'defence', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'blocks', dp: 1 } },
+    { key: 'topg', label: 'Turnovers per game', abbr: 'TOPG', source: 'derived', group: 'discipline', format: { unit: 'decimal', dp: 1, better: 'lower' }, agg: { kind: 'perGame', key: 'turnovers', dp: 1 } },
+    { key: 'mpg', label: 'Minutes per game', abbr: 'MPG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'minutes', dp: 1, over: 'withMinutes' } },
+    { ...HIGH_POINTS },
+    { key: 'highRebounds', label: 'Most rebounds in a match', short: 'most rebounds', source: 'derived', group: 'bests', agg: { kind: 'max', key: 'rebounds' } },
+    { key: 'highAssists', label: 'Most assists in a match', short: 'most assists', source: 'derived', group: 'bests', agg: { kind: 'max', key: 'assists' } },
+    { key: 'tripleDoubles', label: 'Triple-doubles', short: 'triple-doubles', one: 'triple-double', abbr: 'TD', source: 'derived', group: 'scoring',
+      agg: { kind: 'countIf', keys: ['points', 'rebounds', 'assists', 'steals', 'blocks'], atLeast: 3, gte: 10 } },
     { key: 'doubleDoubles', label: 'Double-doubles', short: 'double-doubles', one: 'double-double', abbr: 'DD', source: 'derived', group: 'scoring',
       agg: { kind: 'countIf', keys: ['points', 'rebounds', 'assists', 'steals', 'blocks'], atLeast: 2, gte: 10 } },
   ],
+  filters: { withMinutes: (l) => l.stats?.minutes != null },
+  // SD-24 (BK-06) — FG / 3P splits arrive with SD-40 (not on the line yet)
   sections: [
-    { id: 'scoring', title: 'Scoring', rows: [{ stat: 'points' }, { stat: 'assists' }, { stat: 'freeThrowsMade' }, { stat: 'freeThrowsAtt' }] },
-    { id: 'defence', title: 'Defence', rows: [{ stat: 'rebounds' }, { stat: 'steals' }, { stat: 'blocks' }] },
-    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'turnovers' }, { stat: 'ejections' }] },
+    { id: 'averages', title: 'Per game', rows: ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'topg', 'mpg'].map((stat) => ({ stat })) },
+    { id: 'shooting', title: 'Shooting', rows: [{ stat: 'freeThrowsMade' }, { stat: 'freeThrowsAtt' }, { stat: 'freeThrowPct' }] },
+    { id: 'totals', title: 'Totals', rows: ['points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'minutes', 'plusMinus'].map((stat) => ({ stat })) },
+    { id: 'bests', title: 'Career highs', rows: [
+      { stat: 'highPoints', label: 'Points' }, { stat: 'highRebounds', label: 'Rebounds' }, { stat: 'highAssists', label: 'Assists' },
+      { stat: 'doubleDoubles', hideZero: true }, { stat: 'tripleDoubles', hideZero: true },
+    ] },
+    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'ejections' }] },
   ],
-  careerView: 'totals',
+  careerView: 'sections',
   // SD-23 — the shared box score's columns (FG / 3P / FT splits, OREB / DREB
   // and EFF come with SD-40). MIN and +/- only once the five was set (SD-29),
   // and only on the Overall view.

@@ -16,19 +16,20 @@ Squash has two scoring systems. In PAR (point-a-rally) scoring, used by the PSA 
 - In PAR 11 a game is won at 11 by two clear points, so 10-all goes on to 12-10. **Club English (to 9)** is first to 9. There is no choice at 8-all to play to 10.
 - Tap **⚙ Customize this format** for **Scoring** (**PAR (point-a-rally)** or **English (hand-out)**), **Points to win** and **Win by**.
 - Under **Players**, pick **Singles** or **Doubles**, and add the players.
-- The home side serves the first rally of the match.
 
 ## Step by step: PAR scoring
 1. Open the match → **Scoring** tab.
-2. Check the serving line, for example "Serving: Asha Rao".
-3. After each rally, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
-4. The rally winner serves next, and the winner of a game serves first in the next game.
+2. Under "Who serves first?", tap the side that won the spin of the racket. You can change it until the first rally.
+3. Check the serving line, for example "Serving: Asha Rao".
+4. After each rally, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
+5. The rally winner serves next, and the winner of a game serves first in the next game.
 
 ## Step by step: English scoring
 1. Open the match → **Scoring** tab. The box at the top says "English scoring" and shows who is serving.
-2. After each rally, tap "Rally won — Red House" or "Rally won — Blue House".
-3. If the server won, they score a point and keep serving.
-4. If the receiver won, it's a hand-out: the serve passes over and nobody scores.
+2. Under "Who serves first?", tap the side that serves the first rally. It matters here, because only the server can score.
+3. After each rally, tap "Rally won — Red House" or "Rally won — Blue House".
+4. If the server won, they score a point and keep serving.
+5. If the receiver won, it's a hand-out: the serve passes over and nobody scores.
 
 The scoreboard header shows the call with the server's score first, for example "Game 1 · English · 5-3". In doubles the box also shows server 1 or server 2.
 
@@ -59,11 +60,11 @@ The app replays the match from the first rally. In English scoring one fix can t
 The match ends by itself when a player wins enough games. If a player can't go on, tap **🏁 End match…** and choose **Retired**. If the referee puts a player out, choose **Default**. The result keeps the points played, such as "11-7, 5-3 ret.". See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-When the match ends, each player's squash page adds it to Apps and W-D-L. Under "Totals · this sport" you'll see the points credited to them, points won and lost by their side, games won and lost, deciding games played and won, and return points. Singles players also get service points. You can split a career by singles or doubles; see [Filter a player's career stats](/guides/filter-career-stats/).
+When the match ends, each player's squash page adds it to **Apps**, **W-L** and **Win %**. **Match play** gives W-L and won % for games and points, plus deciding games. **Serve & return** has service and return points won %, from singles only, because the server isn't named in doubles. **Scoring** has points scored. Players with both formats also get **Singles / doubles**, and doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 ## Common questions
 ### The away player serves first. What do I do?
-In PAR scoring it doesn't change the score: the server line corrects itself after the first rally. In English scoring, tap "Rally won" for the away side before the first real rally. It passes the serve over, but it is logged as one hand-out.
+Tap the away side under "Who serves first?" before the first rally. Once a rally is logged the choice is locked.
 
 ### Why didn't the score change?
 In English scoring the receiver won the rally, so it was a hand-out. Only the server can score.

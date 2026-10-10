@@ -54,7 +54,7 @@ export function tennisVoice(text: string, ctx: VoiceContext): ScoreAction[] | nu
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
   // Double fault: the opponent wins the point; the faulting server gets the DF stat.
-  if (/double ?fault|\bdf\b/.test(q)) return [{ type: 'POINT', side: side === 'home' ? 'away' : 'home', attribution2: attribution(player, 'doubleFaults') }];
+  if (/double ?fault|\bdf\b/.test(q)) return [{ type: 'POINT', side: side === 'home' ? 'away' : 'home', payload: { df: true }, attribution2: attribution(player, 'doubleFaults') }];
   if (/\bace\b/.test(q)) return [{ type: 'ACE', side, attribution: attribution(player, 'aces') }];
   return pointVoice(text, ctx);
 }

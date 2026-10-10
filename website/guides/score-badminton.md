@@ -30,7 +30,7 @@ In badminton every rally scores a point, and the side that wins the rally serves
 - In singles the line names the player. In doubles it names the pair, because which partner serves depends on where they are standing.
 
 ## Reading the board
-The scoreboard has GAMES won and one column of points per game, with the game in play highlighted. The header shows the game number and "best of 3". When the match ends, the result reads like "2–1 · 21-18, 19-21, 21-15".
+The scoreboard has GAMES won and one column of points per game, with the game in play highlighted and a 🏸 dot next to the serving side. The header shows the game number and "best of 3". When the match ends, the result reads like "2–1 · 21-18, 19-21, 21-15".
 
 ## Match stats
 The **Score** tab shows a "Match stats" panel once the first rally is played. From the second game, the chips switch between **Match** and each game.
@@ -56,7 +56,7 @@ The app replays the match from the first rally. The score, games, server and pla
 The match ends by itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** and choose **Retired**. For a player put out by the umpire, choose **Default**. The result keeps the points played, such as "21-15, 8-3 ret.". A retirement before the first point shows "w/o". See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-When the match ends, each player's badminton page adds it to Apps and W-D-L. Under "Totals · this sport" you'll see the points credited to them, points won and lost by their side, games won and lost, and deciding games played and won, and return points. Singles players also get service points. In doubles these are left out, because the server isn't named. Partners both get the pair's record. You can split a career by singles or doubles; see [Filter a player's career stats](/guides/filter-career-stats/).
+When the match ends, each player's badminton page adds it to **Apps**, **W-L** and **Win %**. **Match play** gives W-L and won % for games and points, plus deciding games. **Serve & return** has service and return points won %, from singles only, because the server isn't named in doubles. **Scoring** has points scored. Players with both formats also get **Singles / doubles**, and doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 ## Common questions
 ### Do I need to tap who served?

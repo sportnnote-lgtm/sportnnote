@@ -781,6 +781,31 @@ export async function getMatchStatLines(matchId: string): Promise<StatLine[]> {
   return (data as StatLineRow[]).map(rowToStatLine);
 }
 
+/** SD-24 — every stat line of a set of matches (one query): a doubles
+ *  career pairs each line with its partner's line of the same match + side. */
+export async function getStatLinesForMatches(matchIds: string[]): Promise<StatLine[]> {
+  if (matchIds.length === 0) return [];
+  if (!isSupabaseConfigured || !supabase) {
+    const set = new Set(matchIds);
+    return demo.statLines.filter((l) => set.has(l.matchId));
+  }
+  const { data, error } = await selectStatLines((cols) => supabase!.from('stat_lines').select(cols).in('match_id', matchIds));
+  if (error || !data) return [];
+  return (data as StatLineRow[]).map(rowToStatLine);
+}
+
+/** SD-24 — id → full name for a few players (partner rows), one query. */
+export async function getPlayerNames(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  if (!isSupabaseConfigured || !supabase) {
+    const set = new Set(ids);
+    return new Map(demo.players.filter((p) => set.has(p.id)).map((p) => [p.id, p.fullName]));
+  }
+  const { data, error } = await supabase.from(PLAYERS_READ).select('id, full_name').in('id', ids);
+  if (error || !data) return new Map();
+  return new Map((data as { id: string; full_name: string }[]).map((r) => [r.id, r.full_name]));
+}
+
 /** Server-side player search: filtering happens in the DB (or the demo store),
  *  not by loading every player into the client. */
 /** Discover filters. Every field is optional; arrays mean "any of". */

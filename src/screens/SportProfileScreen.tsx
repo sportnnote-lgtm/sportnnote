@@ -14,15 +14,18 @@ import { getSport } from '../sports/registry';
 import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
-import { statCoverage, winRateOf, APPEARANCE_KEYS, aggregate } from '../data/stats';
+import { statCoverage, aggregate } from '../data/stats';
 import { contextsFor, splitOptions, filterLines, type SplitDim, type SplitSelection } from '../data/lineContext';
 import { lineResult, RESULT_PILL } from '../data/appearances';
 import { cricketMatchLine } from '../data/cricketCareer';
 import { statSchema, labelLong } from '../sports/statSchemas';
-import { careerFromSchema } from '../sports/statSchema';
+import {
+  careerSections, recordFigure, winPctText, tileValueIsLong, bestWinRun, titlesAndFinals,
+  disciplineRecords, partnerRecords, doublesMatchIds, historyStats, wlText,
+} from '../data/career';
 import { golfProfileSummary } from '../sports/golf/engine';
-import { getMyPlayerId, getPlayerEditAccess, getTournaments } from '../data/repos';
-import type { Tournament } from '../core/types';
+import { getMyPlayerId, getPlayerEditAccess, getTournaments, getStatLinesForMatches, getPlayerNames } from '../data/repos';
+import type { StatLine, Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
 import type { RootStackParamList } from '../navigation/types';
@@ -74,6 +77,29 @@ export default function SportProfileScreen() {
   }, [splits, sel]);
   const filtered = Object.keys(activeSel).length > 0;
   const splitStats = useMemo(() => (filtered ? aggregate(filterLines(sportLines, ctxOf, activeSel)) : null), [filtered, sportLines, ctxOf, activeSel]);
+
+  // SD-24 — doubles partners: the other lines of the player's doubles matches
+  // (one query per profile, not per chip), paired by match + side, and the
+  // partners' names.
+  const pairIds = useMemo(() => doublesMatchIds(sportLines, ctxOf), [sportLines, ctxOf]);
+  const pairKey = pairIds.join(',');
+  const [mateLines, setMateLines] = useState<StatLine[]>([]);
+  const [names, setNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let on = true;
+    if (!pairIds.length) { setMateLines([]); return; }
+    getStatLinesForMatches(pairIds).then((ls) => on && setMateLines(ls)).catch(() => {});
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairKey]);
+  const allPartners = useMemo(() => partnerRecords(sportLines, mateLines, matchById, ctxOf), [sportLines, mateLines, matchById, ctxOf]);
+  const partnerKey = allPartners.map((p) => p.partnerId).join(',');
+  useEffect(() => {
+    let on = true;
+    const ids = partnerKey ? partnerKey.split(',') : [];
+    getPlayerNames(ids).then((m) => on && setNames(m)).catch(() => {});
+    return () => { on = false; };
+  }, [partnerKey]);
 
   // Name the nav bar after whose profile this is, so the header reads as a
   // breadcrumb (⟨ Aarav Mehta) rather than a generic "Sport".
@@ -129,9 +155,7 @@ export default function SportProfileScreen() {
     : hasSplit && scope === 'official' ? `No official ${plugin.name.toLowerCase()} matches yet.`
     : `No ${plugin.name.toLowerCase()} matches recorded yet.`;
   const history = stats.recent.filter((l) => l.sport === sport);
-  // SD-19: the match-record keys (games / sets won, deciders…) are career
-  // totals — a history row's set line already tells that match's story.
-  const recordKeys = new Set((statSchema(sport)?.stats ?? []).filter((d) => d.group === 'record').map((d) => d.key));
+  const schema = statSchema(sport);
   const detail = player.sportDetails?.[sport];
 
   // History rows open the full match page when they link to a real match.
@@ -231,33 +255,92 @@ export default function SportProfileScreen() {
             <>
             {/* Headline record — accent-coloured so the eye lands here first. */}
             {/* SD-11: appearances, the W-D-L record (draws / ties / no results
-                are no longer losses) and win % over matches with a result. */}
-            <View style={st.statGrid}>
-              <Stat value={String(bySport.matches)} label="Apps" />
-              <Stat value={`${bySport.wins}-${bySport.draws}-${bySport.losses}`} label="W-D-L" />
-              <Stat value={`${Math.round(winRateOf(bySport) * 100)}%`} label="Win %" />
-            </View>
-            {(bySport.startsKnown > 0 || bySport.ties > 0 || bySport.noResults > 0) && (
-              <View style={st.statGrid}>
-                {bySport.startsKnown > 0 && <Stat value={String(bySport.starts)} label="Starts" tone="neutral" />}
-                {bySport.ties > 0 && <Stat value={String(bySport.ties)} label="Ties" tone="neutral" />}
-                {bySport.noResults > 0 && <Stat value={String(bySport.noResults)} label="No result" tone="neutral" />}
-              </View>
-            )}
-            {/* Counting stats — a second, quieter tier so they read as detail,
-                not as more headline numbers. */}
-            {statSchema(sport)?.careerView === 'sections' ? (() => {
-              // Career sections straight from the sport's stat schema (SD-15) —
-              // cricket's Batting / Bowling / Fielding (parity #19).
-              const schema = statSchema(sport)!;
-              const c = careerFromSchema(schema, stats.recent.filter((l) => l.sport === sport));
+                are no longer losses) and win % over matches with a result.
+                SD-24: W-L where the sport has no draws. */}
+            {(() => {
+              const rec = recordFigure(sport, bySport);
+              const winPct = winPctText(bySport);
+              const headLong = [String(bySport.matches), rec.value, winPct].some(tileValueIsLong);
+              // SD-24 — best winning run, titles / finals (cricket's header stays as it was)
+              const framework = sport !== 'cricket';
+              const run = framework ? bestWinRun(history) : 0;
+              const tf = framework ? titlesAndFinals(history, matchById) : { titles: 0, finals: 0 };
+              const extra = bySport.startsKnown > 0 || bySport.ties > 0 || bySport.noResults > 0 || run >= 2 || tf.finals > 0;
               return (
                 <>
-                  {(schema.sections ?? []).map((sec) => (
+                  {/* one font size per row: "100%" (or "12-3") shrinks the whole row */}
+                  <View style={st.statGrid}>
+                    <Stat value={String(bySport.matches)} label="Apps" long={headLong} />
+                    <Stat value={rec.value} label={rec.label} long={headLong} />
+                    <Stat value={winPct} label="Win %" long={headLong} />
+                  </View>
+                  {extra && (
+                    <View style={st.statGrid}>
+                      {bySport.startsKnown > 0 && <Stat value={String(bySport.starts)} label="Starts" tone="neutral" />}
+                      {bySport.ties > 0 && <Stat value={String(bySport.ties)} label="Ties" tone="neutral" />}
+                      {bySport.noResults > 0 && <Stat value={String(bySport.noResults)} label="No result" tone="neutral" />}
+                      {run >= 2 && <Stat value={String(run)} label="Best win run" tone="neutral" />}
+                      {tf.finals > 0 && <Stat value={String(tf.titles)} label={tf.titles === 1 ? 'Title' : 'Titles'} tone="neutral" />}
+                      {tf.finals > 0 && <Stat value={String(tf.finals)} label={tf.finals === 1 ? 'Final' : 'Finals'} tone="neutral" />}
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+            {/* SD-24 — singles / doubles W-L (when the player has played both)
+                and the doubles record per partner. */}
+            {(() => {
+              const disc = disciplineRecords(history, ctxOf);
+              const partners = partnerRecords(history, mateLines, matchById, ctxOf);
+              return (
+                <>
+                  {disc.length >= 2 && (
+                    <>
+                      <Text style={st.totalsLabel}>Singles / doubles</Text>
+                      <View style={st.statGrid}>
+                        {disc.map((d) => <Stat key={d.key} value={wlText(d.record)} label={`${d.label} W-L`} tone="neutral" />)}
+                      </View>
+                    </>
+                  )}
+                  {partners.length > 0 && (
+                    <>
+                      <Text style={st.totalsLabel}>Partners</Text>
+                      <Card style={{ gap: theme.spacing(2) }}>
+                        {partners.map((p) => (
+                          <View key={p.partnerId} style={st.partnerRow}>
+                            <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{names.get(p.partnerId) ?? 'Partner'}</Text>
+                            <Text style={textStyles.muted}>{p.played} {p.played === 1 ? 'match' : 'matches'}</Text>
+                            <Text style={st.partnerWL}>{wlText(p)}</Text>
+                          </View>
+                        ))}
+                      </Card>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+            {/* Career sections — a second, quieter tier so they read as detail,
+                not as more headline numbers. */}
+            {schema?.careerView === 'sections' ? (() => {
+              // SD-24 — every sport's career straight from its stat schema
+              // (SD-15 / SD-16): averages, rates, bests and totals; rows
+              // nobody tracked are hidden (D8). Cricket's Batting / Bowling /
+              // Fielding render exactly as before (parity #19).
+              const secs = careerSections(schema, history);
+              return (
+                <>
+                  {secs.map((sec) => (
                     <React.Fragment key={sec.id}>
                       <Text style={st.totalsLabel}>{sec.title}</Text>
                       <View style={st.statGrid}>
-                        {(c[sec.id] ?? []).map((r) => <Stat key={r.key} value={r.value} label={r.label} tone="neutral" />)}
+                        {sec.rows.map((r) => (
+                          <Stat
+                            key={r.key} value={r.value} label={r.label} tone="neutral"
+                            long={sport === 'cricket' ? undefined : sec.rows.some((x) => tileValueIsLong(x.value))}
+                            coverage={r.coverage} open={openStat === r.key}
+                            onToggle={() => setOpenStat(openStat === r.key ? null : r.key)}
+                          />
+                        ))}
                       </View>
                     </React.Fragment>
                   ))}
@@ -361,7 +444,8 @@ export default function SportProfileScreen() {
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k) && !recordKeys.has(k)).map(([k, v]) => `${v} ${labelLong(k, sport).toLowerCase()}`)].filter(Boolean).join(' · ')}
+                      {/* SD-24: the score line + the key stats (no zeros, no record keys, correct plurals) */}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, historyStats(l, ctxOf.get(l.id))].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pill
@@ -392,15 +476,18 @@ function countInSportOf(s: { bySport: { sport: string; matches: number }[] }, sp
 }
 
 function Stat({
-  value, label, coverage, open, onToggle, tone = 'accent',
+  value, label, coverage, open, onToggle, tone = 'accent', long,
 }: {
   value: string; label: string; tone?: 'accent' | 'neutral';
+  /** the smaller figure (SD-24: set per row so a row reads at one size);
+   *  default: from this value's own length */
+  long?: boolean;
   coverage?: { tracked: number; total: number }; open?: boolean; onToggle?: () => void;
 }) {
   const inner = (
     <Card style={st.statCardInner}>
       {coverage ? <Text style={st.cloud}>☁</Text> : null}
-      <Text style={[st.statValue, tone === 'neutral' && st.statValueNeutral, value.length > 4 && st.statValueLong]} numberOfLines={1}>{value}</Text>
+      <Text style={[st.statValue, tone === 'neutral' && st.statValueNeutral, (long ?? tileValueIsLong(value)) && st.statValueLong]} numberOfLines={1}>{value}</Text>
       <Text style={textStyles.muted}>{label}</Text>
       {coverage && open ? (
         <Text style={st.coverageNote}>tracked in {coverage.tracked} of {coverage.total} games</Text>
@@ -421,10 +508,10 @@ const st = StyleSheet.create({
   scopeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   chipRow: { flexDirection: 'row', gap: theme.spacing(2), paddingRight: theme.spacing(2) },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
-  statCardInner: { width: '100%', alignItems: 'center', gap: theme.spacing(1) },
+  statCardInner: { width: '100%', flexGrow: 1, alignItems: 'center', gap: theme.spacing(1) },
   statCardWrap: { width: '30%', flexGrow: 1 },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
-  /** a W-D-L record ("12-3-10") fits one line on a 375 px phone */
+  /** from 4 characters ("100%", "12-3-10") the figure fits one line on a 375 px phone (SD-24) */
   statValueLong: { fontSize: theme.font.h3, lineHeight: theme.font.h1 + 6 },
   statValueNeutral: { color: theme.colors.text },
   totalsLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(1) },
@@ -433,6 +520,8 @@ const st = StyleSheet.create({
   fbHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   fbMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  partnerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  partnerWL: { color: theme.colors.text, fontWeight: '800', minWidth: 44, textAlign: 'right' },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   histDate: { color: theme.colors.textMuted, fontWeight: '400' },
   chevron: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '700' },

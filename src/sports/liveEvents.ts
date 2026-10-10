@@ -26,6 +26,10 @@ export interface LiveEvent {
   /** SD-21 — side-out sports: who WON a rally that scored no point (kind
    *  'rally'). `side` keeps its legacy meaning on those events. */
   wonBy?: 'home' | 'away';
+  /** SD-104 — tennis: this point (won by `side`) was the opponent's double
+   *  fault; the faulting server, if named. Only on points recorded with the
+   *  `df` payload flag (older double faults carry no marker). */
+  df?: { playerId?: string; playerName?: string };
   /** Optional outcome accent for the timeline node/label — e.g. cricket colours a
    *  boundary green, a wicket red, an extra amber. Absent → node uses the side colour. */
   tone?: 'boundary' | 'wicket' | 'extra';

@@ -7,7 +7,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
-import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
+import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import type { ScoreSummary } from '../types';
 
@@ -47,6 +47,9 @@ export interface TennisState {
   doubles: boolean;
   /** which side served game 1; serve alternates every game after that */
   firstServer: 'home' | 'away';
+  /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
+   *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
+  serveOrder?: ServeOrder;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -124,7 +127,7 @@ function winSet(s: TennisState, side: 'home' | 'away', games: { home: number; aw
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean, whoId?: string): TennisState {
+function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean, whoId?: string, df?: { playerId?: string; playerName?: string }): TennisState {
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -133,7 +136,10 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   const setNo = s.setsWon.home + s.setsWon.away + 1;
   // Structured fields (kind/playerName/set/points) let the per-set box score tally
   // points & aces per player, filtered by set — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1 });
+  // SD-104: a double fault is a plain point for the receiver (so every count of
+  // points stays as before) carrying a `df` marker naming the faulting server.
+  if (df) events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1 });
+  else events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1 });
 
   if (tb) {
     // First to the tiebreak target, win by 2. A match tiebreak records its own
@@ -171,6 +177,10 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   // Who serves first — settable only before the first point (like a tennis
   // toss); serve alternates from there. No `side` on this action.
+  // SD-104 — doubles: which player of a pair serves its first game of this set
+  // (ITF / FIP: each pair chooses at the start of every set). Pre-first-point of
+  // the set only; no score effect and no timeline event.
+  if (a.type === 'SET_SERVE_ORDER') return withServeOrder(s, a.payload as Record<string, unknown> | undefined);
   if (a.type === 'SET_FIRST_SERVER') {
     const played = s.games.home || s.games.away || s.pts.home || s.pts.away || s.sets.length;
     const side = a.payload?.side as 'home' | 'away' | undefined;
@@ -179,6 +189,13 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   }
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).
+  // SD-104: a double fault dispatched with `payload.df` (new UI / voice) marks the
+  // point; the faulting server rides on attribution2 (live) or the persisted
+  // `_attr2` (replay from the log). Older double faults (no flag) are plain points.
+  if (a.type === 'POINT' && a.payload?.df === true) {
+    const f = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);
+    return scorePoint(s, a.side, undefined, false, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) });
+  }
   if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false, a.attribution?.playerId || undefined);
   if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true, a.attribution?.playerId || undefined);
   return s;

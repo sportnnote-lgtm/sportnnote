@@ -5,7 +5,7 @@
  */
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
-import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
+import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 
@@ -32,6 +32,9 @@ export interface PadelState {
   doubles: boolean;
   /** which side served game 1; serve alternates every game after that */
   firstServer: 'home' | 'away';
+  /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
+   *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
+  serveOrder?: ServeOrder;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -143,6 +146,10 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   // Who serves first — settable only before the first point; serve alternates
   // from there. No `side` on this action.
+  // SD-104 — doubles: which player of a pair serves its first game of this set
+  // (ITF / FIP: each pair chooses at the start of every set). Pre-first-point of
+  // the set only; no score effect and no timeline event.
+  if (a.type === 'SET_SERVE_ORDER') return withServeOrder(s, a.payload as Record<string, unknown> | undefined);
   if (a.type === 'SET_FIRST_SERVER') {
     const played = s.games.home || s.games.away || s.pts.home || s.pts.away || s.sets.length;
     const side = a.payload?.side as 'home' | 'away' | undefined;

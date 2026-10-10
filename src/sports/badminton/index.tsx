@@ -101,6 +101,8 @@ const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']
     <SetLineBoard
       ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
       status={`Game ${s.games.length + 1}`} bestOf={`best of ${s.gamesToWin * 2 - 1}`}
+      // SD-104: serve dot on the serving side (the last rally winner / first server), while live.
+      serving={s.ended ? null : serve(s).side} serveIcon="🏸"
     />
   );
 };

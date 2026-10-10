@@ -19,6 +19,7 @@ import { MatchBoxScore } from '../../components/BoxScore';
 import { padelBox } from '../boxSources';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
+import { ServeOrderPicker } from '../ServeOrderPicker';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
@@ -67,6 +68,9 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
         </View>
       ) : (
         <Text style={ctrl.serve}>🟡 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>
+      )}
+      {s.doubles && (
+        <ServeOrderPicker state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} icon="🟡" />
       )}
       {matchTbActive(s) && <Text style={ctrl.serve}>🟡 Match tiebreak — first to 10 (win by 2).</Text>}
       {deucePoint && <Text style={ctrl.serve}>⚡ Golden point — next point wins the game.</Text>}

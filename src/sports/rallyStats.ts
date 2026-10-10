@@ -4,11 +4,12 @@
  *  (src/sports/racketTotals.ts), plus the SD-22 serve / return keys replayed
  *  from the point log (src/sports/serveStats.ts). PURE. */
 import type { SportId } from '../core/types';
-import type { SportStatSchema, StatDef } from './statSchema.ts';
+import type { SectionDef, SportStatSchema, StatDef } from './statSchema.ts';
 import { POINTS } from './sharedStats.ts';
 
+// 'present' (SD-24): absolute statTotals keys, tracked wherever they're on the line
 const rec = (key: string, label: string, short: string, one: string): StatDef =>
-  ({ key, label, short, one, group: 'record' });
+  ({ key, label, short, one, group: 'record', coverage: 'present' });
 
 /** SD-19 — the record keys `statTotals` writes on every racket line (group
  *  'record': career totals, never the per-match history line). `sets` adds the
@@ -33,10 +34,49 @@ export function racketRecordStats(sets: boolean): StatDef[] {
   ];
 }
 
-const rate = (key: string, label: string, num: string, den: string): StatDef => ({
+const rate = (key: string, label: string, num: string | string[], den: string | string[]): StatDef => ({
   key, label, source: 'derived', group: 'record', format: { unit: 'percent', dp: 0 },
   agg: { kind: 'rate', num, den, scale: 100, dp: 0 },
 });
+const pair = (key: string, label: string, a: string | string[], b: string | string[]): StatDef => ({
+  key, label, source: 'derived', group: 'record', format: { unit: 'figure' }, agg: { kind: 'pair', a, b },
+});
+
+/** SD-24 — the racket career's match-play figures over the SD-19 record keys:
+ *  W-L pairs and won %. `sets` adds sets and tiebreaks (tennis, padel). */
+export function racketCareerStats(sets: boolean): StatDef[] {
+  return [
+    ...(sets ? [
+      pair('setsWL', 'Sets W-L', 'setsWon', 'setsLost'),
+      rate('setsPct', 'Sets won %', 'setsWon', ['setsWon', 'setsLost']),
+    ] : []),
+    pair('gamesWL', 'Games W-L', 'gamesWon', 'gamesLost'),
+    rate('gamesPct', 'Games won %', 'gamesWon', ['gamesWon', 'gamesLost']),
+    pair('ptsWL', 'Points W-L', 'ptsWon', 'ptsLost'),
+    rate('ptsPct', 'Points won %', 'ptsWon', ['ptsWon', 'ptsLost']),
+    pair('decidersWL', 'Deciders W-L', 'decidersWon', ['decidersPlayed', '-decidersWon']),
+    ...(sets ? [pair('tiebreaksWL', 'Tiebreaks W-L', 'tiebreaksWon', ['tiebreaksPlayed', '-tiebreaksWon'])] : []),
+  ];
+}
+
+/** SD-24 — the racket career sections (the record / partner / titles block
+ *  above them is the shared framework's, src/data/career.ts). `serveFirst`
+ *  rows (tennis aces / double faults) lead the serve section. */
+export function racketSections(sets: boolean, serveFirst: { stat: string }[] = []): SectionDef[] {
+  return [
+    { id: 'match', title: 'Match play', rows: [
+      ...(sets ? [{ stat: 'setsWL' }, { stat: 'setsPct' }] : []),
+      { stat: 'gamesWL' }, { stat: 'gamesPct' }, { stat: 'ptsWL' }, { stat: 'ptsPct' },
+      { stat: 'decidersWL' }, ...(sets ? [{ stat: 'tiebreaksWL' }] : []),
+    ] },
+    { id: 'serve', title: 'Serve & return', rows: [
+      ...serveFirst,
+      { stat: 'srvPtsPct' }, { stat: 'rcvPtsPct' },
+      ...(sets ? [{ stat: 'holdPct' }, { stat: 'breakPct' }, { stat: 'bpSavedPct' }, { stat: 'bpWonPct' }] : []),
+    ] },
+    { id: 'points', title: 'Scoring', rows: [{ stat: 'points', label: 'Points scored' }] },
+  ];
+}
 
 /** SD-22 — the career serve / return keys every racket line gets from the
  *  replay (`serveCareerKeys`), and the rates built on them. Group 'record'
@@ -74,9 +114,9 @@ export function rallyStats<S extends SportId>(sport: S, icon: string, opts: { se
     sport,
     /** SD-25 — career split chips (line context) */
     splits: ['discipline', 'format', 'tournament', 'season', 'opponent'],
-    stats: [{ ...POINTS, group: 'points', weight: 1 }, ...racketRecordStats(!!opts.sets), ...racketServeStats(!!opts.sets)],
-    sections: [{ id: 'points', title: 'Points', rows: [{ stat: 'points' }] }],
-    careerView: 'totals',
+    stats: [{ ...POINTS, group: 'points', weight: 1 }, ...racketRecordStats(!!opts.sets), ...racketServeStats(!!opts.sets), ...racketCareerStats(!!opts.sets)],
+    sections: racketSections(!!opts.sets),
+    careerView: 'sections',
     box: [{ columns: ['points'] }],
     leaders: ['points'],
     headline: ['points'],

@@ -102,6 +102,16 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
       if (s.current.home !== 0 || s.current.away !== 0) return s;
       return { ...s, startRight: { ...s.startRight, [side]: playerId } };
     }
+    // SD-104 — who serves first (the toss), chosen on the scoring screen before
+    // the match's first rally: sets the opening server (table tennis' game-by-game
+    // alternation) and the side holding serve (squash / side-out). No score
+    // effect, no timeline event; ignored once any rally is logged.
+    if (a.type === 'SET_FIRST_SERVER') {
+      const side = a.payload?.side;
+      if (s.ended || (side !== 'home' && side !== 'away')) return s;
+      if (s.events.length || s.games.length || s.current.home || s.current.away) return s;
+      return { ...s, opening: side, serving: side };
+    }
     if (a.type !== 'POINT' || !a.side || s.ended) return s;
     const gameNo = s.games.length + 1;
 

@@ -9,7 +9,7 @@
  *   tennis / padel  serve.ts `serveInfo` — alternates by game, tiebreak turns,
  *                   doubles slot (SD-103 partner rotation in a tiebreak)
  *   badminton       the last rally winner (the first server before any point)
- *   table tennis    ITTF order (`ttServer`: 2 each, 1 each from 10-10)
+ *   table tennis    ITTF order (`ttServer`: 2 each, 1 each from 10-10; 21-pt: 5 each, 1 each from 20-20)
  *   squash / pickleball, rally scoring   the last rally winner
  *   side-out scoring (pickleball side-out, squash English)  the side holding
  *                   serve (`state.serving`), server 1 / 2 in doubles
@@ -246,7 +246,7 @@ function rallyAdapter(sport: 'tabletennis' | 'squash' | 'pickleball'): Adapter {
     server: (s, w, rosters) => {
       const x = s as RallyState;
       const side: Side = x.sideOut ? x.serving
-        : sport === 'tabletennis' ? ttServer(x.current.home, x.current.away, x.games.length, x.opening ?? 'home')
+        : sport === 'tabletennis' ? ttServer(x.current.home, x.current.away, x.games.length, x.opening ?? 'home', x.target)
         : w ?? x.serving;
       const roster = rosters[side] ?? [];
       let id: string | undefined;

@@ -24,9 +24,11 @@
  *   tennis / padel: svcGames / svcHeld / bpFaced / bpSaved (serving player),
  *                     rtnGames / breaks / bpOpps / bpWon (the side)
  * Doubles lines also get a derived `partnerId` (not stored: no column).
- * NOT owned: tennis `doubleFaults` (credited through attribution2, which the
- * log keeps but an EDIT_LOG point list can't carry) — it stays on increments,
- * so the racket plugins set `statTotalsPartial`.
+ * NOT owned: tennis `doubleFaults` (credited through attribution2) — it stays
+ * on increments, so the racket plugins set `statTotalsPartial`. SD-104: a double
+ * fault recorded with `payload.df` is marked on its point (`event.df`), so an
+ * EDIT_LOG carries it and the correction's STAT_ADJUST moves `doubleFaults`;
+ * older double faults carry no marker and are left as they were.
  */
 import type { LiveEvent } from './liveEvents';
 import type { StatTotalsContext, StatTotalsEntry } from './types';
