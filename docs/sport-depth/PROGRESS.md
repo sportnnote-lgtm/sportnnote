@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-106 match controls + confirm sheet — DONE (83ba1a5, 2026-10-11)
+- End / Restart / Not started? Cancel moved to a red Match controls card at the bottom of Scoring; every destructive action (incl. walkover, discard, delete/reset, period ends, golf finish, results lock) goes through `ConfirmSheet` (green No on top, red/amber Yes). Undo unchanged, next to the scoring buttons.
+- Open: voice "full time"/"end half" still end with no sheet; demo Restart never shows after the first score (demo events lack created_at); native not run.
+
 ## SD-108 invite share — DONE (8051bd2, 2026-10-11)
 - Invite texts say "Team …" / "Tournament …"; the QR PNG is shared with the message (web now; Android app after a new APK — `react-native-share`); Android web join pages offer "Open in the SportnNote app" with a website fallback.
 - "Hrudhay Organizer" is the account's own profile name — edit the profile.
