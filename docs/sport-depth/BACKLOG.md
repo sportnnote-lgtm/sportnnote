@@ -15,9 +15,9 @@ P2 items are parked (PLAN.md §6.2).
 
 | # | Item | Scope | Source | Status | Notes |
 |---|---|---|---|---|---|
-| SD-01 | Final score after the match ends: sets/games won + set/game scores, not "0–0" (result alert, ticker, MiniScore, CorrectMatch) | tennis, badminton, TT, squash, pickleball, carrom | TN-00, BD-01, TT-01, CR-01 | READY | Wave 0 · S · no migration |
-| SD-02 | Tennis scoreline: tiebreak score 7-6(4) kept per set; Grand Slam deciding set (10-pt TB at 6-6) and a fixed `gs5` preset | tennis | TN-04, TN-08 | READY | Wave 0 · S · no migration |
-| SD-03 | Kabaddi raid/tackle attribution: raider credited with actual raid points; tackle point on the defending side; remove/edit ordinal; draw/shootout winner; voice super tackle = 2 | kabaddi | KB-01 | READY | Wave 0 · M · no migration · past lines heal via SD-33 (D2) |
+| SD-01 | Final score after the match ends: sets/games won + set/game scores, not "0–0" (result alert, ticker, MiniScore, CorrectMatch) | tennis, badminton, TT, squash, pickleball, carrom | TN-00, BD-01, TT-01, CR-01 | DONE | 326857f · Wave 0 · S · no migration |
+| SD-02 | Tennis scoreline: tiebreak score 7-6(4) kept per set; Grand Slam deciding set (10-pt TB at 6-6) and a fixed `gs5` preset | tennis | TN-04, TN-08 | DONE | 326857f · Wave 0 · S · no migration |
+| SD-03 | Kabaddi raid/tackle attribution: raider credited with actual raid points; tackle point on the defending side; remove/edit ordinal; draw/shootout winner; voice super tackle = 2 | kabaddi | KB-01 | IN-PROGRESS | Wave 0 · M · no migration · past lines heal via SD-33 (D2) |
 | SD-04 | Volleyball point credit: Opp. error / Serve error capture; ACE and BLOCK count as points; MVP weights | volleyball | VB-01, VB-02 | READY | Wave 0 · M · no migration · new OPP_ERROR / SERVE_ERROR · past lines heal via SD-32 |
 | SD-05 | Basketball FIBA rules: bonus from the 5th foul, technicals as team fouls (FIBA flag), OT fouls carry over, default win 2 / loss 1, full-court +1 → FT flow | basketball | BK-01, BK-02 (points), BK-03 (+1) | READY | Wave 0 · S · no migration · config keys; absent = legacy |
 | SD-06 | Pickleball real presets (side-out tournament default; rally preset renamed "Rec") + right-court server identity | pickleball | PB-01, PB-02 | READY | Wave 0 · M · no migration · D4 · new SET_START_RIGHT |
