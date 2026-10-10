@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-113 cricket scoring safety + flow — DONE (28944cc, 2026-10-11)
+- All P1 rows of scorer-ux-audit-cricket.md + A4, A6, F4, F5, R5. See DEVLOG.
+- Remaining P2: A5 swap toast, A7 over-editor target, F6 past ball → extra, D1–D6 detail, R3 beamer warnings, R4 bouncer limit, R6 free-hit limits in the reducer, R7 powerplay phases, R8 last man stands, R9 DRS counter. Cricket has no frozen-oracle legacy reducer test (legacy-path tests added in the new file).
+
 ## SD-116 one-tap match deciders — DONE (3e93e03, 2026-10-11)
 - Chess record-result confirm + colour lock + 1-0/½-½/0-1 tiles; golf Concede match… / Pick up (NR) / Clear… confirms; carrom no default coins; hockey Full time locked until the last period; basketball Eject confirm + scorer clears. New score-chess guide.
 - Left out: Armageddon draw rule, carrom board editor, other golf/hockey/basketball P1–P2 (→ SD-117). Chess colour lock applies to every game (plugin can't see config.white).
