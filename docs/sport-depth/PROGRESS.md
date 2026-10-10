@@ -2,6 +2,26 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-07 to SD-10: golf missed cut / profile / countback; football minutes, blocked shots and keeper clean sheets; chess Swiss bye — DONE (29649b3, 2026-10-10)
+- **Built:**
+  - Golf: MC below the cut line, cut saved on the round, like-for-like best round, tracked putts, countback only on complete cards.
+  - Football: FIFA 45+2' and ordinal minutes, blocked shots, keeper clean sheets incl. shootouts and corrections (partial `statTotals`), a goalkeeper-only Golden Glove and leaders.
+  - Chess: the Swiss bye point (1 / ½ / 0); byes and forfeits out of played stats and Sonneborn-Berger.
+- No migration. Tests: about 90 new · 978 total · legacy replays identical · demo 8093.
+- **Guides:** `golf-scoring-and-leaderboard`, `score-football`, `run-a-chess-tournament`.
+- **Displayed changes on existing data (bug fixes):**
+  - golf 9-hole bests no longer count as "Best round";
+  - golf putts/round goes up where putts weren't tracked;
+  - golf ties with an incomplete card show T;
+  - existing Swiss chess events with odd fields gain the missing bye points;
+  - chess forfeits leave P/W/L and Sonneborn-Berger.
+- **Old football matches:** their defender clean sheets and on-target blocked shots stay in stored lines until the D2 backfill (it needs each match's lineup).
+- **Noted for Wave 1:**
+  - Sonneborn-Berger still uses opponents' totals including their bye points;
+  - round-1 bye goes to the middle seed (FIDE: the lowest);
+  - football `minutes` are written for keepers only (all players with SD-11 / the tracker).
+- Not verified: live Supabase, a #05 correction through the UI, a keeper red card in the UI.
+
 ## SD-05 + SD-06: basketball FIBA rules; pickleball presets and right-court server — DONE (b6f8dfd, 2026-10-10)
 - **Basketball:**
   - Built: bonus threshold fix in every preset, FIBA technicals as team fouls, OT foul carry-over, team-foul and BONUS lines, a one-tap "+1 FT", new tournaments at 2-1 (loss 1) plus the "Simple 2-1-0" preset.
