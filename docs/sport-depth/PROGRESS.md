@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-117a football / hockey / basketball follow-ups — DONE (f50d7a9, 2026-10-11)
+- P1 rows F10, F12, F13, H6, H7, B3, B6, B8, B9, B10, B12 + P2 F7, H5, B11 (FT prefill). See DEVLOG.
+- Remaining (SD-117): F6, F8, F9, F11, F14, F15, H3, H4, H8–H12, B5, B7, B13–B15, B11 sub-required banner + Q time-up nudge. Team-official cards excluded from fair play (agent's call, easy to flip). Hockey Goal → From PC isn't linked to the open corner (only the PC panel links). Football "added time is up — end the match" nudge wording in a level knockout.
+- Next SD-117 slices: volleyball/kabaddi, carrom/chess/golf, racket cues (change ends, intervals).
+
 ## SD-110 + SD-111 scoring comfort + held result — DONE (cb98189, 2026-10-11)
 - SD-110: screen stays awake while scoring (LiveScoring when the scorer has a started, unfinished match; results entry; live golf scorecard) — web Wake Lock API (re-acquired on visibilitychange), phone expo-keep-awake looked up lazily. Light buzz on each scoring tap, double on Undo (web navigator.vibrate; phone expo-haptics, lazy). Settings → Buzz on scoring taps (per device). Phone parts need a new APK.
 - SD-111: the deciding tap holds `status = completed` (follower "Full time" push via match_status_notify + winner/W-L/standings write-back) for 60 s; note "Result sent to followers in 0:58 · Undo · Send now". Undo cancels; leaving the screen / backgrounding sends at once; a killed app sends on next open (pendingResults, flushed on sign-in). No edge-function or migration change.
