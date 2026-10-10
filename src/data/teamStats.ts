@@ -5,7 +5,9 @@
  * played for this team in each match.
  */
 import type { Match, SportId, StatLine } from '../core/types';
-import { statSchema } from '../sports/statSchemas.ts';
+import { statSchema, labelCompact } from '../sports/statSchemas.ts';
+import { rankPlayers, statDefIn } from '../sports/statSchema.ts';
+import { withLineResults } from './leaderMinimums.ts';
 
 /** W / D / L, plus a cricket tie ('T') and a no result / abandoned match
  *  ('NR'), which counts as played (SD-12) — the same Played as the table. */
@@ -30,7 +32,19 @@ export function h2hLastText(h: Pick<HeadToHead, 'last'>): string {
   const score = l.for != null && l.against != null ? ` ${l.for}–${l.against}` : '';
   return `Last: ${l.result}${score}${l.line ? ` · ${l.line}` : ''}`;
 }
-export interface Leader { icon: string; label: string; stat: string; playerId: string; total: number }
+export interface Leader {
+  icon: string; label: string; stat: string; playerId: string; total: number;
+  /** SD-105 — the figure as shown when it isn't "<total> <stat label>" ("4 wins", "75%") */
+  display?: string;
+}
+
+/** SD-105 — the team-page record leaders for sports ranked by results (the
+ *  racket sports: "Most wins", "Best win %" from the schema's `matchesWon` /
+ *  `winPct`). Sports without those stats keep their per-match awards only. */
+const RECORD_LEADERS: { key: string; icon: string }[] = [
+  { key: 'matchesWon', icon: '🏆' },
+  { key: 'winPct', icon: '📈' },
+];
 export interface TeamStats {
   played: number; won: number;
   /** level results — draws, or cricket ties ('T') */
@@ -121,8 +135,25 @@ export function computeTeamStats(
     for (const [k, v] of Object.entries(l.stats ?? {})) t[k] = (t[k] ?? 0) + (v ?? 0);
     totals.set(l.playerId, t);
   }
-  const awards = [...sports].flatMap((sp) => awardsBySport[sp] ?? []);
+  // SD-105 — racket sports: most wins and best win % (team members only, the
+  // schema's minimum — 3 decided matches for win %), from each line's result.
   const seen = new Set<string>();
+  const mineLines = lines.filter((l) => doneIds.has(l.matchId) && (playedFor[l.matchId] ?? []).includes(l.playerId));
+  for (const sp of sports) {
+    const schema = statSchema(sp);
+    if (!schema) continue;
+    const ls = withLineResults(mineLines.filter((l) => l.sport === sp), done);
+    for (const r of RECORD_LEADERS) {
+      const def = schema.leaders.includes(r.key) ? statDefIn(schema, r.key) : undefined;
+      if (!def || seen.has(r.key)) continue;
+      seen.add(r.key);
+      const top = rankPlayers(schema, def, ls, { limit: 1 })[0];
+      if (!top) continue;
+      const display = def.format?.unit === 'percent' ? top.text : `${top.text} ${labelCompact(def.key, top.value, sp)}`;
+      out.leaders.push({ icon: r.icon, label: def.leaderLabel ?? def.label, stat: def.key, playerId: top.playerId, total: top.value, display });
+    }
+  }
+  const awards = [...sports].flatMap((sp) => awardsBySport[sp] ?? []);
   for (const a of awards) {
     if (seen.has(a.stat)) continue;
     seen.add(a.stat);

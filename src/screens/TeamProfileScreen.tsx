@@ -216,7 +216,7 @@ export default function TeamProfileScreen() {
                       <Text style={st.leaderIcon}>{l.icon}</Text>
                       <Text style={[textStyles.muted, { width: 96 }]}>{l.label}</Text>
                       <Text style={st.leaderName} numberOfLines={1}>{nameOf(l.playerId)}</Text>
-                      <Text style={st.leaderVal}>{l.total} {statLabel(l.stat, l.total)}</Text>
+                      <Text style={st.leaderVal}>{l.display ?? `${l.total} ${statLabel(l.stat, l.total)}`}</Text>
                     </TouchableOpacity>
                   ))}
                   {stats.appearances[0] && (
