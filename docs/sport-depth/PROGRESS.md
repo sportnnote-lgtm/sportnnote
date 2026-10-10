@@ -2,6 +2,35 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-26: Swiss done properly — DONE (a845a64, 2026-10-10)
+- **Built:** C.07-2023 tie-breaks (BH / C1 / M1, SB / C1, PS / C1, BPG, BWG, WIN, WON) as standings columns; FIDE Swiss and FIDE round robin chess presets; the Dutch-style pairing with colour allocation; `white` stored per fixture; the not-FIDE-certified label.
+- **Default order:** BH-C1, BH, SB, PS, h2h, wins, BWG. Source: C.02 §13.16.4, read via a library quoting the handbook. C.07 itself leaves the order to the organiser.
+- No migration. Tests: 24 new · values match the FIDE Arbiters' Commission tie-break exercise crosstable · 200 simulated events.
+- **Displayed changes on existing chess data:**
+  - Swiss SB includes your own bye or forfeit as a dummy contribution;
+  - in round robins, forfeits now count in SB (C.07 15.2, reversing the SD-10 choice);
+  - the settings row reads "FIDE round robin" where nothing was saved.
+- **Pairing limits:** the full C.04.3 quality criteria (float history, top-scorer exception, accelerated pairings, requested byes) are not built. Near-complete round robins may need a flagged relaxation.
+
+## SD-20: game/set score line everywhere; ret. / def. / w/o / abandoned; LineScoreboard for every set/game sport — BUILT, uncommitted (2026-10-10)
+- **Built:**
+  - `scoreline.ts`: the line score as data (`LineScore`, `plugin.lineScore` on tennis / padel / badminton / TT / squash / pickleball / carrom / volleyball); `lineText` (completed sets = the SD-01 `scoreLine`, byte-identical; `partial` adds the unfinished set); `resultMark` + `markedLine` + `matchScoreLine` ("6-4, 3-2 ret.", "21-15, 8-3 def.", "w/o", "11-4 abandoned"); `finalBoard` (sets won + marked line); `lineGrid` (the board model); `compactResult`, `bracketCellText`.
+  - `matchLine.ts` (registry-aware): `matchLine(m)`, `matchLineFor(m, teamId)`, `resultWords`.
+  - `SetLineBoard.tsx`: the shared LineScoreboard. Tennis / badminton / volleyball moved onto it; **new** boards for table tennis, squash, pickleball (rallyCore, serve dot by ITTF rotation / side-out / last rally), padel (POINTS + games, match tiebreak as a "TB" column) and carrom. A match closed by hand renders final: "Match Over · Retired", no highlight, winner's trophy.
+  - Surfaces: share text (sets won + marked line, never "40"), MatchCard, bracket cells (staged match: scoreline between the sides) and series legs, SeriesScreen legs, SportHub results, Calendar, team head-to-head (latest meeting: "Last: L 0–1 · 4-6, 2-3 ret.") and form chips, profile history, Correct match, ticker / OBS overlay, the End-match preview.
+  - **Racket wording** (`retireTerms`): End-match chips **Retired** (= conceded, "ret.") and **Default** (= awarded, "def."); "Asha won — Bina retired (Injury)", "Asha won by default — …". A retirement before any point reads "w/o". The legacy `retireMatch` (awarded + reason "Retired") reads "ret.". Volleyball / carrom keep Conceded / Awarded with plain words ("25-20, 10-8 awarded").
+  - **Padel:** the match tiebreak's points now stored in its set entry ([10-7], as tennis); old snapshots (0-0 + `tb`) display the same. Tennis/padel set chips showed "10-8(8)" for a match tiebreak — fixed via `cellText`.
+  - **Manual end score:** a set/game sport now stores sets/games won as `result.score` (before: the live points, e.g. 30-15).
+- **Choices:**
+  - no_result in racket sports reads "abandoned" (ITF has no "no result").
+  - The match-tiebreak column is labelled "TB" (tennis used the set number before).
+  - Fixtures print/PDF lists upcoming matches only (its Result column is for writing in) — left unchanged.
+  - No push notification on a manual end (none existed); the natural full-time alert already used the line.
+- No migration. Tests: `tests/scoreline-everywhere.test.mts` 24 new; padel pins updated (match-TB set entry, 2 fingerprints in final-score / replay-racket). tsc clean; `npm test` 1387 pass, 3 fail — all in `chess-swiss.test.mts`, the parallel SD-26 work in progress.
+- **Demo 8093 (375 px), local ad-hoc matches only (no demo data written):** table tennis live board (GAMES + per-game columns, live game highlighted, serve dot) and final after End match → Retired: "MATCH OVER · RETIRED", 1 / 11 5 vs 0 / 7 3, summary "11-7, 5-3 ret.", share text "🏓 RESULT / Asha 1 / Bina 0 / 🏁 Asha won — Bina retired (Injury) / Match Over · 11-7, 5-3 ret."; tennis 6-4, 3-2 (30-15) retired → board "Match Over · Retired · best of 3", "6-4, 3-2 ret." in preview/summary/share; volleyball results list shows the set line.
+- **Not verified in the demo:** bracket cell / series leg / team H2H rows (no racket knockout or H2H data in the demo store; unit-tested), the OBS overlay for a closed match (unit-tested via `buildTicker`), padel / carrom boards (typechecked, same component).
+- **Guides:** end-a-match-early (racket Retired / Default + score-line marks; now ~1030 words, over the 900 guideline), live-score-overlay ([10-7], "ret."). `npm run website:build` OK.
+
 ## SD-19 + SD-29: absolute racket statTotals with the D2 backfill tool; on-field tracker — DONE (3ad046a, 2026-10-10)
 - **SD-29:**
   - Built: `onField.ts` (minutes, starts, +/-, sets played, timed suspensions, short-handed count), football minutes for all and an optional sin-bin, basketball MIN / +/-, volleyball setsPlayed.
