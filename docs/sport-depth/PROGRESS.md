@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-102 handball, SD-97 weightlifting — DONE (73317eb, 2026-10-11)
+- Two new live sports (see DEVLOG). No migration.
+- **Handball — check with an IHF source:** sudden-death 7 m order (same team first?), 1 time-out in the last 5 min and limits for youth halves (2:10), clock not stopped for 7 m (2:9), 3rd suspension = 2′ + disqualification in stats (16:3/16:6d/16:8), team warning limit only a hint (16:2). House minimums: save % 20 shots, shooting % 20 attempts, 7 m % 5 throws, per-game 2 matches. Not built: voice, beach handball, passive play, empty-goal, shot zones, per-thrower shoot-out keeper credit, demo seed.
+- **Weightlifting — check with IWF TCRR (rulebook PDF unreadable; 2020 numbers from memory):** calling order steps after weight/attempt (6.6.6), lot as last tie-break (6.8), category bounds (6.4); 2025 categories from IWF/USAW news; Sinclair uses 2021–24 coefficients. Not built: competition clock, bar-loading chart, team classification, A/B groups, moving a lifter between categories.
+- Existing bug found: a 2-player team shows a "Partners" row on profiles for any team sport (shared doubles code) → SD-118.
+
 ## SD-117 per-sport follow-ups — DONE (114d76d, 2026-10-11)
 - Slices a (football/hockey/basketball, f50d7a9), b (volleyball/kabaddi, ab68663), c (carrom/chess/golf/racket cues, 114d76d). See DEVLOG.
 - Remaining (move to own rows when picked up): chess mini-match/Armageddon; carrom penalty board (SD-68); golf SD-35/45/87/89; pickleball MLP freeze (PB-09); padel golden-point receiver prompt; squash cues; volleyball SD-58/71, kabaddi SD-59/72/83; football/hockey/basketball P2s listed under SD-117a. Note: one padel Ace marks the match as point-detail tracked (winners/errors written as 0).
