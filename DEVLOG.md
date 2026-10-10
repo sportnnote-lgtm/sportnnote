@@ -13,6 +13,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-106 match controls at the bottom + coloured YES/NO confirm sheet
+- **Why:** founder saw a tennis scorer with Restart / End match right under the scorecard — one stray tap from ending a live match.
+- **What:** on the Scoring tab, ↺ Not started? Cancel, ↺ Restart match and 🏁 End match… now sit in a red "MATCH CONTROLS" card at the very bottom (below scoring controls and ☰ Quick options). Every one opens a bottom sheet: title, one line on what happens, green **No, keep scoring** on top and red **Yes, …** below (amber for period-level ends — half/quarter/innings). NO is default focus; backdrop/back = NO. Also now confirmed: walkover (names the winner), discard unsynced taps ("N taps will be lost"), Delete match / Reset fixture, football/basketball/kabaddi/hockey period ends + End match (with the final score), cricket End innings / End match / accept tie, hockey Full time (moved to the bottom, red), golf Finish round, athletics/swimming Close round + Finish & lock. ↶ Undo stays between the scoreboard and the scoring buttons and looks nothing like the bottom controls.
+- **Files:** `src/core/matchSafety.ts` (placement model + confirm copy for 14 actions), `src/components/ConfirmSheet.tsx` (mounted once in `App.tsx`), `LiveScoringScreen.tsx`, sport `index.tsx` for football/cricket/basketball/kabaddi/hockey, `GolfRoundScreen.tsx`, `ResultsEventScreen.tsx`. Guides: end-a-match-early, match-quick-options.
+- **Verified:** `tests/match-safety.test.mts` (16, incl. source checks that no sport dispatches END/period-end straight from a tap), tsc clean, full suite green; demo 8093 at 375 px — tennis, football, kabaddi, athletics sheets tapped (NO keeps playing, YES acts). Not tapped: cricket/hockey/basketball/golf sheets (same component); native not run. Voice "full time" still ends without the sheet.
+
+---
+
 ### 2026-10-11 — SD-108 invite share: "Team …" prefix, QR image with the message, open-in-app join pages
 - **Why:** founder report — the WhatsApp invite "Join L&H on SportnNote!" didn't say what L&H is, and the QR on screen couldn't be shared.
 - **Text:** every invite now names the record type ("Join Team L&H…", "Enter your team in Tournament X…", scorer/host/co-host/manager lines), never doubled when the name already contains it. Builders in `src/core/inviteText.ts` (re-exported from `invite.ts`).

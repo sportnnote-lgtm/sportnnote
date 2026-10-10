@@ -4,7 +4,7 @@
  *  See docs/sports/GOLF_DESIGN.md §6. */
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { confirmAction } from '../core/confirm';
+import { confirmMatchAction } from '../components/ConfirmSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -125,7 +125,7 @@ export default function GolfRoundScreen() {
   };
   const finish = async () => {
     const unfinished = board.filter((r) => r.thru < holes.length && r.position != null).length;
-    const ok = await confirmAction('Finish the round?', unfinished ? `${unfinished} player(s) haven't completed every hole. Their cards will count as they stand.` : 'Scores are locked and stats go to each player\'s profile.', 'Finish');
+    const ok = await confirmMatchAction('finishRound', unfinished ? { detail: `${unfinished} player(s) haven't completed every hole. Their cards will count as they stand.` } : undefined);
     if (!ok) return;
     setBusy(true);
     try {

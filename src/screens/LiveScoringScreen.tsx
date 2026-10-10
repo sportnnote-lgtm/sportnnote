@@ -10,6 +10,8 @@
  * replay the same events to authoritative state.
  */
 import { notice, confirmAction } from '../core/confirm';
+import { confirmMatchAction } from '../components/ConfirmSheet';
+import { matchControls, showsControl } from '../core/matchSafety';
 import { getDeviceId } from '../core/deviceId';
 import { mergeMatchConfig } from '../core/matchConfig';
 import { manualResultLine as baseResultLine, isNoResult } from '../core/matchResult';
@@ -71,6 +73,7 @@ import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlo
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
+import { matchRoleInviteText } from '../core/inviteText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveScoring'>;
 
@@ -183,7 +186,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [kickoffAt, setKickoffAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState<number>(Date.now());
   const [retireOpen, setRetireOpen] = useState(false);
-  const [restartOpen, setRestartOpen] = useState(false);
   const [woOpen, setWoOpen] = useState(false); // walkover: pick the winning side
   const [retiredLocally, setRetiredLocally] = useState<'home' | 'away' | null>(null);
   // "🏁 End match…" panel (parity #04): how it ended, who won, why.
@@ -649,14 +651,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     if (id) navigation.navigate('Team', { teamId: id });
   };
 
-  const inviteTextFor = (role: 'scorer' | 'host' | 'official') => (name?: string) => {
-    const who = profile?.fullName ?? 'A friend';
-    const vs = `${homeTeamName ?? homeName} vs ${awayTeamName ?? awayName}`;
-    const when = meta.startsAt ? ` (${formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST')})` : '';
-    const link = matchId ? matchLink(matchId) : 'https://app.sportnnote.in';
-    return `Hi${name ? ` ${name}` : ''}! ${who} added you as ${role === 'scorer' ? 'the scorer' : role === 'official' ? 'an official' : 'a host'} for ${vs}${when} on SportnNote 🏅\n\n`
-      + `Open this link and sign in with this mobile number to ${role === 'scorer' ? 'score it live' : role === 'official' ? 'follow the match' : 'manage the match'}:\n${link}`;
-  };
+  const inviteTextFor = (role: 'scorer' | 'host' | 'official') => (name?: string) => matchRoleInviteText({
+    role, name, inviterName: profile?.fullName,
+    home: homeTeamName ?? homeName, away: awayTeamName ?? awayName,
+    when: meta.startsAt ? formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST') : undefined,
+    link: matchId ? matchLink(matchId) : 'https://app.sportnnote.in',
+  });
 
   // When did scoring actually begin? (first event's server time). Refetch when the
   // log changes so a fresh first-tap sets the kickoff for the restart window.
@@ -813,7 +813,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
 
   // Danger zone (parity #13): delete a friendly while live / within 30 min of the
   // end, or reset a played tournament fixture. Hosts only; the server re-checks.
-  const [dangerAsk, setDangerAsk] = useState<'delete' | 'reset' | null>(null);
   const [dangerBusy, setDangerBusy] = useState(false);
   const [lastActivityAt, setLastActivityAt] = useState<number | null>(null);
   const [dangerTick, setDangerTick] = useState(Date.now());
@@ -837,7 +836,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     try {
       await deleteMatch(matchId, effStatus === 'live' || effStatus === 'completed' ? { played: true } : undefined);
       matchOutbox.clear(matchId);
-      setDangerAsk(null);
       navigation.popToTop();
     } catch (e) {
       notice('Couldn’t delete', e instanceof Error ? e.message : 'Please try again.');
@@ -855,7 +853,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       setLocalStarted(false);
       setKickoffAt(null);
       setMeta((m) => ({ ...m, status: 'scheduled', result: undefined, winner: undefined, score: undefined, onBreak: undefined }));
-      setDangerAsk(null);
       setReloadTick((n) => n + 1);
     } catch (e) {
       notice('Couldn’t reset', e instanceof Error ? e.message : 'Please try again.');
@@ -958,39 +955,32 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const wipeMatch = async () => {
     await reset();
     setLocalStarted(false);
-    setRestartOpen(false);
     setKickoffAt(null);
     // reset() clears the log + backend status to 'scheduled'; mirror it in the
     // screen's cached meta so the header stops showing LIVE.
     setMeta((m) => ({ ...m, status: 'scheduled' }));
   };
-  const restartBar = started && canRestart && retiredLocally == null ? (
-    eventCount === 0 ? (
-      // Nothing scored yet — a plain "cancel the start", no confirmation needed.
-      <TouchableOpacity style={st.restartBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Cancel — match not started" onPress={() => void wipeMatch()}>
-        <Text style={st.restartText}>↺ Not started? Cancel</Text>
-        <Text style={st.restartHint}>nothing scored yet</Text>
-      </TouchableOpacity>
-    ) : !restartOpen ? (
-      <TouchableOpacity style={st.restartBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Restart match — started by mistake" onPress={() => setRestartOpen(true)}>
-        <Text style={st.restartText}>↺ Restart match</Text>
-        <Text style={st.restartHint}>started by mistake · first 5 min only</Text>
-      </TouchableOpacity>
-    ) : (
-      <View style={st.retirePanel}>
-        <Text style={st.retirePrompt}>Clear the score and everything recorded so far, back to “not started”? This can’t be undone.</Text>
-        <View style={st.retireRow}>
-          <Button label="Yes, restart" variant="danger" style={{ flex: 1 }} onPress={() => void wipeMatch()} />
-          <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setRestartOpen(false)} />
-        </View>
-      </View>
-    )
-  ) : null;
-
-  const retireBar = (canScore || isHost) && started && !complete ? (
+  // SD-106: which match-level controls show, and where (src/core/matchSafety.ts).
+  // End / Restart sit in "Match controls" at the very bottom of the Scoring tab —
+  // never under the scorecard — and each asks in a ConfirmSheet first.
+  const safety = matchControls(sport, {
+    started, complete, eventCount, canRestart, retired: retiredLocally != null, dangerVerdict: verdict.verdict, hasMatch,
+  }, { canScore, isHost });
+  const showCancelStart = showsControl(safety, 'cancelStart');
+  const showRestart = showsControl(safety, 'restartMatch');
+  const showEndEarly = showsControl(safety, 'endMatch');
+  const giveWalkover = async (side: 'home' | 'away', after?: () => void) => {
+    if (!matchId) return;
+    if (!(await confirmMatchAction('walkover', { winner: side === 'home' ? fullHome : fullAway }))) return;
+    await walkoverMatch(matchId, side);
+    after?.();
+    navigation.goBack();
+  };
+  const retireBar = showEndEarly ? (
     !retireOpen ? (
-      <TouchableOpacity style={st.retireBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => setRetireOpen(true)}>
-        <Text style={st.retireText}>🏁 End match…</Text>
+      <TouchableOpacity style={st.matchCtrlBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="End match early — asks before ending" onPress={() => setRetireOpen(true)}>
+        <Text style={st.matchCtrlText}>🏁 End match…</Text>
+        <Text style={st.matchCtrlHint}>rain, injury, retired, walkover…</Text>
       </TouchableOpacity>
     ) : (
       <View style={st.retirePanel}>
@@ -1006,8 +996,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             <Text style={st.retirePrompt}>Who takes the walkover win?</Text>
             <Text style={textStyles.muted}>For a team that didn’t turn up or can’t play. No score is shown — if play had started, use Conceded instead.</Text>
             <View style={st.retireRow}>
-              <Button label={homeName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'home'); closeEnd(); navigation.goBack(); }} />
-              <Button label={awayName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'away'); closeEnd(); navigation.goBack(); }} />
+              <Button label={homeName} style={{ flex: 1 }} onPress={() => void giveWalkover('home', closeEnd)} />
+              <Button label={awayName} style={{ flex: 1 }} onPress={() => void giveWalkover('away', closeEnd)} />
             </View>
           </>
         )}
@@ -1035,11 +1025,34 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         ) : null}
         {endPreview ? <Text style={textStyles.muted}>{endPreview}</Text> : null}
         <View style={st.retireRow}>
-          {!endWo ? <Button label={endBusy ? 'Ending…' : 'End match'} variant="danger" style={{ flex: 1 }} disabled={!endReady || endBusy} onPress={() => void endMatch()} /> : null}
           <Button label="Cancel" variant="ghost" style={{ flex: 1 }} onPress={closeEnd} />
+          {!endWo ? <Button label={endBusy ? 'Ending…' : 'End match'} variant="danger" style={{ flex: 1 }} disabled={!endReady || endBusy}
+            onPress={async () => { if (await confirmMatchAction('endMatch', { detail: endPreview ? `${endPreview} — saved, and the match closes.` : undefined })) void endMatch(); }} /> : null}
         </View>
       </View>
     )
+  ) : null;
+  // The "Match controls" section — last thing on the Scoring tab, below every
+  // scoring control and Quick options, styled unlike Undo (audit G1).
+  const matchControlsNode = showCancelStart || showRestart || showEndEarly ? (
+    <View style={st.matchCtrlCard} accessibilityLabel="Match controls">
+      <Text style={st.matchCtrlTitle}>Match controls</Text>
+      {showCancelStart ? (
+        <TouchableOpacity style={st.matchCtrlBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Cancel the start — asks first"
+          onPress={async () => { if (await confirmMatchAction('cancelStart')) void wipeMatch(); }}>
+          <Text style={st.matchCtrlText}>↺ Not started? Cancel</Text>
+          <Text style={st.matchCtrlHint}>nothing scored yet</Text>
+        </TouchableOpacity>
+      ) : null}
+      {showRestart ? (
+        <TouchableOpacity style={st.matchCtrlBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Restart match — asks first"
+          onPress={async () => { if (await confirmMatchAction('restartMatch')) void wipeMatch(); }}>
+          <Text style={st.matchCtrlText}>↺ Restart match</Text>
+          <Text style={st.matchCtrlHint}>started by mistake · first 5 min only</Text>
+        </TouchableOpacity>
+      ) : null}
+      {retireBar}
+    </View>
   ) : null;
   // How a match closed by hand ended — saved, so it shows for everyone, every time.
   const retiredBanner = meta.result ? (
@@ -1760,8 +1773,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
               <Text style={textStyles.muted}>Who takes the walkover win?</Text>
               <View style={{ flexDirection: 'row', gap: theme.spacing(2) }}>
-                <Button label={homeName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'home'); navigation.goBack(); }} />
-                <Button label={awayName} style={{ flex: 1 }} onPress={async () => { await walkoverMatch(matchId, 'away'); navigation.goBack(); }} />
+                <Button label={homeName} style={{ flex: 1 }} onPress={() => void giveWalkover('home')} />
+                <Button label={awayName} style={{ flex: 1 }} onPress={() => void giveWalkover('away')} />
               </View>
               <Text style={st.editLink} onPress={() => setWoOpen(false)}>Cancel</Text>
             </View>
@@ -2014,22 +2027,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             A tournament fixture can’t be deleted (it would leave a hole in the fixtures). Reset it to not started instead{verdict.minutesLeft != null ? ` — available for ${verdict.minutesLeft} more min` : ''}.
           </Text>
         )}
-        {dangerAsk === null ? (
-          <Button label={verdict.verdict === 'delete' ? '🗑 Delete match' : '↺ Reset fixture to not started'} variant="danger" onPress={() => setDangerAsk(verdict.verdict === 'delete' ? 'delete' : 'reset')} />
-        ) : (
-          <View style={{ gap: theme.spacing(2) }}>
-            <Text style={st.retirePrompt}>
-              {dangerAsk === 'delete'
-                ? 'Delete this match? The score, its player stats and any table result go for everyone.'
-                : 'Reset this fixture to not started? The score, player stats, result and POTM are cleared for everyone.'}
-            </Text>
-            <View style={st.retireRow}>
-              <Button label="Keep" variant="ghost" style={{ flex: 1 }} onPress={() => setDangerAsk(null)} />
-              <Button label={dangerBusy ? 'Working…' : dangerAsk === 'delete' ? 'Delete match' : 'Reset fixture'} variant="danger" style={{ flex: 1 }} disabled={dangerBusy}
-                onPress={() => void (dangerAsk === 'delete' ? doDelete() : doReset())} />
-            </View>
-          </View>
-        )}
+        <Button label={dangerBusy ? 'Working…' : verdict.verdict === 'delete' ? '🗑 Delete match' : '↺ Reset fixture to not started'} variant="danger" disabled={dangerBusy}
+          onPress={async () => {
+            const del = verdict.verdict === 'delete';
+            if (await confirmMatchAction(del ? 'deleteMatch' : 'resetFixture')) void (del ? doDelete() : doReset());
+          }} />
       </View>
     ) : null;
 
@@ -2107,7 +2109,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                     {rejectedCount > 0 ? <Text style={st.syncSub}>{rejectedCount === 1 ? '1 unsynced tap from this device wasn’t saved.' : `${rejectedCount} unsynced taps from this device weren’t saved.`}</Text> : null}
                   </View>
                   {rejectedCount > 0 ? (
-                    <TouchableOpacity style={st.syncBtn} activeOpacity={0.8} accessibilityRole="button" onPress={() => void discardRejected()}>
+                    <TouchableOpacity style={st.syncBtn} activeOpacity={0.8} accessibilityRole="button" onPress={async () => { if (await confirmMatchAction('discardTaps', { count: rejectedCount })) void discardRejected(); }}>
                       <Text style={st.syncBtnText}>Discard</Text>
                     </TouchableOpacity>
                   ) : (
@@ -2136,8 +2138,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               {undoBar}
               {liveEditBar}
               {strikeCard}
-              {restartBar}
-              {retireBar}
               {canScore && !retiredLocally && meta.homeTeamId && meta.awayTeamId && (
                 <AddInvitePlayer
                   homeTeamId={meta.homeTeamId} awayTeamId={meta.awayTeamId}
@@ -2153,6 +2153,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   <Text style={st.quickBarText}>☰ Quick options</Text>
                 </TouchableOpacity>
               )}
+              {/* SD-106: End / Restart live here, at the very bottom, behind a confirm. */}
+              {matchControlsNode}
             </>
           )}
 
@@ -2534,16 +2536,19 @@ const st = StyleSheet.create({
   },
   undoText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   undoHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
-  restartBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2),
-    backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md,
-    borderWidth: 1, borderColor: theme.colors.danger,
-    paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4),
+  // SD-106 Match controls: a separate card at the bottom; centred, red-outlined,
+  // transparent buttons so nothing destructive looks like Undo (audit G1).
+  matchCtrlCard: {
+    marginTop: theme.spacing(6), gap: theme.spacing(2), padding: theme.spacing(3),
+    borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.danger + '55', backgroundColor: theme.colors.danger + '0D',
   },
-  restartText: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '800' },
-  restartHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
-  retireBtn: { alignItems: 'center', paddingVertical: theme.spacing(2) },
-  retireText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  matchCtrlTitle: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  matchCtrlBtn: {
+    alignItems: 'center', gap: 2, borderRadius: theme.radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.colors.danger,
+    paddingVertical: theme.spacing(2.5), paddingHorizontal: theme.spacing(4), backgroundColor: 'transparent',
+  },
+  matchCtrlText: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '800' },
+  matchCtrlHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   retirePanel: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   retirePrompt: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   retireRow: { flexDirection: 'row', gap: theme.spacing(2) },

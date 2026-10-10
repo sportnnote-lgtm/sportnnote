@@ -12,7 +12,8 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { confirmAction } from '../core/confirm';
+import { askConfirm, confirmMatchAction } from '../components/ConfirmSheet';
+import { confirmCopy } from '../core/matchSafety';
 import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '../components/ui';
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
 import type { RootStackParamList } from '../navigation/types';
@@ -187,7 +188,7 @@ export default function ResultsEventScreen() {
 
   const advance = async () => {
     if (!next) return;
-    const ok = await confirmAction(`Close ${phaseLabel(f.phase).toLowerCase()}?`, `The qualifiers (Q / q) are seeded into the ${phaseLabel(next.phase).toLowerCase()} and these results are locked.`, 'Close and seed');
+    const ok = await askConfirm({ ...confirmCopy('closePhase'), title: `Close ${phaseLabel(f.phase).toLowerCase()}?`, message: `The qualifiers (Q / q) are seeded into the ${phaseLabel(next.phase).toLowerCase()} and these results are locked.` });
     if (!ok) return;
     setBusy(true);
     try {
@@ -197,7 +198,7 @@ export default function ResultsEventScreen() {
   };
   const finish = async () => {
     const jo = [...ranked.values()].flat().some((r) => r.needsDecider && r.flags.includes('JO'));
-    const ok = await confirmAction('Finish and lock the results?', `${jo ? 'The tie for 1st has no jump-off result — the athletes will share 1st. ' : ''}Places, medals and any new record are final. You can still view the sheet.`, 'Finish');
+    const ok = await confirmMatchAction('finishEvent', { detail: `${jo ? 'The tie for 1st has no jump-off result — the athletes will share 1st. ' : ''}Places, medals and any new record are final. You can still view the sheet.` });
     if (!ok) return;
     setBusy(true);
     try {

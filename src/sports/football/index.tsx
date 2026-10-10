@@ -19,6 +19,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, TextField } from '../../components/ui';
+import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
@@ -1022,7 +1023,11 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       })()}
 
       {(() => {
-        const nextHalf = () => dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } });
+        // SD-106: every end-of-half / full-time tap asks first (ConfirmSheet).
+        const score = `${state.home}-${state.away}`;
+        const nextHalf = async () => {
+          if (await confirmMatchAction('endPeriod', { period: state.half === 1 ? '1st half' : 'ET 1st half', score })) dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } });
+        };
         if (state.half === 1) return <Button label="End 1st Half →" onPress={nextHalf} />;
         if (state.half === 3) return <Button label="End ET 1st half →" onPress={nextHalf} />;
         // End of 2nd half (or 2nd ET half): a level knockout tie goes to the ET/penalty
@@ -1031,7 +1036,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         const label = toDecision ? (state.half === 2 ? 'End 2nd Half →' : 'End extra time →') : 'End Match';
         // SD-09: a level knockout stamps the XIs here too — its clean sheets are
         // decided by the open-play score once the shootout completes it.
-        return <Button label={label} variant="danger" onPress={() => (toDecision ? (stampXi(), dispatch({ type: 'END', payload: { at: Date.now() } })) : endMatch())} />;
+        const onEnd = async () => {
+          if (toDecision) {
+            if (await confirmMatchAction('endPeriod', { period: state.half === 2 ? '2nd half' : 'extra time', score, detail: `Level at ${score} — it goes to the knockout decision. Undo can bring it back.` })) { stampXi(); dispatch({ type: 'END', payload: { at: Date.now() } }); }
+          } else if (await confirmMatchAction('fullTime', { score })) endMatch();
+        };
+        return <Button label={label} variant="danger" onPress={() => void onEnd()} />;
       })()}
     </View>
   );

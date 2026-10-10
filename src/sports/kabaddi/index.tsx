@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
+import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { LiveTimeline } from '../LiveTimeline';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { kabaddiBox } from '../boxSources';
@@ -217,7 +218,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
         </View>
         {raidRow('home', homeName)}
         {raidRow('away', awayName)}
-        <Button label="End as a tie" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+        <Button label="End as a tie" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
       </View>
     );
   }
@@ -359,11 +360,11 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
       )}
 
       {state.goldenRaid ? (
-        <Button label="End as a tie" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+        <Button label="End as a tie" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
       ) : state.half === 1 ? (
-        <Button label="End 1st Half →" onPress={() => dispatch({ type: 'NEXT_HALF' })} />
+        <Button label="End 1st Half →" onPress={async () => { if (await confirmMatchAction('endPeriod', { period: '1st half', score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_HALF' }); }} />
       ) : state.half === 3 ? (
-        <Button label="End Extra Time · 1st half →" onPress={() => dispatch({ type: 'NEXT_HALF' })} />
+        <Button label="End Extra Time · 1st half →" onPress={async () => { if (await confirmMatchAction('endPeriod', { period: 'extra-time 1st half', score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_HALF' }); }} />
       ) : tied ? (
         // Level after the 2nd half or extra time → the tie-breaker the organizer
         // chose (draw stands / extra time then Golden Raid / Golden Raid direct).
@@ -379,10 +380,10 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           {state.decider !== 'none' && (
             <Button label="🎯 5-Raid Shootout" variant="ghost" onPress={() => dispatch({ type: 'START_SHOOTOUT' })} />
           )}
-          <Button label="End as a tie" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+          <Button label="End as a tie" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
         </View>
       ) : (
-        <Button label="🏁 End Match" variant="danger" onPress={() => dispatch({ type: 'END' })} />
+        <Button label="🏁 End Match" variant="danger" onPress={async () => { if (await confirmMatchAction('fullTime', { score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
       )}
     </View>
   );

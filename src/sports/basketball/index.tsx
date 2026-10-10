@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, SelectChip } from '../../components/ui';
+import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { Timeline } from './Timeline';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { basketballBox } from '../boxSources';
@@ -552,17 +553,18 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       )}
 
       {state.quarter < state.regPeriods ? (
-        <Button label={`End ${periodLabel(state.quarter, state.regPeriods)} →`} onPress={() => dispatch({ type: 'NEXT_QUARTER' })} />
+        <Button label={`End ${periodLabel(state.quarter, state.regPeriods)} →`}
+          onPress={async () => { if (await confirmMatchAction('endPeriod', { period: periodLabel(state.quarter, state.regPeriods), score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_QUARTER' }); }} />
       ) : state.home === state.away ? (
         // Level at the end of Q4 or an OT period → play (another) overtime; a draw
         // stays possible for formats that allow one.
         <View style={{ gap: theme.spacing(2) }}>
           <Text style={ctrl.meta}>Scores level ({state.home}–{state.away}) at the end of {periodLabel(state.quarter, state.regPeriods)}.</Text>
           <Button label={`🏀 Start Overtime (${periodLabel(state.quarter + 1, state.regPeriods)})`} onPress={() => dispatch({ type: 'START_OVERTIME' })} />
-          <Button label="End as a draw" variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+          <Button label="End as a draw" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Draw', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
         </View>
       ) : (
-        <Button label="🏁 End Match" variant="danger" onPress={() => dispatch({ type: 'END' })} />
+        <Button label="🏁 End Match" variant="danger" onPress={async () => { if (await confirmMatchAction('fullTime', { score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
       )}
     </View>
   );

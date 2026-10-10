@@ -10,6 +10,7 @@ import { hydrateReminderPrefs } from './src/data/reminderPrefs';
 import { hydrateTimeZone } from './src/core/time';
 import { startTelemetry } from './src/core/telemetry';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { ConfirmSheetHost } from './src/components/ConfirmSheet';
 
 // Error handlers + app_open as early as possible (no-op in demo mode).
 startTelemetry();
@@ -43,6 +44,8 @@ export default function App() {
           </AuthProvider>
         </ErrorBoundary>
       )}
+      {/* SD-106: the shared "Are you sure?" sheet (askConfirm). */}
+      <ConfirmSheetHost />
     </SafeAreaProvider>
   );
 }

@@ -20,6 +20,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, TextField } from '../../components/ui';
+import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { FieldBanner } from '../FieldBanner';
@@ -210,7 +211,11 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     dispatch({ type: 'CLOCK', payload: { run: true, at } });
   };
   const last = s.period >= s.periods;
-  const endPeriod = () => {
+  // SD-106: ending a quarter / full time asks first (ConfirmSheet).
+  const endPeriod = async () => {
+    const score = `${s.home}-${s.away}`;
+    const ok = last ? await confirmMatchAction('fullTime', { score }) : await confirmMatchAction('endPeriod', { period: periodName(s, s.period), score });
+    if (!ok) return;
     if (last) stampXi();
     dispatch({ type: 'END_PERIOD', payload: { at: Date.now() } });
   };
@@ -424,8 +429,9 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
           <Button label={running(s) ? '⏸ Stop' : periodStarted(s) ? '▶ Resume' : s.period === 1 ? '▶ Push back' : `▶ Start ${periodName(s, s.period)}`} variant={running(s) ? 'ghost' : 'primary'} onPress={startStop} />
         </View>
         <View style={c.row}>
-          <Button label={last ? '🏁 Full time' : `⏭ End ${periodName(s, s.period)}`} variant="ghost" style={c.flex}
-            disabled={!periodStarted(s) && !last} onPress={endPeriod} />
+          {/* the last period's Full time sits at the bottom of the controls (SD-106) */}
+          {!last ? <Button label={`⏭ End ${periodName(s, s.period)}`} variant="ghost" style={c.flex}
+            disabled={!periodStarted(s)} onPress={() => void endPeriod()} /> : null}
           <Button label="⏱ Set clock" variant="ghost" style={c.flex} onPress={() => setSetting((v) => !v)} />
         </View>
         {setting ? (
@@ -454,6 +460,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
       )}
 
       <EditList s={s} show={showEdit} setShow={setShowEdit} onRemove={remove} onEdit={edit} homeName={homeName} awayName={awayName} />
+      {last ? <Button label="🏁 Full time" variant="danger" onPress={() => void endPeriod()} /> : null}
     </View>
   );
 };

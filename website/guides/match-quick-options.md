@@ -5,7 +5,7 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: all
 order: 30
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 During play, a scorer needs a few things fast: pause for drinks or rain, bring on a late player, check the full scorecard. Before and after play, organisers sometimes need to set up a rematch or get rid of a test match. This guide covers all of these housekeeping jobs.
@@ -58,13 +58,14 @@ Use this for a rematch, or the second leg of a tie.
 
 ## Step by step: undo a start by mistake (scorers)
 If you started the match by mistake:
-- With nothing scored yet, tap **↺ Not started? Cancel** on the Scoring tab.
-- In the first 5 minutes after the first score, tap **↺ Restart match**, then **Yes, restart**. This clears everything recorded so far.
+Both buttons are in the **Match controls** box at the very bottom of the Scoring tab, below the scoring buttons and **☰ Quick options**.
+- With nothing scored yet, tap **↺ Not started? Cancel**, then **Yes, cancel start**.
+- In the first 5 minutes after the first score, tap **↺ Restart match**. A sheet asks "Restart this match?". Tap the red **Yes, restart match** to clear everything recorded so far, or the green **No, keep scoring** to back out.
 
 ## Step by step: delete or reset a match (hosts)
 1. Open the match → **Info** tab and scroll to the bottom.
 2. In the **Danger zone**, tap **🗑 Delete match** or **↺ Reset fixture to not started**. Which one you see depends on the match (see below).
-3. Read the warning, then tap **Delete match** or **Reset fixture** to confirm, or **Keep** to back out.
+3. A sheet asks "Delete this match?" or "Reset this fixture?". Tap the red **Yes, delete match** / **Yes, reset fixture**, or the green **No, keep it** to back out.
 
 Which button appears:
 - **🗑 Delete match**: for a match that hasn't been played, or a friendly that's live or finished in the last 30 minutes. It's good for test matches.
@@ -78,4 +79,4 @@ Which button appears:
 Either you're not a host, or the window has closed. A finished match can only be deleted or reset for 30 minutes after its last scoring tap. After that, use [Correct a finished match](/guides/correct-a-finished-match/) to fix mistakes.
 
 ### Can I end the match during a break?
-Yes. Use **🏁 End match…** on the Scoring tab. See [End a match early](/guides/end-a-match-early/).
+Yes. Use **🏁 End match…** at the bottom of the Scoring tab. See [End a match early](/guides/end-a-match-early/).

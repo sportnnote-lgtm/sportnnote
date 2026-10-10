@@ -17,6 +17,7 @@ import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import { playerLink, idByName } from '../playerLink';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
+import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
 import { resolvePotm, type ResolvedPotm } from '../../data/ratings';
@@ -87,7 +88,8 @@ function SuperOverDecision({
           <Button label={`🔥 Start Super Over${so ? ` ${nextRound}` : ''}`} variant="primary" onPress={() => dispatch({ type: 'START_SUPER_OVER' })} />
         </>
       )}
-      <Button label={rootState.tieBreak === 'shared' && !tiedRound ? 'End the match — tie stands' : 'Accept the tie & end the match'} variant="ghost" onPress={() => dispatch({ type: 'END' })} />
+      <Button label={rootState.tieBreak === 'shared' && !tiedRound ? 'End the match — tie stands' : 'Accept the tie & end the match'} variant="ghost"
+        onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie' })) dispatch({ type: 'END' }); }} />
     </View>
   );
 }
@@ -555,7 +557,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const [otRan, setOtRan] = useState(0);
   const [otOver, setOtOver] = useState<number | null>(null);
   const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
-  const [confirmEnd, setConfirmEnd] = useState(false);
   // Bowling rules (parity #17): the mid-over replacement panel (with its reason)
   // and the "Allow anyway" quota override.
   const [bowlRepl, setBowlRepl] = useState<'injury' | 'suspended' | 'other' | null>(null);
@@ -1216,31 +1217,18 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           onClose={() => setMorePanel(null)} />
       )}
 
-      {/* Ending an innings/match is a big, easy-to-mis-tap action — confirm it,
-          and show the key facts (score, overs, resulting target) first. */}
-      {confirmEnd ? (
-        <View style={ctrl.confirmBox}>
-          <Text style={ctrl.confirmText}>
-            {state.innings === 1
-              ? `End ${battingName}'s innings at ${cur.runs}/${cur.wickets} (${oversStr(cur.balls, state.ballsPerOver)} ov)? ${bowlingName} will chase ${cur.runs + 1}.`
-              : `End the match with ${battingName} on ${cur.runs}/${cur.wickets}${state.target ? `, chasing ${state.target}` : ''}?`}
-          </Text>
-          <View style={ctrl.row}>
-            <Button label="Cancel" variant="ghost" style={ctrl.flex} onPress={() => setConfirmEnd(false)} />
-            {state.innings === 1 ? (
-              <Button label="End innings →" style={ctrl.flex} onPress={() => { dispatch({ type: 'END_INNINGS' }); setConfirmEnd(false); }} />
-            ) : (
-              <Button label="End match" variant="danger" style={ctrl.flex} onPress={() => { dispatch({ type: 'END' }); setConfirmEnd(false); }} />
-            )}
-          </View>
-        </View>
-      ) : (
-        <Button
-          label={state.innings === 1 ? 'End innings →' : 'End match'}
-          variant={state.innings === 1 ? 'ghost' : 'danger'}
-          onPress={() => setConfirmEnd(true)}
-        />
-      )}
+      {/* Ending an innings/match is a big, easy-to-mis-tap action — SD-106: it asks
+          in the ConfirmSheet with the key facts (score, overs, resulting target). */}
+      <Button
+        label={state.innings === 1 ? 'End innings →' : 'End match'}
+        variant={state.innings === 1 ? 'ghost' : 'danger'}
+        onPress={async () => {
+          const ov = oversStr(cur.balls, state.ballsPerOver);
+          if (state.innings === 1) {
+            if (await confirmMatchAction('endInnings', { detail: `${battingName}'s innings closes at ${cur.runs}/${cur.wickets} (${ov} ov). ${bowlingName} will chase ${cur.runs + 1}.` })) dispatch({ type: 'END_INNINGS' });
+          } else if (await confirmMatchAction('fullTime', { detail: `${battingName} finish on ${cur.runs}/${cur.wickets} (${ov} ov)${state.target ? `, chasing ${state.target}` : ''}. The result is saved and the match closes.` })) dispatch({ type: 'END' });
+        }}
+      />
     </View>
   );
 };
@@ -2052,8 +2040,6 @@ const ctrl = StyleSheet.create({
   rainPreview: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   overDone: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   overDoneText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
-  confirmBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
-  confirmText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   wktPanel: {
     gap: theme.spacing(3),
     backgroundColor: theme.colors.surface,
