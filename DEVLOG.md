@@ -13,6 +13,20 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-22 + SD-23: serve/return stats for racket sports; one shared box score for 11 sports
+
+- **Serve stats:** replaying each match's point list gives ATP/BWF-style serve and return stats —
+  service and return points won, holds and breaks, break points saved / converted, golden points,
+  game / set / match points saved, longest run, side-outs. They show in a per-set Match stats
+  panel and feed careers. Old matches are included (derived, no new capture).
+- **Shared box score:** a single schema-driven component (totals row, periods, pinned names, bench,
+  team comparison) replaces six bespoke ones for basketball, volleyball, kabaddi, football, the
+  racket sports and carrom. Football gains a per-player table. Values are identical to before
+  (golden tests).
+- **Tests:** tsc + 1454.
+
+---
+
 ### 2026-10-10 — Sport depth SD-26: chess Swiss done properly (FIDE C.07 tie-breaks, Dutch-style pairing, colours)
 
 - **Tie-breaks:** pure `swissTiebreaks.ts` gives BH, BH-C1, BH-M1, SB, SB-C1, PS, PS-C1, BPG,

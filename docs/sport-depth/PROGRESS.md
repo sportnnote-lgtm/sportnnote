@@ -2,6 +2,20 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-22 + SD-23: serve/return stats; shared box score — DONE (ba10433, 2026-10-10)
+- **SD-22:**
+  - Built: pure `serveStats.ts`, which replays the point list through each reducer. It gives service and return points; game, set and match points converted / saved; longest run and biggest lead; holds / breaks / BP and golden points (tennis, padel); side-outs / hand-outs; and per serving player where the server is named.
+  - `MatchStatsPanel` (Match / Set N) on the Score tab.
+  - Career serve keys go into racket statTotals, coverage-aware (rates render with SD-24).
+  - Not built: double faults in the panel (not in the point log), badminton "11-point interval", TT deuce-games count. Volleyball waits for SD-58.
+- **SD-23:**
+  - Built: pure `boxScore.ts` and `boxSources.ts`, plus `components/BoxScore.tsx` (MatchBoxScore + TeamComparison). Columns come from the schema `box`; there's a totals row, team / opponent-error rows so totals equal the score, period chips, pinned names, the bench on request, and untracked columns hidden.
+  - 11 sports migrated; cricket keeps InningsCard. The old per-sport BoxScore components were deleted. Golden tests: identical cells per sport and period.
+  - The Summary tab gains a Box score section for every sport. Football gets a per-player table (FB-09).
+  - Left for SD-40: basketball FG/3P/FT made-attempted, OREB/DREB, EFF. Carrom has a comparison only (boards aren't credited to players).
+- No migration. Tests: 62 new · 1454 total · demo 8093 (basketball, football, kabaddi, volleyball, tennis; tennis and badminton stats panels).
+- **Guides:** the basketball, volleyball, football, kabaddi and pickleball guides are over 900 words (954–1260). Trim them in a later docs pass.
+
 ## SD-26: Swiss done properly — DONE (a845a64, 2026-10-10)
 - **Built:** C.07-2023 tie-breaks (BH / C1 / M1, SB / C1, PS / C1, BPG, BWG, WIN, WON) as standings columns; FIDE Swiss and FIDE round robin chess presets; the Dutch-style pairing with colour allocation; `white` stored per fixture; the not-FIDE-certified label.
 - **Default order:** BH-C1, BH, SB, PS, h2h, wins, BWG. Source: C.02 §13.16.4, read via a library quoting the handbook. C.07 itself leaves the order to the organiser.
