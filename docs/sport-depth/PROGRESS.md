@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-114 live scoring bugs — DONE (e6213e3, 2026-10-11)
+- Football double goal + goal lost on Cancel fixed; ✕ confirm + edit-cancel keeps the event across football/hockey/basketball/kabaddi/rally editor; backfill bar; second-yellow red follows its yellow; kabaddi touch cap (v:2). See DEVLOG.
+- Not demoed: hockey, basketball, second-yellow (tests only). Racket guides get the ✕/insert notes with SD-115.
+
 ## SD-112 results-entry safety — DONE (fad0696, 2026-10-11)
 - P0 + P1 rows of scorer-ux-audit-events.md built (see DEVLOG). Range sheet confirms, never rejects; reopen round/final with record rollback.
 - Remaining: finish-order entry mode (P1 flow); P2 rows (confirm on clear, wind > 9.9, DQ reason, lap counters…); three guides are 1,000–1,200 words (over the 900 limit); `reopenPhase`/`completeFinal` have no direct unit test (store not node-runnable); range message shows hand marks at 2 decimals.
