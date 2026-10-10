@@ -13,6 +13,43 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-07 to SD-10: golf missed cut; football 45+2' and blocked shots; keeper clean sheets; chess Swiss bye
+
+- **Golf (SD-07):**
+  - **Missed cut:** derived from who is entered in the latest round. MC players drop below a
+    "— cut —" line with no position (they used to be ranked among cut-makers on 36-hole totals)
+    and are excluded from later round setup. The cut is saved on the round's format.
+  - **Profile:** "Best round" uses complete 18-hole rounds only (+ "Best 9 holes"), and
+    putts/round counts tracked holes only (`puttHoles`).
+  - **Countback:** applies only when every tied card is complete; otherwise T.
+  - **Code:** pure `src/data/golfLeaderboard.ts`.
+- **Football (SD-08):**
+  - **FIFA minute notation:** 45+2' / 90+3' and ordinal minutes (a goal at 10:30 = 11') for new
+    matches, in the Timeline, lineup subs, the edit list and the ticker. Sorted by half, then
+    minute, then log order.
+  - **Shots:** On target / Off target / Blocked; a blocked shot is never on target and the blocker
+    gets `blocks`.
+  - **Old logs:** replay identically (frozen-engine oracle).
+- **Football (SD-09):**
+  - **Who gets the clean sheet:** the keeper on the pitch longest (`keepers.ts`: spells from the
+    XI stamp, subs and red cards), also in a 0–0 shootout, recomputed after corrections.
+  - **How it's synced:** football gets partial `statTotals` (keeper minutes / goalsConceded /
+    cleanSheets). Corrections still apply deltas for other keys (`deltasBesideTotals`).
+  - **Leaders:** the Golden Glove award and tournament leaders rank goalkeepers only.
+- **Chess (SD-10):**
+  - **Byes:** a Swiss bye is worth 1 by default (organiser ½ / 0, `byePoints`), credited once per
+    round as soon as it's drawn.
+  - **Byes and forfeits** stay out of P/W/D/L and Sonneborn-Berger; per-game records are kept for
+    Wave 1's Buchholz.
+  - **Display:** table and standings footnotes, plus the round preview naming the bye.
+- **New public guides:** golf scoring & leaderboard, How to score a football match, Run a chess
+  tournament.
+- **Tests:** tsc + 978.
+- **Demo 8093:** golf cut with MC, a 45+2' goal with a keeper sub and shootout clean sheet, a Swiss
+  bye credited.
+
+---
+
 ### 2026-10-10 — Sport depth SD-05 + SD-06: basketball FIBA rules; pickleball side-out tournaments and the right-court server
 
 - **Basketball (SD-05):**

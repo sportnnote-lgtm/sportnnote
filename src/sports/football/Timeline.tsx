@@ -7,11 +7,14 @@ import { useMask } from '../../core/disputeMask';
 import type { Player } from '../../core/types';
 import { playerLink, idByName } from '../playerLink';
 import { EVENT_META, STAT_META, GOAL_TYPE_LABEL, BODY_PART_LABEL, type FootballEvent, type StatEvent } from './events';
+import { minuteText, eventHalf, byMatchTimeDesc, type MinuteFormat } from './engine';
 
 // One row in the merged timeline (key, sort, render).
 interface Item {
   key: string;
   minute: number;
+  /** the half it happened in (stored, else derived) — sorts before the minute */
+  half: 1 | 2 | 3 | 4;
   order: number;
   icon: string;
   label: string;
@@ -24,7 +27,7 @@ interface Item {
   playerId?: string;
 }
 
-function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[]): Item {
+function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[], f: MinuteFormat): Item {
   const team = e.side === 'home' ? homeName : awayName;
   const who = e.playerName ?? team;
   let label = EVENT_META[e.type].label;
@@ -48,16 +51,16 @@ function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters
   }
   const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' ? 'extra' : undefined;
   const playerId = idByName(e.type === 'sub' ? e.secondName ?? e.playerName : e.playerName, ...rosters);
-  return { key: `e${e.id}`, minute: e.minute, order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone, playerId };
+  return { key: `e${e.id}`, minute: e.minute, half: eventHalf(e, f), order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone, playerId };
 }
 
 // Every scored action earns a timeline row — the scorer should see each tap here.
 const STAT_IN_TIMELINE = new Set<StatEvent['kind']>([
   'shot', 'foul', 'offside', 'corner', 'tackle', 'interception', 'save', 'pass', 'cross', 'dribble', 'handball',
-  'attackContribution', 'defenceContribution', 'penaltyWon', 'penaltyMissed',
+  'attackContribution', 'defenceContribution', 'penaltyWon', 'penaltyMissed', 'block',
 ]);
 
-function statItem(st: StatEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[]): Item {
+function statItem(st: StatEvent, homeName: string, awayName: string, rosters: (Player[] | undefined)[], f: MinuteFormat): Item {
   const team = st.side === 'home' ? homeName : awayName;
   const m = STAT_META[st.kind];
   const who = st.playerName ?? team;
@@ -69,12 +72,12 @@ function statItem(st: StatEvent, homeName: string, awayName: string, rosters: (P
   } else if (st.kind === 'corner') {
     detail = `${team}${st.playerName ? ` · ${st.playerName}` : ''}`;
   } else if (st.kind === 'shot') {
-    detail = `${who} · ${st.onTarget ? 'on target' : 'off target'}`;
+    detail = `${who} · ${st.blocked ? 'blocked' : st.onTarget ? 'on target' : 'off target'}`;
   } else if (st.kind === 'pass') {
     detail = `${who} · ${st.complete ? 'completed' : 'misplaced'}`;
   }
   const playerId = st.playerId ?? idByName(st.playerName, ...rosters);
-  return { key: `s${st.id}`, minute: st.minute, order: st.id, icon: m.icon, label: m.label, detail, side: st.side, playerId };
+  return { key: `s${st.id}`, minute: st.minute, half: eventHalf(st, f), order: st.id, icon: m.icon, label: m.label, detail, side: st.side, playerId };
 }
 
 export function Timeline({
@@ -85,6 +88,8 @@ export function Timeline({
   homeColor = theme.colors.home,
   awayColor = theme.colors.away,
   max = 60,
+  halfMinutes = 45,
+  etMinutes = 15,
   homeRoster,
   awayRoster,
   onPlayer,
@@ -96,6 +101,9 @@ export function Timeline({
   homeColor?: string;
   awayColor?: string;
   max?: number;
+  /** half lengths — for "45+2'" notation and per-half ordering (SD-08) */
+  halfMinutes?: number;
+  etMinutes?: number;
   homeRoster?: Player[];
   awayRoster?: Player[];
   /** tap a row's player → their profile */
@@ -103,10 +111,13 @@ export function Timeline({
 }) {
   const mask = useMask();
   const rosters = [homeRoster, awayRoster];
+  const f: MinuteFormat = { halfMinutes, etMinutes };
+  // Newest first by half, then minute, then log order: a first-half 45+2' sits
+  // below every second-half moment (SD-08).
   const all: Item[] = [
-    ...events.map((e) => eventItem(e, homeName, awayName, rosters)),
-    ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName, rosters)),
-  ].sort((a, b) => b.minute - a.minute || b.order - a.order);
+    ...events.map((e) => eventItem(e, homeName, awayName, rosters, f)),
+    ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName, rosters, f)),
+  ].sort(byMatchTimeDesc);
   const items = all.slice(0, max);
   const hidden = all.length - items.length;
 
@@ -130,7 +141,7 @@ export function Timeline({
               {latest ? <View style={[st.nodeHalo, { borderColor: nodeColor }]} /> : null}
               <View style={[st.node, { backgroundColor: nodeColor }]} />
             </View>
-            <Text style={[st.minute, { color: sideColor }]}>{it.minute}&apos;</Text>
+            <Text style={[st.minute, { color: sideColor }]}>{minuteText(it.minute, it.half, f)}</Text>
             <Text style={st.icon}>{it.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[st.label, (it.tone === 'boundary' || it.tone === 'wicket') && { color: toneColor! }]}>{it.label}</Text>
@@ -160,7 +171,8 @@ const st = StyleSheet.create({
   railLineLast: { bottom: '50%' },
   node: { width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.bg },
   nodeHalo: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 2, opacity: 0.5 },
-  minute: { fontSize: theme.font.body, fontWeight: '800', width: 34 },
+  // wide enough for "90+10'" / "120+3'" at 375 px
+  minute: { fontSize: theme.font.small, fontWeight: '800', width: 50 },
   icon: { fontSize: 18 },
   label: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   detail: { color: theme.colors.textMuted, fontSize: theme.font.small },

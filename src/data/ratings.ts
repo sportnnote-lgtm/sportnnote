@@ -8,6 +8,7 @@
 import type { Player, SportId, StatLine, TournamentAward } from '../core/types';
 import { leadersByKey } from './standings.ts';
 import { cricketCareer } from './cricketCareer.ts';
+import { isGoalkeeper } from '../sports/football/keepers.ts';
 
 /** Points per unit of each stat, per sport. Negatives penalise (cards, fouls). */
 export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
@@ -15,7 +16,7 @@ export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
     goals: 10, assists: 6, cleanSheets: 8,
     shotsOnTarget: 1.5, shots: 0.5, saves: 2, tackles: 1, interceptions: 1,
     attackingContributions: 1, defensiveContributions: 1, passesComplete: 0.05,
-    crosses: 0.5, dribbles: 0.5,
+    crosses: 0.5, dribbles: 0.5, blocks: 1, // a block (SD-08) weighs what "defensive play" did
     penaltiesWon: 2, penaltiesMissed: -3,
     fouls: -1, offsides: -0.5, handballs: -1, yellowCards: -2, redCards: -6,
   },
@@ -198,13 +199,22 @@ const EXTRA_SLOTS: Partial<Record<SportId, AwardSlot[]>> = {
   chess: [{ slot: 'wins', label: 'Most wins', icon: '♟️', stat: 'wins' }],
 };
 
+/** Tournament names for a per-match role award (same slot key, so awards
+ *  already published keep matching their slot and their stored label). */
+const TOURNAMENT_LABELS: Partial<Record<SportId, Record<string, string>>> = {
+  football: { cleanSheets: 'Golden Glove' }, // SD-09 / FB-11: goalkeepers only
+};
+
 /** The fixed award slots per sport: Player of the Tournament + the sport's role awards. */
 export const TOURNAMENT_AWARD_SLOTS: Record<SportId, AwardSlot[]> = Object.fromEntries(
   (Object.keys(SPORT_AWARDS) as SportId[]).map((sp) => [
     sp,
-    [MVP_SLOT, ...(EXTRA_SLOTS[sp] ?? SPORT_AWARDS[sp].map((a) => ({ slot: a.stat, label: a.label, icon: a.icon, stat: a.stat })))],
+    [MVP_SLOT, ...(EXTRA_SLOTS[sp] ?? SPORT_AWARDS[sp].map((a) => ({ slot: a.stat, label: TOURNAMENT_LABELS[sp]?.[a.stat] ?? a.label, icon: a.icon, stat: a.stat })))],
   ]),
 ) as Record<SportId, AwardSlot[]>;
+
+/** SD-09: football's Golden Glove ranks goalkeepers only. */
+const isGoldenGlove = (sport: SportId, slot: string) => sport === 'football' && slot === 'cleanSheets';
 
 /** Icon for an award (custom awards get a medal). */
 export const awardIcon = (sport: SportId, slot: string): string =>
@@ -216,6 +226,9 @@ export function awardFormula(sport: SportId, slot: string): string {
     const w = Object.entries(STAT_WEIGHTS[sport] ?? {}).filter(([, v]) => v !== 0);
     const parts = w.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k, v]) => `${statLabel(k, 2)} ${v > 0 ? '×' : '−'}${Math.abs(v)}`);
     return `Points summed over every match in this tournament${parts.length ? `: ${parts.join(', ')}` : ''}. Ties go by name. You choose the winner.`;
+  }
+  if (isGoldenGlove(sport, slot)) {
+    return 'Goalkeepers only (anyone who kept goal in these matches, or is listed as a GK). Most clean sheets, then most saves, then fewest goals conceded. A clean sheet goes to the keeper on the pitch longest when their team let in no goal (penalty shootouts don\'t count). You choose the winner.';
   }
   return `Total ${statLabel(slot, 2)} in this tournament's matches. Ties go by name. You choose the winner.`;
 }
@@ -265,6 +278,11 @@ export function rankAwardCandidates(
       const c = career(ls);
       return dashless([`${value} ${statLabel('wickets', value)}`, m, `econ ${c.econ}`, `avg ${c.bowlAvg}`]).join(' · ');
     }
+    if (isGoldenGlove(sport, slot)) {
+      const sv = sum(ls, 'saves');
+      const tracked = ls.some((l) => l.stats && 'goalsConceded' in l.stats);
+      return [`${value} ${statLabel('cleanSheets', value)}`, sv ? `${sv} ${statLabel('saves', sv)}` : '', tracked ? `${sum(ls, 'goalsConceded')} conceded` : '', m].filter(Boolean).join(' · ');
+    }
     if (slot === 'mvp') {
       const w = STAT_WEIGHTS[sport] ?? {};
       const top = Object.keys(w)
@@ -278,8 +296,16 @@ export function rankAwardCandidates(
     return `${value} ${statLabel(slot, value)} · ${m}`;
   };
 
-  let rows: { playerId: string; value: number; games: number }[];
-  if (slot === 'mvp') {
+  // Tie-breaks after the value (Golden Glove: more saves, then fewer conceded).
+  let rows: { playerId: string; value: number; games: number; tie?: number[] }[];
+  if (isGoldenGlove(sport, slot)) {
+    // Keepers: listed as a GK, or kept goal in one of these matches (a keeper
+    // line carries goalsConceded). Older clean sheets credited to defenders
+    // don't qualify.
+    rows = [...linesOf.entries()]
+      .filter(([pid, ls]) => isGoalkeeper(byId.get(pid)?.sportDetails?.football?.position) || ls.some((l) => l.stats && 'goalsConceded' in l.stats))
+      .map(([pid, ls]) => ({ playerId: pid, value: sum(ls, 'cleanSheets'), games: ls.length, tie: [sum(ls, 'saves'), -sum(ls, 'goalsConceded')] }));
+  } else if (slot === 'mvp') {
     const w = STAT_WEIGHTS[sport] ?? {};
     rows = [...linesOf.entries()].map(([pid, ls]) => ({
       playerId: pid,
@@ -296,10 +322,11 @@ export function rankAwardCandidates(
       const p = byId.get(r.playerId);
       return {
         playerId: r.playerId, name: p?.fullName ?? 'Player', teamName: p?.houseName, teamColor: p?.houseColor,
-        value: r.value, games: r.games, detail: detailFor(r.playerId, r.value, r.games),
+        value: r.value, games: r.games, detail: detailFor(r.playerId, r.value, r.games), tie: r.tie ?? [],
       };
     })
-    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+    .sort((a, b) => b.value - a.value || (b.tie[0] ?? 0) - (a.tie[0] ?? 0) || (b.tie[1] ?? 0) - (a.tie[1] ?? 0) || a.name.localeCompare(b.name))
+    .map(({ tie: _tie, ...c }) => c)
     .slice(0, limit);
 }
 

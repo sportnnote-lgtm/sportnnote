@@ -6,8 +6,11 @@
  * attributed to a player and stamped with the match minute. A running clock and
  * an event timeline render on the live page (LiveExtras), visible to everyone.
  *
- * Clean sheets are NOT a live action: they're awarded automatically at full
- * time to the GK/defenders (from the lineup) of whichever side conceded zero.
+ * Clean sheets are NOT a live action (SD-09): the plugin's `statTotals` derives
+ * them from the state — the goalkeeper on the pitch longest for a side that
+ * conceded no open-play goal (shootouts excluded) — so completion, a shootout
+ * and every later correction set them absolutely. The lineup is stamped into
+ * the log (`XI`) at kickoff and at full time for that.
  *
  * The reducer is pure, so it can't read the clock — the controls compute the
  * current minute (via `currentMinute`) and pass it in `payload.minute`.
@@ -19,7 +22,8 @@ import { Button, SelectChip, TextField } from '../../components/ui';
 import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
-import { DEFENSIVE_POSITIONS, emptyFormation } from './formation';
+import { emptyFormation } from './formation';
+import { keeperTotals, isGoalkeeper } from './keepers';
 import { useSpeech } from '../../core/speech';
 import { normalizeCommand as llmNormalize, enabled as llmEnabled } from '../../core/voiceLLM';
 import { parseIntent, parseGoalType, matchPlayer, matchTeam, isNoAssist, isYes, isNo, deburr } from './voiceCommands';
@@ -34,6 +38,7 @@ import {
   type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
   clockLabel, clockTime, possessionPct, cardCount, footballStats, FOOTBALL_LIVE_SETTINGS,
+  minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, type XiStamp,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -122,12 +127,17 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // Backfill mode: when set, everything logged is stamped at this past minute
   // (so the scorer can catch up on events that happened before they started).
   const [backfillMin, setBackfillMin] = useState<number | null>(null);
+  // SD-08: the half a backfilled minute belongs to when typed as added time
+  // ("45+2" → minute 47 of the FIRST half); null = derive it from the minute.
+  const [backfillHalf, setBackfillHalf] = useState<1 | 2 | 3 | 4 | null>(null);
   const [backfillText, setBackfillText] = useState('');
   // Show the "correct the timeline" editor (remove/edit a specific past moment).
   const [showEdit, setShowEdit] = useState(false);
   // Editing a past moment: re-entered events are stamped at this original minute
   // (auto-clears when the re-entry flow closes).
   const [editMin, setEditMin] = useState<number | null>(null);
+  // …and the half of that moment, so a 45+2 edit stays in the first half (SD-08).
+  const [editHalf, setEditHalf] = useState<1 | 2 | 3 | 4 | null>(null);
   // Scorer-adjustable extra-time half length (knockout ties).
   const [etMins, setEtMins] = useState(state.etMinutes);
   const opp = (side: 'home' | 'away') => (side === 'home' ? 'away' : 'home');
@@ -143,16 +153,18 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // moment, that past minute — plus the half it belongs to (a past minute derives
   // its half; live events use the current half).
   const pastMin = editMin ?? backfillMin;
+  const pastHalf = editMin != null ? editHalf : backfillHalf;
+  const fmt = { halfMinutes: state.halfMinutes, etMinutes: state.etMinutes };
+  // SD-08: "45+2'" for a minute in a half's added time (display only).
+  const minLabel = (m: number, h?: 1 | 2 | 3 | 4 | null) => minuteText(m, h ?? undefined, fmt);
   const fire = (action: ScoreAction) => {
-    const hm = state.halfMinutes, et = state.etMinutes;
-    const halfFromMin = (m: number): 1 | 2 | 3 | 4 => (m < hm ? 1 : m < 2 * hm ? 2 : m < 2 * hm + et ? 3 : 4);
-    const half = pastMin != null ? halfFromMin(pastMin) : state.half;
+    const half = pastMin != null ? (pastHalf ?? halfOfMinute(pastMin, fmt)) : state.half;
     dispatch({ ...action, payload: { ...action.payload, minute: pastMin ?? currentMinute(state), half } });
   };
 
   // When a re-entry flow finishes (or is cancelled), stop stamping at the edited minute.
   useEffect(() => {
-    if (flow === null && editMin != null) setEditMin(null);
+    if (flow === null && editMin != null) { setEditMin(null); setEditHalf(null); }
   }, [flow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = state.track;
@@ -160,7 +172,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // stat line so a profile can show "this total spans N of M games".
   const trackedKeys = (): string[] => {
     const keys = ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'yellowCards', 'redCards', 'cleanSheets'];
-    if (t.shots) keys.push('shots', 'shotsOnTarget');
+    if (t.shots) keys.push('shots', 'shotsOnTarget', 'blocks');
     if (t.fouls) keys.push('fouls');
     if (t.tackles) keys.push('tackles');
     if (t.interceptions) keys.push('interceptions');
@@ -188,15 +200,15 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // Which side the ball goes to after each kind of action.
   const handover = (kind: StatKind, side: 'home' | 'away'): 'home' | 'away' | undefined => {
     if (kind === 'foul' || kind === 'offside' || kind === 'handball') return side === 'home' ? 'away' : 'home';
-    if (kind === 'tackle' || kind === 'interception' || kind === 'save' || kind === 'corner' || kind === 'defenceContribution') return side;
+    if (kind === 'tackle' || kind === 'interception' || kind === 'save' || kind === 'corner' || kind === 'defenceContribution' || kind === 'block') return side;
     return undefined; // shot / pass / cross / dribble / attacking play — possession unchanged
   };
-  const STAT_KEY: Partial<Record<StatKind, string>> = { shot: 'shots', foul: 'fouls', offside: 'offsides', tackle: 'tackles', interception: 'interceptions', save: 'saves', pass: 'passes', cross: 'crosses', dribble: 'dribbles', handball: 'handballs', attackContribution: 'attackingContributions', defenceContribution: 'defensiveContributions', penaltyWon: 'penaltiesWon', penaltyMissed: 'penaltiesMissed' };
-  const recordStat = (kind: StatKind, side: 'home' | 'away', player?: Player, detail?: { onTarget?: boolean; complete?: boolean }) => {
+  const STAT_KEY: Partial<Record<StatKind, string>> = { shot: 'shots', foul: 'fouls', offside: 'offsides', tackle: 'tackles', interception: 'interceptions', save: 'saves', pass: 'passes', cross: 'crosses', dribble: 'dribbles', handball: 'handballs', attackContribution: 'attackingContributions', defenceContribution: 'defensiveContributions', penaltyWon: 'penaltiesWon', penaltyMissed: 'penaltiesMissed', block: 'blocks' };
+  const recordStat = (kind: StatKind, side: 'home' | 'away', player?: Player, detail?: { onTarget?: boolean; complete?: boolean; blocked?: boolean }) => {
     const statKey = STAT_KEY[kind];
     // a shot on target also bumps shotsOnTarget; a completed pass bumps passesComplete
     const extra: Record<string, number> | undefined =
-      kind === 'shot' && detail?.onTarget ? { shotsOnTarget: 1 }
+      kind === 'shot' && detail?.onTarget && !detail.blocked ? { shotsOnTarget: 1 }
       : kind === 'pass' && detail?.complete ? { passesComplete: 1 }
       : undefined;
     fire({
@@ -262,7 +274,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     const gkSlot = lineupOf(side).find((sl) => sl.position === 'GK' && sl.playerId);
     const onField = xi(side);
     return (gkSlot && onField.find((p) => p.id === gkSlot.playerId))
-      ?? onField.find((p) => p.sportDetails?.football?.position === 'GK');
+      ?? onField.find((p) => isGoalkeeper(p.sportDetails?.football?.position));
   };
 
   const recordGoal = (side: 'home' | 'away', scorer: Player, goalType: GoalType, bodyPart?: BodyPart) =>
@@ -304,7 +316,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const removeStat = (st: StatEvent) => {
     const key = STAT_KEY[st.kind];
     const extra: Record<string, number> | undefined =
-      st.kind === 'shot' && st.onTarget ? { shotsOnTarget: -1 } : st.kind === 'pass' && st.complete ? { passesComplete: -1 } : undefined;
+      st.kind === 'shot' && st.onTarget && !st.blocked ? { shotsOnTarget: -1 } : st.kind === 'pass' && st.complete ? { passesComplete: -1 } : undefined;
     const attribution = st.playerId && key ? { playerId: st.playerId, stat: key, by: -1, playerName: st.playerName, extra } : undefined;
     dispatch({ type: 'REMOVE_EVENT', payload: { id: st.id, target: 'stat' }, attribution });
   };
@@ -313,6 +325,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const editEvent = (ev: FootballEvent) => {
     removeEvent(ev);
     setEditMin(ev.minute);
+    setEditHalf(eventHalf(ev, fmt));
     setShowEdit(false);
     if (ev.type === 'goal') setFlow({ mode: 'goal', side: ev.side, step: 'scorer' });
     else if (ev.type === 'owngoal') setFlow({ mode: 'goal', side: ev.side, step: 'og' });
@@ -322,6 +335,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const editStat = (st: StatEvent) => {
     removeStat(st);
     setEditMin(st.minute);
+    setEditHalf(eventHalf(st, fmt));
     setShowEdit(false);
     if (st.kind === 'foul') setFlow({ mode: 'foul', step: 'by', side: st.side });
     else if (playerNeeded(st.kind)) setFlow({ mode: 'stat', kind: st.kind, step: 'player', side: st.side });
@@ -349,15 +363,40 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     setFlow(null);
   };
 
+  // SD-09: who started for a side — the lineup's starters and keeper (the GK
+  // slot, else a starter listed as a GK), or with no lineup the squad's keeper —
+  // plus every squad keeper, so one coming off the bench is recognised.
+  const xiStamp = (side: 'home' | 'away'): XiStamp => {
+    const roster = rosterOf(side);
+    const byId = new Map(roster.map((p) => [p.id, p]));
+    const slots = lineupOf(side).filter((sl) => sl.playerId);
+    const players = slots.map((sl) => ({ id: sl.playerId!, name: byId.get(sl.playerId!)?.fullName ?? sl.playerName ?? '' }));
+    const keepers = roster.filter((p) => isGoalkeeper(p.sportDetails?.football?.position)).map((p) => ({ id: p.id, name: p.fullName }));
+    const gkSlot = slots.find((sl) => sl.position === 'GK');
+    const gk = gkSlot ? players.find((p) => p.id === gkSlot.playerId)
+      : players.length ? players.find((p) => keepers.some((k) => k.id === p.id))
+      : keepers[0];
+    return { ...(gk ? { gk } : {}), players, keepers };
+  };
+  // Log the stamp when it's new or the lineup changed since (latest wins).
+  const stampXi = () => {
+    for (const side of ['home', 'away'] as const) {
+      const stamp = xiStamp(side);
+      if (!stamp.gk && !stamp.players?.length) continue;
+      if (JSON.stringify(stamp) === JSON.stringify(state.xi?.[side])) continue;
+      dispatch({ type: 'XI', payload: { team: side, ...stamp } });
+    }
+  };
+  // Kickoff: the opening one turns on FIFA ordinal minutes (SD-08) and stamps the XIs.
+  const kickoffAt = (at: number) => {
+    dispatch({ type: 'KICKOFF', payload: { at, ord: true } });
+    if (state.half === 1) stampXi();
+  };
+
+  // Full time. Clean sheets are derived (SD-09), not dispatched — just make sure
+  // the starting XIs are in the log.
   const endMatch = () => {
-    const award = (side: 'home' | 'away', lineup: typeof homeLineup) =>
-      lineup
-        .filter((s) => s.playerId && DEFENSIVE_POSITIONS.has(s.position))
-        .forEach((s) =>
-          dispatch({ type: 'CLEAN_SHEET', side, attribution: { playerId: s.playerId!, stat: 'cleanSheets', playerName: s.playerName } })
-        );
-    if (state.away === 0) award('home', homeLineup);
-    if (state.home === 0) award('away', awayLineup);
+    stampXi();
     dispatch({ type: 'END' });
   };
 
@@ -435,7 +474,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     const teamIn = matchTeam(text, homeTeams, awayTeams);
     const startStat = (kind: StatKind | 'card') => setFlow({ mode: 'stat', kind, step: 'team' });
     switch (intent.kind) {
-      case 'kickoff': if (!state.startedAt) { dispatch({ type: 'KICKOFF', payload: { at: Date.now() } }); say('Kicked off ▶'); } else say('Already underway.'); return;
+      case 'kickoff': if (!state.startedAt) { kickoffAt(Date.now()); say('Kicked off ▶'); } else say('Already underway.'); return;
       case 'endHalf': if (state.half === 1 || state.half === 3) { const ended = HALF_NAME[state.half]; dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } }); say(`Ended the ${ended}.`); } else say('Say "full time" to end the match.'); return;
       case 'fullTime': endMatch(); say('Full time — match ended.'); return;
       case 'goal': { const side = teamIn ?? state.possession.side ?? 'home'; setFlow({ mode: 'goal', side, step: 'scorer' }); say(`Goal for ${teamName(side)} — who scored?`); return; }
@@ -535,7 +574,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           {sub.off && (
             <>
               <Text style={ctrl.meta}>Player ON (from the bench){state.subType === 'fixed' ? ' — withdrawn players unavailable' : ''}:</Text>
-              <PlayerTable players={benchOf(sub.side)} onPick={(p) => { fire({ type: 'SUB', side: sub.side, payload: { offName: sub.off!.fullName, onName: p.fullName } }); setSub(null); }} />
+              <PlayerTable players={benchOf(sub.side)} onPick={(p) => { fire({ type: 'SUB', side: sub.side, payload: { offName: sub.off!.fullName, onName: p.fullName, offId: sub.off!.id, onId: p.id } }); setSub(null); }} />
             </>
           )}
         </View>
@@ -548,7 +587,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     const base = startOffset(state);
     // Joining a game already in progress: start the clock at the current minute.
     const startAt = koMin.trim() === '' ? base : Math.max(base, Math.floor(Number(koMin)) || base);
-    const kickoff = () => dispatch({ type: 'KICKOFF', payload: { at: Date.now() - Math.max(0, startAt - base) * 60000 } });
+    const kickoff = () => kickoffAt(Date.now() - Math.max(0, startAt - base) * 60000);
     const koLabel = state.half === 1 ? 'Kick off' : state.half === 2 ? 'Start 2nd half' : state.half === 3 ? 'Start extra time' : 'Start ET 2nd half';
     const breakMsg = state.half === 1 ? 'Set the lineup, then kick off to start the clock.'
       : state.half === 2 ? 'Half time — make any substitutions, then start the second half.'
@@ -607,7 +646,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           <Text style={ctrl.label}>{title}</Text>
           <Button label="Cancel" variant="ghost" onPress={() => setFlow(null)} />
         </View>
-        {editMin != null ? <Text style={ctrl.editBanner}>✎ Re-entering the {editMin}&apos; moment — your pick replaces the old one.</Text> : null}
+        {editMin != null ? <Text style={ctrl.editBanner}>✎ Re-entering the {minLabel(editMin, editHalf)} moment — your pick replaces the old one.</Text> : null}
         {hint ? <Text style={ctrl.meta}>{hint}</Text> : null}
         {body}
       </View>
@@ -774,23 +813,28 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
               <Button label="🧤 Saved" variant="ghost" style={ctrl.flex}
                 onPress={() => { recordStat('shot', side, player, { onTarget: true }); const gk = gkOf(opp(side)); if (gk) recordStat('save', opp(side), gk); }} />
             </View>
-            <View style={ctrl.row}>
-              <Button label="🧱 Blocked" variant="ghost" style={ctrl.flex}
-                onPress={() => { recordStat('shot', side, player, { onTarget: true }); setFlow({ mode: 'stat', kind: 'shot', step: 'blocker', side, player }); }} />
-              <Button label="On target only" variant="ghost" style={ctrl.flex} onPress={() => recordStat('shot', side, player, { onTarget: true })} />
-            </View>
+            <Button label="On target only" variant="ghost" onPress={() => recordStat('shot', side, player, { onTarget: true })} />
           </View>
         ));
       }
       if (flow.step === 'blocker') {
         return panel('🧱 Blocked by…', `Which ${opp(side) === 'home' ? homeName : awayName} player blocked it?`, (
-          <PlayerTable players={xi(opp(side))} onPick={(b) => recordStat('defenceContribution', opp(side), b)} />
+          <>
+            <PlayerTable players={xi(opp(side))} onPick={(b) => recordStat('block', opp(side), b)} />
+            <Button label="Not sure — skip" variant="ghost" onPress={() => setFlow(null)} />
+          </>
         ));
       }
-      return panel(`🎯 Shot — ${player.fullName}`, 'On target?', (
-        <View style={ctrl.row}>
-          <Button label="🎯 On target" variant="home" style={ctrl.flex} onPress={() => setFlow({ mode: 'stat', kind: 'shot', step: 'outcome', side, player })} />
-          <Button label="↗ Off target" variant="ghost" style={ctrl.flex} onPress={() => recordStat('shot', side, player, { onTarget: false })} />
+      // SD-08: a blocked shot never reached goal, so it is not on target (Opta:
+      // shots = on target + off target + blocked); the blocker gets a block.
+      return panel(`🎯 Shot — ${player.fullName}`, 'Where did it go?', (
+        <View style={{ gap: theme.spacing(2) }}>
+          <View style={ctrl.row}>
+            <Button label="🎯 On target" variant="home" style={ctrl.flex} onPress={() => setFlow({ mode: 'stat', kind: 'shot', step: 'outcome', side, player })} />
+            <Button label="↗ Off target" variant="ghost" style={ctrl.flex} onPress={() => recordStat('shot', side, player, { onTarget: false })} />
+          </View>
+          <Button label="🧱 Blocked" variant="ghost"
+            onPress={() => { recordStat('shot', side, player, { onTarget: false, blocked: true }); setFlow({ mode: 'stat', kind: 'shot', step: 'blocker', side, player }); }} />
         </View>
       ));
     }
@@ -877,18 +921,25 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           <>
             <Text style={ctrl.meta}>Started scoring late? Enter a past minute — everything you log is stamped there until you go back to live.</Text>
             <View style={ctrl.row}>
-              <View style={ctrl.flex}><TextField label="" value={backfillText} onChange={setBackfillText} placeholder="minute, e.g. 12" autoCapitalize="none" /></View>
-              <Button label="Backfill" variant="ghost" disabled={backfillText.trim() === ''} onPress={() => setBackfillMin(Math.max(0, Math.floor(Number(backfillText)) || 0))} />
+              <View style={ctrl.flex}><TextField label="" value={backfillText} onChange={setBackfillText} placeholder="minute, e.g. 12 or 45+2" autoCapitalize="none" /></View>
+              <Button label="Backfill" variant="ghost" disabled={backfillText.trim() === ''} onPress={() => {
+                // "45+2" = added time of the half ending at 45 (SD-08); "12" = the 12th minute.
+                const m = /^\s*(\d+)\s*\+\s*(\d+)\s*'?\s*$/.exec(backfillText);
+                const ends = [1, 2, 3, 4].map((h) => ({ h: h as 1 | 2 | 3 | 4, end: h === 1 ? fmt.halfMinutes : h === 2 ? 2 * fmt.halfMinutes : h === 3 ? 2 * fmt.halfMinutes + fmt.etMinutes : 2 * fmt.halfMinutes + 2 * fmt.etMinutes }));
+                const at = m ? ends.find((x) => x.end === Number(m[1])) : undefined;
+                if (m && at) { setBackfillMin(at.end + Number(m[2])); setBackfillHalf(at.h); }
+                else { setBackfillMin(Math.max(0, Math.floor(Number(backfillText)) || 0)); setBackfillHalf(null); }
+              }} />
             </View>
           </>
         ) : (
           <View style={ctrl.addedBox}>
-            <Text style={ctrl.label}>⏪ Backfilling at {backfillMin}&apos;</Text>
-            <Text style={ctrl.meta}>Every action you log now is stamped at {backfillMin}&apos;. Adjust the minute, or go back to live scoring.</Text>
+            <Text style={ctrl.label}>⏪ Backfilling at {minLabel(backfillMin, backfillHalf)}</Text>
+            <Text style={ctrl.meta}>Every action you log now is stamped at {minLabel(backfillMin, backfillHalf)}. Adjust the minute, or go back to live scoring.</Text>
             <View style={ctrl.row}>
               <Button label="−1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(Math.max(0, backfillMin - 1))} />
               <Button label="+1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(backfillMin + 1)} />
-              <Button label="▶ Back to live" variant="home" style={ctrl.flex} onPress={() => { setBackfillMin(null); setBackfillText(''); }} />
+              <Button label="▶ Back to live" variant="home" style={ctrl.flex} onPress={() => { setBackfillMin(null); setBackfillHalf(null); setBackfillText(''); }} />
             </View>
           </View>
         )}
@@ -903,16 +954,16 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         </View>
         {showEdit && (() => {
           const items = [
-            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}`, onRemove: () => removeEvent(e), onEdit: () => editEvent(e) })),
-            ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), onEdit: () => editStat(st) })),
-          ].sort((a, b) => b.minute - a.minute || b.order - a.order);
+            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}`, onRemove: () => removeEvent(e), onEdit: () => editEvent(e) })),
+            ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, half: eventHalf(st, fmt), order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), onEdit: () => editStat(st) })),
+          ].sort(byMatchTimeDesc);
           if (items.length === 0) return <Text style={ctrl.meta}>Nothing logged yet.</Text>;
           return (
             <View style={{ gap: theme.spacing(1) }}>
               <Text style={ctrl.meta}>Tap Edit to re-pick the player/type (stamped at the same minute — every stat re-adjusts), or Remove to delete it. Nothing else is touched.</Text>
               {items.map((it) => (
                 <View key={it.key} style={ctrl.editRow}>
-                  <Text style={ctrl.editMin}>{it.minute}&apos;</Text>
+                  <Text style={ctrl.editMin}>{minLabel(it.minute, it.half)}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{it.label}</Text>
                   <Text style={ctrl.editEdit} onPress={it.onEdit}>✎ Edit</Text>
                   <Text style={ctrl.editRemove} onPress={it.onRemove}>✕</Text>
@@ -958,7 +1009,9 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         // decision (END without awarding clean sheets yet); otherwise it's full time.
         const toDecision = state.knockout && state.home === state.away;
         const label = toDecision ? (state.half === 2 ? 'End 2nd Half →' : 'End extra time →') : 'End Match';
-        return <Button label={label} variant="danger" onPress={() => (toDecision ? dispatch({ type: 'END', payload: { at: Date.now() } }) : endMatch())} />;
+        // SD-09: a level knockout stamps the XIs here too — its clean sheets are
+        // decided by the open-play score once the shootout completes it.
+        return <Button label={label} variant="danger" onPress={() => (toDecision ? (stampXi(), dispatch({ type: 'END', payload: { at: Date.now() } })) : endMatch())} />;
       })()}
     </View>
   );
@@ -1132,6 +1185,7 @@ const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: F
   const rows: { label: string; home: string; away: string; tracked: boolean; overallOnly?: boolean }[] = [
     { label: 'Shots', home: `${totals.home.shots}`, away: `${totals.away.shots}`, tracked: t.shots },
     { label: 'Shots on target', home: `${totals.home.shotsOnTarget}`, away: `${totals.away.shotsOnTarget}`, tracked: t.shots },
+    { label: 'Blocked shots', home: `${totals.home.blockedShots}`, away: `${totals.away.blockedShots}`, tracked: t.shots },
     // Possession is time-based (cumulative), so it's only meaningful over the whole match.
     { label: 'Possession', home: `${possession.home}%`, away: `${possession.away}%`, tracked: t.possession, overallOnly: true },
     { label: 'Passes', home: `${totals.home.passes}`, away: `${totals.away.passes}`, tracked: t.passes },
@@ -1208,7 +1262,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   const hc = homeColor ?? theme.colors.home;
   const ac = awayColor ?? theme.colors.away;
   if (view === 'timeline') {
-    return <Timeline events={s.events} stats={s.stats} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
+    return <Timeline events={s.events} stats={s.stats} halfMinutes={s.halfMinutes} etMinutes={s.etMinutes} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
   }
   if (view === 'stats') {
     return <StatsComparison s={s} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} />;
@@ -1216,7 +1270,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   return (
     <LineupView
       homeLineup={homeLineup} awayLineup={awayLineup} homeRoster={homeRoster} awayRoster={awayRoster}
-      events={s.events} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac}
+      events={s.events} minuteFormat={{ halfMinutes: s.halfMinutes, etMinutes: s.etMinutes }} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac}
       homeManager={homeManager} awayManager={awayManager}
       homeFormation={homeFormation} awayFormation={awayFormation}
       canEditHome={canEditHome} canEditAway={canEditAway} onEditLineup={onEditLineup} onPlayer={onPlayer}
@@ -1256,6 +1310,11 @@ export const footballPlugin: SportPlugin<FootballState> = {
   tickerFlash: footballTickerFlash,
   createInitialState: init,
   reducer,
+  // SD-09: keepers' clean sheets, goals conceded and minutes, set absolutely at
+  // completion (incl. a shootout) and after every correction; every other
+  // football stat still moves by live increments / correction deltas.
+  statTotals: keeperTotals,
+  statTotalsPartial: true,
   // A level knockout tie isn't complete until the shootout produces a winner.
   isComplete: (s) => s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null),
   result: (s) => {
@@ -1330,7 +1389,7 @@ const ctrl = StyleSheet.create({
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   flex: { flex: 1 },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  editMin: { color: theme.colors.accent, fontWeight: '800', width: 34, fontSize: theme.font.small },
+  editMin: { color: theme.colors.accent, fontWeight: '800', width: 48, fontSize: theme.font.small }, // fits "45+2'" (SD-08)
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
   editEdit: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   editBanner: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700', backgroundColor: theme.colors.accent + '22', padding: theme.spacing(2), borderRadius: theme.radius.sm },

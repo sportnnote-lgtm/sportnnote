@@ -15,6 +15,7 @@ import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
 import { statCoverage } from '../data/stats';
 import { cricketCareer, cricketMatchLine } from '../data/cricketCareer';
+import { golfProfileSummary } from '../sports/golf/engine';
 import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
 import type { EditAccess } from '../core/playerEditAccess';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
@@ -30,6 +31,7 @@ const LABELS: Record<string, string> = {
   // football granular stats
   shots: 'Shots', shotsOnTarget: 'Shots on target', tackles: 'Tackles', interceptions: 'Interceptions',
   saves: 'Saves', passes: 'Passes', passesComplete: 'Passes completed', offsides: 'Offsides', corners: 'Corners',
+  goalsConceded: 'Goals conceded', minutes: 'Minutes', // SD-09 keeper lines
   attackingContributions: 'Attacking plays', defensiveContributions: 'Defensive plays',
   // cricket (parity #19)
   ballsFaced: 'Balls faced', fours: '4s', sixes: '6s', innings: 'Innings', notOut: 'Not out',
@@ -149,22 +151,24 @@ export default function SportProfileScreen() {
               const t = bySport.totals;
               const pct = (hit: number, n: number) => (n ? `${Math.round((hit / n) * 100)}%` : '–');
               const avg = t.completeRounds ? (t.completeStrokes / t.completeRounds).toFixed(1) : '–';
-              const golfLines = stats.recent.filter((l) => l.sport === 'golf' && l.stats.completeRounds);
-              const best = golfLines.length ? Math.min(...golfLines.map((l) => l.stats.strokes)) : null;
+              // Bests compare like for like (18 vs 9 holes); putts/round only
+              // over holes where putts were entered (SD-07).
+              const g = golfProfileSummary(stats.recent.filter((l) => l.sport === 'golf'));
               return (
                 <>
                   <View style={st.statGrid}>
                     <Stat value={String(t.rounds ?? bySport.matches)} label="Rounds" />
                     <Stat value={avg} label="Scoring avg" />
-                    <Stat value={best != null ? String(best) : '–'} label="Best round" />
+                    <Stat value={g.best18 != null ? String(g.best18) : '–'} label="Best round" />
                   </View>
                   <Text style={st.totalsLabel}>Totals · golf</Text>
                   <View style={st.statGrid}>
+                    {g.best9 != null && <Stat value={String(g.best9)} label="Best 9 holes" tone="neutral" />}
                     <Stat value={String(t.eagles ?? 0)} label="Eagles+" tone="neutral" />
                     <Stat value={String(t.birdies ?? 0)} label="Birdies" tone="neutral" />
                     <Stat value={String(t.pars ?? 0)} label="Pars" tone="neutral" />
                     <Stat value={String(bySport.wins)} label="Wins" tone="neutral" />
-                    <Stat value={t.putts && t.rounds ? (t.putts / t.rounds).toFixed(1) : '–'} label="Putts/round" tone="neutral" />
+                    <Stat value={g.puttsPerRound != null ? g.puttsPerRound.toFixed(1) : '–'} label="Putts/round" tone="neutral" />
                     <Stat value={pct(t.girHit ?? 0, t.girHoles ?? 0)} label="Greens (GIR)" tone="neutral" />
                     <Stat value={pct(t.firHit ?? 0, t.firHoles ?? 0)} label="Fairways" tone="neutral" />
                   </View>

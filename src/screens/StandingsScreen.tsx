@@ -17,6 +17,7 @@ import { useAuth } from '../core/auth';
 import { canManageTournament } from '../core/org';
 import { useTournament, useTournamentById, useStandings, useDivisions, useOrganizations } from '../data/hooks';
 import { leaderStat, teamStandings, standingsConfigFromFormat, type PointsAdjustment, type TeamStanding } from '../data/standings';
+import { unplayed } from '../components/LeagueTable';
 import { matchesInDivision, standingsPhases } from '../data/groups';
 import { structureFromFormat } from '../data/structureConfig';
 import { manualRows, withManualRows, blankManualRow, rankManualRows, type ManualStandingRow } from '../data/manualStandings';
@@ -45,7 +46,7 @@ export default function StandingsScreen() {
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params?.tournamentId);
   const table = useMemo(
     () => (activeCat
-      ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]))
+      ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]), undefined, entries.map((e) => e.team))
       : teams),
     [activeCat, matches, entries, activeSport, teams, tournament],
   );
@@ -57,7 +58,7 @@ export default function StandingsScreen() {
     return standingsConfigFromFormat(activeSport, fmt);
   }, [activeSport, tournament, adjOverride]);
   const phases = useMemo(
-    () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg),
+    () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg, entries.map((e) => e.team)),
     [activeCat, matches, entries, activeSport, cfg],
   );
   const lead = leaderStat(activeSport);
@@ -341,6 +342,12 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
             * {nameOf(a.teamId)} {signed(a.points)} · {a.reason}{a.byName ? ` · by ${a.byName}` : ''}, {new Date(a.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
           </Text>
         ))}
+        {/* SD-10: Swiss byes and chess forfeits score but aren't games played (P / W / D / L). */}
+        {rows.some((t) => unplayed(t)) && (
+          <Text style={textStyles.muted}>
+            Not games played (the points count): {rows.filter((t) => unplayed(t)).map((t) => `${t.name}: ${unplayed(t)}`).join('; ')}
+          </Text>
+        )}
       </Card>
     </>
   );

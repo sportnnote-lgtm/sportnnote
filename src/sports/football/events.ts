@@ -29,6 +29,10 @@ export interface FootballEvent {
   secondYellow?: boolean;
   /** goals: which body part struck it (left/right foot, head, chest) */
   bodyPart?: BodyPart;
+  /** SD-09: subs — the ids of the player going off / coming on (new matches;
+   *  older logs carry names only and resolve by name). */
+  playerId?: string;
+  secondId?: string;
 }
 
 export const GOAL_TYPE_LABEL: Record<GoalType, string> = {
@@ -71,7 +75,10 @@ export type StatKind =
   | 'defenceContribution'
   // Penalty outcomes (recorded via the dedicated penalty flow, not the button grid).
   | 'penaltyWon' // the attacker who won the penalty
-  | 'penaltyMissed'; // the taker failed to score (saved or off target)
+  | 'penaltyMissed' // the taker failed to score (saved or off target)
+  // SD-08: the defender who blocked a shot (the shot itself is logged as
+  // `blocked`, never on target — Opta: shots = on + off + blocked).
+  | 'block';
 
 export interface StatEvent {
   id: number;
@@ -82,8 +89,11 @@ export interface StatEvent {
   /** secondary player — for a foul, who was fouled (the victim) */
   secondName?: string;
   minute: number;
-  /** shots: was it on target? */
+  /** shots: was it on target? (a blocked shot is not — SD-08) */
   onTarget?: boolean;
+  /** shots: blocked by a defender before reaching goal (SD-08). Older logs
+   *  recorded a block as `onTarget: true` with no flag. */
+  blocked?: boolean;
   /** passes: was it completed? */
   complete?: boolean;
   /** which half it occurred in — 1/2 in regulation, 3/4 in extra time */
@@ -106,4 +116,5 @@ export const STAT_META: Record<StatKind, { icon: string; label: string }> = {
   defenceContribution: { icon: '🧱', label: 'Defensive play' },
   penaltyWon: { icon: '⚖️', label: 'Penalty won' },
   penaltyMissed: { icon: '🚫', label: 'Penalty missed' },
+  block: { icon: '🧱', label: 'Block' },
 };

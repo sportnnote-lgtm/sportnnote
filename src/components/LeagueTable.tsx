@@ -11,6 +11,16 @@ import type { TeamStanding } from '../data/standings';
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const signRate = (n: number) => (n > 0 ? `+${n.toFixed(2)}` : n.toFixed(2));
+/** Unplayed rounds (SD-10): Swiss byes and chess forfeits score points but
+ *  aren't in P / W / D / L, so a second line says where those points came from
+ *  (its own line so it never truncates at phone width). */
+export const unplayed = (t: TeamStanding) => {
+  const parts: string[] = [];
+  if (t.byes) parts.push(`${t.byes} bye${t.byes === 1 ? '' : 's'}`);
+  if (t.forfeitWins) parts.push(`${t.forfeitWins} won by forfeit`);
+  if (t.forfeitLosses) parts.push(`${t.forfeitLosses} lost by forfeit`);
+  return parts.join(' · ');
+};
 
 export function LeagueTable({
   teams,
@@ -39,6 +49,7 @@ export function LeagueTable({
                   {t.played}P · {t.won}W {t.drawn}D {t.lost}L{showNr ? ` ${t.nr ?? 0}NR` : ''} · {t.for}:{t.against} ({sign(t.diff)})
                   {t.nrr !== undefined ? ` · NRR ${signRate(t.nrr)}` : ''}
                 </Text>
+                {!!unplayed(t) && <Text style={st.meta} numberOfLines={1}>{unplayed(t)}</Text>}
               </View>
               <View style={st.ptsCol}>
                 <Text style={st.pts}>{t.points}{t.adjust ? '*' : ''}</Text>

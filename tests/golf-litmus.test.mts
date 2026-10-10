@@ -10,6 +10,8 @@ import {
   standardPar72, courseHandicap, playingHandicap, strokesReceived, rankLeaderboard, makesCut,
   type GolfCard, type RankInput,
 } from '../src/sports/golf/engine.ts';
+import { buildLeaderboard } from '../src/data/golfLeaderboard.ts';
+import type { FieldEntry, FieldEvent, GolfCourse } from '../src/core/types.ts';
 
 const H = standardPar72();
 let seed = 42;
@@ -49,6 +51,52 @@ describe('litmus: 72-hole open with a 36-hole cut', () => {
     const lead = final[0];
     const sum = rounds.get(lead.id)!.reduce((t, c) => t + c.strokes.reduce((a, s, i) => a + ((s as number) - H[i].par), 0), 0);
     assert.equal(lead.total, sum);
+  });
+
+  test('through buildLeaderboard: missed-cut players sit below the line as MC', () => {
+    // The same open as stored rounds: R1–R2 for all 120, R3–R4 for the cut-makers.
+    const course: GolfCourse = { id: 'c1', name: 'Open course', holes: H, tees: [{ name: 'Champ', courseRating: 72, slope: 113 }] };
+    const fmt = { competition: 'stroke', holes: '18', courseId: 'c1', tieBreak: 'shared' };
+    const events: FieldEvent[] = [1, 2, 3, 4].map((n) => ({
+      id: `r${n}`, sport: 'golf', title: `Round ${n}`, roundNo: n, startsAt: `2026-10-0${n}T08:00:00Z`, status: 'completed',
+      format: n === 3 ? { ...fmt, cutAfterRound: 2, cut: { type: 'top', n: 50 } } : fmt,
+    }));
+    const board36 = rankLeaderboard(after(2, players.map((p) => p.id)), opts);
+    const made = new Set(makesCut(board36, { type: 'top', n: 50 }));
+    const entries: FieldEntry[] = [];
+    for (const p of players) {
+      for (let n = 1; n <= (made.has(p.id) ? 4 : 2); n++) {
+        entries.push({ id: `${p.id}-${n}`, eventId: `r${n}`, playerId: p.id, groupNo: 1, result: rounds.get(p.id)![n - 1], status: 'finished' });
+      }
+    }
+    const board = buildLeaderboard(events, entries, [course]);
+    assert.equal(board.length, 120);
+    const inField = board.filter((r) => !r.missedCut);
+    const mc = board.filter((r) => r.missedCut);
+    assert.equal(inField.length, made.size);
+    assert.equal(mc.length, 120 - made.size);
+    // Everyone who made the cut is listed (and ranked) before every MC row.
+    const firstMc = board.findIndex((r) => r.missedCut);
+    assert.equal(firstMc, made.size);
+    for (const r of inField) { assert.ok(made.has(r.id)); assert.ok(r.position != null && r.position <= made.size); }
+    for (const r of mc) {
+      assert.ok(!made.has(r.id));
+      assert.equal(r.position, null, `${r.id} must not be ranked among the field`);
+      assert.equal(r.positionLabel, 'MC');
+      // An MC player's total is their 36-hole total, which can be lower than a
+      // weekend player's 72-hole total — yet they still sit below the line.
+      assert.equal(r.total, board36.find((b) => b.id === r.id)!.total);
+    }
+    for (let i = 1; i < mc.length; i++) assert.ok(mc[i].total >= mc[i - 1].total);
+    // The field is ranked on four rounds exactly as the engine ranks it alone.
+    const final = rankLeaderboard(after(4, [...made]), opts);
+    const key = (rs: typeof board) => rs.map((r) => `${r.id}:${r.positionLabel}:${r.total}`).sort();
+    assert.deepEqual(key(inField), key(final));
+    // Next-round setup proposes ranked rows only (GolfRoundSetupScreen) — no MC.
+    const proposed = board.filter((r) => r.position != null).map((r) => r.id);
+    assert.deepEqual(new Set(proposed), made);
+    // And a further cut on this board can never pull an MC player back in.
+    for (const id of makesCut(board, { type: 'top', n: 200 })) assert.ok(made.has(id));
   });
 });
 

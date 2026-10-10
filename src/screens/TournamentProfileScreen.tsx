@@ -310,14 +310,14 @@ export default function TournamentProfileScreen() {
     () => (isMedal ? medalStandings(matches, sports, tournament?.scoring, tournament?.formats) : []),
     [isMedal, matches, sports, tournament?.scoring, tournament?.formats],
   );
-  const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
+  const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg, undefined, participants) : []), [matches, activeSport, stCfg, participants]);
   // Grouped tournaments show a table per group instead of one flat league table.
   const groups = useMemo(() => (activeSport ? groupTables(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
   // A Super round-robin phase (Asia-Cup style), if the tournament has one — its
   // own league table, separate from the group stage.
   const superMatches = useMemo(() => (activeSport ? matches.filter((m) => m.stage === 'super' && m.sport === activeSport) : []), [matches, activeSport]);
   const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport, stCfg) : []), [superMatches, activeSport, stCfg]);
-  const phases = useMemo(() => (activeSport ? standingsPhases(matches, activeSport, stCfg) : []), [matches, activeSport, stCfg]);
+  const phases = useMemo(() => (activeSport ? standingsPhases(matches, activeSport, stCfg, participants) : []), [matches, activeSport, stCfg, participants]);
   const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
   const categories = useMemo(
     () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),

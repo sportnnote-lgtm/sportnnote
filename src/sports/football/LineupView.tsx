@@ -13,6 +13,7 @@ import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import type { LineupSlot, Player } from '../../core/types';
 import type { FootballEvent } from './events';
+import { minuteText, type MinuteFormat } from './engine';
 import { playerLink } from '../playerLink';
 import { displayableImage } from '../../core/imageUrl';
 import { isSupabaseConfigured } from '../../core/supabase';
@@ -36,9 +37,9 @@ function formationLabel(lineup: LineupSlot[]): string {
 const initials = (name?: string, position?: string) =>
   name ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : position ?? '';
 
-interface Marks { card?: 'yellow' | 'red' | 'two-yellow'; subOff?: number; goals?: number; }
+interface Marks { card?: 'yellow' | 'red' | 'two-yellow'; subOff?: string; goals?: number; }
 /** Map each player (by name) to their card + sub-off markers from the timeline. */
-function deriveMarks(events: FootballEvent[]): Record<string, Marks> {
+function deriveMarks(events: FootballEvent[], f: MinuteFormat): Record<string, Marks> {
   const out: Record<string, Marks> = {};
   const m = (name?: string): Marks | undefined => {
     if (!name) return undefined;
@@ -47,15 +48,15 @@ function deriveMarks(events: FootballEvent[]): Record<string, Marks> {
   for (const e of events) {
     if (e.type === 'yellow') { const x = m(e.playerName); if (x) x.card = x.card === 'yellow' ? 'two-yellow' : x.card ?? 'yellow'; }
     else if (e.type === 'red') { const x = m(e.playerName); if (x) x.card = e.secondYellow ? 'two-yellow' : 'red'; }
-    else if (e.type === 'sub') { const x = m(e.playerName); if (x) x.subOff = e.minute; } // playerName = off
+    else if (e.type === 'sub') { const x = m(e.playerName); if (x) x.subOff = minuteText(e.minute, e.half, f); } // playerName = off
     else if (e.type === 'goal') { const x = m(e.playerName); if (x) x.goals = (x.goals ?? 0) + 1; } // own goals aren't credited to the scorer's badge
   }
   return out;
 }
 /** Subs who came on (name → minute). */
-function subsIn(events: FootballEvent[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const e of events) if (e.type === 'sub' && e.secondName) out[e.secondName] = e.minute;
+function subsIn(events: FootballEvent[], f: MinuteFormat): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const e of events) if (e.type === 'sub' && e.secondName) out[e.secondName] = minuteText(e.minute, e.half, f);
   return out;
 }
 
@@ -103,25 +104,28 @@ function PlayerDot({
       <Text style={s.name} numberOfLines={1} {...playerLink(slot.playerId, name ?? slot.position, onPlayer)}>
         {jersey != null ? `${jersey} ` : ''}{name ? name.split(' ').slice(-1)[0] : slot.position}
       </Text>
-      {marks?.subOff != null && <Text style={s.subMin}>{marks.subOff}&apos;</Text>}
+      {marks?.subOff != null && <Text style={s.subMin}>{marks.subOff}</Text>}
     </View>
   );
 }
 
 export function LineupView({
-  homeLineup = [], awayLineup = [], homeRoster = [], awayRoster = [], events = [],
+  homeLineup = [], awayLineup = [], homeRoster = [], awayRoster = [], events = [], minuteFormat = { halfMinutes: 45, etMinutes: 15 },
   homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, homeManager, awayManager,
   homeFormation, awayFormation, canEditHome, canEditAway, onEditLineup, onPlayer,
 }: {
   homeLineup?: LineupSlot[]; awayLineup?: LineupSlot[]; homeRoster?: Player[]; awayRoster?: Player[];
-  events?: FootballEvent[]; homeName: string; awayName: string; homeColor?: string; awayColor?: string;
+  events?: FootballEvent[];
+  /** half lengths, for "45+2'" sub minutes (SD-08) */
+  minuteFormat?: MinuteFormat;
+  homeName: string; awayName: string; homeColor?: string; awayColor?: string;
   homeManager?: string; awayManager?: string; homeFormation?: string; awayFormation?: string;
   canEditHome?: boolean; canEditAway?: boolean; onEditLineup?: (side: 'home' | 'away') => void;
   /** tap a player's name (pitch or bench) → their profile */
   onPlayer?: (playerId: string) => void;
 }) {
-  const marks = deriveMarks(events);
-  const cameOn = subsIn(events);
+  const marks = deriveMarks(events, minuteFormat);
+  const cameOn = subsIn(events, minuteFormat);
   const byId = (roster: Player[]) => new Map(roster.map((p) => [p.id, p]));
   const homeById = byId(homeRoster);
   const awayById = byId(awayRoster);
@@ -174,7 +178,7 @@ export function LineupView({
               <Avatar photoUrl={p.photoUrl} label={initials(p.fullName)} color={color} size={28} />
               <View style={{ flex: 1 }}>
                 <Text style={[s.benchName, side === 'away' && { textAlign: 'right' }]} numberOfLines={1} {...playerLink(p.id, mask.byId(p.id, p.fullName), onPlayer)}>{p.jerseyNo ? `${p.jerseyNo} ` : ''}{mask.byId(p.id, p.fullName)}</Text>
-                {onMin != null && <Text style={[s.benchSub, side === 'away' && { textAlign: 'right' }]}>↑ {onMin}&apos;</Text>}
+                {onMin != null && <Text style={[s.benchSub, side === 'away' && { textAlign: 'right' }]}>↑ {onMin}</Text>}
               </View>
               {m?.goals ? <Text style={s.benchGoal}>⚽{m.goals > 1 ? m.goals : ''}</Text> : null}
               {m?.card ? <CardDot card={m.card} /> : null}

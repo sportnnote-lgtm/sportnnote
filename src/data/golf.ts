@@ -9,37 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { demo, genId } from './demoStore';
 import type { FieldEntry, FieldEntryStatus, FieldEvent, FieldEventStatus, GolfCourse } from '../core/types';
-import {
-  holesFor, courseHandicap, playingHandicap, strokesReceived, rankLeaderboard, roundStats, emptyCard,
-  type GolfCard, type GolfFormat, type HoleSet, type RankRow, type Hole,
-} from '../sports/golf/engine';
+import { roundStats, emptyCard, type GolfCard, type Hole } from '../sports/golf/engine';
+import { buildLeaderboard, roundContext, cardOf } from './golfLeaderboard';
+
+// Pure leaderboard/format helpers live in golfLeaderboard.ts (testable in node);
+// re-exported so screens keep importing them from here.
+export { golfFormatOf, roundContext, cardOf, buildLeaderboard, type GolfRoundFormat } from './golfLeaderboard';
 
 const live = () => isSupabaseConfigured && !!supabase;
-
-/* -------------------------------- format -------------------------------- */
-
-/** A golf round's format (stored on FieldEvent.format). */
-export interface GolfRoundFormat extends GolfFormat {
-  courseId: string;
-  tee?: string;
-  /** rank by net (handicap) scores in stroke play */
-  net: boolean;
-  tieBreak: 'countback' | 'shared';
-}
-
-export function golfFormatOf(ev: Pick<FieldEvent, 'format'>): GolfRoundFormat {
-  const f = ev.format ?? {};
-  return {
-    scoring: f.competition === 'stableford' || f.scoring === 'stableford' ? 'stableford' : 'stroke',
-    holes: (['18', 'front9', 'back9'].includes(String(f.holes)) ? String(f.holes) : '18') as HoleSet,
-    allowance: typeof f.allowance === 'number' ? f.allowance : 95,
-    maxScore: (['none', 'ndb', 'par3', 'par5'].includes(String(f.maxScore)) ? f.maxScore : 'ndb') as GolfFormat['maxScore'],
-    courseId: String(f.courseId ?? ''),
-    tee: typeof f.tee === 'string' ? f.tee : undefined,
-    net: f.net === true || f.netScoring === 'net',
-    tieBreak: f.tieBreak === 'shared' ? 'shared' : 'countback',
-  };
-}
 
 /* -------------------------------- courses ------------------------------- */
 
@@ -250,49 +227,6 @@ export async function removeFieldEntry(entryId: string): Promise<void> {
 }
 
 /* ----------------------------- computations ----------------------------- */
-
-/** The holes and strokes received for one entry in one round. */
-export function roundContext(ev: FieldEvent, course: GolfCourse, entry: Pick<FieldEntry, 'handicapIndex'>) {
-  const fmt = golfFormatOf(ev);
-  const holes = holesFor(course, fmt.holes);
-  const tee = course.tees.find((t) => t.name === fmt.tee) ?? course.tees[0];
-  const idx = entry.handicapIndex;
-  const ch = idx == null ? 0 : courseHandicap(idx, tee, holes);
-  const ph = idx == null ? 0 : playingHandicap(ch, fmt.allowance);
-  return { fmt, holes, tee, courseHandicap: ch, playingHandicap: ph, received: strokesReceived(ph, holes) };
-}
-
-export const cardOf = (entry: FieldEntry, holes: number): GolfCard => {
-  const c = entry.result as GolfCard | null;
-  return c && Array.isArray(c.strokes) && c.strokes.length === holes ? c : emptyCard(holes);
-};
-
-/**
- * The leaderboard across one or more rounds (a tournament's rounds, or a single
- * casual round). Players are matched across rounds by player id; the format of
- * the LAST round decides scoring/net/tie-break.
- */
-export function buildLeaderboard(events: FieldEvent[], entries: FieldEntry[], courses: GolfCourse[]): RankRow[] {
-  if (!events.length) return [];
-  const ordered = [...events].sort((a, b) => a.roundNo - b.roundNo);
-  const last = golfFormatOf(ordered[ordered.length - 1]);
-  const byPlayer = new Map<string, { status: FieldEntry['status']; rounds: { card: GolfCard; holes: Hole[]; received: number[] }[] }>();
-  for (const ev of ordered) {
-    const course = courses.find((c) => c.id === golfFormatOf(ev).courseId);
-    if (!course) continue;
-    for (const en of entries.filter((e) => e.eventId === ev.id)) {
-      const ctx = roundContext(ev, course, en);
-      const row = byPlayer.get(en.playerId) ?? { status: en.status, rounds: [] };
-      row.rounds.push({ card: cardOf(en, ctx.holes.length), holes: ctx.holes, received: ctx.received });
-      row.status = en.status;
-      byPlayer.set(en.playerId, row);
-    }
-  }
-  return rankLeaderboard(
-    [...byPlayer.entries()].map(([id, r]) => ({ id, status: r.status, rounds: r.rounds })),
-    { scoring: last.scoring, net: last.net, tieBreak: last.tieBreak },
-  );
-}
 
 /**
  * Finish a round: mark it completed and write each player's stat line (birdies,

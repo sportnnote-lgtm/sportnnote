@@ -85,3 +85,12 @@ export function applyStatWrites<L extends ExistingStatLine>(lines: L[], writes: 
     }
   }
 }
+
+/** SD-09 — for a sport whose `statTotals` is partial: the correction deltas
+ *  the absolute sync does NOT cover (stats outside the keys the totals return).
+ *  Those still have to be written as deltas. */
+export function deltasBesideTotals<D extends { stat: string }>(deltas: D[], totals: MatchTotals): D[] {
+  const owned = new Set<string>();
+  for (const t of Object.values(totals)) for (const k of Object.keys(t.stats)) owned.add(k);
+  return deltas.filter((d) => !owned.has(d.stat));
+}

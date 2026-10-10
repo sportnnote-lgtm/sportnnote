@@ -21,7 +21,7 @@ import { matchFormatFor } from '../data/matchFormat';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { swissRound1, swissNextRound, pairKey, suggestedSwissRounds } from '../data/swiss';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
-import { teamStandings, standingsConfigFromFormat } from '../data/standings';
+import { teamStandings, standingsConfigFromFormat, byePointsFor } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
@@ -228,6 +228,7 @@ export default function GenerateFixturesScreen() {
   }, [swissMatches, sport, stCfg, swissEntrants]);
   const swissTargetRounds = savedStruct?.swissRounds ?? suggestedSwissRounds(selected.length || swissEntrants.size);
   const swissNextNo = swissRoundsPlayed + 1;
+  const swissByePts = byePointsFor(sport, stCfg); // SD-10: shown with the drawn bye
   const swissDone = swissRoundsPlayed >= swissTargetRounds;
 
   function generate() {
@@ -527,6 +528,12 @@ export default function GenerateFixturesScreen() {
           ) : (
             <View style={{ gap: theme.spacing(2), marginTop: theme.spacing(2) }}>
               <Text style={textStyles.h3}>{drafts.length} match{drafts.length === 1 ? '' : 'es'} — review &amp; adjust</Text>
+              {structure === 'swiss' && drafts[0]?.byes?.length ? (
+                // SD-10: say who sits out, and what the bye is worth in the table.
+                <Text style={textStyles.muted}>
+                  Bye this round: {byeNames(drafts[0].byes)}{swissByePts !== undefined ? ` — ${swissByePts === 0.5 ? '½' : swissByePts} point${swissByePts === 1 || swissByePts === 0.5 ? '' : 's'} in the standings (not a game played)` : ''}.
+                </Text>
+              ) : null}
               {drafts.map((d, i) => (
                 <View key={i} style={st.draftCard}>
                   <View style={st.rowBetween}>

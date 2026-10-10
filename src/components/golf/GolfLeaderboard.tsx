@@ -1,5 +1,6 @@
 /** Golf leaderboard: position (T3), player, total (to-par or Stableford points),
- *  today, thru. Tap a row to expand that player's card hole by hole. */
+ *  today, thru. Tap a row to expand that player's card hole by hole. Players who
+ *  missed the cut sit below a "cut" line, labelled MC, with their total so far. */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
@@ -36,16 +37,17 @@ export function GolfLeaderboard({
       </View>
       {rows.map((r, i) => {
         const c = cards?.get(r.id);
-        const thru = holesInRound && r.thru >= holesInRound ? 'F' : String(r.thru);
+        const thru = r.missedCut ? '–' : holesInRound && r.thru >= holesInRound ? 'F' : String(r.thru);
         const showCut = cutAfter != null && r.position != null && i > 0 && (rows[i - 1].position ?? 0) <= cutAfter && r.position > cutAfter;
         return (
           <View key={r.id}>
             {showCut && <Text style={st.cut}>— projected cut —</Text>}
+            {r.missedCut && !rows[i - 1]?.missedCut && <Text style={st.cut}>— cut —</Text>}
             <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${nameOf(r.id)}, ${r.positionLabel}, ${fmt(r.total)}`} activeOpacity={0.8} onPress={() => setOpen(open === r.id ? null : r.id)}>
               <View style={st.row}>
                 <Text style={st.pos}>{r.positionLabel}</Text>
                 <Text style={[textStyles.body, st.name]} numberOfLines={1}>{nameOf(r.id)}</Text>
-                <Text style={[st.num, st.total, r.position === 1 && st.leader]}>{r.position == null ? '–' : fmt(r.total)}</Text>
+                <Text style={[st.num, st.total, r.position === 1 && st.leader, r.missedCut && st.mcTotal]}>{r.position == null && !r.missedCut ? '–' : fmt(r.total)}</Text>
                 <Text style={st.num}>{r.position == null ? '–' : fmt(r.today)}</Text>
                 <Text style={st.num}>{thru}</Text>
               </View>
@@ -87,6 +89,7 @@ const st = StyleSheet.create({
   num: { width: 52, textAlign: 'right', color: theme.colors.text, fontSize: theme.font.small },
   total: { fontWeight: '800' },
   leader: { color: theme.colors.primary },
+  mcTotal: { fontWeight: '600', color: theme.colors.textMuted },
   cut: { textAlign: 'center', color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', paddingVertical: 2 },
   detail: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: theme.spacing(3), backgroundColor: theme.colors.surfaceAlt },
   cell: { width: 44, alignItems: 'center', paddingVertical: 4, borderRadius: 6, backgroundColor: theme.colors.surface },

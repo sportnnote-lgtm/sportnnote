@@ -464,7 +464,7 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([getMatches(), getAllStatLines(), getPlayers(), getTournaments()]).then(([matches, lines, players, tours]) => {
+      Promise.all([getMatches(), getAllStatLines(), getPlayers(), getTournaments(), tournamentId ? getTournamentTeams(tournamentId, sport).catch(() => [] as Team[]) : Promise.resolve([] as Team[])]).then(([matches, lines, players, tours, entrants]) => {
         if (!on) return;
         const scopedMatches = tournamentId ? matches.filter((m) => m.tournamentId === tournamentId) : matches;
         // Leaders come from stat lines, so scope those by the same match set.
@@ -474,11 +474,12 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
         const tour = tournamentId ? tours.find((t) => t.id === tournamentId) : undefined;
         const cfg = standingsConfigFromFormat(sport, tour?.formats?.[sport]);
         setData({
-          teams: teamStandings(scopedMatches, sport, cfg),
+          // `entrants` names a Swiss bye-only entrant with no fixture yet (SD-10).
+          teams: teamStandings(scopedMatches, sport, cfg, undefined, entrants),
           leaders: statLeaders(scopedLines, players, sport),
           matches: scopedMatches,
           // Per-phase tables (league / groups / Super / Swiss), knockouts excluded (parity #07).
-          phases: standingsPhases(scopedMatches, sport, cfg),
+          phases: standingsPhases(scopedMatches, sport, cfg, entrants),
         });
       });
       return () => {

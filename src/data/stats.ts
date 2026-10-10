@@ -78,6 +78,7 @@ const STAT_LABEL: Record<string, string> = {
   assists: 'assists', cleanSheets: 'clean sheets', shots: 'shots', shotsOnTarget: 'shots on target',
   tackles: 'tackles', interceptions: 'interceptions', saves: 'saves', passes: 'passes',
   attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
+  goalsConceded: 'conceded', minutes: 'mins',
   runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', blocks: 'blocks', attackPoints: 'attack pts', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
   wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
   rounds: 'rounds', birdies: 'birdies', eagles: 'eagles', holesWon: 'holes won',

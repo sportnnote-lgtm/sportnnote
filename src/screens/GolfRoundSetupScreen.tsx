@@ -163,6 +163,10 @@ export default function GolfRoundSetupScreen() {
     setBusy(true);
     try {
       let chosen = picks;
+      // The cut is recorded on the new round's format; an inherited one from the
+      // previous round's format is dropped unless a cut is applied now.
+      const { cutAfterRound: _ca, cut: _cut, ...baseFormat } = format as Record<string, unknown>;
+      let cutKeys: Record<string, unknown> = {};
       if (prev && cutPreview) {
         // Cut: top N and ties on the cumulative leaderboard so far.
         const evs = await getFieldEvents({ tournamentId, sport: 'golf' });
@@ -171,12 +175,13 @@ export default function GolfRoundSetupScreen() {
         const rule: CutRule = { type: 'top', n: cutPreview };
         const made = new Set(makesCut(rows, rule, competition === 'stableford' ? 'stableford' : 'stroke'));
         chosen = picks.filter((p) => made.has(p.playerId));
+        cutKeys = { cutAfterRound: roundNo - 1, cut: rule };
       }
       const me = await getMyPlayerId(profile?.id);
       const holes = holesFor(course, String(format.holes ?? '18') as '18' | 'front9' | 'back9');
       const ev = await createFieldEvent({
         tournamentId, sport: 'golf', title: title.trim() || `Round ${roundNo}`, roundNo, startsAt: when.toISOString(),
-        format: { ...format, courseId: course.id, tee: tee ?? course.tees[0]?.name, net: format.netScoring === 'net' },
+        format: { ...baseFormat, ...cutKeys, courseId: course.id, tee: tee ?? course.tees[0]?.name, net: format.netScoring === 'net' },
         hostIds: me ? [me] : [],
       });
       const groups = autoGroups(chosen.map((p) => p.playerId), groupSize, when, interval);

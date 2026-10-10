@@ -70,7 +70,11 @@ export interface StandingsPhase { key: string; title: string; rows: TeamStanding
  * third place, playoff qualifiers, play-ins) never appear in a table. A phase
  * shows once it has a fixture, even before any result. [] when there are none.
  */
-export function standingsPhases(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport)): StandingsPhase[] {
+export function standingsPhases(
+  matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport),
+  /** names a Swiss bye-only entrant with no fixture yet (SD-10) */
+  teams?: { id: string; name: string; colorHex?: string }[],
+): StandingsPhase[] {
   const league: Match[] = [];
   const groups = new Map<string, Match[]>();
   const superMs: Match[] = [];
@@ -93,7 +97,7 @@ export function standingsPhases(matches: Match[], sport: SportId, cfg: Standings
     const size = new Set(superMs.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size;
     out.push({ key: 'super', title: superPhaseLabel(size), rows: teamStandings(superMs, sport, cfg, 'super') });
   }
-  if (swiss.length) out.push({ key: 'swiss', title: 'Swiss', rows: teamStandings(swiss, sport, cfg, 'swiss') });
+  if (swiss.length) out.push({ key: 'swiss', title: 'Swiss', rows: teamStandings(swiss, sport, cfg, 'swiss', teams) });
   return out;
 }
 

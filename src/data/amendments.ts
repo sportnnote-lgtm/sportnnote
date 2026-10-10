@@ -9,6 +9,7 @@ import { getSport } from '../sports/registry';
 import { effectiveLog, replayLog, statDeltas, type AmendOp, type StatDelta } from '../sports/amend';
 import { appendMatchEvent, endMatchManually, getMatch, getMatchEvents, mapThroughDisputes, recordStatLine, syncMatchStatLines, updateMatchSnapshot } from './repos';
 import { newUuid } from '../core/deviceId';
+import { deltasBesideTotals } from './statSync';
 import type { MatchEventRecord, SportId } from '../core/types';
 
 /** What publishing would do — for the preview, and what publish then writes. */
@@ -50,7 +51,10 @@ export async function publishAmendment(matchId: string, sport: SportId, config: 
   // row twice. The deltas stay on the AMEND row so an undo can reverse it.
   // (A match closed by hand — `result` set — is finished too.)
   if (plugin.statTotals && (plugin.isComplete(afterState as never) || !!m?.result)) {
-    await syncMatchStatLines(matchId, sport, plugin.statTotals(afterState as never), { home: m?.homeTeam.name, away: m?.awayTeam.name });
+    const totals = plugin.statTotals(afterState as never);
+    // SD-09: partial totals (football keepers) — the other stats still move by delta.
+    if (plugin.statTotalsPartial) for (const d of deltasBesideTotals(plan.deltas, totals)) await recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+    await syncMatchStatLines(matchId, sport, totals, { home: m?.homeTeam.name, away: m?.awayTeam.name });
   } else {
     for (const d of plan.deltas) await recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
   }

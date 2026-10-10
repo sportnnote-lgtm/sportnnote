@@ -254,6 +254,9 @@ export interface RankRow {
   thru: number;
   grossTotal: number;
   noReturn: boolean;
+  /** missed the cut (multi-round events): listed below the cut line, labelled
+   *  "MC", not ranked among the field. Derived, never a stored status. */
+  missedCut?: boolean;
 }
 
 export interface RankOptions {
@@ -306,15 +309,24 @@ export function rankLeaderboard(inputs: RankInput[], o: RankOptions): RankRow[] 
     });
     // Stroke play: a pickup is "no return" — ranks with the non-finishers.
     const status: EntryStatus = noReturn && r.status === 'finished' ? 'dnf' : r.status;
-    return { r, total, gross, noReturn, today, thru, status, cb: countbackKey(r, o) };
+    // Countback only settles ties between COMPLETE final-round cards; while a
+    // card is still being played, an equal total reads as a tie ("T").
+    const lastRd = r.rounds[r.rounds.length - 1];
+    const complete = !!lastRd && thru === lastRd.holes.length && lastRd.holes.length > 0;
+    return { r, total, gross, noReturn, today, thru, status, complete, cb: countbackKey(r, o) };
   });
 
   const ranked = rows.filter((x) => FINISH_ORDER[x.status] === 0 && x.thru + x.r.rounds.length > 0);
   const others = rows.filter((x) => !ranked.includes(x));
+  // Countback applies to a group of equal totals only when EVERY card in it is
+  // complete — otherwise the whole group shares the place ("T"), so the result
+  // never depends on sort order.
+  const incompleteTotals = new Set(ranked.filter((x) => !x.complete).map((x) => x.total));
+  const useCountback = (total: number) => o.tieBreak === 'countback' && !incompleteTotals.has(total);
 
   ranked.sort((a, b) => {
     if (a.total !== b.total) return better * (a.total - b.total);
-    if (o.tieBreak === 'countback') {
+    if (useCountback(a.total)) {
       for (let i = 0; i < Math.max(a.cb.length, b.cb.length); i++) {
         const d = (a.cb[i] ?? 0) - (b.cb[i] ?? 0);
         if (d !== 0) return better * d;
@@ -324,7 +336,7 @@ export function rankLeaderboard(inputs: RankInput[], o: RankOptions): RankRow[] 
   });
 
   const tied = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
-    a.total === b.total && (o.tieBreak === 'shared' || a.cb.every((v, i) => v === b.cb[i]));
+    a.total === b.total && (!useCountback(a.total) || a.cb.every((v, i) => v === b.cb[i]));
 
   const out: RankRow[] = [];
   ranked.forEach((x, i) => {
@@ -455,7 +467,7 @@ export function roundStats(card: GolfCard, holes: Hole[], received: number[]): R
   const out: Record<string, number> = {
     rounds: 1, holes: s.thru, strokes: s.gross, stableford: s.stableford,
     eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0,
-    putts: 0, girHit: 0, girHoles: 0, firHit: 0, firHoles: 0, penalties: 0,
+    putts: 0, puttHoles: 0, girHit: 0, girHoles: 0, firHit: 0, firHoles: 0, penalties: 0,
   };
   // An 18-hole-equivalent stroke total, only for complete rounds with no pickup.
   if (s.complete && !s.noReturn) { out.toPar = s.toPar; out.completeRounds = 1; out.completeStrokes = s.gross * (18 / holes.length); }
@@ -470,7 +482,7 @@ export function roundStats(card: GolfCard, holes: Hole[], received: number[]): R
       else out.doubles += 1;
     }
     const p = card.putts?.[i];
-    if (typeof p === 'number') out.putts += p;
+    if (typeof p === 'number') { out.putts += p; out.puttHoles += 1; }
     const g = card.gir?.[i];
     if (g != null) { out.girHoles += 1; if (g) out.girHit += 1; }
     const f = card.fir?.[i];
@@ -479,6 +491,26 @@ export function roundStats(card: GolfCard, holes: Hole[], received: number[]): R
     if (typeof pen === 'number') out.penalties += pen;
   });
   return out;
+}
+
+/** Profile headline figures from a player's golf stat lines, compared like
+ *  for like:
+ *  - `best18` / `best9`: lowest gross over COMPLETE rounds (no pickup) of 18 and
+ *    of 9 holes respectively — a 9-hole 40 is never "better" than an 18-hole 75;
+ *  - `puttsPerRound`: putts per 18 holes over only the holes where putts were
+ *    entered (`puttHoles`; older lines without it count a round as tracked when
+ *    it has any putts), so rounds without putts don't drag the average down. */
+export function golfProfileSummary(lines: Array<{ stats: Record<string, number> }>): { best18: number | null; best9: number | null; puttsPerRound: number | null } {
+  const best = (n: number) => {
+    const xs = lines.filter((l) => l.stats.completeRounds && l.stats.holes === n).map((l) => l.stats.strokes);
+    return xs.length ? Math.min(...xs) : null;
+  };
+  let putts = 0, holes = 0;
+  for (const { stats: s } of lines) {
+    const tracked = s.puttHoles ?? ((s.putts ?? 0) > 0 ? s.holes ?? 0 : 0);
+    if (tracked > 0) { putts += s.putts ?? 0; holes += tracked; }
+  }
+  return { best18: best(18), best9: best(9), puttsPerRound: holes ? (putts / holes) * 18 : null };
 }
 
 /** Scoring average (18-hole equivalent) from summed stat totals. */

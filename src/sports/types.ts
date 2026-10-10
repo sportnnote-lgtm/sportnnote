@@ -372,6 +372,11 @@ export interface SportPlugin<S = unknown> {
    *  present, completion and corrections sync stat lines to these values
    *  (`repos.syncMatchStatLines`) instead of relying on live increments alone. */
   statTotals?: (state: S) => Record<string, { side: 'home' | 'away'; stats: Record<string, number> }>;
+  /** SD-09 — `statTotals` covers only SOME keys (football: the keeper's clean
+   *  sheets, goals conceded and minutes). The keys it returns are synced
+   *  absolutely; every other stat keeps moving by live increments and #05
+   *  correction deltas. Absent = the totals own the whole line (cricket). */
+  statTotalsPartial?: boolean;
   /** Parity #19 — the state to persist in `matches.state` (e.g. cricket drops
    *  its derived ball log, which replay rebuilds). Omitted = the state as is. */
   snapshot?: (state: S) => S;

@@ -1,10 +1,10 @@
-/** Football — the PURE scoring core (state, reducer, clock, stats projection).
- *  No React / React Native imports, so it runs in tests and on the server exactly
- *  as it does on-device; the UI lives in index.tsx. Mirrors the basketball /
- *  cricket / kabaddi engines. */
-import type { ScoreAction, LiveSettings, FormatField } from "../types";
-import type { FootballEvent, GoalType, BodyPart, StatEvent, StatKind } from "./events";
-import type { Player } from "../../core/types";
+/** FROZEN copy of the football engine as it was before SD-08 / SD-09 (git 861ad7a,
+ *  src/sports/football/engine.ts). Test oracle only: the legacy-replay identity
+ *  tests replay the same old logs through this and the current engine and
+ *  require the same state. Do not "fix" this file. */
+import type { ScoreAction, LiveSettings, FormatField } from "../src/sports/types.ts";
+import type { FootballEvent, GoalType, BodyPart, StatEvent, StatKind } from "../src/sports/football/events.ts";
+import type { Player } from "../src/core/types.ts";
 export type Decider = 'none' | 'extra_time' | 'penalties';
 
 export interface FootballState {
@@ -50,24 +50,6 @@ export interface FootballState {
   possession: { side: 'home' | 'away' | null; sinceAt?: number; acc: { home: number; away: number } };
   /** which aspects this scorer is tracking for THIS match (game-wise settings) */
   track: TrackConfig;
-  /** SD-08: live events are stamped with the ORDINAL minute (FIFA: a goal at
-   *  10:30 is 11', at 45:30 of the 1st half 45+1'). Set by the first kickoff of
-   *  matches scored on this version; absent = older logs, whose minutes were
-   *  stamped as completed minutes (floor) and are shown as stored. */
-  minuteOrdinal?: true;
-  /** SD-09: who started for each side (stamped at kickoff and at full time from
-   *  the lineup / squad) — the input for keeper minutes and clean sheets.
-   *  Absent on older logs. */
-  xi?: { home?: XiStamp; away?: XiStamp };
-}
-
-/** A side's starting keeper and players, plus the squad's keepers (so a
- *  keeper coming off the bench is recognised). Ids + names: older sub events
- *  carry names only. */
-export interface XiStamp {
-  gk?: { id: string; name: string };
-  players?: { id: string; name: string }[];
-  keepers?: { id: string; name: string }[];
 }
 
 /** Per-match toggle of which stats the scorer captures — set game-wise so a
@@ -197,42 +179,10 @@ export const startOffset = (s: FootballState): number => {
  *  long-open tab reads "90+59'". Signalling added time (SET_STOPPAGE) extends it. */
 export function currentMinute(s: FootballState): number {
   const base = startOffset(s);
-  // SD-08: ordinal minutes (FIFA) — the minute being played, so 0:30 is 1' and a
-  // half-time substitution is 46'. Older matches keep completed minutes.
-  const ord = s.minuteOrdinal ? 1 : 0;
-  if (!s.startedAt) return base + ord;
-  const raw = base + Math.floor((Date.now() - s.startedAt) / 60000) + ord;
-  return Math.min(raw, halfBase(s) + (s.stoppage[s.half] ?? 0));
+  if (!s.startedAt) return base;
+  const raw = base + Math.floor((Date.now() - s.startedAt) / 60000);
+  return Math.min(raw, halfBase(s) + s.stoppage[s.half]);
 }
-
-/** Half lengths, for turning a stored (minute, half) into FIFA notation. */
-export interface MinuteFormat { halfMinutes: number; etMinutes: number }
-/** The regulation end minute of half `h` (45 / 90 / 105 / 120). */
-export const halfEndOf = (h: 1 | 2 | 3 | 4, f: MinuteFormat): number =>
-  h === 1 ? f.halfMinutes : h === 2 ? 2 * f.halfMinutes : h === 3 ? 2 * f.halfMinutes + f.etMinutes : 2 * f.halfMinutes + 2 * f.etMinutes;
-/** The half a bare minute falls in (for events stored without `half`). */
-export const halfOfMinute = (m: number, f: MinuteFormat): 1 | 2 | 3 | 4 =>
-  m <= f.halfMinutes ? 1 : m <= 2 * f.halfMinutes ? 2 : m <= 2 * f.halfMinutes + f.etMinutes ? 3 : 4;
-/** More "added time" than this is not added time: an event whose stored half
- *  disagrees with its minute by that much (an old backfill stamped with the then
- *  current half) is placed by its minute instead. */
-const MAX_ADDED = 20;
-/** SD-08: the half an event belongs to — stored, else derived from its minute. */
-export const eventHalf = (e: { minute: number; half?: 1 | 2 | 3 | 4 }, f: MinuteFormat): 1 | 2 | 3 | 4 =>
-  e.half && e.minute <= halfEndOf(e.half, f) + MAX_ADDED ? e.half : halfOfMinute(e.minute, f);
-/** SD-08: FIFA minute notation — "37'", "45+2'", "90+4'", "120+1'". A minute past
- *  its half's regulation end is added time of THAT half (a first-half 47 is
- *  45+2', never 47'). Display only: stored minutes are untouched. */
-export function minuteText(minute: number, half: 1 | 2 | 3 | 4 | undefined, f: MinuteFormat): string {
-  const h = eventHalf({ minute, half }, f);
-  const end = halfEndOf(h, f);
-  return minute > end ? `${end}+${minute - end}'` : `${minute}'`;
-}
-/** Newest-first comparator for timeline rows: half, then minute, then log order. */
-export const byMatchTimeDesc = (
-  a: { half: number; minute: number; order: number },
-  b: { half: number; minute: number; order: number },
-) => b.half - a.half || b.minute - a.minute || b.order - a.order;
 
 /** The regulation end-of-half minute (45 / 90 / 105 / 120). Base for "+x" display. */
 export const halfBase = (s: FootballState): number => {
@@ -284,7 +234,7 @@ export const push = (s: FootballState, e: Omit<FootballEvent, 'id'>): FootballSt
 
 export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
   // Once full time is called, only shootout actions are still accepted.
-  if (s.ended && a.type !== 'END' && a.type !== 'START_SHOOTOUT' && a.type !== 'START_EXTRA_TIME' && a.type !== 'PEN' && a.type !== 'XI') return s;
+  if (s.ended && a.type !== 'END' && a.type !== 'START_SHOOTOUT' && a.type !== 'START_EXTRA_TIME' && a.type !== 'PEN') return s;
   const minute = Number(a.payload?.minute ?? currentMinute(s));
   // The half an event belongs to: carried in the payload when the controls stamp
   // it (handles stoppage time + backfill correctly); else the current half.
@@ -295,24 +245,7 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       const at = Number(a.payload?.at);
       // first kickoff sets who has the ball; a 2nd-half restart keeps the side
       const side = (a.payload?.possSide as 'home' | 'away') ?? s.possession.side ?? 'home';
-      // SD-08: the opening kickoff of a match scored on this version switches on
-      // ordinal minutes (only before anything is logged, so a match never mixes).
-      const ord = a.payload?.ord === true && s.half === 1 && !s.events.length && !s.stats.length;
-      return { ...s, ...(ord ? { minuteOrdinal: true as const } : {}), startedAt: at, possession: { ...s.possession, side, sinceAt: at } };
-    }
-    case 'XI': {
-      // SD-09: a side's starters / keeper, stamped from the lineup. The latest
-      // stamp wins (a lineup fixed after kickoff is re-stamped at full time).
-      const team = a.payload?.team;
-      if (team !== 'home' && team !== 'away') return s;
-      const stamp: XiStamp = {};
-      const gk = a.payload?.gk as XiStamp['gk'];
-      if (gk?.id) stamp.gk = { id: String(gk.id), name: String(gk.name ?? '') };
-      const players = a.payload?.players as XiStamp['players'];
-      if (Array.isArray(players)) stamp.players = players.filter((p) => p?.id).map((p) => ({ id: String(p.id), name: String(p.name ?? '') }));
-      const keepers = a.payload?.keepers as XiStamp['keepers'];
-      if (Array.isArray(keepers)) stamp.keepers = keepers.filter((p) => p?.id).map((p) => ({ id: String(p.id), name: String(p.name ?? '') }));
-      return { ...s, xi: { ...s.xi, [team]: stamp } };
+      return { ...s, startedAt: at, possession: { ...s.possession, side, sinceAt: at } };
     }
     case 'POSSESSION': {
       const at = Number(a.payload?.at);
@@ -335,8 +268,6 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
         half: evHalf,
         onTarget: a.payload?.onTarget as boolean | undefined,
         complete: a.payload?.complete as boolean | undefined,
-        // SD-08: only new logs carry it (absent key keeps old states identical).
-        ...(a.payload?.blocked === true ? { blocked: true } : {}),
       };
       let next: FootballState = { ...s, seq: s.seq + 1, stats: [...s.stats, ev] };
       // some actions hand the ball to the other side (foul, corner won, tackle…)
@@ -386,12 +317,7 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       // Fixed subs cap the number of changes.
       if (!a.side || (s.subType === 'fixed' && s.subsUsed[a.side] >= s.maxSubs)) return s;
       const offName = String(a.payload?.offName ?? '');
-      // SD-09: new logs also carry the two ids (keeper minutes / clean sheets).
-      const ids = {
-        ...(a.payload?.offId ? { playerId: String(a.payload.offId) } : {}),
-        ...(a.payload?.onId ? { secondId: String(a.payload.onId) } : {}),
-      };
-      const withEvent = push(s, { minute, half: evHalf, type: 'sub', side: a.side, playerName: offName, secondName: String(a.payload?.onName ?? ''), ...ids });
+      const withEvent = push(s, { minute, half: evHalf, type: 'sub', side: a.side, playerName: offName, secondName: String(a.payload?.onName ?? '') });
       return {
         ...withEvent,
         subsUsed: { ...s.subsUsed, [a.side]: s.subsUsed[a.side] + 1 },
@@ -453,13 +379,13 @@ export const cardCount = (events: FootballEvent[], type: 'yellow' | 'red', side:
   events.filter((e) => e.type === type && e.side === side).length;
 
 export interface TeamStatTotals {
-  shots: number; shotsOnTarget: number; blockedShots: number; fouls: number; yellow: number; red: number;
+  shots: number; shotsOnTarget: number; fouls: number; yellow: number; red: number;
   offsides: number; corners: number; tackles: number; interceptions: number; saves: number;
   passes: number; passesComplete: number; crosses: number; dribbles: number; handballs: number;
   attackContributions: number; defenceContributions: number;
 }
 export const blankTotals = (): TeamStatTotals => ({
-  shots: 0, shotsOnTarget: 0, blockedShots: 0, fouls: 0, yellow: 0, red: 0, offsides: 0, corners: 0,
+  shots: 0, shotsOnTarget: 0, fouls: 0, yellow: 0, red: 0, offsides: 0, corners: 0,
   tackles: 0, interceptions: 0, saves: 0, passes: 0, passesComplete: 0, crosses: 0, dribbles: 0, handballs: 0,
   attackContributions: 0, defenceContributions: 0,
 });
@@ -480,9 +406,7 @@ export function footballStats(s: FootballState, nowMs: number) {
     const t = totals[e.side];
     const p = e.playerId ? line(e.playerId, e.playerName, e.side) : undefined;
     switch (e.kind) {
-      // A blocked shot is a shot but never on target (SD-08; older logs flagged
-      // blocks as on target and are shown as stored).
-      case 'shot': t.shots++; if (e.onTarget && !e.blocked) t.shotsOnTarget++; if (e.blocked) t.blockedShots++; if (p) { p.shots++; if (e.onTarget && !e.blocked) p.shotsOnTarget++; } break;
+      case 'shot': t.shots++; if (e.onTarget) t.shotsOnTarget++; if (p) { p.shots++; if (e.onTarget) p.shotsOnTarget++; } break;
       case 'foul': t.fouls++; if (p) p.fouls++; break;
       case 'offside': t.offsides++; break;
       case 'corner': t.corners++; break;

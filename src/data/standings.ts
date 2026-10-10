@@ -4,6 +4,7 @@
  * shows that sport's table and leaders. Pure functions.
  */
 import type { Match, Player, SportId, StatLine } from '../core/types';
+import { isGoalkeeper } from '../sports/football/keepers.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -31,6 +32,33 @@ export interface TeamStanding {
   /** organiser points adjustment (parity #07): Σ of the team's signed
    *  adjustments for this phase, already included in `points` */
   adjust: number;
+  /** Swiss pairing-allocated byes (SD-10): rounds sat out, each worth the bye
+   *  points (already in `points`) but NOT a played game — absent when none */
+  byes?: number;
+  /** chess games won / lost by forfeit (SD-10): their points are in `points`
+   *  but they're unplayed — out of `played`, W/D/L and Sonneborn-Berger.
+   *  Absent when none. */
+  forfeitWins?: number;
+  forfeitLosses?: number;
+  /** per-round record for FIDE C.07 tie-breaks (chess, or any sport with a bye
+   *  point): one entry per game or bye, with `unplayed` set for a bye or a
+   *  forfeit. The data Buchholz / Swiss tie-breaks read (Wave 1). */
+  games?: GameRecord[];
+}
+
+/** One round of a team's record (SD-10). `points` are the game points it took
+ *  (a bye: the bye points). */
+export interface GameRecord {
+  kind: 'played' | 'forfeit' | 'bye';
+  /** a bye or a forfeit — FIDE C.07 "unplayed game" */
+  unplayed: boolean;
+  /** absent for a bye */
+  opponentId?: string;
+  matchId?: string;
+  /** the fixture's stage, e.g. 'swiss3' */
+  stage?: string;
+  result: 'win' | 'draw' | 'loss' | 'nr';
+  points: number;
 }
 
 /** An organiser's signed points bonus/penalty for one team (parity #07), with
@@ -77,6 +105,30 @@ export interface StandingsConfig {
   restart?: boolean;
   /** organiser points adjustments (parity #07) — absent when there are none */
   adjustments?: PointsAdjustment[];
+  /** points for a Swiss pairing-allocated bye (SD-10, the organiser's
+   *  `byePoints`: 1, ½ or 0). Absent = the sport default — always read it
+   *  through `byePointsFor()`. */
+  bye?: number;
+}
+
+/** Points for a Swiss bye: the organiser's `byePoints`, else the sport default —
+ *  chess 1 (founder decision D7; FIDE C.04 "pairing-allocated bye"), applied to
+ *  existing Swiss events too because the point was simply missing. Other sports
+ *  have no bye point unless the organiser set one (undefined = byes not credited,
+ *  unchanged behaviour). */
+export function byePointsFor(sport: SportId, cfg?: StandingsConfig | null): number | undefined {
+  return cfg?.bye ?? (sport === 'chess' ? 1 : undefined);
+}
+
+/** A chess game decided without play: a walkover, or a result recorded with the
+ *  "forfeit" method. FIDE treats it as unplayed (C.07): out of the played-game
+ *  stats and Sonneborn-Berger, though its points still count. Chess only — a
+ *  walkover in another sport is a normal win/loss in the table. */
+export function isChessForfeit(m: Match): boolean {
+  if (m.sport !== 'chess') return false;
+  if (m.walkover) return true;
+  const st = m.state as { method?: unknown } | null | undefined;
+  return !!st && typeof st === 'object' && st.method === 'forfeit';
 }
 const ALL_TB: TieBreaker[] = ['h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints'];
 const isTieBreaker = (s: string): s is TieBreaker => (ALL_TB as string[]).includes(s);
@@ -173,7 +225,7 @@ export function pointsAdjustmentsFromFormat(fmt?: Record<string, unknown> | null
 }
 
 /** Read a tournament's per-sport override from its `formats[sport]` (reserved
- *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`tieBreak`/`pointsAdj`
+ *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`byePoints`/`tieBreak`/`pointsAdj`
  *  keys), falling back to the sport defaults. Zero-migration: rides on the
  *  existing formats jsonb. `noResult` is set only when the organiser chose
  *  `nrPoints`; `adjustments` only when there are any. */
@@ -187,6 +239,7 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
   const adjustments = pointsAdjustmentsFromFormat(fmt);
   return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}),
     ...(typeof fmt.nrPoints === 'number' ? { noResult: fmt.nrPoints } : {}),
+    ...(typeof fmt.byePoints === 'number' && Number.isFinite(fmt.byePoints) ? { bye: fmt.byePoints } : {}),
     ...(adjustments.length ? { adjustments } : {}) };
 }
 
@@ -215,26 +268,52 @@ export const isNoResultMatch = (m: Match): boolean =>
  *  `phaseKey` ('league' | 'group:A' | 'super' | 'swiss') picks which of the
  *  config's points adjustments apply: those tagged with that phase plus the
  *  phase-less ones (no `phaseKey` = all of them). Adjustments are added to
- *  `points` before ranking; head-to-head ignores them. */
-export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport), phaseKey?: string): TeamStanding[] {
+ *  `points` before ranking; head-to-head ignores them.
+ *
+ *  Swiss byes (SD-10): an entrant listed in a Swiss round's `byes` takes
+ *  `byePointsFor()` once for that round (the id rides on every fixture of the
+ *  round, so it's de-duplicated by stage) as soon as the round is drawn. A bye
+ *  is unplayed: it adds to `points` and `byes`, never to `played` / W/D/L /
+ *  for-against / Sonneborn-Berger. `teams` (optional) names a bye-only entrant
+ *  who has no fixture in `matches` yet (e.g. after round 1). Chess forfeits
+ *  are unplayed too: their points count, but they're out of `played`, W/D/L
+ *  and SB (counted in `forfeitWins` / `forfeitLosses`). */
+export function teamStandings(
+  matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport), phaseKey?: string,
+  teams?: { id: string; name: string; colorHex?: string }[],
+): TeamStanding[] {
   const table = new Map<string, TeamStanding>();
   const ensure = (id: string, name: string, color?: string) => {
     if (!table.has(id))
       table.set(id, { teamId: id, name, colorHex: color, played: 0, won: 0, lost: 0, drawn: 0, nr: 0, for: 0, against: 0, diff: 0, points: 0, forUnits: 0, againstUnits: 0, adjust: 0 });
     return table.get(id)!;
   };
+  const byePts = byePointsFor(sport, cfg);
+  // Per-round records (C.07 tie-break data) for chess, or wherever a bye scores.
+  const keepGames = sport === 'chess' || byePts !== undefined;
+  const log = (t: TeamStanding, g: GameRecord) => { if (keepGames) (t.games ??= []).push(g); };
+  const resultOf = (pts: number): GameRecord['result'] => (pts >= cfg.win ? 'win' : pts > cfg.loss ? 'draw' : 'loss');
   const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
   for (const m of played) {
     const h = ensure(m.homeTeam.id, m.homeTeam.name, m.homeTeam.colorHex);
     const a = ensure(m.awayTeam.id, m.awayTeam.name, m.awayTeam.colorHex);
-    h.played += 1;
-    a.played += 1;
+    const base = { matchId: m.id, stage: m.stage };
     // No result / abandoned: played and the NR points, but nothing towards
     // for/against or the rate.
     if (isNoResultMatch(m)) {
+      h.played += 1;
+      a.played += 1;
       const nrPts = noResultPoints(sport, cfg);
       h.nr += 1; a.nr += 1; h.points += nrPts; a.points += nrPts;
+      log(h, { ...base, kind: 'played', unplayed: false, opponentId: a.teamId, result: 'nr', points: nrPts });
+      log(a, { ...base, kind: 'played', unplayed: false, opponentId: h.teamId, result: 'nr', points: nrPts });
       continue;
+    }
+    // A chess forfeit: the points, but not a played game (FIDE C.07).
+    const forfeit = isChessForfeit(m);
+    if (!forfeit) {
+      h.played += 1;
+      a.played += 1;
     }
     // A manual cricket result with "Count in NRR" off still takes its points,
     // but its runs and overs stay out of the table.
@@ -249,12 +328,45 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
       h.forUnits += rate.home; h.againstUnits += rate.away;
       a.forUnits += rate.away; a.againstUnits += rate.home;
     }
+    const kind: GameRecord['kind'] = forfeit ? 'forfeit' : 'played';
     if (m.winner === 'draw') {
-      h.drawn += 1; a.drawn += 1; h.points += cfg.draw; a.points += cfg.draw;
-    } else if (m.winner === 'home') {
-      h.won += 1; a.lost += 1; h.points += cfg.win; a.points += cfg.loss;
+      if (!forfeit) { h.drawn += 1; a.drawn += 1; }
+      h.points += cfg.draw; a.points += cfg.draw;
+      log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: cfg.draw });
+      log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: cfg.draw });
     } else {
-      a.won += 1; h.lost += 1; a.points += cfg.win; h.points += cfg.loss;
+      const [w, l] = m.winner === 'home' ? [h, a] : [a, h];
+      if (forfeit) { w.forfeitWins = (w.forfeitWins ?? 0) + 1; l.forfeitLosses = (l.forfeitLosses ?? 0) + 1; }
+      else { w.won += 1; l.lost += 1; }
+      w.points += cfg.win; l.points += cfg.loss;
+      log(w, { ...base, kind, unplayed: forfeit, opponentId: l.teamId, result: 'win', points: cfg.win });
+      log(l, { ...base, kind, unplayed: forfeit, opponentId: w.teamId, result: 'loss', points: cfg.loss });
+    }
+  }
+  // Swiss byes: once per (round, entrant), from any drawn (not cancelled)
+  // fixture of that round — and never to someone who also has a game in it.
+  if (byePts !== undefined) {
+    const names = new Map<string, { name: string; colorHex?: string }>();
+    for (const t of teams ?? []) names.set(t.id, { name: t.name, colorHex: t.colorHex });
+    for (const m of matches) {
+      if (m.sport !== sport) continue;
+      names.set(m.homeTeam.id, { name: m.homeTeam.name, colorHex: m.homeTeam.colorHex });
+      names.set(m.awayTeam.id, { name: m.awayTeam.name, colorHex: m.awayTeam.colorHex });
+    }
+    const swiss = matches.filter((m) => m.sport === sport && m.status !== 'cancelled' && typeof m.stage === 'string' && m.stage.startsWith('swiss'));
+    const inRound = new Set(swiss.flatMap((m) => [`${m.stage}|${m.homeTeam.id}`, `${m.stage}|${m.awayTeam.id}`]));
+    const seen = new Set<string>();
+    for (const m of swiss) {
+      for (const id of m.byes ?? []) {
+        const key = `${m.stage}|${id}`;
+        if (seen.has(key) || inRound.has(key)) continue;
+        seen.add(key);
+        const n = names.get(id);
+        const t = ensure(id, n?.name ?? 'Entrant', n?.colorHex);
+        t.byes = (t.byes ?? 0) + 1;
+        t.points += byePts;
+        log(t, { kind: 'bye', unplayed: true, stage: m.stage, result: resultOf(byePts), points: byePts });
+      }
     }
   }
   for (const t of table.values()) {
@@ -271,10 +383,13 @@ export function teamStandings(matches: Match[], sport: SportId, cfg: StandingsCo
     t.points += a.points;
   }
   // Sonneborn-Berger needs everyone's final points, so it's a second pass.
+  // Played games only: a forfeit (and a bye, which has no opponent) is
+  // unplayed and stays out (FIDE C.07). Opponents' totals include their own
+  // bye / forfeit points (Wave 1 refines that with the C.07 unplayed rules).
   if (cfg.order.includes('sb')) {
     for (const t of table.values()) t.sb = 0;
     for (const m of played) {
-      if (isNoResultMatch(m)) continue;
+      if (isNoResultMatch(m) || isChessForfeit(m)) continue;
       const h = table.get(m.homeTeam.id)!;
       const a = table.get(m.awayTeam.id)!;
       const share = m.winner === 'draw' ? 0.5 : 1;
@@ -305,7 +420,9 @@ function numericKey(t: TeamStanding, tb: 'nrr' | 'diff' | 'for' | 'wins' | 'sb')
   switch (tb) {
     case 'nrr': return t.nrr ?? 0;
     case 'diff': return t.diff;
-    case 'wins': return t.won;
+    // FIDE C.07 WIN: rounds won with or without playing — over-the-board wins,
+    // forfeit wins and a full-point bye (forfeits used to sit in `won`).
+    case 'wins': return t.won + (t.forfeitWins ?? 0) + (t.games ?? []).filter((g) => g.kind === 'bye' && g.result === 'win').length;
     case 'sb': return t.sb ?? 0;
     default: return t.for;
   }
@@ -492,8 +609,15 @@ export function leadersByKey(lines: StatLine[], players: Player[], sport: SportI
     totalGames.set(l.playerId, (totalGames.get(l.playerId) ?? 0) + 1);
     if (l.tracked ? l.tracked.includes(key) : true) trackedGames.set(l.playerId, (trackedGames.get(l.playerId) ?? 0) + 1);
   }
+  // SD-09: football clean sheets rank goalkeepers only — older clean sheets
+  // credited to defenders stay on their lines until the stat backfill.
+  const keepers = sport === 'football' && key === 'cleanSheets'
+    ? new Set(lines.filter((l) => l.sport === sport && (
+        isGoalkeeper(byId.get(l.playerId)?.sportDetails?.football?.position) || (l.stats && 'goalsConceded' in l.stats)
+      )).map((l) => l.playerId))
+    : null;
   return [...totals.entries()]
-    .filter(([, v]) => v > 0)
+    .filter(([id, v]) => v > 0 && (!keepers || keepers.has(id)))
     .map(([id, value]) => ({
       playerId: id, name: byId.get(id)?.fullName ?? 'Player', houseName: byId.get(id)?.houseName, value,
       trackedGames: trackedGames.get(id) ?? 0, totalGames: totalGames.get(id) ?? 0,

@@ -7,7 +7,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
-import { availableTieBreakers, noResultPoints, standingsConfigFromFormat, standingsPresets, type TieBreaker } from '../data/standings';
+import { availableTieBreakers, byePointsFor, noResultPoints, standingsConfigFromFormat, standingsPresets, type TieBreaker } from '../data/standings';
+import { structureFromFormat } from '../data/structureConfig';
 import type { SportId } from '../core/types';
 
 const TB_LABEL: Record<TieBreaker, string> = {
@@ -37,6 +38,11 @@ export function PointsEditor({ sport, value, onChange }: {
   const drawOptions = sport === 'chess' ? [0, 0.5, 1] : [0, 1, 2];
   // No result / abandoned (parity #04): cricket shares 1 by default, others 0.
   const nr = noResultPoints(sport, cfg);
+  // Swiss bye (SD-10, D7): chess Swiss only — 1 by default, or ½ / 0 by the
+  // event's rules. Shown once the structure is Swiss (or a bye value is saved).
+  const isSwiss = structureFromFormat(value)?.shape === 'swiss' || typeof value.byePoints === 'number';
+  const bye = sport === 'chess' && isSwiss ? byePointsFor(sport, cfg) : undefined;
+  const half = (n: number) => (n === 0.5 ? '½' : `${n}`);
   const primary = cfg.order[0] ?? available[0];
   const presets = standingsPresets(sport);
   const setPrimary = (p: TieBreaker) => onChange('tieBreak', [p, ...available.filter((x) => x !== p)].join(','));
@@ -79,6 +85,14 @@ export function PointsEditor({ sport, value, onChange }: {
           <SelectChip key={n} label={`${n}`} active={nr === n} onPress={() => onChange('nrPoints', n)} />
         ))}
       </View>
+      {bye !== undefined && (
+        <View style={st.row}>
+          <Text style={st.label}>Swiss bye</Text>
+          {[1, 0.5, 0].map((n) => (
+            <SelectChip key={n} label={half(n)} active={bye === n} onPress={() => onChange('byePoints', n)} />
+          ))}
+        </View>
+      )}
       <View style={st.row}>
         <Text style={st.label}>Break ties first by</Text>
         {available.map((t) => (
@@ -86,7 +100,7 @@ export function PointsEditor({ sport, value, onChange }: {
         ))}
       </View>
       <Text style={textStyles.muted}>
-        {cfg.win} for a win, {cfg.draw === 0.5 ? '½' : cfg.draw} for a draw, {cfg.loss} for a loss, {nr} each for a no result. Ties broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}{cfg.restart ? ' — restarting among any still level' : ''}.
+        {cfg.win} for a win, {cfg.draw === 0.5 ? '½' : cfg.draw} for a draw, {cfg.loss} for a loss, {nr} each for a no result{bye !== undefined ? `, ${half(bye)} for a Swiss bye (not a game played)` : ''}. Ties broken by {cfg.order.map((t) => TB_LABEL[t]).join(', then ')}{cfg.restart ? ' — restarting among any still level' : ''}.
       </Text>
     </View>
   );

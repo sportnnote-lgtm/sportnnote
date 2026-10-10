@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
 import { recordStatLine as writeStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch, syncMatchStatLines } from './repos';
+import { deltasBesideTotals } from './statSync';
 import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
@@ -366,7 +367,11 @@ export function useLiveMatch(params: {
     // corrected values (Decision 6) — writing the deltas too would only add a
     // second write per row. The AMEND row still stores the deltas (undo).
     const absolute = !!plugin.statTotals && plugin.isComplete(plan.afterState as never);
-    if (!absolute) for (const d of plan.deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+    // SD-09: partial totals (football keepers) — the other stats still need their deltas.
+    const deltas = !absolute ? plan.deltas
+      : plugin.statTotalsPartial ? deltasBesideTotals(plan.deltas, plugin.statTotals!(plan.afterState as never))
+      : [];
+    for (const d of deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
     await rebuildFromLog();
     void syncThenPersist(stateRef.current).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
