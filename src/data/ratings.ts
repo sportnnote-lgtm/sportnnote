@@ -20,7 +20,9 @@ export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
     fouls: -1, offsides: -0.5, handballs: -1, yellowCards: -2, redCards: -6,
   },
   basketball: { points: 1, rebounds: 1.5, assists: 2, fouls: -1 },
-  volleyball: { points: 1, aces: 3, blocks: 2 },
+  // `points` includes aces & blocks (SD-04), so these are the bonus on top: an
+  // ace still totals 3 and a block 2, as before.
+  volleyball: { points: 1, aces: 2, blocks: 1 },
   badminton: { points: 1 },
   tennis: { points: 1, aces: 2 },
   kabaddi: { raidPoints: 2, tacklePoints: 2 },
@@ -43,7 +45,7 @@ export const STAT_LABELS: Record<string, string> = {
   attackingContributions: 'att. plays', defensiveContributions: 'def. plays', passesComplete: 'passes',
   crosses: 'crosses', dribbles: 'dribbles', offsides: 'offside', handballs: 'handball',
   penaltiesWon: 'pen won', penaltiesMissed: 'pen missed',
-  points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks',
+  points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks', attackPoints: 'attack pts',
   raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', catches: 'catches', games: 'games',
   wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
   holesWon: 'holes won', birdies: 'birdies', eagles: 'eagles', rounds: 'rounds',
@@ -52,7 +54,7 @@ export const STAT_LABELS: Record<string, string> = {
 /** Labels that read the same for one or many (mass nouns, abbreviations, adjectives). */
 const INVARIANT_LABELS = new Set([
   'yellowCards', 'redCards', 'shotsOnTarget', 'offsides', 'handballs',
-  'penaltiesWon', 'penaltiesMissed', 'points', 'rebounds', 'raidPoints', 'tacklePoints', 'wickets',
+  'penaltiesWon', 'penaltiesMissed', 'points', 'rebounds', 'raidPoints', 'tacklePoints', 'wickets', 'attackPoints',
 ]);
 
 /** Singular form for count === 1, only where it differs from the plural label. */

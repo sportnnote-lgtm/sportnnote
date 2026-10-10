@@ -19,8 +19,12 @@ import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 
 /** Kinds of scored point a rally sport logs — each is a single point for `side`.
- *  ('block' = a volleyball point won on a block.) */
-export type PointKind = 'point' | 'ace' | 'block';
+ *  'point' = a point whose outcome wasn't recorded (every legacy point). The rest
+ *  are volleyball outcomes (SD-04): 'attack' = a kill, 'block' = a point won on a
+ *  block, 'opperror' / 'serveerror' = the OPPONENT erred (no player credited). */
+export type PointKind = 'point' | 'ace' | 'block' | 'attack' | 'opperror' | 'serveerror';
+
+const KINDS: readonly string[] = ['point', 'ace', 'block', 'attack', 'opperror', 'serveerror'];
 
 export interface PointInput {
   side: 'home' | 'away';
@@ -33,7 +37,7 @@ export interface PointInput {
 
 /** Every scored-point kind (skip game/set/match banner rows). Must match the
  *  editor's displayed rows so their indices stay aligned. */
-export const isPointKind = (k?: string): k is PointKind => k === 'point' || k === 'ace' || k === 'block';
+export const isPointKind = (k?: string): k is PointKind => k != null && KINDS.includes(k);
 
 /** Reconstruct the ordered scoring inputs from a sport's point log. Each scored
  *  point's `side` IS who won the rally, so replaying them rebuilds the match. */
@@ -42,7 +46,16 @@ export const pointInputs = (events: LiveEvent[]): PointInput[] =>
     .filter((e) => isPointKind(e.kind) && e.side)
     .map((e) => ({ side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName }));
 
-const ACTION_OF: Record<PointKind, string> = { point: 'POINT', ace: 'ACE', block: 'BLOCK' };
+const ACTION_OF: Record<PointKind, string> = {
+  point: 'POINT', ace: 'ACE', block: 'BLOCK', attack: 'ATTACK', opperror: 'OPP_ERROR', serveerror: 'SERVE_ERROR',
+};
+
+/** The profile stats one point of `kind` credits to the player on it. The default
+ *  mirrors how tennis/badminton dispatch (an ace → 'aces' only, else 'points');
+ *  volleyball passes its own (`volleyballCredits`), where an ace or block is ALSO
+ *  a point. An empty map = nobody is credited (an opponent's error). */
+export type PointCredits = (kind: PointKind) => Record<string, number>;
+export const defaultCredits: PointCredits = (kind) => ({ [statOf(kind)]: 1 });
 
 /** Replay a corrected point list through the sport's own pure reducer so every
  *  downstream game/set boundary recomputes correctly. `cleared` = the match reset
@@ -53,7 +66,8 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
       reducer(s, {
         type: ACTION_OF[p.kind],
         side: p.side,
-        attribution: p.playerName
+        // Only a creditable kind carries a player (an opponent's error never does).
+        attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror'
           ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }
           : undefined,
       }),
@@ -61,9 +75,13 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
   );
 }
 
-/** The stat a point credits to a player profile, mirroring how it was originally
- *  dispatched: an ace→'aces', a block→'blocks', any other point→'points'. */
-const statOf = (kind: PointKind) => (kind === 'ace' ? 'aces' : kind === 'block' ? 'blocks' : 'points');
+/** The primary stat a point credits to a player profile, mirroring how it was
+ *  originally dispatched: an ace→'aces', a block→'blocks', any other point→'points'.
+ *  (Only labels the replayed attribution, which the reducer ignores; profile
+ *  reconciliation uses the sport's `PointCredits`.) */
+function statOf(kind: PointKind): string {
+  return kind === 'ace' ? 'aces' : kind === 'block' ? 'blocks' : 'points';
+}
 
 /** No-op `STAT_ADJUST` actions that reconcile player-profile tallies after an
  *  edit — +/- per (player, stat) for the difference between the old and new point
@@ -74,17 +92,19 @@ export function reconcileStatActions(
   oldPts: PointInput[],
   newPts: PointInput[],
   resolveId: (name?: string) => string | undefined,
+  creditsOf: PointCredits = defaultCredits,
 ): ScoreAction[] {
   const tally = (pts: PointInput[]) => {
     const m = new Map<string, { playerId: string; stat: string; name: string; n: number }>();
     for (const p of pts) {
       const id = p.playerId ?? resolveId(p.playerName);
       if (!id || !p.playerName) continue;
-      const stat = statOf(p.kind);
-      const key = `${id}|${stat}`;
-      const cur = m.get(key) ?? { playerId: id, stat, name: p.playerName, n: 0 };
-      cur.n += 1;
-      m.set(key, cur);
+      for (const [stat, by] of Object.entries(creditsOf(p.kind))) {
+        const key = `${id}|${stat}`;
+        const cur = m.get(key) ?? { playerId: id, stat, name: p.playerName, n: 0 };
+        cur.n += by;
+        m.set(key, cur);
+      }
     }
     return m;
   };

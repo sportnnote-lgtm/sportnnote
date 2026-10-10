@@ -1,9 +1,9 @@
 /**
  * Volleyball plugin — archetype: running-points. Rally scoring, set to 25
- * (win by 2), best of 3 sets. Each point is logged; points & aces are
- * attributed to players for profiles.
+ * (win by 2), best of 3 sets. Each point is logged with HOW it was won (attack,
+ * block, ace, opponent error) — see ./engine.ts for who that credits.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { SelectChip, Button, textStyles } from '../../components/ui';
@@ -17,121 +17,62 @@ import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { replayPoints, type PointInput } from '../rallyEdit';
+import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, type VolleyballState, type VbOutcome } from './engine';
 
-const TARGET = 25;
-const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
-const SETS_TO_WIN = 2;
+export { isDecider, setTarget } from './engine';
+export type { VolleyballState } from './engine';
 
-export interface VolleyballState {
-  current: { home: number; away: number };
-  setsWon: { home: number; away: number };
-  sets: Array<[number, number]>;
-  /** sets a side must win to take the match (format: setsToWin) */
-  setsToWin: number;
-  /** points to win a normal set, win by 2 (format: pointsPerSet — 25 indoor, 21 beach) */
-  target: number;
-  /** points to win the deciding set (shorter — 15) */
-  deciderTarget: number;
-  /** must a set be won by two clear points? off = first to target (casual) */
-  winByTwo: boolean;
-  events: LiveEvent[];
-  seq: number;
-  ended: boolean;
+/** One side's point panel. Pick HOW the point was won, then (for a credited
+ *  outcome) WHO — the outcome defaults to Attack and resets after every point, so
+ *  a kill is one tap on the attacker, an opponent's error is one tap, and a
+ *  block/ace is two. Without a roster every outcome is a single button. */
+function SidePoints({ side, name, color, roster, icon, blocks, dispatch }: {
+  side: 'home' | 'away'; name: string; color?: string; roster: Player[]; icon: string; blocks: boolean;
+  dispatch: (a: ScoreAction) => void;
+}) {
+  const [how, setHow] = useState<VbOutcome>('attack');
+  const outcomes = VB_OUTCOMES.filter((o) => blocks || o.kind !== 'block');
+  const credited = outcomes.filter((o) => o.credited);
+  const errors = outcomes.filter((o) => !o.credited);
+  const score = (kind: VbOutcome, p?: Player) => { dispatch(outcomeAction(kind, side, p)); setHow('attack'); };
+  return (
+    <View style={[ctrl.sideBox, { borderLeftColor: color ?? (side === 'home' ? theme.colors.home : theme.colors.away) }]}>
+      <Text style={ctrl.label}>{icon} Point — {name}</Text>
+      {roster.length > 0 ? (
+        <>
+          <View style={ctrl.chips}>
+            {credited.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={how === o.kind} onPress={() => setHow(o.kind)} />)}
+          </View>
+          <Text style={ctrl.hint}>{VB_OUTCOMES.find((o) => o.kind === how)!.label} by…</Text>
+          <View style={ctrl.chips}>
+            {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => score(how, p)} />)}
+            <SelectChip label="No player" active={false} onPress={() => score(how)} />
+          </View>
+          <View style={ctrl.chips}>
+            {errors.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={false} onPress={() => score(o.kind)} />)}
+          </View>
+        </>
+      ) : (
+        <View style={ctrl.chips}>
+          {outcomes.map((o) => <SelectChip key={o.kind} label={`${o.icon} ${o.label}`} active={false} onPress={() => score(o.kind)} />)}
+        </View>
+      )}
+    </View>
+  );
 }
 
-const init = (config?: Record<string, unknown>): VolleyballState => ({
-  current: { home: 0, away: 0 },
-  setsWon: { home: 0, away: 0 },
-  sets: [],
-  setsToWin: Number(config?.setsToWin ?? SETS_TO_WIN),
-  target: Number(config?.pointsPerSet ?? TARGET),
-  deciderTarget: Number(config?.deciderPoints ?? DECIDER_TARGET),
-  winByTwo: config?.winByTwo !== false, // default on (rally to 25, win by 2)
-  events: [],
-  seq: 0,
-  ended: false,
-});
-
-/** Are we in the deciding set? (both sides one set from the match — e.g. 2-2 in
- *  a best-of-5, 1-1 in a best-of-3). The decider is a shorter race to 15. */
-export const isDecider = (s: VolleyballState) =>
-  s.setsToWin > 1 && s.setsWon.home === s.setsToWin - 1 && s.setsWon.away === s.setsToWin - 1;
-/** Points needed to win the current set (15 in the decider, else the set target). */
-export const setTarget = (s: VolleyballState) => (isDecider(s) ? s.deciderTarget : s.target);
-
-/** Reset the match to 0-0 keeping its format (target/setsToWin/decider/win-by-2)
- *  — the clean slate an EDIT_LOG replay rebuilds the corrected point list onto. */
-const clearMatch = (s: VolleyballState): VolleyballState => ({
-  ...s, current: { home: 0, away: 0 }, setsWon: { home: 0, away: 0 }, sets: [], events: [], seq: 0, ended: false,
-});
-
-const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => {
-  // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
-  // effect); EDIT_LOG replays a corrected point list so the score & sets re-derive.
-  if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
-  if (a.type === 'TIMEOUT') {
-    // A team timeout — a non-scoring timeline marker (2 per set in indoor).
-    if (s.ended || !a.side) return s;
-    const setNo = s.setsWon.home + s.setsWon.away + 1;
-    return { ...s, seq: s.seq + 1, events: [...s.events, { id: s.seq + 1, stamp: `Set ${setNo}`, icon: '⏱️', label: 'Timeout', detail: undefined, side: a.side, kind: 'timeout', set: setNo }] };
-  }
-  if (s.ended || !a.side || (a.type !== 'POINT' && a.type !== 'ACE' && a.type !== 'BLOCK')) return s;
-  // Aces and (winning) blocks are also points — they just carry their own stat.
-  const kind = a.type === 'ACE' ? 'ace' : a.type === 'BLOCK' ? 'block' : 'point';
-  const icon = kind === 'ace' ? '🎯' : kind === 'block' ? '🧱' : '🏐';
-  const label = kind === 'ace' ? 'Ace' : kind === 'block' ? 'Block' : 'Point';
-  const who = a.attribution?.playerName;
-  const current = { ...s.current, [a.side]: s.current[a.side] + 1 };
-  const setNo = s.setsWon.home + s.setsWon.away + 1;
-  const tgt = setTarget(s); // 15 in the decider, else the set target
-  let seq = s.seq;
-  const events = [...s.events];
-  // Structured fields (kind/playerName/set/points) let the per-set box score
-  // aggregate points/aces/blocks per player, filtered by set — the timeline ignores them.
-  events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: a.side, kind, playerName: who, set: setNo, points: 1 });
-
-  const h = current.home;
-  const v = current.away;
-  const m = (s.winByTwo ?? true) ? 2 : 1; // win-by-2, or first-to-target (casual)
-  const won = h >= tgt && h - v >= m ? 'home' : v >= tgt && v - h >= m ? 'away' : null;
-  if (!won) return { ...s, current, events, seq };
-
-  const sets = [...s.sets, [h, v] as [number, number]];
-  const setsWon = { ...s.setsWon, [won]: s.setsWon[won] + 1 };
-  const ended = setsWon[won] >= s.setsToWin;
-  events.push({ id: ++seq, stamp: 'Set', icon: '🎉', label: `Set ${sets.length} won`, detail: `${h}-${v}`, side: won });
-  if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${setsWon.home}-${setsWon.away} sets`, side: won });
-  return { ...s, current: { home: 0, away: 0 }, setsWon, sets, events, seq, ended };
-};
-
-const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Player[]; onPick: (p?: Player) => void; fallback: string }) => (
-  <View style={{ gap: theme.spacing(2) }}>
-    <Text style={ctrl.label}>{label}</Text>
-    {roster.length > 0 ? (
-      <View style={ctrl.chips}>{roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => onPick(p)} />)}</View>
-    ) : (
-      <Button label={fallback} variant="ghost" onPress={() => onPick()} />
-    )}
-  </View>
-);
-
-/** Point / ace / (block) / timeout controls — volleyball's, parameterised so a
- *  future set-based net sport without blocks can reuse them. */
+/** Point / timeout controls — volleyball's, parameterised so a future set-based
+ *  net sport without blocks can reuse them. */
 export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet: number }): SportPlugin<VolleyballState>['ScoringControls'] {
   const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
     const s = state as VolleyballState;
-    const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
-      dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
+    const editorKinds = VB_OUTCOMES
+      .filter((o) => opts.blocks || o.kind !== 'block')
+      .map((o) => ({ kind: o.kind, label: `${o.icon} ${o.label}`, credited: o.credited }));
     return (
       <View style={{ gap: theme.spacing(4) }}>
-        <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
-        <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
-        <Row label={`🎯 Ace — ${homeName}`} roster={homeRoster} onPick={(p) => act('ACE', 'home', 'aces', p)} fallback={`Ace ${homeName}`} />
-        <Row label={`🎯 Ace — ${awayName}`} roster={awayRoster} onPick={(p) => act('ACE', 'away', 'aces', p)} fallback={`Ace ${awayName}`} />
-        {opts.blocks && <Row label={`🧱 Block — ${homeName}`} roster={homeRoster} onPick={(p) => act('BLOCK', 'home', 'blocks', p)} fallback={`Block ${homeName}`} />}
-        {opts.blocks && <Row label={`🧱 Block — ${awayName}`} roster={awayRoster} onPick={(p) => act('BLOCK', 'away', 'blocks', p)} fallback={`Block ${awayName}`} />}
+        <SidePoints side="home" name={homeName} color={homeColor} roster={homeRoster} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        <SidePoints side="away" name={awayName} color={awayColor} roster={awayRoster} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
         {opts.timeoutsPerSet > 0 && (() => {
           const setNo = s.setsWon.home + s.setsWon.away + 1;
           const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
@@ -148,6 +89,7 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
           events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
           homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon={opts.icon}
           periodLabel={(e) => `Set ${e.set ?? 1}`}
+          kinds={editorKinds} defaultKind="attack" creditsOf={volleyballCredits}
         />
       </View>
     );
@@ -225,7 +167,7 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   LiveExtras,
   formation: () => courtFormation('volleyball'),
   Court: makeCourt('volleyball'),
-  voice: { hints: ['point home', 'ace {name}', 'block {name}'], parse: volleyballVoice },
+  voice: { hints: ['attack {name}', 'ace {name}', 'block {name}', 'point home'], parse: volleyballVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'indoor',
@@ -262,6 +204,8 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
 const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  hint: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  sideBox: { gap: theme.spacing(2), borderLeftWidth: 3, paddingLeft: theme.spacing(3) },
   setsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   setChip: {
     color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700',

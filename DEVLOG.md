@@ -13,6 +13,28 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-04: volleyball points say how they were won; errors credit nobody; aces and blocks count as points
+
+- **Bug:**
+  - with a roster loaded every point had to go to a player (no "opponent error"), so about a
+    third became fake kills and Best Scorer was wrong;
+  - aces and blocks didn't add to a player's points.
+- **Fix:** new pure `src/sports/volleyball/engine.ts` with `ATTACK` / `OPP_ERROR` / `SERVE_ERROR`
+  (POINT / ACE / BLOCK unchanged).
+  - **Scoring panel:** Attack (default, resets each point) / Block / Ace, then the player; **Opp.
+    error** and **Opp. serve error** score in one tap and credit nobody.
+  - **Credits:** attack = points + attackPoints; ace or block also add a point.
+  - **Shared rally editor** gains point kinds and a credits function (tennis/badminton unchanged).
+  - **MVP weights** rebalanced so an ace is still worth 3 and a block 2.
+  - **Voice** matches the buttons.
+- **Event log:** old logs deep-equal a frozen copy of the old reducer.
+- **Tests:** tsc + 882 (17 new).
+- **Demo 8093 (m10):** each outcome; box score = stat lines; Top scorer counts the block.
+- **New public guide:** "How to score a volleyball match".
+- Past aces and blocks without the matching point heal with the stat backfill (D2).
+
+---
+
 ### 2026-10-10 — Sport depth SD-03: kabaddi raid and tackle points go to the right player and team
 
 - **Bug:**

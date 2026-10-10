@@ -6,6 +6,7 @@ import type { ScoreAction } from './types';
 import type { VoiceContext } from './types';
 import { deburr, resolveSide, attribution, numberFromText } from './voiceMatch.ts';
 import { previewRaid, type KabaddiState } from './kabaddi/engine.ts';
+import { outcomeAction } from './volleyball/engine.ts';
 
 /** Rally/set-point sports (badminton, tennis, volleyball, padel, pickleball,
  *  squash): "point home", "point away", "<team> point", "<player> scores".
@@ -60,8 +61,10 @@ export function volleyballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
   const q = deburr(text);
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
-  if (/\bblock\b|blocked\b|\bstuff\b/.test(q)) return [{ type: 'BLOCK', side, attribution: attribution(player, 'blocks') }];
-  if (/\bace\b/.test(q)) return [{ type: 'ACE', side, attribution: attribution(player, 'aces') }];
+  // Same actions (and credits — an ace/block is also a point) as the buttons.
+  if (/\bblock\b|blocked\b|\bstuff\b/.test(q)) return [outcomeAction('block', side, player)];
+  if (/\bace\b/.test(q)) return [outcomeAction('ace', side, player)];
+  if (/\b(attack|kill|spike|smash)\b/.test(q)) return [outcomeAction('attack', side, player)];
   return pointVoice(text, ctx);
 }
 

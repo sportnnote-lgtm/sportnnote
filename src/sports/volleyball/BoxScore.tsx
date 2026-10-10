@@ -1,7 +1,8 @@
 /** Volleyball player stats — points & aces per player, one table per side,
  *  derived from the point log. A set toggle (Overall / Set 1 / Set 2 …) re-tallies
  *  over just that set — the analogue of basketball's per-quarter box score and
- *  kabaddi's per-half table. An ace is also a point, so it counts in both columns. */
+ *  kabaddi's per-half table. An ace or block is also a point, so it counts in both
+ *  columns — the same credit the player's profile gets (volleyball/engine.ts). */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
@@ -9,26 +10,11 @@ import { SelectChip } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { LiveEvent } from '../liveEvents';
 import { playerLink, idByName } from '../playerLink';
+import { tally, type BoxLine } from './engine';
 
-interface Line { name: string; points: number; aces: number; blocks: number }
+export { tally };
 
-/** Tally points, aces & blocks per player for one side; `scope` limits to one set. */
-export function tally(events: LiveEvent[], side: 'home' | 'away', scope: 'all' | number = 'all'): Line[] {
-  const byName = new Map<string, Line>();
-  const ensure = (name: string) => {
-    if (!byName.has(name)) byName.set(name, { name, points: 0, aces: 0, blocks: 0 });
-    return byName.get(name)!;
-  };
-  for (const e of events) {
-    if (e.side !== side || !e.playerName || (e.kind !== 'point' && e.kind !== 'ace' && e.kind !== 'block')) continue;
-    if (scope !== 'all' && e.set !== scope) continue;
-    const l = ensure(e.playerName);
-    l.points += 1;            // every scored point counts…
-    if (e.kind === 'ace') l.aces += 1; // …an ace also lands in the ace column
-    if (e.kind === 'block') l.blocks += 1; // …a winning block in the block column
-  }
-  return [...byName.values()].sort((a, b) => b.points - a.points || b.aces - a.aces);
-}
+type Line = BoxLine;
 
 function Table({ title, color, lines, roster, onPlayer }: { title: string; color: string; lines: Line[]; roster?: Player[]; onPlayer?: (playerId: string) => void }) {
   return (

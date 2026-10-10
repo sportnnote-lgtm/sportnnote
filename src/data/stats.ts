@@ -78,7 +78,7 @@ const STAT_LABEL: Record<string, string> = {
   assists: 'assists', cleanSheets: 'clean sheets', shots: 'shots', shotsOnTarget: 'shots on target',
   tackles: 'tackles', interceptions: 'interceptions', saves: 'saves', passes: 'passes',
   attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
-  runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
+  runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', blocks: 'blocks', attackPoints: 'attack pts', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
   wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
   rounds: 'rounds', birdies: 'birdies', eagles: 'eagles', holesWon: 'holes won',
 };
@@ -89,7 +89,7 @@ const STAT_LABEL_ONE: Record<string, string> = {
   goals: 'goal', penaltyGoals: 'penalty', freekickGoals: 'free-kick goal', assists: 'assist',
   cleanSheets: 'clean sheet', shots: 'shot', shotsOnTarget: 'shot on target', tackles: 'tackle',
   interceptions: 'interception', saves: 'save', passes: 'pass', attackingContributions: 'attacking play',
-  defensiveContributions: 'defensive play', runs: 'run', aces: 'ace', games: 'game',
+  defensiveContributions: 'defensive play', runs: 'run', aces: 'ace', blocks: 'block', games: 'game',
   wins: 'win', draws: 'draw', losses: 'loss', boards: 'board', queens: 'queen',
   rounds: 'round', birdies: 'birdie', eagles: 'eagle', holesWon: 'hole won',
 };

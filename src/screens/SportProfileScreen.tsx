@@ -25,7 +25,7 @@ import { ageOf } from '../core/age';
 const LABELS: Record<string, string> = {
   goals: 'Goals', openPlayGoals: 'Open-play goals', penaltyGoals: 'Penalties', freekickGoals: 'Free-kick goals',
   assists: 'Assists', runs: 'Runs', wickets: 'Wickets', cleanSheets: 'Clean sheets', yellowCards: 'Yellow', redCards: 'Red',
-  points: 'Points', rebounds: 'Rebounds', fouls: 'Fouls', aces: 'Aces', raidPoints: 'Raid pts', tacklePoints: 'Tackle pts',
+  points: 'Points', rebounds: 'Rebounds', fouls: 'Fouls', aces: 'Aces', blocks: 'Blocks', attackPoints: 'Attack pts', raidPoints: 'Raid pts', tacklePoints: 'Tackle pts',
   golds: 'Golds', silvers: 'Silvers', games: 'Games',
   // football granular stats
   shots: 'Shots', shotsOnTarget: 'Shots on target', tackles: 'Tackles', interceptions: 'Interceptions',
