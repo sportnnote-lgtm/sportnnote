@@ -5,9 +5,10 @@
  * relative to the best performer in that match. Cricket ships its own richer,
  * state-based summary; every other sport uses this.
  */
-import type { Player, SportId, StatLine, TournamentAward } from '../core/types';
-import { leadersByKey } from './standings.ts';
-import { STAT_SPORTS, mvpWeights, matchSummaryLabels, labelCompact, matchAwards, tournamentAwards, eligibilityOf, awardDef } from '../sports/statSchemas.ts';
+import type { Match, Player, SportId, StatLine, TournamentAward } from '../core/types';
+import { STAT_SPORTS, mvpWeights, matchSummaryLabels, labelCompact, matchAwards, tournamentAwards, eligibilityOf, awardDef, statSchema } from '../sports/statSchemas.ts';
+import { aggregateValue, qualifierOf, qualifierText, rankPlayers, statDefIn, type Qualifier, type StatDef } from '../sports/statSchema.ts';
+import { effectiveQualifier, withLineResults, type LeaderMins } from './leaderMinimums.ts';
 import { cricketCareer } from './cricketCareer.ts';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
 
@@ -121,7 +122,8 @@ const MVP_SLOT: AwardSlot = { slot: 'mvp', label: 'Player of the Tournament', ic
 
 /** The fixed award slots per sport: Player of the Tournament + the schema's
  *  tournament awards (a tournament name such as "Golden Glove" keeps the same
- *  slot key, so awards already published keep matching their slot). */
+ *  slot key, so awards already published keep matching their slot). SD-27: a
+ *  slot may RANK by another stat (`rankBy`: basketball Top scorer by PPG). */
 export const TOURNAMENT_AWARD_SLOTS: Record<SportId, AwardSlot[]> = Object.fromEntries(
   STAT_SPORTS.map((sp) => [
     sp,
@@ -129,24 +131,139 @@ export const TOURNAMENT_AWARD_SLOTS: Record<SportId, AwardSlot[]> = Object.fromE
   ]),
 ) as Record<SportId, AwardSlot[]>;
 
-/** SD-09: football's Golden Glove ranks goalkeepers only (schema `eligible`). */
-const isGoldenGlove = (sport: SportId, slot: string) => eligibilityOf(sport, slot) === 'goalkeeper';
-
-/** Icon for an award (custom awards get a medal). */
+/** Icon for an award (custom awards get a medal). A retired slot (racket "Top
+ *  scorer", chess "Most wins") keeps its icon on awards already published. */
 export const awardIcon = (sport: SportId, slot: string): string =>
-  TOURNAMENT_AWARD_SLOTS[sport]?.find((x) => x.slot === slot)?.icon ?? '🏅';
+  TOURNAMENT_AWARD_SLOTS[sport]?.find((x) => x.slot === slot)?.icon ?? awardDef(sport, slot)?.icon ?? '🏅';
 
-/** How each slot is ranked — shown behind "How is this ranked?". */
-export function awardFormula(sport: SportId, slot: string): string {
+/** Options shared by the award rankers. */
+export interface AwardRankOptions {
+  /** restrict to a tournament's matches */
+  matchIds?: Iterable<string>;
+  /** SD-27 — the matches, so each line's W / L is known (racket wins) */
+  matches?: Match[];
+  /** SD-27 — the organiser's minimums for this tournament (format `leaderMins`) */
+  mins?: LeaderMins;
+}
+
+/** What a slot ranks by: the stat definition, its tie-breaks and who may win. */
+interface SlotRank {
+  def: StatDef;
+  tieBreak: { key: string; better: 'higher' | 'lower' }[];
+  keepers: boolean;
+  /** the hand-written prose, if any */
+  howRanked?: string;
+}
+
+/** The ranking a slot uses — undefined for a weighted MVP (summed weights). */
+function slotRank(sport: SportId, slot: string): SlotRank | undefined {
+  const schema = statSchema(sport);
+  if (!schema) return undefined;
   if (slot === 'mvp') {
+    const m = schema.mvp;
+    const def = m && statDefIn(schema, m.stat);
+    return m && def ? { def, tieBreak: m.tieBreak ?? def.tieBreak ?? [], keepers: false, howRanked: m.howRanked } : undefined;
+  }
+  const a = awardDef(sport, slot);
+  const key = a?.rankBy ?? slot;
+  const def: StatDef = statDefIn(schema, key) ?? { key, label: key };
+  return {
+    def, tieBreak: a?.tieBreak ?? def.tieBreak ?? [],
+    keepers: eligibilityOf(sport, slot) === 'goalkeeper' || def.eligible === 'goalkeeper',
+    howRanked: a?.howRanked,
+  };
+}
+
+const isPlainTotal = (def: StatDef) => (def.agg?.kind ?? 'sum') === 'sum' && !(def.agg?.kind === 'sum' && (def.agg.keys || def.agg.key));
+
+/** A figure with its name, short: "4 wins", "18.5 PPG", "80% win", "3/12". */
+function statPhrase(sport: SportId, def: StatDef, value: number, text: string): string {
+  const unit = def.format?.unit;
+  if (unit === 'percent') return `${text} ${def.label.replace(/\s*%$/, '').toLowerCase()}`;
+  if (unit === 'figure') return `${text} ${def.abbr ?? def.label.toLowerCase()}`;
+  const k = def.agg?.kind ?? 'sum';
+  if (k === 'perGame' || k === 'perSet' || k === 'rate' || unit === 'decimal') return `${text} ${def.abbr ?? def.label.toLowerCase()}`;
+  return `${text} ${statLabel(def.key, value, sport)}`;
+}
+
+/** The text after "at least" for a qualifier ("3 matches"), or undefined. */
+const minWords = (sport: SportId, def: StatDef, q: Qualifier | null | undefined): string | undefined => {
+  const schema = statSchema(sport);
+  const t = schema && q ? qualifierText(schema, def, q) : undefined;
+  return t?.replace(/^min /, '');
+};
+
+/** The qualifier a slot ranks with in this tournament. */
+const slotQualifier = (sport: SportId, def: StatDef, mins?: LeaderMins): Qualifier | null | undefined =>
+  mins && def.key in mins ? effectiveQualifier(sport, def.key, mins) : qualifierOf(def);
+
+/** How each slot is ranked — shown behind "How is this ranked?". Generated
+ *  from the schema (the stat's aggregation, its minimum, the tie-break chain
+ *  and who is eligible), unless the schema has hand-written prose. */
+export function awardFormula(sport: SportId, slot: string, mins?: LeaderMins): string {
+  const r = slotRank(sport, slot);
+  if (!r) {
+    // the weighted Player of the Tournament
     const w = Object.entries(STAT_WEIGHTS[sport] ?? {}).filter(([, v]) => v !== 0);
     const parts = w.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k, v]) => `${statLabel(k, 2)} ${v > 0 ? '×' : '−'}${Math.abs(v)}`);
     return `Points summed over every match in this tournament${parts.length ? `: ${parts.join(', ')}` : ''}. Ties go by name. You choose the winner.`;
   }
-  if (isGoldenGlove(sport, slot)) {
-    return 'Goalkeepers only (anyone who kept goal in these matches, or is listed as a GK). Most clean sheets, then most saves, then fewest goals conceded. A clean sheet goes to the keeper on the pitch longest when their team let in no goal (penalty shootouts don\'t count). You choose the winner.';
+  const q = slotQualifier(sport, r.def, mins);
+  const min = minWords(sport, r.def, q);
+  if (r.howRanked) return r.howRanked.replace('{min}', min ?? 'one game');
+  return generatedFormula(sport, r, min);
+}
+
+function generatedFormula(sport: SportId, r: SlotRank, min: string | undefined): string {
+  const { def } = r;
+  const schema = statSchema(sport);
+  const lbl = (k: string) => statLabel(k, 2, sport);
+  // prose names a stat by its full label ("minutes played", not "mins")
+  const long = (k: string) => { const d = schema && statDefIn(schema, k); return d ? d.label.toLowerCase() : lbl(k); };
+  const keysText = (keys: string | string[]) => {
+    const ks = Array.isArray(keys) ? keys : [keys];
+    return ks.map((k, i) => (k.startsWith('-') ? `− ${long(k.slice(1))}` : `${i ? '+ ' : ''}${long(k)}`)).join(' ');
+  };
+  const a = def.agg ?? { kind: 'sum' as const };
+  const plain = isPlainTotal(def) && !r.tieBreak.length && !r.keepers;
+  // Unchanged from parity #21 where it was already right: a plain total.
+  if (plain) return `Total ${lbl(def.key)} in this tournament's matches. Ties go by name. You choose the winner.`;
+  let what: string;
+  switch (a.kind) {
+    case 'sum':
+      what = a.keys && !a.scale ? `${def.label}: ${keysText(a.keys)}, over this tournament's matches`
+        : a.keys ? `${def.label} over this tournament's matches`
+        : `Most ${long(a.key ?? def.key)} in this tournament's matches`;
+      break;
+    case 'perGame': what = `${def.label}: total ${keysText(a.key)}, divided by games played`; break;
+    case 'perSet': what = `${def.label}: total ${long(a.key)}, divided by the sets the player was on court for`; break;
+    case 'rate': {
+      const n = Array.isArray(a.num) ? null : statDefIn(schema!, a.num);
+      const d = Array.isArray(a.den) ? null : statDefIn(schema!, a.den);
+      what = n && d ? `${def.label}: ${long(n.key)} ÷ ${long(d.key)}${a.scale === 100 ? ' (as a %)' : a.scale ? ` × ${a.scale}` : ''}` : `${def.label} over this tournament's matches`;
+      break;
+    }
+    case 'result':
+      what = a.of ? `${def.label}: matches won ÷ matches with a result` : 'Most matches won in this tournament';
+      break;
+    case 'countIf': what = `Most ${long(def.key)} in this tournament's matches`; break;
+    case 'max': what = `${def.label}, the best single match`; break;
+    default: what = `${def.leaderLabel ?? def.label} in this tournament's matches`;
   }
-  return `Total ${statLabel(slot, 2)} in this tournament's matches. Ties go by name. You choose the winner.`;
+  const ties = r.tieBreak.map((t) => {
+    const td = schema && statDefIn(schema, t.key);
+    if (!td) return t.key;
+    const pct = td.format?.unit === 'percent' || ['rate', 'perGame', 'perSet'].includes(td.agg?.kind ?? '') || (td.agg?.kind === 'result' && !!td.agg.of);
+    if (pct) return `the ${t.better === 'higher' ? 'higher' : 'lower'} ${td.label.toLowerCase()}`;
+    return `${t.better === 'higher' ? 'more' : 'fewer'} ${long(t.key)}`;
+  });
+  return [
+    r.keepers ? 'Goalkeepers only (anyone who kept goal in these matches, or is listed as a GK).' : '',
+    `${what}.`,
+    min ? `Players need at least ${min} to rank.` : '',
+    `Ties: ${[...ties, 'by name'].join(', then ')}.`,
+    'You choose the winner.',
+  ].filter(Boolean).join(' ');
 }
 
 export interface AwardCandidate {
@@ -155,105 +272,116 @@ export interface AwardCandidate {
   teamName?: string;
   teamColor?: string;
   value: number;
+  /** SD-27 — the figure as shown when it isn't a plain count ("18.5", "80%") */
+  display?: string;
   /** matches with a stat line in this sport */
   games: number;
   detail: string;
 }
 
-/** Higher tie-break values first, criterion by criterion. */
-const tieCmp = (a: number[], b: number[]) => {
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const d = (b[i] ?? 0) - (a[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-};
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const dashless = (parts: (string | false | undefined)[]) => parts.filter((p): p is string => !!p && !p.includes('–'));
 
 /** Ranked players for one award slot, from this tournament's stat lines.
- *  'mvp' sums the sport's STAT_WEIGHTS over each player's lines; a stat slot
- *  totals that stat (leadersByKey). Highest first, ties by name. Pass
- *  `matchIds` to restrict to a tournament's matches. */
+ *  'mvp' sums the sport's STAT_WEIGHTS over each player's lines — or, where the
+ *  schema names an MVP stat (SD-27: racket matches won, chess score,
+ *  basketball EFF per game), ranks by it. A stat slot ranks by its stat (or
+ *  `rankBy`) through the aggregate engine: minimums, eligibility (Golden Glove:
+ *  keepers), the award's tie-break chain, then name. Pass `matchIds` to
+ *  restrict to a tournament's matches. */
 export function rankAwardCandidates(
   lines: StatLine[], players: Player[], sport: SportId, slot: string, limit = 10,
-  opts: { matchIds?: Iterable<string> } = {},
+  opts: AwardRankOptions = {},
 ): AwardCandidate[] {
   const ids = opts.matchIds ? new Set(opts.matchIds) : null;
-  const mine = lines.filter((l) => l.sport === sport && (!ids || ids.has(l.matchId)));
+  const mine = withLineResults(lines.filter((l) => l.sport === sport && (!ids || ids.has(l.matchId))), opts.matches);
   const byId = new Map(players.map((p) => [p.id, p] as const));
   const linesOf = new Map<string, StatLine[]>();
   for (const l of mine) (linesOf.get(l.playerId) ?? linesOf.set(l.playerId, []).get(l.playerId)!).push(l);
   const sum = (ls: StatLine[], k: string) => ls.reduce((a, l) => a + (Number(l.stats?.[k]) || 0), 0);
+  const nameOf = (id: string) => byId.get(id)?.fullName ?? 'Player';
+  const candidate = (playerId: string, value: number, games: number, detail: string, display?: string): AwardCandidate => {
+    const p = byId.get(playerId);
+    return {
+      playerId, name: nameOf(playerId), teamName: p?.houseName, teamColor: p?.houseColor,
+      value, ...(display !== undefined ? { display } : {}), games, detail,
+    };
+  };
+
+  const rank = slotRank(sport, slot);
+  if (!rank) {
+    // the weighted Player of the Tournament (parity #21)
+    const w = STAT_WEIGHTS[sport] ?? {};
+    return [...linesOf.entries()]
+      .map(([pid, ls]) => {
+        const value = round1(ls.reduce((a, l) => a + Object.entries(l.stats ?? {}).reduce((s2, [k, v]) => s2 + (Number(v) || 0) * (w[k] ?? 0), 0), 0));
+        const top = Object.keys(w)
+          .map((k) => [k, sum(ls, k)] as const)
+          .filter(([k, v]) => v > 0 && (w[k] ?? 0) > 0 && STAT_LABELS[k])
+          .sort((a, b) => b[1] * (w[b[0]] ?? 0) - a[1] * (w[a[0]] ?? 0))
+          .slice(0, 3)
+          .map(([k, v]) => `${v} ${statLabel(k, v)}`);
+        return { pid, value, games: ls.length, detail: [`${ls.length} m`, ...top].join(' · ') };
+      })
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value || nameOf(a.pid).localeCompare(nameOf(b.pid)))
+      .slice(0, limit)
+      .map((r) => candidate(r.pid, r.value, r.games, r.detail));
+  }
+
+  const schema = statSchema(sport)!;
+  const { def } = rank;
+  // Keepers: listed as a GK, or kept goal in one of these matches (a keeper
+  // line carries goalsConceded). Older clean sheets credited to defenders
+  // don't qualify (SD-09).
+  const keepers = rank.keepers
+    ? new Set([...linesOf.entries()]
+        .filter(([pid, ls]) => isGoalkeeper(byId.get(pid)?.sportDetails?.football?.position) || ls.some((l) => l.stats && 'goalsConceded' in l.stats))
+        .map(([pid]) => pid))
+    : null;
+  const ranked = rankPlayers(schema, def, mine, {
+    qualifier: slotQualifier(sport, def, opts.mins),
+    tieBreak: rank.tieBreak,
+    eligible: keepers ? (id) => keepers.has(id) : undefined,
+    finalTie: (a, b) => nameOf(a).localeCompare(nameOf(b)),
+    limit,
+  });
+  const plain = isPlainTotal(def) && def.key === slot;
+  const glove = rank.keepers && slot === 'cleanSheets';
   const career = (ls: StatLine[]) => {
     const c = cricketCareer(ls);
     const v = (sec: 'batting' | 'bowling', k: string) => c[sec].find((x) => x.key === k)?.value ?? '–';
     return { inns: v('batting', 'innings'), avg: v('batting', 'avg'), sr: v('batting', 'sr'), econ: v('bowling', 'econ'), bowlAvg: v('bowling', 'bowlAvg') };
   };
-
-  const detailFor = (pid: string, value: number, games: number): string => {
-    const ls = linesOf.get(pid) ?? [];
+  return ranked.map((r) => {
+    const ls = linesOf.get(r.playerId) ?? [];
+    const games = ls.length;
     const m = `${games} m`;
+    let detail: string;
     if (sport === 'cricket' && slot === 'runs') {
       const c = career(ls);
-      return dashless([`${value} ${statLabel('runs', value)}`, `${c.inns} inns`, `avg ${c.avg}`, `SR ${c.sr}`]).join(' · ');
-    }
-    if (sport === 'cricket' && slot === 'wickets') {
+      detail = dashless([`${r.value} ${statLabel('runs', r.value)}`, `${c.inns} inns`, `avg ${c.avg}`, `SR ${c.sr}`]).join(' · ');
+    } else if (sport === 'cricket' && slot === 'wickets') {
       const c = career(ls);
-      return dashless([`${value} ${statLabel('wickets', value)}`, m, `econ ${c.econ}`, `avg ${c.bowlAvg}`]).join(' · ');
-    }
-    if (isGoldenGlove(sport, slot)) {
+      detail = dashless([`${r.value} ${statLabel('wickets', r.value)}`, m, `econ ${c.econ}`, `avg ${c.bowlAvg}`]).join(' · ');
+    } else if (glove) {
       const sv = sum(ls, 'saves');
       const tracked = ls.some((l) => l.stats && 'goalsConceded' in l.stats);
-      return [`${value} ${statLabel('cleanSheets', value)}`, sv ? `${sv} ${statLabel('saves', sv)}` : '', tracked ? `${sum(ls, 'goalsConceded')} conceded` : '', m].filter(Boolean).join(' · ');
+      detail = [`${r.value} ${statLabel('cleanSheets', r.value)}`, sv ? `${sv} ${statLabel('saves', sv)}` : '', tracked ? `${sum(ls, 'goalsConceded')} conceded` : '', m].filter(Boolean).join(' · ');
+    } else if (plain) {
+      detail = `${r.value} ${statLabel(slot, r.value)} · ${m}`;
+    } else {
+      // the figure, then the first tie-break figures, then games
+      const extra = rank.tieBreak.slice(0, 2).flatMap((t) => {
+        const td = statDefIn(schema, t.key);
+        const v = td ? aggregateValue(schema, td, ls) : undefined;
+        return td && v?.value !== undefined && v.tracked ? [statPhrase(sport, td, v.value, v.text)] : [];
+      });
+      detail = [statPhrase(sport, def, r.value, r.text), ...extra, m].join(' · ');
     }
-    if (slot === 'mvp') {
-      const w = STAT_WEIGHTS[sport] ?? {};
-      const top = Object.keys(w)
-        .map((k) => [k, sum(ls, k)] as const)
-        .filter(([k, v]) => v > 0 && (w[k] ?? 0) > 0 && STAT_LABELS[k])
-        .sort((a, b) => b[1] * (w[b[0]] ?? 0) - a[1] * (w[a[0]] ?? 0))
-        .slice(0, 3)
-        .map(([k, v]) => `${v} ${statLabel(k, v)}`);
-      return [m, ...top].join(' · ');
-    }
-    return `${value} ${statLabel(slot, value)} · ${m}`;
-  };
-
-  // Tie-breaks after the value, from the schema's award (Golden Glove: more
-  // saves, then fewer conceded) — higher-is-better values rank first.
-  const tieOf = (ls: StatLine[]) => (awardDef(sport, slot)?.tieBreak ?? []).map((t) => (t.better === 'higher' ? 1 : -1) * sum(ls, t.key));
-  let rows: { playerId: string; value: number; games: number; tie?: number[] }[];
-  if (isGoldenGlove(sport, slot)) {
-    // Keepers: listed as a GK, or kept goal in one of these matches (a keeper
-    // line carries goalsConceded). Older clean sheets credited to defenders
-    // don't qualify.
-    rows = [...linesOf.entries()]
-      .filter(([pid, ls]) => isGoalkeeper(byId.get(pid)?.sportDetails?.football?.position) || ls.some((l) => l.stats && 'goalsConceded' in l.stats))
-      .map(([pid, ls]) => ({ playerId: pid, value: sum(ls, slot), games: ls.length, tie: tieOf(ls) }));
-  } else if (slot === 'mvp') {
-    const w = STAT_WEIGHTS[sport] ?? {};
-    rows = [...linesOf.entries()].map(([pid, ls]) => ({
-      playerId: pid,
-      value: round1(ls.reduce((a, l) => a + Object.entries(l.stats ?? {}).reduce((s2, [k, v]) => s2 + (Number(v) || 0) * (w[k] ?? 0), 0), 0)),
-      games: ls.length,
-    }));
-  } else {
-    rows = leadersByKey(mine, players, sport, slot, Number.MAX_SAFE_INTEGER)
-      .map((l) => ({ playerId: l.playerId, value: l.value, games: l.totalGames ?? 0 }));
-  }
-  return rows
-    .filter((r) => r.value > 0)
-    .map((r) => {
-      const p = byId.get(r.playerId);
-      return {
-        playerId: r.playerId, name: p?.fullName ?? 'Player', teamName: p?.houseName, teamColor: p?.houseColor,
-        value: r.value, games: r.games, detail: detailFor(r.playerId, r.value, r.games), tie: r.tie ?? [],
-      };
-    })
-    .sort((a, b) => b.value - a.value || tieCmp(a.tie, b.tie) || a.name.localeCompare(b.name))
-    .map(({ tie: _tie, ...c }) => c)
-    .slice(0, limit);
+    const shown = isPlainTotal(def) || def.agg?.kind === 'countIf' || (def.agg?.kind === 'result' && !def.agg.of) ? undefined : r.text;
+    return candidate(r.playerId, Math.round(r.value * 100) / 100, games, detail, shown);
+  });
 }
 
 /** Stable id for a fixed slot's award. */
@@ -267,7 +395,7 @@ export function awardFrom(sport: SportId, slot: string, label: string, c: AwardC
 /** The suggested awards: the #1 candidate in each of the sport's slots (slots
  *  with no candidate are left out). */
 export function defaultAwards(
-  lines: StatLine[], players: Player[], sport: SportId, opts: { matchIds?: Iterable<string> } = {},
+  lines: StatLine[], players: Player[], sport: SportId, opts: AwardRankOptions = {},
 ): TournamentAward[] {
   return (TOURNAMENT_AWARD_SLOTS[sport] ?? []).flatMap((s) => {
     const top = rankAwardCandidates(lines, players, sport, s.slot, 1, opts)[0];

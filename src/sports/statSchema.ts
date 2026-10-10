@@ -23,7 +23,7 @@
  * built from it (`careerFromSchema`) and the leaderboard ranking
  * (`rankPlayers`: qualifiers, coverage, the schema tie-break chain).
  */
-import type { SportId, StatLine } from '../core/types';
+import type { LineResult, SportId, StatLine } from '../core/types';
 
 export type Better = 'higher' | 'lower';
 
@@ -68,6 +68,10 @@ export interface Qualifier {
   /** how the minimum reads on a leaderboard ("min 10 overs"); default built
    *  from the numbers ("min 30 balls faced", "min 3 games") */
   note?: string;
+  /** SD-27 — the unit an organiser types the minimum in, and how it reads
+   *  ("overs" = 6 balls of an economy's `den`; "matches" for a racket win %).
+   *  `per` = line units per typed unit (default 1). */
+  unit?: { label: string; one: string; per?: number };
 }
 
 /** How a stat aggregates over many stat lines (career, tournament, team). */
@@ -103,7 +107,14 @@ export type StatAgg =
   | { kind: 'countIf'; key?: string; keys?: string[]; atLeast?: number; gte?: number; lt?: number; over?: string }
   /** an appearance key (apps / starts): counted with the record, never listed
    *  as a counting stat */
-  | { kind: 'appearance' };
+  | { kind: 'appearance' }
+  /** SD-27 — the player's match results (each line's `result`, see
+   *  `lineOutcome`): the number of lines whose result is in `count` (matches
+   *  won), or with `of` that number × `scale` ÷ the lines whose result is in
+   *  `of` (win % over decided matches). Lines without a result (in play, a
+   *  field event) don't count. `games` = lines with a result in `of` (else
+   *  `count`) — the qualifier's "matches" */
+  | { kind: 'result'; count: LineResult[]; of?: LineResult[]; scale?: number; dp?: number; qualifier?: Qualifier };
 
 /** Labels. Only `label` is required; the rest fall back as documented. */
 export interface StatLabels {
@@ -180,6 +191,23 @@ export interface AwardDef {
   tournament?: boolean;
   /** tie-breaks after the stat itself */
   tieBreak?: { key: string; better: Better }[];
+  /** SD-27 — the stat the slot RANKS by when it isn't `stat` itself (the slot
+   *  key stays `stat`, so published awards keep matching): basketball's Top
+   *  scorer ranks by points per game, volleyball's Best blocker by blocks per
+   *  set. Its qualifier (and an organiser's minimum) applies. */
+  rankBy?: string;
+  /** hand-written "How is this ranked?" text, when the generated one reads
+   *  worse (the Golden Glove) */
+  howRanked?: string;
+}
+
+/** SD-27 — a sport whose Player of the Tournament ranks by one stat (and its
+ *  tie-breaks) instead of the summed MVP weights: racket sports by matches
+ *  won, chess by score, basketball by efficiency per game. */
+export interface MvpDef {
+  stat: string;
+  tieBreak?: { key: string; better: Better }[];
+  howRanked?: string;
 }
 
 /** A career section: an ordered list of stats (with an optional row label
@@ -277,6 +305,8 @@ export interface SportStatSchema<S extends string = SportId> {
   compare?: CompareDef[];
   /** leaderboard categories, in order; the first is the headline leader */
   leaders: string[];
+  /** SD-27 — the Player of the Tournament by a stat (absent = summed weights) */
+  mvp?: MvpDef;
   /** which stats lead a compact one-line summary, in priority order */
   headline: string[];
   awards: AwardDef[];
@@ -406,7 +436,18 @@ function inputsOf(def: StatDef): string[] {
     case 'countIf': return a.keys ?? (a.key ? [a.key] : []);
     case 'best': return a.by.map((b) => b.key);
     case 'appearance': return [def.key];
+    case 'result': return [];
   }
+}
+
+/** SD-27 — a line's match result for the record stats: the stored / filled-in
+ *  `result`, else the legacy `won` flag (a win only — a line without a result
+ *  may be a match still in play, so it is never read as a loss). Undefined for
+ *  a pending line or a field-event line. Callers that have the matches fill
+ *  `result` first (`withLineResults`, standings.ts). */
+export function lineOutcome(l: StatLine): LineResult | undefined {
+  if (l.pending || l.eventId) return undefined;
+  return l.result ?? (l.won ? 'W' : undefined);
 }
 
 /** Aggregate one stat over lines (already this sport's) — every `StatAgg`
@@ -494,6 +535,16 @@ export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def
       const y = ls.reduce((s, l) => s + signed(l, agg.b), 0);
       return { value: x, text: `${x}-${y}`, tracked: true, games: ls.length, den: x + y };
     }
+    case 'result': {
+      const outs = lines.map(lineOutcome);
+      const n = outs.filter((r) => r && agg.count.includes(r)).length;
+      if (!agg.of) return { value: n, text: String(n), tracked: true, games: n };
+      const d = outs.filter((r) => r && agg.of!.includes(r)).length;
+      if (!d) return { ...none(0), den: 0 };
+      const v = (n * (agg.scale ?? 1)) / d;
+      const t = v.toFixed(agg.dp ?? def.format?.dp ?? 0);
+      return { value: v, text: def.format?.unit === 'percent' ? `${t}%` : t, tracked: true, games: d, den: d };
+    }
     case 'countIf': {
       const ls = linesFor(schema, lines, agg.over);
       const keys = agg.keys ?? (agg.key ? [agg.key] : []);
@@ -539,19 +590,43 @@ export function rankDirection(def: StatDef): Better {
   const k = (def.agg ?? { kind: 'sum' }).kind;
   if (k === 'min') return 'lower';
   if (k === 'rate' || k === 'perGame' || k === 'perSet') return betterOf(def.format);
+  if (k === 'result' && def.agg?.kind === 'result' && def.agg.of) return betterOf(def.format);
   return 'higher';
 }
 
 /** The qualifier a stat declares (rates / per-game / per-set). */
 export const qualifierOf = (def: StatDef): Qualifier | undefined => {
   const a = def.agg;
-  return a && (a.kind === 'rate' || a.kind === 'perGame' || a.kind === 'perSet') ? a.qualifier : undefined;
+  return a && (a.kind === 'rate' || a.kind === 'perGame' || a.kind === 'perSet' || a.kind === 'result') ? a.qualifier : undefined;
 };
+
+/** SD-27 — the minimum's size in the unit an organiser types it in (and the
+ *  leaderboard reads): `games`, else `den` ÷ `unit.per`. */
+export function qualifierAmount(q: Qualifier): number {
+  if (q.games != null) return q.games;
+  return (q.den ?? 0) / (q.unit?.per ?? 1);
+}
+
+/** SD-27 — the stat's qualifier with an organiser's minimum (`n` in the
+ *  qualifier's own unit; 0 = no minimum). The dimension (games or the rate's
+ *  denominator) and the unit stay the stat's; the note is rebuilt from `n`. */
+export function qualifierWithMin(def: StatDef, n: number | undefined): Qualifier | null | undefined {
+  const base = qualifierOf(def);
+  if (n === undefined || !base) return base;
+  if (!(n > 0)) return null;
+  const amount = Math.round(n);
+  if (base.games != null || base.den == null) return { games: amount, ...(base.unit ? { unit: base.unit } : {}) };
+  return { den: amount * (base.unit?.per ?? 1), ...(base.unit ? { unit: base.unit } : {}) };
+}
 
 /** "min 30 balls faced" / "min 3 games" — the note a leaderboard shows. */
 export function qualifierText<S extends string>(schema: SportStatSchema<S>, def: StatDef, q?: Qualifier | null): string | undefined {
   if (!q) return undefined;
   if (q.note) return q.note;
+  if (q.unit) {
+    const n = qualifierAmount(q);
+    return `min ${n} ${n === 1 ? q.unit.one : q.unit.label}`;
+  }
   const parts: string[] = [];
   if (q.games) parts.push(`${q.games} ${q.games === 1 ? 'game' : 'games'}`);
   if (q.den) {
@@ -586,6 +661,11 @@ export interface RankOptions {
   /** who may appear (football clean sheets: keepers only) */
   eligible?: (playerId: string, lines: StatLine[]) => boolean;
   limit?: number;
+  /** SD-27 — the last tie-break, after the stat's chain (awards: by name);
+   *  default the order players first appear in */
+  finalTie?: (a: string, b: string) => number;
+  /** SD-27 — tie-breaks to use instead of the stat's own `tieBreak` (an award's) */
+  tieBreak?: { key: string; better: Better }[];
 }
 
 /** Rank players by any stat of the schema. Lines should already be this
@@ -600,9 +680,12 @@ export function rankPlayers<S extends string>(schema: SportStatSchema<S>, def: S
   const q = opts.qualifier === undefined ? qualifierOf(def) : opts.qualifier;
   const dir = rankDirection(def) === 'higher' ? 1 : -1;
   const mustBePositive = kind === 'sum' || kind === 'countIf' || kind === 'max' || kind === 'appearance'
+    || (def.agg?.kind === 'result' && !def.agg.of)
+    // SD-27: a per-game / per-set average of 0 is no "best" (0.00 blocks per set)
+    || ((kind === 'perGame' || kind === 'perSet') && dir === 1)
     || (def.agg?.kind === 'best' && def.agg.by[0].better === 'higher');
   const inputs = inputsOf(def);
-  const ties = (def.tieBreak ?? []).map((t) => ({ def: statDefIn(schema, t.key), better: t.better }));
+  const ties = (opts.tieBreak ?? def.tieBreak ?? []).map((t) => ({ def: statDefIn(schema, t.key), better: t.better }));
   const rows: (RankedPlayer & { order: number[] })[] = [];
   for (const [playerId, ls] of by) {
     if (opts.eligible && !opts.eligible(playerId, ls)) continue;
@@ -628,7 +711,7 @@ export function rankPlayers<S extends string>(schema: SportStatSchema<S>, def: S
     return 0;
   };
   return rows
-    .sort((a, b) => cmp(a.order, b.order)) // Array.prototype.sort is stable
+    .sort((a, b) => cmp(a.order, b.order) || (opts.finalTie ? opts.finalTie(a.playerId, b.playerId) : 0)) // stable
     .slice(0, opts.limit ?? rows.length)
     .map(({ order: _o, ...r }) => r);
 }
@@ -655,7 +738,7 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
     if (a.kind === 'sum' && a.key) need(a.key, w);
     if (a.kind === 'sum' && a.keys) signedKeys(a.keys).forEach((k) => need(k, w));
     if (a.kind === 'pair') [...signedKeys(a.a), ...signedKeys(a.b)].forEach((k) => need(k, w));
-    needFilter(a.kind === 'appearance' ? undefined : a.over, w);
+    needFilter(a.kind === 'appearance' || a.kind === 'result' ? undefined : a.over, w);
     if (a.kind === 'rate') [...signedKeys(a.num), ...signedKeys(a.den)].forEach((k) => need(k, w));
     if (a.kind === 'perGame' || a.kind === 'perSet') signedKeys(a.key).forEach((k) => need(k, w));
     if (a.kind === 'perSet' && a.sets) signedKeys(a.sets).forEach((k) => need(k, w));
@@ -681,7 +764,16 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
   schema.headline.forEach((k) => need(k, 'headline'));
   for (const a of schema.awards) {
     need(a.stat, 'award');
+    if (a.rankBy) need(a.rankBy, `award ${a.stat} rankBy`);
     a.tieBreak?.forEach((t) => need(t.key, `award ${a.stat} tie-break`));
+  }
+  if (schema.mvp) {
+    need(schema.mvp.stat, 'mvp');
+    schema.mvp.tieBreak?.forEach((t) => need(t.key, 'mvp tie-break'));
+  }
+  for (const s of schema.stats) {
+    const q = qualifierOf(s);
+    if (q && q.games == null && q.den == null) errs.push(`stat ${s.key}: a qualifier needs games or den`);
   }
   return errs;
 }

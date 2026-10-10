@@ -227,7 +227,7 @@ export default function StandingsScreen() {
             return (
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={`${i + 1}. ${l.name}, ${l.value} ${lead.label}`}
+                accessibilityLabel={`${i + 1}. ${l.name}, ${l.display ?? l.value} ${lead.label}`}
                 key={l.playerId}
                 activeOpacity={0.85}
                 onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}
@@ -238,7 +238,7 @@ export default function StandingsScreen() {
                     <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]}>{l.name}</Text>
                     {l.houseName ? <Text style={textStyles.muted}>{l.houseName}</Text> : null}
                   </View>
-                  <Text style={st.leaderVal}>{l.value}</Text>
+                  <Text style={st.leaderVal}>{l.display ?? l.value}</Text>
                   <Text style={textStyles.muted}> {lead.label}</Text>
                 </Card>
               </TouchableOpacity>

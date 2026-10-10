@@ -28,9 +28,10 @@ export const batted = (l: StatLine): boolean => (hasKey(l, 'innings') ? n(l, 'in
  * SD-38.
  */
 export const QUALIFIERS = {
-  avg: { games: 3, note: 'min 3 innings' },
-  sr: { den: 30, note: 'min 30 balls' },
-  econ: { den: 60, note: 'min 10 overs' },
+  // SD-27: `unit` = what an organiser types a different minimum in
+  avg: { games: 3, note: 'min 3 innings', unit: { label: 'innings', one: 'innings' } },
+  sr: { den: 30, note: 'min 30 balls', unit: { label: 'balls', one: 'ball' } },
+  econ: { den: 60, note: 'min 10 overs', unit: { label: 'overs', one: 'over', per: 6 } },
 } as const;
 
 export const cricketStats: SportStatSchema<'cricket'> = {

@@ -54,7 +54,7 @@ export default function SportHubScreen() {
   // SD-18: the sport's column units (sets / games / rally points) filled in.
   const tableCfg = useMemo(() => columnsConfig(sport, standingsConfigFromFormat(sport, tournament?.formats?.[sport])), [sport, tournament]);
   const table = useMemo(() => standingsPhases(divMatches, sport, tableCfg)[0]?.rows ?? [], [divMatches, sport, tableCfg]);
-  const categories = useMemo(() => categoryLeaders(lines, players, sport), [lines, players, sport]);
+  const categories = useMemo(() => categoryLeaders(lines, players, sport, { matches }), [lines, players, sport, matches]);
 
   const canScore = canScoreByRole(profile?.role);
   // "See all" opens the full Matches browser filtered to this sport + section.

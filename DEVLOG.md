@@ -13,6 +13,27 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-27: leaderboards and awards from each sport's schema — Wave 1 complete
+
+- **Leaders:** every sport's tournament leaders, sport-hub leaders, award slots, award ranking,
+  per-match POTM weights and "How is this ranked?" text now come from its stat schema via
+  `rankPlayers`.
+- **Minimums:** averages carry minimums (basketball PPG etc. 2 games, volleyball per-set 5 sets,
+  football goals per 90 180 minutes, racket win % 3 matches, service points 30). Organisers can
+  change them per tournament (`leaderMins`).
+- **Awards:**
+  - Racket sports rank Player of the Tournament by wins → win % → sets / games won %; no "Top
+    scorer" in racket sports.
+  - Golden Boot: goals → assists → fewer minutes.
+  - Kabaddi: best raider / defender. Chess: score %. Volleyball: best server / blocker.
+  - Published awards are untouched.
+- **Tests:** tsc + 1529. **Guide:** tournament-awards explains rankings and minimums.
+- **Wave 1 (foundations) complete:** SD-14 … SD-29 plus SD-103 / SD-104.
+
+---
+
+---
+
 ### 2026-10-10 — Sport depth SD-24 + SD-104: a proper career for every sport; racket rule and UX fixes
 
 - **SD-24 (career framework):** pure `src/data/career.ts` renders every sport's career sections from

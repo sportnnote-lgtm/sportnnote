@@ -53,6 +53,16 @@ const COMPACT_ONE_FIXES: Record<string, string> = {
 };
 const SHORT_ONE_FIXES: Record<string, string> = { fouls: 'foul', catches: 'catch' };
 
+/** SD-27 (GEN-14) changed these sports' leaders, award slots and MVP weights on
+ *  purpose (rank by average with minimums, racket results not rally points,
+ *  FIBA EFF, FIVB per-set awards, chess score). Their new outputs are pinned in
+ *  tests/leaders-awards.test.mts. Cricket, football and golf still equal the
+ *  golden values here (football: the Golden Boot tie-break and two appended
+ *  leader categories are the listed exceptions). */
+const SD27_CHANGED = new Set(['basketball', 'volleyball', 'kabaddi', 'chess', 'carrom', 'tennis', 'badminton', 'tabletennis', 'squash', 'padel', 'pickleball']);
+const KEPT = (SPORTS as string[]).filter((sp) => !SD27_CHANGED.has(sp));
+const pick = <T,>(o: Record<string, T>) => Object.fromEntries(KEPT.map((sp) => [sp, o[sp]]));
+
 describe('SD-15 — every sport has a valid schema', () => {
   test('14 sports, one schema each, keyed by its own sport', () => {
     assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS].sort());
@@ -162,21 +172,27 @@ describe('SD-15 — every stat key a plugin writes is declared', () => {
 
 describe('SD-15 — the old maps are derived views, equal to the golden values', () => {
   test('MVP weights (non-zero, in the same order — order breaks ties)', () => {
-    for (const sp of SPORTS) {
+    for (const sp of KEPT) {
       const want = (golden.STAT_WEIGHTS[sp] as [string, number][]).filter(([, w]) => w !== 0);
       assert.deepEqual(Object.entries(STAT_WEIGHTS[sp as SportId]), want, sp);
     }
   });
   test('per-match rating labels (STAT_LABELS)', () => assert.deepEqual(STAT_LABELS, golden.STAT_LABELS));
-  test('per-match role awards (SPORT_AWARDS)', () => assert.deepEqual(SPORT_AWARDS, golden.SPORT_AWARDS));
-  test('tournament award slots', () => assert.deepEqual(TOURNAMENT_AWARD_SLOTS, golden.TOURNAMENT_AWARD_SLOTS));
+  test('per-match role awards (SPORT_AWARDS)', () => assert.deepEqual(pick(SPORT_AWARDS), pick(golden.SPORT_AWARDS)));
+  test('tournament award slots', () => assert.deepEqual(pick(TOURNAMENT_AWARD_SLOTS), pick(golden.TOURNAMENT_AWARD_SLOTS)));
   test('leaderboard categories + headline leader', () => {
     // SD-16 appended cricket's records categories after the original three
-    const now = { ...STAT_CATEGORIES, cricket: STAT_CATEGORIES.cricket.slice(0, golden.STAT_CATEGORIES.cricket.length) };
-    assert.deepEqual(now, golden.STAT_CATEGORIES);
+    // SD-27 appended football's goals per 90 and save % after the golden ones
+    const now = pick({
+      ...STAT_CATEGORIES,
+      cricket: STAT_CATEGORIES.cricket.slice(0, golden.STAT_CATEGORIES.cricket.length),
+      football: STAT_CATEGORIES.football.slice(0, golden.STAT_CATEGORIES.football.length),
+    });
+    assert.deepEqual(now, pick(golden.STAT_CATEGORIES));
+    assert.deepEqual(STAT_CATEGORIES.football.slice(golden.STAT_CATEGORIES.football.length).map((c) => c.key), ['goalsPer90', 'savePct']);
     assert.deepEqual(STAT_CATEGORIES.cricket.slice(golden.STAT_CATEGORIES.cricket.length).map((c) => c.label),
       ['Highest score', 'Best bowling', 'Best batting average', 'Best strike rate', 'Best economy', 'Most 50s', 'Most 100s']);
-    for (const sp of SPORTS) assert.deepEqual(leaderStat(sp as SportId), golden.leaderStat[sp]);
+    for (const sp of KEPT) assert.deepEqual(leaderStat(sp as SportId), golden.leaderStat[sp]);
   });
   test('headline order', () => {
     for (const sp of SPORTS) assert.deepEqual(statSchema(sp as SportId)?.headline, golden.HEADLINE_ORDER[sp], sp);
@@ -223,31 +239,35 @@ describe('SD-15 — leaders, awards, ratings and summaries render as before', ()
   test('award formulas and icons', () => {
     for (const sp of SPORTS) {
       for (const [slot, text] of Object.entries(golden.awardFormula[sp] as Record<string, string>)) {
+        // SD-27: the Golden Boot names its tie-break chain (FB-11)
+        if (SD27_CHANGED.has(sp) || (sp === 'football' && (slot === 'goals' || slot === 'someCustomKey'))) continue;
         assert.equal(awardFormula(sp as SportId, slot === 'someCustomKey' ? 'goals' : slot), text, `${sp}/${slot}`);
       }
       for (const [k, icon] of Object.entries(golden.awardIcon[sp] as Record<string, string>)) assert.equal(awardIcon(sp as SportId, k), icon);
     }
   });
   test('award candidates for every slot (incl. Golden Glove keepers + tie-breaks, cricket details)', () => {
-    for (const sp of SPORTS) {
+    for (const sp of KEPT) {
       for (const [slot, want] of Object.entries(golden.rankAwardCandidates[sp])) {
         assert.deepEqual(plain(rankAwardCandidates(lines, players, sp as SportId, slot)), want, `${sp}/${slot}`);
       }
     }
   });
   test('default awards', () => {
-    for (const sp of SPORTS) assert.deepEqual(plain(defaultAwards(lines, players, sp as SportId)), golden.defaultAwards[sp], sp);
+    for (const sp of KEPT) assert.deepEqual(plain(defaultAwards(lines, players, sp as SportId)), golden.defaultAwards[sp], sp);
   });
   test('tournament leaders (incl. keepers-only clean sheets)', () => {
-    for (const sp of SPORTS) {
+    for (const sp of KEPT) {
       const now = plain(categoryLeaders(lines, players, sp as SportId));
-      // SD-16: cricket's records categories follow the golden ones (tested in aggregate-engine.test.mts)
-      const old = sp === 'cricket' ? now.filter((c) => ['runs', 'wickets', 'catches'].includes(c.key)) : now;
+      // SD-16: cricket's records categories follow the golden ones (tested in aggregate-engine.test.mts);
+      // SD-27: so do football's goals per 90 / save %
+      const old = sp === 'cricket' ? now.filter((c) => ['runs', 'wickets', 'catches'].includes(c.key))
+        : sp === 'football' ? now.filter((c) => !['goalsPer90', 'savePct'].includes(c.key)) : now;
       assert.deepEqual(old, golden.categoryLeaders[sp], sp);
     }
   });
   test('per-match ratings, MVP and role awards', () => {
-    for (const sp of SPORTS) {
+    for (const sp of KEPT) {
       const r = matchRatings(lines.filter((l) => l.sport === sp), sp as SportId, players.slice(0, 2), players.slice(2));
       assert.deepEqual(plain(r), golden.matchRatings[sp], sp);
       assert.deepEqual(plain(awardsFor(r.players, sp as SportId)), golden.awardsFor[sp], sp);

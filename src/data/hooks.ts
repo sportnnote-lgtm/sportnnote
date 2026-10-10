@@ -38,6 +38,7 @@ import { aggregate, type PlayerStats } from './stats';
 import { lineResult } from './appearances';
 import { isSearchable, rankByName, type SearchResults, type SearchKind } from './search';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
+import { readLeaderMins } from './leaderMinimums';
 import { columnsConfig } from './standingsColumns';
 import { standingsPhases, type StandingsPhase } from './groups';
 import { followStore, type FollowType } from './followStore';
@@ -479,7 +480,7 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
         setData({
           // `entrants` names a Swiss bye-only entrant with no fixture yet (SD-10).
           teams: teamStandings(scopedMatches, sport, cfg, undefined, entrants),
-          leaders: statLeaders(scopedLines, players, sport),
+          leaders: statLeaders(scopedLines, players, sport, { matches: scopedMatches, mins: readLeaderMins(tour?.formats?.[sport] as Record<string, unknown> | undefined) }),
           matches: scopedMatches,
           // Per-phase tables (league / groups / Super / Swiss), knockouts excluded (parity #07).
           phases: standingsPhases(scopedMatches, sport, cfg, entrants),

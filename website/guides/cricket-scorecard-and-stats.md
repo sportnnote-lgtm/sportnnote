@@ -71,7 +71,7 @@ The match's format decides where it goes. Sixes and Box cricket count as **Box**
 
 After **Runs**, **Wickets** and **Catches** come the records: **Highest score** (a * means not out), **Best bowling** (most wickets, then fewest runs), **Best batting average**, **Best strike rate**, **Best economy**, **Most 50s** and **Most 100s**.
 
-A rate means little after a few balls, so these cards need a minimum, shown under the card's title:
+A rate means little after a few balls, so these cards need a minimum, shown under the card's title. Organisers can change it with **Minimums**:
 - **Best batting average**: at least 3 innings, and out at least once.
 - **Best strike rate**: at least 30 balls faced.
 - **Best economy**: at least 10 overs bowled.

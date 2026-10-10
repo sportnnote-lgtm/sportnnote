@@ -19,15 +19,15 @@ describe('award slots', () => {
     for (const slots of Object.values(TOURNAMENT_AWARD_SLOTS)) assert.equal(slots[0].slot, 'mvp');
     assert.equal(TOURNAMENT_AWARD_SLOTS.cricket[0].label, 'Player of the Tournament');
   });
-  test('cricket: best batter (runs) + best bowler (wickets); chess: most wins', () => {
+  test('cricket: best batter (runs) + best bowler (wickets); chess: best score % (SD-27)', () => {
     assert.deepEqual(TOURNAMENT_AWARD_SLOTS.cricket.map((s) => [s.slot, s.label]), [['mvp', 'Player of the Tournament'], ['runs', 'Best batter'], ['wickets', 'Best bowler']]);
-    assert.deepEqual(TOURNAMENT_AWARD_SLOTS.chess.map((s) => s.slot), ['mvp', 'wins']);
+    assert.deepEqual(TOURNAMENT_AWARD_SLOTS.chess.map((s) => s.slot), ['mvp', 'scorePct']);
   });
   test('football and kabaddi come from the per-match role awards', () => {
     const fb = TOURNAMENT_AWARD_SLOTS.football.map((s) => s.label);
     assert.ok(fb.includes('Top scorer') && fb.includes('Playmaker'));
     assert.equal(TOURNAMENT_AWARD_SLOTS.football.find((s) => s.label === 'Top scorer')?.stat, 'goals');
-    assert.deepEqual(TOURNAMENT_AWARD_SLOTS.kabaddi.map((s) => s.label), ['Player of the Tournament', 'Top raider', 'Top defender']);
+    assert.deepEqual(TOURNAMENT_AWARD_SLOTS.kabaddi.map((s) => s.label), ['Player of the Tournament', 'Best raider', 'Best defender']);
   });
   test('cricket catches weigh 8 (the per-match fielding weight)', () => {
     assert.equal(STAT_WEIGHTS.cricket.catches, 8);
@@ -98,7 +98,8 @@ describe('rankAwardCandidates — football + scoping', () => {
   });
   test('the formula text names the weights', () => {
     assert.match(awardFormula('cricket', 'mvp'), /wkts ×18/);
-    assert.match(awardFormula('football', 'goals'), /Total goals/);
+    // SD-27 (FB-11): the Golden Boot names its tie-break chain
+    assert.match(awardFormula('football', 'goals'), /Most goals in this tournament's matches\. Ties: more assists, then fewer minutes, then by name\./);
   });
 });
 

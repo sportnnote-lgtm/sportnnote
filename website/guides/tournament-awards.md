@@ -1,11 +1,11 @@
 ---
 title: Publish tournament awards and change Player of the Match
-description: Pick tournament award winners from suggested stats, add your own awards, publish and share them, and change a match's Player of the Match once.
+description: Pick award winners from suggested stats, set the minimum to rank, add your own awards, publish and share them, and change a Player of the Match once.
 category: Tournaments
 audience: Organisers, Scorers, Players, Parents & fans
 sports: all
 order: 70
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 At the closing ceremony, you need to name a Player of the Tournament, a top scorer and a best bowler. The **Awards** tab suggests winners from the stats already recorded. You change any you disagree with, add your own awards, and publish. The winners get an alert, and everyone can see and share the list.
@@ -40,9 +40,16 @@ Each winner gets an alert, "You won" plus the award name. The Awards tab now sho
 3. Tap **Update awards**, then **Update**. Anyone newly named gets an alert.
 
 ## How suggestions are worked out
-- **Player of the Tournament** adds up a points score across every match in the tournament. The score weights the sport's important stats, such as goals, runs, wickets and catches.
-- Other awards use the total of one stat, such as runs or wickets, across the tournament.
-- If players are tied, the list goes by name. You always choose the final winner.
+- **Player of the Tournament** usually adds up a points score across every match, weighting the sport's key stats, such as goals, runs, wickets and catches. Racket sports rank by matches won, then win %, then the share of sets or games won. Chess ranks by score, and basketball by efficiency per game.
+- Other awards rank by one figure: a total (runs, goals), a per-game average (basketball points per game) or a per-set rate (volleyball blocks per set).
+- Ties follow the sport's rule. Football's **Top scorer** goes to more assists, then fewer minutes played, and the **Golden Glove** only to goalkeepers. **How is this ranked?** gives each award's exact rule. You always choose the final winner.
+
+## Step by step: set the minimum to rank
+An average or a % only counts once a player has played enough, for example 2 basketball games or 3 badminton matches.
+1. Open the tournament → **Stats** tab and pick the sport.
+2. Under the leaders, tap **Minimums**.
+3. Use **−** and **+** to change each minimum. 0 means no minimum, and **Defaults** puts them back.
+4. Tap **Save**. The leaderboards and award suggestions update straight away.
 
 ## Change Player of the Match (once)
 After each match, SportnNote suggests a Player of the Match from the stats. If the umpires or officials choose someone else, a scorer or host can change it, but only once.

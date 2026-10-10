@@ -12,7 +12,9 @@ export const footballStats: SportStatSchema<'football'> = {
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'tournament', 'season', 'opponent'],
   stats: [
-    { key: 'goals', label: 'Goals', short: 'goals', one: 'goal', group: 'attack', weight: 10, matchSummary: true },
+    // SD-27 (FB-11): the Golden Boot chain — goals, then assists, then fewer minutes
+    { key: 'goals', label: 'Goals', short: 'goals', one: 'goal', group: 'attack', weight: 10, matchSummary: true,
+      tieBreak: [{ key: 'assists', better: 'higher' }, { key: 'minutes', better: 'lower' }] },
     { ...ASSISTS, group: 'attack', weight: 6 },
     { key: 'cleanSheets', label: 'Clean sheets', short: 'clean sheets', one: 'clean sheet', group: 'goalkeeping', weight: 8, matchSummary: true, eligible: 'goalkeeper' },
     { key: 'shotsOnTarget', label: 'Shots on target', short: 'shots on target', one: 'shot on target', compact: 'on target', group: 'attack', weight: 1.5, matchSummary: true, ...opt('shots') },
@@ -49,7 +51,8 @@ export const footballStats: SportStatSchema<'football'> = {
     // SD-24 (FB-08) — rates and bests for the career
     { key: 'goalsPerGame', label: 'Goals per game', short: 'goals per game', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perGame', key: 'goals', dp: 2 } },
     { key: 'goalsPer90', label: 'Goals per 90', short: 'goals per 90', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 },
-      agg: { kind: 'rate', num: 'goals', den: 'minutes', scale: 90, dp: 2, over: 'withMinutes' } },
+      agg: { kind: 'rate', num: 'goals', den: 'minutes', scale: 90, dp: 2, over: 'withMinutes', qualifier: { den: 180, unit: { label: 'minutes', one: 'minute' } } },
+      tieBreak: [{ key: 'goals', better: 'higher' }] },
     { key: 'shotAccuracy', label: 'Shots on target %', source: 'derived', group: 'attack', format: { unit: 'percent', dp: 0 },
       agg: { kind: 'rate', num: 'shotsOnTarget', den: 'shots', scale: 100, dp: 0 } },
     { key: 'conversion', label: 'Shot conversion %', source: 'derived', group: 'attack', format: { unit: 'percent', dp: 0 },
@@ -58,7 +61,8 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'hatTricks', label: 'Hat-tricks', short: 'hat-tricks', one: 'hat-trick', source: 'derived', group: 'bests', agg: { kind: 'countIf', key: 'goals', gte: 3 } },
     // keepers (SD-09: a keeper line carries goalsConceded) — save % = saves ÷ shots on target faced
     { key: 'savePct', label: 'Save %', source: 'derived', group: 'goalkeeping', format: { unit: 'percent', dp: 0 },
-      agg: { kind: 'rate', num: 'saves', den: ['saves', 'goalsConceded'], scale: 100, dp: 0, over: 'keeper' } },
+      agg: { kind: 'rate', num: 'saves', den: ['saves', 'goalsConceded'], scale: 100, dp: 0, over: 'keeper', qualifier: { den: 10, unit: { label: 'shots faced', one: 'shot faced' } } },
+      eligible: 'goalkeeper', tieBreak: [{ key: 'saves', better: 'higher' }] },
     { key: 'concededPerGame', label: 'Conceded per game', short: 'conceded per game', source: 'derived', group: 'goalkeeping', format: { unit: 'decimal', dp: 2, better: 'lower' },
       agg: { kind: 'perGame', key: 'goalsConceded', dp: 2, over: 'keeper' } },
     // team-level match stats (the comparison panel), never on a player line
@@ -100,13 +104,16 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'yellowCards', label: 'Yellow cards' }, { key: 'redCards', label: 'Red cards' }, 'offsides', 'corners', 'tackles',
     'interceptions', 'saves', 'crosses', 'dribbles', 'handballs', 'attackingContributions', 'defensiveContributions',
   ],
-  leaders: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'cleanSheets', 'shots', 'shotsOnTarget', 'tackles', 'interceptions', 'saves', 'passes', 'attackingContributions', 'defensiveContributions'],
+  // SD-27: goals per 90 (min minutes) and keepers' save % (min shots faced)
+  // follow the original categories
+  leaders: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'cleanSheets', 'shots', 'shotsOnTarget', 'tackles', 'interceptions', 'saves', 'passes', 'attackingContributions', 'defensiveContributions', 'goalsPer90', 'savePct'],
   headline: ['goals', 'assists', 'shotsOnTarget', 'tackles', 'saves', 'passes'],
   awards: [
     { stat: 'goals', icon: '⚽', label: 'Top scorer' },
     { stat: 'assists', icon: '🅰️', label: 'Playmaker' },
     // SD-09 / FB-11: goalkeepers only; more saves, then fewer conceded
-    { stat: 'cleanSheets', icon: '🧤', label: 'Clean sheet', tournamentLabel: 'Golden Glove', tieBreak: [{ key: 'saves', better: 'higher' }, { key: 'goalsConceded', better: 'lower' }] },
+    { stat: 'cleanSheets', icon: '🧤', label: 'Clean sheet', tournamentLabel: 'Golden Glove', tieBreak: [{ key: 'saves', better: 'higher' }, { key: 'goalsConceded', better: 'lower' }],
+      howRanked: 'Goalkeepers only (anyone who kept goal in these matches, or is listed as a GK). Most clean sheets, then most saves, then fewest goals conceded. A clean sheet goes to the keeper on the pitch longest when their team let in no goal (penalty shootouts don\'t count). You choose the winner.' },
   ],
   scoreUnit: 'goals',
 };

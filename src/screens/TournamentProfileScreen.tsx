@@ -28,7 +28,9 @@ import { formatDate, formatTime, zoneAbbrev } from '../core/time';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
-import { getMyPlayerId, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
+import { LeaderMinimums } from '../components/LeaderMinimums';
+import { readLeaderMins, leaderMinsPatch, type LeaderMins } from '../data/leaderMinimums';
+import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
@@ -322,10 +324,22 @@ export default function TournamentProfileScreen() {
   const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport, stCfg) : []), [superMatches, activeSport, stCfg]);
   const phases = useMemo(() => (activeSport ? standingsPhases(matches, activeSport, stCfg, participants) : []), [matches, activeSport, stCfg, participants]);
   const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
-  const categories = useMemo(
-    () => (activeSport ? categoryLeaders(lines, players, activeSport) : []),
-    [lines, players, activeSport]
+  // SD-27: the organiser's minimums (format `leaderMins`), kept locally after a save
+  const [savedMins, setSavedMins] = useState<Partial<Record<SportId, LeaderMins>>>({});
+  const mins = useMemo(
+    () => (activeSport ? savedMins[activeSport] ?? readLeaderMins(tournament?.formats?.[activeSport] as Record<string, unknown> | undefined) : {}),
+    [activeSport, savedMins, tournament?.formats],
   );
+  const categories = useMemo(
+    () => (activeSport ? categoryLeaders(lines, players, activeSport, { matches, mins }) : []),
+    [lines, players, activeSport, matches, mins]
+  );
+  const saveMins = async (next: LeaderMins) => {
+    if (!tournament || !activeSport) return;
+    const patch = leaderMinsPatch(activeSport, next);
+    await patchTournamentFormat(tournament.id, activeSport, patch);
+    setSavedMins((m) => ({ ...m, [activeSport]: readLeaderMins(patch) }));
+  };
 
   if (!tournament) {
     return (
@@ -454,7 +468,7 @@ export default function TournamentProfileScreen() {
       {/* ------------------------------ AWARDS ------------------------------ */}
       {activeTab === 'Awards' ? (
         <TournamentAwardsTab
-          tournament={tournament} matches={matches} lines={lines} players={players}
+          tournament={tournament} matches={matches} lines={lines} players={players} savedMins={savedMins}
           canManage={canManageHosts} myId={myId} myName={profile?.fullName}
           activeSport={activeSport} onSport={setSport}
           awards={awards} onSaved={setAwards}
@@ -942,6 +956,7 @@ export default function TournamentProfileScreen() {
                 <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
               </>
             )}
+            {activeSport ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}
           </>
         )}
 

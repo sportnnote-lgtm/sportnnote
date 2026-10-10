@@ -18,6 +18,7 @@ import {
   TOURNAMENT_AWARD_SLOTS, rankAwardCandidates, defaultAwards, awardFrom, awardId, awardIcon, awardFormula, type AwardCandidate,
 } from '../data/ratings';
 import type { Match, Player, SportId, StatLine, Tournament, TournamentAward, TournamentAwards } from '../core/types';
+import { readLeaderMins, type LeaderMins } from '../data/leaderMinimums';
 
 const CUSTOM_SUGGESTIONS = ['Best fielder', 'Emerging player', 'Fair play', 'Best goalkeeper'];
 
@@ -29,10 +30,12 @@ type Picker =
   | { kind: 'custom'; sport: SportId; label: string; id: string };
 
 export function TournamentAwardsTab({
-  tournament, matches, lines, players, canManage, myId, myName, activeSport, onSport, awards, onSaved, onPlayer,
+  tournament, matches, lines, players, canManage, myId, myName, activeSport, onSport, awards, onSaved, onPlayer, savedMins,
 }: {
   tournament: Tournament;
   matches: Match[];
+  /** SD-27 — minimums saved from the Stats tab this session (else the format's) */
+  savedMins?: Partial<Record<SportId, LeaderMins>>;
   lines: StatLine[];
   players: Player[];
   canManage: boolean;
@@ -48,11 +51,19 @@ export function TournamentAwardsTab({
   const sport = activeSport ?? sports[0];
   const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
   const published = !!awards?.publishedAt;
+  // SD-27: every ranking uses the matches (W / L) and the organiser's minimums
+  const optsFor = useMemo(() => {
+    const cache = new Map<SportId, { matchIds: Set<string>; matches: Match[]; mins: LeaderMins }>();
+    return (sp: SportId) => {
+      if (!cache.has(sp)) cache.set(sp, { matchIds, matches, mins: savedMins?.[sp] ?? readLeaderMins(tournament.formats?.[sp] as Record<string, unknown> | undefined) });
+      return cache.get(sp)!;
+    };
+  }, [matchIds, matches, savedMins, tournament.formats]);
 
   // Suggestions for every sport (the #1 candidate per slot).
   const suggested = useMemo(
-    () => sports.flatMap((sp) => defaultAwards(lines, players, sp, { matchIds })),
-    [sports, lines, players, matchIds],
+    () => sports.flatMap((sp) => defaultAwards(lines, players, sp, optsFor(sp))),
+    [sports, lines, players, optsFor],
   );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<TournamentAward[] | null>(null);
@@ -72,8 +83,8 @@ export function TournamentAwardsTab({
 
   // Players with a stat line in this sport here — custom awards go only to them.
   const candidatesMvp = useMemo(
-    () => (sport ? rankAwardCandidates(lines, players, sport, 'mvp', Number.MAX_SAFE_INTEGER, { matchIds }) : []),
-    [lines, players, sport, matchIds],
+    () => (sport ? rankAwardCandidates(lines, players, sport, 'mvp', Number.MAX_SAFE_INTEGER, optsFor(sport)) : []),
+    [lines, players, sport, optsFor],
   );
   const linePlayerRows = useMemo((): PickerRow[] => {
     if (!sport) return [];
@@ -87,17 +98,17 @@ export function TournamentAwardsTab({
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [sport, players, lines, matchIds, candidatesMvp]);
 
-  const toRow = (c: AwardCandidate): PickerRow => ({ id: c.playerId, name: c.name, teamName: c.teamName, teamColor: c.teamColor, detail: c.detail, value: c.value });
+  const toRow = (c: AwardCandidate): PickerRow => ({ id: c.playerId, name: c.name, teamName: c.teamName, teamColor: c.teamColor, detail: c.detail, value: c.display ?? c.value });
   const pickerRows = useMemo((): PickerRow[] => {
     if (!picker) return [];
     if (picker.kind === 'custom') return linePlayerRows;
-    return rankAwardCandidates(lines, players, picker.sport, picker.slot, 10, { matchIds }).map(toRow);
-  }, [picker, lines, players, matchIds, linePlayerRows]);
+    return rankAwardCandidates(lines, players, picker.sport, picker.slot, 10, optsFor(picker.sport)).map(toRow);
+  }, [picker, lines, players, optsFor, linePlayerRows]);
 
   const onPick = (row: PickerRow) => {
     if (!picker) return;
     if (picker.kind === 'slot') {
-      const c = rankAwardCandidates(lines, players, picker.sport, picker.slot, Number.MAX_SAFE_INTEGER, { matchIds }).find((x) => x.playerId === row.id);
+      const c = rankAwardCandidates(lines, players, picker.sport, picker.slot, Number.MAX_SAFE_INTEGER, optsFor(picker.sport)).find((x) => x.playerId === row.id);
       if (c) {
         const id = awardId(picker.sport, picker.slot);
         const next = awardFrom(picker.sport, picker.slot, picker.label, c);
@@ -236,7 +247,7 @@ export function TournamentAwardsTab({
           <>
             <Text style={textStyles.muted}>{published ? 'Edit the awards, then tap Update.' : 'Pre-filled from the stats — change any, then publish.'}</Text>
             {slots.map((s) => {
-              const has = sport ? rankAwardCandidates(lines, players, sport, s.slot, 1, { matchIds }).length > 0 : false;
+              const has = sport ? rankAwardCandidates(lines, players, sport, s.slot, 1, optsFor(sport)).length > 0 : false;
               return slotCard(s.slot, s.label, s.icon, current.find((i) => i.id === awardId(sport!, s.slot)),
                 has ? () => setPicker({ kind: 'slot', sport: sport!, slot: s.slot, label: s.label }) : undefined);
             })}
@@ -271,7 +282,7 @@ export function TournamentAwardsTab({
         visible={!!picker} onClose={() => setPicker(null)}
         title={picker ? `${picker.kind === 'slot' ? awardIcon(picker.sport, picker.slot) : '🏅'} ${picker.label}` : ''}
         subtitle={picker?.kind === 'custom' ? 'Players with stats in this tournament' : undefined}
-        howRanked={picker?.kind === 'slot' ? awardFormula(picker.sport, picker.slot) : undefined}
+        howRanked={picker?.kind === 'slot' ? awardFormula(picker.sport, picker.slot, optsFor(picker.sport).mins) : undefined}
         rows={pickerRows} ranked={picker?.kind === 'slot'} searchable={picker?.kind === 'custom'}
         selectedId={picker ? current.find((i) => i.id === (picker.kind === 'slot' ? awardId(picker.sport, picker.slot) : picker.id))?.playerId : undefined}
         emptyLabel="No player stats yet."

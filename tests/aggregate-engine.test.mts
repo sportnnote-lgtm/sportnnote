@@ -197,7 +197,9 @@ describe('SD-16 — cricket records leaders (CK-01 proof)', () => {
       ['Best batting average', 'min 3 innings'], ['Best strike rate', 'min 30 balls'], ['Best economy', 'min 10 overs'],
       ['Most 50s', ''], ['Most 100s', ''],
     ]);
-    assert.deepEqual(QUALIFIERS, { avg: { games: 3, note: 'min 3 innings' }, sr: { den: 30, note: 'min 30 balls' }, econ: { den: 60, note: 'min 10 overs' } });
+    // the minimums are unchanged; SD-27 adds the unit an organiser overrides them in
+    assert.deepEqual(Object.fromEntries(Object.entries(QUALIFIERS).map(([k, q]) => [k, { games: (q as { games?: number }).games, den: (q as { den?: number }).den, note: q.note }])),
+      { avg: { games: 3, den: undefined, note: 'min 3 innings' }, sr: { games: undefined, den: 30, note: 'min 30 balls' }, econ: { games: undefined, den: 60, note: 'min 10 overs' } });
   });
 });
 

@@ -1,6 +1,12 @@
 /** SD-15 — volleyball's stat schema (see ../statSchema.ts). PURE. `points`
  *  includes aces and blocks (SD-04), so their weights are the bonus on top. */
-import type { SportStatSchema } from '../statSchema.ts';
+import type { Qualifier, SportStatSchema } from '../statSchema.ts';
+
+/** SD-27 (VB-08) — FIVB ranks its per-set awards (Best Blocker, Best Server)
+ *  among players with enough sets on court. Default 5 sets (two matches of a
+ *  school event); organisers can change it. */
+export const VOLLEYBALL_MIN_SETS: Qualifier = { den: 5, unit: { label: 'sets', one: 'set' } };
+const q = VOLLEYBALL_MIN_SETS;
 import { ACES, BLOCKS, HIGH_POINTS, POINTS } from '../sharedStats.ts';
 
 export const volleyballStats: SportStatSchema<'volleyball'> = {
@@ -23,9 +29,9 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     // opponent's errors, and its own service errors
     { key: 'oppErrors', label: 'Opp. errors', short: 'opp. errors', one: 'opp. error', source: 'team' },
     { key: 'serveErrors', label: 'Serve errors', short: 'serve errors', one: 'serve error', source: 'team', format: { unit: 'count', better: 'lower' } },
-    { key: 'pointsPerSet', label: 'Points per set', abbr: 'PTS/S', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'points', sets: 'setsPlayed', dp: 2 } },
-    { key: 'acesPerSet', label: 'Aces per set', abbr: 'ACE/S', source: 'derived', group: 'serve', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'aces', sets: 'setsPlayed', dp: 2 } },
-    { key: 'blocksPerSet', label: 'Blocks per set', abbr: 'BLK/S', source: 'derived', group: 'block', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'blocks', sets: 'setsPlayed', dp: 2 } },
+    { key: 'pointsPerSet', label: 'Points per set', abbr: 'PTS/S', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'points', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'points', better: 'higher' }] },
+    { key: 'acesPerSet', label: 'Aces per set', abbr: 'ACE/S', source: 'derived', group: 'serve', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'aces', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'aces', better: 'higher' }] },
+    { key: 'blocksPerSet', label: 'Blocks per set', abbr: 'BLK/S', source: 'derived', group: 'block', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'blocks', sets: 'setsPlayed', dp: 2, qualifier: q }, tieBreak: [{ key: 'blocks', better: 'higher' }] },
     // SD-24 (VB-08) — the team's sets on the player's lines, and a best match
     { key: 'setsWL', label: 'Sets W-L', source: 'derived', group: 'record', format: { unit: 'figure' }, agg: { kind: 'pair', a: 'setsWon', b: 'setsLost' } },
     { key: 'setsPct', label: 'Sets won %', source: 'derived', group: 'record', format: { unit: 'percent', dp: 0 }, agg: { kind: 'rate', num: 'setsWon', den: ['setsWon', 'setsLost'], scale: 100, dp: 0 } },
@@ -41,11 +47,18 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
   careerView: 'sections',
   box: [{ columns: [{ key: 'points', emphasis: true }, 'attackPoints', 'aces', 'blocks'] }],
   compare: ['points', 'attackPoints', 'blocks', 'aces', 'oppErrors', 'serveErrors'],
-  leaders: ['points', 'aces', 'blocks'],
+  // SD-27 (VB-08): totals, then FIVB's per-set rates (min sets on court)
+  leaders: ['points', 'attackPoints', 'aces', 'blocks', 'pointsPerSet', 'acesPerSet', 'blocksPerSet'],
   headline: ['points', 'aces'],
+  // FIVB individual awards. Best Scorer = attack + block + serve points (all in
+  // `points` since SD-04); Best Server / Blocker by aces / blocks per set; Best
+  // Attacker is attack efficiency, which needs attempts — "Most attack points"
+  // until they're recorded. Setter / libero / receiver / digger: custom awards.
   awards: [
-    { stat: 'points', icon: '🏐', label: 'Top scorer' },
-    { stat: 'aces', icon: '💥', label: 'Aces' },
+    { stat: 'points', icon: '🏐', label: 'Top scorer', tournamentLabel: 'Best scorer', tieBreak: [{ key: 'pointsPerSet', better: 'higher' }] },
+    { stat: 'aces', icon: '💥', label: 'Aces', tournamentLabel: 'Best server', rankBy: 'acesPerSet' },
+    { stat: 'blocks', icon: '🧱', label: 'Blocks', tournamentLabel: 'Best blocker', rankBy: 'blocksPerSet' },
+    { stat: 'attackPoints', icon: '⚡', label: 'Attack points', tournamentLabel: 'Most attack points', match: false },
   ],
   scoreUnit: 'sets',
 };

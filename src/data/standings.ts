@@ -8,6 +8,7 @@ import { isGoalkeeper } from '../sports/football/keepers.ts';
 import { STAT_SPORTS, leaderCategories, eligibilityOf, statSchema } from '../sports/statSchemas.ts';
 import { rankPlayers, statDefIn, qualifierOf, qualifierText, type Qualifier, type StatDef } from '../sports/statSchema.ts';
 import { fideTieBreaks, type FideTieBreaks, type XRound } from './swissTiebreaks.ts';
+import { effectiveQualifier, withLineResults, type LeaderMins } from './leaderMinimums.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -1159,7 +1160,10 @@ export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> 
 /** The headline stat used to rank individuals in each sport. */
 export const leaderStat = (sport: SportId) => {
   const c = STAT_CATEGORIES[sport][0];
-  return { key: c.key, label: c.label.toLowerCase() };
+  // the stat's own name, not its card title ("4 matches won", not "4 most wins")
+  const schema = statSchema(sport);
+  const def = schema && statDefIn(schema, c.key);
+  return { key: c.key, label: (def?.label ?? c.label).toLowerCase() };
 };
 
 export interface StatLeader {
@@ -1219,19 +1223,37 @@ export interface LeaderCategory {
   qualifier?: string;
 }
 
-/** Every leaderboard category for a sport, each with its ranked players. */
-export function categoryLeaders(lines: StatLine[], players: Player[], sport: SportId): LeaderCategory[] {
+/** Every leaderboard category for a sport, each with its ranked players.
+ *  SD-27: `matches` fills each line's result (racket "Most wins" / "Best win
+ *  %" count W-L; a match still in play is never a loss), `mins` = the
+ *  organiser's minimums for this tournament (format `leaderMins`). */
+export function categoryLeaders(
+  lines: StatLine[], players: Player[], sport: SportId,
+  opts: { matches?: Match[]; mins?: LeaderMins } = {},
+): LeaderCategory[] {
   const schema = statSchema(sport);
+  const ls = withLineResults(lines, opts.matches);
   return STAT_CATEGORIES[sport]
     .map((c) => {
       const def = schema && statDefIn(schema, c.key);
-      const qualifier = schema && def ? qualifierText(schema, def, qualifierOf(def)) : undefined;
-      return { key: c.key, label: c.label, leaders: leadersByKey(lines, players, sport, c.key), ...(qualifier ? { qualifier } : {}) };
+      const q = opts.mins && c.key in opts.mins ? effectiveQualifier(sport, c.key, opts.mins) : def ? qualifierOf(def) : undefined;
+      const qualifier = schema && def ? qualifierText(schema, def, q) : undefined;
+      return {
+        key: c.key, label: c.label,
+        leaders: leadersByKey(ls, players, sport, c.key, 10, opts.mins && c.key in opts.mins ? { qualifier: q ?? null } : {}),
+        ...(qualifier ? { qualifier } : {}),
+      };
     })
     .filter((c) => c.leaders.length > 0);
 }
 
-/** Back-compat: headline leaders for a sport. */
-export function statLeaders(lines: StatLine[], players: Player[], sport: SportId): StatLeader[] {
-  return leadersByKey(lines, players, sport, leaderStat(sport).key);
+/** Back-compat: headline leaders for a sport. SD-27: `matches` fills line
+ *  results (racket "Most wins"), `mins` = the organiser's minimums. */
+export function statLeaders(
+  lines: StatLine[], players: Player[], sport: SportId,
+  opts: { matches?: Match[]; mins?: LeaderMins } = {},
+): StatLeader[] {
+  const key = leaderStat(sport).key;
+  const ls = withLineResults(lines, opts.matches);
+  return leadersByKey(ls, players, sport, key, 10, opts.mins && key in opts.mins ? { qualifier: effectiveQualifier(sport, key, opts.mins) ?? null } : {});
 }
