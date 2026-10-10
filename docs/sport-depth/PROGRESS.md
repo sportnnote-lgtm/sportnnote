@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-107 racket point detail — DONE (cef440d, 2026-10-11)
+- Optional "How was the point won?" in all six racket sports + tennis 1st/2nd serve; stats keyed so untracked matches show "not tracked". See DEVLOG.
+- Follow-ups noticed (not built): tennis box DF column never filled (tennisBox lacks doubleFaults); lets on serve; code/time violations + penalty ladders (→ SD-53); medical timeouts/retirement reasons; challenge counts; squash plain Let (SD-63 remainder); padel/pickleball 1st/2nd serve; return stats; net approaches; MLP freeze (PB-09). Apply toast says "next ball" for racket sports.
+
 ## SD-106 match controls + confirm sheet — DONE (83ba1a5, 2026-10-11)
 - End / Restart / Not started? Cancel moved to a red Match controls card at the bottom of Scoring; every destructive action (incl. walkover, discard, delete/reset, period ends, golf finish, results lock) goes through `ConfirmSheet` (green No on top, red/amber Yes). Undo unchanged, next to the scoring buttons.
 - Open: voice "full time"/"end half" still end with no sheet; demo Restart never shows after the first score (demo events lack created_at); native not run.
