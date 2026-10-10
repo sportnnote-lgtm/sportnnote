@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — School staff can fix each other's players (migration 0048) + DLS decision
+
+- **Founder decision (#12 follow-up):** same-school staff can edit an unclaimed player that a
+  colleague added. Migration 0048 `20261019122600_org_staff_player_edit.sql` (bundle
+  `2026-10-org-staff-player-edit-0048.sql`) — founder to run. It keeps every 0044 arm of
+  `can_admin_player` and adds one: an org Owner/Admin may edit an unclaimed, unreported player on a
+  team of that org when both of these hold:
+  - the team's creator is an active member;
+  - the player's creator joined the org by choice (created it, or their own join request was
+    accepted). Direct "+ Add member" adds and invites don't count — admins can add anyone, or mark
+    an invite accepted themselves, without consent.
+- **Tests:** PGlite orgstaffedit 48/48 (control with the old function fails the 8 staff cases);
+  admineditplayer 37/37. Guide `fix-a-players-details` updated ("Set your school up as a
+  community", Request to join).
+- **Pre-existing holes found (not fixed):**
+  - `teams_insert` lets anyone create a team carrying another org's `org_id` through their own
+    club;
+  - an org admin can mark an invite as accepted without the invitee.
+- **DLS (#18) decision:** keep today's method (error ≤ 1 run, only at 6–9 wickets down, never raises
+  a target); research to source the full official Standard Edition table; drop it in later behind a
+  new DLS version flag so matches already played replay unchanged.
+
+---
+
 ### 2026-10-10 — Match start/result alerts verified on the live project (#23 staging check)
 
 - **Test:** the founder ran a throwaway football match (no teams or followers; created and deleted

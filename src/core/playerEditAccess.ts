@@ -1,8 +1,8 @@
 /**
  * Who may edit a player's details, and what an admin edit may change
  * (CricHeroes parity #12). The server decides (`can_edit_player` /
- * `guard_player_write`, migration 0044); these pure rules shape the UI and the
- * patch so the client never even sends what the server would refuse or ignore.
+ * `guard_player_write`, migrations 0044 + 0048 for school-community staff);
+ * these pure rules shape the UI and the patch so the client never even sends what the server would refuse or ignore.
  */
 import type { Player } from './types';
 
