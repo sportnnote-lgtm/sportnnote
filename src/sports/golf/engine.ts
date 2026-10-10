@@ -144,6 +144,35 @@ export interface GolfCard {
   /** green in regulation */
   gir?: (boolean | null)[];
   penalties?: (number | null)[];
+  /** SD-117c — Rule 3.3b certification: the marker and the player have each
+   *  signed this card (the scorecard's "Marker ✓ / Player ✓"). Any change to a
+   *  hole score clears it — they signed the card as it stood. Absent = not
+   *  signed (every older card). */
+  signed?: { marker?: boolean; player?: boolean };
+}
+
+/** SD-117c — the most strokes a hole can be entered as on the scorecard. */
+export const MAX_HOLE_STROKES = 20;
+
+/** SD-117c — has the card been certified by both the marker and the player? */
+export const cardSigned = (c: Pick<GolfCard, 'signed'> | null | undefined): boolean => !!c?.signed?.marker && !!c?.signed?.player;
+
+/** SD-117c — putts can't be more than the strokes on the hole (= strokes is a
+ *  chip-in-free hole of all putts — allowed); null stays null. */
+export const clampPutts = (putts: number | null | undefined, strokes: HoleScore): number | null => {
+  if (putts == null || typeof strokes !== 'number') return putts ?? null;
+  return Math.max(0, Math.min(putts, strokes));
+};
+
+/** SD-117c — the hole-state line of a conceded match-play match from the
+ *  conceding side's view: "conceded, 3 down thru 12" / "conceded, all square
+ *  thru 4" / "conceded before hole 1". */
+export function concededLine(holes: HoleWinner[], conceder: 'home' | 'away', regulation = 18, extraHoles = false): string {
+  const m = matchState(holes, regulation, extraHoles);
+  if (!m.played) return 'conceded before hole 1';
+  const mine = conceder === 'home' ? m.up : -m.up;
+  const st = mine === 0 ? 'all square' : `${Math.abs(mine)} ${mine < 0 ? 'down' : 'up'}`;
+  return `conceded, ${st} thru ${m.played}`;
 }
 
 export type GolfScoring = 'stroke' | 'stableford';

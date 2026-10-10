@@ -96,7 +96,8 @@ describe('SD-27 — award slots and MVP weights from the schema', () => {
     assert.equal(STAT_WEIGHTS.tennis.doubleFaults, -1);
     // SD-107: point detail — winners +1, unforced errors / service faults −1 (aces +2)
     assert.deepEqual(STAT_WEIGHTS.badminton, { points: 1, gamesWon: 2, winners: 1, unforcedErrors: -1, serviceFaults: -1 });
-    assert.deepEqual(STAT_WEIGHTS.padel, { points: 1, gamesWon: 2, setsWon: 4, aces: 2, serviceWinners: 1, winners: 1, unforcedErrors: -1 });
+    // SD-117c: padel's one-tap double fault costs the rating a point, as tennis
+    assert.deepEqual(STAT_WEIGHTS.padel, { points: 1, gamesWon: 2, setsWon: 4, aces: 2, serviceWinners: 1, winners: 1, unforcedErrors: -1, doubleFaults: -1 });
     assert.deepEqual(STAT_WEIGHTS.chess, { wins: 1, draws: 0.5 });
     // unchanged where already right
     assert.deepEqual(STAT_WEIGHTS.volleyball, { points: 1, aces: 2, blocks: 1 });

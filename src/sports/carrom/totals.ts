@@ -32,7 +32,7 @@
  * totals are always right; only the in-between live line may lag.
  */
 import type { StatTotalsContext, StatTotalsEntry } from '../types';
-import { creditedPoints, type CarromState } from './engine.ts';
+import { boardBreakers, creditedPoints, type CarromState } from './engine.ts';
 
 type Side = 'home' | 'away';
 const SIDES: Side[] = ['home', 'away'];
@@ -41,6 +41,14 @@ const SIDES: Side[] = ['home', 'away'];
 export const CARROM_BOX_KEYS = ['points', 'boards', 'queens'] as const;
 /** Owned here, never credited live. */
 export const CARROM_DERIVED_KEYS = ['gamesWon', 'gamesLost', 'boardsPlayed', 'whiteSlams', 'blackSlams', 'zeroGames'] as const;
+/** SD-117c — derived keys written only on a match that tracked them ('keyed'
+ *  coverage: an older line reads "not tracked", never 0):
+ *   boardBreaks / boardBreaksWon — boards the side broke / won on its own break (the
+ *     toss was recorded: FIRST_BREAK);
+ *   lostQueens — boards the side LOST after covering the Queen (the three-way
+ *     Queen chip was used on any board). */
+export const CARROM_BREAK_KEYS = ['boardBreaks', 'boardBreaksWon'] as const;
+export const CARROM_QUEEN_KEYS = ['lostQueens'] as const;
 
 /** One side's record for the match. */
 export function carromSideRecord(s: CarromState, side: Side): Record<string, number> {
@@ -58,7 +66,18 @@ export function carromSideRecord(s: CarromState, side: Side): Record<string, num
   const idx = side === 'home' ? 0 : 1;
   const games = s?.games ?? [];
   const won = games.filter((g) => g[idx] > g[1 - idx]);
+  // SD-117c — the break (when the toss was recorded) and the losing side's Queen
+  const extra: Record<string, number> = {};
+  if (s?.firstBreak) {
+    const br = boardBreakers(s);
+    extra.boardBreaks = br.filter((x) => x === side).length;
+    extra.boardBreaksWon = (s.boards ?? []).filter((b, i) => br[i] === side && b.winner === side).length;
+  }
+  if ((s?.boards ?? []).some((b) => b.queenBy)) {
+    extra.lostQueens = (s.boards ?? []).filter((b) => b.winner === opp && b.queenBy === 'loser').length;
+  }
   return {
+    ...extra,
     points, boards, queens,
     gamesWon: s?.gamesWon?.[side] ?? won.length,
     gamesLost: s?.gamesWon?.[opp] ?? games.length - won.length,
@@ -93,6 +112,7 @@ export function carromStatTotals(s: CarromState, ctx?: StatTotalsContext): Recor
     const rec = carromSideRecord(s, side);
     const stats: Record<string, number> = {};
     for (const k of CARROM_DERIVED_KEYS) stats[k] = rec[k];
+    for (const k of [...CARROM_BREAK_KEYS, ...CARROM_QUEEN_KEYS]) if (k in rec) stats[k] = rec[k];
     if (resolved) for (const k of CARROM_BOX_KEYS) stats[k] = rec[k];
     const list = ids[side];
     for (const id of list) {

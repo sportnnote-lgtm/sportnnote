@@ -22,7 +22,7 @@ import { useGolfRounds } from '../data/useGolf';
 import {
   golfFormatOf, roundContext, cardOf, saveCard, buildLeaderboard, completeRound, setFieldEventStatus, pendingCardCount,
 } from '../data/golf';
-import { summarize, toParLabel, type GolfCard, type HoleScore } from '../sports/golf/engine';
+import { summarize, toParLabel, cardSigned, clampPutts, MAX_HOLE_STROKES, type GolfCard, type HoleScore } from '../sports/golf/engine';
 import type { FieldEntry } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
@@ -119,6 +119,14 @@ export default function GolfRoundScreen() {
       card.putts = [...(cur.putts ?? new Array(n).fill(null))];
       card.putts[hole] = putts;
     }
+    // SD-117c — putts never exceed the strokes (a lowered score clamps them;
+    // a pick-up / cleared hole drops them)
+    if (card.putts && card.putts[hole] != null) {
+      card.putts = [...card.putts];
+      card.putts[hole] = typeof value === 'number' ? clampPutts(card.putts[hole], value) : null;
+    }
+    // SD-117c — a changed score un-signs the card: they certified it as it stood
+    if (cur.strokes[hole] !== value) delete card.signed;
     setLocal((m) => new Map(m).set(e.id, card));
     try { setPendingSync(await saveCard(e.id, card)); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
@@ -137,6 +145,18 @@ export default function GolfRoundScreen() {
     await setStroke(e, null);
   };
 
+  // SD-117c (Rule 3.3b) — the marker and the player each certify the card
+  const toggleSign = async (e: FieldEntry, who: 'marker' | 'player') => {
+    if (!canMark || ev.status === 'completed') return;
+    tapFeedback();
+    const cur = cardFor(e, holes.length);
+    const signed = { ...cur.signed, [who]: !cur.signed?.[who] };
+    const card: GolfCard = { ...cur, signed };
+    setLocal((m) => new Map(m).set(e.id, card));
+    try { setPendingSync(await saveCard(e.id, card)); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
+  };
+
   const start = async () => {
     setBusy(true);
     try { await setFieldEventStatus(ev.id, 'live'); await reload(); }
@@ -145,7 +165,13 @@ export default function GolfRoundScreen() {
   };
   const finish = async () => {
     const unfinished = board.filter((r) => r.thru < holes.length && r.position != null).length;
-    const ok = await confirmMatchAction('finishRound', unfinished ? { detail: `${unfinished} player(s) haven't completed every hole. Their cards will count as they stand.` } : undefined);
+    // SD-117c — flag cards the marker and player haven't both signed
+    const unsigned = entries.filter((e) => e.status !== 'wd' && e.status !== 'dq' && e.status !== 'dnf' && !cardSigned(cardFor(e, holes.length))).map((e) => nameOf(e.playerId));
+    const notes = [
+      unfinished ? `${unfinished} player(s) haven't completed every hole. Their cards will count as they stand.` : '',
+      unsigned.length ? `${unsigned.length} card(s) not signed by both marker and player: ${unsigned.slice(0, 6).join(', ')}${unsigned.length > 6 ? '…' : ''}.` : '',
+    ].filter(Boolean);
+    const ok = await confirmMatchAction('finishRound', notes.length ? { detail: notes.join(' ') } : undefined);
     if (!ok) return;
     setBusy(true);
     try {
@@ -244,7 +270,7 @@ export default function GolfRoundScreen() {
                       <Text style={[st.value, typeof v === 'number' && v < par && st.under, typeof v === 'number' && v > par && st.over]}>{v == null ? '–' : v}</Text>
                       <Text style={st.valueSub}>{typeof v === 'number' ? (v - par === 0 ? 'par' : v - par < 0 ? `${v - par === -1 ? 'birdie' : v - par === -2 ? 'eagle' : `${v - par}`}` : `${v - par === 1 ? 'bogey' : v - par === 2 ? 'double' : `+${v - par}`}`) : v === 'P' ? 'picked up' : ''}</Text>
                     </View>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`One more stroke for ${nameOf(e.playerId)}`} disabled={!canMark} onPress={() => set(typeof v === 'number' ? Math.min(15, v + 1) : par + 1)} style={st.stepBtn}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`One more stroke for ${nameOf(e.playerId)}`} disabled={!canMark} onPress={() => set(typeof v === 'number' ? Math.min(MAX_HOLE_STROKES, v + 1) : par + 1)} style={st.stepBtn}>
                       <Text style={st.stepTxt}>+</Text>
                     </TouchableOpacity>
                   </View>
@@ -253,14 +279,31 @@ export default function GolfRoundScreen() {
                     <SelectChip label={fmt.scoring === 'stableford' ? 'Pick up' : 'Pick up (NR)'} active={v === 'P'} onPress={() => canMark && void pickUp(e, v)} />
                     {v != null && <SelectChip label="Clear…" active={false} onPress={() => canMark && void clearHole(e)} />}
                   </View>
-                  {trackPutts && typeof v === 'number' && (
+                  {trackPutts && typeof v === 'number' && (() => {
+                    // SD-117c — 0–4 as chips, then "5+" steps up; never more than the strokes
+                    const pv = card.putts?.[hole];
+                    const high = typeof pv === 'number' && pv >= 5;
+                    return (
+                      <View style={st.tabs}>
+                        <Text style={textStyles.muted}>Putts</Text>
+                        {[0, 1, 2, 3, 4].filter((p) => p <= v).map((p) => (
+                          <SelectChip key={p} label={String(p)} active={pv === p} onPress={() => canMark && void setStroke(e, v, p)} />
+                        ))}
+                        {v >= 5 && (
+                          <SelectChip label={high ? `${pv} ＋` : '5+'} active={high}
+                            onPress={() => canMark && void setStroke(e, v, high ? Math.min(v, (pv as number) + 1) : 5)} />
+                        )}
+                      </View>
+                    );
+                  })()}
+                  {/* SD-117c (Rule 3.3b) — certify the card once every hole has a score */}
+                  {sum.thru >= holes.length ? (
                     <View style={st.tabs}>
-                      <Text style={textStyles.muted}>Putts</Text>
-                      {[0, 1, 2, 3, 4].map((p) => (
-                        <SelectChip key={p} label={String(p)} active={card.putts?.[hole] === p} onPress={() => canMark && void setStroke(e, v, p)} />
-                      ))}
+                      <Text style={[textStyles.muted, !cardSigned(card) && st.unsigned]}>{cardSigned(card) ? '✍ Card signed' : '✍ Sign the card'}</Text>
+                      <SelectChip label={card.signed?.marker ? 'Marker ✓' : 'Marker'} active={!!card.signed?.marker} onPress={() => void toggleSign(e, 'marker')} />
+                      <SelectChip label={card.signed?.player ? 'Player ✓' : 'Player'} active={!!card.signed?.player} onPress={() => void toggleSign(e, 'player')} />
                     </View>
-                  )}
+                  ) : null}
                 </Card>
               );
             })}
@@ -312,4 +355,5 @@ const st = StyleSheet.create({
   valueSub: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   under: { color: theme.colors.primary },
   over: { color: theme.colors.accent },
+  unsigned: { color: theme.colors.accent, fontWeight: '800' },
 });

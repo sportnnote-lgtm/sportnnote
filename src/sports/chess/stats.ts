@@ -21,8 +21,12 @@ export const chessStats: SportStatSchema<'chess'> = {
     { key: 'scorePct', label: 'Score %', source: 'derived', group: 'results', format: { unit: 'percent', dp: 0 },
       agg: { kind: 'rate', num: ['wins', 'wins', 'draws'], den: ['games', 'games'], scale: 100, dp: 0, qualifier: { games: 3, unit: { label: 'games', one: 'game' } } },
       leaderLabel: 'Best score %', tieBreak: [{ key: 'score', better: 'higher' }, { key: 'wins', better: 'higher' }] },
+    // SD-117c — a forfeit is not a game played: it credits these instead of
+    // games + wins / losses ('keyed': only lines that had one carry the key)
+    { key: 'forfeitWins', label: 'Forfeit wins', short: 'forfeit wins', one: 'forfeit win', group: 'results', coverage: 'keyed' },
+    { key: 'forfeitLosses', label: 'Forfeit losses', short: 'forfeit losses', one: 'forfeit loss', group: 'results', coverage: 'keyed' },
   ],
-  sections: [{ id: 'results', title: 'Results', rows: [{ stat: 'games' }, { stat: 'score' }, { stat: 'scorePct' }, { stat: 'wins' }, { stat: 'draws' }, { stat: 'losses' }] }],
+  sections: [{ id: 'results', title: 'Results', rows: [{ stat: 'games' }, { stat: 'score' }, { stat: 'scorePct' }, { stat: 'wins' }, { stat: 'draws' }, { stat: 'losses' }, { stat: 'forfeitWins' }, { stat: 'forfeitLosses' }] }],
   careerView: 'sections',
   // the result is the row's pill; the row shows colour · time control instead
   history: [],

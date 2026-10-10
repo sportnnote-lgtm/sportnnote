@@ -14,7 +14,7 @@ import { Button, textStyles } from '../../components/ui';
 import { askConfirm } from '../../components/ConfirmSheet';
 import { confirmCopy } from '../../core/matchSafety';
 import type { SportPlugin } from '../types';
-import { matchState, type HoleWinner } from './engine';
+import { matchState, concededLine, type HoleWinner } from './engine';
 
 export interface GolfMatchState {
   /** holes in the match (18 or 9) */
@@ -58,7 +58,8 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
   const m = stateOf(s);
   const [conceding, setConceding] = useState(false);
   const nm = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster)[0]?.fullName ?? (side === 'home' ? homeName : awayName);
-  if (s.ended) return <Text style={textStyles.muted}>Match over.</Text>;
+  // SD-117c — a conceded match keeps its hole state ("conceded, 3 down thru 12")
+  if (s.ended) return <Text style={textStyles.muted}>Match over{s.conceded ? ` · ${nm(s.conceded)} ${concededLine(s.holes, s.conceded, s.regulation, s.extraHoles)}` : ''}.</Text>;
   const concede = async (side: 'home' | 'away') => {
     const other = side === 'home' ? 'away' : 'home';
     const where = m.played ? ` (${m.status === 'AS' ? 'all square' : `${leaderName} ${m.status}`} thru ${m.played})` : '';
@@ -117,6 +118,7 @@ const LiveExtras: NonNullable<SportPlugin<GolfMatchState>['LiveExtras']> = ({ st
         const state = up === 0 ? 'AS' : `${up > 0 ? homeName : awayName} ${Math.abs(up)} UP`;
         return <Text key={i} style={textStyles.body}>Hole {i + 1}: {who} · {state}</Text>;
       })}
+      {s.conceded ? <Text style={textStyles.body}>🏳 {s.conceded === 'home' ? homeName : awayName} {concededLine(s.holes, s.conceded, s.regulation, s.extraHoles)}</Text> : null}
     </View>
   );
 };
@@ -144,7 +146,8 @@ export const golfPlugin: SportPlugin<GolfMatchState> = {
     return {
       homeScore: m.up > 0 ? `${lead} UP` : m.up === 0 ? 'AS' : '',
       awayScore: m.up < 0 ? `${lead} UP` : m.up === 0 ? 'AS' : '',
-      statusLine: s.conceded ? 'Match conceded' : m.decided ? `Final · ${m.result}` : `Match play · thru ${m.played}`,
+      // SD-117c — the hole state at the concession, from the conceder's side
+      statusLine: s.conceded ? `Final · ${concededLine(s.holes, s.conceded, s.regulation, s.extraHoles)}` : m.decided ? `Final · ${m.result}` : `Match play · thru ${m.played}`,
       detailLine: m.dormie ? 'Dormie' : `${s.regulation} holes${s.extraHoles ? ' · extra holes if level' : ''}`,
     };
   },

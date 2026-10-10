@@ -274,14 +274,17 @@ export const rallyLineScore = (s: RallyState): LineScore | null =>
 
 /** Scoreboard summary for pickleball / squash / table tennis. Live = the current
  *  game's points; once ended = games won + every game's score (not the reset 0–0). */
-export function rallySummary(s: RallyState, serveTag: string): ScoreSummary {
+export function rallySummary(s: RallyState, serveTag: string, opts: { rallyCall?: boolean } = {}): ScoreSummary {
   if (s.ended) return finalSummary(s.gamesWon, rallyScoreLine(s));
   const line = rallyScoreLine(s);
+  // SD-117c (pickleball) — rally scoring has a call too: "Serving 4-2", the
+  // server's score first (once someone serves: after the toss or a rally).
+  const rallyCall = opts.rallyCall && !s.sideOut && (s.serverPicked || s.events.length > 0) ? ` · Serving ${serveSpot(s).call}` : '';
   return {
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),
     // SD-06: in side-out scoring the score call ("4-2-1") is the headline.
-    statusLine: `Game ${s.games.length + 1}${s.sideOut ? ` · ${serveTag} · ${serveSpot(s).call}` : ''}`,
+    statusLine: `Game ${s.games.length + 1}${s.sideOut ? ` · ${serveTag} · ${serveSpot(s).call}` : rallyCall}`,
     detailLine:
       `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target}${s.winBy === 2 ? ' (win by 2)' : ''} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}`,
   };

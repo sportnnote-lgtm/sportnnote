@@ -42,9 +42,11 @@ export const pickleballPlugin = makeRallyPlugin({
         { value: 'sideout15', label: 'Tournament (side-out · 1 game to 15)', set: { scoring: 'sideout', pointsPerGame: 15, winBy: 2, gamesToWin: 1 } },
         { value: 'sideout21', label: 'Tournament (side-out · 1 game to 21)', set: { scoring: 'sideout', pointsPerGame: 21, winBy: 2, gamesToWin: 1 } },
         { value: 'medal', label: 'Medal match (side-out · best of 5 to 11)', set: { scoring: 'sideout', pointsPerGame: 11, winBy: 2, gamesToWin: 3 } },
-        // MLP: rally-scored games to 21 (also the DreamBreaker). The MLP "freeze"
-        // at 20 and the DreamBreaker singles rotation aren't tracked yet.
-        { value: 'dreambreaker', label: 'MLP (rally · 1 game to 21)', set: { scoring: 'rally', pointsPerGame: 21, winBy: 2, gamesToWin: 1 } },
+        // SD-117c — a rally-scored game to 21 (MLP's game length / the
+        // DreamBreaker), named for what it plays: MLP's "freeze" at 20 (PB-09)
+        // and the DreamBreaker rotation aren't tracked yet, so it isn't called
+        // "MLP". The value stays 'dreambreaker' (stored formats keep working).
+        { value: 'dreambreaker', label: 'Rally to 21 (1 game)', set: { scoring: 'rally', pointsPerGame: 21, winBy: 2, gamesToWin: 1 } },
         { value: 'rec', label: 'Rec (rally · 11)', set: { scoring: 'rally', pointsPerGame: 11, winBy: 2, gamesToWin: 2 } },
         { value: 'rec1', label: 'Rec quick (rally · 11 · win by 1)', set: { scoring: 'rally', pointsPerGame: 11, winBy: 1, gamesToWin: 2 } },
         { value: 'custom', label: 'Custom' },
@@ -62,7 +64,7 @@ export const pickleballPlugin = makeRallyPlugin({
       hint: 'how points are won',
       options: [
         { value: 'sideout', label: 'Side-out (tournament)' },
-        { value: 'rally', label: 'Rally (rec / MLP)' },
+        { value: 'rally', label: 'Rally (every rally scores)' },
       ],
     },
     {

@@ -29,3 +29,24 @@ export function ttServer(home: number, away: number, gamesPlayed: number, openin
   if (home >= deuce && away >= deuce) return total % 2 === 0 ? first : other(first);
   return Math.floor(total / ttServesEach(target)) % 2 === 0 ? first : other(first);
 }
+
+/** SD-117c — where the server is in their turn: the n-th serve of `of` (2 each
+ *  — 5 in a 21-point game), or `deuce` from 10-10 (20-20) when service
+ *  alternates every point. Derived from the score. */
+export function ttServeTurn(home: number, away: number, target = 11): { n: number; of: number; deuce: boolean } {
+  const deuce = Math.max(1, (Number(target) || 11) - 1);
+  if (home >= deuce && away >= deuce) return { n: 1, of: 1, deuce: true };
+  const each = ttServesEach(target);
+  return { n: ((home + away) % each) + 1, of: each, deuce: false };
+}
+
+const ORD = ['1st', '2nd', '3rd', '4th', '5th'];
+
+/** "2nd serve of 2 · service changes after this point" / "Deuce: service
+ *  alternates every point". */
+export function ttServeHint(home: number, away: number, target = 11): string {
+  const t = ttServeTurn(home, away, target);
+  const deuce = Math.max(1, (Number(target) || 11) - 1);
+  if (t.deuce) return home === deuce && away === deuce ? `Deuce at ${deuce}-${deuce}: service now alternates every point` : 'Deuce: service alternates every point';
+  return `${ORD[t.n - 1] ?? `${t.n}th`} serve of ${t.of}${t.n === t.of ? ' · service changes after this point' : ''}`;
+}

@@ -22,7 +22,9 @@ import { PointDetailRow } from '../PointDetailRow';
 import { detailLiveSettings } from '../pointDetailSettings';
 import { PointButtons, SecondaryAction, ServeFirstPicker } from '../PointButtons';
 import { pointPressure, pressureText } from '../pointStatus';
-import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type TennisState } from './engine';
+import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, tennisCue, tiebreakBanner, type TennisState } from './engine';
+import { CueBanner, useCueTimeline } from '../CueBanner';
+import { pointInputs } from '../rallyEdit';
 import { tennisTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
 
@@ -57,7 +59,10 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {/* SD-117c — derived "Change ends" cue and the tiebreak rules */}
+      <CueBanner cue={tennisCue(s)} />
       {!noPlayYet && <Text style={ctrl.serveBanner}>🎾 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>}
+      {tiebreakBanner(s) && <Text style={ctrl.tbBanner}>🎾 {tiebreakBanner(s)}</Text>}
       <ServeFirstPicker
         icon="🎾" homeName={homeName} awayName={awayName} started={!noPlayYet}
         picked={s.serverPicked || !noPlayYet ? s.firstServer : null}
@@ -92,6 +97,8 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
 
 const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as TennisState;
+  // SD-117c — change-ends markers on the point log (derived, display only)
+  const timeline = useCueTimeline(reducer, s, pointInputs, tennisCue);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -107,7 +114,7 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
       <Text style={ctrl.label}>Player stats</Text>
       <MatchBoxScore sport="tennis" source={tennisBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
-      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <LiveTimeline events={timeline} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 };
@@ -130,6 +137,7 @@ const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({
       serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serveInfo(s).side} serveIcon="🎾"
       // SD-115 — MATCH / SET / BREAK POINT, derived by playing the next point.
       alerts={pressureText(pointPressure(reducer, s, { unit: 'set', server: serveInfo(s).side }), { home: homeName, away: awayName })}
+      cue={tennisCue(s)?.text}
     />
   );
 };
@@ -248,6 +256,7 @@ const ctrl = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill,
     paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start',
   },
+  tbBanner: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   setsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   setChip: {
     color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700',

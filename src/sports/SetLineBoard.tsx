@@ -14,7 +14,7 @@ import { lineGrid, MARK_WORD, type LineScore } from './scoreline';
 import type { ScoreboardProps } from './types';
 
 export function SetLineBoard({
-  ls, homeName, awayName, homeColor, awayColor, live, closed, status, leadLabel, lead, serving, serveIcon = '•', bestOf, alerts,
+  ls, homeName, awayName, homeColor, awayColor, live, closed, status, leadLabel, lead, serving, serveIcon = '•', bestOf, alerts, cue,
 }: Omit<ScoreboardProps, 'state'> & {
   ls: LineScore | null;
   /** live status line ("Set 2 · Tiebreak") — "Match Over" is added once it ends */
@@ -29,6 +29,8 @@ export function SetLineBoard({
   bestOf?: string;
   /** SD-115 — "MATCH POINT · Nadal" chips (pointStatus.ts), while live */
   alerts?: Array<{ side: 'home' | 'away'; text: string }>;
+  /** SD-117c — a derived "↔ Change ends · 90 s" cue (courtCues.ts), while live */
+  cue?: string | null;
 }) {
   if (!ls) return null;
   const final = ls.ended || !!closed;
@@ -49,7 +51,10 @@ export function SetLineBoard({
       away={{ name: name('away', awayName), color: awayColor ?? theme.colors.away, lead: leadOf('away'), cells: grid.away }}
     />
   );
-  if (final || !alerts?.length) return board;
+  // SD-117c — a neutral cue line under the board (change ends / interval)
+  const cueLine = !final && cue ? <Text style={st.cue} accessibilityLiveRegion="polite">{cue}</Text> : null;
+  if (final || (!alerts?.length && !cueLine)) return board;
+  if (!alerts?.length) return <View style={st.wrap}>{board}{cueLine}</View>;
   // SD-115 — the next point decides something: say so in the side's colour.
   return (
     <View style={st.wrap}>
@@ -65,6 +70,7 @@ export function SetLineBoard({
           );
         })}
       </View>
+      {cueLine}
     </View>
   );
 }
@@ -78,5 +84,6 @@ const st = StyleSheet.create({
     paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3),
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  cue: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800' },
   chipText: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
 });

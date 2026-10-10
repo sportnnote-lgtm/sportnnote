@@ -9,6 +9,7 @@ import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder,
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
+import { setSportCue, type Cue } from '../courtCues.ts';
 
 const SETS_TO_WIN = 2;
 
@@ -100,7 +101,7 @@ function winSet(s: PadelState, side: 'home' | 'away', games: { home: number; awa
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined, whoId?: string): PadelState {
+function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined, whoId?: string, df?: { playerId?: string; playerName?: string }): PadelState {
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -108,9 +109,13 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
   const matchTb = matchTbActive(s);
   const pts = { ...s.pts, [side]: s.pts[side] + 1 };
   const setNo = s.setsWon.home + s.setsWon.away + 1;
-  events.push({
+  const stamp = matchTb ? 'Match TB' : `Set ${setNo}${tb ? ' · TB' : ''}`;
+  // SD-117c — a double fault (as tennis SD-104): a plain point for the receiver
+  // carrying a `df` marker naming the faulting server (no player credited).
+  if (df) events.push({ id: ++seq, stamp, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1 });
+  else events.push({
     id: ++seq,
-    stamp: matchTb ? 'Match TB' : `Set ${setNo}${tb ? ' · TB' : ''}`,
+    stamp,
     icon: '🟡',
     label: tb ? `${matchTb ? 'Match tiebreak' : 'Tiebreak'} ${pts.home}-${pts.away}` : 'Point',
     detail: who,
@@ -173,7 +178,20 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
   if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).
-  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined);
+  // SD-117c — one-tap Double fault / Ace (new optional payload keys, so old logs
+  // replay unchanged): `df: true` marks the receiver's point with the faulting
+  // server (attribution2 live, `_attr2` on replay); `pd` (an Ace) annotates the
+  // server's point exactly as a POINT_DETAIL right after it would.
+  if (a.type === 'POINT' && a.payload?.df === true) {
+    const f = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);
+    return scorePoint(s, a.side, undefined, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) });
+  }
+  if (a.type === 'POINT') {
+    const next = scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined);
+    if (a.payload?.pd == null) return next;
+    const ev = applyPointDetail(next.events, { pd: a.payload.pd });
+    return ev ? { ...next, events: ev } : next;
+  }
   return s;
 };
 
@@ -255,3 +273,9 @@ export function standingsUnits(s: PadelState): { games: { home: number; away: nu
   });
   return { games };
 }
+
+// ------------------------------------------------- SD-117c · court cues --
+
+/** SD-117c — "Change ends" due after the last point (FIP, as tennis; derived). */
+export const padelCue = (s: PadelState): Cue | null =>
+  setSportCue({ ended: s.ended, pts: s.pts, games: s.games, sets: s.sets, matchGames: standingsUnits(s)?.games ?? { home: 0, away: 0 }, inTiebreak: inTiebreak(s) });

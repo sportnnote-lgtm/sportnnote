@@ -12,7 +12,7 @@ import { askConfirm } from '../../components/ConfirmSheet';
 import { confirmCopy } from '../../core/matchSafety';
 import type { Attribution, SportPlugin } from '../types';
 import {
-  init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL,
+  init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL, isForfeit, clockText, parseClock,
   type ChessMethod, type ChessState, type Side,
 } from './engine';
 
@@ -34,6 +34,9 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
   const [unlockColour, setUnlockColour] = useState(false);
   const [method, setMethod] = useState<ChessMethod | null>(null);
   const [moves, setMoves] = useState('');
+  // SD-117c — optional clock times left (typed "4:07", "1:05:30" or minutes)
+  const [clockW, setClockW] = useState('');
+  const [clockB, setClockB] = useState('');
   const [busy, setBusy] = useState(false);
   // A person's full name reads better than a team code ("AM") in a 1-v-1 game.
   const nameOf = (side: Side) => (side === 'home' ? homeRoster : awayRoster)[0]?.fullName ?? (side === 'home' ? homeName : awayName);
@@ -46,6 +49,9 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
           {s.winner === 'draw' ? 'Draw' : `${nameOf(s.winner as Side)} won`}{s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}{s.moves ? ` · ${s.moves} moves` : ''}
         </Text>
         <Text style={textStyles.muted}>♔ {nameOf(s.white)} had White</Text>
+        {s.clock && (s.clock.white != null || s.clock.black != null) ? (
+          <Text style={textStyles.muted}>⏱ Time left · White {s.clock.white != null ? clockText(s.clock.white) : '–'} · Black {s.clock.black != null ? clockText(s.clock.black) : '–'}</Text>
+        ) : null}
       </View>
     );
   }
@@ -63,18 +69,25 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
     setBusy(false);
     if (!ok) return;
     // Credit both players a game (+ the outcome) so it shows on their profiles.
+    // SD-117c: a forfeit is no game played — it credits a forfeit win / loss
+    // instead of `games` + `wins` / `losses` (FIDE: excluded from played games).
     const credit = (side: Side): Attribution | undefined => {
       const p = (side === 'home' ? homeRoster : awayRoster)[0];
       if (!p) return undefined;
+      if (isForfeit(method) && winner !== 'draw') {
+        return { playerId: p.id, playerName: p.fullName, stat: winner === side ? 'forfeitWins' : 'forfeitLosses', by: 1 };
+      }
       const outcome = winner === 'draw' ? 'draws' : winner === side ? 'wins' : 'losses';
       return { playerId: p.id, playerName: p.fullName, stat: 'games', by: 1, extra: { [outcome]: 1 } };
     };
+    const w = parseClock(clockW); const b = parseClock(clockB);
+    const clock = w != null || b != null ? { ...(w != null ? { white: w } : {}), ...(b != null ? { black: b } : {}) } : undefined;
     // the colour is committed only now, and only if it really changed
     if (white !== s.white) dispatch({ type: 'SET_WHITE', payload: { side: white } });
     dispatch({
       type: 'RESULT',
       side: winner === 'draw' ? undefined : winner,
-      payload: { winner, method: method ?? undefined, moves: Number(moves) || undefined },
+      payload: { winner, method: method ?? undefined, moves: Number(moves) || undefined, ...(clock ? { clock } : {}) },
       attribution: credit('home'),
       attribution2: credit('away'),
     });
@@ -131,6 +144,21 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
             keyboardType="number-pad"
             accessibilityLabel="Number of moves"
           />
+          {/* SD-117c — optional clock times left at the end */}
+          {!isForfeit(method) && (
+            <>
+              <Text style={ctrl.meta}>Time left on the clocks (optional · 4:07, 1:05:30 or minutes)</Text>
+              <View style={ctrl.tiles}>
+                {([['White', clockW, setClockW], ['Black', clockB, setClockB]] as const).map(([c, v, set]) => (
+                  <TextInput key={c} style={[ctrl.input, { flex: 1 }, v && parseClock(v) == null ? ctrl.bad : null]} value={v}
+                    onChangeText={(t) => set(t.replace(/[^0-9:m]/gi, ''))}
+                    placeholder={`${c} ⏱`} placeholderTextColor={theme.colors.textMuted}
+                    accessibilityLabel={`${c}'s time left`} />
+                ))}
+              </View>
+            </>
+          )}
+          {isForfeit(method) && <Text style={ctrl.meta}>A forfeit counts in the table, but no game is credited as played.</Text>}
         </View>
       )}
       <Button label={winner ? `✓ Record ${scoreFor(white, winner)}…` : '✓ Record result'} onPress={() => void record()} disabled={!winner || busy} />
@@ -160,7 +188,8 @@ export const chessPlugin: SportPlugin<ChessState> = {
       statusLine: s.ended
         ? `${resultString(s)}${s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}`
         : `${TIME_CONTROL_LABEL[s.timeControl] ?? s.timeControl} · in play`,
-      detailLine: `${s.white === 'home' ? 'Home' : 'Away'} has White`,
+      // SD-117c — the clock times left, when recorded
+      detailLine: `${s.white === 'home' ? 'Home' : 'Away'} has White${s.clock && (s.clock.white != null || s.clock.black != null) ? ` · ⏱ White ${s.clock.white != null ? clockText(s.clock.white) : '–'} · Black ${s.clock.black != null ? clockText(s.clock.black) : '–'}` : ''}`,
     };
   },
   ScoringControls,
@@ -196,6 +225,7 @@ const ctrl = StyleSheet.create({
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   box: { gap: theme.spacing(1), alignItems: 'center', padding: theme.spacing(4), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md },
   big: { color: theme.colors.text, fontSize: 32, fontWeight: '800' },
+  bad: { borderColor: theme.colors.danger },
   input: {
     backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, color: theme.colors.text,
     borderRadius: theme.radius.md, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), fontSize: theme.font.body,

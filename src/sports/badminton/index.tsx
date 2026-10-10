@@ -21,7 +21,9 @@ import { PointDetailRow } from '../PointDetailRow';
 import { detailLiveSettings } from '../pointDetailSettings';
 import { PointButtons, ServeFirstPicker } from '../PointButtons';
 import { pointPressure, pressureText } from '../pointStatus';
-import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, type BadmintonState } from './engine';
+import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, badmintonCue, type BadmintonState } from './engine';
+import { CueBanner, useCueTimeline } from '../CueBanner';
+import { pointInputs } from '../rallyEdit';
 import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
 
@@ -41,6 +43,8 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
   const needsServer = noPlayYet && !s.serverPicked;
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {/* SD-117c — derived interval / change-ends cue (BWF) */}
+      <CueBanner cue={badmintonCue(s)} />
       {!noPlayYet && <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>}
       <ServeFirstPicker
         icon="🏸" homeName={homeName} awayName={awayName} started={!noPlayYet}
@@ -69,6 +73,8 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
 
 const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as BadmintonState;
+  // SD-117c — interval / change-ends markers on the rally log (display only)
+  const timeline = useCueTimeline(reducer, s, pointInputs, badmintonCue);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Games</Text>
@@ -84,7 +90,7 @@ const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ st
       <Text style={ctrl.label}>Player stats</Text>
       <MatchBoxScore sport="badminton" source={badmintonBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Rally log</Text>
-      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <LiveTimeline events={timeline} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 };
@@ -101,6 +107,7 @@ const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']
       serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serve(s).side} serveIcon="🏸"
       // SD-115 — GAME / MATCH POINT, derived by playing the next rally.
       alerts={pressureText(pointPressure(reducer, s, { unit: 'game' }), { home: homeName, away: awayName })}
+      cue={badmintonCue(s)?.text}
     />
   );
 };

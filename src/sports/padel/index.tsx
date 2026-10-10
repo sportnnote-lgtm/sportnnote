@@ -22,13 +22,15 @@ import { MatchStatsPanel } from '../MatchStatsPanel';
 import { ServeOrderPicker } from '../ServeOrderPicker';
 import { PointDetailRow } from '../PointDetailRow';
 import { detailLiveSettings } from '../pointDetailSettings';
-import { PointButtons, ServeFirstPicker } from '../PointButtons';
+import { PointButtons, SecondaryAction, ServeFirstPicker } from '../PointButtons';
+import { CueBanner, useCueTimeline } from '../CueBanner';
+import { pointInputs } from '../rallyEdit';
 import { pointPressure, pressureText } from '../pointStatus';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
-import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type PadelState } from './engine';
+import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, padelCue, other, type PadelState } from './engine';
 import { padelTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
 import { SetLineBoard } from '../SetLineBoard';
@@ -50,8 +52,18 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
   const noPlayYet = gamesPlayed(s) === 0 && s.pts.home === 0 && s.pts.away === 0;
   // SD-115: no silent default — the point buttons wait for the toss.
   const needsServer = noPlayYet && !s.serverPicked;
+  // SD-117c — one-tap Ace / Double fault for the CURRENT server (as tennis
+  // SD-104): an ace is the server's point with the "Ace" detail; a double
+  // fault is the receivers' point marked with the faulting server.
+  const serverP: Player | undefined = s.doubles ? serverRoster[serve.slot] : serverRoster[0];
+  const by = serverP ? serverP.fullName : serverSideName;
+  const receiverSideName = serve.side === 'home' ? awayName : homeName;
+  const ace = () => dispatch({ type: 'POINT', side: serve.side, payload: { pd: { how: 'ace' } }, attribution: serverP ? { playerId: serverP.id, stat: 'points', playerName: serverP.fullName } : undefined });
+  const doubleFault = () => dispatch({ type: 'POINT', side: other(serve.side), payload: { df: true }, attribution2: serverP ? { playerId: serverP.id, stat: 'doubleFaults', playerName: serverP.fullName } : undefined });
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {/* SD-117c — derived "Change ends" cue (FIP, as tennis) */}
+      <CueBanner cue={padelCue(s)} />
       {!noPlayYet && <Text style={ctrl.serve}>🟡 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>}
       <ServeFirstPicker
         icon="🟡" homeName={homeName} awayName={awayName} started={!noPlayYet}
@@ -71,12 +83,17 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
         disabled={needsServer} disabledHint="Pick who serves first to start scoring."
         onPoint={act}
       />
+      {/* SD-117c — Ace / Double fault: secondary, below the point buttons, server only */}
+      {!needsServer && <View style={ctrl.row}>
+        <SecondaryAction label={`🎯 Ace · ${by}`} color={serve.side === 'home' ? homeColor : awayColor} onPress={ace} />
+        <SecondaryAction label={`⚠️ Double fault · ${by} → point ${receiverSideName}`} onPress={doubleFault} />
+      </View>}
       {/* SD-107 — optional "how was it won?" for the last point */}
       <PointDetailRow sport="padel" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       {/* SD-21 — edit / delete / insert a past point; the engine replays it (EDIT_LOG). */}
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🟡" detailSport="padel"
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🟡" detailSport="padel" doubleFault
         periodLabel={(e) => (e.stamp === 'Match TB' ? 'Match TB' : `Set ${e.set ?? 1}`)}
       />
     </View>
@@ -85,6 +102,8 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
 
 const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as PadelState;
+  // SD-117c — change-ends markers on the point log (derived, display only)
+  const timeline = useCueTimeline(reducer, s, pointInputs, padelCue);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -100,7 +119,7 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
       <Text style={ctrl.label}>Box score</Text>
       <MatchBoxScore sport="padel" source={padelBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
-      <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <LiveTimeline events={timeline} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 };
@@ -120,6 +139,7 @@ const PadelScoreboard: NonNullable<SportPlugin<PadelState>['Scoreboard']> = ({ s
       serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serveInfo(s).side} serveIcon="🟡"
       // SD-115 — MATCH / SET / BREAK POINT, derived by playing the next point.
       alerts={pressureText(pointPressure(reducer, s, { unit: 'set', server: serveInfo(s).side }), { home: homeName, away: awayName })}
+      cue={padelCue(s)?.text}
     />
   );
 };
@@ -208,6 +228,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
 
 const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   serve: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   setsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },

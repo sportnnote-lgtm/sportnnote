@@ -14,6 +14,7 @@ const QUIET: Record<string, string> = {
   SET_FIRST_SERVER: 'first-server pick',
   SET_START_RIGHT: 'right-court pick',
   SET_SERVE_ORDER: 'serving-order pick',
+  FIRST_BREAK: 'break pick', // SD-117c carrom toss
   SET_DETAIL: 'point-detail setting',
   POINT_DETAIL: 'point detail',
   EDIT_LOG: 'timeline correction',
@@ -43,7 +44,7 @@ export function undoLabel(
   let head: string;
   if (p.kind === 'rally') head = `rally to ${name(p.wonBy)}${p.label ? ` · ${p.label.toLowerCase()}` : ''}`;
   else if (p.df) head = `double fault → point to ${name(p.side)}`;
-  else if (p.kind === 'ace') head = `ace · ${p.playerName ?? name(p.side)}`;
+  else if (p.kind === 'ace' || (p.kind === 'point' && p.pd?.how === 'ace')) head = `ace · ${p.playerName ?? name(p.side)}`;
   else if (p.kind === 'point') head = `point to ${p.playerName ?? name(p.side)}`;
   else {
     // Other sports: the timeline label (some events carry none — never print

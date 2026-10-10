@@ -8,6 +8,7 @@ import type { ScoreAction, ScoreSummary } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
+import { badmintonCue as cueOf, type Cue } from '../courtCues.ts';
 
 const TARGET = 21;
 const CAP = 30;
@@ -160,3 +161,6 @@ export function standingsUnits(s: BadmintonState): { points: { home: number; awa
   const points = s.games.reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: s.current?.home ?? 0, away: s.current?.away ?? 0 });
   return { points };
 }
+
+/** SD-117c — interval / change-ends cue due after the last rally (BWF; derived). */
+export const badmintonCue = (s: BadmintonState): Cue | null => cueOf(s);

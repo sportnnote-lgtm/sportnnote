@@ -54,7 +54,7 @@ With an odd number of players, one player sits out each Swiss round: the lowest-
 3. Under **Result (White first)**, tap **1-0**, **½-½** or **0-1**, and optionally **How (optional)**.
 4. Tap **✓ Record 1-0…**, check the sentence and tap **Yes, record result**. See [How to record a chess game result](/guides/score-chess/).
 
-No-show? A host can tap **🏳 Award a walkover**, or record it with the **Forfeit** method: the full point, but not a game played. In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops; in a round-robin it is a normal game.
+No-show? A host can tap **🏳 Award a walkover**, or record it with the **Forfeit** method: the full point, but not a game played (profiles show a forfeit win or loss). In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops; in a round-robin it is a normal game.
 
 ## Tie-breaks
 Players level on points are split by the **FIDE Swiss** order, one tie-break after another:
@@ -74,7 +74,7 @@ Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss 
 ## Common questions
 
 ### Our rules give only half a point for a bye.
-Set the **Swiss bye** to **½** in **Chess — format & points**. The table updates straight away.
+Set the **Swiss bye** to **½** in **Chess — format & points**.
 
 ### Does a round-robin change?
-Only with forfeits: a forfeit now counts in Sonneborn-Berger as a normal game, as FIDE says for round-robins.
+Only with forfeits: a forfeit now counts in Sonneborn-Berger as a normal game.

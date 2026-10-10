@@ -24,7 +24,14 @@ export interface BoardResult {
   points: number; game: number;
   /** SD-37 — only on a board recorded with a slam (old logs: absent) */
   slam?: Slam;
+  /** SD-117c — who covered the Queen, when the scorer said so (the three-way
+   *  chip): 'winner' (= `queen`), 'loser' (covered by the side that lost the
+   *  board — it scores nobody anything) or 'none'. Absent = not recorded. */
+  queenBy?: QueenBy;
 }
+
+/** SD-117c — the three-way Queen chip. */
+export type QueenBy = 'winner' | 'loser' | 'none';
 
 /** SD-37 — a player the log credited (the scorer's attribution on a BOARD). */
 export interface CarromCredit { side: Side; id?: string; name?: string }
@@ -49,6 +56,23 @@ export interface CarromState {
   /** SD-37 — every player the log credited, per side (absent until a credited
    *  board; deduplicated). `statTotals` adds them to the ctx players. */
   credited?: CarromCredit[];
+  /** SD-117c (CR-04) — who broke the first board of game 1 (the toss /
+   *  FIRST_BREAK). The break then alternates board by board, and the first
+   *  break of each game alternates game by game. Absent = not recorded (every
+   *  older match): no breaker is shown or counted. */
+  firstBreak?: Side;
+  /** SD-117c — the players each board credited (same order as `boards`), so
+   *  the board editor can replay a corrected list with its credits. Absent
+   *  until a credited board; not part of the score. */
+  boardBy?: CarromCredit[][];
+}
+
+/** SD-117c — one board as the editor replays it (EDIT_LOG). */
+export interface BoardInput {
+  side: Side; coins: number; queen: boolean;
+  queenBy?: QueenBy; slam?: Slam;
+  /** the players the board credited (attribution / attribution2) */
+  by?: CarromCredit[];
 }
 
 export function init(config?: Record<string, unknown>): CarromState {
@@ -111,18 +135,35 @@ function creditsOf(side: Side, a: { attribution?: Attr; attribution2?: Attr; pay
  * SD-37: `slam` ('white' | 'black') is optional — old logs replay identically.
  */
 export function reducer(s: CarromState, a: { type: string; side?: Side; payload?: Record<string, unknown>; attribution?: Attr; attribution2?: Attr }): CarromState {
+  // SD-117c — corrections. STAT_ADJUST only reconciles player profiles (no
+  // match effect); EDIT_LOG replays a corrected board list (the board editor).
+  if (a.type === 'STAT_ADJUST') return s;
+  if (a.type === 'EDIT_LOG') return replayBoards(s, (a.payload?.boards as BoardInput[] | undefined) ?? []);
+  // SD-117c (CR-04) — the toss: who breaks the first board. Only names the
+  // breaker (derived per board), so it may be fixed later; no score effect.
+  if (a.type === 'FIRST_BREAK') {
+    const side = (a.payload?.side ?? a.side) as Side | undefined;
+    if (s.ended || (side !== 'home' && side !== 'away')) return s;
+    return { ...s, firstBreak: side };
+  }
   if (a.type !== 'BOARD' || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
   const side = a.side;
   const coins = Number(a.payload?.coins ?? 0);
-  const queen = !!a.payload?.queen;
+  const qb = a.payload?.queenBy;
+  const queenBy: QueenBy | undefined = qb === 'winner' || qb === 'loser' || qb === 'none' ? qb : undefined;
+  // the three-way chip wins over the old flag; old logs carry only `queen`
+  const queen = queenBy ? queenBy === 'winner' : !!a.payload?.queen;
   const slam = a.payload?.slam === 'white' || a.payload?.slam === 'black' ? (a.payload.slam as Slam) : undefined;
   const pts = boardPoints(coins, queen, s.current[side], s);
   const gameNo = s.games.length + 1;
   const current = { ...s.current, [side]: s.current[side] + pts };
   const boardsInGame = s.boardsInGame + 1;
-  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo, ...(slam ? { slam } : {}) }];
+  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo, ...(slam ? { slam } : {}), ...(queenBy ? { queenBy } : {}) }];
   const credited = creditsOf(side, a, s.credited);
   if (credited) s = { ...s, credited };
+  // SD-117c — this board's own credits (for the editor's replay)
+  const by = creditsOf(side, a, undefined) ?? [];
+  if (by.length || s.boardBy) s = { ...s, boardBy: [...(s.boardBy ?? s.boards.map(() => [])), by] };
 
   let gameWinner: Side | null = null;
   if (current[side] >= s.target) gameWinner = side;
@@ -184,4 +225,107 @@ export function boardCloses(s: CarromState, side: Side, coins: number, queen: bo
   if (next.games.length === s.games.length) return null;
   const winner: Side = next.gamesWon.home > s.gamesWon.home ? 'home' : 'away';
   return { kind: next.ended ? 'match' : 'game', game: next.games.length, winner };
+}
+
+// ------------------------------------------------ SD-117c · breaker --
+
+/** The side that breaks the board at `index` (0-based, over the whole match)
+ *  of `boards`, or null when the toss wasn't recorded. Game g's first break
+ *  alternates (game 1: the toss winner), then the break alternates board by
+ *  board inside the game — ICF. */
+export function breakerAt(s: Pick<CarromState, 'firstBreak' | 'boards' | 'games'>, game: number, boardInGame: number): Side | null {
+  if (!s.firstBreak) return null;
+  const other: Side = s.firstBreak === 'home' ? 'away' : 'home';
+  const opener = game % 2 === 1 ? s.firstBreak : other;
+  return boardInGame % 2 === 0 ? opener : opener === 'home' ? 'away' : 'home';
+}
+
+/** Who broke each recorded board (same order as `s.boards`); null = unknown. */
+export function boardBreakers(s: CarromState): Array<Side | null> {
+  const seen = new Map<number, number>();
+  return (s?.boards ?? []).map((b) => {
+    const i = seen.get(b.game) ?? 0;
+    seen.set(b.game, i + 1);
+    return breakerAt(s, b.game, i);
+  });
+}
+
+/** Who breaks the next board (null = the toss isn't recorded). */
+export const nextBreaker = (s: CarromState): Side | null =>
+  s.ended ? null : breakerAt(s, s.games.length + 1, s.boardsInGame);
+
+/** SD-117c — the slam a board finished in the first turn is: White when the
+ *  board's winner broke it, Black when they didn't. null = breaker unknown. */
+export const slamFor = (winner: Side, breaker: Side | null): Slam | null =>
+  (breaker ? (winner === breaker ? 'white' : 'black') : null);
+
+// ------------------------------------------- SD-117c · board editor --
+
+/** Back to board 1 of game 1 keeping the format, the toss and the players
+ *  credited so far — the clean slate an EDIT_LOG replays onto. */
+const clearMatch = (s: CarromState): CarromState => {
+  const { boardBy: _b, ...rest } = s;
+  return { ...rest, current: { home: 0, away: 0 }, boardsInGame: 0, boards: [], games: [], gamesWon: { home: 0, away: 0 }, ended: false, seq: 0 };
+};
+
+const attrOf = (c?: CarromCredit): Attr => (c ? { ...(c.id ? { playerId: c.id } : {}), ...(c.name ? { playerName: c.name } : {}) } : undefined);
+
+/** The BOARD action one corrected board replays as. */
+export function boardAction(b: BoardInput): { type: string; side: Side; payload: Record<string, unknown>; attribution?: Attr; attribution2?: Attr } {
+  return {
+    type: 'BOARD', side: b.side,
+    payload: { coins: b.coins, queen: b.queenBy ? b.queenBy === 'winner' : !!b.queen, ...(b.queenBy ? { queenBy: b.queenBy } : {}), ...(b.slam ? { slam: b.slam } : {}) },
+    attribution: attrOf(b.by?.[0]), attribution2: attrOf(b.by?.[1]),
+  };
+}
+
+/** Replay a corrected board list through this reducer: games, totals and the
+ *  match result re-derive (a board limit or a game end can move). */
+export function replayBoards(s: CarromState, boards: BoardInput[]): CarromState {
+  return boards.reduce((st, b) => reducer(st, boardAction(b)), clearMatch(s));
+}
+
+/** The board list a state replays from (the editor's rows). */
+export function boardInputs(s: CarromState): BoardInput[] {
+  return (s?.boards ?? []).map((b, i) => ({
+    side: b.winner, coins: b.coins, queen: b.queen,
+    ...(b.queenBy ? { queenBy: b.queenBy } : {}), ...(b.slam ? { slam: b.slam } : {}),
+    ...(s.boardBy?.[i]?.length ? { by: s.boardBy[i] } : {}),
+  }));
+}
+
+/** What a board list credits each player LIVE (the controls' attribution:
+ *  capped `points`, `boards`, `queens`), keyed by player id. */
+export function liveCredits(s: CarromState): Map<string, { name?: string; points: number; boards: number; queens: number }> {
+  const capped = creditedPoints(s);
+  const out = new Map<string, { name?: string; points: number; boards: number; queens: number }>();
+  (s?.boards ?? []).forEach((b, i) => {
+    for (const c of s.boardBy?.[i] ?? []) {
+      if (!c.id) continue;
+      const t = out.get(c.id) ?? { name: c.name, points: 0, boards: 0, queens: 0 };
+      t.points += capped[i]; t.boards += 1; if (b.queen) t.queens += 1;
+      out.set(c.id, t);
+    }
+  });
+  return out;
+}
+
+/** Everything one board-editor correction dispatches: the EDIT_LOG with the
+ *  corrected list, then STAT_ADJUST deltas so the live profile lines match
+ *  what the corrected boards credit (capped points move with the game). */
+export function boardCorrection(s: CarromState, edited: BoardInput[]): Array<{ type: string; payload?: Record<string, unknown>; attribution?: { playerId: string; stat: string; by: number; playerName?: string } }> {
+  const next = replayBoards(s, edited);
+  const before = liveCredits(s);
+  const after = liveCredits(next);
+  const out: Array<{ type: string; payload?: Record<string, unknown>; attribution?: { playerId: string; stat: string; by: number; playerName?: string } }> = [
+    { type: 'EDIT_LOG', payload: { boards: edited } },
+  ];
+  for (const id of new Set([...before.keys(), ...after.keys()])) {
+    const b = before.get(id); const a = after.get(id);
+    for (const stat of ['points', 'boards', 'queens'] as const) {
+      const d = (a?.[stat] ?? 0) - (b?.[stat] ?? 0);
+      if (d) out.push({ type: 'STAT_ADJUST', attribution: { playerId: id, stat, by: d, playerName: a?.name ?? b?.name } });
+    }
+  }
+  return out;
 }

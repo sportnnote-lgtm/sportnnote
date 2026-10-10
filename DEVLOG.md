@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-117c carrom, chess, golf + racket court cues
+- **Carrom:** "Who breaks first?" toss, then "⚪ {name} to break" alternating per board (Fix the toss never changes the score); ✎ Correct a board editor with ✎ / ✕ + confirm (replays every board, stats follow); slam chip already says White/Black; Queen covered by Winner / Loser / Not covered. New stats boardBreaks, boardBreaksWon, own-break win %, lostQueens ("not tracked" on old matches).
+- **Chess:** forfeits no longer count as games played (forfeitWins / forfeitLosses); new methods Illegal move, Time out vs insufficient material, Fivefold repetition, 75-move rule; optional White/Black clock time left.
+- **Golf:** Marker ✓ / Player ✓ sign-off per completed card (un-signs on any change; Finish names unsigned cards); putts 0–4 + "5+" capped at strokes; stroke cap 20; conceded result keeps the hole state ("conceded, 3 down thru 12").
+- **Racket cues (`courtCues.ts`, `CueBanner.tsx`):** "↔ Change ends" banner + scoreboard line + log marker — tennis/padel after odd games (whole-match count, ITF Rule 10) and every 6 tiebreak points; badminton 60 s interval at 11, ends at 11 in the decider, 120 s between games; table tennis each game + 5 in the decider. Tennis tiebreak banner ("Tiebreak to 7 … (10 in the deciding set)"); TT "2nd serve of 2" + deuce hint; pickleball "Serving 4-2" in rally scoring; "MLP" preset renamed "Rally to 21 (1 game)" (freeze not built); padel one-tap Ace / Double fault for the server (+ doubleFaults stat).
+- **Verified:** `tests/sd117c-scorer-flow.test.mts` (18), carrom + TT fingerprints unchanged, suite green, tsc clean; demo 8093 — table tennis cues, carrom toss/editor, chess methods + clock. Golf and tennis/padel/badminton/pickleball screens: tests only.
+
+---
+
 ### 2026-10-11 — SD-117b volleyball + kabaddi scorer follow-ups
 - **Volleyball:** the six on court first (bench folded behind "Bench (n) ▾"), team-colour dots on every chip; 🏐 serving side derived from the rallies — Ace only offered to the server, "Opp. missed serve" only to the receiver; SET / MATCH POINT chip; "🚩 Opp. fault" takes an optional error type (net touch, foot fault, rotation, double/4 hits, attack out, block out) and the erring opponent → new `errors` stat ("not tracked" on old matches); `timeoutsPerSet` (beach 1) + technical-timeout note; "↔ Switch sides" cue (beach every 7 / 5 in the decider, indoor decider at 8).
 - **Kabaddi:** the side due to raid is highlighted ("◀ next", ⚠ DoD badge); clock Pause / Resume; substituted players may return (format toggle, on for new matches); team timeouts 2 per half (pauses the clock); optional tackle type ("Tackle +1 (ankle hold)"); Raider chip toggles and players who are out are dimmed.

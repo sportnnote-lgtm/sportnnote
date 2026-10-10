@@ -29,7 +29,9 @@ import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
-import { ttServer } from './tabletennis/serve';
+import { ttServer, ttServeHint } from './tabletennis/serve';
+import { tableTennisCue } from './courtCues';
+import { CueBanner, useCueTimeline } from './CueBanner';
 import { rallyTotals } from './racketTotals';
 import { SetLineBoard } from './SetLineBoard';
 import { makeRallyEngine, rallySummary, rallyScoreLine, rallyLineScore, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
@@ -206,10 +208,15 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const serverName = spot
       ? `${positionedServer?.fullName ?? serverSideName} (${spot.court}) · ${spot.call}`
       : s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;
+    // SD-117c (table tennis) — the change-ends cue and where the server is in
+    // their turn ("2nd serve of 2"), flagging the switch to 1 each at deuce.
+    const isTT = opts.serveRule === 'tt';
     return (
       <View style={{ gap: theme.spacing(4) }}>
+        {isTT && <CueBanner cue={tableTennisCue(s)} />}
         {firstPicker}
         {!blocked && <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>}
+        {!blocked && isTT && !s.ended && <Text style={ctrl.meta}>{ttServeHint(s.current.home, s.current.away, s.target)}</Text>}
         {startPicker}
         {/* SD-115 — two big team-coloured point buttons, one layout for every
             scoring system; singles auto-credits, doubles credit is optional. */}
@@ -227,6 +234,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
 
   const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
     const s = state as RallyState;
+    // SD-117c (table tennis) — change-ends markers on the rally log (display only)
+    const timeline = useCueTimeline(reducer, s, rallyInputs, opts.serveRule === 'tt' ? tableTennisCue : null);
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <Text style={ctrl.label}>Games</Text>
@@ -242,7 +251,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         <Text style={ctrl.label}>Box score</Text>
         <MatchBoxScore sport={opts.id} source={rallyBox(s, { homeRoster, awayRoster }, opts.id)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
         <Text style={ctrl.label}>Rally log</Text>
-        <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+        <LiveTimeline events={timeline} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       </View>
     );
   };
@@ -258,12 +267,13 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     return (
       <SetLineBoard
         ls={rallyLineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
-        status={rallySummary(s, opts.serveTag).statusLine ?? `Game ${s.games.length + 1}`}
+        status={rallySummary(s, opts.serveTag, { rallyCall: opts.courtPositions }).statusLine ?? `Game ${s.games.length + 1}`}
         bestOf={s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}
         serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serving} serveIcon={opts.icon}
         // SD-115 — GAME / MATCH POINT, derived by playing the next rally (side-out:
         // only the server can score, so only the server can have one).
         alerts={pressureText(pointPressure(reducer, s, { unit: 'game' }), { home: homeName, away: awayName })}
+        cue={opts.serveRule === 'tt' ? tableTennisCue(s)?.text : undefined}
       />
     );
   };
@@ -284,7 +294,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
       { home: s.current.home, away: s.current.away },
     ),
     // SD-01: once ended → games won + "11-7, 9-11, 11-5" (never the reset 0–0).
-    summary: (s) => rallySummary(s, opts.serveTag),
+    // SD-117c — pickleball rally scoring shows the "Serving 4-2" call too
+    summary: (s) => rallySummary(s, opts.serveTag, { rallyCall: opts.courtPositions }),
     scoreLine: rallyScoreLine,
     // SD-20: the line score (LineScoreboard, "11-7, 5-3 ret.") + ITTF/WSF result marks.
     lineScore: rallyLineScore,

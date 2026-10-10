@@ -11,6 +11,7 @@ import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder,
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import type { ScoreSummary } from '../types';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
+import { setSportCue, type Cue } from '../courtCues.ts';
 
 export const SETS_TO_WIN = 2;
 
@@ -321,4 +322,32 @@ export function standingsUnits(s: TennisState): { games: { home: number; away: n
     } else { games.home += h; games.away += a; }
   });
   return { games };
+}
+
+// ------------------------------------------------- SD-117c · court cues --
+
+/** SD-117c — "Change ends" due after the last point (ITF Rule 10; derived). */
+export const tennisCue = (s: TennisState): Cue | null =>
+  setSportCue({ ended: s.ended, pts: s.pts, games: s.games, sets: s.sets, matchGames: standingsUnits(s)?.games ?? { home: 0, away: 0 }, inTiebreak: inTiebreak(s) });
+
+/** SD-117c — what the tiebreak in play is: a set tiebreak (to 7, Fast4 to 5
+ *  with sudden death), a Grand Slam deciding-set tiebreak (to 10) or a match
+ *  tiebreak replacing the deciding set (to N). null = not in a tiebreak. */
+export function tiebreakInfo(s: TennisState): { kind: 'set' | 'decider' | 'match'; target: number; suddenDeathAt?: number; deciderTarget?: number } | null {
+  if (!inTiebreak(s)) return null;
+  if (isMatchTB(s)) return { kind: 'match', target: s.finalSetTiebreak };
+  if (isSlamDecider(s)) return { kind: 'decider', target: SLAM_DECIDER_TB_POINTS };
+  const sd = s.tbSuddenDeathAt ?? 0;
+  const deciderTarget = s.finalSetTiebreak > 0 ? s.finalSetTiebreak : (s.finalSetTBAt ?? 0) > 0 ? SLAM_DECIDER_TB_POINTS : undefined;
+  return { kind: 'set', target: s.tiebreakPoints, ...(sd > 0 ? { suddenDeathAt: sd } : {}), ...(deciderTarget && deciderTarget !== s.tiebreakPoints ? { deciderTarget } : {}) };
+}
+
+/** "Tiebreak to 7, win by 2 (10 in the deciding set) · 1 serve, then 2 each". */
+export function tiebreakBanner(s: TennisState): string | null {
+  const t = tiebreakInfo(s);
+  if (!t) return null;
+  const head = t.kind === 'match' ? `Match tiebreak to ${t.target}` : t.kind === 'decider' ? `Deciding-set tiebreak to ${t.target}` : `Tiebreak to ${t.target}`;
+  const rule = t.suddenDeathAt ? `sudden death at ${t.suddenDeathAt}-${t.suddenDeathAt}` : 'win by 2';
+  const dec = t.deciderTarget ? ` (${t.deciderTarget} in the deciding set)` : '';
+  return `${head}, ${rule}${dec} · first server 1 point, then 2 each`;
 }
