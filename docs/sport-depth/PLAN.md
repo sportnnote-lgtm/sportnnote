@@ -345,6 +345,19 @@ Badminton, TT, squash, padel and pickleball have no Wave 2 rows because their P0
 | SD-101 hockey, SD-102 handball | SD-11, SD-15 … SD-19, SD-23, SD-24, SD-27, SD-29 | Team-match foundations + timed suspensions |
 | SD-49 (GEN-18 golf into leaders / medals) | SD-28 | Golf rides the results engine's medal path |
 
+### Wave 1 retrospective (2026-10-11)
+Wave 1 (SD-14 … SD-29, SD-103, SD-104) delivered some Wave 2/3 scope early. BACKLOG.md rows were trimmed to what remains; evidence is in PROGRESS.md.
+- **Done by foundation:** SD-73 (doubles serving order per set, tennis / padel) — SD-104's `SET_SERVE_ORDER` picker.
+- **Trimmed to a remainder (still READY):**
+  - statTotals: SD-30 football (keeper CS / GA and minutes owned via SD-09 / SD-29), SD-32 volleyball (sets played / W-L via SD-29 / SD-19), SD-37 carrom (lines for every entrant via SD-11).
+  - Tennis: SD-34 is now only the relabelling of pre-SD-104 double faults (SD-104 did the `df` marker, DF column, editor kind, server-only Ace / DF).
+  - Careers: SD-36 chess (method, unbeaten streak), SD-39 football, SD-44 basketball (FG / 3P), SD-82 kabaddi (strike rates), SD-86 carrom — SD-24 built the sections; SD-25 gave chess colour / time-control splits.
+  - Cricket: SD-38 (4s / 6s / maidens / dots / ducks leaders; the rest in SD-16 / SD-27), SD-43 (leaders / awards filter; profile splits in SD-25).
+  - Box scores: SD-40 basketball (FG / 3P / FT M-A, OREB / DREB, EFF column, statTotals), SD-41 kabaddi match centre, SD-56 football (HT score, shirt numbers), SD-81 volleyball (per-player attempts / errors) — SD-23 built the shared box and comparison panel.
+  - Others: SD-42 golf columns (cut line via SD-07), SD-46 team stats (T / NR via SD-12), SD-49 golf leaders / medals (medal path via SD-28), SD-65 pickleball first-server picker (squash / TT picker via SD-104).
+- **Sizes shrink:** SD-36, SD-38, SD-39, SD-43, SD-44, SD-56, SD-82 are now S or S–M. Wave 2 round order is unchanged.
+- **New from Wave 1:** SD-105 (racket team-page top performers, an SD-27 regression) leads Wave 2.
+
 ---
 
 ## 6. Migrations and out of scope
