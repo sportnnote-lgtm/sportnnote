@@ -355,6 +355,13 @@ export default function ScheduleMatchScreen() {
             </Text>
             <Button label="🏊 Set up a swimming event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'swimming' })} />
           </>
+        ) : sport === 'weightlifting' ? (
+          <>
+            <Text style={textStyles.muted}>
+              🏋️ Weightlifting isn’t a match: each bodyweight category is an event — weigh-in, then three snatch and three clean & jerk attempts per lifter. Add the category and its lifters, then enter each attempt as it is lifted.
+            </Text>
+            <Button label="🏋️ Set up a weightlifting event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'weightlifting' })} />
+          </>
         ) : golfField ? (
           <>
             <SportFormatEditor sport="golf" value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} omitKeys={['extraHoles']} />

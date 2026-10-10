@@ -157,6 +157,11 @@ function formatFor(sport: SportId, cfg: Cfg, state: Cfg): SplitValue | undefined
       if (n === 6) return v('6aside', 'Indoor 6-a-side');
       return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
     }
+    case 'handball': {
+      // SD-102: senior 2 × 30 / youth 2 × 25 / 2 × 20 (IHF 2:1)
+      const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
+      return m ? v(`2x${m}`, `2 × ${m} min`) : undefined;
+    }
     case 'basketball': {
       const n = numOf(cfg.playersPerSide);
       return n === 3 ? v('3x3', '3x3') : n ? v(`${n}v${n}`, `${n}-on-${n}`) : undefined;

@@ -8,7 +8,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
-  attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels,
+  attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -39,9 +39,12 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   if (def.capture === 'attempts') return (res.attempts ?? []).map((a) => attemptText(a, def) + (def.wind === 'attempt' && a.mark != null && a.wind != null ? ` (${windText(a.wind)})` : '')).filter(Boolean).join('  ');
   if (def.capture === 'heights') return [...(res.heights ?? [])].sort((a, b) => a.height - b.height).filter((h) => h.tries).map((h) => `${formatMark(h.height, def)} ${h.tries}`).join(' · ');
   if (def.capture === 'lifts') {
+    // SD-97: "Bw 78.4 · Sn 80 (83) 83 → 83 · C&J 100 105 (108) → 105"; a lift-only table shows that lift
     const l = summarizeLifts(res.lifts);
-    const one = (xs?: { kg: number; good?: boolean }[]) => (xs ?? []).map((a) => (a.good === false ? `(${a.kg})` : String(a.kg))).join(' ');
-    return `Sn ${one(res.lifts?.snatch)} → ${l.snatch ?? '–'} · C&J ${one(res.lifts?.cj)} → ${l.cj ?? '–'}`;
+    const sn = `Sn ${liftSeries(res.lifts?.snatch) || '–'} → ${l.snatch ?? '–'}`, cj = `C&J ${liftSeries(res.lifts?.cj) || '–'} → ${l.cj ?? '–'}`;
+    const only = def.lifts?.length === 1 ? def.lifts[0] : undefined;
+    const bomb = !only && r.status === 'NM' ? bombedOutOf(res) : null;
+    return [res.bodyweight != null ? `Bw ${fmtKg(res.bodyweight)}` : '', only === 'cj' ? '' : sn, only === 'snatch' ? '' : cj, bomb ? `no total — no good ${bomb === 'snatch' ? 'snatch' : 'C&J'}` : ''].filter(Boolean).join(' · ');
   }
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
   // SD-94 swimming: medley legs by stroke, then the 50 m splits
@@ -83,22 +86,22 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : 'Athlete'}</Text>
-            <Text style={[st.mark, st.headTxt]}>{def.unit === 'time' ? 'Time' : def.unit === 'mass' ? 'Total' : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : 'Athlete'}</Text>
+            <Text style={[st.mark, st.headTxt]}>{def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
             const detail = [overall ? `Heat ${r.entry.heat}` : '', seriesText(r, def)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>
-                  <Text style={[st.pos, r.position === 1 && st.gold]}>{r.label || '–'}</Text>
+                  <Text style={[st.pos, r.position === 1 && st.gold]}>{def.capture === 'lifts' && r.status === 'NM' ? '—' : r.label || '–'}</Text>
                   <Text style={st.lane}>{(lanes ? r.entry.result.lane : r.entry.result.order) ?? ''}</Text>
                   <View style={st.name}>
                     <Text style={st.nameTxt} numberOfLines={1}>{r.entry.name}</Text>
                     {r.entry.team?.name && r.entry.team.name !== r.entry.name ? <Text style={st.team} numberOfLines={1}>{r.entry.team.name}</Text> : null}
                   </View>
                   <View style={st.mark}>
-                    <Text style={st.markTxt}>{r.bestText || (r.status !== 'ok' ? r.status : '')}</Text>
+                    <Text style={st.markTxt}>{r.bestText || (def.capture === 'lifts' && r.status === 'NM' ? '—' : r.status !== 'ok' ? r.status : '')}</Text>
                     {def.wind === 'attempt' && r.wind != null ? <Text style={st.team}>{windText(r.wind)}</Text> : null}
                   </View>
                 </View>

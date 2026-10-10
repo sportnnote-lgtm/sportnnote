@@ -15,16 +15,20 @@ import { useMeet } from '../../data/useAthletics';
 import { medalStandings } from '../../data/medalStandings';
 import {
   categoryKey, categoryLabel, disciplineOf, eventLeaders, eventStatus, formatMark, meetFieldResults, meetSettings, topAthletes,
-  swimMeetSettings, courseLabel, courseShort,
+  swimMeetSettings, courseLabel, courseShort, eventMeetSettings, wlMeetSettings, sinclairTotal, summarizeLifts, fmtKg, SINCLAIR, pointsLabel,
   type MeetEvent, type RecordMark,
 } from '../../data/results';
-import { eventWords, type EventSport } from '../../sports/eventSports';
+import { eventWords, eventPrefix, type EventSport } from '../../sports/eventSports';
 import type { Tournament } from '../../core/types';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const AGE_ORDER = ['U10', 'U12', 'U14', 'U16', 'U18', 'U20', 'Open'];
+const AGE_ORDER = ['U10', 'U12', 'U14', 'U16', 'U18', 'U20', 'Open', 'School', 'Youth', 'Junior', 'Senior'];
+/** SD-97: records read snatch, C&J, total */
+const LIFT_ORDER = ['wl.snatch', 'wl.cj', 'wl.total'];
+/** SD-97: "+110 kg" after "110 kg" */
+const classSort = (wc?: string) => { const m = /^(\+)?(\d+)/.exec(wc ?? ''); return m ? String(Number(m[2]) * 2 + (m[1] ? 1 : 0)).padStart(4, '0') : ''; };
 
 export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: { tournament: Tournament; canOrganize: boolean; sport?: EventSport }) {
   const nav = useNavigation<Nav>();
@@ -33,24 +37,43 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
   const { events, records, schoolRecords, loading } = useMeet(tournament.id, tournament.hostOrgId, sport);
   const fmt = tournament.formats?.[sport] as Record<string, unknown> | undefined;
   const swimSettings = swim ? swimMeetSettings(fmt) : null;
-  const settings = swimSettings ?? meetSettings(fmt);
-  const points = { positionPoints: settings.positionPoints, relayFactor: settings.relayFactor };
+  const wl = sport === 'weightlifting';
+  const wlSettings = wl ? wlMeetSettings(fmt) : null;
+  const settings = swimSettings ?? (wl ? eventMeetSettings(sport, fmt) : meetSettings(fmt));
+  const points = { positionPoints: settings.positionPoints, relayFactor: settings.relayFactor, liftMedals: wlSettings?.liftMedals };
   const table = useMemo(() => medalStandings([], [], { mode: 'position' }, undefined, meetFieldResults(events, points)), [events, settings.positionPoints.join(), settings.relayFactor]); // eslint-disable-line react-hooks/exhaustive-deps
   const leaders = useMemo(() => eventLeaders(events), [events]);
   const top = useMemo(() => topAthletes(events, points).slice(0, 5), [events, settings.positionPoints.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // SD-97: best lifters across bodyweight categories by Sinclair total (a meet setting)
+  const sinclair = useMemo(() => {
+    if (!wlSettings?.sinclair) return [];
+    const out: { id: string; athleteId?: string; name: string; team?: string; total: number; bw: number; points: number; cat: string }[] = [];
+    for (const e of events) {
+      const fin = e.phases.find((p) => p.status === 'completed');
+      for (const en of fin?.entries ?? []) {
+        const total = summarizeLifts(en.result.lifts).total;
+        const pts = sinclairTotal(total, en.result.bodyweight, e.category?.gender);
+        if (pts != null && total != null) out.push({ id: en.id, athleteId: en.athleteId, name: en.name, team: en.team?.name, total, bw: en.result.bodyweight!, points: pts, cat: categoryLabel(e.category) });
+      }
+    }
+    return out.sort((a, b) => b.points - a.points).slice(0, 5);
+  }, [events, wlSettings?.sinclair]);
 
   // Programme by category (age, then Boys / Girls / Mixed).
   const byCat = useMemo(() => {
     const m = new Map<string, { label: string; sort: string; events: MeetEvent[] }>();
     for (const e of events) {
       const k = categoryKey(e.category);
-      const sort = `${String(AGE_ORDER.indexOf(e.category?.age ?? 'Open')).padStart(2, '0')}${e.category?.gender ?? 'X'}`;
-      const g = m.get(k) ?? { label: categoryLabel(e.category), sort, events: [] };
+      const sort = `${String(AGE_ORDER.indexOf(e.category?.age ?? 'Open')).padStart(2, '0')}${e.category?.gender ?? 'X'}${classSort(e.category?.weightClass)}`;
+      // SD-97: weightlifting groups by age + gender (each event is one bodyweight category)
+      const gk = wl ? `${e.category?.age ?? ''}-${e.category?.gender ?? ''}` : k;
+      const g = m.get(gk) ?? { label: wl ? categoryLabel({ age: e.category?.age, gender: e.category?.gender, weightClass: e.category?.weightClass ? ' ' : undefined }).trim() : categoryLabel(e.category), sort, events: [] };
       g.events.push(e);
-      m.set(k, g);
+      m.set(gk, g);
     }
+    for (const g of m.values()) g.events.sort((a, b) => classSort(a.category?.weightClass).localeCompare(classSort(b.category?.weightClass)));
     return [...m.values()].sort((a, b) => a.sort.localeCompare(b.sort));
-  }, [events]);
+  }, [events, wl]);
 
   const open = (e: MeetEvent) => {
     const cur = [...e.phases].reverse().find((p) => p.status !== 'completed') ?? e.phases[e.phases.length - 1];
@@ -61,12 +84,15 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
     <View style={{ gap: theme.spacing(3) }}>
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Button label="＋ Add an event" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(swim ? { sport } : {}) })} />
-          <Button label={swim ? '⚙ Pool, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
+          <Button label={wl ? '＋ Add a bodyweight category' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
+          <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}
       {swimSettings ? (
         <Text style={textStyles.muted}>{courseLabel(swimSettings.course)} · {swimSettings.lanes} lanes{swimSettings.manual ? ' · manual timing' : ''} · World Aquatics seeding (fastest heat last, fastest in the centre lane).</Text>
+      ) : null}
+      {wlSettings ? (
+        <Text style={textStyles.muted}>IWF rules: snatch then clean & jerk, 3 attempts each; equal totals go to whoever lifted the total first. Medals for {wlSettings.liftMedals ? 'the snatch, the clean & jerk and the total' : 'the total'}.</Text>
       ) : null}
 
       <SectionHeader title="📋 Programme" count={events.length} />
@@ -95,12 +121,12 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
       ))}
 
       <SectionHeader title="🏅 House table" count={table.length} />
-      <Text style={textStyles.muted}>{settings.positionPoints.join('-')} points per final{settings.relayFactor !== 1 ? `, relays ×${settings.relayFactor}` : ''}; tied places share.</Text>
+      <Text style={textStyles.muted}>{pointsLabel(settings.positionPoints)} points per {wl ? `category${wlSettings?.liftMedals ? ' and per lift' : ''}` : 'final'}{settings.relayFactor !== 1 ? `, relays ×${settings.relayFactor}` : ''}; tied places share.</Text>
       <MedalTable rows={table} emptyLabel="No final has finished yet." />
 
       {leaders.length > 0 && (
         <>
-          <SectionHeader title="⚡ Best by event" count={leaders.length} />
+          <SectionHeader title={wl ? '⚡ Best total by category' : '⚡ Best by event'} count={leaders.length} />
           <Card style={{ gap: theme.spacing(2) }}>
             {leaders.map((l) => (
               <TouchableOpacity key={l.eventKey} accessibilityRole="button" disabled={!l.athleteId} onPress={() => l.athleteId && nav.navigate('PlayerProfile', { playerId: l.athleteId })}>
@@ -109,7 +135,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                     <Text style={textStyles.muted} numberOfLines={1}>{l.title}</Text>
                     <Text style={textStyles.body} numberOfLines={1}>{l.name}{l.team && l.team !== l.name ? <Text style={textStyles.muted}>  {l.team}</Text> : null}</Text>
                   </View>
-                  <Text style={st.mark}>{l.text}{l.flags.length ? ` ${l.flags.join(' ')}` : ''}</Text>
+                  <Text style={st.mark}>{l.text}{wl ? ' kg' : ''}{l.flags.length ? ` ${l.flags.join(' ')}` : ''}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -131,19 +157,40 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                 </View>
               </TouchableOpacity>
             ))}
-            <Text style={textStyles.muted}>Position points from individual finals; relays count for the house.</Text>
+            <Text style={textStyles.muted}>{wl ? 'Position points from every category.' : 'Position points from individual finals; relays count for the house.'}</Text>
           </Card>
         </>
       )}
 
-      <RecordBook title="📖 Meet records" list={records} prefix={swim ? 'swim.' : 'ath.'} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : 'Set by the first final of each event.'} />
-      {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={swim ? 'swim.' : 'ath.'} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
+      {sinclair.length > 0 && (
+        <>
+          <SectionHeader title="⚖️ Best lifters (Sinclair)" count={sinclair.length} />
+          <Card style={{ gap: theme.spacing(2) }}>
+            {sinclair.map((a, i) => (
+              <TouchableOpacity key={a.id} accessibilityRole="button" disabled={!a.athleteId} onPress={() => a.athleteId && nav.navigate('PlayerProfile', { playerId: a.athleteId })}>
+                <View style={st.lead}>
+                  <Text style={st.rank}>{i + 1}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={textStyles.body} numberOfLines={1}>{a.name}{a.team ? <Text style={textStyles.muted}>  {a.team}</Text> : null}</Text>
+                    <Text style={textStyles.muted} numberOfLines={1}>{a.cat} · {a.total} kg at {fmtKg(a.bw)} kg</Text>
+                  </View>
+                  <Text style={st.mark}>{a.points.toFixed(2)}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <Text style={textStyles.muted}>Total × the IWF Sinclair coefficient for the bodyweight ({SINCLAIR.period} coefficients).</Text>
+          </Card>
+        </>
+      )}
+
+      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : 'Set by the first final of each event.'} />
+      {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={eventPrefix(sport)} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
     </View>
   );
 }
 
 function RecordBook({ title, list, empty, prefix }: { title: string; list: RecordMark[]; empty: string; prefix: string }) {
-  const rows = [...list].filter((r) => r.discipline.startsWith(prefix)).sort((a, b) => a.category.localeCompare(b.category) || a.discipline.localeCompare(b.discipline));
+  const rows = [...list].filter((r) => r.discipline.startsWith(prefix)).sort((a, b) => a.category.localeCompare(b.category) || LIFT_ORDER.indexOf(a.discipline) - LIFT_ORDER.indexOf(b.discipline) || a.discipline.localeCompare(b.discipline));
   return (
     <>
       <SectionHeader title={title} count={rows.length} />
@@ -153,13 +200,16 @@ function RecordBook({ title, list, empty, prefix }: { title: string; list: Recor
             const def = disciplineOf(r.discipline);
             const [age, g, extra] = r.category.split('-');
             const pool = extra === 'LCM' || extra === 'SCM' ? ` (${courseShort(extra)})` : '';
+            // SD-97: a weightlifting record is per bodyweight category (and per lift)
+            const wc = extra && !pool ? extra : undefined;
+            const unit = def?.unit === 'mass' ? ' kg' : '';
             return (
               <View key={`${r.scope}${r.discipline}${r.category}`} style={st.lead}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.muted} numberOfLines={1}>{def?.label}{pool} {categoryLabel({ age: age === 'open' ? 'Open' : age, gender: g as 'M' | 'F' | 'X' })}{r.date ? ` · ${r.date}` : ''}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{def?.label.replace('Weightlifting total', 'Total')}{pool} {categoryLabel({ age: age === 'open' ? 'Open' : age, gender: g as 'M' | 'F' | 'X', weightClass: wc })}{r.date ? ` · ${r.date}` : ''}</Text>
                   <Text style={textStyles.body} numberOfLines={1}>{r.holder}{r.team && r.team !== r.holder ? <Text style={textStyles.muted}>  {r.team}</Text> : null}</Text>
                 </View>
-                <Text style={st.mark}>{def ? formatMark(r.value, def) : r.value}</Text>
+                <Text style={st.mark}>{def ? formatMark(r.value, def) : r.value}{unit}</Text>
               </View>
             );
           })}

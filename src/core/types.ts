@@ -23,7 +23,9 @@ export type SportId =
   | 'golf'
   | 'athletics'
   | 'hockey'
-  | 'swimming';
+  | 'swimming'
+  | 'weightlifting'
+  | 'handball';
 
 /** `support` is the internal support/admin role — it can review verification
  *  documents and has every organizer/scorer capability (a superset). */

@@ -16,8 +16,8 @@ export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'parti
   // SD-90: an athletics-only meet: houses / teams, then its events.
   if (t.sports.length > 0 && t.sports.every((s) => EVENT_SPORTS.has(s))) {
     return [
-      { key: 'teams', label: 'Add teams or houses', hint: 'Athletes score for them; relay teams come from them.', done: teamCount >= 2 },
-      { key: 'events', label: 'Add the events', hint: `Each race with its category, ${t.sports.every((s) => s === 'swimming') ? 'swimmers' : 'athletes'}, rounds and lanes.`, done: eventCount > 0 },
+      { key: 'teams', label: 'Add teams or houses', hint: t.sports.every((s) => s === 'weightlifting') ? 'Lifters score for them.' : 'Athletes score for them; relay teams come from them.', done: teamCount >= 2 },
+      { key: 'events', label: 'Add the events', hint: t.sports.every((s) => s === 'weightlifting') ? 'Each bodyweight category with its lifters.' : `Each race with its category, ${t.sports.every((s) => s === 'swimming') ? 'swimmers' : 'athletes'}, rounds and lanes.`, done: eventCount > 0 },
     ];
   }
   const matchSports = t.sports.filter((s) => !EVENT_SPORTS.has(s));

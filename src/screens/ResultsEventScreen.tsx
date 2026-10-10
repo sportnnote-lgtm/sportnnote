@@ -18,6 +18,7 @@ import { askConfirm, confirmMatchAction } from '../components/ConfirmSheet';
 import { confirmCopy } from '../core/matchSafety';
 import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '../components/ui';
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
+import { WeighInCard, NextLiftCard, LiftGrid } from '../components/results/LiftingPanel';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { getPlayers, getMyPlayerId } from '../data/repos';
@@ -30,12 +31,12 @@ import {
   disciplineOf, phaseOf, phaseLabel, toResultEntry, rankByHeat, qualify, withQualification, withRecordFlags,
   fieldFinalists, firstRoundsDone, attemptOrder, formatMark, parseMark, attemptText, summarizeHeights, addTry,
   eventAwards, categoryKey, categoryLabel, usesLanes,
-  digitsToTime, handTime as handTimeTenth, handNote, reactionFalseStart, moveLane, startListText, resultsText, meetSettings, hurdleHeight,
+  digitsToTime, handTime as handTimeTenth, handNote, reactionFalseStart, moveLane, startListText, resultsText, hurdleHeight,
   looseLegal, attemptNextUp, trialsFor, verticalState, jumpOffStatus, jumpOffTry, jumpOffStart, trialSeconds, barProgressionError,
-  type DisciplineDef, type EntryResult, type MarkHistory, type RankedEntry, type RecordMark, type ResultStatus, type LiftAttempt,
+  type DisciplineDef, type EntryResult, type MarkHistory, type RankedEntry, type RecordMark, type ResultStatus,
   type ResultEntry, type JumpOff, type VerticalState, type Attempt,
-  phaseDiscipline, laneNumbers, rankEntries, dqCodesFor, dqReason, officialManualTime, splitDistances, splitsError, swimMeetSettings,
-  courseLabel, swimEventOf,
+  phaseDiscipline, laneNumbers, rankEntries, dqCodesFor, dqReason, officialManualTime, splitDistances, splitsError,
+  courseLabel, swimEventOf, eventMeetSettings, recordDefsFor, activeLift, nextSeq, weightClasses, LIFT_DISCIPLINE, liftAwards, pointsLabel,
   rangeCheck, readDigits, toggleHand, stripUnconfirmedFlags, unconfirmedOutOfRange, rowsForRecords, blankEntries, newRecords,
   closeRoundDetail, finishDetail, reopenVerdict, updateRecords, type KeypadMode, type RangeIssue, type Category,
 } from '../data/results';
@@ -56,8 +57,8 @@ const STATUSES: ResultStatus[] = ['DNS', 'DNF', 'FS', 'DQ'];
 const statusesFor = (def: DisciplineDef): ResultStatus[] =>
   def.sport === 'swimming' ? ['DNS', 'DQ'] : def.capture === 'single' ? (def.unit === 'time' ? STATUSES : ['DNS', 'DQ']) : ['DNS', 'DQ', 'WD'];
 const ruleHint = (def: DisciplineDef) => (def.sport === 'swimming' ? 'SW 7.6' : def.sport === 'athletics' ? 'TR 16.8' : 'rule');
-/** The meet's points settings for an event sport (athletics / swimming). */
-const pointsFor = (sport: string, fmt?: Record<string, unknown>) => (sport === 'swimming' ? swimMeetSettings(fmt) : meetSettings(fmt));
+/** The meet's points settings for an event sport (athletics / swimming / SD-97 weightlifting). */
+const pointsFor = (sport: string, fmt?: Record<string, unknown>) => eventMeetSettings(sport, fmt);
 const num = (t: string) => { const v = Number(t.trim().replace(',', '.').replace('−', '-')); return t.trim() && Number.isFinite(v) ? v : undefined; };
 type Course = Category['course'];
 /** SD-112: a mark outside the event's usual range is never rejected — it asks first. */
@@ -138,7 +139,8 @@ export default function ResultsEventScreen() {
     // SD-90: + the school record (SR) — the best at the host organisation's other meets.
     setRecords(recs);
     setLocal(new Map());
-    setHistory(await getMarkHistory(d, ens.map((e) => e.playerId), ev.id, pf.category?.course));
+    // SD-97: weightlifting PBs per lift and for the total
+    setHistory((await Promise.all(recordDefsFor(d).map((x) => getMarkHistory(x, ens.map((e) => e.playerId), ev.id, pf.category?.course)))).flat());
     setLoading(false);
   }, [params.phaseId]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -171,6 +173,14 @@ export default function ResultsEventScreen() {
     // SD-112: an out-of-range mark nobody confirmed shows no PB / SB / MR
     return new Map([...byHeat].map(([h, rows]) => [h, stripUnconfirmedFlags(withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx), def, f.category?.course)]));
   }, [def, f, phase, resEntries, history, records, srBook, timedFinal]);
+  // SD-97: weightlifting — the snatch and C&J rankings (own medals / records / PBs)
+  const lifts = def?.capture === 'lifts';
+  const liftRanked = useMemo(() => {
+    if (!lifts || !f || !phase) return null;
+    const ctx = { history, records: [...records, ...srBook], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
+    const one = (k: 'snatch' | 'cj') => { const d = disciplineOf(LIFT_DISCIPLINE[k])!; return stripUnconfirmedFlags(withRecordFlags(rankEntries(resEntries, d), d, ctx), d); };
+    return { snatch: one('snatch'), cj: one('cj') };
+  }, [lifts, f, phase, resEntries, history, records, srBook]);
   // SD-94: the overall order of a timed final (the sheet / share), and the
   // swim-off a tie at the qualifying line needs (SW 3.2.3)
   const overall = useMemo(() => (timedFinal ? [...ranked.values()].flat().sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.status === 'ok' ? 0 : 1) - (b.status === 'ok' ? 0 : 1)) : null), [ranked, timedFinal]);
@@ -238,7 +248,9 @@ export default function ResultsEventScreen() {
     const jo = [...ranked.values()].flat().some((r) => r.needsDecider && r.flags.includes('JO'));
     // SD-112: blank rows, unconfirmed out-of-range marks and any new meet record, in the confirm
     const rows = rankEntries(resEntries, def, { handLegal: looseLegal(f) });
-    const after = updateRecords(rowsForRecords(rows, def, course), def, categoryKey(f.category), records, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    // SD-97: a weightlifting session can set snatch, C&J and total records
+    let after = records;
+    for (const d of recordDefsFor(def)) after = updateRecords(rowsForRecords(d === def ? rows : rankEntries(resEntries, d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
     const detail = finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
       unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
@@ -249,8 +261,10 @@ export default function ResultsEventScreen() {
     try {
       const pts = isEventSport(def.sport) ? pointsFor(def.sport, tournament?.formats?.[def.sport] as Record<string, unknown> | undefined) : undefined;
       const book = await completeFinal(phase, merged, nameOf, ['MR'], pts);
-      const mine = book.filter((r) => r.discipline === def.key && r.category === categoryKey(f.category));
-      setInfo(mine.length ? `Records: ${mine.map((r) => `${r.scope} ${formatMark(r.value, def)} (${r.holder})`).join(' · ')}` : null);
+      const keys = recordDefsFor(def).map((d) => d.key);
+      const mine = book.filter((r) => keys.includes(r.discipline) && r.category === categoryKey(f.category));
+      const what = (k: string) => (lifts ? `${k === LIFT_DISCIPLINE.snatch ? 'snatch' : k === LIFT_DISCIPLINE.cj ? 'C&J' : 'total'} ` : '');
+      setInfo(mine.length ? `Records: ${mine.map((r) => `${r.scope} ${what(r.discipline)}${formatMark(r.value, def)}${lifts ? ' kg' : ''} (${r.holder})`).join(' · ')}` : null);
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -296,7 +310,17 @@ export default function ResultsEventScreen() {
   const relayX = meet && def.teamSize && meet.relayFactor !== 1 ? meet.relayFactor : 1;
   const awards = (f.phase === 'final' ? eventAwards(overall ?? [...ranked.values()].flat(), meet ? { positionPoints: meet.positionPoints } : {}) : [])
     .map((a) => (relayX !== 1 ? { ...a, points: Math.round(a.points * relayX * 100) / 100 } : a));
-  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length; });
+  // SD-97: snatch / C&J medals when the meet awards them
+  const liftMedals = lifts && !!meet?.liftMedals ? liftAwards(resEntries, { positionPoints: meet!.positionPoints, liftMedals: true }) : null;
+  const wlClasses = lifts ? weightClasses(f.category?.age, f.category?.gender === 'F' ? 'F' : 'M') : [];
+  const saveLift = (entryId: string, n: EntryResult, undoLabel?: string) => {
+    const e = merged.find((x) => x.id === entryId);
+    if (!e) return;
+    if (undoLabel) offerUndo(entryId, resultOf(e), undoLabel);
+    void save(e, n);
+  };
+  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass); });
+  const curLift = lifts ? activeLift(resEntries) : null;
   const hurdles = hurdleHeight(def.key, f.category ?? {});
   // SD-91: the field event's set-up line (implement, board, wind gauge)
   const fieldNote = [f.implement ? `Implement ${f.implement}` : '', f.board ? `Take-off board ${f.board} m` : '', f.noWindGauge ? 'No wind gauge — jumps without a reading count for records' : ''].filter(Boolean).join(' · ');
@@ -402,6 +426,7 @@ export default function ResultsEventScreen() {
         {swim ? <Text style={textStyles.muted}>{courseLabel(f.category?.course)} · {def.lanes} lanes{f.handTimed ? ' · manual timing (SW 11.3)' : ''}{timedFinal ? ` · timed final: ${f.heats} heats, places on time across heats` : ''}</Text> : null}
         {!swim && timedFinal ? <Text style={textStyles.muted}>Timed final: {f.heats} heats, places on time across heats.</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
+        {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
 
@@ -438,6 +463,10 @@ export default function ResultsEventScreen() {
               </View>
             )}
 
+            {lifts && phase.status !== 'completed' && (
+              <WeighInCard entries={heatRes} classes={wlClasses} weightClass={f.category?.weightClass} editable={editable} onSave={saveLift} />
+            )}
+            {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} />}
             {def.capture === 'attempts' && editable && (
               <AttemptCard def={def} up={nextUp} rows={heatRows} heatRes={heatRes} phaseKind={f.phase} onSave={saveAttempt} />
             )}
@@ -481,7 +510,7 @@ export default function ResultsEventScreen() {
                       {re.team?.name ? <Text style={textStyles.muted} numberOfLines={1}>{[re.team.name !== re.name ? re.team.name : '', r.members?.length ? r.members.map((m) => m.name.split(' ')[0]).join(', ') : ''].filter(Boolean).join(' · ')}</Text> : null}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={st.place}>{row?.label || ''}</Text>
+                      <Text style={st.place}>{lifts && row?.status === 'NM' ? '—' : row?.label || ''}</Text>
                       {row ? <Flags flags={row.flags} /> : null}
                     </View>
                   </View>
@@ -498,7 +527,7 @@ export default function ResultsEventScreen() {
                       onUndoable={(label) => offerUndo(e.id, r, `${label} · ${re.name.split(' ')[0]} R${round}`)} />
                   )}
                   {def.capture === 'heights' && <HeightRow def={def} r={r} bar={curBar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
-                  {def.capture === 'lifts' && <LiftCells r={r} editable={editable && (r.status ?? 'ok') === 'ok'} nextSeq={1 + Math.max(0, ...merged.flatMap((x) => [...((x.result as EntryResult)?.lifts?.snatch ?? []), ...((x.result as EntryResult)?.lifts?.cj ?? [])].map((l) => l.seq ?? 0)))} onChange={(n) => void save(e, n)} />}
+                  {def.capture === 'lifts' && <LiftGrid r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
                   {swim && editable && f.handTimed && (r.status ?? 'ok') === 'ok' && (
                     <WatchesField key={`${e.id}:w:${(r.watches ?? []).join(',')}`} def={def} r={r} course={course}
                       register={(x) => { inputs.current.set(e.id, x); }} onNext={() => focusAfter(e.id)} onChange={(n) => void save(e, n)} />
@@ -530,7 +559,10 @@ export default function ResultsEventScreen() {
               <Button label={`Next heat → Heat ${nextHeat}`} variant="ghost" onPress={() => { setHeat(nextHeat); scroller.current?.scrollTo({ y: 0, animated: true }); }} />
             )}
 
-            <ResultsSheet def={def} title="Live ranking" subtitle={heats.length > 1 ? `Heat ${activeHeat}` : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} />
+            {lifts && liftRanked && curLift === 'snatch'
+              // SD-97: during the snatch nobody has a total yet — show the snatch standings
+              ? <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.snatch)!} title="Live — snatch standings" heats={new Map([[1, liftRanked.snatch]])} />
+              : <ResultsSheet def={def} title="Live ranking" subtitle={heats.length > 1 ? `Heat ${activeHeat}` : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} />}
 
             {editable && next && <Button label={busy ? 'Seeding…' : `Close ${phaseLabel(f.phase).toLowerCase()} → seed the ${phaseLabel(next.phase).toLowerCase()}`} onPress={() => void advance()} disabled={busy} />}
             {editable && !next && <Button label={busy ? 'Finishing…' : '🏁 Finish & lock results'} onPress={() => void finish()} disabled={busy} />}
@@ -541,6 +573,12 @@ export default function ResultsEventScreen() {
           <>
             <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)}${swim ? ` · ${courseLabel(f.category?.course)}` : ''} · ${phase.startsAt.slice(0, 10)}`} heats={overall && anyMark ? new Map([[0, overall]]) : ranked} wind={windByHeat} overall={!!overall && anyMark} />
             {f.jumpOff ? <Text style={textStyles.muted}>{jumpOffText(f.jumpOff, def, resEntries)}</Text> : null}
+            {lifts && liftRanked && anyMark && (
+              <>
+                <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.snatch)!} title="Snatch" heats={new Map([[1, liftRanked.snatch]])} />
+                <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.cj)!} title="Clean & jerk" heats={new Map([[1, liftRanked.cj]])} />
+              </>
+            )}
             {awards.length > 0 && (
               <Card style={{ gap: theme.spacing(1) }}>
                 <Text style={textStyles.h3}>Medals & points</Text>
@@ -549,7 +587,15 @@ export default function ResultsEventScreen() {
                     {a.medal === 'gold' ? '🥇' : a.medal === 'silver' ? '🥈' : a.medal === 'bronze' ? '🥉' : `${a.position}.`} {a.name}{a.team?.name && a.team.name !== a.name ? ` (${a.team.name})` : ''} — {a.points} pts
                   </Text>
                 ))}
-                <Text style={textStyles.muted}>{meet ? meet.positionPoints.join('-') : 'Default 8-7-6-5-4-3-2-1'}; tied places share the points.{meet && meet.relayFactor !== 1 && def.teamSize ? ` Relays score ×${meet.relayFactor}.` : ''} These feed the meet's house / medal table.</Text>
+                {liftMedals && (['snatch', 'cj'] as const).map((k) => (
+                  <View key={k} style={{ gap: theme.spacing(1) }}>
+                    <Text style={st.label}>{k === 'snatch' ? 'Snatch' : 'Clean & jerk'}</Text>
+                    {liftMedals[k].filter((a) => a.medal).map((a) => (
+                      <Text key={a.entryId} style={textStyles.body}>{a.medal === 'gold' ? '🥇' : a.medal === 'silver' ? '🥈' : '🥉'} {a.name} — {a.points} pts</Text>
+                    ))}
+                  </View>
+                ))}
+                <Text style={textStyles.muted}>{meet ? pointsLabel(meet.positionPoints) : 'Default 8-7-6-5-4-3-2-1'}; tied places share the points.{meet && meet.relayFactor !== 1 && def.teamSize ? ` Relays score ×${meet.relayFactor}.` : ''} These feed the meet's house / medal table.</Text>
               </Card>
             )}
           </>
@@ -1001,37 +1047,6 @@ function HeightRow({ def, r, bar, editable, onChange }: { def: DisciplineDef; r:
           {tries ? <SelectChip label="Undo" active={false} onPress={() => set(tries.slice(0, -1))} /> : null}
         </View>
       )}
-    </View>
-  );
-}
-
-function LiftCells({ r, editable, nextSeq, onChange }: { r: EntryResult; editable: boolean; nextSeq: number; onChange: Change }) {
-  const [kg, setKg] = useState('');
-  const add = (lift: 'snatch' | 'cj', good: boolean) => {
-    const v = num(kg);
-    const list = r.lifts?.[lift] ?? [];
-    if (v == null || list.length >= 3) return;
-    const next: LiftAttempt[] = [...list, { kg: v, good, seq: nextSeq }];
-    onChange({ ...r, lifts: { ...r.lifts, [lift]: next } });
-    setKg('');
-  };
-  const row = (lift: 'snatch' | 'cj', label: string) => (
-    <View style={st.inline}>
-      <Text style={[st.label, { width: 44 }]}>{label}</Text>
-      {(r.lifts?.[lift] ?? []).map((a, k) => <Text key={k} style={[st.cellTxt, a.good === false && { textDecorationLine: 'line-through', color: theme.colors.danger }]}>{a.kg}</Text>)}
-      {editable && (r.lifts?.[lift]?.length ?? 0) < 3 && (
-        <>
-          <SelectChip label="✓ good" active={false} onPress={() => add(lift, true)} />
-          <SelectChip label="✗ no lift" active={false} onPress={() => add(lift, false)} />
-        </>
-      )}
-    </View>
-  );
-  return (
-    <View style={{ gap: theme.spacing(2) }}>
-      {editable && <TextInput style={[st.input, { width: 90 }]} value={kg} onChangeText={setKg} placeholder="kg" placeholderTextColor={theme.colors.textMuted} keyboardType="decimal-pad" accessibilityLabel="Weight in kg" />}
-      {row('snatch', 'Sn')}
-      {row('cj', 'C&J')}
     </View>
   );
 }

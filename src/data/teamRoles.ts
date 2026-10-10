@@ -13,6 +13,7 @@ export const TEAM_ROLES: Partial<Record<SportId, string[]>> = {
   basketball: ['Point Guard', 'Shooting Guard', 'Small Forward', 'Power Forward', 'Center'],
   volleyball: ['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'],
   kabaddi: ['Raider', 'Defender', 'All-rounder'],
+  handball: ['Goalkeeper', 'Wing', 'Back', 'Centre back', 'Pivot'],
 };
 
 /** Valid roles for a sport (empty when the sport has no squad-role concept). */

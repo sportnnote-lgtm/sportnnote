@@ -35,6 +35,8 @@ import { creditedPoints as carromCredited, type CarromState } from './carrom/eng
 import { hockeyBox } from './hockey/box.ts';
 import { DETAIL_BOX_KEYS, detailPlayerCredits, detailTracked, type DetailSport } from './pointDetail.ts';
 import type { HockeyState } from './hockey/engine.ts';
+import { handballBox } from './handball/box.ts';
+import type { HandballState } from './handball/engine.ts';
 
 type Side = 'home' | 'away';
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -478,6 +480,7 @@ export function matchBoxSource(sport: SportId, state: unknown, ctx: BoxContext =
     case 'tabletennis': case 'squash': case 'pickleball': return rallyBox(state as RallyState, ctx, sport);
     case 'carrom': return carromBox(state as CarromState);
     case 'hockey': return hockeyBox(state as HockeyState, ctx);
+    case 'handball': return handballBox(state as HandballState, ctx);
     default: return undefined;
   }
 }

@@ -2402,6 +2402,7 @@ function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   }
   if (sport === 'kabaddi' && fmt.halfMinutes != null) parts.push(`${fmt.halfMinutes}-min halves`);
   if (sport === 'hockey' && fmt.periodMinutes != null) parts.push(`${fmt.periods ?? 4} × ${fmt.periodMinutes} min`);
+  if (sport === 'handball' && fmt.periodMinutes != null) parts.push(`2 × ${fmt.periodMinutes} min`);
   return parts.length ? parts.join(' · ') : '—';
 }
 

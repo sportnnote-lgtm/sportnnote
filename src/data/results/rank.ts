@@ -6,7 +6,7 @@
  * unranked statuses (NM, DNF, FS, DQ, WD, DNS) listed below. Pure.
  */
 import { STATUS_ORDER, type DisciplineDef, type RankedEntry, type ResultEntry, type ResultFlag, type ResultStatus } from './model.ts';
-import { effectiveStatus, formatMark, summarizeAttempts, summarizeHeights, summarizeLifts, windLegal } from './marks.ts';
+import { bestLiftAttempt, effectiveStatus, formatMark, summarizeAttempts, summarizeHeights, summarizeLifts, windLegal } from './marks.ts';
 import { compareKeys, sharedPositions } from './positions.ts';
 
 export interface Performance {
@@ -55,8 +55,18 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       return { status, best: h.best, bestLegal: h.best, legal: h.best != null, keys: [h.best ?? -Infinity, -h.failsAtBest, -h.totalFails, decider], flags };
     }
     case 'lifts': {
+      // IWF: equal results → whoever achieved it first (the attempt's place in
+      // the competition, `seq`), then the lower lot / start number (`order`).
+      const lot = r.order != null ? -r.order : undefined;
+      const only = def.lifts?.length === 1 ? def.lifts[0] : undefined;
+      if (only) {
+        // SD-97: one lift ranked on its own (separate snatch / C&J medals and records)
+        const b = bestLiftAttempt(r.lifts?.[only]);
+        const best = b?.kg ?? null;
+        return { status, best, bestLegal: best, legal: best != null, keys: [best ?? -Infinity, b?.seq != null ? -b.seq : undefined, lot], flags };
+      }
       const l = summarizeLifts(r.lifts);
-      return { status, best: l.total, bestLegal: l.total, legal: l.total != null, keys: [l.total ?? -Infinity, l.totalSeq != null ? -l.totalSeq : undefined], flags };
+      return { status, best: l.total, bestLegal: l.total, legal: l.total != null, keys: [l.total ?? -Infinity, l.totalSeq != null ? -l.totalSeq : undefined, lot], flags };
     }
     case 'target': {
       const best = r.mark ?? null;

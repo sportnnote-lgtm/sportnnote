@@ -167,12 +167,19 @@ const bestLift = (list: LiftAttempt[] | undefined) => {
  *  best lifts came later in the competition (its `seq`). */
 export function summarizeLifts(lifts: EntryResult['lifts']): LiftSummary {
   const s = bestLift(lifts?.snatch), c = bestLift(lifts?.cj);
-  const failed = (l?: LiftAttempt[]) => (l ?? []).length >= 3 && (l ?? []).slice(0, 3).every((a) => a.good === false);
+  const failed = liftFailed;
   const bombedOut = failed(lifts?.snatch) || failed(lifts?.cj);
   const total = s && c ? s.kg + c.kg : null;
   const seqs = [s?.seq, c?.seq].filter((x): x is number => x != null);
   return { snatch: s?.kg ?? null, cj: c?.kg ?? null, total, totalSeq: total != null && seqs.length === 2 ? Math.max(...seqs) : undefined, bombedOut };
 }
+
+/** Three attempts taken in a lift and none good (a declined attempt — SD-97 `pass` — counts as no lift). */
+export const liftFailed = (l?: LiftAttempt[]): boolean =>
+  (l ?? []).length >= 3 && (l ?? []).slice(0, 3).every((a) => a.good === false || (a.good !== true && !!a.pass));
+
+/** SD-97: the best good attempt of one lift (heaviest; among equal weights the first taken). */
+export const bestLiftAttempt = (list: LiftAttempt[] | undefined): LiftAttempt | null => bestLift(list);
 
 /** IWF: a lifter's next attempt may not be lighter than the previous one. */
 export function liftProgressionError(list: LiftAttempt[] | undefined): string | null {
@@ -197,6 +204,10 @@ export function effectiveStatus(r: EntryResult, def: DisciplineDef): ResultStatu
     const h = summarizeHeights(r.heights);
     if (h.best == null && h.eliminated) return 'NM';
   }
-  if (def.capture === 'lifts' && summarizeLifts(r.lifts).bombedOut) return 'NM';
+  if (def.capture === 'lifts') {
+    // SD-97: one lift ranked on its own (wl.snatch / wl.cj) — out only if that lift failed
+    const only = def.lifts?.length === 1 ? def.lifts[0] : undefined;
+    if (only ? liftFailed(r.lifts?.[only]) : summarizeLifts(r.lifts).bombedOut) return 'NM';
+  }
   return 'ok';
 }

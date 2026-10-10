@@ -19,7 +19,8 @@ import { eventAwards, type Award, type FieldResultInput, type PointsConfig } fro
 import type { PlannedPhase } from './plan.ts';
 import { fieldRoundPresets } from './field.ts';
 import { phaseLabel } from './plan.ts';
-import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER } from './swimming.ts';
+import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER, swimMeetSettings } from './swimming.ts';
+import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -35,6 +36,13 @@ export function meetSettings(fmt?: Record<string, unknown>): MeetSettings {
     handTimed: fmt?.handTimed === true,
     reaction: fmt?.reaction === true,
   };
+}
+
+/** SD-97: any event sport's points settings (athletics, swimming, weightlifting). */
+export function eventMeetSettings(sport: string, fmt?: Record<string, unknown>): { positionPoints: number[]; relayFactor: number; liftMedals?: boolean } {
+  if (sport === 'swimming') return swimMeetSettings(fmt);
+  if (sport === 'weightlifting') return wlMeetSettings(fmt);
+  return meetSettings(fmt);
 }
 
 /* ------------------------------- categories ------------------------------- */
@@ -513,6 +521,8 @@ export function eventStatus(e: MeetEvent): { label: string; done: boolean; live:
 export interface PointsSettings extends PointsConfig {
   /** relay points multiplier (many school meets score relays double) */
   relayFactor?: number;
+  /** SD-97 weightlifting: medals (and points) for the snatch and the C&J too, not only the total */
+  liftMedals?: boolean;
 }
 
 /** A finished final's medals and points (relays × relayFactor), or null. */
@@ -532,7 +542,13 @@ export function meetFieldResults(events: MeetEvent[], cfg: PointsSettings = {}, 
   const out: FieldResultInput[] = [];
   for (const e of events) {
     const r = finalAwards(e, cfg, handLegal);
-    if (r) out.push({ sport: disciplineOf(e.discipline)!.sport, event: e.title, awards: r.awards });
+    if (!r) continue;
+    out.push({ sport: disciplineOf(e.discipline)!.sport, event: e.title, awards: r.awards });
+    // SD-97: separate snatch and C&J medals when the meet awards them
+    if (cfg.liftMedals && disciplineOf(e.discipline)?.capture === 'lifts') {
+      const la = liftAwards(r.fin.entries, cfg);
+      out.push({ sport: 'weightlifting', event: `${e.title} — Snatch`, awards: la.snatch }, { sport: 'weightlifting', event: `${e.title} — Clean & jerk`, awards: la.cj });
+    }
   }
   return out;
 }
@@ -593,10 +609,11 @@ export function topAthletes(events: MeetEvent[], cfg: PointsSettings = {}, categ
 export function deriveRecordBook(events: MeetEvent[], scope: 'MR' | 'SR'): RecordMark[] {
   const out = new Map<string, RecordMark>();
   for (const e of events) {
-    const def = disciplineOf(e.discipline);
-    if (!def) continue;
+    const base = disciplineOf(e.discipline);
+    if (!base) continue;
     const cat = categoryKey(e.category);
-    for (const p of e.phases) {
+    // SD-97: a weightlifting session keeps snatch, C&J and total records
+    for (const def of recordDefsFor(base)) for (const p of e.phases) {
       if (p.status !== 'completed') continue;
       for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
         if (r.position == null || r.bestLegal == null) continue;

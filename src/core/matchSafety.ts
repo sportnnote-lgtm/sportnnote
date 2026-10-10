@@ -83,6 +83,7 @@ export const FLOW_CONTROLS: Partial<Record<SportId, MatchAction[]>> = {
   basketball: ['endPeriod', 'fullTime', 'endTie'],
   kabaddi: ['endPeriod', 'fullTime', 'endTie'],
   hockey: ['endPeriod', 'fullTime'],
+  handball: ['endPeriod', 'fullTime'],
 };
 
 /** Field / timed events run on their own screens; their finish lives at the
@@ -91,6 +92,7 @@ export const EVENT_CONTROLS: Partial<Record<SportId, MatchAction[]>> = {
   golf: ['finishRound'],
   athletics: ['closePhase', 'finishEvent'],
   swimming: ['closePhase', 'finishEvent'],
+  weightlifting: ['finishEvent'],
 };
 
 /** Every control a scorer / host sees on a match's screen, in display order. */

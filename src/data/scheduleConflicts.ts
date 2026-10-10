@@ -32,6 +32,8 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   athletics: 240, // a session of track events
   hockey: 105, // 4 × 15 + breaks + turnaround
   swimming: 240, // a session of swimming events
+  handball: 90, // 2 × 30 + half-time + time-outs + turnaround
+  weightlifting: 150, // one bodyweight category's session (snatch + C&J) + turnaround
 };
 
 /** The nominal on-ground window for a sport (minutes). Falls back to 2 hours. */

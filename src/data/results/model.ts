@@ -95,7 +95,9 @@ export const categoryKey = (c?: Category): string =>
   [c?.age ?? 'open', c?.gender ?? 'X', c?.weightClass ?? '', c?.course ?? ''].filter(Boolean).join('-');
 
 export const categoryLabel = (c?: Category): string => {
-  const g = c?.gender === 'M' ? 'Boys' : c?.gender === 'F' ? 'Girls' : c?.gender === 'X' ? 'Mixed' : '';
+  // SD-97: senior / junior weightlifting categories read "Men 79 kg" / "Women 58 kg"
+  const adult = !!c?.weightClass && /^(Senior|Junior)$/.test(c?.age ?? '');
+  const g = c?.gender === 'M' ? (adult ? 'Men' : 'Boys') : c?.gender === 'F' ? (adult ? 'Women' : 'Girls') : c?.gender === 'X' ? 'Mixed' : '';
   return [c?.age, g, c?.weightClass].filter(Boolean).join(' ') || 'Open';
 };
 
@@ -183,10 +185,21 @@ export interface HeightAttempt { height: number; tries: string }
 
 export interface LiftAttempt {
   kg: number;
-  /** true = good lift, false = no lift, undefined = not yet taken */
+  /** true = good lift, false = no lift, undefined = not yet taken (a declared weight) */
   good?: boolean;
   /** competition-wide attempt order — earlier = smaller (IWF tie rule) */
   seq?: number;
+  /** SD-97: the three referees' lights (true = white / good) when the official
+   *  enters them — the decision is the majority (IWF TCRR) */
+  lights?: boolean[];
+  /** SD-97: the lifter declined (forfeited) this attempt — it counts as no lift
+   *  for the result but not as attempted for the make rate */
+  pass?: boolean;
+  /** SD-97: the declaration was made by the app (+1 kg after a good lift, the
+   *  same weight after a no lift) — the lifter / coach can still change it */
+  auto?: boolean;
+  /** SD-112 / SD-97: the official confirmed a weight outside the usual range */
+  rangeOk?: boolean;
 }
 
 /** The result payload stored in `field_entries.result`. Absent fields = not tracked. */
@@ -337,6 +350,10 @@ export const DISCIPLINES: DisciplineDef[] = [
   swim('4x50medley', '4 × 50 m medley relay', { teamSize: 4 }),
   swim('4x100medley', '4 × 100 m medley relay', { teamSize: 4 }),
   { key: 'wl.total', label: 'Weightlifting total', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['snatch', 'cj'] },
+  // SD-97: each lift ranked on its own (separate snatch / C&J medals, records, PBs).
+  // Not events of their own — a weightlifting event is always 'wl.total'.
+  { key: 'wl.snatch', label: 'Snatch', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['snatch'] },
+  { key: 'wl.cj', label: 'Clean & jerk', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['cj'] },
   { key: 'arch.720', label: 'Archery 70 m ranking round (72 arrows)', sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count' },
   { key: 'shoot.10mar', label: '10 m air rifle qualification', sport: 'shooting', unit: 'points', better: 'higher', dp: 1, capture: 'target', tie: 'inner-count' },
 ];

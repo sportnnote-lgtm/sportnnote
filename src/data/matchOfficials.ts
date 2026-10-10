@@ -45,6 +45,14 @@ export const OFFICIAL_SLOTS: Partial<Record<SportId, OfficialSlot[]>> = {
     { key: 'technical_officer', label: 'Technical officer', group: ['Technical officer', 'Technical officers'] },
     COMMENTATOR,
   ],
+  // IHF: a pair of referees, plus the timekeeper and scorekeeper at the table
+  handball: [
+    { key: 'referee1', label: 'Referee 1', group: ['Referee', 'Referees'] },
+    { key: 'referee2', label: 'Referee 2', group: ['Referee', 'Referees'] },
+    { key: 'timekeeper', label: 'Timekeeper', group: ['Timekeeper', 'Timekeepers'] },
+    { key: 'scorekeeper', label: 'Scorekeeper', group: ['Scorekeeper', 'Scorekeepers'] },
+    COMMENTATOR,
+  ],
   kabaddi: [
     { key: 'referee', label: 'Referee', group: ['Referee', 'Referees'] },
     { key: 'umpire1', label: 'Umpire 1', group: UMPIRES },

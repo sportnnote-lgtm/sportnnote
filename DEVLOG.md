@@ -13,6 +13,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — New sports: handball (SD-102) and weightlifting (SD-97)
+- **Handball (IHF), `src/sports/handball/`:** running clock (stops for team time-outs; suspensions / disqualifications with `stopClock`); presets senior 2×30, youth 2×25 / 2×20, custom; goals and misses by type (6 m, 9 m, wing, breakthrough, fast break, 7 m) with keeper saves (7 m separately), blocks, steals, technical faults; team time-outs 3 a match / 2 a half / 1 in the last 5 min; sanctions warning → 2′ (team short, timer) → 3rd 2′ = disqualification, red, blue, officials too; deciders: draw / 7 m throws / ET 2×5 then 7 m / two ETs. On-field tracker, statTotals, schema (save %, 7 m save %, goal-type %), box MIN G SH 7M AS TF ST BS SV GA YC 2′ D, leaders + awards (Top scorer, Best goalkeeper), IHF 2-1-0 standings. Match controls + confirms, ✕ confirm, backfill bar from day one. Guide: score-handball.
+- **Weightlifting (IWF), results engine:** 2025 bodyweight categories (senior/junior/youth) + school preset; weigh-in with category check; declarations (whole kg, never lighter, +1 kg after a good lift, same weight after a no lift); Good lift / No lift or 3 referee lights, Declined; calling order "Next: {name} · 87 kg · 2nd attempt"; snatch + C&J → total (bomb-out = no total, still ranked in the other lift); ties to whoever reached the total first; optional snatch/C&J medals; meet records per lift + total with reopen rollback; Sinclair; career with make rate + PBs. `src/data/results/weightlifting.ts`, `LiftingPanel.tsx`, `WeightliftingEventSetup.tsx`, `LiftingCareer.tsx`. Guide: run-a-weightlifting-meet.
+- **No migration** for either (sport is plain text; lifting data in JSON fields).
+- **Verified:** `tests/handball.test.mts` (32), `tests/weightlifting.test.mts` (27), suite green, tsc clean; demo 8093 375 px — handball friendly end to end; weightlifting meet with weigh-in, calling order, bomb-out, tie on total, records, reopen.
+
+---
+
 ### 2026-10-11 — SD-117c carrom, chess, golf + racket court cues
 - **Carrom:** "Who breaks first?" toss, then "⚪ {name} to break" alternating per board (Fix the toss never changes the score); ✎ Correct a board editor with ✎ / ✕ + confirm (replays every board, stats follow); slam chip already says White/Black; Queen covered by Winner / Loser / Not covered. New stats boardBreaks, boardBreaksWon, own-break win %, lostQueens ("not tracked" on old matches).
 - **Chess:** forfeits no longer count as games played (forfeitWins / forfeitLosses); new methods Illegal move, Time out vs insufficient material, Fivefold repetition, 75-move rule; optional White/Black clock time left.

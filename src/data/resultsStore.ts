@@ -21,7 +21,7 @@ import {
   type Category, type DisciplineDef, type EntryResult, type MarkHistory, type PhaseFormat, type PlannedPhase,
   type RecordMark, type RecordScope, type ResultEntry, type RankedEntry, type PhaseKind, compareKeys, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
   type FieldResultInput, looseLegal, seededRng, phaseDiscipline, swimSeed, timedFinalHeats, laneOrder, type Seeded,
-  rowsForRecords, recordsFor, rollbackRecords, reopenVerdict,
+  rowsForRecords, recordsFor, rollbackRecords, reopenVerdict, recordDefsFor, liftLines,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
@@ -40,6 +40,8 @@ export interface NewEntrant {
   /** seed mark (season best / entry time) — better first */
   seed?: number;
   bib?: string;
+  /** SD-97: start-list fields known at entry (bodyweight, opening declarations) */
+  start?: Pick<EntryResult, 'bodyweight' | 'lifts'>;
 }
 
 export interface NewResultsEvent {
@@ -163,7 +165,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     const e = ordered[Number(s.id)];
     return {
       playerId: e.playerId, teamId: e.team?.id, heat: s.heat,
-      result: { lane: s.lane, order: s.order, bib: e.bib, team: e.team, ...(e.playerId ? {} : { name: e.name, members: e.members ?? [] }) },
+      result: { ...(e.start ?? {}), lane: s.lane, order: s.order, bib: e.bib, team: e.team, ...(e.playerId ? {} : { name: e.name, members: e.members ?? [] }) },
     };
   }));
   return ev;
@@ -218,7 +220,7 @@ export { getFieldEntries as getPhaseEntries };
 
 /** Save one entry's result (offline-safe; returns how many saves are waiting to sync). */
 export function saveEntryResult(entryId: string, result: EntryResult): Promise<number> {
-  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good);
+  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good) || !!result.lifts?.cj?.some((l) => l.good);
   return saveFieldResult(entryId, result, fieldStatusFor(result.status, hasMark));
 }
 
@@ -299,17 +301,25 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   if (!f || !def) throw new Error('Not a results event');
   // A timed final (several heats) ranks across heats — the whole phase at once.
   const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
-  if (isEventSport(def.sport)) {
+  if (def.capture === 'lifts') {
+    // SD-97: weightlifting lines — best snatch / C&J / total, make rate, medals
+    await writePhaseLines(phase, f, liftLines(f, entries.map((e) => toResultEntry(e, nameOf)), points ?? {}));
+  } else if (isEventSport(def.sport)) {
     let awards = eventAwards(rows, points ?? {});
     if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
     await writePhaseLines(phase, f, phaseLines(f, rows, awards));
   }
   const book = await getRecordBook(phase.tournamentId, def.sport);
   const cat = categoryKey(f.category);
-  // SD-112: an out-of-range mark nobody confirmed never sets a record
-  const next = updateRecords(rowsForRecords(rows, def, f.category?.course), def, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  // SD-112: an out-of-range mark nobody confirmed never sets a record.
+  // SD-97: a weightlifting session sets snatch, C&J and total records.
+  let next = book;
+  for (const d of recordDefsFor(def)) {
+    const dRows = d === def ? rows : rankEntries(entries.map((e) => toResultEntry(e, nameOf)), d);
+    next = updateRecords(rowsForRecords(dRows, d, f.category?.course), d, cat, next, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  }
   // SD-112: keep what the book said before, so "Reopen final" can put it back
-  await patchPhaseFormat(phase.id, { recordsBefore: recordsFor(book, def.key, cat) });
+  await patchPhaseFormat(phase.id, { recordsBefore: recordDefsFor(def).flatMap((d) => recordsFor(book, d.key, cat)) });
   if (next !== book) await saveRecordBook(phase.tournamentId, def.sport, next);
   await setPhaseStatus(phase.id, 'completed');
   return next;
@@ -347,7 +357,8 @@ export async function reopenPhase(stale: FieldEvent): Promise<{ removedPhase?: s
   if (v.kind === 'final') {
     const cat = categoryKey(f.category);
     const book = await getRecordBook(phase.tournamentId, def.sport);
-    const next = rollbackRecords(book, def.key, cat, f.eventKey, f.recordsBefore);
+    let next = book;
+    for (const d of recordDefsFor(def)) next = rollbackRecords(next, d.key, cat, f.eventKey, f.recordsBefore);
     if (next.length !== book.length || next.some((r, i) => r !== book[i])) await saveRecordBook(phase.tournamentId, def.sport, next);
     out.records = next;
   }
@@ -374,14 +385,16 @@ export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], e
   if (!ids.length) return [];
   // SD-94: swimming PBs are per pool length (an unset course reads as long course)
   const sameCourse = (e: FieldEvent) => def.sport !== 'swimming' || (phaseOf(e)?.category?.course ?? 'LCM') === (course ?? 'LCM');
+  // SD-97: a lift (wl.snatch / wl.cj) comes from the weightlifting sessions ('wl.total')
+  const phaseKey = def.capture === 'lifts' ? 'wl.total' : def.key;
   let phases: FieldEvent[];
   let entries: FieldEntry[];
   if (!live()) {
-    phases = demo.fieldEvents.filter((e) => e.status === 'completed' && e.id !== exceptPhaseId && phaseOf(e)?.discipline === def.key && sameCourse(e));
+    phases = demo.fieldEvents.filter((e) => e.status === 'completed' && e.id !== exceptPhaseId && phaseOf(e)?.discipline === phaseKey && sameCourse(e));
     const pids = new Set(phases.map((p) => p.id));
     entries = demo.fieldEntries.filter((e) => pids.has(e.eventId) && ids.includes(e.playerId));
   } else {
-    const { data } = await supabase!.from('field_events').select('*').eq('status', 'completed').eq('format->results->>discipline', def.key);
+    const { data } = await supabase!.from('field_events').select('*').eq('status', 'completed').eq('format->results->>discipline', phaseKey);
     phases = ((data ?? []) as any[]).map(toEvent).filter((e) => e.id !== exceptPhaseId && sameCourse(e));
     if (!phases.length) return [];
     const { data: rows } = await supabase!.from('field_entries').select('*').in('event_id', phases.map((p) => p.id)).in('player_id', ids);

@@ -22,6 +22,8 @@ import { golfPlugin } from './golf';
 import { athleticsPlugin } from './athletics';
 import { hockeyPlugin } from './hockey';
 import { swimmingPlugin } from './swimming';
+import { weightliftingPlugin } from './weightlifting';
+import { handballPlugin } from './handball';
 import { STAT_SCHEMAS } from './statSchemas';
 
 export const SPORTS: Record<SportId, SportPlugin<any>> = {
@@ -42,6 +44,8 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
   athletics: athleticsPlugin,
   hockey: hockeyPlugin,
   swimming: swimmingPlugin,
+  weightlifting: weightliftingPlugin,
+  handball: handballPlugin,
 };
 
 // SD-15: every plugin carries its stat schema (defined next to the plugin in

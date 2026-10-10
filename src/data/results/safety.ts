@@ -19,7 +19,9 @@
 import type { Attempt, Category, DisciplineDef, EntryResult, RankedEntry, ResultEntry, ResultFlag } from './model.ts';
 import type { RecordMark } from './records.ts';
 import { formatMark } from './marks.ts';
+import { disciplineOf } from './model.ts';
 import { digitsToTime, handTime } from './athletics.ts';
+import { WL_RANGE, outOfRange } from './weightlifting.ts';
 
 export interface MarkRange { min: number; max: number }
 
@@ -65,6 +67,8 @@ const SWIM_LCM_MIN: Record<string, number> = {
 export function markRange(discipline: string, course?: Category['course']): MarkRange | null {
   const a = ATHLETICS[discipline];
   if (a) return { min: a[0], max: a[1] };
+  // SD-97: weightlifting — kg per lift / total (and bodyweight, see weightlifting.ts)
+  if (WL_RANGE[discipline]) return { ...WL_RANGE[discipline] };
   if (discipline.startsWith('swim.')) {
     const base = SWIM_LCM_MIN[discipline.slice(5)];
     if (base == null) return null;
@@ -84,8 +88,9 @@ export function rangeCheck(def: Pick<DisciplineDef, 'key' | 'label' | 'unit' | '
   if (mark >= range.min && mark <= range.max) return null;
   const side = mark < range.min ? 'low' : 'high';
   const time = def.unit === 'time';
-  const word = time ? (side === 'low' ? 'fast' : 'slow') : (side === 'low' ? 'short' : def.unit === 'height' ? 'high' : 'long');
-  const unit = time ? '' : ' m';
+  const mass = def.unit === 'mass';
+  const word = time ? (side === 'low' ? 'fast' : 'slow') : mass ? (side === 'low' ? 'light' : 'heavy') : (side === 'low' ? 'short' : def.unit === 'height' ? 'high' : 'long');
+  const unit = time ? '' : mass ? ' kg' : ' m';
   const usual = `${formatMark(range.min, def)}${unit} – ${formatMark(range.max, def)}${unit}`;
   return { side, range, message: `${formatMark(mark, def)}${unit} looks too ${word} for the ${def.label.toLowerCase()} — the usual range is ${usual}. Check the digits before saving.` };
 }
@@ -147,6 +152,11 @@ const outside = (def: DisciplineDef, v: number | undefined, course?: Category['c
 export function unconfirmedOutOfRange(r: EntryResult, def: DisciplineDef, course?: Category['course']): boolean {
   if (def.capture === 'single') return outside(def, r.mark, course) && !r.rangeOk;
   if (def.capture === 'attempts') return (r.attempts ?? []).some((a: Attempt | undefined) => !!a && !a.foul && !a.pass && outside(def, a.mark, course) && !a.rangeOk);
+  // SD-97: a good lift at a weight outside the usual range, not confirmed
+  if (def.capture === 'lifts') {
+    const lifts = def.lifts ?? ['snatch', 'cj'];
+    return lifts.some((l) => (r.lifts?.[l] ?? []).some((a) => a.good === true && outOfRange(l === 'snatch' ? 'wl.snatch' : 'wl.cj', a)));
+  }
   // HJ / PV: the bar heights are confirmed when they are added
   return false;
 }
@@ -184,7 +194,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : (n === 1 ? 'athlete' : 'athletes');
+  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {
@@ -203,8 +213,10 @@ export function finishDetail(opts: {
   blank: ResultEntry[]; def: DisciplineDef; records: { rec: RecordMark; old?: RecordMark }[]; unconfirmed: number; jumpOff?: boolean;
 }): string {
   const { def } = opts;
-  const unit = def.unit === 'time' ? '' : ' m';
-  const rec = opts.records.map(({ rec, old }) => `New ${rec.scope === 'MR' ? 'meet record' : 'school record'}: ${formatMark(rec.value, def)}${unit} by ${rec.holder}${old ? ` (was ${formatMark(old.value, def)}${unit})` : ''}. `).join('');
+  const unit = def.unit === 'time' ? '' : def.unit === 'mass' ? ' kg' : ' m';
+  // SD-97: a weightlifting session can set snatch, C&J and total records
+  const what = (d: string) => (def.capture === 'lifts' ? ` (${(disciplineOf(d)?.label ?? d).replace('Weightlifting total', 'total').toLowerCase()})` : '');
+  const rec = opts.records.map(({ rec, old }) => `New ${rec.scope === 'MR' ? 'meet record' : 'school record'}${what(rec.discipline)}: ${formatMark(rec.value, def)}${unit} by ${rec.holder}${old ? ` (was ${formatMark(old.value, def)}${unit})` : ''}. `).join('');
   return [
     opts.jumpOff ? 'The tie for 1st has no jump-off result — the athletes will share 1st. ' : '',
     blankWarning(opts.blank, def, 'they get no place or points'),

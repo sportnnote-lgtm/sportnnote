@@ -40,8 +40,8 @@ import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFo
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
 import { medalStandings } from '../data/medalStandings';
 import { useMeet } from '../data/useAthletics';
-import { meetFieldResults, meetSettings, swimMeetSettings, courseShort } from '../data/results';
-import { isEventSport, eventWords } from '../sports/eventSports';
+import { meetFieldResults, meetSettings, swimMeetSettings, courseShort, eventMeetSettings, pointsLabel } from '../data/results';
+import { isEventSport, eventWords, eventPrefix } from '../sports/eventSports';
 import { MedalTable } from '../components/MedalTable';
 import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
 import type { SportId } from '../core/types';
@@ -325,8 +325,9 @@ export default function TournamentProfileScreen() {
     // each event sport scores with its own points settings
     return sports.filter((s) => isEventSport(s)).flatMap((s) => {
       const f = tournament?.formats?.[s] as Record<string, unknown> | undefined;
-      const cfg = s === 'swimming' ? swimMeetSettings(f) : meetSettings(f);
-      return meetFieldResults(meet.events.filter((e) => e.discipline.startsWith(s === 'swimming' ? 'swim.' : 'ath.')), { positionPoints: cfg.positionPoints, relayFactor: cfg.relayFactor });
+      const cfg = eventMeetSettings(s, f);
+      // SD-97: weightlifting may award snatch / C&J medals too (liftMedals)
+      return meetFieldResults(meet.events.filter((e) => e.discipline.startsWith(eventPrefix(s))), { positionPoints: cfg.positionPoints, relayFactor: cfg.relayFactor, liftMedals: cfg.liftMedals });
     });
   }, [hasAthletics, meet.events, tournament?.formats, sports]);
   const showMedal = (isMedal && sports.length > 1) || fieldResults.length > 0;
@@ -695,13 +696,13 @@ export default function TournamentProfileScreen() {
               if (isEventSport(sp)) {
                 const ms = meetSettings(fmt);
                 const sw = sp === 'swimming' ? swimMeetSettings(fmt) : null;
-                const n = meet.events.filter((e) => e.discipline.startsWith(sw ? 'swim.' : 'ath.')).length;
+                const n = meet.events.filter((e) => e.discipline.startsWith(eventPrefix(sp))).length;
                 const name = getSport(sp).name;
                 return (
                   <React.Fragment key={sp}>
                     <HubRow icon={eventWords(sp).icon} title={`${name} — events`} status={n ? `${n} event${n === 1 ? '' : 's'} · add, enter results` : 'None yet — add the first event'}
                       onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: sp, tournamentName: tournament.name })} />
-                    <HubRow icon="⚙" title={`${name} — ${sw ? 'pool, points & timing' : 'points & timing'}`} status={`${sw ? `${courseShort(sw.course)} · ${sw.lanes} lanes · ` : ''}${ms.positionPoints.join('-')}${ms.relayFactor !== 1 ? ` · relays ×${ms.relayFactor}` : ''}${ms.handTimed ? (sw ? ' · manual timing' : ' · hand-timed') : ''}`}
+                    <HubRow icon="⚙" title={`${name} — ${sw ? 'pool, points & timing' : sp === 'weightlifting' ? 'medals & points' : 'points & timing'}`} status={`${sw ? `${courseShort(sw.course)} · ${sw.lanes} lanes · ` : ''}${sp === 'weightlifting' && fmt?.liftMedals === true ? 'snatch, C&J & total medals · ' : ''}${pointsLabel(ms.positionPoints)}${ms.relayFactor !== 1 ? ` · relays ×${ms.relayFactor}` : ''}${ms.handTimed ? (sw ? ' · manual timing' : ' · hand-timed') : ''}`}
                       onPress={() => nav.navigate('SportSettings', { sport: sp, tournamentId: tournament.id })} />
                   </React.Fragment>
                 );
