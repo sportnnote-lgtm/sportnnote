@@ -43,6 +43,8 @@ export function qualify(byHeat: Map<number, RankedEntry[]>, def: DisciplineDef, 
   const qCount = prog.byMark ?? (prog.fillTo != null ? Math.max(0, prog.fillTo - marks.size) : 0);
   if (qCount > 0) {
     const keys = new Map(all.filter((r) => !marks.has(r.id)).map((r) => [r.id, performanceOf(r.entry, def)]));
+    // SD-94: a swim-off (SW 3.2.3) separates equal times for the last places through.
+    if (def.tie === 'stands') for (const r of all) { const p = keys.get(r.id); if (p) p.keys = [...p.keys, r.entry.result?.decider != null ? -r.entry.result.decider : undefined]; }
     levelKeys([...keys.values()]);
     const k = (r: RankedEntry) => keys.get(r.id)!.keys;
     const rest = all.filter((r) => keys.has(r.id)).sort((a, b) => compareKeys(k(a), k(b)));

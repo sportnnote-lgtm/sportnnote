@@ -21,7 +21,7 @@ const legal = await import(join(ROOT, 'src/data/legal.ts'));
 const SPORTS = [
   ['🏏', 'Cricket'], ['⚽', 'Football'], ['🏀', 'Basketball'], ['🏐', 'Volleyball'], ['🤼', 'Kabaddi'],
   ['🎾', 'Tennis'], ['🏸', 'Badminton'], ['🏓', 'Table tennis'], ['⚫', 'Squash'], ['🟡', 'Padel'],
-  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'],
+  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'], ['🏑', 'Hockey'], ['🏊', 'Swimming'],
 ];
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

@@ -8,7 +8,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
-  attemptText, formatMark, summarizeLifts, usesLanes,
+  attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -17,6 +17,8 @@ const FLAG_COLOR: Partial<Record<ResultFlag, string>> = {
   SR: theme.colors.accent, '=SR': theme.colors.accent, PB: theme.colors.home, '=PB': theme.colors.home, SB: theme.colors.home, '=SB': theme.colors.home,
   w: theme.colors.away, h: theme.colors.away, JO: theme.colors.danger, SO: theme.colors.danger,
 };
+
+const LEG_SHORT: Record<string, string> = { Backstroke: 'Back', Breaststroke: 'Breast', Butterfly: 'Fly', Freestyle: 'Free' };
 
 export const windText = (w: number | undefined) => (w == null ? '' : `${w > 0 ? '+' : w < 0 ? '−' : ''}${Math.abs(w).toFixed(1)}`);
 
@@ -42,11 +44,17 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
     return `Sn ${one(res.lifts?.snatch)} → ${l.snatch ?? '–'} · C&J ${one(res.lifts?.cj)} → ${l.cj ?? '–'}`;
   }
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
-  if (res.members?.length) return res.members.map((m) => m.name).join(', ');
-  return '';
+  // SD-94 swimming: medley legs by stroke, then the 50 m splits
+  const swim = def.sport === 'swimming';
+  const legs = swim ? legLabels(def.key) : [];
+  const members = res.members?.length
+    ? res.members.slice(0, def.teamSize ?? 4).map((m, i) => (swim && LEG_SHORT[legs[i]] ? `${LEG_SHORT[legs[i]]} ${m.name}` : m.name)).join(', ')
+    : '';
+  const splits = swim ? splitsText(res.splits, (v) => formatMark(v, def), def.key) : '';
+  return [members, splits].filter(Boolean).join(' · ');
 }
 
-export function ResultsSheet({ def, title, subtitle, heats, wind }: {
+export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
   def: DisciplineDef;
   title: string;
   subtitle?: string;
@@ -54,6 +62,8 @@ export function ResultsSheet({ def, title, subtitle, heats, wind }: {
   heats: Map<number, RankedEntry[]>;
   /** race wind per heat (track sprints) */
   wind?: Map<number, number | undefined>;
+  /** SD-94: a timed final's one overall table (each row shows its heat) */
+  overall?: boolean;
 }) {
   const lanes = usesLanes(def);
   const many = heats.size > 1;
@@ -65,19 +75,19 @@ export function ResultsSheet({ def, title, subtitle, heats, wind }: {
       </View>
       {[...heats].map(([heat, rows]) => (
         <Card key={heat} style={{ gap: theme.spacing(1), padding: theme.spacing(3) }}>
-          {(many || (def.wind === 'race' && wind?.get(heat) != null)) && (
+          {(many || overall || (def.wind === 'race' && wind?.get(heat) != null)) && (
             <Text style={st.heatHead}>
-              {many ? `Heat ${heat}` : 'Result'}{def.wind === 'race' && wind?.get(heat) != null ? `  ·  wind ${windText(wind.get(heat))} m/s` : ''}
+              {overall ? 'Overall' : many ? `Heat ${heat}` : 'Result'}{def.wind === 'race' && wind?.get(heat) != null ? `  ·  wind ${windText(wind.get(heat))} m/s` : ''}
             </Text>
           )}
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : 'Athlete'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : 'Athlete'}</Text>
             <Text style={[st.mark, st.headTxt]}>{def.unit === 'time' ? 'Time' : def.unit === 'mass' ? 'Total' : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
-            const detail = seriesText(r, def);
+            const detail = [overall ? `Heat ${r.entry.heat}` : '', seriesText(r, def)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>
@@ -95,7 +105,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind }: {
                 {(detail || r.flags.length || r.entry.result.ruleRef) ? (
                   <View style={st.sub}>
                     <Flags flags={r.flags} />
-                    {r.entry.result.ruleRef ? <Text style={st.team}>{r.status} {r.entry.result.ruleRef}</Text> : null}
+                    {r.entry.result.ruleRef ? <Text style={st.team}>{r.status} {r.entry.result.ruleRef}{r.entry.result.reason ? ` ${r.entry.result.reason}` : ''}</Text> : null}
                     {detail ? <Text style={st.detail}>{detail}</Text> : null}
                   </View>
                 ) : null}

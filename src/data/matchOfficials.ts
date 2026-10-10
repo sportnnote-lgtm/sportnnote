@@ -38,6 +38,13 @@ export const OFFICIAL_SLOTS: Partial<Record<SportId, OfficialSlot[]>> = {
     { key: 'table_official', label: 'Table official', group: ['Table official', 'Table officials'] },
     COMMENTATOR,
   ],
+  // FIH: two field umpires, plus the technical officer at the table
+  hockey: [
+    { key: 'umpire1', label: 'Umpire 1', group: UMPIRES },
+    { key: 'umpire2', label: 'Umpire 2', group: UMPIRES },
+    { key: 'technical_officer', label: 'Technical officer', group: ['Technical officer', 'Technical officers'] },
+    COMMENTATOR,
+  ],
   kabaddi: [
     { key: 'referee', label: 'Referee', group: ['Referee', 'Referees'] },
     { key: 'umpire1', label: 'Umpire 1', group: UMPIRES },

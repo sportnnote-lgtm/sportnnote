@@ -150,6 +150,13 @@ function formatFor(sport: SportId, cfg: Cfg, state: Cfg): SplitValue | undefined
       const n = numOf(cfg.playersPerSide);
       return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
     }
+    case 'hockey': {
+      // SD-101: Hockey5s / indoor 6-a-side / 11-a-side field hockey
+      const n = numOf(cfg.playersPerSide);
+      if (n === 5) return v('5s', 'Hockey5s');
+      if (n === 6) return v('6aside', 'Indoor 6-a-side');
+      return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
+    }
     case 'basketball': {
       const n = numOf(cfg.playersPerSide);
       return n === 3 ? v('3x3', '3x3') : n ? v(`${n}v${n}`, `${n}-on-${n}`) : undefined;

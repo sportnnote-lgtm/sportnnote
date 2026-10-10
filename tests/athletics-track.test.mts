@@ -96,8 +96,8 @@ describe('rounds: World Athletics presets by entry count', () => {
   test('presets offered: recommended, heats → final, and semis for big fields; no straight final over the lanes', () => {
     const keys = (n: number) => roundPresets(M100, n).map((p) => p.key);
     assert.deepEqual(keys(6), ['wa', 'heats']);
-    assert.deepEqual(keys(12), ['wa']); // heats → final is the recommended plan
-    assert.deepEqual(keys(20), ['wa', 'semis']);
+    assert.deepEqual(keys(12), ['wa', 'timed']); // heats → final is the recommended plan; SD-94 adds the timed final
+    assert.deepEqual(keys(20), ['wa', 'semis', 'timed']);
     assert.equal(heatsSemisFinal(M100, 20)[1].heats, 2);
     assert.equal(describePlan(recommendedRounds(M100, 12)), '2 heats (first 3 + 2 fastest) → Final');
   });

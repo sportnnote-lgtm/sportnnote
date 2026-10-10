@@ -83,10 +83,14 @@ export interface Category {
   gender?: 'M' | 'F' | 'X';
   /** bodyweight class for weightlifting ('61 kg') */
   weightClass?: string;
+  /** SD-94 swimming: the pool length — 'LCM' (50 m, long course) or 'SCM'
+   *  (25 m, short course). Part of the key, so records and PBs are kept apart
+   *  per course (World Aquatics SW 12.1 / 12.2); not shown in the label. */
+  course?: 'LCM' | 'SCM';
 }
 
 export const categoryKey = (c?: Category): string =>
-  [c?.age ?? 'open', c?.gender ?? 'X', c?.weightClass ?? ''].filter(Boolean).join('-');
+  [c?.age ?? 'open', c?.gender ?? 'X', c?.weightClass ?? '', c?.course ?? ''].filter(Boolean).join('-');
 
 export const categoryLabel = (c?: Category): string => {
   const g = c?.gender === 'M' ? 'Boys' : c?.gender === 'F' ? 'Girls' : c?.gender === 'X' ? 'Mixed' : '';
@@ -138,6 +142,11 @@ export interface PhaseFormat {
   board?: number;
   /** SD-91: a vertical-jump jump-off for 1st (TR 26.9), or the tied athletes' choice to share */
   jumpOff?: JumpOff;
+  /** SD-94: lanes in use at this venue when they differ from the discipline's
+   *  default (a 6- or 10-lane pool; 10 lanes are numbered 0–9, SW 3.1.2) */
+  lanes?: number;
+  /** SD-94: 50 m split times are recorded at this meet */
+  splits?: boolean;
 }
 
 /** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
@@ -209,6 +218,12 @@ export interface EntryResult {
   team?: { id?: string; name: string; colorHex?: string };
   /** a relay / crew entry's display name ("Red House A") */
   name?: string;
+  /** SD-94 swimming: cumulative split times (s) every 50 m, the last one before the finish */
+  splits?: number[];
+  /** SD-94: what the DQ was for ("Early take-off, leg 3") — shown with the rule reference */
+  reason?: string;
+  /** SD-94: the manual times from the lane's watches (SW 11.3) the official time came from */
+  watches?: number[];
 }
 
 /** One entry in one phase, as the engine sees it. */
@@ -297,15 +312,30 @@ export const DISCIPLINES: DisciplineDef[] = [
   horizontal('ht', 'Hammer throw', false),
   vertical('hj', 'High jump'),
   vertical('pv', 'Pole vault'),
-  swim('50free', '50 m freestyle'),
-  swim('100free', '100 m freestyle'),
+  // SD-94: the World Aquatics programme (SW 12.1 / 12.2) — 100 m IM is short course only.
+  ...(['50', '100', '200', '400', '800', '1500'].map((d) => swim(`${d}free`, `${d} m freestyle`))),
+  ...(['back', 'breast', 'fly'] as const).flatMap((s) => ['50', '100', '200'].map((d) => swim(`${d}${s}`, `${d} m ${s === 'back' ? 'backstroke' : s === 'breast' ? 'breaststroke' : 'butterfly'}`))),
+  swim('100im', '100 m individual medley'),
+  swim('200im', '200 m individual medley'),
+  swim('400im', '400 m individual medley'),
   swim('4x50free', '4 × 50 m freestyle relay', { teamSize: 4 }),
+  swim('4x100free', '4 × 100 m freestyle relay', { teamSize: 4 }),
+  swim('4x200free', '4 × 200 m freestyle relay', { teamSize: 4 }),
+  swim('4x50medley', '4 × 50 m medley relay', { teamSize: 4 }),
+  swim('4x100medley', '4 × 100 m medley relay', { teamSize: 4 }),
   { key: 'wl.total', label: 'Weightlifting total', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['snatch', 'cj'] },
   { key: 'arch.720', label: 'Archery 70 m ranking round (72 arrows)', sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count' },
   { key: 'shoot.10mar', label: '10 m air rifle qualification', sport: 'shooting', unit: 'points', better: 'higher', dp: 1, capture: 'target', tie: 'inner-count' },
 ];
 
 export const disciplineOf = (key: string): DisciplineDef | undefined => DISCIPLINES.find((d) => d.key === key);
+
+/** SD-94: the discipline as raced at this phase's venue (a 6- or 10-lane pool). */
+export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes'> | null): DisciplineDef =>
+  (f?.lanes && def.lanes ? { ...def, lanes: f.lanes } : def);
+
+/** SD-94: the lane numbers of a venue — a 10-lane pool uses 0–9 (SW 3.1.2), else 1…n. */
+export const laneNumbers = (lanes: number): number[] => Array.from({ length: lanes }, (_, i) => (lanes === 10 ? i : i + 1));
 
 /** Whether a discipline races in lanes (start list shows Lane; else Order). */
 export const usesLanes = (d: DisciplineDef) => !!d.lanes && d.capture === 'single';

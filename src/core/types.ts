@@ -21,7 +21,9 @@ export type SportId =
   | 'chess'
   | 'carrom'
   | 'golf'
-  | 'athletics';
+  | 'athletics'
+  | 'hockey'
+  | 'swimming';
 
 /** `support` is the internal support/admin role — it can review verification
  *  documents and has every organizer/scorer capability (a superset). */

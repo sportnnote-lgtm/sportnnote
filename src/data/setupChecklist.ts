@@ -3,11 +3,12 @@
  * computed from the tournament's real data (nothing stored but "Hide"). Pure.
  */
 import type { Tournament } from '../core/types';
+import { EVENT_SPORTS as EVENTS } from '../sports/eventSports.ts';
 
 export type SetupStep = { key: 'teams' | 'format' | 'schedule' | 'events'; label: string; hint: string; done: boolean };
 
 /** Sports run as timed events (no league / knockout format, no fixtures) — SD-90. */
-const EVENT_SPORTS = new Set(['athletics']);
+const EVENT_SPORTS = new Set<string>(EVENTS);
 
 export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'participation'>, teamCount: number, matchCount: number, eventCount = 0): SetupStep[] {
   const individual = t.participation === 'individual';
@@ -16,7 +17,7 @@ export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'parti
   if (t.sports.length > 0 && t.sports.every((s) => EVENT_SPORTS.has(s))) {
     return [
       { key: 'teams', label: 'Add teams or houses', hint: 'Athletes score for them; relay teams come from them.', done: teamCount >= 2 },
-      { key: 'events', label: 'Add the events', hint: 'Each race with its category, athletes, rounds and lanes.', done: eventCount > 0 },
+      { key: 'events', label: 'Add the events', hint: `Each race with its category, ${t.sports.every((s) => s === 'swimming') ? 'swimmers' : 'athletes'}, rounds and lanes.`, done: eventCount > 0 },
     ];
   }
   const matchSports = t.sports.filter((s) => !EVENT_SPORTS.has(s));

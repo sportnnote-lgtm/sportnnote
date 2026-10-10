@@ -13,6 +13,36 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Hockey and swimming are live; carrom statTotals and career
+
+- **Hockey (SD-101, FIH):**
+  - pure engine with game-clock seconds (stops on goals / PCs);
+  - goals by type (field, PC, stroke) with assists, PCs awarded / converted, shots and saves;
+  - green / yellow / red cards via the SD-29 on-field tracker (banner, "10 v 11", auto-return);
+  - shoot-out with sudden death;
+  - presets FIH 4×15, School 2×25, Junior 4×10, Indoor, Hockey5s;
+  - box score with MIN / GA, statTotals owning the whole line (contract incl. AMEND);
+  - FIH 3-1-0 plus shoot-out bonus standings; career with GK save %, leaders, best-GK award;
+  - guide score-hockey.
+- **Swimming (SD-94, World Aquatics):**
+  - shares the athletics setup / results / hub / career layer via `eventSports.ts`;
+  - events by stroke and distance per age, gender and pool (LCM / SCM — records and PBs kept per
+    pool length);
+  - seeding and lanes per SW 3.1–3.2, timed finals (now also for athletics), swim-offs;
+  - 3-watch manual timing, 50 m splits;
+  - DQ codes incl. SW 10.13 early take-off;
+  - relays, house table, careers, public results;
+  - guide run-a-swim-meet.
+- **Carrom (SD-37 / SD-86):**
+  - doubles boards credit both partners; points capped at 25 a game (ICF); optional slam chip;
+  - absolute statTotals (games W/L, boards played, slams, 25-0 games); career Match play
+    section.
+- **Tests:** tsc + all green (31 hockey, 32 swimming, 16 carrom).
+
+---
+
+---
+
 ### 2026-10-11 — Athletics track is live (first new sport); basketball shooting depth; kabaddi depth
 
 - **Athletics track (SD-90):** athletics is a live sport (🏃).

@@ -17,6 +17,7 @@ import { StatLeaderRail } from '../components/StatLeaderRail';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { GolfTournamentHub } from '../components/golf/GolfTournamentHub';
 import { AthleticsHub } from '../components/athletics/AthleticsHub';
+import { isEventSport } from '../sports/eventSports';
 import { canManageTournament } from '../core/org';
 import { useOrganizations } from '../data/hooks';
 import { getMyPlayerId } from '../data/repos';
@@ -76,14 +77,15 @@ export default function SportHubScreen() {
   // SD-90: athletics is a programme of timed events (heats → final), not matches.
   const orgs = useOrganizations();
   const [me, setMe] = useState<string | null>(null);
-  useEffect(() => { if (sport === 'athletics') void getMyPlayerId(profile?.id).then(setMe).catch(() => {}); }, [sport, profile?.id]);
-  if (sport === 'athletics') {
+  useEffect(() => { if (isEventSport(sport)) void getMyPlayerId(profile?.id).then(setMe).catch(() => {}); }, [sport, profile?.id]);
+  // SD-94: swimming is the same kind of meet.
+  if (isEventSport(sport)) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <ScrollView contentContainerStyle={st.content}>
           <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={tournamentName} />
           {tournament ? (
-            <AthleticsHub tournament={tournament} canOrganize={canOrganize(profile?.role) || canManageTournament(tournament, orgs, me)} />
+            <AthleticsHub sport={sport} tournament={tournament} canOrganize={canOrganize(profile?.role) || canManageTournament(tournament, orgs, me)} />
           ) : <Text style={textStyles.muted}>Loading…</Text>}
         </ScrollView>
       </SafeAreaView>

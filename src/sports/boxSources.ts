@@ -31,7 +31,9 @@ import type { RallyState } from './rallyEngine.ts';
 import type { TennisState } from './tennis/engine.ts';
 import type { PadelState } from './padel/engine.ts';
 import type { BadmintonState } from './badminton/engine.ts';
-import type { CarromState } from './carrom/engine.ts';
+import { creditedPoints as carromCredited, type CarromState } from './carrom/engine.ts';
+import { hockeyBox } from './hockey/box.ts';
+import type { HockeyState } from './hockey/engine.ts';
 
 type Side = 'home' | 'away';
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -405,17 +407,19 @@ export function badmintonBox(s: BadmintonState, ctx: BoxContext = {}): MatchBoxS
 
 /* ---------------------------------- carrom ---------------------------------- */
 
-/** Carrom boards aren't credited to a player in the state: a team comparison
- *  (points, boards, queens) per game, no player table. */
+/** Carrom: a board is the SIDE's (SD-37 credits both doubles partners the
+ *  same), so a team comparison (points, boards, queens) per game, no player
+ *  table. Points are the capped credits (SD-37), so a game's box = its score. */
 export function carromBox(s: CarromState): MatchBoxSource {
   const games = Math.max(1, s.games.length + (s.ended ? 0 : 1), ...s.boards.map((b) => b.game));
+  const credit = carromCredited(s);
   return {
     periods: numbered(games, 'Game'),
     players: false,
     data: (scope) => {
       const side = (sd: Side): BoxSideInput => {
-        const won = s.boards.filter((b) => b.winner === sd && (scope === 'all' || b.game === scope));
-        return { rows: [], teamStats: { points: won.reduce((a, b) => a + b.points, 0), boards: won.length, queens: won.filter((b) => b.queen).length } };
+        const won = s.boards.map((b, i) => ({ b, pts: credit[i] })).filter(({ b }) => b.winner === sd && (scope === 'all' || b.game === scope));
+        return { rows: [], teamStats: { points: won.reduce((a, x) => a + x.pts, 0), boards: won.length, queens: won.filter((x) => x.b.queen).length } };
       };
       return { home: side('home'), away: side('away') };
     },
@@ -438,6 +442,7 @@ export function matchBoxSource(sport: SportId, state: unknown, ctx: BoxContext =
     case 'padel': return padelBox(state as PadelState, ctx);
     case 'tabletennis': case 'squash': case 'pickleball': return rallyBox(state as RallyState, ctx);
     case 'carrom': return carromBox(state as CarromState);
+    case 'hockey': return hockeyBox(state as HockeyState, ctx);
     default: return undefined;
   }
 }

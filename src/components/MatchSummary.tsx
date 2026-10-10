@@ -80,7 +80,7 @@ export function MatchSummary({
         {complete && scoreLine ? <Text style={st.scoreLine}>{scoreLine}</Text> : null}
         {complete && decided ? (
           <Text style={st.winner}>🏆 {homeWon ? homeName : awayName} won</Text>
-        ) : complete && !isNaN(hs) && !isNaN(as) && hs === as ? (
+        ) : complete && !isNaN(hs) && !isNaN(as) && hs === as && !scoreLine ? ( // a level score with a line ("SO 3–4", hockey) was decided by a shoot-out
           <Text style={st.drawn}>Match drawn</Text>
         ) : null}
       </View>

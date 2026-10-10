@@ -69,7 +69,10 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       if (best != null && def.wind === 'race' && aided(r.wind, def)) flags.push('w');
       if (best != null && r.hand) flags.push('h');
       const thou = def.tie === 'photo' && r.thousandths != null ? sign * r.thousandths : undefined;
-      return { status, best, bestLegal: legal ? best : null, wind: r.wind, legal, keys: [best == null ? -Infinity : sign * best, thou, decider], flags };
+      // SD-94: in swimming the tie stands on the sheet (SW 11.2 / 13.4.2) — a
+      // swim-off only decides who goes through (SW 3.2.3, see qualify()).
+      const dec = def.tie === 'stands' ? undefined : decider;
+      return { status, best, bestLegal: legal ? best : null, wind: r.wind, legal, keys: [best == null ? -Infinity : sign * best, thou, dec], flags };
     }
   }
 }

@@ -20,6 +20,8 @@ const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉' } as const;
 
 export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
   const nav = useNavigation<Nav>();
+  // SD-94: the same career for swimmers (PBs per event per pool length)
+  const swim = lines.length > 0 && lines.every((l) => l.sport === 'swimming');
   const [infos, setInfos] = useState<Map<string, PhaseInfo>>(new Map());
   const key = lines.map((l) => l.eventId ?? '').join(',');
   useEffect(() => {
@@ -44,7 +46,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
 
       <Text style={st.section}>Personal bests</Text>
       {c.bests.length === 0 ? (
-        <Text style={textStyles.muted}>No legal marks yet (wind-aided and, at fully-timed meets, hand times don’t count).</Text>
+        <Text style={textStyles.muted}>{swim ? 'No times yet (25 m and 50 m pool bests are kept apart).' : 'No legal marks yet (wind-aided and, at fully-timed meets, hand times don’t count).'}</Text>
       ) : (
         <Card style={{ gap: theme.spacing(2) }}>
           <View style={st.bestRow}>
@@ -74,7 +76,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
             <TouchableOpacity key={`${h.eventId}${i}`} accessibilityRole="button" activeOpacity={0.85} disabled={!h.eventId} onPress={() => nav.navigate('ResultsEvent', { phaseId: h.eventId, tab: 'sheet' })}>
               <Card style={[st.hist, { borderLeftWidth: 3, borderLeftColor: h.medal ? theme.colors.accent : theme.colors.border }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
+                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : h.discipline?.startsWith('swim.') || swim ? '🏊' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
                   <Text style={textStyles.muted}>{[h.text, ...h.flags].filter(Boolean).join(' · ')}</Text>
                 </View>
                 {h.medal ? <Text style={{ fontSize: 20 }}>{MEDAL[h.medal]}</Text> : h.place ? <Pill label={`${h.place}`} /> : null}

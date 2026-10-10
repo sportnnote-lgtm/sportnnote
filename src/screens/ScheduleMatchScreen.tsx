@@ -348,6 +348,13 @@ export default function ScheduleMatchScreen() {
             </Text>
             <Button label="🏃 Set up an athletics event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId })} />
           </>
+        ) : sport === 'swimming' ? (
+          <>
+            <Text style={textStyles.muted}>
+              🏊 Swimming isn’t a match: each race is an event — a timed final, or heats and a final. Add the event, its swimmers (or relay teams), rounds and lanes, then enter times heat by heat.
+            </Text>
+            <Button label="🏊 Set up a swimming event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'swimming' })} />
+          </>
         ) : golfField ? (
           <>
             <SportFormatEditor sport="golf" value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} omitKeys={['extraHoles']} />

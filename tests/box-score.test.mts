@@ -466,8 +466,10 @@ describe('SD-23 · team comparison panel', () => {
     assert.equal(src.players, false);
     const cmp = comparisonRows(STAT_SCHEMAS.carrom, src.data('all'));
     assert.deepEqual(cmp.rows.map((r) => r.label), ['Points', 'Boards', 'Queens']);
-    const sumPts = (sd: Side) => String(s.boards.filter((b) => b.winner === sd).reduce((a, b) => a + b.points, 0));
+    // SD-37: capped board points — the box equals the games' scores (25+12+25, 18+25+20)
+    const sumPts = (sd: Side) => String(s.games.reduce((a, g) => a + g[sd === 'home' ? 0 : 1], 0));
     assert.deepEqual([cmp.rows[0].home, cmp.rows[0].away], [sumPts('home'), sumPts('away')]);
+    assert.deepEqual([cmp.rows[0].home, cmp.rows[0].away], ['62', '63']);
     const g1 = comparisonRows(STAT_SCHEMAS.carrom, src.data(1), 1);
     assert.equal(Number(g1.rows[1].home) + Number(g1.rows[1].away), s.boards.filter((b) => b.game === 1).length);
   });

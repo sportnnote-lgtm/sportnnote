@@ -19,6 +19,7 @@ import { eventAwards, type Award, type FieldResultInput, type PointsConfig } fro
 import type { PlannedPhase } from './plan.ts';
 import { fieldRoundPresets } from './field.ts';
 import { phaseLabel } from './plan.ts';
+import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER } from './swimming.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -185,24 +186,27 @@ export function heatsSemisFinal(def: DisciplineDef, n: number): PlannedPhase[] {
   ];
 }
 
-export interface RoundsPreset { key: 'wa' | 'final' | 'heats' | 'semis' | 'qual'; label: string; plan: PlannedPhase[] }
+export interface RoundsPreset { key: 'wa' | 'final' | 'heats' | 'semis' | 'qual' | 'timed'; label: string; plan: PlannedPhase[] }
 
 /** The round choices the setup screen offers for `n` entries (no duplicates).
  *  Field events (SD-91): straight final or qualification → final of 12. */
 export function roundPresets(def: DisciplineDef, n: number): RoundsPreset[] {
   if (def.capture !== 'single') return fieldRoundPresets(n);
+  if (def.sport === 'swimming') return swimRoundPresets(def, n);
   const out: RoundsPreset[] = [{ key: 'wa', label: 'Recommended (World Athletics)', plan: recommendedRounds(def, n) }];
   const add = (p: RoundsPreset) => { if (!out.some((x) => JSON.stringify(x.plan) === JSON.stringify(p.plan))) out.push(p); };
   if (!def.lanes || n <= def.lanes) add({ key: 'final', label: 'Straight final', plan: [{ phase: 'final', heats: 1 }] });
   if (n > 2) add({ key: 'heats', label: 'Heats → final', plan: heatsFinal(def, n) });
   if (def.lanes && n > def.lanes * 2) add({ key: 'semis', label: 'Heats → semis → final', plan: heatsSemisFinal(def, n) });
+  // SD-94: a timed final — every heat is the final, ranked on time across heats.
+  if (def.lanes && n > def.lanes) add({ key: 'timed', label: 'Timed final (heats ranked on time)', plan: timedFinalPlan(def, n) });
   return out;
 }
 
 /** "2 heats (first 3 + 2 fastest) → Final" */
 export function describePlan(plan: { phase: PhaseKind; heats: number; progression?: Progression }[]): string {
   return plan.map((p) => {
-    if (p.phase === 'final') return 'Final';
+    if (p.phase === 'final') return p.heats > 1 ? `Timed final in ${p.heats} heats (places on time across heats)` : 'Final';
     if (p.phase === 'qualification') {
       const pr = p.progression;
       return `Qualification${p.heats > 1 ? ` (${p.heats} groups)` : ''}${pr?.fillTo ? ` — ${pr.standard != null ? `standard ${pr.standard.toFixed(2)} m or ` : ''}best ${pr.fillTo}` : ''}`;
@@ -302,9 +306,9 @@ export const reactionFalseStart = (rt?: number): boolean => rt != null && rt < 0
 export interface SheetRow { heat: number; lane?: number; order?: number; name: string; team?: string; mark?: string; place?: string; flags?: string[] }
 
 /** A WhatsApp-friendly start list ("Heat 1 · L3 Aarav Mehta (Red House)"). */
-export function startListText(title: string, rows: SheetRow[], link?: string): string {
+export function startListText(title: string, rows: SheetRow[], link?: string, icon = '🏃'): string {
   const heats = [...new Set(rows.map((r) => r.heat))].sort((a, b) => a - b);
-  const out = [`🏃 START LIST · ${title}`];
+  const out = [`${icon} START LIST · ${title}`];
   for (const h of heats) {
     if (heats.length > 1) out.push('', `Heat ${h}`);
     for (const r of rows.filter((x) => x.heat === h).sort((a, b) => (a.lane ?? a.order ?? 0) - (b.lane ?? b.order ?? 0))) {
@@ -316,11 +320,11 @@ export function startListText(title: string, rows: SheetRow[], link?: string): s
 }
 
 /** Results text: places, marks and flags per heat. */
-export function resultsText(title: string, rows: SheetRow[], final: boolean, link?: string): string {
+export function resultsText(title: string, rows: SheetRow[], final: boolean, link?: string, icon = '🏃'): string {
   const heats = [...new Set(rows.map((r) => r.heat))].sort((a, b) => a - b);
-  const out = [`🏃 ${final ? 'RESULTS' : 'LIVE'} · ${title}`];
+  const out = [`${icon} ${final ? 'RESULTS' : 'LIVE'} · ${title}`];
   for (const h of heats) {
-    if (heats.length > 1) out.push('', `Heat ${h}`);
+    if (heats.length > 1) out.push('', h === 0 ? 'Overall' : `Heat ${h}`);
     for (const r of rows.filter((x) => x.heat === h)) {
       if (!r.mark && !r.place) continue;
       out.push(`${r.place ? `${r.place}. ` : ''}${r.name}${r.team ? ` (${r.team})` : ''} ${r.mark ?? ''}${r.flags?.length ? ` ${r.flags.join(' ')}` : ''}`.trim());
@@ -332,8 +336,18 @@ export function resultsText(title: string, rows: SheetRow[], final: boolean, lin
 
 /* ------------------------------ stat lines -------------------------------- */
 
-/** The stat-line key for an athlete's legal mark in a discipline ('ath.100m' → 'm_100m'). */
-export const markKey = (discipline: string) => `m_${discipline.replace(/^ath\./, '')}`;
+/** The stat-line key for an athlete's legal mark in a discipline ('ath.100m' →
+ *  'm_100m'). SD-94 swimming keeps the pool length in the key — long and short
+ *  course are separate PBs / records: 'swim.50free' + LCM → 'm_sw_50free_lc'. */
+export const markKey = (discipline: string, course?: 'LCM' | 'SCM') =>
+  (/^swim\./.test(discipline) ? `m_sw_${discipline.slice(5)}_${course === 'SCM' ? 'sc' : 'lc'}` : `m_${discipline.replace(/^ath\./, '')}`);
+
+/** The discipline + course a mark key came from ('m_sw_50free_sc' → swim.50free, SCM). */
+export function markKeyDiscipline(key: string): { discipline: string; course?: 'LCM' | 'SCM' } {
+  const m = /^m_sw_(.+)_(lc|sc)$/.exec(key);
+  if (m) return { discipline: `swim.${m[1]}`, course: m[2] === 'sc' ? 'SCM' : 'LCM' };
+  return { discipline: `ath.${key.slice(2)}` };
+}
 
 export interface PhaseLine { playerId: string; stats: Record<string, number>; won: boolean }
 
@@ -345,7 +359,7 @@ export interface PhaseLine { playerId: string; stats: Record<string, number>; wo
  *   discipline's legal mark key), wind, hand, Q / q, finals, golds / silvers /
  *   bronzes, posPoints (position points), dnf / dq.
  */
-export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked: RankedEntry[], awards: Award[] = []): PhaseLine[] {
+export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase' | 'category'>, ranked: RankedEntry[], awards: Award[] = []): PhaseLine[] {
   const def = disciplineOf(f.discipline);
   if (!def) return [];
   const byEntry = new Map(awards.map((a) => [a.entryId, a]));
@@ -372,7 +386,7 @@ export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked:
     if (def.capture === 'single') s.races = 1; else s.field = 1;
     if (a && a.points > 0) s.posPoints = a.points;
     if (r.best != null) s.mark = r.best;
-    if (r.bestLegal != null) s[markKey(def.key)] = r.bestLegal;
+    if (r.bestLegal != null) s[markKey(def.key, f.category?.course)] = r.bestLegal;
     if (r.entry.result.wind != null && def.wind === 'race') s.wind = r.entry.result.wind;
     // the best jump's wind (LJ / TJ)
     if (def.wind === 'attempt' && r.wind != null) s.wind = r.wind;
@@ -419,7 +433,10 @@ export function athleticsCareer(
     c.points += s.posPoints ?? 0;
     const info = l.eventId ? phases.get(l.eventId) : undefined;
     const key = Object.keys(s).find((k) => k.startsWith('m_'));
-    const discipline = info?.discipline ?? (key ? `ath.${key.slice(2)}` : undefined);
+    const fromKey = key ? markKeyDiscipline(key) : undefined;
+    const discipline = info?.discipline ?? fromKey?.discipline;
+    // SD-94: swimming PBs per pool length
+    const course = info?.category?.course ?? fromKey?.course;
     const def = discipline ? disciplineOf(discipline) : undefined;
     // the full timestamp (shown in local time); the day for the season
     const date = info?.date ?? l.date ?? '';
@@ -430,14 +447,15 @@ export function athleticsCareer(
       const hurdles = /mh$/.test(def.key);
       const throwKey = THROWS.includes(def.key);
       const implement = throwKey ? info?.implement : undefined;
-      const bk = hurdles || (throwKey && !implement) ? `${def.key}|${categoryKey(info?.category)}` : implement ? `${def.key}|${implement}` : def.key;
+      const swim = def.sport === 'swimming';
+      const bk = swim ? `${def.key}|${course ?? 'LCM'}` : hurdles || (throwKey && !implement) ? `${def.key}|${categoryKey(info?.category)}` : implement ? `${def.key}|${implement}` : def.key;
       const best: CareerBest = {
         discipline: def.key, label: def.label, category: info?.category ? categoryLabel(info.category) : undefined, value: v,
         text: formatMark(v, def) + (s.hand ? 'h' : ''), date, eventId: l.eventId ?? '', wind: s.wind, hand: !!s.hand, ...(implement ? { implement } : {}),
       };
       const prev = pbSoFar.get(bk);
       if (prev == null || betterMark(v, prev, def)) { if (prev != null) flags.push('PB'); pbSoFar.set(bk, v); }
-      const label = implement ? `${def.label} (${implement})` : (hurdles || throwKey) && best.category ? `${def.label} (${best.category})` : def.label;
+      const label = swim ? `${def.label} (${courseShort(course)})` : implement ? `${def.label} (${implement})` : (hurdles || throwKey) && best.category ? `${def.label} (${best.category})` : def.label;
       const row = bests.get(bk) ?? { key: bk, label, pb: best };
       if (betterMark(v, row.pb.value, def)) row.pb = best;
       if (day >= seasonFrom && (!row.sb || betterMark(v, row.sb.value, def))) row.sb = best;
@@ -461,7 +479,7 @@ export function athleticsCareer(
 }
 
 const ORDER = ['ath.100m', 'ath.200m', 'ath.400m', 'ath.800m', 'ath.1500m', 'ath.3000m', 'ath.80mh', 'ath.100mh', 'ath.110mh', 'ath.300mh', 'ath.400mh',
-  'ath.lj', 'ath.tj', 'ath.hj', 'ath.pv', 'ath.sp', 'ath.dt', 'ath.jt', 'ath.ht'];
+  'ath.lj', 'ath.tj', 'ath.hj', 'ath.pv', 'ath.sp', 'ath.dt', 'ath.jt', 'ath.ht', ...SWIM_ORDER];
 const THROWS = ['ath.sp', 'ath.dt', 'ath.jt', 'ath.ht'];
 const order = (d: string) => { const i = ORDER.indexOf(d); return i < 0 ? 99 : i; };
 export const ordSuffix = (n: number) => { const v = n % 100; return ['th', 'st', 'nd', 'rd'][(v - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][v] ?? 'th'; };

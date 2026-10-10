@@ -1,6 +1,7 @@
 /** Data-driven player profile, shared by the Profile tab and PlayerProfile
  *  screen. Stays concise: header, follow, overall stats, and a tappable
  *  per-sport list. Deep per-sport stats/details live on SportProfileScreen. */
+import { isEventSport } from '../sports/eventSports';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
@@ -334,7 +335,7 @@ export function ProfileView({
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body}>{getSport(b.sport as SportId).name}</Text>
                 {/* SD-90: a measured sport (athletics) has races, not a W-D-L record */}
-                {b.sport !== 'athletics' && (
+                {!isEventSport(b.sport) && (
                 <Text style={textStyles.muted}>
                   {plural(b.matches, 'match', 'matches')} · {recordText(b)}
                 </Text>

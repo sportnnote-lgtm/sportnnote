@@ -30,6 +30,8 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   carrom: 60,
   golf: 300, // an 18-hole round + turnaround
   athletics: 240, // a session of track events
+  hockey: 105, // 4 × 15 + breaks + turnaround
+  swimming: 240, // a session of swimming events
 };
 
 /** The nominal on-ground window for a sport (minutes). Falls back to 2 hours. */

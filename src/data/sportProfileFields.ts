@@ -52,6 +52,9 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   golf: [{ key: 'hand', label: 'Plays', options: ['Right-handed', 'Left-handed'] }],
   // Track: the event group is the "position"; no handedness.
   athletics: [],
+  // Hockey sticks are one-sided — no handedness worth recording.
+  hockey: [],
+  swimming: [],
 };
 
 export const POSITION_HINT: Record<SportId, string> = {
@@ -70,4 +73,6 @@ export const POSITION_HINT: Record<SportId, string> = {
   carrom: 'e.g. Singles, Doubles',
   golf: 'e.g. Handicap index 12.4, Home club',
   athletics: 'e.g. Sprints (100 / 200 m), Hurdles, Middle distance',
+  hockey: 'e.g. Goalkeeper, Defender, Midfielder, Forward, Drag-flicker',
+  swimming: 'e.g. Sprint freestyle, Backstroke, Individual medley',
 };

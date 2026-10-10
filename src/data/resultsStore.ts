@@ -19,9 +19,10 @@ import {
   qualify, nextRound, updateRecords, categoryKey, categoryLabel, phaseLabel, withQualification, eventAwards, phaseLines,
   groupMeet, deriveRecordBook, meetFieldResults, seedOrder,
   type Category, type DisciplineDef, type EntryResult, type MarkHistory, type PhaseFormat, type PlannedPhase,
-  type RecordMark, type RecordScope, type ResultEntry, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
-  type FieldResultInput, looseLegal, seededRng,
+  type RecordMark, type RecordScope, type ResultEntry, type RankedEntry, type PhaseKind, compareKeys, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
+  type FieldResultInput, looseLegal, seededRng, phaseDiscipline, swimSeed, timedFinalHeats, laneOrder, type Seeded,
 } from './results';
+import { isEventSport } from '../sports/eventSports';
 
 const live = () => isSupabaseConfigured && !!supabase;
 
@@ -63,6 +64,10 @@ export interface NewResultsEvent {
   implement?: string;
   board?: number;
   noWindGauge?: boolean;
+  /** SD-94: the venue's lanes when not the discipline's default (a 6- / 10-lane pool) */
+  venueLanes?: number;
+  /** SD-94: 50 m splits are recorded */
+  splits?: boolean;
 }
 
 const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase'>) => `${eventTitle} — ${phaseLabel(f.phase)}`;
@@ -116,8 +121,10 @@ function bySeed(list: NewEntrant[], def: DisciplineDef): NewEntrant[] {
 /** Create an event: its first phase (heats, or a straight final) with the
  *  seeded start list. Later phases are created by `advancePhase`. */
 export async function createResultsEvent(input: NewResultsEvent): Promise<FieldEvent> {
-  const def = disciplineOf(input.discipline);
-  if (!def) throw new Error('Unknown discipline');
+  const base = disciplineOf(input.discipline);
+  if (!base) throw new Error('Unknown discipline');
+  const venueLanes = input.venueLanes && base.lanes && input.venueLanes !== base.lanes ? input.venueLanes : undefined;
+  const def = phaseDiscipline(base, { lanes: venueLanes });
   if (!input.entrants.length) throw new Error('Add at least one entry.');
   if (def.teamSize && input.entrants.some((e) => e.playerId)) throw new Error(`${def.label} entries are teams, not athletes.`);
   const plan = input.plan ?? planRounds(def, input.entrants.length);
@@ -129,6 +136,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     ...(input.handTimed ? { handTimed: true } : {}), ...(input.reaction ? { reaction: true } : {}),
     ...(input.bar?.length ? { bar: input.bar } : {}), ...(input.implement ? { implement: input.implement } : {}),
     ...(input.board ? { board: input.board } : {}), ...(input.noWindGauge ? { noWindGauge: true } : {}),
+    ...(venueLanes ? { lanes: venueLanes } : {}), ...(input.splits ? { splits: true } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -137,8 +145,15 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
   const draw = input.lanes === 'draw';
   const rng = input.rng ?? Math.random;
   // A draw also shuffles the unseeded entrants; else the given order stands.
-  const ordered = draw ? seedOrder(input.entrants.map((e, i) => ({ ...e, id: String(i) })), def, rng) : bySeed(input.entrants, def);
-  let seeded = seedHeats(ordered.map((_, i) => String(i)), first.heats, def, draw ? rng : undefined, { drawAll: draw });
+  // SD-94: swimmers without an entry time are placed by draw (SW 3.1.1).
+  const ordered = draw || def.sport === 'swimming' ? seedOrder(input.entrants.map((e, i) => ({ ...e, id: String(i) })), def, rng) : bySeed(input.entrants, def);
+  const ids = ordered.map((_, i) => String(i));
+  // SD-94: swimming seeds by World Aquatics SW 3.1 (heats circle-seeded, the
+  // fastest in the centre lanes, no lane draw); a timed final (a final run in
+  // several heats) puts the fastest in the last heat — athletics too.
+  let seeded = def.sport === 'swimming' ? swimSeed(ids, first.phase, first.heats, def.lanes ?? 8, def.key)
+    : first.phase === 'final' && first.heats > 1 && def.lanes && def.capture === 'single' ? timedFinalSeed(ids, def.lanes, def.key, draw ? rng : undefined)
+      : seedHeats(ids, first.heats, def, draw ? rng : undefined, { drawAll: draw });
   // SD-91 field events: seeds are spread over the qualification groups; the
   // order inside a group is drawn (TR 25.5), or — not drawn — the best seed goes last.
   if (def.capture !== 'single') seeded = fieldOrder(seeded, draw ? rng : undefined);
@@ -150,6 +165,18 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     };
   }));
   return ev;
+}
+
+/** SD-94: a timed final in lanes — fastest heat last (at least three in the
+ *  first heat), lanes by ranking inside each heat (drawn within the World
+ *  Athletics groups when `rng` is given). */
+function timedFinalSeed(ids: string[], lanes: number, discipline: string, rng?: () => number): Seeded[] {
+  const out: Seeded[] = [];
+  timedFinalHeats(ids.length, lanes).forEach((ranks, h) => {
+    const order = laneOrder(Math.max(lanes, ranks.length), rng, discipline);
+    ranks.forEach((rank, i) => out.push({ id: ids[rank], heat: h + 1, lane: order[i], order: i + 1 }));
+  });
+  return out;
 }
 
 /** Re-number the order inside each group: a draw (shuffle), else reversed (best seed last). */
@@ -217,7 +244,8 @@ export async function setPhaseStatus(id: string, status: FieldEvent['status']): 
  */
 export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nameOf: (id: string) => string): Promise<FieldEvent> {
   const f = phaseOf(phase);
-  const def = f && disciplineOf(f.discipline);
+  const base = f && disciplineOf(f.discipline);
+  const def = base ? phaseDiscipline(base, f) : null;
   if (!f || !def) throw new Error('Not a results event');
   const next = f.plan?.[f.phaseNo];
   if (!next || !f.progression) throw new Error('This is the last round.');
@@ -225,11 +253,11 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   const byHeat = rankByHeat(res, def, { handLegal: looseLegal(f) });
   const q = qualify(byHeat, def, f.progression);
   if (!q.marks.size) throw new Error('Nobody has qualified yet — enter the results first.');
-  if (def.sport === 'athletics') {
+  if (isEventSport(def.sport)) {
     const ranked = [...byHeat.values()].flatMap((rows) => withQualification(rows, q));
     await writePhaseLines(phase, f, phaseLines(f, ranked));
   }
-  let seeded = nextRound(byHeat, def, q, next.heats);
+  let seeded = def.sport === 'swimming' ? swimNextRound(byHeat, def, q, next.phase, next.heats) : nextRound(byHeat, def, q, next.heats);
   // SD-91: a field final's order is drawn afresh (TR 25.5); a vertical final keeps the bar heights.
   if (def.capture !== 'single') seeded = fieldOrder(seeded, seededRng(Date.now()));
   const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: next.heats, progression: next.progression, bar: def.capture === 'heights' ? f.bar : undefined, jumpOff: undefined };
@@ -267,8 +295,9 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   const f = phaseOf(phase);
   const def = f && disciplineOf(f.discipline);
   if (!f || !def) throw new Error('Not a results event');
+  // A timed final (several heats) ranks across heats — the whole phase at once.
   const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
-  if (def.sport === 'athletics') {
+  if (isEventSport(def.sport)) {
     let awards = eventAwards(rows, points ?? {});
     if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
     await writePhaseLines(phase, f, phaseLines(f, rows, awards));
@@ -286,18 +315,20 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
  * Earlier legal marks of these athletes in this discipline, from completed
  * phases (any meet), excluding `exceptPhaseId` — the PB / SB input.
  */
-export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], exceptPhaseId: string): Promise<MarkHistory[]> {
+export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], exceptPhaseId: string, course?: Category['course']): Promise<MarkHistory[]> {
   const ids = athleteIds.filter(Boolean);
   if (!ids.length) return [];
+  // SD-94: swimming PBs are per pool length (an unset course reads as long course)
+  const sameCourse = (e: FieldEvent) => def.sport !== 'swimming' || (phaseOf(e)?.category?.course ?? 'LCM') === (course ?? 'LCM');
   let phases: FieldEvent[];
   let entries: FieldEntry[];
   if (!live()) {
-    phases = demo.fieldEvents.filter((e) => e.status === 'completed' && e.id !== exceptPhaseId && phaseOf(e)?.discipline === def.key);
+    phases = demo.fieldEvents.filter((e) => e.status === 'completed' && e.id !== exceptPhaseId && phaseOf(e)?.discipline === def.key && sameCourse(e));
     const pids = new Set(phases.map((p) => p.id));
     entries = demo.fieldEntries.filter((e) => pids.has(e.eventId) && ids.includes(e.playerId));
   } else {
     const { data } = await supabase!.from('field_events').select('*').eq('status', 'completed').eq('format->results->>discipline', def.key);
-    phases = ((data ?? []) as any[]).map(toEvent).filter((e) => e.id !== exceptPhaseId);
+    phases = ((data ?? []) as any[]).map(toEvent).filter((e) => e.id !== exceptPhaseId && sameCourse(e));
     if (!phases.length) return [];
     const { data: rows } = await supabase!.from('field_entries').select('*').in('event_id', phases.map((p) => p.id)).in('player_id', ids);
     entries = ((rows ?? []) as any[]).map(toEntry);
@@ -323,14 +354,14 @@ async function writePhaseLines(phase: FieldEvent, f: PhaseFormat, lines: { playe
   const label = phase.title;
   if (!live()) {
     demo.statLines = demo.statLines.filter((l) => l.eventId !== phase.id);
-    for (const l of lines) demo.statLines.push({ id: genId('sl'), matchId: '', eventId: phase.id, playerId: l.playerId, sport: 'athletics', stats: l.stats, won: l.won, opponent: label, date: phase.startsAt });
+    for (const l of lines) demo.statLines.push({ id: genId('sl'), matchId: '', eventId: phase.id, playerId: l.playerId, sport: phase.sport, stats: l.stats, won: l.won, opponent: label, date: phase.startsAt });
     return;
   }
   try {
     await supabase!.from('stat_lines').delete().eq('event_id', phase.id);
     if (lines.length) {
       await supabase!.from('stat_lines').insert(lines.map((l) => ({
-        event_id: phase.id, match_id: null, player_id: l.playerId, sport: 'athletics', stats: l.stats, won: l.won, opponent: label, recorded_at: phase.startsAt,
+        event_id: phase.id, match_id: null, player_id: l.playerId, sport: phase.sport, stats: l.stats, won: l.won, opponent: label, recorded_at: phase.startsAt,
       })));
     }
   } catch { /* lines are a profile view; the results themselves are saved */ }
@@ -348,9 +379,10 @@ export async function moveEntry(entryId: string, heat: number, result: EntryResu
   if (error) throw new Error(error.message);
 }
 
-/** Every athletics phase of a tournament with its entries, as the meet model. */
-export async function getMeet(tournamentId: string, nameOf: (id: string) => string): Promise<MeetEvent[]> {
-  const phases = (await getResultsPhases({ tournamentId })).filter((p) => p.sport === 'athletics');
+/** Every phase of a tournament's event sport (athletics by default; SD-94
+ *  swimming; `'all'` = every event sport) with its entries, as the meet model. */
+export async function getMeet(tournamentId: string, nameOf: (id: string) => string, sport: string = 'athletics'): Promise<MeetEvent[]> {
+  const phases = (await getResultsPhases({ tournamentId })).filter((p) => (sport === 'all' ? isEventSport(p.sport) : p.sport === sport));
   const entries = await getFieldEntries(phases.map((p) => p.id));
   return groupMeet(meetPhases(phases, entries, nameOf));
 }
@@ -374,7 +406,7 @@ export function meetResultsFor(events: MeetEvent[], points: PointsSettings): Fie
  * their completed results — no separate storage. Historic records set before
  * the app are not included.
  */
-export async function getOrgRecordBook(orgId: string, exceptTournamentId: string | undefined, nameOf: (id: string) => string): Promise<RecordMark[]> {
+export async function getOrgRecordBook(orgId: string, exceptTournamentId: string | undefined, nameOf: (id: string) => string, sport: string = 'athletics'): Promise<RecordMark[]> {
   let tids: string[];
   if (!live()) tids = demo.tournaments.filter((t) => t.hostOrgId === orgId && t.id !== exceptTournamentId).map((t) => t.id);
   else {
@@ -383,9 +415,9 @@ export async function getOrgRecordBook(orgId: string, exceptTournamentId: string
   }
   if (!tids.length) return [];
   let phases: FieldEvent[];
-  if (!live()) phases = demo.fieldEvents.filter((e) => e.sport === 'athletics' && e.status === 'completed' && !!e.tournamentId && tids.includes(e.tournamentId));
+  if (!live()) phases = demo.fieldEvents.filter((e) => e.sport === sport && e.status === 'completed' && !!e.tournamentId && tids.includes(e.tournamentId));
   else {
-    const { data } = await supabase!.from('field_events').select('*').eq('sport', 'athletics').eq('status', 'completed').in('tournament_id', tids);
+    const { data } = await supabase!.from('field_events').select('*').eq('sport', sport).eq('status', 'completed').in('tournament_id', tids);
     phases = ((data ?? []) as any[]).map(toEvent);
   }
   if (!phases.length) return [];
@@ -409,4 +441,16 @@ export async function getPhaseInfos(ids: string[]): Promise<Map<string, PhaseInf
     if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle, implement: f.implement });
   }
   return out;
+}
+
+/**
+ * SD-94 — the next swimming round: everyone through is q on time (ties at the
+ * line settled by a swim-off, SW 3.2.3), ranked on time across the heats and
+ * seeded into the semi-finals (SW 3.2.1) or the final's lanes (SW 3.2.2).
+ */
+function swimNextRound(byHeat: Map<number, RankedEntry[]>, def: DisciplineDef, q: ReturnType<typeof qualify>, phase: PhaseKind, heats: number): Seeded[] {
+  const through = [...byHeat.values()].flat().filter((r) => q.marks.has(r.id));
+  const keyOf = (r: RankedEntry) => [...performanceOf(r.entry, def).keys, r.entry.result.decider != null ? -r.entry.result.decider : undefined];
+  through.sort((a, b) => compareKeys(keyOf(a), keyOf(b)) || a.entry.name.localeCompare(b.entry.name));
+  return swimSeed(through.map((r) => r.id), phase, heats, def.lanes ?? 8, def.key);
 }

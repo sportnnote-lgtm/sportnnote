@@ -13,7 +13,21 @@ import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } fr
 
 export type Side = 'home' | 'away';
 
-export interface BoardResult { winner: Side; coins: number; queen: boolean; points: number; game: number }
+/** SD-37/78 — a slam: the board finished in the first turn. White = by the
+ *  side that broke; Black = by the side that didn't (ICF records). */
+export type Slam = 'white' | 'black';
+
+export interface BoardResult {
+  winner: Side; coins: number; queen: boolean;
+  /** the board's value as played (coins + a Queen that counted) — uncapped;
+   *  `creditedPoints` gives what it adds to the game score (capped at 25) */
+  points: number; game: number;
+  /** SD-37 — only on a board recorded with a slam (old logs: absent) */
+  slam?: Slam;
+}
+
+/** SD-37 — a player the log credited (the scorer's attribution on a BOARD). */
+export interface CarromCredit { side: Side; id?: string; name?: string }
 
 export interface CarromState {
   current: { home: number; away: number };
@@ -30,6 +44,11 @@ export interface CarromState {
   queenCutoff: number;
   ended: boolean;
   seq: number;
+  /** players per side (1 singles, 2 doubles) — which roster players a board credits */
+  perSide?: number;
+  /** SD-37 — every player the log credited, per side (absent until a credited
+   *  board; deduplicated). `statTotals` adds them to the ctx players. */
+  credited?: CarromCredit[];
 }
 
 export function init(config?: Record<string, unknown>): CarromState {
@@ -41,6 +60,7 @@ export function init(config?: Record<string, unknown>): CarromState {
     queenValue: 3,
     queenCutoff: Number(config?.queenCutoff ?? 22),
     ended: false, seq: 0,
+    perSide: Number(config?.playersPerSide ?? 1) >= 2 ? 2 : 1,
   };
 }
 
@@ -50,17 +70,59 @@ export function boardPoints(coins: number, queen: boolean, winnerTotal: number, 
   return c + (queen && winnerTotal < s.queenCutoff ? s.queenValue : 0);
 }
 
-/** BOARD {side: winner, payload: {coins (opponent's left, 0-9), queen}}. */
-export function reducer(s: CarromState, a: { type: string; side?: Side; payload?: Record<string, unknown> }): CarromState {
+/** SD-37 — what a board adds to its winner's GAME score: its value, capped so
+ *  the game is recorded at the target (Laws r.56 — a 28 is written 25). The
+ *  credited player points, so a player's points = their side's game scores. */
+export function creditPoints(coins: number, queen: boolean, winnerTotal: number, s: Pick<CarromState, 'queenValue' | 'queenCutoff' | 'target'>): number {
+  const pts = boardPoints(coins, queen, winnerTotal, s);
+  return winnerTotal + pts >= s.target ? Math.max(0, s.target - winnerTotal) : pts;
+}
+
+/** SD-37 — the capped value of every board in `s.boards` (same order), replayed
+ *  from the boards: per game, the winner's running total before each board. */
+export function creditedPoints(s: Pick<CarromState, 'boards' | 'target'>): number[] {
+  const run = new Map<number, { home: number; away: number }>();
+  return (s?.boards ?? []).map((b) => {
+    const t = run.get(b.game) ?? run.set(b.game, { home: 0, away: 0 }).get(b.game)!;
+    const before = t[b.winner];
+    const v = before + b.points >= s.target ? Math.max(0, s.target - before) : b.points;
+    t[b.winner] = before + b.points;
+    return v;
+  });
+}
+
+type Attr = { playerId?: string; playerName?: string } | null | undefined;
+
+/** The players a BOARD action credits (attribution + a doubles partner's
+ *  `attribution2`, stored as `payload._attr2` on replay). */
+function creditsOf(side: Side, a: { attribution?: Attr; attribution2?: Attr; payload?: Record<string, unknown> }, prior: CarromCredit[] | undefined): CarromCredit[] | undefined {
+  let out = prior;
+  for (const at of [a.attribution, a.attribution2 ?? (a.payload?._attr2 as Attr)]) {
+    if (!at || (!at.playerId && !at.playerName)) continue;
+    const c: CarromCredit = { side, ...(at.playerId ? { id: at.playerId } : {}), ...(at.playerName ? { name: at.playerName } : {}) };
+    if ((out ?? []).some((o) => o.side === side && (c.id ? o.id === c.id : !o.id && o.name === c.name))) continue;
+    out = [...(out ?? []), c];
+  }
+  return out;
+}
+
+/**
+ * BOARD {side: winner, payload: {coins (opponent's left, 0-9), queen, slam?}}.
+ * SD-37: `slam` ('white' | 'black') is optional — old logs replay identically.
+ */
+export function reducer(s: CarromState, a: { type: string; side?: Side; payload?: Record<string, unknown>; attribution?: Attr; attribution2?: Attr }): CarromState {
   if (a.type !== 'BOARD' || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
   const side = a.side;
   const coins = Number(a.payload?.coins ?? 0);
   const queen = !!a.payload?.queen;
+  const slam = a.payload?.slam === 'white' || a.payload?.slam === 'black' ? (a.payload.slam as Slam) : undefined;
   const pts = boardPoints(coins, queen, s.current[side], s);
   const gameNo = s.games.length + 1;
   const current = { ...s.current, [side]: s.current[side] + pts };
   const boardsInGame = s.boardsInGame + 1;
-  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo }];
+  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo, ...(slam ? { slam } : {}) }];
+  const credited = creditsOf(side, a, s.credited);
+  if (credited) s = { ...s, credited };
 
   let gameWinner: Side | null = null;
   if (current[side] >= s.target) gameWinner = side;

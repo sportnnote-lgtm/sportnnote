@@ -10,6 +10,7 @@
  *  new team is attributed to the hosting community, and you can capture a
  *  manager/captain contact who gets invited to claim the team & manage its
  *  squad (a team-claim invite → join link, sent by email / WhatsApp / SMS). */
+import { isEventSport } from '../sports/eventSports';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Switch, Linking, Platform, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -354,7 +355,7 @@ export default function TournamentTeamsScreen() {
   // ad-hoc-team plumbing under the hood — only the wording changes.
   // SD-90: athletics athletes are entered per EVENT (event setup); the meet's
   // participants are the houses / schools they score for (and relay teams come from).
-  const pMode = sport === 'athletics' ? 'team' : participantMode(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
+  const pMode = isEventSport(sport) ? 'team' : participantMode(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
   const noun = pMode === 'individual' ? 'player' : pMode === 'pairs' ? 'pair' : 'team';
   const nounPl = `${noun}s`;
 

@@ -13,10 +13,12 @@ import type { SportPlugin } from '../types';
 import { SetLineBoard } from '../SetLineBoard';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { carromBox } from '../boxSources';
-import { init, reducer, result, boardPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side } from './engine';
+import { init, reducer, result, boardPoints, creditPoints, creditedPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side, type Slam } from './engine';
+import { carromStatTotals, creditedPlayers } from './totals';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
+  const perSide = s.perSide ?? 1;
   // Singles: a person's name reads better than a team code ("AM").
   const nameOf = (side: Side) => {
     const r = side === 'home' ? homeRoster : awayRoster;
@@ -25,20 +27,32 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   const [winner, setWinner] = useState<Side | null>(null);
   const [coins, setCoins] = useState(0);
   const [queen, setQueen] = useState(false);
-  const [who, setWho] = useState<Player | null>(null);
+  const [slam, setSlam] = useState<Slam | null>(null);
+  // "Played by" (a roster bigger than the side) — kept from board to board
+  const [picked, setPicked] = useState<Record<Side, string[]>>({ home: [], away: [] });
   if (s.ended) return <Text style={textStyles.muted}>Match over.</Text>;
 
   const roster = winner ? (winner === 'home' ? homeRoster : awayRoster) : [];
-  const preview = winner ? boardPoints(coins, queen, s.current[winner], s) : 0;
+  const players = winner ? creditedPlayers(roster, perSide, picked[winner]) : [];
+  // SD-37: the game score counts at most to 25, and so do the players' points
+  const value = winner ? boardPoints(coins, queen, s.current[winner], s) : 0;
+  const credit = winner ? creditPoints(coins, queen, s.current[winner], s) : 0;
   const queenCounts = winner ? s.current[winner] < s.queenCutoff : true;
+  const togglePick = (side: Side, id: string) => setPicked((cur) => {
+    const now = creditedPlayers(roster, perSide, cur[side]).map((p) => p.id);
+    const next = now.includes(id) ? now.filter((x) => x !== id) : [...now, id].slice(-perSide);
+    return { ...cur, [side]: next.length ? next : now };
+  });
   const record = () => {
     if (!winner) return;
-    const p = who ?? roster[0];
+    const attr = (p: Player) => ({ playerId: p.id, playerName: p.fullName, stat: 'points', by: credit, extra: { boards: 1, ...(queen ? { queens: 1 } : {}) } });
     dispatch({
-      type: 'BOARD', side: winner, payload: { coins, queen },
-      attribution: p ? { playerId: p.id, playerName: p.fullName, stat: 'points', by: preview, extra: { boards: 1, ...(queen ? { queens: 1 } : {}) } } : undefined,
+      type: 'BOARD', side: winner, payload: { coins, queen, ...(slam ? { slam } : {}) },
+      // SD-37: a board is the side's — both doubles partners are credited
+      attribution: players[0] ? attr(players[0]) : undefined,
+      attribution2: players[1] ? attr(players[1]) : undefined,
     });
-    setWinner(null); setCoins(0); setQueen(false); setWho(null);
+    setWinner(null); setCoins(0); setQueen(false); setSlam(null);
   };
 
   return (
@@ -47,17 +61,17 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>Board won by</Text>
         <View style={ctrl.row}>
-          <Button label={nameOf('home')} variant={winner === 'home' ? 'home' : 'ghost'} style={ctrl.flex} onPress={() => { setWinner('home'); setWho(null); }} />
-          <Button label={nameOf('away')} variant={winner === 'away' ? 'away' : 'ghost'} style={ctrl.flex} onPress={() => { setWinner('away'); setWho(null); }} />
+          <Button label={nameOf('home')} variant={winner === 'home' ? 'home' : 'ghost'} style={ctrl.flex} onPress={() => setWinner('home')} />
+          <Button label={nameOf('away')} variant={winner === 'away' ? 'away' : 'ghost'} style={ctrl.flex} onPress={() => setWinner('away')} />
         </View>
       </View>
       {winner && (
         <>
-          {roster.length > 1 && (
+          {roster.length > perSide && (
             <View style={{ gap: theme.spacing(2) }}>
-              <Text style={ctrl.label}>Finished by</Text>
+              <Text style={ctrl.label}>Played by</Text>
               <View style={ctrl.chips}>
-                {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={(who ?? roster[0]).id === p.id} onPress={() => setWho(p)} />)}
+                {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={players.some((x) => x.id === p.id)} onPress={() => togglePick(winner, p.id)} />)}
               </View>
             </View>
           )}
@@ -68,7 +82,14 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
             </View>
           </View>
           <SelectChip label={`👑 Winner covered the Queen${queenCounts ? ' (+3)' : ' (no points at 22+)'}`} active={queen} onPress={() => setQueen(!queen)} />
-          <Button label={`✓ Record board · +${preview}`} variant={winner} onPress={record} />
+          <View style={{ gap: theme.spacing(2) }}>
+            <Text style={ctrl.label}>Slam? <Text style={ctrl.meta}>(finished in the first turn · optional)</Text></Text>
+            <View style={ctrl.chips}>
+              <SelectChip label="⚪ White slam · broke" active={slam === 'white'} onPress={() => setSlam(slam === 'white' ? null : 'white')} />
+              <SelectChip label="⚫ Black slam · didn't break" active={slam === 'black'} onPress={() => setSlam(slam === 'black' ? null : 'black')} />
+            </View>
+          </View>
+          <Button label={`✓ Record board · +${credit}${credit < value ? ` (game at ${s.target})` : ''}`} variant={winner} onPress={record} />
         </>
       )}
     </View>
@@ -77,6 +98,8 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
 
 const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
   const s = state as CarromState;
+  // SD-37: a game-winning board shows what it added (the game is written at 25)
+  const credited = creditedPoints(s);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Games</Text>
@@ -90,9 +113,9 @@ const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state
       )}
       <Text style={ctrl.label}>Boards</Text>
       {s.boards.length === 0 ? <Text style={textStyles.muted}>No boards yet.</Text> : (
-        [...s.boards].reverse().map((b, i) => (
+        s.boards.map((b, i) => ({ b, pts: credited[i] })).reverse().map(({ b, pts }, i) => (
           <Text key={i} style={textStyles.body}>
-            G{b.game} · {b.winner === 'home' ? homeName : awayName} +{b.points} ({b.coins} coin{b.coins === 1 ? '' : 's'}{b.queen ? ' + 👑' : ''})
+            G{b.game} · {b.winner === 'home' ? homeName : awayName} +{pts} ({b.coins} coin{b.coins === 1 ? '' : 's'}{b.queen ? ' + 👑' : ''}){b.slam ? ` · ${b.slam === 'white' ? '⚪ White' : '⚫ Black'} slam` : ''}
           </Text>
         ))
       )}
@@ -130,6 +153,11 @@ export const carromPlugin: SportPlugin<CarromState> = {
   scoreLine,
   // SD-20: the line score (board grid, a game closed by hand).
   lineScore,
+  // SD-37: absolute lines at completion — both partners, capped points, games,
+  // boards played, slams, 25-0 games (src/sports/carrom/totals.ts)
+  statTotals: carromStatTotals,
+  statTotalsNeedsPlayers: true,
+  statTotalsPartial: true,
   Scoreboard: CarromScoreboard,
   ScoringControls,
   LiveExtras,

@@ -9,3 +9,4 @@ export * from './medals.ts';
 export * from './plan.ts';
 export * from './athletics.ts';
 export * from './field.ts';
+export * from './swimming.ts';

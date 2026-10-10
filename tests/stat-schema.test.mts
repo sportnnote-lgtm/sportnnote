@@ -66,7 +66,7 @@ const pick = <T,>(o: Record<string, T>) => Object.fromEntries(KEPT.map((sp) => [
 
 describe('SD-15 — every sport has a valid schema', () => {
   test('14 sports, one schema each, keyed by its own sport', () => {
-    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS, 'athletics'].sort()); // SD-90 added athletics after the golden snapshot
+    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS, 'athletics', 'hockey', 'swimming'].sort()); // SD-90 athletics, SD-101 hockey, SD-94 swimming went live after the golden snapshot
     for (const sp of STAT_SPORTS) assert.equal(STAT_SCHEMAS[sp].sport, sp);
   });
   test('every reference resolves (sections, box, leaders, headline, awards, aggregations)', () => {
@@ -415,9 +415,9 @@ const athletics: SportStatSchema<'athletics'> = {
 };
 
 describe('SD-15 — the schema shape expresses hockey, handball and timed / measured sports', () => {
-  test('the three sample schemas are valid (not registered as live sports)', () => {
+  test('the three sample schemas are valid (handball not yet a live sport)', () => {
     for (const s of [hockey, handball, athletics] as SportStatSchema<string>[]) assert.deepEqual(validateSchema(s), [], s.sport);
-    assert.ok(!(STAT_SPORTS as string[]).includes('hockey')); // athletics went live with SD-90
+    assert.ok(!(STAT_SPORTS as string[]).includes('handball')); // athletics went live with SD-90, hockey with SD-101
   });
   test('hockey: PC conversion and GK save % as rates; timed suspensions declared; per-game (SD-16)', () => {
     const c = careerFromSchema(hockey, [
