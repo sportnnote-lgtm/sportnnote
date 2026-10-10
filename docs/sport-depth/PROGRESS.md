@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-108 invite share — DONE (8051bd2, 2026-10-11)
+- Invite texts say "Team …" / "Tournament …"; the QR PNG is shared with the message (web now; Android app after a new APK — `react-native-share`); Android web join pages offer "Open in the SportnNote app" with a website fallback.
+- "Hrudhay Organizer" is the account's own profile name — edit the profile.
+- **Founder steps for true one-tap App Links (not done):** (1) a host that doesn't redirect (app.sportnnote.in 301s to sportnnote.expo.app today) — serve directly or use sportnnote.in; (2) `eas credentials -p android` → release SHA-256; (3) serve `/.well-known/assetlinks.json` (200, application/json, no redirect) with package `in.sportnnote.app` + that fingerprint; (4) `android.intentFilters` autoVerify for /join-club and /join-tournament in app.json + the https prefix in RootNavigator linking; (5) point SHARE_BASE at that host; (6) new APK, check `adb shell pm get-app-links in.sportnnote.app`. iPhone stays on the web app.
+- Not verified: native image share, real WhatsApp caption on iOS, a real intent handoff.
+
 ## SD-101 hockey, SD-94 swimming, SD-37/86 carrom — DONE (68dd087, 2026-10-11)
 - **Hockey:** a live sport (see DEVLOG).
   - To verify against FIH: clock stops for PCs and after goals, yellow 5–10′, Hockey5s 2×10 with no PCs, the tie-break order.
