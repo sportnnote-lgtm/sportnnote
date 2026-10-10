@@ -4,7 +4,8 @@
  * it. `rallyCore.tsx` builds each sport's plugin (controls, summary) on top.
  */
 import type { LiveEvent } from './liveEvents';
-import type { ScoreAction } from './types';
+import type { ScoreAction, ScoreSummary } from './types';
+import { scoreLine as lineOf, finalSummary } from './scoreline.ts';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -105,4 +106,24 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
   };
 
   return { init, reducer };
+}
+
+/** SD-01 — the completed games, "11-7, 9-11, 11-5". */
+export function rallyScoreLine(s: RallyState, perspective?: 'home' | 'away'): string {
+  return lineOf(s?.games, { perspective });
+}
+
+/** Scoreboard summary for pickleball / squash / table tennis. Live = the current
+ *  game's points; once ended = games won + every game's score (not the reset 0–0). */
+export function rallySummary(s: RallyState, serveTag: string): ScoreSummary {
+  if (s.ended) return finalSummary(s.gamesWon, rallyScoreLine(s));
+  const line = rallyScoreLine(s);
+  return {
+    homeScore: String(s.current.home),
+    awayScore: String(s.current.away),
+    statusLine: `Game ${s.games.length + 1}${s.sideOut ? ` · ${serveTag}` : ''}`,
+    detailLine:
+      `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target}${s.winBy === 2 ? ' (win by 2)' : ''} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}` +
+      (s.sideOut && s.doubles ? ` · call ${s.current[s.serving]}-${s.current[other(s.serving)]}-${s.serverNo}` : ''),
+  };
 }

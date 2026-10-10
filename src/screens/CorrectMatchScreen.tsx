@@ -69,7 +69,12 @@ export default function CorrectMatchScreen() {
     if (!r) return 'Unfinished';
     return r.winner === 'draw' ? 'Draw' : `${r.winner === 'home' ? home : away} won`;
   };
-  const score = (state: unknown) => { const s = plugin.summary(state as never); return `${s.homeScore} – ${s.awayScore}`; };
+  // SD-01: set/game sports show the per-set line too ("2 – 1 · 6-4, 3-6, 7-6(4)").
+  const score = (state: unknown) => {
+    const s = plugin.summary(state as never);
+    const line = plugin.scoreLine?.(state as never);
+    return `${s.homeScore} – ${s.awayScore}${line ? ` · ${line}` : ''}`;
+  };
   const nameOf = (id: string) => [...rosters.home, ...rosters.away].find((p) => p.id === id)?.fullName ?? 'A player';
   const unfinished = !!plan && !match?.result && !plugin.isComplete(plan.afterState as never);
 

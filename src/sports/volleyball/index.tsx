@@ -8,6 +8,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { SelectChip, Button, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
+import { scoreLine, finalSummary } from '../scoreline';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
@@ -212,7 +213,9 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   isComplete: (s) => s.ended,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   Scoreboard: VolleyballScoreboard,
-  summary: (s) => ({
+  // SD-01: once ended → sets won + "25-21, 23-25, 15-12" (never the reset 0–0).
+  scoreLine: (s, perspective) => scoreLine(s?.sets, { perspective }),
+  summary: (s) => s.ended ? finalSummary(s.setsWon, scoreLine(s.sets)) : ({
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),
     statusLine: s.ended ? 'Match Over' : `Set ${s.setsWon.home + s.setsWon.away + 1}${isDecider(s) ? ' · decider' : ''}`,

@@ -8,6 +8,8 @@ import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
+import { scoreLine as lineOf, finalSummary, type Pair } from '../scoreline.ts';
+import type { ScoreSummary } from '../types';
 
 export const SETS_TO_WIN = 2;
 
@@ -30,8 +32,17 @@ export interface TennisState {
   tiebreakPoints: number;
   /** no-advantage scoring — a single deciding point at deuce */
   noAd: boolean;
-  /** if > 0, the deciding set is a first-to-N match tiebreak (Grand Slam = 10) */
+  /** if > 0, the deciding set is replaced by a first-to-N match tiebreak
+   *  (champions' tiebreak, e.g. 10). Wins over `finalSetTBAt`. */
   finalSetTiebreak: number;
+  /** SD-02 Grand Slam deciding set: if > 0 (and no match tiebreak), the deciding
+   *  set is played in games and at N-N goes to a 10-point tiebreak (win by 2).
+   *  Absent on older matches → 0, so their stored format keeps its meaning. */
+  finalSetTBAt?: number;
+  /** SD-02 per completed set: the tiebreak points [home, away] when the set
+   *  ended in a tiebreak (7-6(4)), else null. Derived — rebuilt on every replay;
+   *  absent on snapshots saved before SD-02 (see `setTiebreaks`). */
+  tb?: Array<Pair | null>;
   /** doubles (2 a side) vs singles — drives the serve display & rotation */
   doubles: boolean;
   /** which side served game 1; serve alternates every game after that */
@@ -56,6 +67,8 @@ export const init = (config?: Record<string, unknown>): TennisState => {
     tiebreakPoints: Number(config?.tiebreakPoints ?? 7),
     noAd: Boolean(config?.noAd ?? false),
     finalSetTiebreak: Number(config?.finalSetTiebreak ?? 0),
+    finalSetTBAt: Number(config?.finalSetTBAt ?? 0),
+    tb: [],
     doubles: Number(config?.playersPerSide ?? 1) >= 2,
     firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
     events: [],
@@ -69,9 +82,19 @@ export const other = (side: 'home' | 'away') => (side === 'home' ? 'away' : 'hom
 const isDeciderSet = (s: TennisState) => s.setsWon.home === s.setsToWin - 1 && s.setsWon.away === s.setsToWin - 1;
 /** The deciding set is played as a single match tiebreak (champions' tiebreak). */
 const isMatchTB = (s: TennisState) => isDeciderSet(s) && s.finalSetTiebreak > 0;
+/** Grand Slam deciding set: games as usual, a 10-point tiebreak at finalSetTBAt-all. */
+const isSlamDecider = (s: TennisState) => isDeciderSet(s) && !isMatchTB(s) && (s.finalSetTBAt ?? 0) > 0;
+/** Games-all score that starts this set's tiebreak (null = no tiebreak in this set). */
+const tbAtFor = (s: TennisState): number | null => (isSlamDecider(s) ? s.finalSetTBAt! : s.setTiebreak ? s.tiebreakAt : null);
+/** Points a Grand Slam deciding-set tiebreak is played to. */
+export const SLAM_DECIDER_TB_POINTS = 10;
 /** In a tiebreak: either the whole deciding set, or a set-ending tiebreak at N-N. */
-export const inTiebreak = (s: TennisState) => isMatchTB(s) || (s.setTiebreak && s.games.home === s.tiebreakAt && s.games.away === s.tiebreakAt);
-const tbTarget = (s: TennisState) => (isMatchTB(s) ? s.finalSetTiebreak : s.tiebreakPoints);
+export const inTiebreak = (s: TennisState) => {
+  if (isMatchTB(s)) return true;
+  const at = tbAtFor(s);
+  return at != null && s.games.home === at && s.games.away === at;
+};
+const tbTarget = (s: TennisState) => (isMatchTB(s) ? s.finalSetTiebreak : isSlamDecider(s) ? SLAM_DECIDER_TB_POINTS : s.tiebreakPoints);
 
 /** Completed games so far — the current game's 0-based index. (Shared serve.ts.) */
 export const gamesPlayed = (s: TennisState) => gamesPlayedOf(s);
@@ -91,13 +114,14 @@ export function disp(s: TennisState, side: 'home' | 'away'): string {
 }
 
 /** Finish a set for `side` with the given game score; advance or end the match. */
-function winSet(s: TennisState, side: 'home' | 'away', games: { home: number; away: number }, events: LiveEvent[], seq: number): TennisState {
+function winSet(s: TennisState, side: 'home' | 'away', games: { home: number; away: number }, events: LiveEvent[], seq: number, tbPts: Pair | null = null): TennisState {
   const sets = [...s.sets, [games.home, games.away] as [number, number]];
+  const tb = [...(s.tb ?? []), tbPts];
   const setsWon = { ...s.setsWon, [side]: s.setsWon[side] + 1 };
   const ended = setsWon[side] >= s.setsToWin;
   events.push({ id: ++seq, stamp: 'Set', icon: '🎉', label: `Set ${sets.length} won`, detail: `${games.home}-${games.away}`, side });
   if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${setsWon.home}-${setsWon.away} sets`, side });
-  return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, events, seq, ended };
+  return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
 function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean): TennisState {
@@ -116,8 +140,8 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
     // score as the set (e.g. 10-8); a set tiebreak makes the games tiebreakAt+1.
     const tbWon = pts[side] >= tbTarget(s) && pts[side] - pts[o] >= 2;
     if (!tbWon) return { ...s, pts, events, seq };
-    const games = isMatchTB(s) ? { home: pts.home, away: pts.away } : { ...s.games, [side]: s.tiebreakAt + 1 };
-    return winSet(s, side, games, events, seq);
+    const games = isMatchTB(s) ? { home: pts.home, away: pts.away } : { ...s.games, [side]: (tbAtFor(s) ?? s.tiebreakAt) + 1 };
+    return winSet(s, side, games, events, seq, [pts.home, pts.away]);
   }
 
   const gameWon = pts[side] >= 4 && pts[side] - pts[o] >= (s.noAd ? 1 : 2);
@@ -137,7 +161,7 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
 /** Reset the match to love-all keeping its format (sets/games/tiebreak rules) —
  *  the clean slate an EDIT_LOG replay rebuilds the corrected point list onto. */
 const clearMatch = (s: TennisState): TennisState => ({
-  ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, events: [], seq: 0, ended: false,
+  ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, tb: [], events: [], seq: 0, ended: false,
 });
 
 export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
@@ -158,3 +182,44 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true);
   return s;
 };
+
+// ------------------------------------------------------------ scoreline ----
+
+/** Tiebreak points per completed set. Uses `s.tb`; a snapshot saved before SD-02
+ *  has none, so count each set's tiebreak points from its event log instead
+ *  (every tiebreak point is stamped "Set N · TB"). */
+export function setTiebreaks(s: TennisState): Array<Pair | null> {
+  const sets = s.sets ?? [];
+  if (Array.isArray(s.tb) && s.tb.length === sets.length) return s.tb;
+  return sets.map((_, i) => {
+    const stamp = `Set ${i + 1} · TB`;
+    const t: Pair = [0, 0];
+    for (const e of s.events ?? []) {
+      if (e.stamp !== stamp || (e.kind !== 'point' && e.kind !== 'ace')) continue;
+      if (e.side === 'home') t[0] += 1; else if (e.side === 'away') t[1] += 1;
+    }
+    return t[0] + t[1] > 0 ? t : null;
+  });
+}
+
+/** Which completed sets were a whole-set match (champions') tiebreak → "[10-8]". */
+const matchTbSets = (s: TennisState): boolean[] =>
+  (s.sets ?? []).map((_, i) => s.finalSetTiebreak > 0 && i === s.setsToWin * 2 - 2);
+
+/** "6-4, 3-6, 7-6(4)" — the completed sets, tiebreak points included. */
+export function scoreLine(s: TennisState, perspective?: 'home' | 'away'): string {
+  if (!s || !Array.isArray(s.sets)) return '';
+  return lineOf(s.sets, { tb: setTiebreaks(s), matchTb: matchTbSets(s), perspective });
+}
+
+/** Scoreboard summary: live = current-game points; ended = sets won + the set line. */
+export function summary(s: TennisState): ScoreSummary {
+  if (s.ended) return finalSummary(s.setsWon, scoreLine(s));
+  const line = scoreLine(s);
+  return {
+    homeScore: disp(s, 'home'),
+    awayScore: disp(s, 'away'),
+    statusLine: `Set ${s.setsWon.home + s.setsWon.away + 1}${inTiebreak(s) ? ' · TIEBREAK' : ''} · ${s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}`,
+    detailLine: `Games ${s.games.home}-${s.games.away}${line ? ' · ' + line : ''}`,
+  };
+}

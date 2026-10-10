@@ -8,6 +8,9 @@
  * target (25), or after the board limit (8) — then the higher total wins; level
  * after the limit → an extra (tie-break) board. A match is best of 1 or 3 games.
  */
+import type { ScoreSummary } from '../types';
+import { scoreLine as lineOf, finalSummary } from '../scoreline.ts';
+
 export type Side = 'home' | 'away';
 
 export interface BoardResult { winner: Side; coins: number; queen: boolean; points: number; game: number }
@@ -77,4 +80,22 @@ export function reducer(s: CarromState, a: { type: string; side?: Side; payload?
 export function result(s: CarromState): { winner: Side | 'draw'; home: number; away: number } | null {
   if (!s.ended) return null;
   return { winner: s.gamesWon.home > s.gamesWon.away ? 'home' : 'away', home: s.gamesWon.home, away: s.gamesWon.away };
+}
+
+/** SD-01 — the completed games, "25-18, 12-25, 25-20". */
+export function scoreLine(s: CarromState, perspective?: Side): string {
+  return lineOf(s?.games, { perspective });
+}
+
+/** Scoreboard summary: live = this game's points; once ended = games won + every
+ *  game's score (the board no longer reads the reset 0 : 0). */
+export function summary(s: CarromState): ScoreSummary {
+  if (s.ended) return finalSummary(s.gamesWon, scoreLine(s));
+  const line = scoreLine(s);
+  return {
+    homeScore: String(s.current.home),
+    awayScore: String(s.current.away),
+    statusLine: `Game ${s.games.length + 1} · board ${s.boardsInGame + 1}`,
+    detailLine: `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}`,
+  };
 }

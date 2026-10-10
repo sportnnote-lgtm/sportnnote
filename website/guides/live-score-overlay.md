@@ -5,7 +5,7 @@ category: Streaming & sharing
 audience: Organisers
 sports: all
 order: 10
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 When a college media club streams the inter-house final, viewers want to see the score on the video. SportnNote gives every match a free score overlay link. Add it to OBS once and the score bar updates by itself as the scorer taps. Big moments flash on screen too, such as a wicket, a six or a goal. There's no login and no extra app to install.
@@ -40,7 +40,7 @@ These steps are also printed on the card under **Add it in OBS**.
 - The team names, colours and the live score, with sport detail such as overs in cricket or the match clock in football.
 - Flashes for big moments: **WICKET!**, **FOUR!** and **SIX!** in cricket, and **GOAL!** with the scorer and minute in football.
 - During a break, the break is shown, for example "Rain break".
-- After the match, the final result.
+- After the match, the final result. In set and game sports such as tennis, badminton, table tennis, squash, pickleball, padel, volleyball and carrom, that's the sets or games won plus each set's score, for example 2–1 with 6-4, 3-6, 7-6(4).
 
 The overlay follows the live score a few seconds behind the scorer's taps.
 

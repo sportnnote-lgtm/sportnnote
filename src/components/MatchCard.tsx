@@ -34,6 +34,11 @@ function LiveBadge() {
   );
 }
 
+/** A stored snapshot may predate the current engine — never let it break a card. */
+function safeLine(f: () => string | undefined): string {
+  try { return f() ?? ''; } catch { return ''; }
+}
+
 /** `onStart` (parity #13): the scorer's one-tap "▶ Start scoring" / "Continue
  *  scoring" straight into the Scoring tab. */
 export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: () => void; onStart?: () => void }) {
@@ -48,6 +53,9 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
   const cancelled = match.status === 'cancelled';
   const walkover = done && match.walkover;
   const showScore = (live || done) && !!match.score && !walkover;
+  // SD-01: a finished set/game match shows its per-set line under the sets/games
+  // score ("21-18, 19-21, 21-15"; tennis "6-4, 3-6, 7-6(4)").
+  const setLine = done && showScore && match.state ? safeLine(() => plugin.scoreLine?.(match.state as never)) : '';
 
   return (
     // The start button sits beside (not inside) the card's touchable — a button
@@ -56,7 +64,7 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${plugin.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}${
-        showScore ? `, ${match.score!.home} to ${match.score!.away}` : ''
+        showScore ? `, ${match.score!.home} to ${match.score!.away}${setLine ? ` (${setLine})` : ''}` : ''
       }, ${onBreak ? 'on a break' : live ? 'live now' : done ? 'final' : time}`}
       style={s.body}
       activeOpacity={0.85}
@@ -105,6 +113,8 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
           <Text style={s.team} numberOfLines={1}>{match.awayTeam.name}</Text>
         </View>
       </View>
+
+      {setLine ? <Text style={s.setLine} numberOfLines={1}>{setLine}</Text> : null}
 
       {/* Footer: call-to-action / kickoff, plus venue */}
       <Text style={s.foot}>
@@ -186,6 +196,7 @@ const s = StyleSheet.create({
   scoreWrap: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingHorizontal: theme.spacing(1) },
   score: { color: theme.colors.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, minWidth: 20, textAlign: 'center' },
   scoreLive: { color: theme.colors.primary },
+  setLine: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
   scoreSep: { color: theme.colors.textMuted, fontSize: theme.font.h3, fontWeight: '700' },
   vs: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', paddingHorizontal: theme.spacing(2) },
   walkover: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5, paddingHorizontal: theme.spacing(2) },

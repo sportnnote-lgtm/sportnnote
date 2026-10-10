@@ -13,6 +13,30 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-01/SD-02: real final scores everywhere; tennis tiebreak scores and Grand Slam deciding set
+
+- **Bug:** finished set and game matches showed "0–0" in the full-time alert, ticker/overlay,
+  correction screen and history, because `summary()` returned the reset current-game points.
+- **Fix:** one shared `src/sports/scoreline.ts` (+ optional `SportPlugin.scoreLine`) gives sets or
+  games won plus each set's score, e.g. "2–1 · 21-18, 19-21, 21-15" or "6-4, 7-6(4)".
+  - **Sports:** tennis, padel, badminton, table tennis, squash, pickleball and carrom, plus
+    volleyball (same bug).
+  - **Surfaces:** the alert, ticker / `/o/`, MiniScore, the Summary tab, match cards (incl. their
+    accessibility label), the Correct match screen and profile history (from the player's side).
+- **Tennis:**
+  - each set keeps its tiebreak score (derived state; old snapshots count it from the log);
+  - the `gs5` preset plays the deciding set in games with a 10-point tiebreak at 6-6
+    (`finalSetTBAt`), and Custom offers it as a choice;
+  - matches already stored with the old preset keep their rule.
+- **Padel** keeps tiebreak scores too.
+- **Badminton and padel** engines moved into `engine.ts` files so tests can load them.
+- **Tests:** tsc + 847 (31 new: final-score, tennis-scoreline). Legacy replay fingerprints for 12
+  sample logs are identical vs HEAD.
+- **Demo 8093:** tennis 6-4, 7-6(4) on board, Summary, card, `/o/`, Correct match and history;
+  badminton 2–1.
+
+---
+
 ### 2026-10-10 — Org integrity: no planting teams/clubs in another org; only the invitee accepts an invite (migration 0049)
 
 - **Migration 0049** `20261019122700_org_integrity.sql` (bundle `2026-10-org-integrity-0049.sql`, run

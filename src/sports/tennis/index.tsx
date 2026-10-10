@@ -15,7 +15,12 @@ import { courtFormation, makeCourt } from '../courts';
 import { TennisBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, type TennisState } from './engine';
+import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, type TennisState } from './engine';
+import { setScore } from '../scoreline';
+
+/** Small superscript digits for a tiebreak score on the board (6⁴). */
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const sup = (n: number) => String(n).split('').map((d) => SUP[Number(d)] ?? d).join('');
 
 
 const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Player[]; onPick: (p?: Player) => void; fallback?: string }) => (
@@ -90,7 +95,7 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
         {s.sets.length === 0 ? (
           <Text style={textStyles.muted}>Set 1 in progress · games {s.games.home}-{s.games.away}</Text>
         ) : (
-          s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {g[0]}-{g[1]}</Text>)
+          s.sets.map((g, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {setScore(g, { tb: setTiebreaks(s)[i] })}</Text>)
         )}
       </View>
       <Text style={ctrl.label}>Player stats</Text>
@@ -108,8 +113,18 @@ const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({
   const setNo = s.setsWon.home + s.setsWon.away + 1;
   const nSets = Math.max(1, s.ended ? s.sets.length : setNo); // sets played + the one in progress
   const columns = Array.from({ length: nSets }, (_, i) => ({ label: String(i + 1), highlight: !s.ended && i + 1 === setNo }));
-  const cell = (side: 'home' | 'away', i: number) =>
-    i < s.sets.length ? String(s.sets[i][side === 'home' ? 0 : 1]) : String(s.games[side]);
+  // A set won in a tiebreak shows the loser's tiebreak points as a superscript
+  // (7 / 6⁴) — the broadcast convention. A match tiebreak shows its points as is.
+  const tbs = setTiebreaks(s);
+  const cell = (side: 'home' | 'away', i: number) => {
+    if (i >= s.sets.length) return String(s.games[side]);
+    const g = s.sets[i][side === 'home' ? 0 : 1];
+    const t = tbs[i];
+    const mine = t ? t[side === 'home' ? 0 : 1] : 0;
+    const theirs = t ? t[side === 'home' ? 1 : 0] : 0;
+    const matchTb = t && t[0] === s.sets[i][0] && t[1] === s.sets[i][1];
+    return t && !matchTb && mine < theirs ? `${g}${sup(mine)}` : String(g);
+  };
   // After the match the current-game POINTS are meaningless (0-0), so the headline
   // becomes SETS won — the result a fan reads off a final board.
   const winner = s.ended ? (s.setsWon.home > s.setsWon.away ? 'home' : 'away') : undefined;
@@ -141,14 +156,9 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   isComplete: (s) => s.ended,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
   Scoreboard: TennisScoreboard,
-  summary: (s) => ({
-    homeScore: disp(s, 'home'),
-    awayScore: disp(s, 'away'),
-    statusLine: s.ended
-      ? 'Match Over'
-      : `Set ${s.setsWon.home + s.setsWon.away + 1}${inTiebreak(s) ? ' · TIEBREAK' : ''} · ${s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}`,
-    detailLine: `Games ${s.games.home}-${s.games.away}${s.sets.length ? ' · ' + s.sets.map((g) => `${g[0]}-${g[1]}`).join(', ') : ''}`,
-  }),
+  // SD-01: once ended → sets won + "6-4, 3-6, 7-6(4)" (never the reset 0–0).
+  summary,
+  scoreLine,
   ScoringControls,
   LiveExtras,
   formation: () => courtFormation('tennis'),
@@ -158,12 +168,15 @@ export const tennisPlugin: SportPlugin<TennisState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'bo3',
       options: [
-        { value: 'bo3', label: 'Best of 3 sets', set: { setsToWin: 2, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0 } },
-        { value: 'bo5', label: 'Best of 5 sets', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0 } },
-        { value: 'gs5', label: 'Grand Slam (Bo5, final-set TB)', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 10 } },
-        { value: 'fast4', label: 'Fast4', set: { setsToWin: 2, gamesPerSet: 4, setWinByTwo: false, tiebreakAt: 3, setTiebreak: true, tiebreakPoints: 5, noAd: true, finalSetTiebreak: 0 } },
-        { value: 'proset', label: 'Pro set (to 8)', set: { setsToWin: 1, gamesPerSet: 8, setWinByTwo: true, tiebreakAt: 8, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0 } },
-        { value: 'match_tb', label: 'Match tiebreak (to 10)', set: { setsToWin: 1, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10 } },
+        { value: 'bo3', label: 'Best of 3 sets', set: { setsToWin: 2, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
+        { value: 'bo5', label: 'Best of 5 sets', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
+        // SD-02: a Slam plays the 5th set in games and a 10-point tiebreak at 6-6
+        // (since 2022). Matches already created with the old gs5 stored
+        // finalSetTiebreak: 10 in their own format, so they keep their rules.
+        { value: 'gs5', label: 'Grand Slam (Bo5, 10-pt TB at 6-6 in set 5)', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 6 } },
+        { value: 'fast4', label: 'Fast4', set: { setsToWin: 2, gamesPerSet: 4, setWinByTwo: false, tiebreakAt: 3, setTiebreak: true, tiebreakPoints: 5, noAd: true, finalSetTiebreak: 0, finalSetTBAt: 0 } },
+        { value: 'proset', label: 'Pro set (to 8)', set: { setsToWin: 1, gamesPerSet: 8, setWinByTwo: true, tiebreakAt: 8, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
+        { value: 'match_tb', label: 'Match tiebreak (to 10)', set: { setsToWin: 1, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10, finalSetTBAt: 0 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -203,6 +216,14 @@ export const tennisPlugin: SportPlugin<TennisState> = {
       options: [
         { value: 0, label: 'Full set' },
         { value: 10, label: '10-point match tiebreak' },
+      ],
+    },
+    {
+      key: 'finalSetTBAt', label: 'Deciding-set tiebreak', type: 'choice', default: 0, advanced: true,
+      hint: 'when the deciding set is a full set',
+      options: [
+        { value: 0, label: 'Same as other sets' },
+        { value: 6, label: '10-point at 6-6 (Grand Slam)' },
       ],
     },
   ],

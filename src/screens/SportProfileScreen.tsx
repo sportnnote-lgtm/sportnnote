@@ -278,6 +278,12 @@ export default function SportProfileScreen() {
                     l.stats.putts ? `${l.stats.putts} putts` : '',
                   ].filter(Boolean).join(' · ')
                 : '';
+              // SD-01: set/game sports lead with the match's set line, read from
+              // this player's side ("6-4, 3-6, 7-6(4)").
+              const hm = matchById.get(l.matchId);
+              const persp: 'home' | 'away' = hm && l.opponent && l.opponent === hm.homeTeam.name ? 'away' : 'home';
+              let setLine = '';
+              try { setLine = !golfRound && hm?.status === 'completed' && hm.state ? plugin.scoreLine?.(hm.state as never, persp) ?? '' : ''; } catch { setLine = ''; }
               const row = (
                 <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>
@@ -286,7 +292,7 @@ export default function SportProfileScreen() {
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`).join(' · ')}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pill

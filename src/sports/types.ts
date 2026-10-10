@@ -260,6 +260,11 @@ export interface SportPlugin<S = unknown> {
   reducer: (state: S, action: ScoreAction) => S;
   /** Projection for the universal scoreboard. */
   summary: (state: S) => ScoreSummary;
+  /** SD-01 — set/game sports: the per-set line of the COMPLETED sets/games
+   *  ("21-18, 19-21, 21-15"; tennis "6-4, 3-6, 7-6(4)"), '' before the first one
+   *  ends. `perspective: 'away'` reads it from the away side (history rows). Must
+   *  tolerate a stored snapshot (`matches.state`) from an older engine version. */
+  scoreLine?: (state: S, perspective?: 'home' | 'away') => string;
   /** Has the match reached its end condition? */
   isComplete: (state: S) => boolean;
   /** The decided outcome once the match is complete: the winning side (or 'draw')

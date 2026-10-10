@@ -286,7 +286,9 @@ export function useLiveMatch(params: {
       }
       if (plugin.isComplete(next) && teamOrTourWants('result')) {
         const sm = plugin.summary(next);
-        void notify({ title: `Full time — ${matchLabel}`, body: `${getSport(sport).name} · ${sm.homeScore}–${sm.awayScore}`, matchId });
+        // SD-01: set/game sports add the per-set line — "2–1 · 21-18, 19-21, 21-15".
+        const line = plugin.scoreLine?.(next);
+        void notify({ title: `Full time — ${matchLabel}`, body: `${getSport(sport).name} · ${sm.homeScore}–${sm.awayScore}${line ? ` · ${line}` : ''}`, matchId });
       }
       const rec: MatchEventRecord = {
         seq,

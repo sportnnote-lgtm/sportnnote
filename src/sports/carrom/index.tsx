@@ -10,7 +10,7 @@ import { theme } from '../../core/theme';
 import { Button, SelectChip, textStyles } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
-import { init, reducer, result, boardPoints, type CarromState, type Side } from './engine';
+import { init, reducer, result, boardPoints, summary, scoreLine, type CarromState, type Side } from './engine';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
@@ -103,12 +103,9 @@ export const carromPlugin: SportPlugin<CarromState> = {
   reducer,
   isComplete: (s) => s.ended,
   result: (s) => result(s),
-  summary: (s) => ({
-    homeScore: String(s.current.home),
-    awayScore: String(s.current.away),
-    statusLine: s.ended ? 'Match Over' : `Game ${s.games.length + 1} · board ${s.boardsInGame + 1}`,
-    detailLine: `Games — ${s.gamesWon.home}:${s.gamesWon.away} · to ${s.target} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}`,
-  }),
+  // SD-01: once ended → games won + "25-18, 12-25, 25-20" (never the reset 0 : 0).
+  summary,
+  scoreLine,
   ScoringControls,
   LiveExtras,
   formatFields: [

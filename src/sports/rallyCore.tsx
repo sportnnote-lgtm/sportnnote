@@ -23,7 +23,7 @@ import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer } from './tabletennis/serve';
-import { makeRallyEngine, other, type RallyState } from './rallyEngine';
+import { makeRallyEngine, rallySummary, rallyScoreLine, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
 
@@ -153,14 +153,9 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
       (t, [h, a]) => ({ home: t.home + h, away: t.away + a }),
       { home: s.current.home, away: s.current.away },
     ),
-    summary: (s) => ({
-      homeScore: String(s.current.home),
-      awayScore: String(s.current.away),
-      statusLine: s.ended ? 'Match Over' : `Game ${s.games.length + 1}${s.sideOut ? ` · ${opts.serveTag}` : ''}`,
-      detailLine:
-        `Games — ${s.gamesWon.home}:${s.gamesWon.away} · to ${s.target}${s.winBy === 2 ? ' (win by 2)' : ''} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}` +
-        (s.sideOut && s.doubles ? ` · call ${s.current[s.serving]}-${s.current[other(s.serving)]}-${s.serverNo}` : ''),
-    }),
+    // SD-01: once ended → games won + "11-7, 9-11, 11-5" (never the reset 0–0).
+    summary: (s) => rallySummary(s, opts.serveTag),
+    scoreLine: rallyScoreLine,
     ScoringControls,
     LiveExtras,
     voice: { hints: ['rally home', 'rally away', 'point home'], parse: pointVoice },

@@ -2255,7 +2255,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               <MatchSummary
                 statLines={matchStats} sport={sport} homeRoster={homeRoster} awayRoster={awayRoster}
                 homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-                summary={summary} complete={complete} live={matchLive}
+                summary={summary} scoreLine={plugin.scoreLine?.(state)} complete={complete} live={matchLive}
                 onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
                 potm={potmProp}
               />

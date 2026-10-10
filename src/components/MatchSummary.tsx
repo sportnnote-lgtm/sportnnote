@@ -17,7 +17,7 @@ const initials = (name?: string): string =>
 
 export function MatchSummary({
   statLines, sport, homeRoster, awayRoster, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away,
-  summary, complete, live, onPlayer, potm,
+  summary, scoreLine, complete, live, onPlayer, potm,
 }: {
   statLines: StatLine[];
   sport: SportId;
@@ -28,6 +28,9 @@ export function MatchSummary({
   homeColor?: string;
   awayColor?: string;
   summary: ScoreSummary;
+  /** SD-01 — set/game sports: the per-set line ("21-18, 19-21, 21-15") shown
+   *  under the sets/games score once the match is over. */
+  scoreLine?: string;
   complete: boolean;
   /** match is underway (not just "not complete") — drives the result live dot */
   live?: boolean;
@@ -74,6 +77,7 @@ export function MatchSummary({
             <Text style={[st.sideName, { color: awayColor }]} numberOfLines={1}>{awayName}</Text>
           </View>
         </View>
+        {complete && scoreLine ? <Text style={st.scoreLine}>{scoreLine}</Text> : null}
         {complete && decided ? (
           <Text style={st.winner}>🏆 {homeWon ? homeName : awayName} won</Text>
         ) : complete && !isNaN(hs) && !isNaN(as) && hs === as ? (
@@ -176,6 +180,7 @@ const st = StyleSheet.create({
   colon: { color: theme.colors.textMuted, fontSize: theme.font.h2, fontWeight: '300', marginHorizontal: theme.spacing(2) },
   score: { fontSize: theme.font.h1, fontWeight: '900' },
   scoreLost: { opacity: 0.45 },
+  scoreLine: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
   winner: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
   drawn: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', letterSpacing: 0.5 },
   mvp: {

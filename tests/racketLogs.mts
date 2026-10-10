@@ -1,0 +1,118 @@
+/**
+ * Sample event logs for the set/game sports (SD-01 / SD-02 tests) and a
+ * fingerprint of the SCORING state they replay to. Not a test file itself (no
+ * `.test.`), so `npm test` doesn't run it directly.
+ *
+ * The fingerprints pinned in final-score.test.mts were captured by replaying
+ * these same logs through the engines as they were BEFORE SD-01/02 (git HEAD
+ * d4c8cba). Matching them proves old logs still replay to the same scores, and
+ * that the new `tb` field is purely derived (it's left out of the fingerprint).
+ */
+import { createHash } from 'node:crypto';
+import type { ScoreAction } from '../src/sports/types.ts';
+
+export type Side = 'home' | 'away';
+const P = (side: Side): ScoreAction => ({ type: 'POINT', side });
+const ACE = (side: Side): ScoreAction => ({ type: 'ACE', side });
+
+// ----------------------------------------------------------- tennis/padel --
+
+/** One game won to love. */
+export const tGame = (side: Side): ScoreAction[] => [P(side), P(side), P(side), P(side)];
+
+/** A set to an exact score without a tiebreak (e.g. 6-4): alternate games, then the winner's run. */
+export function tSet(h: number, a: number): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  const lo = Math.min(h, a);
+  for (let i = 0; i < lo; i++) out.push(...tGame('home'), ...tGame('away'));
+  const w: Side = h > a ? 'home' : 'away';
+  for (let i = 0; i < Math.abs(h - a); i++) out.push(...tGame(w));
+  return out;
+}
+
+/** A set that reaches `at`-all, then a tiebreak with these points (in order). */
+export function tTiebreakSet(at: number, tb: ScoreAction[]): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  for (let i = 0; i < at; i++) out.push(...tGame('home'), ...tGame('away'));
+  return [...out, ...tb];
+}
+
+/** `n` tiebreak points for `side` (the first one an ace, to cover ACE). */
+export const tbPts = (side: Side, n: number, withAce = false): ScoreAction[] =>
+  Array.from({ length: n }, (_, i) => (withAce && i === 0 ? ACE(side) : P(side)));
+
+/** Bo3: 6-4, 3-6, 7-6(4) — the set-3 tiebreak goes 7-4 to home. */
+export const TENNIS_BO3: ScoreAction[] = [
+  ...tSet(6, 4),
+  ...tSet(3, 6),
+  ...tTiebreakSet(6, [...tbPts('home', 3, true), ...tbPts('away', 4), ...tbPts('home', 4)]),
+];
+
+/** Bo5 to two sets all, used for the Grand Slam decider tests. */
+export const TENNIS_TWO_ALL: ScoreAction[] = [...tSet(6, 3), ...tSet(4, 6), ...tSet(6, 2), ...tSet(3, 6)];
+
+/** Padel Bo3: 6-4, 6-7(5), then the decider (a full set or a match tiebreak). */
+export const PADEL_TWO_SETS: ScoreAction[] = [
+  ...tSet(6, 4),
+  ...tTiebreakSet(6, [...tbPts('home', 5), ...tbPts('away', 7)]),
+];
+
+// ----------------------------------------------------------------- rally --
+
+/** A game to an exact score: alternate rallies to the loser's total, then the winner's run. */
+export function rGame(h: number, a: number): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  const lo = Math.min(h, a);
+  for (let i = 0; i < lo; i++) out.push(P('home'), P('away'));
+  const w: Side = h > a ? 'home' : 'away';
+  for (let i = 0; i < Math.abs(h - a); i++) out.push(P(w));
+  return out;
+}
+export const rMatch = (...games: Array<[number, number]>): ScoreAction[] => games.flatMap(([h, a]) => rGame(h, a));
+
+/** Badminton 21-18, 19-21, 21-15 (BWF bo3). */
+export const BADMINTON_LOG = rMatch([21, 18], [19, 21], [21, 15]);
+/** Table tennis bo5: 11-7, 9-11, 11-5, 13-11. */
+export const TT_LOG = rMatch([11, 7], [9, 11], [11, 5], [13, 11]);
+/** Squash PAR 11 bo5: 11-9, 8-11, 11-6, 7-11, 12-10. */
+export const SQUASH_LOG = rMatch([11, 9], [8, 11], [11, 6], [7, 11], [12, 10]);
+/** Pickleball rally scoring bo3: 11-4, 11-9. */
+export const PICKLEBALL_RALLY_LOG = rMatch([11, 4], [11, 9]);
+/** Pickleball side-out doubles: who WON each rally (the server scores only on a win). */
+export const PICKLEBALL_SIDEOUT_LOG: ScoreAction[] = (() => {
+  const out: ScoreAction[] = [];
+  // Home wins game 1 11-0 serving throughout; game 2: away holds serve to 11-0.
+  for (let i = 0; i < 11; i++) out.push(P('home'));
+  out.push(P('away')); // game 2: home (winner) serves first as server 2 → fault = side-out
+  for (let i = 0; i < 11; i++) out.push(P('away'));
+  out.push(P('home')); // game 3: away serves first, home wins the rally → side-out
+  for (let i = 0; i < 11; i++) out.push(P('home'));
+  return out;
+})();
+
+// ---------------------------------------------------------------- carrom --
+
+export type Board = [Side, number, boolean];
+/** ICF bo3: 25-18 (with a queen), 12-25, 25-20. Boards are [winner, opp coins left, queen]. */
+export const CARROM_BOARDS: Board[] = [
+  // game 1: home 25 (9+3, 9, 4 = 25), away 18 (9, 9)
+  ['home', 9, true], ['away', 9, false], ['home', 9, false], ['away', 9, false], ['home', 4, false],
+  // game 2: away to 25 (9+3, 9, 4), home 12 (9, 3)
+  ['away', 9, true], ['home', 9, false], ['away', 9, false], ['home', 3, false], ['away', 4, false],
+  // game 3: home 25 (9+3, 9, 9 → capped at 25), away 20 (9, 9, 2)
+  ['home', 9, true], ['away', 9, false], ['home', 9, false], ['away', 9, false], ['away', 2, false], ['home', 9, false],
+];
+
+// ----------------------------------------------------------- fingerprint --
+
+type AnyEvent = { stamp?: string; label?: string; detail?: string; side?: string };
+/** A short hash of the scoring state — everything a replay must reproduce. */
+export function fingerprint(state: Record<string, unknown>, keys: string[]): string {
+  const pick: Record<string, unknown> = {};
+  for (const k of keys) pick[k] = state[k];
+  const events = (state.events as AnyEvent[] | undefined)?.map((e) => [e.stamp, e.label, e.detail, e.side]);
+  return createHash('sha1').update(JSON.stringify({ pick, events })).digest('hex').slice(0, 12);
+}
+export const TENNIS_KEYS = ['pts', 'games', 'sets', 'setsWon', 'ended'];
+export const RALLY_KEYS = ['current', 'games', 'gamesWon', 'ended', 'serving', 'serverNo'];
+export const CARROM_KEYS = ['current', 'games', 'gamesWon', 'ended', 'boards'];
