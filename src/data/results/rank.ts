@@ -25,12 +25,16 @@ export interface RankOptions {
   tiePrefix?: string;
   /** field events: rank on the first N attempts only (the top-8 cut after 3) */
   upToAttempt?: number;
+  /** SD-90: a hand-timed meet — hand times are record-legal (still flagged "h"),
+   *  and a race with no wind reading counts (no gauge); a reading over the
+   *  limit still doesn't */
+  handLegal?: boolean;
 }
 
 const aided = (wind: number | undefined, def: DisciplineDef) => !!def.wind && wind != null && !windLegal(wind, def);
 
 /** One entry's performance in its discipline. */
-export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: number): Performance {
+export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: number, handLegal?: boolean): Performance {
   const r = e.result ?? {};
   const sign = def.better === 'higher' ? 1 : -1;
   const decider = r.decider != null ? -r.decider : undefined;
@@ -59,7 +63,8 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
     }
     default: {
       const best = r.mark ?? null;
-      const legal = best != null && !r.hand && (def.wind !== 'race' || windLegal(r.wind, def));
+      // A hand-timed meet (SD-90) has no wind gauge either: no reading is accepted there.
+      const legal = best != null && (!r.hand || !!handLegal) && (def.wind !== 'race' || windLegal(r.wind, def) || (!!handLegal && r.wind == null));
       if (best != null && def.wind === 'race' && aided(r.wind, def)) flags.push('w');
       if (best != null && r.hand) flags.push('h');
       const thou = def.tie === 'photo' && r.thousandths != null ? sign * r.thousandths : undefined;
@@ -95,7 +100,7 @@ export const betterMark = (a: number, b: number, def: Pick<DisciplineDef, 'bette
  */
 export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): RankedEntry[] {
   const prefix = o.tiePrefix ?? '=';
-  const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt) }));
+  const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt, o.handLegal) }));
   levelKeys(rows.map((x) => x.p));
   const startOrder = (x: (typeof rows)[number]) => x.entry.result?.lane ?? x.entry.result?.order ?? 999;
   const ranked = rows.filter((x) => x.p.status === 'ok' && x.p.best != null);

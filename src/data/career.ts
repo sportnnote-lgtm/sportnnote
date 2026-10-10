@@ -87,7 +87,11 @@ export function careerSections(schema: SportStatSchema<SportId>, lines: StatLine
       if (r.hideZero && !v.value) continue;
       const row: CareerRow = { key: def.key, label: r.label ?? def.label, value: v.text };
       if (def.coverage === 'optional') {
-        const tracked = lines.filter((l) => inputs.every((k) => trackedIn(schema, l, k))).length;
+        // SD-44: a stat whose aggregation reads only a filtered set of lines
+        // (basketball FG% — the games that tracked missed shots) is covered
+        // by those lines
+        const over = def.agg && 'over' in def.agg && def.agg.over ? schema.filters?.[def.agg.over] : undefined;
+        const tracked = lines.filter((l) => inputs.every((k) => trackedIn(schema, l, k)) && (!over || over(l))).length;
         if (tracked < lines.length) row.coverage = { tracked, total: lines.length };
       }
       rows.push(row);

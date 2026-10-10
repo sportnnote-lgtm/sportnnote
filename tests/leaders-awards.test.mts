@@ -91,7 +91,7 @@ describe('SD-27 — award slots and MVP weights from the schema', () => {
     assert.deepEqual(slots('cricket'), [['mvp', 'Player of the Tournament'], ['runs', 'Best batter'], ['wickets', 'Best bowler']]);
   });
   test('MVP weights: basketball = EFF, tennis double fault −1, racket results, chess = score', () => {
-    assert.deepEqual(STAT_WEIGHTS.basketball, { points: 1, rebounds: 1, assists: 1, steals: 1, blocks: 1, turnovers: -1, freeThrowsMade: 1, freeThrowsAtt: -1 });
+    assert.deepEqual(STAT_WEIGHTS.basketball, { points: 1, rebounds: 1, assists: 1, steals: 1, blocks: 1, turnovers: -1, freeThrowsMade: 1, freeThrowsAtt: -1, fgMissed: -1 });
     assert.equal(STAT_WEIGHTS.tennis.doubleFaults, -1);
     assert.deepEqual(STAT_WEIGHTS.badminton, { points: 1, gamesWon: 2 });
     assert.deepEqual(STAT_WEIGHTS.padel, { points: 1, gamesWon: 2, setsWon: 4 });

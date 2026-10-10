@@ -1,6 +1,7 @@
 /** A play-by-play event in a basketball game. */
 export type BBEventType =
   | 'score' // field goal (1/2/3 — 3×3 uses 1 & 2)
+  | 'miss' // SD-31: a missed field goal (2 or 3; 3×3: 1 or 2) — no points
   | 'freethrow' // a single free-throw attempt (made or missed)
   | 'rebound'
   | 'assist'
@@ -25,8 +26,11 @@ export interface BBEvent {
   type: BBEventType;
   side: 'home' | 'away';
   playerName?: string;
-  /** points for a 'score' event (1/2/3) */
+  /** points for a 'score' event (1/2/3); for a 'miss', the shot's value */
   points?: number;
+  /** SD-31: a made field goal logged while "Track missed shots" was on — it
+   *  counts as an attempt (FGA). Absent on older logs and untracked games. */
+  fga?: true;
   /** free-throw made (true) or missed (false) */
   made?: boolean;
   /** foul kind — drives the FT prompt and team-foul-bonus counting */
@@ -39,6 +43,7 @@ export interface BBEvent {
 
 export const BB_META: Record<BBEventType, { icon: string; label: string }> = {
   score: { icon: '🏀', label: 'Basket' },
+  miss: { icon: '⭕', label: 'Missed shot' },
   freethrow: { icon: '🎯', label: 'Free throw' },
   rebound: { icon: '🔁', label: 'Rebound' },
   assist: { icon: '🅰️', label: 'Assist' },

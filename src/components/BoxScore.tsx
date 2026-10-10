@@ -82,6 +82,7 @@ export function MatchBoxScore({
           <Text style={st.legend}>
             {table.columns.map((c) => `${c.abbr} ${c.label}`).join(' · ')}{starters ? ' · * starter' : ''}
           </Text>
+          {(source.notes?.() ?? []).map((n) => <Text key={n} style={st.legend}>{n}</Text>)}
           {hasBench && (
             <View style={st.scopeRow}>
               <SelectChip label={bench ? 'Hide bench' : 'Show bench'} active={bench} onPress={() => setBench(!bench)} />

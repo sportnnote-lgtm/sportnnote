@@ -6,7 +6,7 @@
 import { Linking, Platform, Share } from 'react-native';
 import { track } from './telemetry';
 
-export async function shareMessage(message: string, what: 'match' | 'tournament' | 'golf' | 'profile'): Promise<void> {
+export async function shareMessage(message: string, what: 'match' | 'tournament' | 'golf' | 'profile' | 'results'): Promise<void> {
   const web = Platform.OS === 'web' && typeof navigator !== 'undefined';
   try {
     if (web && typeof (navigator as { share?: unknown }).share !== 'function') {

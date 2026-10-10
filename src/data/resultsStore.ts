@@ -16,9 +16,11 @@ import { saveFieldResult, toEntry, toEvent, getFieldEntries } from './golf';
 import { patchTournamentFormat } from './repos';
 import {
   disciplineOf, phaseOf, planRounds, seedHeats, fieldStatusFor, toResultEntry, performanceOf, rankByHeat, rankEntries,
-  qualify, nextRound, updateRecords, categoryKey, categoryLabel, phaseLabel,
+  qualify, nextRound, updateRecords, categoryKey, categoryLabel, phaseLabel, withQualification, eventAwards, phaseLines,
+  groupMeet, deriveRecordBook, meetFieldResults, seedOrder,
   type Category, type DisciplineDef, type EntryResult, type MarkHistory, type PhaseFormat, type PlannedPhase,
-  type RecordMark, type RecordScope, type ResultEntry,
+  type RecordMark, type RecordScope, type ResultEntry, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
+  type FieldResultInput,
 } from './results';
 
 const live = () => isSupabaseConfigured && !!supabase;
@@ -48,6 +50,14 @@ export interface NewResultsEvent {
   entrants: NewEntrant[];
   /** the rounds; default planRounds(discipline, entrants) */
   plan?: PlannedPhase[];
+  /** SD-90 lanes: 'draw' = World Athletics first round (TR 20.4.3: drawn
+   *  lanes, seeded heats); 'seeded' (default) = best in the centre lanes */
+  lanes?: 'draw' | 'seeded';
+  /** the draw's random source (tests pass a seeded one) */
+  rng?: () => number;
+  /** SD-90 meet settings carried on every phase */
+  handTimed?: boolean;
+  reaction?: boolean;
 }
 
 const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase'>) => `${eventTitle} — ${phaseLabel(f.phase)}`;
@@ -111,13 +121,17 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
   const fmt: PhaseFormat = {
     discipline: def.key, category: input.category, phase: first.phase, phaseNo: 1, heats: first.heats,
     progression: first.progression, eventKey: genId('rev'), plan, eventTitle,
+    ...(input.handTimed ? { handTimed: true } : {}), ...(input.reaction ? { reaction: true } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
     startsAt: input.startsAt ?? new Date().toISOString(), format: { results: fmt }, hostIds: input.hostIds ?? [],
   });
-  const ordered = bySeed(input.entrants, def);
-  const seeded = seedHeats(ordered.map((_, i) => String(i)), first.heats, def);
+  const draw = input.lanes === 'draw';
+  const rng = input.rng ?? Math.random;
+  // A draw also shuffles the unseeded entrants; else the given order stands.
+  const ordered = draw ? seedOrder(input.entrants.map((e, i) => ({ ...e, id: String(i) })), def, rng) : bySeed(input.entrants, def);
+  const seeded = seedHeats(ordered.map((_, i) => String(i)), first.heats, def, draw ? rng : undefined, { drawAll: draw });
   await insertEntries(ev.id, seeded.map((s) => {
     const e = ordered[Number(s.id)];
     return {
@@ -186,9 +200,13 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   const next = f.plan?.[f.phaseNo];
   if (!next || !f.progression) throw new Error('This is the last round.');
   const res = entries.map((e) => toResultEntry(e, nameOf));
-  const byHeat = rankByHeat(res, def);
+  const byHeat = rankByHeat(res, def, { handLegal: f.handTimed });
   const q = qualify(byHeat, def, f.progression);
   if (!q.marks.size) throw new Error('Nobody has qualified yet — enter the results first.');
+  if (def.sport === 'athletics') {
+    const ranked = [...byHeat.values()].flatMap((rows) => withQualification(rows, q));
+    await writePhaseLines(phase, f, phaseLines(f, ranked));
+  }
   const seeded = nextRound(byHeat, def, q, next.heats);
   const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: next.heats, progression: next.progression, bar: undefined };
   const ev = await insertPhase({
@@ -219,12 +237,18 @@ async function saveRecordBook(tournamentId: string | undefined, sport: string, l
   await patchTournamentFormat(tournamentId, sport, { records: JSON.stringify(list) });
 }
 
-/** Finish a final: lock it and write any new meet / school record. */
-export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], nameOf: (id: string) => string, scopes: RecordScope[] = ['MR']): Promise<RecordMark[]> {
+/** Finish a final: lock it and write any new meet / school record. Athletics
+ *  (SD-90) also writes each athlete's stat line with medals and points. */
+export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], nameOf: (id: string) => string, scopes: RecordScope[] = ['MR'], points?: PointsSettings): Promise<RecordMark[]> {
   const f = phaseOf(phase);
   const def = f && disciplineOf(f.discipline);
   if (!f || !def) throw new Error('Not a results event');
-  const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def);
+  const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: f.handTimed });
+  if (def.sport === 'athletics') {
+    let awards = eventAwards(rows, points ?? {});
+    if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
+    await writePhaseLines(phase, f, phaseLines(f, rows, awards));
+  }
   const book = await getRecordBook(phase.tournamentId, def.sport);
   const next = updateRecords(rows, def, categoryKey(f.category), book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
   if (next !== book) await saveRecordBook(phase.tournamentId, def.sport, next);
@@ -257,7 +281,7 @@ export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], e
   const dateOf = new Map(phases.map((p) => [p.id, p.startsAt.slice(0, 10)]));
   const out: MarkHistory[] = [];
   for (const e of entries) {
-    const p = performanceOf(toResultEntry(e, () => ''), def);
+    const p = performanceOf(toResultEntry(e, () => ''), def, undefined, phaseOf(phases.find((x) => x.id === e.eventId)!)?.handTimed);
     if (p.status === 'ok' && p.bestLegal != null) out.push({ athleteId: e.playerId, discipline: def.key, value: p.bestLegal, date: dateOf.get(e.eventId) ?? '' });
   }
   return out;
@@ -265,3 +289,100 @@ export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], e
 
 /** For tests / sheets: the engine's entries for a phase. */
 export const resultEntries = (entries: FieldEntry[], nameOf: (id: string) => string): ResultEntry[] => entries.map((e) => toResultEntry(e, nameOf));
+
+/* ------------------------------ SD-90 athletics ------------------------------ */
+
+/** Write a closed round's stat lines (one per athlete / relay member, event_id =
+ *  the phase). Idempotent: re-closing rewrites them. Not fatal — results stay
+ *  saved if a line can't be written (the profile is a view of them). */
+async function writePhaseLines(phase: FieldEvent, f: PhaseFormat, lines: { playerId: string; stats: Record<string, number>; won: boolean }[]): Promise<void> {
+  const label = phase.title;
+  if (!live()) {
+    demo.statLines = demo.statLines.filter((l) => l.eventId !== phase.id);
+    for (const l of lines) demo.statLines.push({ id: genId('sl'), matchId: '', eventId: phase.id, playerId: l.playerId, sport: 'athletics', stats: l.stats, won: l.won, opponent: label, date: phase.startsAt });
+    return;
+  }
+  try {
+    await supabase!.from('stat_lines').delete().eq('event_id', phase.id);
+    if (lines.length) {
+      await supabase!.from('stat_lines').insert(lines.map((l) => ({
+        event_id: phase.id, match_id: null, player_id: l.playerId, sport: 'athletics', stats: l.stats, won: l.won, opponent: label, recorded_at: phase.startsAt,
+      })));
+    }
+  } catch { /* lines are a profile view; the results themselves are saved */ }
+  void f;
+}
+
+/** Manual lane / heat override on a start list (managers only). */
+export async function moveEntry(entryId: string, heat: number, result: EntryResult): Promise<void> {
+  if (!live()) {
+    const d = demo.fieldEntries.find((e) => e.id === entryId);
+    if (d) { d.groupNo = heat; d.result = result; }
+    return;
+  }
+  const { error } = await supabase!.from('field_entries').update({ group_no: heat, result }).eq('id', entryId);
+  if (error) throw new Error(error.message);
+}
+
+/** Every athletics phase of a tournament with its entries, as the meet model. */
+export async function getMeet(tournamentId: string, nameOf: (id: string) => string): Promise<MeetEvent[]> {
+  const phases = (await getResultsPhases({ tournamentId })).filter((p) => p.sport === 'athletics');
+  const entries = await getFieldEntries(phases.map((p) => p.id));
+  return groupMeet(meetPhases(phases, entries, nameOf));
+}
+
+function meetPhases(phases: FieldEvent[], entries: FieldEntry[], nameOf: (id: string) => string): MeetPhase[] {
+  return phases.flatMap((p) => {
+    const f = phaseOf(p);
+    if (!f) return [];
+    return [{ id: p.id, format: f, status: p.status as MeetPhase['status'], date: p.startsAt, entries: entries.filter((e) => e.eventId === p.id).map((e) => toResultEntry(e, nameOf)) }];
+  });
+}
+
+/** The tournament's finished athletics finals → the medal / house table. */
+export function meetResultsFor(events: MeetEvent[], points: PointsSettings): FieldResultInput[] {
+  return meetFieldResults(events, points);
+}
+
+/**
+ * The school record book (SR) for an organisation: the best legal mark per
+ * event + category at its OTHER meets (tournaments it hosts), derived from
+ * their completed results — no separate storage. Historic records set before
+ * the app are not included.
+ */
+export async function getOrgRecordBook(orgId: string, exceptTournamentId: string | undefined, nameOf: (id: string) => string): Promise<RecordMark[]> {
+  let tids: string[];
+  if (!live()) tids = demo.tournaments.filter((t) => t.hostOrgId === orgId && t.id !== exceptTournamentId).map((t) => t.id);
+  else {
+    const { data } = await supabase!.from('tournaments').select('id').eq('host_org_id', orgId);
+    tids = ((data ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== exceptTournamentId);
+  }
+  if (!tids.length) return [];
+  let phases: FieldEvent[];
+  if (!live()) phases = demo.fieldEvents.filter((e) => e.sport === 'athletics' && e.status === 'completed' && !!e.tournamentId && tids.includes(e.tournamentId));
+  else {
+    const { data } = await supabase!.from('field_events').select('*').eq('sport', 'athletics').eq('status', 'completed').in('tournament_id', tids);
+    phases = ((data ?? []) as any[]).map(toEvent);
+  }
+  if (!phases.length) return [];
+  const entries = await getFieldEntries(phases.map((p) => p.id));
+  return deriveRecordBook(groupMeet(meetPhases(phases, entries, nameOf)), 'SR');
+}
+
+/** What the athletics career needs about the phases an athlete's lines came from. */
+export async function getPhaseInfos(ids: string[]): Promise<Map<string, PhaseInfo>> {
+  const out = new Map<string, PhaseInfo>();
+  const uniq = [...new Set(ids.filter(Boolean))];
+  if (!uniq.length) return out;
+  let evs: FieldEvent[];
+  if (!live()) evs = demo.fieldEvents.filter((e) => uniq.includes(e.id));
+  else {
+    const { data } = await supabase!.from('field_events').select('*').in('id', uniq);
+    evs = ((data ?? []) as any[]).map(toEvent);
+  }
+  for (const e of evs) {
+    const f = phaseOf(e);
+    if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle });
+  }
+  return out;
+}

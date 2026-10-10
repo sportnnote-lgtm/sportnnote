@@ -64,7 +64,7 @@ export default function ResultsLabScreen() {
       <ScrollView contentContainerStyle={st.content}>
         <View>
           <Text style={textStyles.h2}>Results lab</Text>
-          <Text style={textStyles.muted}>Developer preview of the timed / measured results engine. Not a live sport yet.</Text>
+          <Text style={textStyles.muted}>Developer preview of the timed / measured results engine. Athletics meets use the tournament's Athletics page (SD-90).</Text>
         </View>
         <FormError message={error} />
         <Card style={{ gap: theme.spacing(2) }}>

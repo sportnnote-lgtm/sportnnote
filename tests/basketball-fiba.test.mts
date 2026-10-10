@@ -167,13 +167,14 @@ describe('SD-05 — full-court "+1" is a free throw', () => {
     assert.equal(acts[0].type, 'FREE_THROW');
     assert.deepEqual(acts[0].attribution?.extra, { freeThrowsMade: 1, freeThrowsAtt: 1 });
     // "and one" is still the 2-point basket; "three" still 3.
-    assert.deepEqual(basketballVoice('and one Asha', ctx(init(FIBA)))![0].payload, { points: 2 });
-    assert.deepEqual(basketballVoice('three Asha', ctx(init(FIBA)))![0].payload, { points: 3 });
+    // (SD-40: the player's id rides along as `pid`)
+    assert.deepEqual(basketballVoice('and one Asha', ctx(init(FIBA)))![0].payload, { points: 2, pid: asha.id });
+    assert.deepEqual(basketballVoice('three Asha', ctx(init(FIBA)))![0].payload, { points: 3, pid: asha.id });
   });
   test('3×3 (first to 21) keeps the 1-point basket', () => {
     const acts = basketballVoice('one Asha', ctx(init({ targetPoints: 21, regPeriods: 1 })))!;
     assert.equal(acts[0].type, 'SCORE');
-    assert.deepEqual(acts[0].payload, { points: 1 });
+    assert.deepEqual(acts[0].payload, { points: 1, pid: asha.id });
   });
 });
 

@@ -10,6 +10,8 @@ export const SHARE_BASE = 'https://app.sportnnote.in';
 export const matchLink = (matchId: string) => `${SHARE_BASE}/m/${matchId}`;
 export const tournamentLink = (tournamentId: string) => `${SHARE_BASE}/t/${tournamentId}`;
 export const golfLink = (eventId: string) => `${SHARE_BASE}/g/${eventId}`;
+/** SD-90: a timed / measured event's public results page (one round). */
+export const resultsLink = (phaseId: string) => `${SHARE_BASE}/r/${phaseId}`;
 export const profileLink = (playerId: string) => `${SHARE_BASE}/p/${playerId}`;
 
 /** The OBS score-overlay link (parity #25): `/o/<id>?t=bar&pos=bottom[&sp=…]`.

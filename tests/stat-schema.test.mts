@@ -35,6 +35,7 @@ import { STAT_CATEGORIES, leaderStat, categoryLeaders } from '../src/data/standi
 import { computeTeamStats } from '../src/data/teamStats.ts';
 import { cricketCareer, bestBowling, highestScore } from '../src/data/cricketCareer.ts';
 import { volleyballCredits } from '../src/sports/volleyball/engine.ts';
+import { eventCredits } from '../src/sports/basketball/credits.ts';
 import { defaultCredits } from '../src/sports/rallyEdit.ts';
 import { roundStats } from '../src/sports/golf/engine.ts';
 import { FIELD_NOTE_STAT } from '../src/sports/cricket/scorecard.ts';
@@ -65,7 +66,7 @@ const pick = <T,>(o: Record<string, T>) => Object.fromEntries(KEPT.map((sp) => [
 
 describe('SD-15 — every sport has a valid schema', () => {
   test('14 sports, one schema each, keyed by its own sport', () => {
-    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS].sort());
+    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS, 'athletics'].sort()); // SD-90 added athletics after the golden snapshot
     for (const sp of STAT_SPORTS) assert.equal(STAT_SCHEMAS[sp].sport, sp);
   });
   test('every reference resolves (sections, box, leaders, headline, awards, aggregations)', () => {
@@ -140,6 +141,10 @@ describe('SD-15 — every stat key a plugin writes is declared', () => {
   }
   // credit helpers and absolute line writers, run for real
   add('volleyball', ['point', 'ace', 'block', 'attack', 'opperror'].flatMap((k) => Object.keys(volleyballCredits(k as never))));
+  // SD-31 / SD-40: basketball's credit table (every play type, tracked shots, typed rebounds)
+  add('basketball', (['score', 'miss', 'freethrow', 'rebound', 'assist', 'steal', 'block', 'turnover', 'foul', 'eject'] as const).flatMap((type) =>
+    [{ points: 3, fga: true as const, made: true, reboundType: 'off' as const }, { points: 2, reboundType: 'def' as const }]
+      .flatMap((x) => Object.keys(eventCredits({ id: 1, quarter: 1, minute: 0, side: 'home', type, ...x }, false)))));
   for (const sp of RALLY_SPORTS) add(sp, ['point', 'rally'].flatMap((k) => Object.keys(defaultCredits(k as never))));
   add('golf', Object.keys(roundStats({ strokes: [3, 4, 5, 6, 2], putts: [1, 2, 2, 1, 1], gir: [true, false, true, true, true], fir: [true, false, null, true, null], penalties: [0, 1, 0, 0, 0] } as never,
     [3, 4, 4, 5, 4].map((par, i) => ({ number: i + 1, par, strokeIndex: i + 1 })) as never, [0, 0, 0, 0, 0])));
@@ -412,7 +417,7 @@ const athletics: SportStatSchema<'athletics'> = {
 describe('SD-15 — the schema shape expresses hockey, handball and timed / measured sports', () => {
   test('the three sample schemas are valid (not registered as live sports)', () => {
     for (const s of [hockey, handball, athletics] as SportStatSchema<string>[]) assert.deepEqual(validateSchema(s), [], s.sport);
-    assert.ok(!(STAT_SPORTS as string[]).includes('hockey') && !(STAT_SPORTS as string[]).includes('athletics'));
+    assert.ok(!(STAT_SPORTS as string[]).includes('hockey')); // athletics went live with SD-90
   });
   test('hockey: PC conversion and GK save % as rates; timed suspensions declared; per-game (SD-16)', () => {
     const c = careerFromSchema(hockey, [

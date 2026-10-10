@@ -17,6 +17,7 @@ import { kabaddiVoice } from '../voiceParsers';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
 import { sum } from './rules';
+import { kabaddiTotals } from './totals.ts';
 
 import {
   init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints,
@@ -472,6 +473,13 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
       : s.goldenRaid ? '⚡ Golden Raid'
       : s.half <= 2 ? `Half ${s.half}` : halfLabel(s.half),
   }),
+  // SD-33 (KB-02): absolute stat lines from the raid replay — heals the
+  // pre-SD-03 +1-per-raid lines on completion / the D2 resync. Partial: when a
+  // credited player can't be named (an old snapshot) the point keys are left
+  // to the live increments.
+  statTotals: kabaddiTotals,
+  statTotalsPartial: true,
+  statTotalsNeedsPlayers: true,
   ScoringControls,
   LiveClock,
   LiveExtras,

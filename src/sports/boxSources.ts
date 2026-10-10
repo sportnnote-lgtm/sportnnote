@@ -15,11 +15,14 @@
 import type { Player, SportId } from '../core/types';
 import type { LiveEvent } from './liveEvents';
 import type { BoxRowInput, BoxScope, BoxSideInput, MatchBoxSource } from './boxScore.ts';
-import { periodLabel, type BasketballState } from './basketball/engine.ts';
-import { pointsOf, type BBEvent } from './basketball/events.ts';
+import { periodLabel, teamFoulsByPeriod, type BasketballState } from './basketball/engine.ts';
+import type { BBEvent } from './basketball/events.ts';
+import { eventCredits } from './basketball/credits.ts';
+import { shotsTracked } from './basketball/totals.ts';
 import { boxFieldByName } from './basketball/fieldTime.ts';
 import { tally as volleyballTally, type VolleyballState } from './volleyball/engine.ts';
 import { tally as kabaddiTally, isShootoutEvent, type KabaddiState } from './kabaddi/engine.ts';
+import { kabaddiMatchCentre, KABADDI_COUNT_KEYS } from './kabaddi/totals.ts';
 import { footballStats, type FootballState, type TrackConfig } from './football/engine.ts';
 import { footballFieldLog, liveClockMinutes } from './football/fieldTime.ts';
 import { keeperTotals, position } from './football/keepers.ts';
@@ -38,6 +41,9 @@ export interface BoxContext {
   awayRoster?: Player[];
   /** the clock for live figures (football minutes / possession) */
   now?: number;
+  /** team names, for footnotes (basketball team fouls) */
+  homeName?: string;
+  awayName?: string;
 }
 
 const rosterOf = (ctx: BoxContext, side: Side): Player[] => (side === 'home' ? ctx.homeRoster : ctx.awayRoster) ?? [];
@@ -54,64 +60,82 @@ export interface BasketballLine {
   name: string;
   pts: number; reb: number; ast: number; stl: number; blk: number; to: number; pf: number;
   ftm: number; fta: number;
+  /** SD-40: field goals / threes made, attempts (tracked games), misses, OREB / DREB */
+  fgm: number; fga: number; tpm: number; tpa: number; fgx: number; oreb: number; dreb: number;
 }
+
+const blankLine = (name: string): BasketballLine =>
+  ({ name, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, ftm: 0, fta: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, fgx: 0, oreb: 0, dreb: 0 });
 
 /** A side's players from the play-by-play (every roster player listed, as the
  *  old table did); `scope` = one period. Sorted by points. */
-export function basketballTally(events: BBEvent[], side: Side, roster: Player[], scope: BoxScope = 'all'): BasketballLine[] {
+export function basketballTally(events: BBEvent[], side: Side, roster: Player[], scope: BoxScope = 'all', halfCourt = false, tracked?: boolean): BasketballLine[] {
   const byName = new Map<string, BasketballLine>();
   const ensure = (name: string) => {
-    if (!byName.has(name)) byName.set(name, { name, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, ftm: 0, fta: 0 });
+    if (!byName.has(name)) byName.set(name, blankLine(name));
     return byName.get(name)!;
   };
   roster.forEach((p) => ensure(p.fullName));
   for (const e of events) {
     if (e.side !== side || !e.playerName) continue;
     if (scope !== 'all' && e.quarter !== scope) continue;
-    add(ensure(e.playerName), e);
+    add(ensure(e.playerName), e, halfCourt, tracked);
   }
   return [...byName.values()].sort((a, b) => b.pts - a.pts);
 }
 
-function add(l: BasketballLine, e: BBEvent) {
-  l.pts += pointsOf(e); // field goals + made free throws
-  if (e.type === 'freethrow') { l.fta += 1; if (e.made) l.ftm += 1; }
-  if (e.type === 'rebound') l.reb += 1;
-  else if (e.type === 'assist') l.ast += 1;
-  else if (e.type === 'steal') l.stl += 1;
-  else if (e.type === 'block') l.blk += 1;
-  else if (e.type === 'turnover') l.to += 1;
-  else if (e.type === 'foul') l.pf += 1;
+/** One play onto a line — the same credits the controls send (credits.ts). */
+function add(l: BasketballLine, e: BBEvent, halfCourt = false, tracked?: boolean) {
+  const c = eventCredits(e, halfCourt, tracked);
+  l.pts += c.points ?? 0; // field goals + made free throws
+  l.ftm += c.freeThrowsMade ?? 0; l.fta += c.freeThrowsAtt ?? 0;
+  l.fgm += c.fgMade ?? 0; l.fga += c.fgAtt ?? 0; l.tpm += c.threesMade ?? 0; l.tpa += c.threesAtt ?? 0; l.fgx += c.fgMissed ?? 0;
+  l.reb += c.rebounds ?? 0; l.oreb += c.oreb ?? 0; l.dreb += c.dreb ?? 0;
+  l.ast += c.assists ?? 0; l.stl += c.steals ?? 0; l.blk += c.blocks ?? 0; l.to += c.turnovers ?? 0; l.pf += c.fouls ?? 0;
 }
 
-const bbStats = (l: BasketballLine): Record<string, number> => ({
+/** The line's box keys. D8: FGA / 3PA only when the match tracked missed
+ *  shots, OREB / DREB only once a rebound was typed — else those columns hide. */
+const bbStats = (l: BasketballLine, cov: { shots: boolean; split: boolean }): Record<string, number> => ({
   points: l.pts, rebounds: l.reb, assists: l.ast, steals: l.stl, blocks: l.blk, turnovers: l.to, fouls: l.pf,
-  freeThrowsMade: l.ftm, freeThrowsAtt: l.fta,
+  freeThrowsMade: l.ftm, freeThrowsAtt: l.fta, fgMade: l.fgm, threesMade: l.tpm, fgMissed: l.fgx,
+  ...(cov.shots ? { fgAtt: l.fga, threesAtt: l.tpa } : null),
+  ...(cov.split ? { oreb: l.oreb, dreb: l.dreb } : null),
 });
 
 export function basketballBox(s: BasketballState, ctx: BoxContext = {}): MatchBoxSource {
   const periods = Array.from({ length: Math.max(1, s.quarter) }, (_, i) => ({ value: i + 1, label: periodLabel(i + 1, s.regPeriods) }));
+  const halfCourt = s.targetPoints > 0;
+  const cov = { shots: shotsTracked(s), split: s.events.some((e) => e.type === 'rebound' && !!e.reboundType) };
   return {
     periods,
     emptyText: 'No players.',
+    untrackedHint: cov.shots ? undefined : 'needs "Track missed shots" on',
+    // SD-40: FIBA's team-fouls line, per period (full-court games only)
+    notes: () => {
+      if (halfCourt || !s.events.some((e) => e.type === 'foul')) return [];
+      const h = teamFoulsByPeriod(s, 'home'), a = teamFoulsByPeriod(s, 'away');
+      const who = ctx.homeName && ctx.awayName ? ` (${ctx.homeName}–${ctx.awayName})` : '';
+      return [`Team fouls${who}: ${h.map((n, i) => `${periodLabel(i + 1, s.regPeriods)} ${n}–${a[i] ?? 0}`).join(' · ')}`];
+    },
     data: (scope) => {
       // SD-29 MIN / +/- / on court: whole-game figures, the Overall view only.
       const field = scope === 'all' ? boxFieldByName(s) : undefined;
       const side = (sd: Side): BoxSideInput => {
         const roster = rosterOf(ctx, sd);
-        const rows = basketballTally(s.events, sd, roster, scope).map((l) => {
+        const rows = basketballTally(s.events, sd, roster, scope, halfCourt, cov.shots).map((l) => {
           const f = field?.get(l.name);
-          const stats = bbStats(l);
+          const stats = bbStats(l, cov);
           if (f?.min !== undefined) stats.minutes = f.min;
           if (f) stats.plusMinus = f.pm;
           return withId({ name: l.name, stats, ...(f?.on ? { on: true } : null) }, roster);
         });
         // points / rebounds … logged with no player: the side's "Team" row
-        const team: BasketballLine = { name: 'Team', pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, ftm: 0, fta: 0 };
-        for (const e of s.events) if (e.side === sd && !e.playerName && (scope === 'all' || e.quarter === scope)) add(team, e);
-        return { rows, team: { label: 'Team', stats: bbStats(team) } };
+        const team = blankLine('Team');
+        for (const e of s.events) if (e.side === sd && !e.playerName && (scope === 'all' || e.quarter === scope)) add(team, e, halfCourt, cov.shots);
+        return { rows, team: { label: 'Team', stats: bbStats(team, cov) } };
       };
-      return { home: side('home'), away: side('away') };
+      return { home: side('home'), away: side('away'), ...(cov.shots ? null : { untracked: ['fgPct', 'threePct'] }) };
     },
   };
 }
@@ -177,7 +201,21 @@ export function kabaddiBox(s: KabaddiState, ctx: BoxContext = {}): MatchBoxSourc
     emptyText: 'No points yet.',
     data: (scope) => {
       const inScope = (e: LiveEvent) => !isShootoutEvent(e) && (scope === 'all' || e.half === scope);
-      const pts = (sd: Side, kind: string) => s.events.filter((e) => e.side === sd && e.kind === kind && inScope(e)).reduce((a, e) => a + (e.points ?? 0), 0);
+      // SD-41 (KB-03): the PKL match centre — points split, raids, strike rates, all-outs
+      const centre = kabaddiMatchCentre(s, scope);
+      const teamFigures = (sd: Side): Record<string, number> => {
+        const c = centre[sd];
+        const out: Record<string, number> = { raidPoints: c.raidPoints, tacklePoints: c.tacklePoints, allOutPoints: c.allOutPoints, extraPoints: c.extraPoints };
+        if (!centre.countsTracked) return out;
+        Object.assign(out, {
+          raids: c.raids, successfulRaids: c.successfulRaids, emptyRaids: c.emptyRaids, raidsOut: c.raidsOut, superRaids: c.superRaids,
+          doOrDieRaids: c.doOrDieRaids, tackles: c.tackles, superTackles: c.superTackles, allOuts: c.allOuts,
+        });
+        if (c.raidStrikeRate !== undefined) out.raidStrikeRate = c.raidStrikeRate;
+        if (c.tackleStrikeRate !== undefined) out.tackleStrikeRate = c.tackleStrikeRate;
+        if (c.doOrDieRate !== undefined) out.doOrDieRate = c.doOrDieRate;
+        return out;
+      };
       const side = (sd: Side): BoxSideInput => {
         const roster = rosterOf(ctx, sd);
         // raid / tackle points logged without a player
@@ -185,15 +223,12 @@ export function kabaddiBox(s: KabaddiState, ctx: BoxContext = {}): MatchBoxSourc
         return {
           rows: kabaddiTally(s.events, sd, scope).map((l) => withId({ name: l.name, stats: { raidPoints: l.raid, tacklePoints: l.tackle } }, roster)),
           team: { label: 'Team', stats: { raidPoints: loose('raid'), tacklePoints: loose('tackle') } },
-          teamStats: {
-            raidPoints: pts(sd, 'raid'),
-            tacklePoints: pts(sd, 'tackle'),
-            allOutPoints: pts(sd, 'allout'),
-            raids: s.events.filter((e) => e.side === sd && e.kind === 'raid' && inScope(e)).length,
-          },
+          teamStats: teamFigures(sd),
         };
       };
-      return { home: side('home'), away: side('away') };
+      // old one-tap points: the raid / tackle counts weren't captured (D8)
+      const untracked = centre.countsTracked ? undefined : [...KABADDI_COUNT_KEYS, 'raidStrikeRate', 'tackleStrikeRate', 'doOrDieRate', 'allOuts'];
+      return { home: side('home'), away: side('away'), ...(untracked ? { untracked } : null) };
     },
   };
 }

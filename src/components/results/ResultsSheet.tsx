@@ -85,7 +85,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind }: {
                   <Text style={st.lane}>{(lanes ? r.entry.result.lane : r.entry.result.order) ?? ''}</Text>
                   <View style={st.name}>
                     <Text style={st.nameTxt} numberOfLines={1}>{r.entry.name}</Text>
-                    {r.entry.team?.name ? <Text style={st.team} numberOfLines={1}>{r.entry.team.name}</Text> : null}
+                    {r.entry.team?.name && r.entry.team.name !== r.entry.name ? <Text style={st.team} numberOfLines={1}>{r.entry.team.name}</Text> : null}
                   </View>
                   <View style={st.mark}>
                     <Text style={st.markTxt}>{r.bestText || (r.status !== 'ok' ? r.status : '')}</Text>

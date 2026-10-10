@@ -341,7 +341,14 @@ export default function ScheduleMatchScreen() {
 
         <SportPicker sport={sport} onPick={pickSport} />
 
-        {golfField ? (
+        {sport === 'athletics' ? (
+          <>
+            <Text style={textStyles.muted}>
+              🏃 Athletics isn’t a match: each race is an event with heats and a final. Add the event, its athletes (or relay teams), rounds and lanes, then enter times heat by heat.
+            </Text>
+            <Button label="🏃 Set up a track event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId })} />
+          </>
+        ) : golfField ? (
           <>
             <SportFormatEditor sport="golf" value={format} onChange={(k, v) => setFormat((f) => ({ ...f, [k]: v }))} omitKeys={['extraHoles']} />
             <Text style={textStyles.muted}>

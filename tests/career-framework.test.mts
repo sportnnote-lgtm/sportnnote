@@ -45,7 +45,7 @@ const rowsOf = (sport: SportId, lines: StatLine[]) =>
 describe('SD-24 — every sport renders sections (golf stays custom)', () => {
   test('careerView', () => {
     for (const sp of STAT_SPORTS) {
-      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : 'sections', sp);
+      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : sp === 'athletics' ? 'measured' : 'sections', sp); // SD-90: athletics renders a measured career
       assert.deepEqual(validateSchema(STAT_SCHEMAS[sp]), [], sp);
     }
   });
@@ -69,8 +69,8 @@ describe('SD-24 — per-sport sections from fixture lines', () => {
     const c = rowsOf('basketball', ls);
     assert.deepEqual(c.averages, {
       'Points per game': '15.0', 'Rebounds per game': '7.0', 'Assists per game': '7.0', 'Steals per game': '1.0',
-      'Blocks per game': '1.0', 'Turnovers per game': '2.0', 'Minutes per game': '30.0',
-    });
+      'Blocks per game': '1.0', 'Efficiency per game': '27.0', 'Turnovers per game': '2.0', 'Minutes per game': '30.0',
+    }); // SD-44: EFF/G in the career
     assert.deepEqual(c.shooting, { 'Free throws made': '6', 'Free throws attempted': '10', 'Free throw %': '60%' });
     assert.deepEqual(c.bests, { Points: '20', Rebounds: '10', Assists: '10', 'Double-doubles': '2' }); // no triple-double: hidden
     assert.equal(c.totals.Minutes, '30');
@@ -124,8 +124,9 @@ describe('SD-24 — per-sport sections from fixture lines', () => {
   test('kabaddi: total, per match, Super 10s, High 5s, best match (KB-04)', () => {
     const ls = [L(M('kabaddi'), { raidPoints: 11, tacklePoints: 1 }), L(M('kabaddi'), { raidPoints: 3, tacklePoints: 5 })];
     const c = rowsOf('kabaddi', ls);
-    assert.deepEqual(c.overall, { 'Total points': '20', 'Points per match': '10.0' });
-    assert.deepEqual(c.raiding, { 'Raid pts': '14', 'Raid pts per match': '7.0', 'Best match': '11', 'Super 10s': '1' });
+    // SD-82: the best match is by total points; the raid high reads "Most in a match"
+    assert.deepEqual(c.overall, { 'Total points': '20', 'Points per match': '10.0', 'Best match': '12' });
+    assert.deepEqual(c.raiding, { 'Raid pts': '14', 'Raid pts per match': '7.0', 'Most in a match': '11', 'Super 10s': '1' });
     assert.deepEqual(c.defending, { 'Tackle pts': '6', 'Tackle pts per match': '3.0', 'High 5s': '1' });
   });
   test('chess: score (W + ½D) and score % (CH-05)', () => {

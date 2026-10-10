@@ -13,6 +13,36 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Athletics track is live (first new sport); basketball shooting depth; kabaddi depth
+
+- **Athletics track (SD-90):** athletics is a live sport (🏃).
+  - **Setup:** a programme screen with age group × gender, the D9 event list, World Athletics round
+    presets and lane draws, entrants from houses / teams, relay teams with ordered legs, PB / SB
+    seeding.
+  - **Results:** a stopwatch keypad (1085 → 10.85), hand-timed rules, reaction time, wind, Q/q
+    progression, and closing a round writes stat lines.
+  - **Outputs:** medals and position points feed the house / medal table; MR / SR records (school
+    records derived from the organisation's meets); athlete careers with PB / SB per event and
+    medals; a hub with fastest times and records; a public `/r/<phaseId>` results page.
+  - No migration (relays use 0051, already live).
+  - **Guide:** run-athletics-track-events.
+- **Basketball (SD-31 / SD-40 / SD-44):**
+  - optional "Track missed shots" (Miss 2 / Miss 3) with D8 "not tracked";
+  - full FIBA box score (FGM-A, 3PM-A, FTM-A, %, OREB / DREB, EFF with missed FG) and team fouls
+    per quarter;
+  - one credit table for live / edit / totals; absolute basketball statTotals (contract-tested);
+  - career FG% / 3P% over tracked games and EFF per game; leaders and POTM use EFF with misses.
+- **Kabaddi (SD-33 / SD-41 / SD-82):**
+  - absolute statTotals from the raid replay (heals old +1-per-raid lines via the D2 resync);
+  - PKL match-centre panel (points split, raid / tackle strike rates, super raids / tackles,
+    do-or-die);
+  - career raid strike rate, not-out %, super raids / tackles, best match.
+- **Tests:** tsc + all green.
+
+---
+
+---
+
 ### 2026-10-10 — Sport depth SD-27: leaderboards and awards from each sport's schema — Wave 1 complete
 
 - **Leaders:** every sport's tournament leaders, sport-hub leaders, award slots, award ranking,

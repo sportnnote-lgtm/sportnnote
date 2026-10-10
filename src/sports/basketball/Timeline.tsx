@@ -11,6 +11,7 @@ import { playerLink, idByName } from '../playerLink';
 function describe(e: BBEvent): string {
   const who = e.playerName ?? 'Team';
   if (e.type === 'score') return `+${e.points ?? 0}  ${who}`;
+  if (e.type === 'miss') return `${e.points === 3 ? '3PT' : `${e.points ?? 2}PT`} miss  ${who}`;
   if (e.type === 'freethrow') return `${e.made ? '✅ made' : '❌ miss'}  ${who}`;
   if (e.type === 'sub' && e.onName) return `${who} ▸ ${e.onName}`;
   if (e.type === 'foul' && e.foulType) return `${FOUL_LABEL[e.foulType]} · ${who}`;

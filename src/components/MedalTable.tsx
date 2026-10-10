@@ -40,6 +40,16 @@ export function MedalTable({ rows, emptyLabel = 'No results yet.' }: { rows: Med
                   {getSport(p.sport as SportId).icon} {ord(p.position)} · {p.points}
                 </Text>
               ))}
+              {/* SD-90: timed / measured events — placings and points per sport. */}
+              {[...new Set((r.perEvent ?? []).map((e) => e.sport))].map((sp) => {
+                const evs = (r.perEvent ?? []).filter((e) => e.sport === sp);
+                const pts = Math.round(evs.reduce((a, e) => a + e.points, 0) * 100) / 100;
+                return (
+                  <Text key={`ev-${sp}`} style={st.chip} numberOfLines={1}>
+                    {getSport(sp as SportId)?.icon ?? '🏅'} {evs.length} {evs.length === 1 ? 'placing' : 'placings'} · {pts}
+                  </Text>
+                );
+              })}
             </View>
           </View>
         );

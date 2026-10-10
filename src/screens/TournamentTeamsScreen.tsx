@@ -352,7 +352,9 @@ export default function TournamentTeamsScreen() {
   // teams), doubles register pairs. Derived from the *currently selected* sport +
   // its format, so a multi-sport meet adapts per sport. Entries ride the same
   // ad-hoc-team plumbing under the hood — only the wording changes.
-  const pMode = participantMode(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
+  // SD-90: athletics athletes are entered per EVENT (event setup); the meet's
+  // participants are the houses / schools they score for (and relay teams come from).
+  const pMode = sport === 'athletics' ? 'team' : participantMode(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
   const noun = pMode === 'individual' ? 'player' : pMode === 'pairs' ? 'pair' : 'team';
   const nounPl = `${noun}s`;
 

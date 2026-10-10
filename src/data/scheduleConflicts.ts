@@ -29,6 +29,7 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   chess: 120, // rapid/blitz rounds are shorter; classical can run 4h+
   carrom: 60,
   golf: 300, // an 18-hole round + turnaround
+  athletics: 240, // a session of track events
 };
 
 /** The nominal on-ground window for a sport (minutes). Falls back to 2 hours. */

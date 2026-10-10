@@ -84,7 +84,11 @@ export type StatAgg =
       keys?: SignedKeys; scale?: number }
   /** highest / lowest single-line value of `key` (default: the stat's own key),
    *  over lines that carry the key; the result keeps the line it came from */
-  | { kind: 'max'; key?: string; over?: string }
+  | { kind: 'max'; key?: string; over?: string;
+      /** SD-82 — the best single line by a signed sum of keys instead of one
+       *  (kabaddi best match = raid + tackle points); a line counts when it
+       *  carries any of them */
+      keys?: SignedKeys }
   | { kind: 'min'; key?: string; over?: string }
   /** best single-line figure: order lines by `by` (first decides, the rest
    *  break ties), render the winning line. "–" when no line qualifies. */
@@ -294,8 +298,10 @@ export interface SportStatSchema<S extends string = SportId> {
   sections?: SectionDef[];
   /** how the profile renders the career: 'sections' from the schema (SD-24:
    *  every sport but golf), 'totals' = the summed-counter grid (a sport without
-   *  sections yet), 'custom' = the sport's own block (golf) */
-  careerView?: 'sections' | 'totals' | 'custom';
+   *  sections yet), 'custom' = the sport's own block (golf), 'measured' (SD-90)
+   *  = a timed / measured career from the results engine: PB / SB per event,
+   *  medals, finals, results history (athletics) */
+  careerView?: 'sections' | 'totals' | 'custom' | 'measured';
   /** SD-24 — the key stats a match-history row shows after the score line, in
    *  priority order (zeros skipped, at most 3). Default: `headline`. */
   history?: string[];
@@ -428,7 +434,8 @@ function inputsOf(def: StatDef): string[] {
   const a: StatAgg = def.agg ?? { kind: 'sum' };
   switch (a.kind) {
     case 'sum': return a.keys ? bare(a.keys) : [a.key ?? def.key];
-    case 'max': case 'min': return [a.key ?? def.key];
+    case 'max': return a.keys ? bare(a.keys) : [a.key ?? def.key];
+    case 'min': return [a.key ?? def.key];
     case 'rate': return [...bare(a.num), ...bare(a.den)];
     case 'perGame': return bare(a.key);
     case 'pair': return [...bare(a.a), ...bare(a.b)];
@@ -476,16 +483,19 @@ export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def
     }
     case 'max': case 'min': {
       const k = agg.key ?? def.key;
+      const multi = agg.kind === 'max' ? agg.keys : undefined;
+      const val = (l: StatLine) => (multi ? signed(l, multi) : num(l, k));
+      const carries = (l: StatLine) => (multi ? bare(multi).some((x) => hasKey(l, x)) : hasKey(l, k));
       const all = linesFor(schema, lines, agg.over);
       const cov = covered(all);
       if (all.length && !cov.length) return untracked;
       let line: StatLine | undefined;
       for (const l of cov) {
-        if (!hasKey(l, k)) continue;
-        if (!line || (agg.kind === 'max' ? num(l, k) > num(line, k) : num(l, k) < num(line, k))) line = l;
+        if (!carries(l)) continue;
+        if (!line || (agg.kind === 'max' ? val(l) > val(line) : val(l) < val(line))) line = l;
       }
       if (!line) return none(cov.length);
-      const v = num(line, k);
+      const v = val(line);
       return { value: v, text: formatValue(v, def.format), tracked: true, games: cov.length, line };
     }
     case 'best': {
@@ -747,6 +757,7 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
       [...(a.key ? [a.key] : []), ...(a.keys ?? [])].forEach((k) => need(k, w));
     }
     if ((a.kind === 'max' || a.kind === 'min') && a.key) need(a.key, w);
+    if (a.kind === 'max' && a.keys) signedKeys(a.keys).forEach((k) => need(k, w));
     if (a.kind === 'best') a.by.forEach((b) => need(b.key, w));
   }
   for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));

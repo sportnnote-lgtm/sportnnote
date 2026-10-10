@@ -163,7 +163,8 @@ describe('SD-23 · schemas declare the box', () => {
   });
   test('per-sport columns (headers, in order)', () => {
     const h = (sp: keyof typeof STAT_SCHEMAS) => boxColumns(STAT_SCHEMAS[sp]).map((c) => c.abbr);
-    assert.deepEqual(h('basketball'), ['MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-']);
+    // SD-40: the FIBA box (shooting pairs / % and OREB / DREB show only when tracked)
+    assert.deepEqual(h('basketball'), ['MIN', 'PTS', 'FGM-A', 'FG%', '3PM-A', '3P%', 'FTM-A', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-', 'EFF']);
     assert.deepEqual(h('volleyball'), ['PTS', 'ATK', 'ACE', 'BLK']);
     assert.deepEqual(h('kabaddi'), ['RAID', 'TKL', 'PTS']);
     assert.deepEqual(h('football'), ['MIN', 'G', 'A', 'SH', 'SOT', 'SV', 'GA', 'FC', 'YC', 'RC']);
@@ -184,7 +185,8 @@ describe('SD-23 · golden: the shared table equals the old components', () => {
       for (const sd of SIDES) assertSame(legacyBasketball(s.events, sd, sd === 'home' ? BK_H : BK_A, sc, field), t, sd, {}, `Q${sc}`);
     }
     const all = buildBoxTable(STAT_SCHEMAS.basketball, src.data('all'));
-    assert.deepEqual(abbrs(all), ['MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-']);
+    // SD-40: no missed shots tracked → no FGM-A / FG% / 3PM-A / 3P% (D8); a typed rebound → OREB / DREB
+    assert.deepEqual(abbrs(all), ['MIN', 'PTS', 'FTM-A', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-', 'EFF']);
     assert.equal(cell(all, 'home', 'H6', '+/-'), '+4'); // on from Q1 5': +3 +2 −2 −1 +2
     assert.equal(cell(all, 'home', 'H7', 'MIN'), '–'); // never on court
   });
@@ -450,10 +452,12 @@ describe('SD-23 · team comparison panel', () => {
   test('kabaddi: raid / tackle / all-out points and raids (unnamed raids count for the team)', () => {
     const s = kabaddiMatch();
     const cmp = comparisonRows(STAT_SCHEMAS.kabaddi, kabaddiBox(s).data('all'));
-    assert.deepEqual(cmp.rows.map((r) => r.label), ['Raid pts', 'Tackle pts', 'All-out pts', 'Raids']);
+    // SD-41 extended the panel to the PKL match centre (tests/kabaddi-depth.test.mts)
+    assert.deepEqual(cmp.rows.map((r) => r.label).slice(0, 5), ['Raid pts', 'Tackle pts', 'All-out pts', 'Extra pts', 'Raids']);
     const raid = (sd: Side) => String(s.events.filter((e) => e.side === sd && e.kind === 'raid').reduce((a, e) => a + (e.points ?? 0), 0));
     assert.deepEqual([cmp.rows[0].home, cmp.rows[0].away], [raid('home'), raid('away')]);
-    assert.deepEqual([cmp.rows[3].home, cmp.rows[3].away], ['5', '3']); // incl. the empty raid and the unnamed one
+    const raids = cmp.rows.find((r) => r.key === 'raids')!;
+    assert.deepEqual([raids.home, raids.away], ['5', '3']); // incl. the empty raid and the unnamed one
   });
   test('carrom: points / boards / queens per game, no player table', () => {
     let s = carrom.init({});
@@ -485,7 +489,7 @@ describe('SD-23 · sticky-name layout', () => {
     const l = boxLayout(t, 317);
     assert.equal(l.sticky, true);
     assert.ok(l.nameWidth >= 80 && l.nameWidth + 40 <= 317, 'a readable name and at least one number column on screen');
-    assert.equal(l.widths.length, 9);
+    assert.equal(l.widths.length, 14); // SD-40: + FTM-A, FT%, OREB, DREB, EFF
     // a tablet fits everything beside a flexing name
     const wide = boxLayout(t, 700);
     assert.equal(wide.sticky, false);

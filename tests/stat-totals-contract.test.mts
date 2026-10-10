@@ -25,6 +25,9 @@ import * as football from '../src/sports/football/engine.ts';
 import { keeperTotals } from '../src/sports/football/keepers.ts';
 import { tennisTotals, padelTotals, badmintonTotals, rallyTotals, volleyballSetRecord, mergeTotals, RACKET_RECORD_KEYS, SET_RECORD_KEYS, SERVE_KEYS, SERVE_SET_KEYS } from '../src/sports/racketTotals.ts';
 import { correctionActions, pointInputs, type PointInput } from '../src/sports/rallyEdit.ts';
+import * as basketball from '../src/sports/basketball/engine.ts';
+import { basketballStatTotals } from '../src/sports/basketball/totals.ts';
+import { creditAttribution as bbCredit, makeCredits as bbMake, missCredits as bbMiss, reboundCredits as bbReb, ftCredits as bbFt } from '../src/sports/basketball/credits.ts';
 
 type Side = 'home' | 'away';
 // SD-22: the replayed serve / return keys are derived too
@@ -182,5 +185,24 @@ describe('SD-19 · contract: the sports that had totals before', () => {
     assert.deepEqual(t.v1.stats, { setsWon: 2, setsLost: 1 });
     assert.deepEqual(t.w2.stats, { setsWon: 1, setsLost: 2 });
     assert.deepEqual(mergeTotals({ v1: { side: 'home', stats: { setsPlayed: 3 } } }, t).v1.stats, { setsPlayed: 3, setsWon: 2, setsLost: 1 });
+  });
+
+  test('basketball (SD-40 box keys + SD-29 MIN / +/-): live credits, misses, removals', () => {
+    const sp: TotalsSport<basketball.BasketballState> = {
+      name: 'basketball', init: basketball.init, reducer: basketball.reducer, partial: true, config: { trackMisses: true },
+      statTotals: basketballStatTotals, derived: ['minutes', 'plusMinus'], signed: ['plusMinus'],
+    };
+    const pl = (id: string, name: string, type: string, payload: Record<string, unknown>, c: Record<string, number>): ScoreAction =>
+      ({ type, side: id.startsWith('h') ? 'home' : 'away', payload: { ...payload, pid: id, quarter: 1, minute: 1 }, attribution: bbCredit(id, name, c) });
+    const acts: ScoreAction[] = [
+      { type: 'SET_LINEUP', payload: { home: ['H1'], away: ['A1'], ids: { H1: 'h1', A1: 'a1' } } },
+      { type: 'KICKOFF', payload: { at: 1 } },
+      pl('h1', 'H1', 'SCORE', { points: 3, fga: true }, bbMake(3, false, true)), pl('h1', 'H1', 'MISS', { points: 2 }, bbMiss(2)),
+      pl('a1', 'A1', 'REBOUND', { reboundType: 'def' }, bbReb('def')), pl('a1', 'A1', 'FREE_THROW', { made: true }, bbFt(true)),
+      { type: 'REMOVE_EVENT', side: 'home', payload: { id: 2 }, attribution: bbCredit('h1', 'H1', bbMiss(2), -1) },
+      { type: 'END' },
+    ];
+    const t = assertContract(sp, toRecords(acts), { every: 1 });
+    assert.deepEqual([t.h1.stats.fgMade, t.h1.stats.fgAtt, t.h1.stats.fgMissed, t.a1.stats.dreb], [1, 1, 0, 1]);
   });
 });

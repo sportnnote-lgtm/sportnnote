@@ -17,18 +17,25 @@ import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '.
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
-import { getPlayers } from '../data/repos';
+import { getPlayers, getMyPlayerId } from '../data/repos';
 import type { FieldEntry, FieldEvent } from '../core/types';
 import {
   getPhase, getResultsPhases, getPhaseEntries, saveEntryResult, patchPhaseFormat, setPhaseStatus, advancePhase,
-  completeFinal, getMarkHistory, getRecordBook,
+  completeFinal, getMarkHistory, getRecordBook, getOrgRecordBook, moveEntry,
 } from '../data/resultsStore';
 import {
   disciplineOf, phaseOf, phaseLabel, toResultEntry, rankByHeat, qualify, withQualification, withRecordFlags,
   fieldFinalists, firstRoundsDone, attemptOrder, formatMark, parseMark, attemptText, summarizeHeights, addTry,
   eventAwards, categoryKey, categoryLabel, usesLanes,
+  digitsToTime, handTime, handNote, reactionFalseStart, moveLane, startListText, resultsText, meetSettings, hurdleHeight,
   type DisciplineDef, type EntryResult, type MarkHistory, type RankedEntry, type RecordMark, type ResultStatus, type LiftAttempt,
 } from '../data/results';
+import { useAuth } from '../core/auth';
+import { canOrganize } from '../core/roles';
+import { canManageTournament } from '../core/org';
+import { useTournamentById, useOrganizations } from '../data/hooks';
+import { shareMessage } from '../core/share';
+import { resultsLink } from '../core/shareText';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Change = (next: EntryResult) => void;
@@ -43,6 +50,12 @@ export default function ResultsEventScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'ResultsEvent'>>();
   const [tab, setTab] = useParamState<'enter' | 'sheet'>('tab', 'enter');
+  const { profile } = useAuth();
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => { void getMyPlayerId(profile?.id).then(setMe).catch(() => setMe(null)); }, [profile?.id]);
+  const orgs = useOrganizations();
+  const [lanesOpen, setLanesOpen] = useState(false);
+  const [moving, setMoving] = useState<string | null>(null);
   const [phase, setPhase] = useState<FieldEvent | null>(null);
   const [phases, setPhases] = useState<FieldEvent[]>([]);
   const [entries, setEntries] = useState<FieldEntry[]>([]);
@@ -61,6 +74,12 @@ export default function ResultsEventScreen() {
 
   const f = phase ? phaseOf(phase) : null;
   const def = f ? disciplineOf(f.discipline) ?? null : null;
+  const tournament = useTournamentById(phase?.tournamentId);
+  // Who may enter results: the event's creator / hosts, the tournament's
+  // managers, or an organiser. Everyone else (a shared /r/ link) reads.
+  const canEdit = !!phase && (canOrganize(profile?.role) || phase.createdBy === profile?.id || (!!me && (phase.hostIds ?? []).includes(me))
+    || (!!tournament && canManageTournament(tournament, orgs, me)));
+  const view = canEdit ? tab : 'sheet';
 
   const load = useCallback(async () => {
     const ev = await getPhase(params.phaseId);
@@ -70,8 +89,10 @@ export default function ResultsEventScreen() {
     if (!ev || !pf || !d) { setLoading(false); return; }
     const [ens, ps, all, recs] = await Promise.all([getPhaseEntries([ev.id]), getPlayers(), getResultsPhases({ eventKey: pf.eventKey }), getRecordBook(ev.tournamentId, d.sport)]);
     setEntries(ens);
-    setNames(new Map(ps.map((p) => [p.id, p.fullName])));
+    const nm = new Map(ps.map((p) => [p.id, p.fullName]));
+    setNames(nm);
     setPhases(all.sort((a, b) => a.roundNo - b.roundNo));
+    // SD-90: + the school record (SR) — the best at the host organisation's other meets.
     setRecords(recs);
     setLocal(new Map());
     setHistory(await getMarkHistory(d, ens.map((e) => e.playerId), ev.id));
@@ -80,22 +101,31 @@ export default function ResultsEventScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const nameOf = useCallback((id: string) => names.get(id) ?? 'Athlete', [names]);
+  // SD-90: the school record book (SR), derived from the host organisation's other meets.
+  const [srBook, setSrBook] = useState<RecordMark[]>([]);
+  const hostOrgId = tournament?.hostOrgId;
+  useEffect(() => {
+    let on = true;
+    if (!hostOrgId || def?.sport !== 'athletics') { setSrBook([]); return; }
+    void getOrgRecordBook(hostOrgId, tournament?.id, (id) => names.get(id) ?? 'Athlete').then((b) => on && setSrBook(b)).catch(() => {});
+    return () => { on = false; };
+  }, [hostOrgId, tournament?.id, def?.sport, names]);
   const merged = useMemo(() => entries.map((e) => (local.has(e.id) ? { ...e, result: local.get(e.id) } : e)), [entries, local]);
   const resEntries = useMemo(() => merged.map((e) => toResultEntry(e, nameOf)), [merged, nameOf]);
 
   // Ranking per heat with Q / q and PB / SB / MR flags.
   const ranked = useMemo(() => {
     if (!def || !f || !phase) return new Map<number, RankedEntry[]>();
-    const byHeat = rankByHeat(resEntries, def);
+    const byHeat = rankByHeat(resEntries, def, { handLegal: f.handTimed });
     const q = f.progression ? qualify(byHeat, def, f.progression) : null;
-    const ctx = { history, records, category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
+    const ctx = { history, records: [...records, ...srBook], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
     return new Map([...byHeat].map(([h, rows]) => [h, withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx)]));
-  }, [def, f, phase, resEntries, history, records]);
+  }, [def, f, phase, resEntries, history, records, srBook]);
 
   const heats = useMemo(() => [...new Set(entries.map((e) => e.groupNo))].sort((a, b) => a - b), [entries]);
   const activeHeat = heats.includes(heat) ? heat : heats[0] ?? 1;
   const heatEntries = merged.filter((e) => e.groupNo === activeHeat);
-  const editable = phase?.status !== 'completed';
+  const editable = canEdit && phase?.status !== 'completed';
   const finalists = useMemo(() => (def?.capture === 'attempts' ? fieldFinalists(resEntries.filter((e) => e.heat === activeHeat), def) : new Set<string>()), [def, resEntries, activeHeat]);
   const extraOpen = def?.capture === 'attempts' && firstRoundsDone(resEntries.filter((e) => e.heat === activeHeat), def);
   const windByHeat = useMemo(() => new Map(heats.map((h) => [h, (merged.find((e) => e.groupNo === h && (e.result as EntryResult)?.wind != null)?.result as EntryResult | undefined)?.wind])), [heats, merged]);
@@ -139,7 +169,8 @@ export default function ResultsEventScreen() {
     if (!ok) return;
     setBusy(true);
     try {
-      const book = await completeFinal(phase, merged, nameOf);
+      const pts = def.sport === 'athletics' ? meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined) : undefined;
+      const book = await completeFinal(phase, merged, nameOf, ['MR'], pts);
       const mine = book.filter((r) => r.discipline === def.key && r.category === categoryKey(f.category));
       setInfo(mine.length ? `Records: ${mine.map((r) => `${r.scope} ${formatMark(r.value, def)} (${r.holder})`).join(' · ')}` : null);
       await load();
@@ -147,7 +178,33 @@ export default function ResultsEventScreen() {
   };
 
   const heatRows = ranked.get(activeHeat) ?? [];
-  const awards = f.phase === 'final' ? eventAwards([...ranked.values()].flat()) : [];
+  const meet = def.sport === 'athletics' ? meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined) : undefined;
+  const awards = f.phase === 'final' ? eventAwards([...ranked.values()].flat(), meet ? { positionPoints: meet.positionPoints } : {}) : [];
+  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length; });
+  const hurdles = hurdleHeight(def.key, f.category ?? {});
+
+  // Share: the start list before anyone has a mark, the results after.
+  const share = () => {
+    const rows = [...ranked].flatMap(([h, rs]) => rs.map((r) => ({
+      heat: h, lane: r.entry.result.lane, order: r.entry.result.order, name: r.entry.name, team: r.entry.team?.name,
+      mark: r.bestText || (r.status !== 'ok' ? r.status : ''), place: r.label && r.position != null ? r.label : '', flags: r.flags.filter((x) => x !== 'w' && x !== 'h'),
+    })));
+    const title = `${f.eventTitle ?? def.label} — ${phaseLabel(f.phase)}`;
+    void shareMessage(anyMark ? resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id)) : startListText(title, rows, resultsLink(phase.id)), 'results');
+  };
+  // Manual lane override (World Athletics lets the referee re-draw / move).
+  const pickLane = async (entryId: string, heatNo: number, lane: number) => {
+    const rows = merged.map((e) => ({ id: e.id, heat: e.groupNo, lane: ((e.result ?? {}) as EntryResult).lane }));
+    const changes = moveLane(rows, entryId, heatNo, lane);
+    setMoving(null);
+    try {
+      for (const c of changes) {
+        const e = merged.find((x) => x.id === c.id)!;
+        await moveEntry(c.id, c.heat, { ...((e.result ?? {}) as EntryResult), lane: c.lane });
+      }
+      await load();
+    } catch (e) { setError((e as Error).message); }
+  };
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -168,13 +225,15 @@ export default function ResultsEventScreen() {
           </View>
         )}
         <View style={st.wrap}>
-          <SelectChip label="Enter results" active={tab === 'enter'} onPress={() => setTab('enter')} />
-          <SelectChip label="Results sheet" active={tab === 'sheet'} onPress={() => setTab('sheet')} />
+          {canEdit && <SelectChip label="Enter results" active={view === 'enter'} onPress={() => setTab('enter')} />}
+          <SelectChip label={anyMark ? 'Results sheet' : 'Start list'} active={view === 'sheet'} onPress={() => setTab('sheet')} />
+          <SelectChip label="📤 Share" active={false} onPress={share} />
         </View>
+        {hurdles ? <Text style={textStyles.muted}>Hurdle height {hurdles} (World Athletics, {categoryLabel(f.category)}).</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
 
-        {tab === 'enter' && (
+        {view === 'enter' && (
           <>
             {heats.length > 1 && (
               <View style={st.wrap}>
@@ -189,6 +248,22 @@ export default function ResultsEventScreen() {
 
             {def.wind === 'race' && editable && (
               <WindField value={windByHeat.get(activeHeat)} onSave={(w) => { for (const e of heatEntries) void save(e, { ...resultOf(e), wind: w }); }} />
+            )}
+
+            {usesLanes(def) && editable && !anyMark && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <SelectChip label={lanesOpen ? '✓ Done changing lanes' : '✎ Change lanes'} active={lanesOpen} onPress={() => { setLanesOpen(!lanesOpen); setMoving(null); }} />
+                {lanesOpen && <Text style={textStyles.muted}>Tap an athlete, then the lane to move them to — whoever is in it swaps places.</Text>}
+                {lanesOpen && moving && (
+                  <View style={st.wrap}>
+                    {heats.length > 1 && heats.map((h) => <SelectChip key={`h${h}`} label={`Heat ${h}`} active={h === activeHeat} onPress={() => setHeat(h)} />)}
+                    {Array.from({ length: def.lanes ?? 8 }, (_, i) => i + 1).map((ln) => {
+                      const who = merged.find((e) => e.groupNo === activeHeat && ((e.result ?? {}) as EntryResult).lane === ln);
+                      return <SelectChip key={ln} label={`L${ln}${who ? ` · ${toResultEntry(who, nameOf).name.split(' ')[0]}` : ''}`} active={false} onPress={() => void pickLane(moving, activeHeat, ln)} />;
+                    })}
+                  </View>
+                )}
+              </View>
             )}
 
             {def.capture === 'attempts' && (
@@ -213,12 +288,15 @@ export default function ResultsEventScreen() {
               const re = toResultEntry({ ...e, result: r }, nameOf);
               const row = heatRows.find((x) => x.id === e.id);
               return (
-                <Card key={e.id} style={st.entryCard}>
+                <Card key={e.id} style={[st.entryCard, moving === e.id && { borderColor: theme.colors.primary, borderWidth: 2 }]}>
+                  {lanesOpen && editable && !anyMark ? (
+                    <SelectChip label={moving === e.id ? 'Moving… pick a lane' : `Move ${re.name.split(' ')[0]}`} active={moving === e.id} onPress={() => setMoving(moving === e.id ? null : e.id)} />
+                  ) : null}
                   <View style={st.headRow}>
                     <Text style={st.lane}>{usesLanes(def) ? `L${r.lane ?? '–'}` : `#${r.order ?? '–'}`}</Text>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={st.name} numberOfLines={1}>{finalists.has(e.id) && extraOpen ? '★ ' : ''}{re.name}</Text>
-                      {re.team?.name ? <Text style={textStyles.muted} numberOfLines={1}>{re.team.name}{r.members?.length ? ` · ${r.members.map((m) => m.name.split(' ')[0]).join(', ')}` : ''}</Text> : null}
+                      {re.team?.name ? <Text style={textStyles.muted} numberOfLines={1}>{[re.team.name !== re.name ? re.team.name : '', r.members?.length ? r.members.map((m) => m.name.split(' ')[0]).join(', ') : ''].filter(Boolean).join(' · ')}</Text> : null}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={st.place}>{row?.label || ''}</Text>
@@ -226,7 +304,9 @@ export default function ResultsEventScreen() {
                     </View>
                   </View>
                   {def.capture === 'single' || def.capture === 'target' ? (
-                    <MarkField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}`} def={def} r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />
+                    def.unit === 'time'
+                      ? <TimeField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}:${r.hand ? 'h' : ''}`} def={def} r={r} handMeet={!!f.handTimed} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />
+                      : <MarkField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}`} def={def} r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />
                   ) : null}
                   {def.capture === 'attempts' && (
                     <AttemptCells def={def} r={r} round={round} editable={editable && (r.status ?? 'ok') === 'ok'}
@@ -234,6 +314,9 @@ export default function ResultsEventScreen() {
                   )}
                   {def.capture === 'heights' && <HeightRow def={def} r={r} bar={bar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
                   {def.capture === 'lifts' && <LiftCells r={r} editable={editable && (r.status ?? 'ok') === 'ok'} nextSeq={1 + Math.max(0, ...merged.flatMap((x) => [...((x.result as EntryResult)?.lifts?.snatch ?? []), ...((x.result as EntryResult)?.lifts?.cj ?? [])].map((l) => l.seq ?? 0)))} onChange={(n) => void save(e, n)} />}
+                  {f.reaction && def.unit === 'time' && editable && (
+                    <ReactionField value={r.reaction} onSave={(v) => void save(e, { ...r, reaction: v })} />
+                  )}
                   {row?.needsDecider && editable && (
                     <DeciderField label={def.tie === 'vertical' ? 'Jump-off place' : 'Shoot-off place'} value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
                   )}
@@ -249,7 +332,7 @@ export default function ResultsEventScreen() {
           </>
         )}
 
-        {tab === 'sheet' && (
+        {view === 'sheet' && (
           <>
             <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)} · ${phase.startsAt.slice(0, 10)}`} heats={ranked} wind={windByHeat} />
             {awards.length > 0 && (
@@ -260,7 +343,7 @@ export default function ResultsEventScreen() {
                     {a.medal === 'gold' ? '🥇' : a.medal === 'silver' ? '🥈' : a.medal === 'bronze' ? '🥉' : `${a.position}.`} {a.name}{a.team?.name ? ` (${a.team.name})` : ''} — {a.points} pts
                   </Text>
                 ))}
-                <Text style={textStyles.muted}>Default 8-7-6-5-4-3-2-1; tied places share the points. These feed the meet's house / medal table.</Text>
+                <Text style={textStyles.muted}>{meet ? meet.positionPoints.join('-') : 'Default 8-7-6-5-4-3-2-1'}; tied places share the points.{meet && meet.relayFactor !== 1 && def.teamSize ? ` Relays score ×${meet.relayFactor}.` : ''} These feed the meet's house / medal table.</Text>
               </Card>
             )}
           </>
@@ -310,6 +393,56 @@ function MarkField({ def, r, editable, onChange }: { def: DisciplineDef; r: Entr
           <SmallNum label="X / inner" value={r.xs} editable={editable} onSave={(v) => onChange({ ...r, xs: v })} />
         </View>
       )}
+    </View>
+  );
+}
+
+/** SD-90: the stopwatch keypad — type the digits only ("1085" → 10.85,
+ *  "15234" → 1:52.34); a typed "10.85" / "1:52.34" / "10.853" (photo-finish
+ *  thousandths) still works. Hand times go to the next tenth (TR 19.21). */
+function TimeField({ def, r, editable, handMeet, onChange }: { def: DisciplineDef; r: EntryResult; editable: boolean; handMeet: boolean; onChange: Change }) {
+  const [t, setT] = useState(r.thousandths != null ? r.thousandths.toFixed(3) : formatMark(r.mark, def));
+  const [bad, setBad] = useState(false);
+  const hand = r.hand ?? (handMeet && r.mark == null ? true : false);
+  const read = (text: string): { mark: number; thousandths?: number } | null => {
+    if (/[.:,]/.test(text)) return parseMark(text, def);
+    const v = digitsToTime(text);
+    return v == null ? null : { mark: v };
+  };
+  const preview = t.trim() && !/[.:,]/.test(t) ? read(t) : null;
+  const commit = (h = hand) => {
+    if (!t.trim()) { setBad(false); if (r.mark != null) onChange({ ...r, mark: undefined, thousandths: undefined }); return; }
+    const p = read(t);
+    setBad(!p);
+    if (!p) return;
+    const mark = h ? handTime(p.mark) : p.mark;
+    const next = { ...r, mark, thousandths: h ? undefined : p.thousandths, hand: h };
+    if (next.mark !== r.mark || next.thousandths !== r.thousandths || !!next.hand !== !!r.hand) onChange(next);
+  };
+  return (
+    <View style={{ gap: theme.spacing(1) }}>
+      <View style={st.inline}>
+        <TextInput style={[st.input, st.markInput, bad && st.bad]} value={t} onChangeText={setT} editable={editable} placeholder="1085 = 10.85"
+          placeholderTextColor={theme.colors.textMuted} keyboardType="number-pad" accessibilityLabel="Time" selectTextOnFocus
+          onBlur={() => commit()} onSubmitEditing={() => commit()} />
+        <SelectChip label="Hand" active={hand} disabled={!editable} onPress={() => { onChange({ ...r, hand: !hand, ...(r.mark != null && !hand ? { mark: handTime(r.mark), thousandths: undefined } : {}) }); }} />
+        {preview ? <Text style={st.preview}>= {formatMark(hand ? handTime(preview.mark) : preview.mark, def)}{hand ? 'h' : ''}</Text> : null}
+        {bad && <Text style={st.badTxt}>Can't read that</Text>}
+      </View>
+      {hand ? <Text style={textStyles.muted}>{handNote(def, r.mark)}{handMeet ? '' : ' Not record-eligible.'}</Text> : null}
+    </View>
+  );
+}
+
+function ReactionField({ value, onSave }: { value?: number; onSave: (v: number | undefined) => void }) {
+  const [t, setT] = useState(value != null ? value.toFixed(3) : '');
+  const v = num(t);
+  return (
+    <View style={st.inline}>
+      <Text style={st.label}>Reaction (s)</Text>
+      <TextInput style={[st.input, { width: 80 }]} value={t} onChangeText={setT} placeholder="0.145" placeholderTextColor={theme.colors.textMuted}
+        keyboardType="decimal-pad" accessibilityLabel="Reaction time in seconds" onBlur={() => onSave(num(t))} onSubmitEditing={() => onSave(num(t))} />
+      {reactionFalseStart(v) ? <Text style={st.badTxt}>Under 0.100 s — a false start if the start was recalled (TR 16.6)</Text> : null}
     </View>
   );
 }
@@ -502,6 +635,7 @@ const st = StyleSheet.create({
   },
   markInput: { width: 130, fontSize: theme.font.h3, fontWeight: '800' },
   bad: { borderColor: theme.colors.danger },
+  preview: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800', fontVariant: ['tabular-nums'] },
   badTxt: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   status: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
   statusOn: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },

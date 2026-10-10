@@ -50,6 +50,8 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   chess: [],
   carrom: [{ key: 'hand', label: 'Striking hand', options: ['Right', 'Left'] }],
   golf: [{ key: 'hand', label: 'Plays', options: ['Right-handed', 'Left-handed'] }],
+  // Track: the event group is the "position"; no handedness.
+  athletics: [],
 };
 
 export const POSITION_HINT: Record<SportId, string> = {
@@ -67,4 +69,5 @@ export const POSITION_HINT: Record<SportId, string> = {
   chess: 'e.g. FIDE 1650, Rapid specialist',
   carrom: 'e.g. Singles, Doubles',
   golf: 'e.g. Handicap index 12.4, Home club',
+  athletics: 'e.g. Sprints (100 / 200 m), Hurdles, Middle distance',
 };

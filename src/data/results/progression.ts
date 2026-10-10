@@ -103,17 +103,19 @@ export function attemptOrder(entries: ResultEntry[], def: DisciplineDef, round: 
 /**
  * Lane preference for a ranked list. Eight lanes follow the World Athletics
  * groups (TR 20.4.4 for 200 m and up; also used for the 100 m here): ranks
- * 1–4 → lanes 3–6, ranks 5–6 → lanes 7–8, ranks 7–8 → lanes 1–2. The lanes
- * inside a group are DRAWN; pass `rng` to draw, else a fixed order (best in
- * lane 4) is used. Other lane counts go middle-out.
+ * 1–4 → lanes 3–6, ranks 5–6 → lanes 7–8, ranks 7–8 → lanes 1–2. The 800 m
+ * (TR 20.4.5) draws ranks 1–5 into lanes 3–7 and ranks 6–8 into 1, 2 and 8.
+ * The lanes inside a group are DRAWN; pass `rng` to draw, else a fixed order
+ * (best in lane 4) is used. Other lane counts go middle-out.
  */
-export function laneOrder(lanes: number, rng?: () => number): number[] {
+export function laneOrder(lanes: number, rng?: () => number, discipline?: string): number[] {
   const shuffle = (xs: number[]) => {
     if (!rng) return xs;
     const a = [...xs];
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   };
+  if (lanes === 8 && discipline === 'ath.800m') return [...shuffle([4, 5, 3, 6, 7]), ...shuffle([2, 1, 8])];
   if (lanes === 8) return [...shuffle([4, 5, 3, 6]), ...shuffle([7, 8]), ...shuffle([2, 1])];
   const mid = Math.ceil(lanes / 2);
   const out: number[] = [mid];
@@ -129,8 +131,11 @@ export interface Seeded { id: string; heat: number; lane?: number; order: number
 /**
  * Seed a ranked list (best first) into `heats` heats — serpentine, so each heat
  * gets a fair spread — and give lanes (lane races) or a running / attempt order.
+ * `drawAll` (SD-90, World Athletics TR 20.4.3: the first round's lanes are
+ * drawn): every athlete in a heat draws from the lanes the heat uses, with no
+ * ranking groups — needs `rng`.
  */
-export function seedHeats(rankedIds: string[], heats: number, def: DisciplineDef, rng?: () => number): Seeded[] {
+export function seedHeats(rankedIds: string[], heats: number, def: DisciplineDef, rng?: () => number, opts: { drawAll?: boolean } = {}): Seeded[] {
   const n = Math.max(1, heats);
   const buckets: string[][] = Array.from({ length: n }, () => []);
   rankedIds.forEach((id, i) => {
@@ -139,7 +144,12 @@ export function seedHeats(rankedIds: string[], heats: number, def: DisciplineDef
   });
   const out: Seeded[] = [];
   buckets.forEach((ids, h) => {
-    const lanes = def.lanes && def.capture === 'single' ? laneOrder(Math.max(def.lanes, ids.length), rng) : null;
+    let lanes = def.lanes && def.capture === 'single' ? laneOrder(Math.max(def.lanes, ids.length), rng, def.key) : null;
+    if (lanes && opts.drawAll && rng) {
+      const used = lanes.slice(0, ids.length);
+      for (let i = used.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [used[i], used[j]] = [used[j], used[i]]; }
+      lanes = used;
+    }
     ids.forEach((id, i) => out.push({ id, heat: h + 1, lane: lanes ? lanes[i] : undefined, order: i + 1 }));
   });
   return out;

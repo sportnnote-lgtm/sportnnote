@@ -74,6 +74,8 @@ export interface MatchBoxSource {
   tickMs?: number;
   /** said under the comparison when some rows aren't tracked */
   untrackedHint?: string;
+  /** SD-40 — short lines under the tables (basketball: team fouls per period) */
+  notes?: () => string[];
 }
 
 /* --------------------------------- columns --------------------------------- */

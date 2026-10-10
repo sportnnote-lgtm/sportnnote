@@ -31,6 +31,8 @@ export interface TotalsSport<S> {
   /** owned keys that are never credited live (games won, minutes…): checked
    *  only for being finite and ≥ 0. A function decides per key. */
   derived: readonly string[] | ((key: string) => boolean);
+  /** derived keys that may be negative (basketball +/-, SD-40) */
+  signed?: readonly string[];
 }
 
 /** Stored rows for a list of dispatched actions (as useLiveMatch persists them). */
@@ -72,7 +74,7 @@ export function contractErrors<S>(sp: TotalsSport<S>, totals: Totals, live: Reco
     if (t.side !== 'home' && t.side !== 'away') errs.push(`${where}${id}: bad side ${t.side}`);
     for (const [k, v] of Object.entries(t.stats)) {
       if (!Number.isFinite(v)) errs.push(`${where}${id}.${k} = ${v} (not finite)`);
-      else if (isDerived(sp as TotalsSport<unknown>, k) && v < 0) errs.push(`${where}${id}.${k} = ${v} (< 0)`);
+      else if (isDerived(sp as TotalsSport<unknown>, k) && v < 0 && !sp.signed?.includes(k)) errs.push(`${where}${id}.${k} = ${v} (< 0)`);
     }
   }
   // (2) owned live keys = the live sum, per player (a missing key reads 0 — rule 4)

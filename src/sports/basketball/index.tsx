@@ -13,10 +13,11 @@ import { Button, SelectChip } from '../../components/ui';
 import { Timeline } from './Timeline';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { basketballBox } from '../boxSources';
-import { basketballTotals } from './fieldTime';
+import { basketballStatTotals, shotsTracked } from './totals';
+import { creditAttribution, eventCredits, ftCredits, makeCredits, missCredits, reboundCredits } from './credits';
 import { BB_META, FOUL_LABEL, pointsOf, type BBEvent, type FoulType, type ReboundType } from './events';
 import type { Player } from '../../core/types';
-import type { ScoreAction, SportPlugin } from '../types';
+import type { LiveSettings, ScoreAction, SportPlugin } from '../types';
 import { basketballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { LineScoreboard } from '../../components/LineScoreboard';
@@ -84,32 +85,35 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const fire = (action: ScoreAction) =>
     dispatch({ ...action, payload: { ...action.payload, ...stampFor() } });
 
-  const score = (side: 'home' | 'away', pts: number) => {
-    const p = sel[side];
+  // SD-31: "Track missed shots" (live settings) — Miss buttons, and every make
+  // counts as an attempt (`fga`) so FGA / FG% / EFF are complete.
+  const tracking = state.trackMisses === true;
+  // SD-40: the credited player's id rides in `pid` so statTotals keys by id.
+  const pidOf = (p?: Player) => (p ? { pid: p.id } : {});
+  const score = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side], fga = tracking) => {
     fire({
       type: 'SCORE',
       side,
-      payload: { points: pts },
-      attribution: p ? { playerId: p.id, stat: 'points', by: pts, playerName: p.fullName } : undefined,
+      payload: { points: pts, ...(fga ? { fga: true } : {}), ...pidOf(p) },
+      attribution: p ? creditAttribution(p.id, p.fullName, makeCredits(pts, halfCourt, fga)) : undefined,
     });
   };
+  const miss = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side]) =>
+    fire({ type: 'MISS', side, payload: { points: pts, ...pidOf(p) }, attribution: p ? creditAttribution(p.id, p.fullName, missCredits(pts)) : undefined });
   const stat = (side: 'home' | 'away', type: string, key: string, p: Player) =>
-    fire({ type, side, attribution: { playerId: p.id, stat: key, playerName: p.fullName } });
+    fire({ type, side, payload: pidOf(p), attribution: { playerId: p.id, stat: key, playerName: p.fullName } });
 
   // ----- Correct the timeline: remove / edit one specific past play -----
   const STAT_KEY: Record<string, string> = { rebound: 'rebounds', assist: 'assists', foul: 'fouls', steal: 'steals', block: 'blocks', turnover: 'turnovers' };
   // Which plays can be re-entered in place (single-player stat plays). Free
   // throws (made/miss), timeouts and subs are remove-only.
   const canEdit = (e: BBEvent) => !!e.playerName && (e.type === 'score' || !!STAT_KEY[e.type]);
-  const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
+  const rosterId = (nm?: string) => (nm ? state.ids?.[nm] : undefined) ?? [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
   const removeEvent = (e: BBEvent) => {
+    // Reverse exactly what the play credited (credits.ts — FG / 3P / misses /
+    // OREB-DREB included), so the lines match the log again.
     const pid = rosterId(e.playerName);
-    let attribution: ScoreAction['attribution'];
-    if (pid && e.type === 'score') attribution = { playerId: pid, stat: 'points', by: -(e.points ?? 0), playerName: e.playerName };
-    else if (pid && e.type === 'freethrow') attribution = e.made
-      ? { playerId: pid, stat: 'points', by: -1, playerName: e.playerName, extra: { freeThrowsMade: -1, freeThrowsAtt: -1 } }
-      : { playerId: pid, stat: 'freeThrowsAtt', by: -1, playerName: e.playerName };
-    else if (pid && STAT_KEY[e.type]) attribution = { playerId: pid, stat: STAT_KEY[e.type], by: -1, playerName: e.playerName };
+    const attribution = pid ? creditAttribution(pid, e.playerName, eventCredits(e, halfCourt, shotsTracked(state)), -1) : undefined;
     dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution });
   };
   // Edit = remove the old play, then re-enter it stamped at the same moment so
@@ -117,8 +121,10 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const editEvent = (e: BBEvent) => { removeEvent(e); setShowEdit(false); setEditSel(null); setEdit(e); };
   const commitEdit = (p: Player, points?: number) => {
     if (!edit) return;
-    if (edit.type === 'score') fire({ type: 'SCORE', side: edit.side, payload: { points }, attribution: { playerId: p.id, stat: 'points', by: points, playerName: p.fullName } });
-    else fire({ type: edit.type.toUpperCase(), side: edit.side, attribution: { playerId: p.id, stat: STAT_KEY[edit.type], playerName: p.fullName } });
+    if (edit.type === 'score') score(edit.side, points ?? 0, p, shotsTracked(state));
+    else if (edit.type === 'rebound') fire({ type: 'REBOUND', side: edit.side, payload: { ...(edit.reboundType ? { reboundType: edit.reboundType } : {}), ...pidOf(p) }, attribution: creditAttribution(p.id, p.fullName, reboundCredits(edit.reboundType)) });
+    else if (edit.type === 'foul') fire({ type: 'FOUL', side: edit.side, payload: { foulType: edit.foulType ?? 'personal', ...pidOf(p) }, attribution: { playerId: p.id, stat: 'fouls', playerName: p.fullName } });
+    else stat(edit.side, edit.type.toUpperCase(), STAT_KEY[edit.type], p);
     setEdit(null); setEditSel(null);
   };
 
@@ -130,23 +136,21 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // Free throw — one attempt; the panel stays open so 2- and 3-shot trips are quick.
   const freeThrow = (side: 'home' | 'away', made: boolean, shooter?: Player) =>
     fire({
-      type: 'FREE_THROW', side, payload: { made },
-      attribution: shooter
-        ? { playerId: shooter.id, stat: made ? 'points' : 'freeThrowsAtt', by: 1, playerName: shooter.fullName, extra: made ? { freeThrowsMade: 1, freeThrowsAtt: 1 } : undefined }
-        : undefined,
+      type: 'FREE_THROW', side, payload: { made, ...pidOf(shooter) },
+      attribution: shooter ? creditAttribution(shooter.id, shooter.fullName, ftCredits(made)) : undefined,
     });
 
   // Foul — logged with its type; a shooting/technical/flagrant foul flows straight
   // into the opponent's free throws.
   const recordFoul = (side: 'home' | 'away', fouler: Player, type: FoulType) => {
-    fire({ type: 'FOUL', side, payload: { foulType: type }, attribution: { playerId: fouler.id, stat: 'fouls', playerName: fouler.fullName } });
+    fire({ type: 'FOUL', side, payload: { foulType: type, ...pidOf(fouler) }, attribution: { playerId: fouler.id, stat: 'fouls', playerName: fouler.fullName } });
     if (type === 'shooting' || type === 'technical' || type === 'flagrant')
       setFlow({ kind: 'ft', side: opp(side), reason: `${FOUL_LABEL[type]} foul on ${fouler.fullName} — free throws for ${nameOf(opp(side))}` });
     else setFlow(null);
   };
 
   const recordRebound = (side: 'home' | 'away', player: Player, rt: ReboundType) => {
-    fire({ type: 'REBOUND', side, payload: { reboundType: rt }, attribution: { playerId: player.id, stat: 'rebounds', playerName: player.fullName } });
+    fire({ type: 'REBOUND', side, payload: { reboundType: rt, ...pidOf(player) }, attribution: creditAttribution(player.id, player.fullName, reboundCredits(rt)) });
     setFlow(null);
   };
 
@@ -249,7 +253,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               </View>
               <Text style={ctrl.meta}>Shooting, technical & flagrant fouls go to the free-throw line next.</Text>
               <Button label={`🟥 Eject ${flow.fouler.fullName}`} variant="danger"
-                onPress={() => { fire({ type: 'EJECT', side: flow.side, attribution: { playerId: flow.fouler!.id, stat: 'ejections', playerName: flow.fouler!.fullName } }); setFlow(null); }} />
+                onPress={() => { fire({ type: 'EJECT', side: flow.side, payload: pidOf(flow.fouler), attribution: { playerId: flow.fouler!.id, stat: 'ejections', playerName: flow.fouler!.fullName } }); setFlow(null); }} />
             </>
           )}
         </View>
@@ -412,6 +416,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               : <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
           ))}
         </View>
+        {/* SD-31: missed field goals — one tap, the selected player optional. */}
+        {tracking && (
+          <View style={ctrl.row}>
+            {(halfCourt ? [1, 2] : [2, 3]).map((n) => (
+              <Button key={n} label={`⭕ Miss ${n}`} variant="ghost" style={ctrl.flex} onPress={() => miss(side, n)} />
+            ))}
+          </View>
+        )}
         {/* And-one: score the basket AND open the bonus free throw for the scorer. */}
         <Button label="🔗 And-one (+2 & the foul shot)" variant="ghost"
           onPress={() => { score(side, 2); setFlow({ kind: 'ft', side, shooter: selected, remaining: 1, total: 1, reason: 'And-one — the bonus free throw' }); }} />
@@ -529,7 +541,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               {[...state.events].sort((a, b) => b.quarter - a.quarter || b.minute - a.minute || b.id - a.id).map((e) => (
                 <View key={e.id} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{periodLabel(e.quarter, state.regPeriods)}</Text>
-                  <Text style={ctrl.editLabel} numberOfLines={1}>{BB_META[e.type].icon} {BB_META[e.type].label}{e.type === 'score' ? ` +${e.points}` : ''}{e.type === 'freethrow' ? (e.made ? ' ✅' : ' ❌') : ''}{e.playerName ? ` — ${e.playerName}` : ''}{e.type === 'sub' && e.onName ? ` ▸ ${e.onName}` : ''}</Text>
+                  <Text style={ctrl.editLabel} numberOfLines={1}>{BB_META[e.type].icon} {BB_META[e.type].label}{e.type === 'score' ? ` +${e.points}` : e.type === 'miss' ? ` ${e.points}` : ''}{e.type === 'freethrow' ? (e.made ? ' ✅' : ' ❌') : ''}{e.playerName ? ` — ${e.playerName}` : ''}{e.type === 'sub' && e.onName ? ` ▸ ${e.onName}` : ''}</Text>
                   {canEdit(e) && <Text style={ctrl.editEdit} onPress={() => editEvent(e)}>✎ Edit</Text>}
                   <Text style={ctrl.editRemove} onPress={() => removeEvent(e)}>✕</Text>
                 </View>
@@ -594,7 +606,7 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
       <Text style={ctrl.label}>Play-by-play</Text>
       <Timeline events={s.events} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Box score</Text>
-      <MatchBoxScore sport="basketball" source={basketballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
+      <MatchBoxScore sport="basketball" source={basketballBox(s, { homeRoster, awayRoster, homeName, awayName })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
     </View>
   );
 };
@@ -620,6 +632,17 @@ const BasketballScoreboard: NonNullable<SportPlugin<BasketballState>['Scoreboard
   );
 };
 
+/** SD-31 — the scorer's coverage toggle (config mode: patches the match
+ *  format; each make records its own `fga`, so past plays keep their credit). */
+const BASKETBALL_LIVE_SETTINGS: LiveSettings<BasketballState> = {
+  title: '⚙️ Scoring settings',
+  hint: 'Capture only what this scorer can keep up with — applies to this match only.',
+  mode: 'config',
+  fields: [{ key: 'trackMisses', label: 'Track missed shots', type: 'toggle', default: false, group: 'Stats captured', hint: 'Miss 2 / Miss 3 buttons — FG%, 3P% and full EFF' }],
+  read: (s) => ({ trackMisses: s.trackMisses === true }),
+  defaults: { trackMisses: false },
+};
+
 export const basketballPlugin: SportPlugin<BasketballState> = {
   id: 'basketball',
   name: 'Basketball',
@@ -628,10 +651,13 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   createInitialState: init,
   reducer,
   isComplete: (s) => s.ended,
-  // SD-29 (BK-10): MIN and +/- from the starting five + subs, set absolutely
-  // at completion and after corrections; every other stat stays incremental.
-  statTotals: basketballTotals,
+  // SD-40 (BK-05): every box key from the log (credits.ts) + SD-29 MIN and
+  // +/-, set absolutely at completion and after corrections. Partial: an older
+  // log whose players can't all be resolved to ids keeps the box keys on live
+  // increments (only MIN / +/- are synced).
+  statTotals: basketballStatTotals,
   statTotalsPartial: true,
+  liveSettings: BASKETBALL_LIVE_SETTINGS,
   result: (s) => (s.ended ? { winner: s.home > s.away ? 'home' : s.away > s.home ? 'away' : 'draw', home: s.home, away: s.away } : null),
   Scoreboard: BasketballScoreboard,
   summary: (s) => ({
@@ -644,7 +670,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   LiveExtras,
   formation: () => courtFormation('basketball'),
   Court: makeCourt('basketball'),
-  voice: { hints: ['two {name}', 'three {name}', 'free throw {name}', 'rebound {name}', 'steal {name}', 'block {name}', 'foul {name}'], parse: basketballVoice },
+  voice: { hints: ['two {name}', 'three {name}', 'miss three {name}', 'free throw {name}', 'rebound {name}', 'steal {name}', 'block {name}', 'foul {name}'], parse: basketballVoice },
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'fiba',
@@ -678,6 +704,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     { key: 'techIsTeamFoul', label: 'Technical fouls count as team fouls', type: 'toggle', default: true, advanced: true, hint: 'FIBA yes · NBA no' },
     { key: 'otFoulsCarry', label: 'Overtime team fouls carry over from the last quarter', type: 'toggle', default: true, advanced: true, hint: 'FIBA yes · NBA resets' },
     { key: 'overtimeMinutes', label: 'Overtime length (min)', type: 'number', default: 5, min: 1, max: 10, advanced: true, hint: 'played when tied after regulation; repeats until decided' },
+    { key: 'trackMisses', label: 'Track missed shots', type: 'toggle', default: false, hint: 'Miss 2 / Miss 3 buttons — FG%, 3P% and full EFF' },
     { key: 'shotClock', label: 'Shot clock (sec)', type: 'number', default: 24, min: 0, max: 35, advanced: true, hint: 'shown for reference' },
     { key: 'timeouts', label: 'Timeouts per team', type: 'number', default: 0, min: 0, max: 9, advanced: true, hint: '0 = don’t track' },
   ],

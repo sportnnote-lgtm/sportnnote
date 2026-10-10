@@ -123,6 +123,12 @@ export interface PhaseFormat {
   plan?: { phase: PhaseKind; heats: number; progression?: Progression }[];
   /** the event's title without the phase ("100 m U14 Boys") */
   eventTitle?: string;
+  /** SD-90: a hand-timed meet (stopwatches, usually no wind gauge) — hand
+   *  times and races without a wind reading count for PB / SB / records (still
+   *  shown "h"). Off = only fully automatic, wind-legal times count (World Athletics). */
+  handTimed?: boolean;
+  /** SD-90: reaction times are read at this meet (start-information system) */
+  reaction?: boolean;
 }
 
 export interface Attempt {
@@ -255,6 +261,8 @@ export const DISCIPLINES: DisciplineDef[] = [
   track('100mh', '100 m hurdles', { wind: 'race', windLimit: 2.0 }),
   track('110mh', '110 m hurdles', { wind: 'race', windLimit: 2.0 }),
   track('80mh', '80 m hurdles', { wind: 'race', windLimit: 2.0 }),
+  track('300mh', '300 m hurdles'),
+  track('400mh', '400 m hurdles'),
   track('4x100', '4 × 100 m relay', { teamSize: 4 }),
   track('4x400', '4 × 400 m relay', { teamSize: 4 }),
   horizontal('lj', 'Long jump', true),

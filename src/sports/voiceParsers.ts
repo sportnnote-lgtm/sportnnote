@@ -7,6 +7,7 @@ import type { VoiceContext } from './types';
 import { deburr, resolveSide, attribution, numberFromText } from './voiceMatch.ts';
 import { previewRaid, type KabaddiState } from './kabaddi/engine.ts';
 import { outcomeAction } from './volleyball/engine.ts';
+import { creditAttribution, ftCredits, makeCredits, missCredits } from './basketball/credits.ts';
 
 /** Rally/set-point sports (badminton, tennis, volleyball, padel, pickleball,
  *  squash): "point home", "point away", "<team> point", "<player> scores".
@@ -22,28 +23,43 @@ export function pointVoice(text: string, ctx: VoiceContext): ScoreAction[] | nul
 }
 
 /** Basketball: "two/three [player]", "free throw [player]", "rebound/assist/steal/
- *  block/turnover/foul [player]". */
+ *  block/turnover/foul [player]", and (SD-31, when the match tracks missed
+ *  shots) "miss two/three [player]" / "missed free throw [player]". The
+ *  credits are the buttons' (basketball/credits.ts), with the player's id in
+ *  `pid` (SD-40). */
 export function basketballVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
   const q = deburr(text);
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
-  if (/\brebound\b/.test(q)) return [{ type: 'REBOUND', side, attribution: attribution(player, 'rebounds') }];
-  if (/\bassist\b/.test(q)) return [{ type: 'ASSIST', side, attribution: attribution(player, 'assists') }];
-  if (/\bsteal\b|stole\b/.test(q)) return [{ type: 'STEAL', side, attribution: attribution(player, 'steals') }];
-  if (/\bblock\b|blocked\b|swat/.test(q)) return [{ type: 'BLOCK', side, attribution: attribution(player, 'blocks') }];
-  if (/\bturnover\b|turned over|lost the ball/.test(q)) return [{ type: 'TURNOVER', side, attribution: attribution(player, 'turnovers') }];
-  if (/\bfoul\b/.test(q)) return [{ type: 'FOUL', side, payload: { foulType: 'personal' }, attribution: attribution(player, 'fouls') }];
-  // A spoken free throw is a made free throw (say "miss" via the buttons). In a
-  // full-court (timed) game a spoken "one" is a free throw too, like the "+1 FT"
-  // button (SD-05); 3×3 / first-to-N games keep the 1-point basket.
-  const fullCourt = Number((ctx.state as { targetPoints?: number } | null)?.targetPoints ?? 0) === 0;
-  if (/\bfree ?throw\b|foul shot/.test(q) || (fullCourt && /\bone\b|one ?pointer/.test(q) && !/\btwo\b|\bthree\b|\bbasket\b|\bbucket\b|lay ?up|dunk|jumper|and one/.test(q)))
-    return [{ type: 'FREE_THROW', side, payload: { made: true }, attribution: player ? { playerId: player.id, stat: 'points', by: 1, playerName: player.fullName, extra: { freeThrowsMade: 1, freeThrowsAtt: 1 } } : undefined }];
+  const st = ctx.state as { targetPoints?: number; trackMisses?: boolean } | null;
+  const fullCourt = Number(st?.targetPoints ?? 0) === 0;
+  const tracking = st?.trackMisses === true;
+  const pid = player ? { pid: player.id } : {};
+  const credit = (c: Record<string, number>) => (player ? creditAttribution(player.id, player.fullName, c) : undefined);
+  const simple = (type: string, stat: string): ScoreAction[] => [{ type, side, payload: pid, attribution: attribution(player, stat) }];
+  const ftWords = /\bfree ?throw\b|foul shot/.test(q);
+  if (/\bmiss(ed|es)?\b/.test(q)) {
+    if (ftWords) return [{ type: 'FREE_THROW', side, payload: { made: false, ...pid }, attribution: credit(ftCredits(false)) }];
+    if (!tracking) return null; // turn on "Track missed shots" first (D8)
+    const pts = fullCourt ? (/\bthree\b|three ?pointer/.test(q) ? 3 : 2) : (/\btwo\b|two ?pointer/.test(q) ? 2 : 1);
+    return [{ type: 'MISS', side, payload: { points: pts, ...pid }, attribution: credit(missCredits(pts)) }];
+  }
+  if (/\brebound\b/.test(q)) return simple('REBOUND', 'rebounds');
+  if (/\bassist\b/.test(q)) return simple('ASSIST', 'assists');
+  if (/\bsteal\b|stole\b/.test(q)) return simple('STEAL', 'steals');
+  if (/\bblock\b|blocked\b|swat/.test(q)) return simple('BLOCK', 'blocks');
+  if (/\bturnover\b|turned over|lost the ball/.test(q)) return simple('TURNOVER', 'turnovers');
+  if (/\bfoul\b/.test(q)) return [{ type: 'FOUL', side, payload: { foulType: 'personal', ...pid }, attribution: attribution(player, 'fouls') }];
+  // A spoken free throw is a made free throw. In a full-court (timed) game a
+  // spoken "one" is a free throw too, like the "+1 FT" button (SD-05); 3×3 /
+  // first-to-N games keep the 1-point basket.
+  if (ftWords || (fullCourt && /\bone\b|one ?pointer/.test(q) && !/\btwo\b|\bthree\b|\bbasket\b|\bbucket\b|lay ?up|dunk|jumper|and one/.test(q)))
+    return [{ type: 'FREE_THROW', side, payload: { made: true, ...pid }, attribution: credit(ftCredits(true)) }];
   let pts: number | undefined;
   if (/\bthree\b|three ?pointer|from (downtown|deep)/.test(q)) pts = 3;
   else if (/\btwo\b|\bbasket\b|\bbucket\b|lay ?up|dunk|jumper|and one/.test(q)) pts = 2;
   else if (/\bone\b|one ?pointer/.test(q)) pts = 1; // 3×3 one-pointer (inside the arc)
-  if (pts) return [{ type: 'SCORE', side, payload: { points: pts }, attribution: attribution(player, 'points', pts) }];
+  if (pts) return [{ type: 'SCORE', side, payload: { points: pts, ...(tracking ? { fga: true } : {}), ...pid }, attribution: credit(makeCredits(pts, !fullCourt, tracking)) }];
   return null;
 }
 

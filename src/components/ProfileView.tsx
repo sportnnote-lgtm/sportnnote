@@ -333,9 +333,12 @@ export function ProfileView({
               <Text style={st.sportIcon}>{getSport(b.sport as SportId).icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body}>{getSport(b.sport as SportId).name}</Text>
+                {/* SD-90: a measured sport (athletics) has races, not a W-D-L record */}
+                {b.sport !== 'athletics' && (
                 <Text style={textStyles.muted}>
                   {plural(b.matches, 'match', 'matches')} · {recordText(b)}
                 </Text>
+                )}
                 {summary ? (
                   <Text style={st.summaryLine}>{summary}{partial ? '  ☁' : ''}</Text>
                 ) : null}

@@ -256,7 +256,7 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
       ...scored,
       ...(gr ? { ended: true, startedAt: undefined } : null),
       seq: s.seq + 1,
-      events: [...s.events, { id: s.seq + 1, stamp: gr ? 'GR' : `${minute}'`, icon: gr ? '⚡' : type === 'RAID' ? '🤼' : '🛡️', label: gr ? `Golden Raid — ${kind} +${pts}` : type === 'RAID' ? `Raid +${pts}` : `Tackle +${pts}`, detail: who, side: a.side, kind, points: pts, playerName: who, minute, half: hf }],
+      events: [...s.events, { id: s.seq + 1, stamp: gr ? 'GR' : `${minute}'`, icon: gr ? '⚡' : type === 'RAID' ? '🤼' : '🛡️', label: gr ? `Golden Raid — ${kind} +${pts}` : type === 'RAID' ? `Raid +${pts}` : `Tackle +${pts}`, detail: who, side: a.side, kind, points: pts, playerName: who, ...(a.attribution?.playerId ? { playerId: a.attribution.playerId } : null), minute, half: hf }],
     };
   };
   switch (a.type) {

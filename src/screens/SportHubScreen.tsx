@@ -1,7 +1,7 @@
 /** A single sport within a tournament: its schedule, a shortcut to organize a
  *  game, the league table, and the statistics rail. Reached from the Home sport
  *  chips and from a tournament's sport list. */
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -16,6 +16,10 @@ import { columnsConfig } from '../data/standingsColumns';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { GolfTournamentHub } from '../components/golf/GolfTournamentHub';
+import { AthleticsHub } from '../components/athletics/AthleticsHub';
+import { canManageTournament } from '../core/org';
+import { useOrganizations } from '../data/hooks';
+import { getMyPlayerId } from '../data/repos';
 import { getSport } from '../sports/registry';
 import { useLeagueData, useDivisions, useTournamentById } from '../data/hooks';
 import { useAuth } from '../core/auth';
@@ -68,6 +72,23 @@ export default function SportHubScreen() {
       homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
       canScore,
     });
+
+  // SD-90: athletics is a programme of timed events (heats → final), not matches.
+  const orgs = useOrganizations();
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => { if (sport === 'athletics') void getMyPlayerId(profile?.id).then(setMe).catch(() => {}); }, [sport, profile?.id]);
+  if (sport === 'athletics') {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <ScrollView contentContainerStyle={st.content}>
+          <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={tournamentName} />
+          {tournament ? (
+            <AthleticsHub tournament={tournament} canOrganize={canOrganize(profile?.role) || canManageTournament(tournament, orgs, me)} />
+          ) : <Text style={textStyles.muted}>Loading…</Text>}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   // Golf stroke play / Stableford is a field event: rounds + one leaderboard.
   const golfFmt = sport === 'golf' ? (tournament?.formats?.golf as Record<string, unknown> | undefined) : undefined;

@@ -4,12 +4,23 @@
  */
 import type { Tournament } from '../core/types';
 
-export type SetupStep = { key: 'teams' | 'format' | 'schedule'; label: string; hint: string; done: boolean };
+export type SetupStep = { key: 'teams' | 'format' | 'schedule' | 'events'; label: string; hint: string; done: boolean };
 
-export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'participation'>, teamCount: number, matchCount: number): SetupStep[] {
+/** Sports run as timed events (no league / knockout format, no fixtures) — SD-90. */
+const EVENT_SPORTS = new Set(['athletics']);
+
+export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'participation'>, teamCount: number, matchCount: number, eventCount = 0): SetupStep[] {
   const individual = t.participation === 'individual';
   const formats = (t.formats ?? {}) as Record<string, Record<string, unknown> | undefined>;
-  const formatDone = matchCount > 0 || (t.sports.length > 0 && t.sports.every((s) => !!formats[s]?.structShape));
+  // SD-90: an athletics-only meet: houses / teams, then its events.
+  if (t.sports.length > 0 && t.sports.every((s) => EVENT_SPORTS.has(s))) {
+    return [
+      { key: 'teams', label: 'Add teams or houses', hint: 'Athletes score for them; relay teams come from them.', done: teamCount >= 2 },
+      { key: 'events', label: 'Add the events', hint: 'Each race with its category, athletes, rounds and lanes.', done: eventCount > 0 },
+    ];
+  }
+  const matchSports = t.sports.filter((s) => !EVENT_SPORTS.has(s));
+  const formatDone = matchCount > 0 || (matchSports.length > 0 && matchSports.every((s) => !!formats[s]?.structShape));
   return [
     { key: 'teams', label: individual ? 'Add players' : 'Add teams', hint: individual ? 'At least 2 players take part.' : 'At least 2 teams take part.', done: teamCount >= 2 },
     { key: 'format', label: 'Choose the format — league, groups or knockout', hint: 'Sets the points table and how fixtures are drawn.', done: formatDone },
@@ -20,5 +31,5 @@ export function setupChecklist(t: Pick<Tournament, 'sports' | 'formats' | 'parti
 /** The first sport still missing a format (the "format" step opens it). */
 export function firstSportWithoutFormat(t: Pick<Tournament, 'sports' | 'formats'>): string | undefined {
   const formats = (t.formats ?? {}) as Record<string, Record<string, unknown> | undefined>;
-  return t.sports.find((s) => !formats[s]?.structShape) ?? t.sports[0];
+  return t.sports.find((s) => !EVENT_SPORTS.has(s) && !formats[s]?.structShape) ?? t.sports.find((s) => !EVENT_SPORTS.has(s)) ?? t.sports[0];
 }

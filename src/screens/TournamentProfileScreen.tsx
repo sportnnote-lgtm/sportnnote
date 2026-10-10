@@ -39,6 +39,8 @@ import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat, pointsSystemLabel } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
 import { medalStandings } from '../data/medalStandings';
+import { useMeet } from '../data/useAthletics';
+import { meetFieldResults, meetSettings } from '../data/results';
 import { MedalTable } from '../components/MedalTable';
 import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
 import type { SportId } from '../core/types';
@@ -193,6 +195,9 @@ export default function TournamentProfileScreen() {
   };
 
   const sports = tournament?.sports ?? [];
+  // SD-90: athletics finals (results engine) feed the medal / house table too.
+  const hasAthletics = sports.includes('athletics');
+  const meet = useMeet(hasAthletics ? params.tournamentId : undefined);
   const [sport, setSport] = useState<SportId | null>(null);
   const activeSport = sport ?? sports[0];
 
@@ -217,10 +222,11 @@ export default function TournamentProfileScreen() {
     setSetupHidden(true);
     void AsyncStorage.setItem(`setupHidden:${params.tournamentId}`, '1').catch(() => {});
   };
-  const setupSteps = tournament ? setupChecklist(tournament, participants.length, matches.length) : [];
+  const setupSteps = tournament ? setupChecklist(tournament, participants.length, matches.length, meet.events.length) : [];
   const openSetupStep = (key: SetupStep['key']) => {
     if (!tournament) return;
     if (key === 'teams') nav.navigate('TournamentTeams', { tournamentId: tournament.id });
+    else if (key === 'events') nav.navigate('SportHub', { tournamentId: tournament.id, sport: 'athletics', tournamentName: tournament.name });
     else if (key === 'format') nav.navigate('SportSettings', { sport: firstSportWithoutFormat(tournament) as SportId, tournamentId: tournament.id });
     else {
       const amSport = tournament.sports.find((sp) => structureFromFormat(tournament.formats?.[sp])?.shape === 'americano');
@@ -311,9 +317,15 @@ export default function TournamentProfileScreen() {
   const overall = useMemo(() => overallStandings(matches, sports, tournament?.formats), [matches, sports, tournament?.formats]);
   // A medal meet ranks the overall table by position points, not match points.
   const isMedal = tournament?.scoring?.mode === 'position';
+  const fieldResults = useMemo(() => {
+    if (!hasAthletics) return [];
+    const cfg = meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined);
+    return meetFieldResults(meet.events, { positionPoints: cfg.positionPoints, relayFactor: cfg.relayFactor });
+  }, [hasAthletics, meet.events, tournament?.formats]);
+  const showMedal = (isMedal && sports.length > 1) || fieldResults.length > 0;
   const medal = useMemo(
-    () => (isMedal ? medalStandings(matches, sports, tournament?.scoring, tournament?.formats) : []),
-    [isMedal, matches, sports, tournament?.scoring, tournament?.formats],
+    () => (showMedal ? medalStandings(matches, isMedal ? sports : [], isMedal ? tournament?.scoring : { mode: 'position' }, tournament?.formats, fieldResults) : []),
+    [showMedal, isMedal, matches, sports, tournament?.scoring, tournament?.formats, fieldResults],
   );
   const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg, undefined, participants) : []), [matches, activeSport, stCfg, participants]);
   // Grouped tournaments show a table per group instead of one flat league table.
@@ -673,6 +685,18 @@ export default function TournamentProfileScreen() {
             {tournament.sports.map((sp) => {
               const fmt = tournament.formats?.[sp] as Record<string, unknown> | undefined;
               const cfg = structureFromFormat(fmt);
+              // SD-90: athletics is a programme of events, not a league / knockout.
+              if (sp === 'athletics') {
+                const ms = meetSettings(fmt);
+                return (
+                  <React.Fragment key={sp}>
+                    <HubRow icon="🏃" title="Athletics — events" status={meet.events.length ? `${meet.events.length} event${meet.events.length === 1 ? '' : 's'} · add, enter results` : 'None yet — add the first event'}
+                      onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: 'athletics', tournamentName: tournament.name })} />
+                    <HubRow icon="⚙" title="Athletics — points & timing" status={`${ms.positionPoints.join('-')}${ms.relayFactor !== 1 ? ` · relays ×${ms.relayFactor}` : ''}${ms.handTimed ? ' · hand-timed' : ''}`}
+                      onPress={() => nav.navigate('SportSettings', { sport: sp, tournamentId: tournament.id })} />
+                  </React.Fragment>
+                );
+              }
               return (
                 <HubRow key={sp} icon={getSport(sp).icon} title={`${getSport(sp).name} — format & points`}
                   status={`${cfg ? describeStructure(cfg) : 'Not set yet'} · ${pointsSystemLabel(sp, fmt)}`}
@@ -872,12 +896,14 @@ export default function TournamentProfileScreen() {
         {/* ------------------------------ STATS ------------------------------- */}
         {activeTab === 'Stats' && (
           <>
+            {!(singleSport && sports[0] === 'athletics') && (
             <Button
               label="📊 Standings & leaders"
               variant="ghost"
               onPress={() => nav.navigate('Standings', { tournamentId: tournament.id, ...(singleSport ? { sport: sports[0] } : {}) })}
             />
-            {tournament.structure !== 'league' && (
+            )}
+            {tournament.structure !== 'league' && !(singleSport && sports[0] === 'athletics') && (
               <Button
                 label="🏆 Knockout bracket"
                 variant="ghost"
@@ -886,10 +912,10 @@ export default function TournamentProfileScreen() {
             )}
 
             {/* Medal meet — overall ranked by position points across every sport. */}
-            {!singleSport && isMedal && (
+            {showMedal && (
               <>
                 <SectionHeader title="🏅 Medal table" count={medal.length} />
-                <Text style={textStyles.muted}>Position points from every sport, added up.</Text>
+                <Text style={textStyles.muted}>{isMedal ? 'Position points from every sport, added up.' : 'Position points from every athletics final, added up by house / team.'}</Text>
                 <MedalTable rows={medal} emptyLabel="No sport has a final table yet." />
               </>
             )}
@@ -934,7 +960,11 @@ export default function TournamentProfileScreen() {
             )}
             {/* One table per league phase (parity #07) — groups, Super phase, Swiss;
                 knockouts are never in a table (the bracket shows them). */}
-            {activeSport && phases.length > 0 ? (
+            {activeSport === 'athletics' ? (
+              // SD-90: athletics has no league table — its programme, leaders and records live on its page.
+              <Button label="🏃 Athletics results, leaders & records" variant="ghost"
+                onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: 'athletics', tournamentName: tournament.name })} />
+            ) : activeSport && phases.length > 0 ? (
               phases.map((ph) => (
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>
                   {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
@@ -949,14 +979,14 @@ export default function TournamentProfileScreen() {
               />
             ) : null}
 
-            {activeSport && categories.length > 0 && (
+            {activeSport && activeSport !== 'athletics' && categories.length > 0 && (
               <>
                 <Text style={[textStyles.h3, st.section]}>📈 {getSport(activeSport).name} leaders</Text>
                 <Text style={textStyles.muted}>Swipe for more →</Text>
                 <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
               </>
             )}
-            {activeSport ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}
+            {activeSport && activeSport !== 'athletics' ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}
           </>
         )}
 

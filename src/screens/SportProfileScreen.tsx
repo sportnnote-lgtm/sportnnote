@@ -24,6 +24,7 @@ import {
   disciplineRecords, partnerRecords, doublesMatchIds, historyStats, wlText,
 } from '../data/career';
 import { golfProfileSummary } from '../sports/golf/engine';
+import { AthleticsCareer } from '../components/athletics/AthleticsCareer';
 import { getMyPlayerId, getPlayerEditAccess, getTournaments, getStatLinesForMatches, getPlayerNames } from '../data/repos';
 import type { StatLine, Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
@@ -222,7 +223,11 @@ export default function SportProfileScreen() {
           <EmptyState icon={plugin.icon} title={emptyMsg} compact />
         ) : (
           <>
-            {sport === 'golf' ? (() => {
+            {schema?.careerView === 'measured' ? (
+              // SD-90 — a timed / measured career: PB / SB per event, medals,
+              // finals and the results history (it renders its own history).
+              <AthleticsCareer lines={history} />
+            ) : sport === 'golf' ? (() => {
               // Golf reads in rounds, scoring average and percentages — not
               // matches/wins or raw counters.
               const t = bySport.totals;
@@ -412,7 +417,7 @@ export default function SportProfileScreen() {
           )}
         </Card>
 
-        {history.length > 0 && (
+        {history.length > 0 && schema?.careerView !== 'measured' && (
           <>
             <Text style={[textStyles.h3, { marginTop: theme.spacing(2) }]}>Match history</Text>
             {history.map((l) => {

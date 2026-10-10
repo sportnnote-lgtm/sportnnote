@@ -51,6 +51,11 @@ export interface BasketballState {
    *  logs (events carry names only) — so minutes and +/- reach the right stat
    *  line. Absent on older logs. */
   ids?: Record<string, string>;
+  /** SD-31 (BK-03): "Track missed shots" (format key `trackMisses`) — the
+   *  scorer logs Miss 2 / Miss 3, so FGA / FG% / missed FG in EFF are known.
+   *  Only on the state when the stored config has the key (old matches keep
+   *  their exact state shape); absent / false = not tracked (D8). */
+  trackMisses?: boolean;
 }
 
 /** SD-29: merge name → id pairs into the state (only when a payload has any,
@@ -75,6 +80,7 @@ export const init = (config?: Record<string, unknown>): BasketballState => ({
   // SD-05 rule flags — present only when the stored config carries them.
   ...(config?.techIsTeamFoul != null ? { techIsTeamFoul: config.techIsTeamFoul === true } : {}),
   ...(config?.otFoulsCarry != null ? { otFoulsCarry: config.otFoulsCarry === true } : {}),
+  ...(config?.trackMisses != null ? { trackMisses: config.trackMisses === true } : {}),
 });
 
 /** Q1..Qn (or H1/H2 for a two-half game), then OT, OT2… for overtime periods. */
@@ -107,6 +113,16 @@ const inFoulPeriod = (s: BasketballState, q: number): boolean =>
  *  for technicals and `inFoulPeriod` for overtime). */
 export const teamFoulsThisQuarter = (s: BasketballState, side: 'home' | 'away'): number =>
   s.events.filter((e) => e.side === side && inFoulPeriod(s, e.quarter) && isTeamFoul(s, e)).length;
+/** SD-40 — team fouls per period for one side (the FIBA box score's line):
+ *  index 0 = period 1. Counts what `teamFoulsThisQuarter` counts (technicals
+ *  per the format), period by period — the OT carry-over is a bonus rule, not
+ *  a different tally. */
+export const teamFoulsByPeriod = (s: BasketballState, side: 'home' | 'away'): number[] => {
+  const n = Math.max(1, s.quarter, ...s.events.map((e) => e.quarter));
+  const out = Array.from({ length: n }, () => 0);
+  for (const e of s.events) if (e.side === side && isTeamFoul(s, e) && e.quarter >= 1) out[e.quarter - 1] += 1;
+  return out;
+};
 /** Timeouts a side has used so far (whole game). */
 export const timeoutsUsed = (s: BasketballState, side: 'home' | 'away'): number =>
   s.events.filter((e) => e.type === 'timeout' && e.side === side).length;
@@ -142,7 +158,17 @@ const push = (s: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, quarter: n
   events: [...s.events, { ...e, id: s.seq + 1, quarter }],
 });
 
+/** SD-40: newer controls put the credited player's id in `payload.pid` (events
+ *  carry names only), so `statTotals` can key every line by id. Merged only
+ *  when the play was logged — an older log (no pid) keeps its exact state. */
 export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => {
+  const next = reduce(s, a);
+  const pid = a.payload?.pid;
+  const name = a.attribution?.playerName;
+  return next !== s && typeof pid === 'string' && pid && name && next.ids?.[name] !== pid ? withIds(next, [[name, pid]]) : next;
+};
+
+const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
   if (s.ended && a.type !== 'END') return s;
   const minute = Number(a.payload?.minute ?? currentMinute(s));
   const quarter = Number(a.payload?.quarter ?? s.quarter);
@@ -167,7 +193,14 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
       const pts = Number(a.payload?.points ?? 0);
       // First-to-N games (3×3 to 21, streetball) end the moment the target is
       // reached with the required margin.
-      return scorePoints(a.side, pts, { minute, type: 'score', side: a.side, playerName: name, points: pts });
+      return scorePoints(a.side, pts, { minute, type: 'score', side: a.side, playerName: name, points: pts, ...(a.payload?.fga === true ? { fga: true as const } : {}) });
+    }
+    case 'MISS': {
+      // SD-31: a missed field goal (2 or 3; 3×3: 1 or 2) — logged for FGA /
+      // FG% / EFF only; the score doesn't move.
+      if (!a.side || isPlayerOut(s, name)) return s;
+      const pts = Number(a.payload?.points ?? 2);
+      return push(s, { minute, type: 'miss', side: a.side, playerName: name, points: pts }, quarter);
     }
     case 'FREE_THROW': {
       // One free-throw attempt. A make adds a point; a miss is logged for the

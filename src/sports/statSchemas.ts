@@ -21,6 +21,7 @@ import { tableTennisStats } from './tabletennis/stats.ts';
 import { chessStats } from './chess/stats.ts';
 import { carromStats } from './carrom/stats.ts';
 import { golfStats } from './golf/stats.ts';
+import { athleticsStats } from './athletics/stats.ts';
 
 export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   football: footballStats,
@@ -37,6 +38,7 @@ export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   chess: chessStats,
   carrom: carromStats,
   golf: golfStats,
+  athletics: athleticsStats,
 };
 
 export const STAT_SPORTS = Object.keys(STAT_SCHEMAS) as SportId[];
