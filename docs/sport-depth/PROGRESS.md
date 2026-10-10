@@ -2,6 +2,19 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-05 + SD-06: basketball FIBA rules; pickleball presets and right-court server — DONE (b6f8dfd, 2026-10-10)
+- **Basketball:**
+  - Built: bonus threshold fix in every preset, FIBA technicals as team fouls, OT foul carry-over, team-foul and BONUS lines, a one-tap "+1 FT", new tournaments at 2-1 (loss 1) plus the "Simple 2-1-0" preset.
+  - Not modelled: NBA 3 team fouls in OT, forfeit 0 points.
+  - Editing a pre-change match's format mid-game picks up the new defaults (existing app pattern).
+  - Bug noticed, not fixed: the play-by-play labels OT events "Q5" (`Timeline.tsx`).
+- **Pickleball:**
+  - Built: side-out tournament presets (D4), tournament default, start-right pick at 0-0, server derived from court position, correct call and credit, a court shown in rally mode.
+  - Not done: who serves first in game 2+ (PB-11), MLP freeze at 20 (PB-09), voice "rally home" credit in side-out mode.
+- No migration. Tests: 32 new · 914 total · legacy replays identical · demo 8093.
+- **Guides:** `score-basketball`, `score-pickleball`.
+- Demo data from these checks was left in the demo store.
+
 ## SD-04: volleyball point outcomes — DONE (1ee96f2, 2026-10-10)
 - **Built:** the Attack / Block / Ace / Opp. error / Opp. serve error panel, a pure volleyball engine, aces and blocks counting as points, editor point kinds, voice, and an MVP weight rebalance.
 - **Guide:** `score-volleyball`.
