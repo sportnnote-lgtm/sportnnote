@@ -171,7 +171,8 @@ export function titlesAndFinals(lines: StatLine[], matchById: Map<string, Match>
 
 export interface PartnerRecord extends WL { partnerId: string }
 
-/** SD-24 — doubles record per partner. The partner of a line is the other
+/** SD-24 — doubles record per partner (SD-118: doubles / mixed lines only —
+ *  needs the line context). The partner of a line is the other
  *  player on the same side of the same match: another stat line of that match
  *  on the same side (`matchLines`), else the side's two-player roster. Only
  *  matches with a result count; most-played partner first. */
@@ -185,8 +186,12 @@ export function partnerRecords(
   for (const l of matchLines) (byMatch.get(l.matchId) ?? byMatch.set(l.matchId, []).get(l.matchId)!).push(l);
   const out = new Map<string, PartnerRecord>();
   for (const l of lines) {
+    // SD-118 — only a doubles / mixed line of a sport that has a singles /
+    // doubles discipline (racket sports, carrom) has a partner. A team sport's
+    // 2-player team (a 2-a-side kabaddi / football squad that only named two
+    // players) is not a pair.
     const disc = ctxOf?.get(l.id)?.discipline?.key;
-    if (disc === 'singles') continue;
+    if (disc !== 'doubles' && disc !== 'mixed') continue;
     const m = matchById.get(l.matchId);
     if (!m || l.pending || !l.result || l.result === 'NR') continue;
     const side = ctxOf?.get(l.id)?.side ?? sideOf(l, m);

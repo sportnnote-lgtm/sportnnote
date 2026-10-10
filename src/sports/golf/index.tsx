@@ -194,6 +194,17 @@ export const golfPlugin: SportPlugin<GolfMatchState> = {
       options: [
         { value: 'countback', label: 'Countback (last 9/6/3/1)' },
         { value: 'shared', label: 'Shared' },
+        // SD-89 — a tie for first is "Playoff pending" until the host records the winner
+        { value: 'playoff', label: 'Playoff for 1st' },
+      ],
+    },
+    {
+      // SD-66 — Best Gross / Best Net boards side by side (stroke play with handicaps)
+      key: 'prizes', label: 'Gross + net prizes', type: 'choice', default: 'both', advanced: true,
+      hint: 'stroke play: can one player win both the gross and the net prize?',
+      options: [
+        { value: 'both', label: 'Can win both' },
+        { value: 'one', label: 'One prize each (gross first)' },
       ],
     },
     {

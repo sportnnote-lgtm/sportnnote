@@ -93,6 +93,7 @@ export const EVENT_CONTROLS: Partial<Record<SportId, MatchAction[]>> = {
   athletics: ['closePhase', 'finishEvent'],
   swimming: ['closePhase', 'finishEvent'],
   weightlifting: ['finishEvent'],
+  shooting: ['closePhase', 'finishEvent'],
 };
 
 /** Every control a scorer / host sees on a match's screen, in display order. */

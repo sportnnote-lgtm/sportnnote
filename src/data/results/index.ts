@@ -12,3 +12,4 @@ export * from './field.ts';
 export * from './swimming.ts';
 export * from './safety.ts';
 export * from './weightlifting.ts';
+export * from './shooting.ts';

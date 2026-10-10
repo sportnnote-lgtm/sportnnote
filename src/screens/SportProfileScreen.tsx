@@ -23,9 +23,10 @@ import {
   careerSections, recordFigure, winPctText, tileValueIsLong, bestWinRun, titlesAndFinals,
   disciplineRecords, partnerRecords, doublesMatchIds, historyStats, wlText,
 } from '../data/career';
-import { golfProfileSummary } from '../sports/golf/engine';
+import { golfProfileSummary, golfDetailSummary } from '../sports/golf/engine';
 import { AthleticsCareer } from '../components/athletics/AthleticsCareer';
 import { LiftingCareer } from '../components/results/LiftingCareer';
+import { ShootingCareer } from '../components/results/ShootingCareer';
 import { getMyPlayerId, getPlayerEditAccess, getTournaments, getStatLinesForMatches, getPlayerNames } from '../data/repos';
 import type { StatLine, Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
@@ -227,7 +228,7 @@ export default function SportProfileScreen() {
             {schema?.careerView === 'measured' ? (
               // SD-90 — a timed / measured career: PB / SB per event, medals,
               // finals and the results history (it renders its own history).
-              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : <AthleticsCareer lines={history} />
+              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : sport === 'shooting' ? <ShootingCareer lines={history} /> : <AthleticsCareer lines={history} />
             ) : sport === 'golf' ? (() => {
               // Golf reads in rounds, scoring average and percentages — not
               // matches/wins or raw counters.
@@ -255,6 +256,22 @@ export default function SportProfileScreen() {
                     <Stat value={pct(t.girHit ?? 0, t.girHoles ?? 0)} label="Greens (GIR)" tone="neutral" />
                     <Stat value={pct(t.firHit ?? 0, t.firHoles ?? 0)} label="Fairways" tone="neutral" />
                   </View>
+                  {/* SD-45 — from rounds kept with the stats row; older rounds
+                      are "not tracked" (the ☁ says over how many rounds) */}
+                  {(() => {
+                    const golfLines = stats.recent.filter((l) => l.sport === 'golf');
+                    const d = golfDetailSummary(golfLines);
+                    const total = golfLines.length;
+                    if (!d.scrambling.rounds && !d.sandSaves.rounds) return null;
+                    const cov = (rounds: number) => (rounds < total ? { tracked: rounds, total } : undefined);
+                    return (
+                      <View style={st.statGrid}>
+                        <Stat value={pct(d.scrambling.num, d.scrambling.den)} label="Scrambling" tone="neutral" coverage={cov(d.scrambling.rounds)} />
+                        <Stat value={pct(d.sandSaves.num, d.sandSaves.den)} label="Sand saves" tone="neutral" coverage={cov(d.sandSaves.rounds)} />
+                        <Stat value={d.puttsPerGir.den ? (d.puttsPerGir.num / d.puttsPerGir.den).toFixed(2) : '–'} label="Putts per GIR" tone="neutral" coverage={cov(d.puttsPerGir.rounds)} />
+                      </View>
+                    );
+                  })()}
                 </>
               );
             })() : (

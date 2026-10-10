@@ -350,8 +350,8 @@ describe('archery / shooting: 10s then X (inner tens), shoot-off', () => {
     const so = rankEntries([en('x', { mark: 600, tens: 10, xs: 2, decider: 2 }), en('y', { mark: 600, tens: 10, xs: 2, decider: 1 })], ARCH);
     assert.deepEqual(labels(so), ['1:y', '2:x']);
   });
-  test('shooting: decimal totals at 0.1, inner tens break the tie', () => {
-    const rows = rankEntries([en('a', { mark: 628.4, tens: 40 }), en('b', { mark: 628.4, tens: 44 }), en('c', { mark: 629.0, tens: 30 })], SHOOT);
+  test('shooting: decimal totals at 0.1; SD-96 (ISSF): equal decimal totals → the last series back, not inner tens', () => {
+    const rows = rankEntries([en('a', { mark: 628.4, series: [314.2, 314.2] }), en('b', { mark: 628.4, series: [314.0, 314.4] }), en('c', { mark: 629.0, tens: 30 })], SHOOT);
     assert.deepEqual(labels(rows), ['1:c', '2:b', '3:a']);
     assert.equal(rows[0].bestText, '629.0');
   });

@@ -4,7 +4,9 @@
  *  See docs/sports/GOLF_DESIGN.md §6. */
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { confirmMatchAction } from '../components/ConfirmSheet';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { confirmMatchAction, askConfirm } from '../components/ConfirmSheet';
+import { GolfEntryAdminSheet } from '../components/golf/GolfEntryAdminSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import { useKeepAwakeWhile } from '../core/keepAwake';
@@ -21,13 +23,22 @@ import { getMyPlayerId } from '../data/repos';
 import { useGolfRounds } from '../data/useGolf';
 import {
   golfFormatOf, roundContext, cardOf, saveCard, buildLeaderboard, completeRound, setFieldEventStatus, pendingCardCount,
+  setEntryAdmin, updateFieldEntry, removeFieldEntry, updateFieldEventFormat, entryStatusOf, entryAdminOf, adminLabel, withAdmin, prizeBoards,
+  getFieldEntries,
 } from '../data/golf';
-import { summarize, toParLabel, cardSigned, clampPutts, MAX_HOLE_STROKES, type GolfCard, type HoleScore } from '../sports/golf/engine';
+import {
+  summarize, toParLabel, cardSigned, clampPutts, cardHasDetail, derivedGir, MAX_HOLE_STROKES,
+  type GolfCard, type HoleScore, type EntryAdmin, type FairwayDir,
+} from '../sports/golf/engine';
 import type { FieldEntry } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+/** SD-45 (D8) — the per-hole stats row is off by default and remembered per
+ *  scorer (this phone), like the other detail modes. */
+const STATS_ROW_KEY = 'sportfolio.golfStatsRow.v1';
 
 export default function GolfRoundScreen() {
   const nav = useNavigation<Nav>();
@@ -43,6 +54,16 @@ export default function GolfRoundScreen() {
   const [group, setGroup] = useState<number | null>(null);
   const [hole, setHole] = useState(0);
   const [trackPutts, setTrackPutts] = useState(false);
+  const [statsRow, setStatsRow] = useState(false);
+  const [adminFor, setAdminFor] = useState<string | null>(null); // SD-35 entry id
+  useEffect(() => {
+    AsyncStorage.getItem(STATS_ROW_KEY).then((v) => { if (v === '1') setStatsRow(true); }).catch(() => {});
+  }, []);
+  const toggleStatsRow = () => {
+    const next = !statsRow;
+    setStatsRow(next);
+    AsyncStorage.setItem(STATS_ROW_KEY, next ? '1' : '0').catch(() => {});
+  };
   const [local, setLocal] = useState<Map<string, GolfCard>>(new Map()); // optimistic cards
   const [pendingSync, setPendingSync] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +87,13 @@ export default function GolfRoundScreen() {
     return m;
   }, [ev, course, entries]);
 
-  const board = useMemo(() => {
-    if (!ev || !course) return [];
-    const merged = entries.map((e) => (local.has(e.id) ? { ...e, result: local.get(e.id) } : e));
-    return buildLeaderboard([ev], merged, [course]);
-  }, [ev, course, entries, local]);
+  const merged = useMemo(() => entries.map((e) => (local.has(e.id) ? { ...e, result: local.get(e.id) } : e)), [entries, local]);
+  const board = useMemo(() => (ev && course ? buildLeaderboard([ev], merged, [course]) : []), [ev, course, merged]);
+  // SD-66 — Best Gross / Best Net side by side (stroke play with handicaps)
+  const prizes = useMemo(() => {
+    if (!ev || !course || golfFormatOf(ev).scoring !== 'stroke' || !entries.some((e) => e.handicapIndex != null)) return null;
+    return prizeBoards(buildLeaderboard([ev], merged, [course], { net: false }), buildLeaderboard([ev], merged, [course], { net: true }), undefined, golfFormatOf(ev).prizes);
+  }, [ev, course, merged, entries]);
 
   // Title + a Share button that sends the current top of the leaderboard.
   useEffect(() => {
@@ -113,7 +136,7 @@ export default function GolfRoundScreen() {
     tapFeedback(); // SD-110
     const n = holes.length;
     const cur = cardFor(e, n);
-    const card: GolfCard = { ...cur, strokes: [...cur.strokes] };
+    const card: GolfCard = withDetail({ ...cur, strokes: [...cur.strokes] }, n);
     card.strokes[hole] = value;
     if (putts !== undefined) {
       card.putts = [...(cur.putts ?? new Array(n).fill(null))];
@@ -130,6 +153,85 @@ export default function GolfRoundScreen() {
     setLocal((m) => new Map(m).set(e.id, card));
     try { setPendingSync(await saveCard(e.id, card)); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
+  };
+
+  // SD-45 — in stats mode a card carries the stats-row arrays (so GIR,
+  // scrambling … are derived from it); older / non-stats cards stay as they are.
+  function withDetail(card: GolfCard, n: number): GolfCard {
+    if (!statsRow || cardHasDetail(card)) return card;
+    return { ...card, firDir: new Array(n).fill(null), bunker: new Array(n).fill(null) };
+  }
+  const setDetail = async (e: FieldEntry, patch: (c: GolfCard, n: number) => GolfCard) => {
+    if (!canMark || ev.status === 'completed') return;
+    tapFeedback();
+    const n = holes.length;
+    const card = patch(withDetail({ ...cardFor(e, n) }, n), n);
+    setLocal((m) => new Map(m).set(e.id, card));
+    try { setPendingSync(await saveCard(e.id, card)); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
+  };
+  const setFairway = (e: FieldEntry, d: FairwayDir) => setDetail(e, (c, n) => {
+    const firDir = [...(c.firDir ?? new Array(n).fill(null))];
+    firDir[hole] = firDir[hole] === d ? null : d;
+    return { ...c, firDir };
+  });
+  const toggleBunker = (e: FieldEntry) => setDetail(e, (c, n) => {
+    const bunker = [...(c.bunker ?? new Array(n).fill(null))];
+    bunker[hole] = bunker[hole] ? null : true;
+    return { ...c, bunker };
+  });
+  const stepPenalty = (e: FieldEntry, by: 1 | -1) => setDetail(e, (c, n) => {
+    const penalties = [...(c.penalties ?? new Array(n).fill(null))];
+    const next = Math.max(0, (penalties[hole] ?? 0) + by);
+    penalties[hole] = next || null;
+    return { ...c, penalties };
+  });
+
+  /* ---------------------- SD-35 entry admin (organiser) --------------------- */
+  const adminEntry = adminFor ? entries.find((e) => e.id === adminFor) : undefined;
+  const openAdminForPlayer = (playerId: string) => {
+    const e = entries.find((x) => x.playerId === playerId);
+    if (e && isHost) setAdminFor(e.id);
+  };
+  const saveAdmin = async (e: FieldEntry, admin: EntryAdmin | null) => {
+    const n = holes.length;
+    const res = withAdmin(cardFor(e, n), admin, ev.status === 'completed');
+    setLocal((m) => new Map(m).set(e.id, res.card));
+    setPendingSync(await setEntryAdmin({ ...e, result: cardFor(e, n) }, n, admin, ev.status === 'completed'));
+    await reload();
+  };
+  // A closed round's stat lines and winner are rewritten after a change.
+  const refinish = async () => {
+    const fresh = await getFieldEntries([ev.id]);
+    await completeRound(ev, fresh, course);
+  };
+  const saveHandicap = async (e: FieldEntry, index: number | undefined) => {
+    await updateFieldEntry(e.id, { handicapIndex: index ?? null });
+    if (ev.status === 'completed') await refinish();
+    await reload();
+  };
+  const removeEntry = async (e: FieldEntry) => {
+    setAdminFor(null);
+    const ok = await askConfirm({
+      title: `Remove ${nameOf(e.playerId)}?`,
+      message: `Their card for this round${cardFor(e, holes.length).strokes.some((x) => x != null) ? ' (and every score on it)' : ''} is deleted. To keep the scores, mark them WD instead.`,
+      yesLabel: 'Yes, remove', noLabel: 'No, keep them', tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await removeFieldEntry(e.id);
+      setLocal((m) => { const x = new Map(m); x.delete(e.id); return x; });
+      if (ev.status === 'completed') await refinish();
+      await reload();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not remove'); }
+  };
+  // SD-89 — the host records who won the playoff for first
+  const setPlayoffWinner = async (playerId: string | null) => {
+    try {
+      await updateFieldEventFormat(ev.id, { playoffWinner: playerId ?? '' });
+      if (ev.status === 'completed') { const fresh = await getFieldEntries([ev.id]); await completeRound({ ...ev, format: { ...ev.format, playoffWinner: playerId ?? '' } }, fresh, course); }
+      await reload();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
   };
 
   // SD-116: in stroke play a pick-up makes the whole card a no return (NR), so
@@ -256,11 +358,35 @@ export default function GolfRoundScreen() {
               const runLabel = fmt.scoring === 'stableford' ? `${sum.stableford} pts` : toParLabel(fmt.net ? sum.netToPar : sum.toPar);
               const par = h.par;
               const set = (x: HoleScore) => void setStroke(e, x);
+              // SD-35 — a withdrawn / disqualified / DNS player's card is closed
+              const est = entryStatusOf({ ...e, result: card });
+              const out = est === 'wd' || est === 'dq' || est === 'dns' || est === 'dnf';
+              const adm = entryAdminOf({ ...e, result: card });
+              const adminBtn = isHost ? (
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Entry admin for ${nameOf(e.playerId)}: withdraw, disqualify, handicap or remove`} hitSlop={8} onPress={() => setAdminFor(e.id)} style={st.moreBtn}>
+                  <Text style={st.moreTxt}>⋯</Text>
+                </TouchableOpacity>
+              ) : null;
+              if (out) {
+                return (
+                  <Card key={e.id} style={{ gap: theme.spacing(1) }}>
+                    <View style={st.headRow}>
+                      <Text style={[textStyles.body, st.bold, { flex: 1 }]} numberOfLines={1}>{nameOf(e.playerId)}</Text>
+                      <Pill label={est.toUpperCase()} color={theme.colors.surfaceAlt} textColor={theme.colors.danger} />
+                      {adminBtn}
+                    </View>
+                    <Text style={textStyles.muted}>{adm ? adminLabel(adm) : est.toUpperCase()} · {est === 'dns' ? 'did not start' : 'no score returned'}{isHost ? ' — ⋯ to reinstate' : ''}</Text>
+                  </Card>
+                );
+              }
+              const pv = card.putts?.[hole];
+              const gir = derivedGir(v, pv, par);
               return (
                 <Card key={e.id} style={{ gap: theme.spacing(2) }}>
                   <View style={st.headRow}>
                     <Text style={[textStyles.body, st.bold, { flex: 1 }]} numberOfLines={1}>{nameOf(e.playerId)}{recv > 0 ? `  ${'•'.repeat(recv)}` : ''}</Text>
                     <Text style={textStyles.muted}>{runLabel} · thru {sum.thru}</Text>
+                    {adminBtn}
                   </View>
                   <View style={st.scoreRow}>
                     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`One fewer stroke for ${nameOf(e.playerId)}`} disabled={!canMark} onPress={() => set(typeof v === 'number' ? Math.max(1, v - 1) : par - 1)} style={st.stepBtn}>
@@ -279,9 +405,8 @@ export default function GolfRoundScreen() {
                     <SelectChip label={fmt.scoring === 'stableford' ? 'Pick up' : 'Pick up (NR)'} active={v === 'P'} onPress={() => canMark && void pickUp(e, v)} />
                     {v != null && <SelectChip label="Clear…" active={false} onPress={() => canMark && void clearHole(e)} />}
                   </View>
-                  {trackPutts && typeof v === 'number' && (() => {
+                  {(trackPutts || statsRow) && typeof v === 'number' && (() => {
                     // SD-117c — 0–4 as chips, then "5+" steps up; never more than the strokes
-                    const pv = card.putts?.[hole];
                     const high = typeof pv === 'number' && pv >= 5;
                     return (
                       <View style={st.tabs}>
@@ -296,6 +421,25 @@ export default function GolfRoundScreen() {
                       </View>
                     );
                   })()}
+                  {/* SD-45 — the stats row: fairway (par 4 / 5), greenside bunker,
+                      penalty strokes; GIR from strokes − putts ≤ par − 2 */}
+                  {statsRow && typeof v === 'number' && (
+                    <View style={st.tabs}>
+                      {par >= 4 && (
+                        <>
+                          <Text style={textStyles.muted}>FW</Text>
+                          {(['L', 'hit', 'R'] as FairwayDir[]).map((d) => (
+                            <SelectChip key={d} label={d === 'L' ? '◀ L' : d === 'R' ? 'R ▶' : '✓'} active={card.firDir?.[hole] === d}
+                              onPress={() => canMark && void setFairway(e, d)} />
+                          ))}
+                        </>
+                      )}
+                      <SelectChip label="⛱ Bunker" active={card.bunker?.[hole] === true} onPress={() => canMark && void toggleBunker(e)} />
+                      <SelectChip label={`Pen ${card.penalties?.[hole] ?? 0}`} active={(card.penalties?.[hole] ?? 0) > 0} onPress={() => canMark && void stepPenalty(e, 1)} />
+                      {(card.penalties?.[hole] ?? 0) > 0 && <SelectChip label="−" active={false} onPress={() => canMark && void stepPenalty(e, -1)} />}
+                      <Text style={[textStyles.muted, gir && st.girHit]}>{gir == null ? 'GIR: add putts' : gir ? 'GIR ✓' : 'GIR ✗'}</Text>
+                    </View>
+                  )}
                   {/* SD-117c (Rule 3.3b) — certify the card once every hole has a score */}
                   {sum.thru >= holes.length ? (
                     <View style={st.tabs}>
@@ -308,7 +452,11 @@ export default function GolfRoundScreen() {
               );
             })}
 
-            <SelectChip label={trackPutts ? '✓ Tracking putts' : 'Track putts'} active={trackPutts} onPress={() => setTrackPutts(!trackPutts)} />
+            <View style={st.tabs}>
+              <SelectChip label={trackPutts || statsRow ? '✓ Tracking putts' : 'Track putts'} active={trackPutts || statsRow} onPress={() => !statsRow && setTrackPutts(!trackPutts)} />
+              {/* SD-45 — remembered on this phone; off by default (D8) */}
+              <SelectChip label={statsRow ? '✓ Stats: fairway · bunker · penalties' : 'Stats: fairway · bunker · penalties'} active={statsRow} onPress={toggleStatsRow} />
+            </View>
             {hole < holes.length - 1 && <Button label={`Next: hole ${holes[hole + 1].n} ▶`} onPress={() => setHole(hole + 1)} />}
             {ev.status === 'live' && isHost && <Button label={busy ? 'Finishing…' : '🏁 Finish the round'} variant="ghost" onPress={() => void finish()} disabled={busy} />}
           </>
@@ -316,16 +464,66 @@ export default function GolfRoundScreen() {
 
         {tab === 'board' && (
           <>
-            <GolfLeaderboard rows={board} scoring={fmt.scoring} nameOf={nameOf} cards={lbCards} holesInRound={holes.length} />
+            <GolfLeaderboard rows={board} scoring={fmt.scoring} nameOf={nameOf} cards={lbCards} holesInRound={holes.length}
+              onLongPressRow={isHost ? openAdminForPlayer : undefined} />
             <Text style={textStyles.muted}>
-              {fmt.scoring === 'stableford' ? 'Most points wins.' : `Lowest ${fmt.net ? 'net ' : ''}score to par wins.`} Ties: {fmt.tieBreak === 'countback' ? 'countback on the last 9, 6, 3, 1 holes' : 'shared'}. Tap a player to see their card.
+              {fmt.scoring === 'stableford' ? 'Most points wins.' : `Lowest ${fmt.net ? 'net ' : ''}score to par wins.`} Ties: {fmt.tieBreak === 'countback' ? 'countback on the last 9, 6, 3, 1 holes' : fmt.tieBreak === 'playoff' ? 'a playoff for first; other places shared' : 'shared'}. Tap a player to see their card{isHost ? '; long-press for WD / DQ / DNS, handicap or remove' : ''}.
             </Text>
+            {/* SD-89 — the host records the playoff winner */}
+            {fmt.tieBreak === 'playoff' && board.some((r) => r.playoff) && (
+              <Card style={{ gap: theme.spacing(2) }}>
+                <Text style={[textStyles.body, st.bold]}>🏌️ Playoff for 1st</Text>
+                {board.some((r) => r.playoff === 'pending')
+                  ? <Text style={textStyles.muted}>Tied for first — {board.filter((r) => r.playoff).map((r) => nameOf(r.id)).join(' / ')}. {isHost ? 'Who won the playoff?' : 'Playoff pending.'}</Text>
+                  : <Text style={textStyles.muted}>Won by {nameOf(board.find((r) => r.playoff === 'won')!.id)}.</Text>}
+                {isHost && (
+                  <View style={st.tabs}>
+                    {board.filter((r) => r.playoff).map((r) => (
+                      <SelectChip key={r.id} label={nameOf(r.id)} active={r.playoff === 'won'} onPress={() => void setPlayoffWinner(r.playoff === 'won' ? null : r.id)} />
+                    ))}
+                  </View>
+                )}
+              </Card>
+            )}
+            {/* SD-66 — Best Gross / Best Net side by side */}
+            {prizes && (prizes.gross.length > 0 || prizes.net.length > 0) && (
+              <View style={st.prizes}>
+                {([['Best gross', prizes.gross], ['Best net', prizes.net]] as const).map(([title, rows]) => (
+                  <Card key={title} style={[st.prizeCol, { gap: theme.spacing(1) }]}>
+                    <Text style={[textStyles.body, st.bold]}>{title}</Text>
+                    {rows.length ? rows.map((r) => (
+                      <View key={r.id} style={st.headRow}>
+                        <Text style={st.prizePos}>{r.positionLabel}</Text>
+                        <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{nameOf(r.id)}</Text>
+                        <Text style={st.prizeScore}>{toParLabel(r.total)}</Text>
+                      </View>
+                    )) : <Text style={textStyles.muted}>—</Text>}
+                  </Card>
+                ))}
+              </View>
+            )}
+            {prizes && prizes.gross.length > 0 && fmt.prizes === 'one' ? <Text style={textStyles.muted}>One prize per player: a gross prize-winner is left off the net board.</Text> : null}
             {ev.status === 'completed' && ev.tournamentId && isHost && (
               <Button label="＋ Set up the next round" variant="ghost" onPress={() => nav.navigate('GolfRoundSetup', { tournamentId: ev.tournamentId, nextOf: ev.id })} />
             )}
           </>
         )}
       </ScrollView>
+      {adminEntry && (
+        <GolfEntryAdminSheet
+          visible={!!adminEntry}
+          name={nameOf(adminEntry.playerId)}
+          status={entryStatusOf({ ...adminEntry, result: cardFor(adminEntry, holes.length) })}
+          admin={entryAdminOf({ ...adminEntry, result: cardFor(adminEntry, holes.length) })}
+          thru={summarize(cardFor(adminEntry, holes.length), holes, ctxByEntry.get(adminEntry.id)?.received ?? []).thru}
+          handicapIndex={adminEntry.handicapIndex ?? undefined}
+          roundState={ev.status === 'completed' ? 'completed' : ev.status === 'live' ? 'live' : 'scheduled'}
+          onClose={() => setAdminFor(null)}
+          onStatus={(a) => saveAdmin(adminEntry, a)}
+          onHandicap={(i) => saveHandicap(adminEntry, i)}
+          onRemove={() => void removeEntry(adminEntry)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -356,4 +554,11 @@ const st = StyleSheet.create({
   under: { color: theme.colors.primary },
   over: { color: theme.colors.accent },
   unsigned: { color: theme.colors.accent, fontWeight: '800' },
+  moreBtn: { paddingHorizontal: theme.spacing(2), paddingVertical: 2 },
+  moreTxt: { color: theme.colors.primary, fontSize: 22, fontWeight: '900' },
+  girHit: { color: theme.colors.primary, fontWeight: '800' },
+  prizes: { flexDirection: 'row', gap: theme.spacing(2) },
+  prizeCol: { flex: 1 },
+  prizeScore: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.small },
+  prizePos: { width: 26, color: theme.colors.textMuted, fontWeight: '800', fontSize: theme.font.small },
 });

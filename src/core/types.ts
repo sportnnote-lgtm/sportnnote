@@ -25,6 +25,7 @@ export type SportId =
   | 'hockey'
   | 'swimming'
   | 'weightlifting'
+  | 'shooting'
   | 'handball';
 
 /** `support` is the internal support/admin role — it can review verification

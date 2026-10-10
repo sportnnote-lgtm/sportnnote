@@ -6,8 +6,8 @@
  */
 import type { FieldEntry, FieldEvent, GolfCourse } from '../core/types.ts';
 import {
-  holesFor, courseHandicap, playingHandicap, strokesReceived, rankLeaderboard, emptyCard,
-  type GolfCard, type GolfFormat, type HoleSet, type RankRow, type Hole,
+  holesFor, courseHandicap, playingHandicap, strokesReceived, rankLeaderboard, emptyCard, summarize,
+  type GolfCard, type GolfFormat, type HoleSet, type RankRow, type Hole, type EntryStatus, type EntryAdmin,
 } from '../sports/golf/engine.ts';
 
 /* -------------------------------- format -------------------------------- */
@@ -18,7 +18,14 @@ export interface GolfRoundFormat extends GolfFormat {
   tee?: string;
   /** rank by net (handicap) scores in stroke play */
   net: boolean;
-  tieBreak: 'countback' | 'shared';
+  /** 'playoff' (SD-89): a tie for first is shared until the host records the
+   *  playoff winner (`format.playoffWinner`); other ties are shared */
+  tieBreak: 'countback' | 'shared' | 'playoff';
+  /** SD-66 — gross + net prizes: 'one' = a player takes one prize only (the
+   *  gross prize first); 'both' (default) = they can win both */
+  prizes: 'both' | 'one';
+  /** SD-89 — the player who won the playoff for first */
+  playoffWinner?: string;
 }
 
 export function golfFormatOf(ev: Pick<FieldEvent, 'format'>): GolfRoundFormat {
@@ -31,9 +38,56 @@ export function golfFormatOf(ev: Pick<FieldEvent, 'format'>): GolfRoundFormat {
     courseId: String(f.courseId ?? ''),
     tee: typeof f.tee === 'string' ? f.tee : undefined,
     net: f.net === true || f.netScoring === 'net',
-    tieBreak: f.tieBreak === 'shared' ? 'shared' : 'countback',
+    tieBreak: f.tieBreak === 'shared' ? 'shared' : f.tieBreak === 'playoff' ? 'playoff' : 'countback',
+    prizes: f.prizes === 'one' ? 'one' : 'both',
+    playoffWinner: typeof f.playoffWinner === 'string' && f.playoffWinner ? f.playoffWinner : undefined,
   };
 }
+
+/* ----------------------------- entry admin ------------------------------ */
+
+/** "12.4" → 12.4; "+2.1" (a plus handicap) → −2.1; '' → undefined. WHS
+ *  range: up to 54.0 (and plus handicaps), one decimal. */
+export const parseIndex = (s: string): number | undefined => {
+  const t = s.trim();
+  if (!t) return undefined;
+  const plus = t.startsWith('+');
+  const n = Number(t.replace('+', ''));
+  if (!Number.isFinite(n) || n < 0 || n > 54 || (plus && n > 10)) return undefined;
+  const r = Math.round(n * 10) / 10;
+  return plus ? (r === 0 ? 0 : -r) : r;
+};
+/** −2.1 → "+2.1"; undefined → ''. */
+export const showIndex = (n?: number | null) => (n == null ? '' : n < 0 ? `+${Math.abs(n)}` : String(n));
+
+/** SD-35 — the organiser's admin note on an entry's card, if any. */
+export const entryAdminOf = (entry: Pick<FieldEntry, 'result' | 'status'>): EntryAdmin | undefined => {
+  const a = (entry.result as GolfCard | null)?.admin;
+  return a && (a.status === 'wd' || a.status === 'dq' || a.status === 'dns') ? a : undefined;
+};
+
+/** SD-35 — the entry's status for ranking: a DNS is stored as `wd` (the
+ *  status column has no 'dns') with `admin.status: 'dns'` on the card. */
+export function entryStatusOf(entry: Pick<FieldEntry, 'result' | 'status'>): EntryStatus {
+  const a = entryAdminOf(entry);
+  if (entry.status === 'wd' && a?.status === 'dns') return 'dns';
+  return entry.status;
+}
+
+/** SD-35 — the card + status column for an admin change. `null` reinstates
+ *  the player (playing; finished once the round is closed). A DNS is stored
+ *  as `wd`. Pure: the caller saves both in one write. */
+export function withAdmin(card: GolfCard, admin: EntryAdmin | null, roundCompleted = false): { card: GolfCard; status: FieldEntry['status'] } {
+  const { admin: _old, ...rest } = card;
+  if (!admin) return { card: rest, status: roundCompleted ? 'finished' : 'playing' };
+  const reason = admin.reason?.trim();
+  const a: EntryAdmin = { status: admin.status, ...(reason ? { reason } : {}), ...(admin.thru != null ? { thru: admin.thru } : {}) };
+  return { card: { ...rest, admin: a }, status: admin.status === 'dq' ? 'dq' : 'wd' };
+}
+
+/** "WD — injury" / "DQ (Rule 3.3b)" / "DNS" — the leaderboard's note. */
+export const adminLabel = (a: EntryAdmin): string =>
+  `${a.status.toUpperCase()}${a.status === 'wd' && a.thru ? ` after ${a.thru}` : ''}${a.reason ? ` — ${a.reason}` : ''}`;
 
 /* ----------------------------- computations ----------------------------- */
 
@@ -66,28 +120,43 @@ export const cardOf = (entry: FieldEntry, holes: number): GolfCard => {
  * Players who went further rank above those cut earlier (54-hole MC above
  * 36-hole MC). WD / DQ / NR keep their own labels at the bottom.
  */
-export function buildLeaderboard(events: FieldEvent[], entries: FieldEntry[], courses: GolfCourse[]): RankRow[] {
+export function buildLeaderboard(events: FieldEvent[], entries: FieldEntry[], courses: GolfCourse[], override: { net?: boolean } = {}): RankRow[] {
   if (!events.length) return [];
   const ordered = [...events].sort((a, b) => a.roundNo - b.roundNo);
   const last = golfFormatOf(ordered[ordered.length - 1]);
-  const byPlayer = new Map<string, { status: FieldEntry['status']; lastRound: number; rounds: { card: GolfCard; holes: Hole[]; received: number[] }[] }>();
+  const notes = new Map<string, string>();
+  const byPlayer = new Map<string, { status: EntryStatus; lastRound: number; rounds: { card: GolfCard; holes: Hole[]; received: number[] }[] }>();
   let latestRound = 0;
   for (const ev of ordered) {
     const course = courses.find((c) => c.id === golfFormatOf(ev).courseId);
     if (!course) continue;
     for (const en of entries.filter((e) => e.eventId === ev.id)) {
       const ctx = roundContext(ev, course, en);
-      const row = byPlayer.get(en.playerId) ?? { status: en.status, lastRound: 0, rounds: [] };
+      const status = entryStatusOf(en);
+      const row = byPlayer.get(en.playerId) ?? { status, lastRound: 0, rounds: [] };
       row.rounds.push({ card: cardOf(en, ctx.holes.length), holes: ctx.holes, received: ctx.received });
-      row.status = en.status;
+      row.status = status;
+      const a = entryAdminOf(en);
+      if (a?.reason) notes.set(en.playerId, a.reason); else notes.delete(en.playerId);
       row.lastRound = Math.max(row.lastRound, ev.roundNo);
       latestRound = Math.max(latestRound, ev.roundNo);
       byPlayer.set(en.playerId, row);
     }
   }
-  const opts = { scoring: last.scoring, net: last.net, tieBreak: last.tieBreak };
+  // SD-89 — a playoff ranks like "shared" until the winner is recorded
+  const opts = { scoring: last.scoring, net: override.net ?? last.net, tieBreak: last.tieBreak === 'countback' ? 'countback' as const : 'shared' as const };
   const players = [...byPlayer.entries()].map(([id, r]) => ({ id, status: r.status, rounds: r.rounds, lastRound: r.lastRound }));
-  const board = rankLeaderboard(players.filter((p) => p.lastRound === latestRound), opts);
+  let board = rankLeaderboard(players.filter((p) => p.lastRound === latestRound), opts);
+  // SD-35 — the organiser's reason on WD / DQ / DNS rows (only when there is one)
+  if (notes.size) board = board.map((r) => (r.position == null && notes.has(r.id) ? { ...r, note: notes.get(r.id) } : r));
+  if (last.tieBreak === 'playoff') {
+    // only a tie between finished cards goes to a playoff
+    const done = (id: string) => {
+      const rd = byPlayer.get(id)?.rounds.at(-1);
+      return !!rd && summarize(rd.card, rd.holes, rd.received).thru >= rd.holes.length;
+    };
+    board = applyPlayoff(board, last.playoffWinner, done);
+  }
   const cutRounds = [...new Set(players.filter((p) => p.lastRound < latestRound).map((p) => p.lastRound))].sort((a, b) => b - a);
   if (!cutRounds.length) return board;
   // Missed the cut: ranked among themselves only to ORDER them, per cut stage.
@@ -100,4 +169,75 @@ export function buildLeaderboard(events: FieldEvent[], entries: FieldEntry[], co
     }
   }
   return [...board.filter((r) => r.position != null), ...mc, ...board.filter((r) => r.position == null), ...mcOut];
+}
+
+/* ---------------------------- SD-89 playoff ----------------------------- */
+
+/** A tie for first under the playoff tie-break (once every tied card is
+ *  complete): "Playoff pending" until the host records the winner; then the winner is 1 and the other(s) share 2nd
+ *  (a sudden-death playoff only decides the winner). Other places unchanged. */
+export function applyPlayoff(board: RankRow[], winner?: string, complete: (id: string) => boolean = () => true): RankRow[] {
+  const top = board.filter((r) => r.position === 1);
+  if (top.length < 2 || !top.every((r) => complete(r.id))) return board;
+  if (!winner || !top.some((r) => r.id === winner)) return board.map((r) => (r.position === 1 ? { ...r, playoff: 'pending' as const } : r));
+  const losers = top.length - 1;
+  const w = top.find((r) => r.id === winner)!;
+  const rest = board.filter((r) => r.position !== 1);
+  const lost = top.filter((r) => r.id !== winner).map((r) => ({ ...r, position: 2, positionLabel: losers > 1 ? 'T2' : '2', playoff: 'lost' as const }));
+  return [{ ...w, positionLabel: '1', playoff: 'won' as const }, ...lost, ...rest];
+}
+
+/* ----------------------- SD-42 round-by-round columns -------------------- */
+
+export interface RoundCell {
+  /** strokes over the holes played (a pickup leaves that hole out) */
+  gross: number;
+  toPar: number;
+  thru: number;
+  holes: number;
+  /** a pickup in stroke play: no return for the round */
+  noReturn: boolean;
+}
+
+/** Each player's rounds in round order (null = not in that round), for the
+ *  R1–R4 columns and the "F" / "thru N" / "–" cell. */
+export function roundCells(events: FieldEvent[], entries: FieldEntry[], courses: GolfCourse[]): { rounds: number[]; byPlayer: Map<string, (RoundCell | null)[]> } {
+  const ordered = [...events].sort((a, b) => a.roundNo - b.roundNo);
+  const byPlayer = new Map<string, (RoundCell | null)[]>();
+  ordered.forEach((ev, ri) => {
+    const course = courses.find((c) => c.id === golfFormatOf(ev).courseId);
+    if (!course) return;
+    for (const en of entries.filter((e) => e.eventId === ev.id)) {
+      const ctx = roundContext(ev, course, en);
+      const s = summarize(cardOf(en, ctx.holes.length), ctx.holes, ctx.received);
+      const row = byPlayer.get(en.playerId) ?? ordered.map(() => null);
+      row[ri] = { gross: s.gross, toPar: s.toPar, thru: s.thru, holes: ctx.holes.length, noReturn: s.noReturn };
+      byPlayer.set(en.playerId, row);
+    }
+  });
+  return { rounds: ordered.map((e) => e.roundNo), byPlayer };
+}
+
+/** The leaderboard's "Thru" cell: "F" when the current round's card is
+ *  complete, "thru N" → "N" while playing, "–" before tee-off (or when the
+ *  player is not in the round). */
+export function thruLabel(cell: RoundCell | null | undefined): string {
+  if (!cell || cell.thru === 0) return '–';
+  return cell.thru >= cell.holes ? 'F' : String(cell.thru);
+}
+
+/* -------------------------- SD-66 gross + net --------------------------- */
+
+/** Best Gross and Best Net side by side: the top `places` of each board
+ *  (default one per four players, 1–3)
+ *  (players in the competition only). With `prizes: 'one'` a player takes one
+ *  prize — the gross prize first (the usual club rule) — so the net board
+ *  skips the gross prize-winners. */
+export function prizeBoards(gross: RankRow[], net: RankRow[], places?: number, prizes: 'both' | 'one' = 'both'): { gross: RankRow[]; net: RankRow[] } {
+  const inField = (r: RankRow) => r.position != null && !r.missedCut && (r.thru > 0 || r.grossTotal > 0);
+  // default: one place per four players, 1–3 (a 3-ball has one prize each way)
+  const n = places ?? Math.max(1, Math.min(3, Math.ceil(gross.filter(inField).length / 4)));
+  const g = gross.filter(inField).slice(0, n);
+  const taken = new Set(prizes === 'one' ? g.map((r) => r.id) : []);
+  return { gross: g, net: net.filter((r) => inField(r) && !taken.has(r.id)).slice(0, n) };
 }

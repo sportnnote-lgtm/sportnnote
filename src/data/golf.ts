@@ -10,11 +10,15 @@ import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { demo, genId } from './demoStore';
 import type { FieldEntry, FieldEntryStatus, FieldEvent, FieldEventStatus, GolfCourse } from '../core/types';
 import { roundStats, emptyCard, type GolfCard, type Hole } from '../sports/golf/engine';
-import { buildLeaderboard, roundContext, cardOf } from './golfLeaderboard';
+import { buildLeaderboard, roundContext, cardOf, entryStatusOf, withAdmin } from './golfLeaderboard';
+import type { EntryAdmin } from '../sports/golf/engine';
 
 // Pure leaderboard/format helpers live in golfLeaderboard.ts (testable in node);
 // re-exported so screens keep importing them from here.
-export { golfFormatOf, roundContext, cardOf, buildLeaderboard, type GolfRoundFormat } from './golfLeaderboard';
+export {
+  golfFormatOf, roundContext, cardOf, buildLeaderboard, type GolfRoundFormat,
+  parseIndex, showIndex, entryAdminOf, entryStatusOf, withAdmin, adminLabel, applyPlayoff, roundCells, thruLabel, prizeBoards, type RoundCell,
+} from './golfLeaderboard';
 
 const live = () => isSupabaseConfigured && !!supabase;
 
@@ -114,6 +118,20 @@ export async function getFieldEvent(id: string): Promise<FieldEvent | null> {
   return data ? toEvent(data) : null;
 }
 
+/** SD-89 — merge keys into a round's format (the playoff winner). Hosts only
+ *  (RLS: can_manage_field_event). */
+export async function updateFieldEventFormat(id: string, patch: Record<string, unknown>): Promise<void> {
+  if (!live()) {
+    const e = demo.fieldEvents.find((x) => x.id === id);
+    if (e) e.format = { ...e.format, ...patch };
+    return;
+  }
+  const { data, error: readErr } = await supabase!.from('field_events').select('format').eq('id', id).maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+  const { error } = await supabase!.from('field_events').update({ format: { ...((data?.format as Record<string, unknown>) ?? {}), ...patch } }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 export async function setFieldEventStatus(id: string, status: FieldEventStatus): Promise<void> {
   if (!live()) {
     const e = demo.fieldEvents.find((x) => x.id === id);
@@ -211,10 +229,10 @@ export async function saveFieldResult(entryId: string, card: unknown, status?: F
 }
 
 /** Organizer edits outside the card: handicap index, group, status. */
-export async function updateFieldEntry(entryId: string, patch: Partial<Pick<FieldEntry, 'handicapIndex' | 'groupNo' | 'teeTime' | 'startHole' | 'status'>>): Promise<void> {
+export async function updateFieldEntry(entryId: string, patch: Partial<Pick<FieldEntry, 'groupNo' | 'teeTime' | 'startHole' | 'status'>> & { handicapIndex?: number | null }): Promise<void> {
   if (!live()) {
     const e = demo.fieldEntries.find((x) => x.id === entryId);
-    if (e) Object.assign(e, patch);
+    if (e) Object.assign(e, { ...patch, ...(patch.handicapIndex === null ? { handicapIndex: undefined } : {}) });
     return;
   }
   const row: Record<string, unknown> = {};
@@ -225,6 +243,14 @@ export async function updateFieldEntry(entryId: string, patch: Partial<Pick<Fiel
   if (patch.status !== undefined) row.status = patch.status;
   const { error } = await supabase!.from('field_entries').update(row).eq('id', entryId);
   if (error) throw new Error(error.message);
+}
+
+/** SD-35 — withdraw / disqualify / mark DNS (with a reason), or reinstate
+ *  (`admin = null`): the card's `admin` note and the status column in one
+ *  offline-safe write. Organisers only (the server guard rejects a marker). */
+export async function setEntryAdmin(entry: FieldEntry, holes: number, admin: EntryAdmin | null, roundCompleted = false): Promise<number> {
+  const { card, status } = withAdmin(cardOf(entry, holes), admin, roundCompleted);
+  return saveFieldResult(entry.id, card, status);
 }
 
 export async function removeFieldEntry(entryId: string): Promise<void> {
@@ -244,7 +270,8 @@ export async function completeRound(ev: FieldEvent, entries: FieldEntry[], cours
   await flushGolfOutbox();
   const rows = buildLeaderboard([ev], entries, [course]);
   const winners = new Set(rows.filter((r) => r.position === 1).map((r) => r.id));
-  const lines = entries.map((en) => {
+  // SD-35 — a player who did not start gets no line (they played no golf)
+  const lines = entries.filter((en) => entryStatusOf(en) !== 'dns').map((en) => {
     const ctx = roundContext(ev, course, en);
     return { playerId: en.playerId, stats: roundStats(cardOf(en, ctx.holes.length), ctx.holes, ctx.received), won: winners.has(en.playerId) };
   });

@@ -180,6 +180,8 @@ export function blankEntries(entries: ResultEntry[], def: DisciplineDef): Result
   return entries.filter((e) => {
     const r = e.result ?? {};
     if ((r.status ?? 'ok') !== 'ok') return false;
+    // SD-96: a finalist with no final shot yet
+    if (Array.isArray(r.fshots)) return !r.fshots.length;
     if (def.capture === 'single' || def.capture === 'target') return r.mark == null;
     if (def.capture === 'attempts') return !(r.attempts ?? []).some((a) => !!a && (a.mark != null || a.foul || a.pass));
     if (def.capture === 'heights') return !(r.heights ?? []).some((h) => !!h.tries);
@@ -194,7 +196,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : (n === 1 ? 'athlete' : 'athletes');
+  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {
@@ -213,7 +215,7 @@ export function finishDetail(opts: {
   blank: ResultEntry[]; def: DisciplineDef; records: { rec: RecordMark; old?: RecordMark }[]; unconfirmed: number; jumpOff?: boolean;
 }): string {
   const { def } = opts;
-  const unit = def.unit === 'time' ? '' : def.unit === 'mass' ? ' kg' : ' m';
+  const unit = def.unit === 'time' || def.unit === 'points' ? '' : def.unit === 'mass' ? ' kg' : ' m';
   // SD-97: a weightlifting session can set snatch, C&J and total records
   const what = (d: string) => (def.capture === 'lifts' ? ` (${(disciplineOf(d)?.label ?? d).replace('Weightlifting total', 'total').toLowerCase()})` : '');
   const rec = opts.records.map(({ rec, old }) => `New ${rec.scope === 'MR' ? 'meet record' : 'school record'}${what(rec.discipline)}: ${formatMark(rec.value, def)}${unit} by ${rec.holder}${old ? ` (was ${formatMark(old.value, def)}${unit})` : ''}. `).join('');
@@ -230,7 +232,7 @@ export function finishDetail(opts: {
 
 /** Anything entered on a phase (a mark, a status, a trial, a bar try)? */
 export function hasAnyResult(results: (EntryResult | null | undefined)[]): boolean {
-  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length));
+  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length || !!r.fshots?.length || !!r.series?.length));
 }
 
 export type ReopenVerdict = { ok: true; kind: 'round' | 'final' } | { ok: false; reason: string };

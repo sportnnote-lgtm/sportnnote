@@ -30,6 +30,7 @@ import {
 } from '../data/results';
 import { ageOf } from '../core/age';
 import { WeightliftingEventSetup } from './WeightliftingEventSetup';
+import { ShootingEventSetup } from './ShootingEventSetup';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -50,6 +51,7 @@ const cm = (v: number) => `${Math.round(v * 100)} cm`;
 /** SD-97: weightlifting has its own setup (bodyweight categories, lifters, lots). */
 export default function AthleticsEventSetupScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'AthleticsEventSetup'>>();
+  if (params?.sport === 'shooting') return <ShootingEventSetup tournamentId={params.tournamentId} />; // SD-96
   return params?.sport === 'weightlifting' ? <WeightliftingEventSetup tournamentId={params.tournamentId} /> : <TrackSwimEventSetup />;
 }
 

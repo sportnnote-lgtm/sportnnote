@@ -16,6 +16,7 @@
  */
 
 import type { RecordMark } from './records.ts';
+import { SHOOT_EVENTS } from './shootingDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -37,7 +38,8 @@ export type TieRule =
   | 'countback' // horizontal jumps / throws: next-best mark, then the next …
   | 'vertical' // HJ / PV: fewer failures at the tie height, then fewer total failures; jump-off for 1st
   | 'lifted-first' // weightlifting (IWF): the lifter who reached the total first
-  | 'inner-count'; // archery (10s incl. X, then X) / shooting (inner tens); then shoot-off
+  | 'inner-count' // archery (10s incl. X, then X); then shoot-off
+  | 'issf'; // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
 
 export type ResultStatus =
   | 'ok' // a valid mark (or still competing)
@@ -89,16 +91,22 @@ export interface Category {
    *  (25 m, short course). Part of the key, so records and PBs are kept apart
    *  per course (World Aquatics SW 12.1 / 12.2); not shown in the label. */
   course?: 'LCM' | 'SCM';
+  /** SD-96 shooting: a shorter match than the event's standard (a 40-shot
+   *  junior / school 10 m match). Part of the key — a 40-shot score and a
+   *  60-shot score are separate records and PBs; shown in the label. */
+  shots?: number;
 }
 
 export const categoryKey = (c?: Category): string =>
-  [c?.age ?? 'open', c?.gender ?? 'X', c?.weightClass ?? '', c?.course ?? ''].filter(Boolean).join('-');
+  [c?.age ?? 'open', c?.gender ?? 'X', c?.weightClass ?? '', c?.course ?? '', c?.shots ? `${c.shots}sh` : ''].filter(Boolean).join('-');
 
 export const categoryLabel = (c?: Category): string => {
   // SD-97: senior / junior weightlifting categories read "Men 79 kg" / "Women 58 kg"
-  const adult = !!c?.weightClass && /^(Senior|Junior)$/.test(c?.age ?? '');
+  // SD-96: senior / junior shooting too ("10 m Air Rifle Junior Men")
+  const adult = /^(Senior|Junior)$/.test(c?.age ?? '');
   const g = c?.gender === 'M' ? (adult ? 'Men' : 'Boys') : c?.gender === 'F' ? (adult ? 'Women' : 'Girls') : c?.gender === 'X' ? 'Mixed' : '';
-  return [c?.age, g, c?.weightClass].filter(Boolean).join(' ') || 'Open';
+  const base = [c?.age, g, c?.weightClass].filter(Boolean).join(' ') || 'Open';
+  return c?.shots ? `${base} · ${c.shots} shots` : base;
 };
 
 /** How a phase feeds the next one. Q = by place in each heat (or by reaching a
@@ -154,6 +162,10 @@ export interface PhaseFormat {
   /** SD-112: the record book's entries for this discipline + category as they
    *  stood before "Finish & lock" — what "Reopen final" puts back */
   recordsBefore?: RecordMark[];
+  /** SD-96 shooting: the qualification is entered by series totals (+ inner tens) or shot by shot */
+  shootEntry?: 'series' | 'shot';
+  /** SD-96: the event ends in an ISSF elimination final (the plan's final phase) */
+  shootFinal?: boolean;
 }
 
 /** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
@@ -225,6 +237,20 @@ export interface EntryResult {
   tens?: number;
   /** archery X count */
   xs?: number;
+  /** SD-96 shooting: the qualification series totals in order (decimal at 0.1,
+   *  integer, or targets hit) — `mark` is their sum, `xs` the inner tens */
+  series?: number[];
+  /** SD-96: inner tens (X) per series, when entered by series */
+  seriesX?: number[];
+  /** SD-96: the shots of each series when entered shot by shot ('X' = an inner ten, integer scoring) */
+  shots?: (number | 'X')[][];
+  /** SD-96: an elimination final's shots in order (decimal) — present (even
+   *  empty) on every finalist's row; the final is ranked by elimination */
+  fshots?: number[];
+  /** SD-96: final shoot-offs, keyed by the shot after which the tie arose ("12") — one shot per round */
+  so?: Record<string, number[]>;
+  /** SD-96: the qualification score carried into the final (records / sheet) */
+  qual?: { mark: number; xs?: number; series?: number[] };
   /** jump-off / shoot-off / swim-off place (1 = won it). Only compared when both rows have one. */
   decider?: number;
   /** start-list fields */
@@ -355,7 +381,11 @@ export const DISCIPLINES: DisciplineDef[] = [
   { key: 'wl.snatch', label: 'Snatch', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['snatch'] },
   { key: 'wl.cj', label: 'Clean & jerk', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['cj'] },
   { key: 'arch.720', label: 'Archery 70 m ranking round (72 arrows)', sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count' },
-  { key: 'shoot.10mar', label: '10 m air rifle qualification', sport: 'shooting', unit: 'points', better: 'higher', dp: 1, capture: 'target', tie: 'inner-count' },
+  // SD-96: the ISSF programme (shootingDefs.ts) — qualification by series, finals by elimination
+  ...SHOOT_EVENTS.map((e): DisciplineDef => ({
+    key: e.key, label: e.label, sport: 'shooting', unit: 'points', better: 'higher', dp: e.scoring === 'decimal' ? 1 : 0, capture: 'target', tie: 'issf',
+    ...(e.teamSize ? { teamSize: e.teamSize } : {}),
+  })),
 ];
 
 export const disciplineOf = (key: string): DisciplineDef | undefined => DISCIPLINES.find((d) => d.key === key);

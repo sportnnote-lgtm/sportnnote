@@ -250,7 +250,7 @@ describe('no filter = today', () => {
 describe('schema declarations', () => {
   test('every sport except golf declares splits; racket sports offer singles/doubles; chess colour + time control', () => {
     for (const [sp, s] of Object.entries(STAT_SCHEMAS)) {
-      if (sp === 'golf' || sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting') assert.equal(s.splits, undefined); // SD-90 / SD-94: a measured career, no match context
+      if (sp === 'golf' || sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting' || sp === 'shooting') assert.equal(s.splits, undefined); // SD-90 / SD-94: a measured career, no match context
       else assert.ok(s.splits?.includes('tournament') && s.splits.includes('season') && s.splits.includes('opponent'), sp);
     }
     for (const sp of ['tennis', 'badminton', 'tabletennis', 'squash', 'pickleball', 'padel', 'carrom'] as SportId[]) {

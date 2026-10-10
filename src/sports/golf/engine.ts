@@ -149,7 +149,33 @@ export interface GolfCard {
    *  hole score clears it — they signed the card as it stood. Absent = not
    *  signed (every older card). */
   signed?: { marker?: boolean; player?: boolean };
+  /** SD-45 — the per-hole stats row (all optional; absent on every older
+   *  card, which reads "not tracked"): the tee shot on a par 4 / 5 — left,
+   *  hit, right — and whether the player was in a greenside bunker. A card
+   *  carrying either array was kept in stats mode: GIR, scrambling, sand saves
+   *  and putts per GIR are derived from it (see `roundStats`). */
+  firDir?: (FairwayDir | null)[];
+  bunker?: (boolean | null)[];
+  /** SD-35 — the organiser's entry admin: withdrawn / disqualified / did not
+   *  start, with a reason (the status column holds wd / dq; a DNS is stored as
+   *  `wd` + `admin.status: 'dns'` — no migration). Absent = playing as normal. */
+  admin?: EntryAdmin;
 }
+
+/** SD-45 — a par-4 / par-5 tee shot: missed left, hit, missed right. */
+export type FairwayDir = 'L' | 'hit' | 'R';
+
+/** SD-35 — why an entry is out of the competition (R&A Rules 3.3, 1.3 / 5.3). */
+export interface EntryAdmin {
+  status: 'wd' | 'dq' | 'dns';
+  reason?: string;
+  /** holes completed when it happened (a WD after starting returns no score) */
+  thru?: number;
+}
+
+/** SD-45 — was this card kept with the per-hole stats row? */
+export const cardHasDetail = (c: Pick<GolfCard, 'firDir' | 'bunker'> | null | undefined): boolean =>
+  !!c && (Array.isArray(c.firDir) || Array.isArray(c.bunker));
 
 /** SD-117c — the most strokes a hole can be entered as on the scorecard. */
 export const MAX_HOLE_STROKES = 20;
@@ -260,7 +286,8 @@ export const toParLabel = (n: number) => (n === 0 ? 'E' : n > 0 ? `+${n}` : `−
 
 /* ------------------------------- ranking -------------------------------- */
 
-export type EntryStatus = 'playing' | 'finished' | 'dnf' | 'wd' | 'dq';
+/** 'dns' (SD-35) = did not start — engine-only: stored as `wd` + card.admin. */
+export type EntryStatus = 'playing' | 'finished' | 'dnf' | 'wd' | 'dq' | 'dns';
 
 /** One player's rounds, already summarized, for the leaderboard. */
 export interface RankInput {
@@ -287,6 +314,11 @@ export interface RankRow {
   /** missed the cut (multi-round events): listed below the cut line, labelled
    *  "MC", not ranked among the field. Derived, never a stored status. */
   missedCut?: boolean;
+  /** SD-35 — the organiser's reason for a WD / DQ / DNS ("injury", "Rule 3.3b") */
+  note?: string;
+  /** SD-89 — a tie for first under the playoff tie-break: still to be played,
+   *  or the playoff's winner / loser(s) */
+  playoff?: 'pending' | 'won' | 'lost';
 }
 
 export interface RankOptions {
@@ -324,7 +356,7 @@ function countbackKey(r: RankInput, o: RankOptions): number[] {
   });
 }
 
-const FINISH_ORDER: Record<EntryStatus, number> = { finished: 0, playing: 0, dnf: 1, wd: 2, dq: 3 };
+const FINISH_ORDER: Record<EntryStatus, number> = { finished: 0, playing: 0, dnf: 1, wd: 2, dq: 3, dns: 4 };
 
 export function rankLeaderboard(inputs: RankInput[], o: RankOptions): RankRow[] {
   const better = o.scoring === 'stableford' ? -1 : 1; // sort multiplier: low-wins vs high-wins
@@ -494,6 +526,9 @@ export function roundStats(card: GolfCard, holes: Hole[], received: number[]): R
     eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0,
     putts: 0, puttHoles: 0, girHit: 0, girHoles: 0, firHit: 0, firHoles: 0, penalties: 0,
   };
+  // SD-45 — stats-mode cards add their keys (absent on older lines = not tracked)
+  const detail = cardHasDetail(card);
+  if (detail) Object.assign(out, { firLeft: 0, firRight: 0, scrambles: 0, scrambleHoles: 0, sandSaves: 0, sandHoles: 0, puttsGir: 0, girPutted: 0 });
   // An 18-hole-equivalent stroke total, only for complete rounds with no pickup.
   if (s.complete && !s.noReturn) { out.toPar = s.toPar; out.completeRounds = 1; out.completeStrokes = s.gross * (18 / holes.length); }
   holes.forEach((h, i) => {
@@ -508,14 +543,57 @@ export function roundStats(card: GolfCard, holes: Hole[], received: number[]): R
     }
     const p = card.putts?.[i];
     if (typeof p === 'number') { out.putts += p; out.puttHoles += 1; }
-    const g = card.gir?.[i];
+    const g = card.gir?.[i] ?? (detail ? derivedGir(st, p, h.par) : null);
     if (g != null) { out.girHoles += 1; if (g) out.girHit += 1; }
-    const f = card.fir?.[i];
+    const dir = card.firDir?.[i] ?? null;
+    const f = card.fir?.[i] ?? (dir ? dir === 'hit' : null);
     if (f != null && h.par >= 4) { out.firHoles += 1; if (f) out.firHit += 1; }
     const pen = card.penalties?.[i];
     if (typeof pen === 'number') out.penalties += pen;
+    if (!detail || typeof st !== 'number') return;
+    // SD-45 — derived from the stats row (keyed: only stats-mode cards carry them)
+    if (dir === 'L' && h.par >= 4) out.firLeft += 1;
+    if (dir === 'R' && h.par >= 4) out.firRight += 1;
+    if (g === false) { out.scrambleHoles += 1; if (st <= h.par) out.scrambles += 1; }
+    if (g === true && typeof p === 'number') { out.girPutted += 1; out.puttsGir += p; }
+    if (card.bunker?.[i] === true) {
+      out.sandHoles += 1;
+      // up and down from the greenside bunker: out + at most one putt (without
+      // putts entered: par or better)
+      if (typeof p === 'number' ? p <= 1 : st <= h.par) out.sandSaves += 1;
+    }
   });
   return out;
+}
+
+/** SD-45 — green in regulation from the card: on the green in par − 2 strokes
+ *  or fewer = strokes − putts ≤ par − 2. Needs the putts (null otherwise). */
+export function derivedGir(strokes: HoleScore | undefined, putts: number | null | undefined, par: number): boolean | null {
+  if (typeof strokes !== 'number' || typeof putts !== 'number') return null;
+  return strokes - putts <= par - 2;
+}
+
+/** SD-45 — the stats-row figures over a player's golf lines. Each is null
+ *  when no line carries its key (older rounds: "not tracked", never 0%);
+ *  `rounds` = how many lines tracked it. */
+export function golfDetailSummary(lines: Array<{ stats: Record<string, number> }>) {
+  const sum = (num: string, den: string, key = num) => {
+    let n = 0, d = 0, rounds = 0;
+    for (const { stats: s } of lines) {
+      if (!(key in s)) continue;
+      rounds += 1; n += s[num] ?? 0; d += s[den] ?? 0;
+    }
+    return { num: n, den: d, rounds };
+  };
+  return {
+    scrambling: sum('scrambles', 'scrambleHoles'),
+    sandSaves: sum('sandSaves', 'sandHoles'),
+    puttsPerGir: sum('puttsGir', 'girPutted'),
+    fairways: sum('firHit', 'firHoles', 'firHoles'),
+    // fairway misses by side: only over stats-mode rounds
+    missLeft: sum('firLeft', 'firHoles'),
+    missRight: sum('firRight', 'firHoles'),
+  };
 }
 
 /** Profile headline figures from a player's golf stat lines, compared like

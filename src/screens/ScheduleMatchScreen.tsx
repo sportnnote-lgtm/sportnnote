@@ -355,6 +355,13 @@ export default function ScheduleMatchScreen() {
             </Text>
             <Button label="🏊 Set up a swimming event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'swimming' })} />
           </>
+        ) : sport === 'shooting' ? (
+          <>
+            <Text style={textStyles.muted}>
+              🎯 Shooting isn’t a match: each event (10 m Air Rifle, 10 m Air Pistol …) is a qualification of series, then a final for the best eight. Add the event and its shooters, then enter each series as it is scored.
+            </Text>
+            <Button label="🎯 Set up a shooting event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'shooting' })} />
+          </>
         ) : sport === 'weightlifting' ? (
           <>
             <Text style={textStyles.muted}>

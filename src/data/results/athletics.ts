@@ -21,6 +21,7 @@ import { fieldRoundPresets } from './field.ts';
 import { phaseLabel } from './plan.ts';
 import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER, swimMeetSettings } from './swimming.ts';
 import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
+import { shootMeetSettings } from './shooting.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -42,6 +43,7 @@ export function meetSettings(fmt?: Record<string, unknown>): MeetSettings {
 export function eventMeetSettings(sport: string, fmt?: Record<string, unknown>): { positionPoints: number[]; relayFactor: number; liftMedals?: boolean } {
   if (sport === 'swimming') return swimMeetSettings(fmt);
   if (sport === 'weightlifting') return wlMeetSettings(fmt);
+  if (sport === 'shooting') return shootMeetSettings(fmt);
   return meetSettings(fmt);
 }
 

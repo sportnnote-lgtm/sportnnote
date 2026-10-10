@@ -45,7 +45,7 @@ const rowsOf = (sport: SportId, lines: StatLine[]) =>
 describe('SD-24 — every sport renders sections (golf stays custom)', () => {
   test('careerView', () => {
     for (const sp of STAT_SPORTS) {
-      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting' ? 'measured' : 'sections', sp); // SD-90 / SD-94: athletics and swimming render a measured career
+      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting' || sp === 'shooting' ? 'measured' : 'sections', sp); // SD-90 / SD-94: athletics and swimming render a measured career
       assert.deepEqual(validateSchema(STAT_SCHEMAS[sp]), [], sp);
     }
   });
@@ -210,6 +210,29 @@ describe('SD-24 — doubles: singles / doubles W-L and the per-partner record', 
     assert.equal(dbl.length, 3);
     assert.deepEqual(rowsOf(sp, dbl), rowsOf(sp, dbl)); // deterministic
     assert.equal(partnerRecords(filterLines(mine, ctx, { discipline: 'singles' }), others, byId, ctx).length, 0);
+  });
+});
+
+describe('SD-118 — Partners only for doubles formats of racket sports', () => {
+  test('a team sport\'s 2-player team is not a pair (kabaddi, football, basketball)', () => {
+    for (const sp of ['kabaddi', 'football', 'basketball', 'volleyball'] as SportId[]) {
+      const m = M(sp, { home: team('h2', 'Duo', sp, ['p1', 'p2']), away: team('a2', 'Rivals', sp, ['p3', 'p4']) });
+      const mine = [L(m, { points: 3 }, { result: 'W' })];
+      const mate = [L(m, { points: 1 }, { playerId: 'p2' })];
+      const byId = new Map([[m.id, m]]);
+      const ctx = contextsFor(mine, byId, new Map());
+      assert.equal(partnerRecords(mine, [...mine, ...mate], byId, ctx).length, 0, sp);
+      // without the line context there is no discipline either
+      assert.equal(partnerRecords(mine, [...mine, ...mate], byId).length, 0, sp);
+    }
+  });
+  test('racket doubles still pair; a racket singles match with a 2-name roster does not', () => {
+    const dbl = M('tennis', { home: team('h3', 'A/B', 'tennis', ['p1', 'p2']), away: team('a3', 'C/D', 'tennis', ['p3', 'p4']), state: { doubles: true } });
+    const sgl = M('tennis', { home: team('h4', 'A', 'tennis', ['p1', 'p9']), away: team('a4', 'C', 'tennis', ['p3']), state: { doubles: false } });
+    const mine = [L(dbl, {}, { result: 'W' }), L(sgl, {}, { result: 'W' })];
+    const byId = new Map([dbl, sgl].map((m) => [m.id, m]));
+    const ctx = contextsFor(mine, byId, new Map());
+    assert.deepEqual(partnerRecords(mine, mine, byId, ctx).map((r) => r.partnerId), ['p2']);
   });
 });
 

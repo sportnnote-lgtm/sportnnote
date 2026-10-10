@@ -8,6 +8,8 @@
 import { STATUS_ORDER, type DisciplineDef, type RankedEntry, type ResultEntry, type ResultFlag, type ResultStatus } from './model.ts';
 import { bestLiftAttempt, effectiveStatus, formatMark, summarizeAttempts, summarizeHeights, summarizeLifts, windLegal } from './marks.ts';
 import { compareKeys, sharedPositions } from './positions.ts';
+import { isFinalRows, qualKeys, rankShootFinal } from './shootingRank.ts';
+import { shootEventOf, sumTenths, fromTenths } from './shootingDefs.ts';
 
 export interface Performance {
   status: ResultStatus;
@@ -69,6 +71,17 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       return { status, best: l.total, bestLegal: l.total, legal: l.total != null, keys: [l.total ?? -Infinity, l.totalSeq != null ? -l.totalSeq : undefined, lot], flags };
     }
     case 'target': {
+      const shoot = def.tie === 'issf' ? shootEventOf(def.key) : undefined;
+      if (shoot) {
+        // SD-96: a finalist's row (elimination final) is ranked by rankShootFinal;
+        // on its own it shows the final total and never counts for records / PBs
+        if (Array.isArray(r.fshots)) {
+          const t = r.fshots.length ? fromTenths(sumTenths(r.fshots)) : null;
+          return { status, best: t, bestLegal: null, legal: false, keys: [t ?? -Infinity], flags };
+        }
+        const best = r.mark ?? (r.series?.length ? fromTenths(sumTenths(r.series)) : null);
+        return { status, best, bestLegal: best, legal: best != null, keys: best == null ? [-Infinity] : [...qualKeys(r, shoot), decider], flags };
+      }
       const best = r.mark ?? null;
       return { status, best, bestLegal: best, legal: best != null, keys: [best ?? -Infinity, r.tens, r.xs, decider], flags };
     }
@@ -118,6 +131,8 @@ export const betterMark = (a: number, b: number, def: Pick<DisciplineDef, 'bette
  * then NM, DNF, FS, DQ, WD, DNS.
  */
 export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): RankedEntry[] {
+  // SD-96: an ISSF elimination final ranks by elimination, not by a mark
+  if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
   const prefix = o.tiePrefix ?? '=';
   const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt, o.handLegal) }));
   levelKeys(rows.map((x) => x.p));
@@ -139,7 +154,7 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
     // SD-91: a group where every row carries a decider has settled it (a held
     // jump-off, or athletes who agreed to share — all decider 1).
     const settled = ranked.filter((_y, j) => places[j].position === position).every((y) => y.entry.result?.decider != null);
-    if (tie && !settled && ((def.tie === 'vertical' && position === 1) || (def.tie === 'inner-count' && position <= 3))) {
+    if (tie && !settled && ((def.tie === 'vertical' && position === 1) || ((def.tie === 'inner-count' || def.tie === 'issf') && position <= 3))) {
       row.needsDecider = true;
       row.flags.push(def.tie === 'vertical' ? 'JO' : 'SO');
     }

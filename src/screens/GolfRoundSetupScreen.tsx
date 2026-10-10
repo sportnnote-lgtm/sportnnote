@@ -17,7 +17,7 @@ import { usePlayers } from '../data/hooks';
 import { getMyPlayerId, createReplacementPlayer } from '../data/repos';
 import {
   getGolfCourses, createGolfCourse, createFieldEvent, addFieldEntries, autoGroups, getFieldEvent, getFieldEvents,
-  getFieldEntries, buildLeaderboard, golfFormatOf,
+  getFieldEntries, buildLeaderboard, golfFormatOf, parseIndex, showIndex,
 } from '../data/golf';
 import { getSport } from '../sports/registry';
 import { standardPar72, holesFor, makesCut, type CutRule, type Hole } from '../sports/golf/engine';
@@ -27,16 +27,9 @@ import type { RootStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 interface Pick { playerId: string; name: string; index: string }
 
-/** "12.4" → 12.4; "+2.1" (a plus handicap) → −2.1; '' → undefined. */
-export const parseIndex = (s: string): number | undefined => {
-  const t = s.trim();
-  if (!t) return undefined;
-  const plus = t.startsWith('+');
-  const n = Number(t.replace('+', ''));
-  if (!Number.isFinite(n) || n < 0 || n > 54) return undefined;
-  return plus ? -n : n;
-};
-const showIndex = (n?: number) => (n == null ? '' : n < 0 ? `+${Math.abs(n)}` : String(n));
+// parseIndex / showIndex moved to data/golfLeaderboard (SD-35: the entry-admin
+// sheet edits a handicap too); re-exported for older imports.
+export { parseIndex };
 
 export default function GolfRoundSetupScreen() {
   const nav = useNavigation<Nav>();

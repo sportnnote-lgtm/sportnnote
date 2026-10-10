@@ -19,6 +19,7 @@ import { confirmCopy } from '../core/matchSafety';
 import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '../components/ui';
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
 import { WeighInCard, NextLiftCard, LiftGrid } from '../components/results/LiftingPanel';
+import { SeriesCard, FinalCard } from '../components/results/ShootingPanel';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { getPlayers, getMyPlayerId } from '../data/repos';
@@ -39,6 +40,7 @@ import {
   courseLabel, swimEventOf, eventMeetSettings, recordDefsFor, activeLift, nextSeq, weightClasses, LIFT_DISCIPLINE, liftAwards, pointsLabel,
   rangeCheck, readDigits, toggleHand, stripUnconfirmedFlags, unconfirmedOutOfRange, rowsForRecords, blankEntries, newRecords,
   closeRoundDetail, finishDetail, reopenVerdict, updateRecords, type KeypadMode, type RangeIssue, type Category,
+  shootEvent, shotsOf, qualView, isFinalRows, finalState, totalText,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
 import { useAuth } from '../core/auth';
@@ -140,7 +142,7 @@ export default function ResultsEventScreen() {
     setRecords(recs);
     setLocal(new Map());
     // SD-97: weightlifting PBs per lift and for the total
-    setHistory((await Promise.all(recordDefsFor(d).map((x) => getMarkHistory(x, ens.map((e) => e.playerId), ev.id, pf.category?.course)))).flat());
+    setHistory((await Promise.all(recordDefsFor(d).map((x) => getMarkHistory(x, ens.map((e) => e.playerId), ev.id, pf.category?.course, pf.category?.shots)))).flat());
     setLoading(false);
   }, [params.phaseId]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -173,6 +175,9 @@ export default function ResultsEventScreen() {
     // SD-112: an out-of-range mark nobody confirmed shows no PB / SB / MR
     return new Map([...byHeat].map(([h, rows]) => [h, stripUnconfirmedFlags(withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx), def, f.category?.course)]));
   }, [def, f, phase, resEntries, history, records, srBook, timedFinal]);
+  // SD-96: shooting — the ISSF event, and whether this phase is its elimination final
+  const shoot = shootEvent(def);
+  const shootFinalPhase = !!shoot && isFinalRows(resEntries);
   // SD-97: weightlifting — the snatch and C&J rankings (own medals / records / PBs)
   const lifts = def?.capture === 'lifts';
   const liftRanked = useMemo(() => {
@@ -250,8 +255,11 @@ export default function ResultsEventScreen() {
     const rows = rankEntries(resEntries, def, { handLegal: looseLegal(f) });
     // SD-97: a weightlifting session can set snatch, C&J and total records
     let after = records;
-    for (const d of recordDefsFor(def)) after = updateRecords(rowsForRecords(d === def ? rows : rankEntries(resEntries, d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
-    const detail = finishDetail({
+    // SD-96: a shooting record is a qualification / match score — a final reads as its finalists' qualification scores
+    const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
+    for (const d of recordDefsFor(def)) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    const unfinished = shoot && shootFinalPhase && !finalState(resEntries, shoot).done ? 'The final isn’t complete — the places stand as they are now. ' : '';
+    const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
       unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
     });
@@ -319,7 +327,7 @@ export default function ResultsEventScreen() {
     if (undoLabel) offerUndo(entryId, resultOf(e), undoLabel);
     void save(e, n);
   };
-  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass); });
+  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass) || !!r.fshots?.length; });
   const curLift = lifts ? activeLift(resEntries) : null;
   const hurdles = hurdleHeight(def.key, f.category ?? {});
   // SD-91: the field event's set-up line (implement, board, wind gauge)
@@ -426,6 +434,7 @@ export default function ResultsEventScreen() {
         {swim ? <Text style={textStyles.muted}>{courseLabel(f.category?.course)} · {def.lanes} lanes{f.handTimed ? ' · manual timing (SW 11.3)' : ''}{timedFinal ? ` · timed final: ${f.heats} heats, places on time across heats` : ''}</Text> : null}
         {!swim && timedFinal ? <Text style={textStyles.muted}>Timed final: {f.heats} heats, places on time across heats.</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
+        {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
         {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
@@ -439,7 +448,7 @@ export default function ResultsEventScreen() {
             )}
             {f.progression && (
               <Text style={textStyles.muted}>
-                Through: {f.progression.byPlace ? `first ${f.progression.byPlace} in each heat (Q)` : ''}{f.progression.byMark ? ` + ${f.progression.byMark} fastest / best (q)` : ''}{f.progression.standard != null ? `standard ${formatMark(f.progression.standard, def)} (Q)` : ''}
+                Through: {f.progression.byPlace ? `first ${f.progression.byPlace} in each heat (Q)` : ''}{f.progression.byMark ? ` + ${f.progression.byMark} fastest / best (q)` : ''}{f.progression.standard != null ? `standard ${formatMark(f.progression.standard, def)} (Q)` : ''}{f.progression.fillTo != null && f.progression.standard == null && !f.progression.byPlace ? `the best ${f.progression.fillTo} to the ${next ? phaseLabel(next.phase).toLowerCase() : 'next round'} (q)` : ''}
               </Text>
             )}
 
@@ -466,6 +475,10 @@ export default function ResultsEventScreen() {
             {lifts && phase.status !== 'completed' && (
               <WeighInCard entries={heatRes} classes={wlClasses} weightClass={f.category?.weightClass} editable={editable} onSave={saveLift} />
             )}
+            {shoot && !shootFinalPhase && (editable || anyMark) && (
+              <SeriesCard entries={heatRes} ev={shoot} shots={shotsOf(shoot, f.category)} mode={f.shootEntry ?? 'series'} editable={editable} onSave={saveLift} />
+            )}
+            {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
             {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} />}
             {def.capture === 'attempts' && editable && (
               <AttemptCard def={def} up={nextUp} rows={heatRows} heatRes={heatRes} phaseKind={f.phase} onSave={saveAttempt} />
@@ -494,7 +507,7 @@ export default function ResultsEventScreen() {
               <BarHeights def={def} bar={f.bar ?? []} current={curBar} onPick={setBar} editable={editable} onAdd={addBar} />
             )}
 
-            {orderFor(heatEntries).map((e) => {
+            {(shootFinalPhase ? [] : orderFor(heatEntries)).map((e) => {
               const r = resultOf(e);
               const re = toResultEntry({ ...e, result: r }, nameOf);
               const row = heatRows.find((x) => x.id === e.id);
@@ -514,7 +527,9 @@ export default function ResultsEventScreen() {
                       {row ? <Flags flags={row.flags} /> : null}
                     </View>
                   </View>
-                  {def.capture === 'single' || def.capture === 'target' ? (
+                  {shoot ? (
+                    <Text style={textStyles.muted} numberOfLines={2}>{r.mark != null ? `${(r.series ?? []).length} series · ${totalText(r.mark, shoot.scoring === 'integer' ? r.xs : undefined, shoot.scoring)}` : 'No series yet'}{r.members?.length ? ` · ${r.members.map((m) => m.name).join(' / ')}` : ''}</Text>
+                  ) : def.capture === 'single' || def.capture === 'target' ? (
                     def.unit === 'time'
                       ? <TimeField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}:${r.hand ? 'h' : ''}`} def={def} r={r} handMeet={!!f.handTimed} course={course}
                           editable={editable && (r.status ?? 'ok') === 'ok'} watchesOnly={swim && !!f.handTimed}

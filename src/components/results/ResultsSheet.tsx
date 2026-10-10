@@ -9,6 +9,7 @@ import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
+  shootEventOf, seriesLine, totalText,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -45,6 +46,14 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
     const only = def.lifts?.length === 1 ? def.lifts[0] : undefined;
     const bomb = !only && r.status === 'NM' ? bombedOutOf(res) : null;
     return [res.bodyweight != null ? `Bw ${fmtKg(res.bodyweight)}` : '', only === 'cj' ? '' : sn, only === 'snatch' ? '' : cj, bomb ? `no total — no good ${bomb === 'snatch' ? 'snatch' : 'C&J'}` : ''].filter(Boolean).join(' · ');
+  }
+  // SD-96 shooting: a finalist's final shots (+ the qualification score), or the series and the ISSF total ("586-24x")
+  const shoot = def.tie === 'issf' ? shootEventOf(def.key) : undefined;
+  if (shoot) {
+    if (Array.isArray(res.fshots)) return [res.fshots.length ? `${res.fshots.length} shot${res.fshots.length === 1 ? '' : 's'}: ${res.fshots.slice(-5).map((v) => v.toFixed(1)).join(' ')}${res.fshots.length > 5 ? ' …' : ''}` : '', res.qual ? `Q ${totalText(res.qual.mark, res.qual.xs, shoot.scoring)}` : ''].filter(Boolean).join(' · ');
+    const members = res.members?.length ? res.members.map((m) => m.name).join(' / ') : '';
+    const line = seriesLine(res, shoot, (res.series?.length ?? 0) * shoot.seriesOf);
+    return [members, line, shoot.scoring === 'integer' && res.xs != null && res.mark != null ? totalText(res.mark, res.xs, 'integer') : ''].filter(Boolean).join(' · ');
   }
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
   // SD-94 swimming: medley legs by stroke, then the 50 m splits
@@ -86,7 +95,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : 'Athlete'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : 'Athlete'}</Text>
             <Text style={[st.mark, st.headTxt]}>{def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {

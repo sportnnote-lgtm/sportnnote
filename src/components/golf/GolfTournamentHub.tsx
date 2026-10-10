@@ -1,16 +1,16 @@
 /** Golf inside a tournament (stroke play / Stableford): its rounds and the
  *  cumulative leaderboard across them, plus "set up a round". Match-play golf
  *  tournaments use the normal matches/bracket hub instead. */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../core/theme';
-import { Button, Pill, textStyles } from '../ui';
+import { Button, Pill, SelectChip, textStyles } from '../ui';
 import { SectionHeader } from '../SectionHeader';
-import { GolfLeaderboard } from './GolfLeaderboard';
+import { GolfLeaderboard, type LeaderboardCard } from './GolfLeaderboard';
 import { useGolfRounds } from '../../data/useGolf';
-import { buildLeaderboard, golfFormatOf } from '../../data/golf';
+import { buildLeaderboard, golfFormatOf, roundCells, roundContext, cardOf } from '../../data/golf';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -22,6 +22,20 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
   const scoring = events.length ? golfFormatOf(events[events.length - 1]).scoring : (format?.competition === 'stableford' ? 'stableford' : 'stroke');
   const last = events[events.length - 1];
   const nameOf = (pid: string) => players.get(pid)?.fullName ?? 'Player';
+  // SD-42 — R1–R4 + "F" / thru N / "–", and a card drill-down per round
+  const cells = useMemo(() => roundCells(events, entries, courses), [events, entries, courses]);
+  const [pick, setPick] = useState<number | null>(null);
+  const cardEv = events[pick ?? events.length - 1];
+  const cards = useMemo(() => {
+    const m = new Map<string, LeaderboardCard>();
+    const course = cardEv && courses.find((c) => c.id === golfFormatOf(cardEv).courseId);
+    if (!cardEv || !course) return m;
+    for (const en of entries.filter((e) => e.eventId === cardEv.id)) {
+      const ctx = roundContext(cardEv, course, en);
+      m.set(en.playerId, { holes: ctx.holes, card: cardOf(en, ctx.holes.length), received: ctx.received });
+    }
+    return m;
+  }, [cardEv, courses, entries]);
 
   return (
     <View style={{ gap: theme.spacing(3) }}>
@@ -51,7 +65,17 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
       ))}
 
       <SectionHeader title={events.length > 1 ? '🏆 Leaderboard (all rounds)' : '🏆 Leaderboard'} count={rows.length} />
-      <GolfLeaderboard rows={rows} scoring={scoring} nameOf={nameOf} />
+      {events.length > 1 && (
+        <View style={st.chips}>
+          <Text style={textStyles.muted}>Cards:</Text>
+          {events.map((e, i) => (
+            <SelectChip key={e.id} label={`R${e.roundNo}`} active={cardEv?.id === e.id} onPress={() => setPick(i)} />
+          ))}
+        </View>
+      )}
+      <GolfLeaderboard rows={rows} scoring={scoring} nameOf={nameOf} roundCols={cells} cards={cards}
+        cardTitle={cardEv ? `Round ${cardEv.roundNo} card` : undefined} />
+      {rows.length > 0 && <Text style={textStyles.muted}>Tap a player for their card{events.length > 1 ? ' (pick the round above)' : ''}. F = round finished · – = not teed off.</Text>}
     </View>
   );
 }
@@ -59,4 +83,5 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
 const st = StyleSheet.create({
   round: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   bold: { fontWeight: '800' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), alignItems: 'center' },
 });

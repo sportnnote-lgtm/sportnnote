@@ -56,6 +56,7 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   hockey: [],
   swimming: [],
   weightlifting: [],
+  shooting: [{ key: 'eye', label: 'Dominant eye', options: ['Right', 'Left'] }],
   // A left-hander is prized on the right side (right back / right wing).
   handball: [{ key: 'hand', label: 'Throwing hand', options: ['Right', 'Left'] }],
 };
@@ -79,5 +80,6 @@ export const POSITION_HINT: Record<SportId, string> = {
   hockey: 'e.g. Goalkeeper, Defender, Midfielder, Forward, Drag-flicker',
   swimming: 'e.g. Sprint freestyle, Backstroke, Individual medley',
   weightlifting: 'e.g. Senior men 79 kg, Youth girls 53 kg',
+  shooting: 'e.g. 10 m Air Rifle, 10 m Air Pistol, 50 m Rifle 3 Positions',
   handball: 'e.g. Goalkeeper, Left wing, Left back, Centre back, Right back, Right wing, Pivot',
 };

@@ -84,8 +84,8 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
     <View style={{ gap: theme.spacing(3) }}>
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Button label={wl ? '＋ Add a bodyweight category' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
-          <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
+          <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
+          <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' ? '⚙ Points' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}
       {swimSettings ? (
@@ -126,7 +126,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
 
       {leaders.length > 0 && (
         <>
-          <SectionHeader title={wl ? '⚡ Best total by category' : '⚡ Best by event'} count={leaders.length} />
+          <SectionHeader title={wl ? '⚡ Best total by category' : sport === 'shooting' ? '⚡ Best match score by event' : '⚡ Best by event'} count={leaders.length} />
           <Card style={{ gap: theme.spacing(2) }}>
             {leaders.map((l) => (
               <TouchableOpacity key={l.eventKey} accessibilityRole="button" disabled={!l.athleteId} onPress={() => l.athleteId && nav.navigate('PlayerProfile', { playerId: l.athleteId })}>
@@ -157,7 +157,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                 </View>
               </TouchableOpacity>
             ))}
-            <Text style={textStyles.muted}>{wl ? 'Position points from every category.' : 'Position points from individual finals; relays count for the house.'}</Text>
+            <Text style={textStyles.muted}>{wl ? 'Position points from every category.' : sport === 'shooting' ? 'Position points from every event (the final, or the match where there is none).' : 'Position points from individual finals; relays count for the house.'}</Text>
           </Card>
         </>
       )}
@@ -183,7 +183,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
         </>
       )}
 
-      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : 'Set by the first final of each event.'} />
+      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : 'Set by the first final of each event.'} />
       {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={eventPrefix(sport)} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
     </View>
   );
@@ -201,12 +201,14 @@ function RecordBook({ title, list, empty, prefix }: { title: string; list: Recor
             const [age, g, extra] = r.category.split('-');
             const pool = extra === 'LCM' || extra === 'SCM' ? ` (${courseShort(extra)})` : '';
             // SD-97: a weightlifting record is per bodyweight category (and per lift)
-            const wc = extra && !pool ? extra : undefined;
+            // SD-96: a shorter shooting match ('40sh') is part of the key
+            const shotsN = extra && /^\d+sh$/.test(extra) ? Number(extra.slice(0, -2)) : undefined;
+            const wc = extra && !pool && shotsN == null ? extra : undefined;
             const unit = def?.unit === 'mass' ? ' kg' : '';
             return (
               <View key={`${r.scope}${r.discipline}${r.category}`} style={st.lead}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.muted} numberOfLines={1}>{def?.label.replace('Weightlifting total', 'Total')}{pool} {categoryLabel({ age: age === 'open' ? 'Open' : age, gender: g as 'M' | 'F' | 'X', weightClass: wc })}{r.date ? ` · ${r.date}` : ''}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{def?.label.replace('Weightlifting total', 'Total')}{pool} {categoryLabel({ age: age === 'open' ? 'Open' : age, gender: g as 'M' | 'F' | 'X', weightClass: wc, ...(shotsN ? { shots: shotsN } : {}) })}{r.date ? ` · ${r.date}` : ''}</Text>
                   <Text style={textStyles.body} numberOfLines={1}>{r.holder}{r.team && r.team !== r.holder ? <Text style={textStyles.muted}>  {r.team}</Text> : null}</Text>
                 </View>
                 <Text style={st.mark}>{def ? formatMark(r.value, def) : r.value}{unit}</Text>
