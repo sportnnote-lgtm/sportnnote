@@ -2,6 +2,17 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-04: volleyball point outcomes — DONE (1ee96f2, 2026-10-10)
+- **Built:** the Attack / Block / Ace / Opp. error / Opp. serve error panel, a pure volleyball engine, aces and blocks counting as points, editor point kinds, voice, and an MVP weight rebalance.
+- **Guide:** `score-volleyball`.
+- No migration. Tests: 17 new · 882 total · legacy replay identical · demo 8093.
+- Not verified in the UI: the no-roster layout, undo of an attack, leaders in a real tournament, and voice.
+- **Choices:**
+  - errors don't name the opponent who erred (keeps it to one tap; `errors` / `serveErrors` are for a later detailed mode);
+  - the kill stat key is `attackPoints`;
+  - Attack resets after each point;
+  - old stat lines without a `tracked` list count as tracked (existing app behaviour).
+
 ## Kabaddi feedback from the guide writer (2026-10-10), for KB items later in the queue
 These are small kabaddi issues the guide writer found. Each is listed with what it means for us.
 - **"Pro rules (do-or-die, super tackle, bonus)" toggle:** the label suggests the bonus depends on Pro rules, but it doesn't (bonus needs 6+ defenders either way). Relabel it.
