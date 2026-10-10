@@ -2,6 +2,24 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-11 to SD-13: player results and appearances; standings fixes; cricket NRR — DONE (4994c8d, 2026-10-10) · Wave 0 complete
+- **Founder to run:** migration 0050 — `supabase/release/2026-10-stat-line-result-0050.sql` (adds `stat_lines.result` and a conservative backfill: W/L only when the side is certain, no row inserts). The app works before it runs.
+- Tests: 54 new · 1032 total · PGlite statlineresult 39/39 + bundle re-run · demo 8093 (football draw, carrom loser, profiles; standings meet with custom points, cricket tie / NR / DLS).
+- **Displayed changes (bug fixes):**
+  - profiles show draws, ties and NR correctly, with Win % over decided matches only;
+  - overall house tables with custom points;
+  - team pages count NR in Played;
+  - cricket ties show T;
+  - cricket NRR moves where an innings ended with no batter left, or the target was revised;
+  - best-placed seeding for table tennis and chess (new knockouts only).
+- **Gaps / notes:**
+  - after `resetMatch`, existing lines stay as empty lines (pre-existing);
+  - the roster fallback uses current rosters;
+  - basketball and kabaddi subs are matched by name (unit-tested only);
+  - "absent" batters aren't modelled for no-batter-left;
+  - the team page's record-by-sport uses default points;
+  - the cricket-rain-and-dls guide is ~1050 words (over the 900 limit).
+
 ## SD-07 to SD-10: golf missed cut / profile / countback; football minutes, blocked shots and keeper clean sheets; chess Swiss bye — DONE (29649b3, 2026-10-10)
 - **Built:**
   - Golf: MC below the cut line, cut saved on the round, like-for-like best round, tracked putts, countback only on complete cards.
