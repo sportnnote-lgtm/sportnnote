@@ -2,6 +2,17 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-90 athletics track; SD-31/40/44 basketball shooting; SD-33/41/82 kabaddi depth — DONE (665c38f, 2026-10-11)
+- **SD-90:** athletics registered; event setup, round presets, lane draws, relays; results with keypad / hand times / reaction; stat lines; medal table; MR / SR; careers; hub; public `/r/`. No migration.
+  - Limits: the main profile header still shows Apps / W-D-L / Win % for athlete-only users; same-team athletes aren't split across heats; no timed finals; no historic (pre-app) school records.
+  - Left for SD-91–93: field events, road / XC, combined events, steeplechase, walks, 60 mH.
+- **SD-31/40/44:** basketball misses (toggle), the FIBA box score, statTotals, career FG% / 3P%, EFF with misses.
+  - **Choice:** after a mid-match "Track missed shots" switch-on, every make counts as an attempt; live lines lag until the completion sync. The alternative is to count only makes after the switch.
+- **SD-33/41/82:** kabaddi statTotals, match centre, career rates.
+  - **Choices:** a failed do-or-die point counts as "Extra pts"; tackle strike rate = tackles ÷ (tackles + opposing raids that scored and returned).
+  - Tackle % isn't built (no failed-tackle capture).
+- No migration. Tests all green · demo 8093.
+
 ## SD-105: racket team top performers — DONE (6ad1171, 2026-10-11)
 - **Built:** team pages for the 6 racket sports show "Most wins" and "Best win %" (min 3 decided matches) from the schema leaders, counting team members only. Other sports are unchanged (golden; volleyball also shows SD-27's Blocks award).
 - Tests: 17 new · demo 8093 (`sd105-*` badminton ties added to demo data).
