@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-112 results-entry safety — DONE (fad0696, 2026-10-11)
+- P0 + P1 rows of scorer-ux-audit-events.md built (see DEVLOG). Range sheet confirms, never rejects; reopen round/final with record rollback.
+- Remaining: finish-order entry mode (P1 flow); P2 rows (confirm on clear, wind > 9.9, DQ reason, lap counters…); three guides are 1,000–1,200 words (over the 900 limit); `reopenPhase`/`completeFinal` have no direct unit test (store not node-runnable); range message shows hand marks at 2 decimals.
+
 ## SD-107 racket point detail — DONE (cef440d, 2026-10-11)
 - Optional "How was the point won?" in all six racket sports + tennis 1st/2nd serve; stats keyed so untracked matches show "not tracked". See DEVLOG.
 - Follow-ups noticed (not built): tennis box DF column never filled (tennisBox lacks doubleFaults); lets on serve; code/time violations + penalty ladders (→ SD-53); medical timeouts/retirement reasons; challenge counts; squash plain Let (SD-63 remainder); padel/pickleball 1st/2nd serve; return stats; net approaches; MLP freeze (PB-09). Apply toast says "next ball" for racket sports.
