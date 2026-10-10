@@ -50,7 +50,15 @@ On the **Score** tab, "Box score" shows each player's points, and the rally log 
 - To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
 ## Fix a mistake
-Tapped the wrong team? Tap **Undo** to step back one action. The score, the server and the call all go back with it.
+- Tapped the wrong team just now? Tap **Undo** to step back one action. The score, the server and the call all go back with it.
+- To fix an older rally, go to the **Scoring** tab and tap **Edit** next to "Correct the timeline". Every rally is listed, newest first, including side-outs and changes to server 2.
+1. Find the rally and tap ✎. Change who won the rally, and the player if it was a point. Tap **Save**.
+2. To delete a rally, tap ✕. To add a rally you missed, tap ＋ on the rally just before it, or **＋ Insert a point at the very start**.
+3. Tap **Done** to close the editor.
+
+The app replays the match from the first rally, so the score, server, call and games all recalculate. In side-out scoring one fix can turn a side-out into a point, or a point into a side-out, and later rallies follow the new serve. Player points recalculate too.
+
+> **Note:** The player named on each later point stays as it was. If a fix changes who was serving later in the game, check those points in the list.
 
 ## Common questions
 ### The app named the wrong server. What do I do?

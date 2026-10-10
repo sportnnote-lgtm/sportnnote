@@ -7,6 +7,7 @@ import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair } from '../scoreline.ts';
+import { replayPoints, type PointInput } from '../rallyEdit.ts';
 
 const SETS_TO_WIN = 2;
 
@@ -128,7 +129,17 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
   return winSet(s, side, games, events, seq);
 }
 
+/** SD-21 — back to love-all of set 1 keeping the format and who served first:
+ *  the clean slate an EDIT_LOG replay rebuilds the corrected point list onto. */
+const clearMatch = (s: PadelState): PadelState => ({
+  ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, tb: [], events: [], seq: 0, ended: false,
+});
+
 export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
+  // SD-21 — timeline correction (as tennis): STAT_ADJUST only reconciles player
+  // profiles; EDIT_LOG replays a corrected point list so games/sets/serve re-derive.
+  if (a.type === 'STAT_ADJUST') return s;
+  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   // Who serves first — settable only before the first point; serve alternates
   // from there. No `side` on this action.
   if (a.type === 'SET_FIRST_SERVER') {

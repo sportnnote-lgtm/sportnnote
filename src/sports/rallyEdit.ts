@@ -22,9 +22,13 @@ import type { ScoreAction } from './types';
  *  'point' = a point whose outcome wasn't recorded (every legacy point). The rest
  *  are volleyball outcomes (SD-04): 'attack' = a kill, 'block' = a point won on a
  *  block, 'opperror' / 'serveerror' = the OPPONENT erred (no player credited). */
-export type PointKind = 'point' | 'ace' | 'block' | 'attack' | 'opperror' | 'serveerror';
+export type PointKind = 'point' | 'ace' | 'block' | 'attack' | 'opperror' | 'serveerror' | 'rally';
+// SD-21 — 'rally' = a side-out sport's rally that scored NO point (a hand-out /
+// side-out, or the hand to the 2nd server). Its PointInput `side` is who WON the
+// rally (the event's `wonBy`), so replaying it as a POINT for that side lets the
+// rally engine re-derive whether it scores or hands out. Never credits a player.
 
-const KINDS: readonly string[] = ['point', 'ace', 'block', 'attack', 'opperror', 'serveerror'];
+const KINDS: readonly string[] = ['point', 'ace', 'block', 'attack', 'opperror', 'serveerror', 'rally'];
 
 export interface PointInput {
   side: 'home' | 'away';
@@ -39,15 +43,29 @@ export interface PointInput {
  *  editor's displayed rows so their indices stay aligned. */
 export const isPointKind = (k?: string): k is PointKind => k != null && KINDS.includes(k);
 
-/** Reconstruct the ordered scoring inputs from a sport's point log. Each scored
- *  point's `side` IS who won the rally, so replaying them rebuilds the match. */
-export const pointInputs = (events: LiveEvent[]): PointInput[] =>
+/** One editable timeline row: the log event and the input it replays as. */
+export interface EditRow { e: LiveEvent; p: PointInput }
+
+/** Every editable row of a point log, in order. A scored point's `side` IS who
+ *  won the rally; a `rally` row (SD-21, side-out) uses its `wonBy`. */
+export const pointRows = (events: LiveEvent[]): EditRow[] =>
   events
-    .filter((e) => isPointKind(e.kind) && e.side)
-    .map((e) => ({ side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName }));
+    .filter((e) => isPointKind(e.kind) && (e.kind === 'rally' ? e.wonBy : e.side))
+    .map((e) => ({
+      e,
+      p: e.kind === 'rally'
+        ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const }
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName },
+    }));
+
+/** Reconstruct the ordered scoring inputs from a sport's point log, so replaying
+ *  them rebuilds the match. */
+export const pointInputs = (events: LiveEvent[]): PointInput[] => pointRows(events).map((r) => r.p);
 
 const ACTION_OF: Record<PointKind, string> = {
   point: 'POINT', ace: 'ACE', block: 'BLOCK', attack: 'ATTACK', opperror: 'OPP_ERROR', serveerror: 'SERVE_ERROR',
+  // a rally is replayed as "this side won the rally" — the engine decides if it scores
+  rally: 'POINT',
 };
 
 /** The profile stats one point of `kind` credits to the player on it. The default
@@ -55,7 +73,7 @@ const ACTION_OF: Record<PointKind, string> = {
  *  volleyball passes its own (`volleyballCredits`), where an ace or block is ALSO
  *  a point. An empty map = nobody is credited (an opponent's error). */
 export type PointCredits = (kind: PointKind) => Record<string, number>;
-export const defaultCredits: PointCredits = (kind) => ({ [statOf(kind)]: 1 });
+export const defaultCredits: PointCredits = (kind) => (kind === 'rally' ? {} : { [statOf(kind)]: 1 });
 
 /** Replay a corrected point list through the sport's own pure reducer so every
  *  downstream game/set boundary recomputes correctly. `cleared` = the match reset
@@ -67,7 +85,7 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
         type: ACTION_OF[p.kind],
         side: p.side,
         // Only a creditable kind carries a player (an opponent's error never does).
-        attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror'
+        attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror' && p.kind !== 'rally'
           ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }
           : undefined,
       }),
@@ -120,4 +138,20 @@ export function reconcileStatActions(
     actions.push({ type: 'STAT_ADJUST', attribution: { playerId: meta.playerId, stat: meta.stat, by: delta, playerName: meta.name } });
   }
   return actions;
+}
+
+/** SD-21 — everything one editor correction dispatches: the EDIT_LOG with the
+ *  corrected list, then the STAT_ADJUST deltas. `normalize` (side-out sports)
+ *  maps the edited list to what it actually replays to — a rally the server now
+ *  loses is a hand-out that credits nobody — so the EDIT_LOG and the credit diff
+ *  both follow the replay and nothing is counted twice. */
+export function correctionActions(
+  oldPts: PointInput[],
+  edited: PointInput[],
+  resolveId: (name?: string) => string | undefined,
+  creditsOf: PointCredits = defaultCredits,
+  normalize?: (points: PointInput[]) => PointInput[],
+): ScoreAction[] {
+  const next = normalize ? normalize(edited) : edited;
+  return [{ type: 'EDIT_LOG', payload: { points: next } }, ...reconcileStatActions(oldPts, next, resolveId, creditsOf)];
 }

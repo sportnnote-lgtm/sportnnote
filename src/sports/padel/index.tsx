@@ -16,6 +16,7 @@ import { theme } from '../../core/theme';
 import { SelectChip, Button, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
 import { PointBoxScore } from '../PointBoxScore';
+import { RallyPointEditor } from '../RallyPointEditor';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
@@ -35,7 +36,7 @@ const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Playe
   </View>
 );
 
-const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as PadelState;
   const act = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
@@ -67,6 +68,12 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
       {deucePoint && <Text style={ctrl.serve}>⚡ Golden point — next point wins the game.</Text>}
       <Row label={`🟡 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('home', p)} fallback={`Point ${homeName}`} />
       <Row label={`🟡 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('away', p)} fallback={`Point ${awayName}`} />
+      {/* SD-21 — edit / delete / insert a past point; the engine replays it (EDIT_LOG). */}
+      <RallyPointEditor
+        events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🟡"
+        periodLabel={(e) => (e.stamp === 'Match TB' ? 'Match TB' : `Set ${e.set ?? 1}`)}
+      />
     </View>
   );
 };

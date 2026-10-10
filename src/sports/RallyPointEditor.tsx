@@ -15,14 +15,14 @@ import { Button, SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
-import { pointInputs, isPointKind, reconcileStatActions, defaultCredits, type PointCredits, type PointInput, type PointKind } from './rallyEdit';
+import { pointRows, correctionActions, defaultCredits, type EditRow, type PointCredits, type PointInput, type PointKind } from './rallyEdit';
 
 /** One choosable point type in the editor. `credited: false` = nobody on the
  *  scoring side gets credit (an opponent's error) → no player picker. */
 export interface EditorKind { kind: PointKind; label: string; credited: boolean }
 
 /** Timeline-row icon per kind (a sport's normal point uses its own `pointIcon`). */
-const ROW_ICON: Partial<Record<PointKind, string>> = { ace: '🎯', block: '🧱', attack: '⚡', opperror: '🎁', serveerror: '🎁' };
+const ROW_ICON: Partial<Record<PointKind, string>> = { ace: '🎯', block: '🧱', attack: '⚡', opperror: '🎁', serveerror: '🎁', rally: '🔁' };
 
 interface Draft {
   mode: 'edit' | 'insert';
@@ -48,6 +48,8 @@ export function RallyPointEditor({
   kinds,
   defaultKind = 'point',
   creditsOf = defaultCredits,
+  rowsOf = pointRows,
+  normalize,
 }: {
   events: LiveEvent[];
   homeName: string;
@@ -71,6 +73,13 @@ export function RallyPointEditor({
   /** the profile stats each kind credits — kept in step with how the sport
    *  dispatches, so a correction reconciles careers exactly (see rallyEdit). */
   creditsOf?: PointCredits;
+  /** SD-21 — the editable rows of the log (default: every scored point). The
+   *  rally engine also lists side-out rallies, inferring them on older logs. */
+  rowsOf?: (events: LiveEvent[]) => EditRow[];
+  /** SD-21 — what a corrected list actually replays to (side-out: a rally the
+   *  server now loses becomes a hand-out and credits nobody). Dispatched as the
+   *  EDIT_LOG and used for the STAT_ADJUST diff, so credits match the replay. */
+  normalize?: (points: PointInput[]) => PointInput[];
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -79,15 +88,14 @@ export function RallyPointEditor({
     ? [{ kind: 'point', label: `${pointIcon} Point`, credited: true }, { kind: 'ace', label: '🎯 Ace', credited: true }]
     : []);
   const isCredited = (k: PointKind) => choices.find((c) => c.kind === k)?.credited ?? true;
-  const list = pointInputs(events); // forward order; index i ↔ i-th point event
-  const pointEvents = events.filter((e) => isPointKind(e.kind) && e.side); // must match `list` order
+  const rows = rowsOf(events);
+  const list = rows.map((r) => r.p); // forward order; index i ↔ rows[i]
   const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
   const rosterFor = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster);
 
   // Commit a rewritten point list: replay it (EDIT_LOG) and reconcile profiles.
-  const commit = (next: PointInput[]) => {
-    dispatch({ type: 'EDIT_LOG', payload: { points: next } });
-    for (const a of reconcileStatActions(list, next, rosterId, creditsOf)) dispatch(a);
+  const commit = (edited: PointInput[]) => {
+    for (const a of correctionActions(list, edited, rosterId, creditsOf, normalize)) dispatch(a);
     setDraft(null);
   };
 
@@ -98,7 +106,8 @@ export function RallyPointEditor({
     // An uncredited kind (an opponent's error) never carries a player.
     const credited = isCredited(draft.kind);
     const item: PointInput = {
-      side: draft.side, kind: choices.length ? draft.kind : 'point',
+      // no type choice → a plain "won the rally" point (the engine re-derives side-outs)
+      side: draft.side, kind: choices.length && draft.kind !== 'rally' ? draft.kind : 'point',
       playerName: credited ? draft.playerName : undefined, playerId: credited ? draft.playerId : undefined,
     };
     if (draft.mode === 'edit') {
@@ -117,7 +126,7 @@ export function RallyPointEditor({
   const beginInsert = (afterIndex: number) =>
     setDraft({ mode: 'insert', index: afterIndex, side: 'home', kind: defaultKind, playerName: undefined, playerId: undefined });
 
-  if (pointEvents.length === 0) return null;
+  if (rows.length === 0) return null;
 
   return (
     <View style={{ gap: theme.spacing(2) }}>
@@ -134,6 +143,7 @@ export function RallyPointEditor({
             <View style={st.draftBox}>
               <Text style={st.label}>{draft.mode === 'edit' ? '✎ Edit this point' : '＋ Insert a missed point'}</Text>
               <Text style={st.meta}>Who won the rally?</Text>
+              {normalize && <Text style={st.meta}>Serve and side-outs are worked out again from the rallies.</Text>}
               <View style={st.chips}>
                 <SelectChip label={homeName} active={draft.side === 'home'} onPress={() => setDraft({ ...draft, side: 'home', playerId: undefined, playerName: undefined })} />
                 <SelectChip label={awayName} active={draft.side === 'away'} onPress={() => setDraft({ ...draft, side: 'away', playerId: undefined, playerName: undefined })} />
@@ -175,17 +185,18 @@ export function RallyPointEditor({
             <Text style={st.insertTop} onPress={() => beginInsert(-1)}>＋ Insert a point at the very start</Text>
           )}
 
-          {pointEvents
-            .map((e, i) => ({ e, i }))
+          {rows
+            .map((r, i) => ({ e: r.e, p: r.p, i }))
             .reverse()
-            .map(({ e, i }) => {
-              const side = e.side as 'home' | 'away';
+            .map(({ e, p, i }) => {
+              const side = p.side; // who won the rally (a legacy 2nd-server event's own `side` is the loser)
+              const rally = p.kind === 'rally';
               return (
                 <View key={e.id} style={st.editRow}>
                   <View style={[st.dot, { backgroundColor: side === 'home' ? homeColor : awayColor }]} />
                   <Text style={st.period}>{periodLabel(e)}</Text>
                   <Text style={st.rowLabel} numberOfLines={1}>
-                    {ROW_ICON[e.kind as PointKind] ?? pointIcon} {side === 'home' ? homeName : awayName}{e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}
+                    {ROW_ICON[p.kind] ?? pointIcon} {side === 'home' ? homeName : awayName}{rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}
                   </Text>
                   {!draft && (
                     <>

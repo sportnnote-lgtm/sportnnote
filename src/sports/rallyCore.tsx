@@ -17,13 +17,14 @@ import { theme } from '../core/theme';
 import { Button, SelectChip, textStyles } from '../components/ui';
 import { LiveTimeline } from './LiveTimeline';
 import { PointBoxScore } from './PointBoxScore';
+import { RallyPointEditor } from './RallyPointEditor';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer } from './tabletennis/serve';
-import { makeRallyEngine, rallySummary, rallyScoreLine, rallyServingSide, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
+import { makeRallyEngine, rallySummary, rallyScoreLine, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
 
@@ -55,8 +56,20 @@ export interface RallyOpts {
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
   const { init, reducer } = makeRallyEngine(opts);
 
-  const ScoringControls: SportPlugin<RallyState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
+  const ScoringControls: SportPlugin<RallyState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
     const s = state as RallyState;
+    // SD-21 — "Correct the timeline": edit / delete / insert a past rally. The
+    // corrected rally list replays through this engine (EDIT_LOG), so score,
+    // games, server and side-outs re-derive; credits follow the replay.
+    const editor = (
+      <RallyPointEditor
+        events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon={opts.icon}
+        periodLabel={(e) => `Game ${e.game ?? 1}`}
+        rowsOf={rallyRows}
+        normalize={s.sideOut ? (pts) => rallyInputs(reducer(s, { type: 'EDIT_LOG', payload: { points: pts } }).events) : undefined}
+      />
+    );
     const rosterOf = (t: 'home' | 'away') => (t === 'home' ? homeRoster : awayRoster);
     const point = (side: 'home' | 'away', p?: Player) =>
       dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
@@ -122,6 +135,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
             <Button label={`Rally won — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => rallyWon('home')} />
             <Button label={`Rally won — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => rallyWon('away')} />
           </View>
+          {editor}
         </View>
       );
     }
@@ -155,6 +169,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         {startPicker}
         <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
         <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} />
+        {editor}
       </View>
     );
   };

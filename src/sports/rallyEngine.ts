@@ -6,6 +6,7 @@
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction, ScoreSummary } from './types';
 import { scoreLine as lineOf, finalSummary } from './scoreline.ts';
+import { pointRows, replayPoints, type EditRow, type PointInput } from './rallyEdit.ts';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -77,7 +78,21 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     ended: false,
   });
 
+  /** SD-21 — back to 0-0 of game 1 with the format, toss and right-court picks
+   *  kept: the clean slate an EDIT_LOG replay rebuilds the corrected rallies onto. */
+  const clearMatch = (s: RallyState): RallyState => ({
+    ...s,
+    current: { home: 0, away: 0 }, games: [], gamesWon: { home: 0, away: 0 },
+    serving: s.opening ?? 'home', serverNo: 2, srvStarter: true,
+    events: [], seq: 0, ended: false,
+  });
+
   const reducer = (s: RallyState, a: ScoreAction): RallyState => {
+    // SD-21 — timeline correction. STAT_ADJUST only reconciles player profiles (no
+    // match effect); EDIT_LOG replays the corrected rally list (each entry = who
+    // won the rally), so score, games, server and side-outs all re-derive.
+    if (a.type === 'STAT_ADJUST') return s;
+    if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
     // SD-06 — who starts this game in the right-hand court, per team. Pre-serve
     // only (the game is still 0-0); no score effect and no timeline event.
     if (a.type === 'SET_START_RIGHT') {
@@ -97,10 +112,11 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
       const events = [...s.events];
       if (s.doubles && s.serverNo === 1) {
         // Hand serve to the 2nd server on the same team — not a side-out yet.
-        events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: '2nd server', detail: 'serve → partner', side: s.serving });
+        // `side` stays the serving (losing) team as before; `wonBy` (SD-21) records the rally winner.
+        events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: '2nd server', detail: 'serve → partner', side: s.serving, kind: 'rally', wonBy: a.side, game: gameNo });
         return { ...s, serverNo: 2, srvStarter: !(s.srvStarter ?? true), events, seq };
       }
-      events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: opts.sideOutLabel, detail: `serve → ${a.side}`, side: a.side });
+      events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: opts.sideOutLabel, detail: `serve → ${a.side}`, side: a.side, kind: 'rally', wonBy: a.side, game: gameNo });
       // Server 1 at a side-out is whoever stands in the right court: the starter
       // when the team's score is even, the partner when it's odd.
       return { ...s, serving: a.side, serverNo: 1, srvStarter: s.current[a.side] % 2 === 0, events, seq };
@@ -127,6 +143,26 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
 
   return { init, reducer };
 }
+
+// ------------------------------------------------- SD-21 · point editor --
+
+/** The editable rallies of a rally-engine log, in order: every point, plus every
+ *  side-out / 2nd-server rally (side-out scoring). Logs from before SD-21 carry
+ *  those rallies without `kind`/`wonBy`, so they're inferred from the 🔁 event:
+ *  "2nd server" → `side` is the serving team, which LOST the rally; a side-out /
+ *  hand-out → `side` is the receiving team, which WON it. */
+export function rallyRows(events: LiveEvent[]): EditRow[] {
+  const legacy = (events ?? []).map((e): LiveEvent => {
+    if (e.kind || e.icon !== '🔁' || !e.side) return e;
+    const wonBy = e.label === '2nd server' ? other(e.side) : e.side;
+    const g = /^Game (\d+)$/.exec(e.stamp);
+    return { ...e, kind: 'rally', wonBy, game: g ? Number(g[1]) : undefined };
+  });
+  return pointRows(legacy);
+}
+
+/** The rally list a log replays from (see `rallyRows`). */
+export const rallyInputs = (events: LiveEvent[]): PointInput[] => rallyRows(events).map((r) => r.p);
 
 // ------------------------------------------------- SD-06 · court positions --
 // USA Pickleball rules. Doubles: each team's players switch courts only when
