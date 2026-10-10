@@ -13,6 +13,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-16: aggregate engine and cricket records leaders
+
+- **Engine:** the stat schema now computes every aggregate generically — single-match best (keeps
+  the line it came from), best figure with an ordering chain, rates with minimums (qualifiers),
+  per game / per set (appearance-aware), count-if (100s, double-doubles), coverage-aware.
+  `rankPlayers` ranks any stat with direction, minimum and tie-break chain; `leadersByKey` uses it
+  with identical outputs for existing categories.
+- **Tournament Stats tab, cricket:** Highest score, Best bowling, Best average (min 3 innings),
+  Best SR (min 30 balls), Best economy (min 10 overs), Most 50s / 100s, with "54*" and "3/12"
+  display strings and the minimum shown.
+- **Tests:** tsc + 1147.
+- **Guide:** cricket-scorecard-and-stats gains a records-leaders section.
+
+---
+
 ### 2026-10-10 — Sport depth SD-21: fix a past point in table tennis, squash, pickleball and padel
 
 - **What's new:** these sports can edit, delete or insert a past point through the same

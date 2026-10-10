@@ -2,6 +2,13 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-16: aggregate engine — DONE (acb7669, 2026-10-10)
+- **Built:** `aggregateValue` / `rankPlayers` for every agg kind, with coverage ("not tracked" → undefined), qualifiers (overridable), and tie chains (value, then best-figure `by`, then the stat's `tieBreak`, then stable order).
+- **Cricket records leaders in the Stats tab:** Highest score, Best bowling, Best batting average (min 3 innings), Best strike rate (min 30 balls), Best economy (min 10 overs), Most 50s / 100s.
+- **Declared, data only:** basketball PPG / RPG / APG and double-doubles; volleyball per-set figures (show "–" until SD-19 writes set counts).
+- No migration. Tests: 21 new · 1147 total · golden values still equal · demo 8093.
+- **Note:** demo cricket lines are old-style (runs/wickets only), so rate leaders appear only after full matches are scored.
+
 ## SD-21: point editor for TT, squash, pickleball, padel — DONE (2dc58ff, 2026-10-10)
 - **Built:** a `rally` kind with `wonBy` for side-out sports; rallyEngine and padel engine handle EDIT_LOG and STAT_ADJUST; `RallyPointEditor` gains `rowsOf`/`normalize`; `correctionActions`; the editor is mounted for table tennis, squash, pickleball and padel. Old side-out logs are inferred from their 🔁 events.
 - No migration. Tests: 21 new · an edited match equals the same match scored live · pinned fingerprints unchanged · demo 8093 (pickleball side-out flip, TT change and delete).
