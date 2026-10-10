@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-110 + SD-111 scoring comfort + held result — DONE (cb98189, 2026-10-11)
+- SD-110: screen stays awake while scoring (LiveScoring when the scorer has a started, unfinished match; results entry; live golf scorecard) — web Wake Lock API (re-acquired on visibilitychange), phone expo-keep-awake looked up lazily. Light buzz on each scoring tap, double on Undo (web navigator.vibrate; phone expo-haptics, lazy). Settings → Buzz on scoring taps (per device). Phone parts need a new APK.
+- SD-111: the deciding tap holds `status = completed` (follower "Full time" push via match_status_notify + winner/W-L/standings write-back) for 60 s; note "Result sent to followers in 0:58 · Undo · Send now". Undo cancels; leaving the screen / backgrounding sends at once; a killed app sends on next open (pendingResults, flushed on sign-in). No edge-function or migration change.
+- Tests: tests/result-hold.test.mts (8). Demo (static export of 8093 build): hold → status live; Undo → never completed; 60 s → completed + winner; next-open flush → completed.
+
 ## SD-113 cricket scoring safety + flow — DONE (28944cc, 2026-10-11)
 - All P1 rows of scorer-ux-audit-cricket.md + A4, A6, F4, F5, R5. See DEVLOG.
 - Remaining P2: A5 swap toast, A7 over-editor target, F6 past ball → extra, D1–D6 detail, R3 beamer warnings, R4 bouncer limit, R6 free-hit limits in the reducer, R7 powerplay phases, R8 last man stands, R9 DRS counter. Cricket has no frozen-oracle legacy reducer test (legacy-path tests added in the new file).
