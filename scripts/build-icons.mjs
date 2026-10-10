@@ -54,6 +54,8 @@ const png = {
   'assets/favicon.png': [svg(tile(44) + mark(1)), 48],
   'assets/brand/sportnnote-logo-512.png': [svg(tile(44) + mark(1)), 512],
   // Web app (iPhone Home Screen + Android "Add to Home screen"), maskable-safe.
+  // Versioned name: browsers cache favicons by URL for weeks, so a new logo needs a new name.
+  'public/favicon-v2.png': [svg(tile(44) + mark(1)), 48],
   'public/apple-touch-icon.png': [svg(tile(0) + mark(0.8)), 180],
   'public/icon-192.png': [svg(tile(0) + mark(0.8)), 192],
   'public/icon-512.png': [svg(tile(0) + mark(0.8)), 512],

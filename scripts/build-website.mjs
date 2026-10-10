@@ -64,7 +64,7 @@ function page({ title, description, path, body, ogType = 'website', head = '', n
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${url}">
 <meta property="og:image" content="${cfg.siteUrl}/icon.png">
-<link rel="icon" href="/favicon.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-v2.png">
 <link rel="apple-touch-icon" href="/icon.png">
 <link rel="stylesheet" href="/styles.css">${head}
 </head>
@@ -494,6 +494,9 @@ if (existsSync(join(GUIDES_DIR, 'img'))) cpSync(join(GUIDES_DIR, 'img'), join(OU
 copyFileSync(join(SITE, 'styles.css'), join(OUT, 'styles.css'));
 copyFileSync(join(ROOT, 'assets/icon.png'), join(OUT, 'icon.png'));
 copyFileSync(join(ROOT, 'assets/favicon.png'), join(OUT, 'favicon.png'));
+// Versioned copy (browsers cache favicons by URL) + /favicon.ico for browsers that ask for it.
+copyFileSync(join(ROOT, 'assets/favicon.png'), join(OUT, 'favicon-v2.png'));
+copyFileSync(join(ROOT, 'assets/favicon.png'), join(OUT, 'favicon.ico'));
 writeFileSync(join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${cfg.siteUrl}/sitemap.xml\n`);
 writeFileSync(join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
