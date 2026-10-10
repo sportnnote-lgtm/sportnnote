@@ -35,6 +35,8 @@ export const QUALIFIERS = {
 
 export const cricketStats: SportStatSchema<'cricket'> = {
   sport: 'cricket',
+  /** SD-25 — career split chips (line context) */
+  splits: ['format', 'ball', 'tournament', 'season', 'opponent'],
   filters: {
     batted,
     /** #19 lines: innings / notOut / ballsFaced known */

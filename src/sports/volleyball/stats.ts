@@ -5,6 +5,8 @@ import { ACES, BLOCKS, POINTS } from '../sharedStats.ts';
 
 export const volleyballStats: SportStatSchema<'volleyball'> = {
   sport: 'volleyball',
+  /** SD-25 — career split chips (line context) */
+  splits: ['format', 'tournament', 'season', 'opponent'],
   stats: [
     { ...POINTS, group: 'attack', weight: 1 },
     { ...ACES, group: 'serve', weight: 2 },

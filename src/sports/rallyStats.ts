@@ -8,6 +8,8 @@ import { POINTS } from './sharedStats.ts';
 export function rallyStats<S extends SportId>(sport: S, icon: string): SportStatSchema<S> {
   return {
     sport,
+    /** SD-25 — career split chips (line context) */
+    splits: ['discipline', 'format', 'tournament', 'season', 'opponent'],
     stats: [{ ...POINTS, group: 'points', weight: 1 }],
     sections: [{ id: 'points', title: 'Points', rows: [{ stat: 'points' }] }],
     careerView: 'totals',

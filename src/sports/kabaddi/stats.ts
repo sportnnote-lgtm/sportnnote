@@ -4,6 +4,8 @@ import type { SportStatSchema } from '../statSchema.ts';
 
 export const kabaddiStats: SportStatSchema<'kabaddi'> = {
   sport: 'kabaddi',
+  /** SD-25 — career split chips (line context) */
+  splits: ['format', 'tournament', 'season', 'opponent'],
   stats: [
     { key: 'raidPoints', label: 'Raid pts', short: 'raid pts', abbr: 'RAID', group: 'raiding', weight: 2, matchSummary: true },
     { key: 'tacklePoints', label: 'Tackle pts', short: 'tackle pts', abbr: 'TKL', group: 'defending', weight: 2, matchSummary: true },

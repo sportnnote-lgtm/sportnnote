@@ -9,6 +9,8 @@ const opt = (mode: string) => ({ coverage: 'optional' as const, mode });
 
 export const footballStats: SportStatSchema<'football'> = {
   sport: 'football',
+  /** SD-25 — career split chips (line context) */
+  splits: ['format', 'tournament', 'season', 'opponent'],
   stats: [
     { key: 'goals', label: 'Goals', short: 'goals', one: 'goal', group: 'attack', weight: 10, matchSummary: true },
     { ...ASSISTS, group: 'attack', weight: 6 },

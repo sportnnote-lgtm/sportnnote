@@ -13,13 +13,15 @@ import { getSport } from '../sports/registry';
 import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
-import { statCoverage, winRateOf, APPEARANCE_KEYS } from '../data/stats';
+import { statCoverage, winRateOf, APPEARANCE_KEYS, aggregate } from '../data/stats';
+import { contextsFor, splitOptions, filterLines, type SplitDim, type SplitSelection } from '../data/lineContext';
 import { lineResult, RESULT_PILL } from '../data/appearances';
 import { cricketMatchLine } from '../data/cricketCareer';
 import { statSchema, labelLong } from '../sports/statSchemas';
 import { careerFromSchema } from '../sports/statSchema';
 import { golfProfileSummary } from '../sports/golf/engine';
-import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
+import { getMyPlayerId, getPlayerEditAccess, getTournaments } from '../data/repos';
+import type { Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
 import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
 import type { RootStackParamList } from '../navigation/types';
@@ -44,6 +46,33 @@ export default function SportProfileScreen() {
   // 'self' = my own profile; 'admin' = an unclaimed player I manage (parity #12).
   const [access, setAccess] = useState<EditAccess>('none');
   const [openStat, setOpenStat] = useState<string | null>(null);
+
+  // SD-25 — split chips (Format · Singles/Doubles · Tournament · Season ·
+  // Opponent …). Each line's context is derived from its already-loaded match
+  // and tournament; a chip only filters lines and re-runs the aggregates, so
+  // switching chips makes no network calls. Tournaments load once.
+  const [sel, setSel] = useState<SplitSelection>({});
+  const [openDim, setOpenDim] = useState<SplitDim | null>(null);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  useEffect(() => {
+    let on = true;
+    getTournaments({ includeDeleted: true }).then((t) => on && setTournaments(t)).catch(() => {});
+    return () => { on = false; };
+  }, []);
+  const tournamentById = useMemo(() => new Map(tournaments.map((t) => [t.id, t])), [tournaments]);
+  const baseStats = !allStats || !official || !friendly ? null
+    : countInSportOf(allStats, sport) === 0 || scope === 'all' ? allStats : scope === 'official' ? official : friendly;
+  const sportLines = useMemo(() => (baseStats?.recent ?? []).filter((l) => l.sport === sport), [baseStats, sport]);
+  const ctxOf = useMemo(() => contextsFor(sportLines, matchById, tournamentById), [sportLines, matchById, tournamentById]);
+  const splits = useMemo(() => splitOptions(sportLines, ctxOf, statSchema(sport)?.splits ?? []), [sportLines, ctxOf, sport]);
+  // Only choices still on offer count (a scope switch can drop a value).
+  const activeSel = useMemo(() => {
+    const out: SplitSelection = {};
+    for (const o of splits) { const k = sel[o.dim]; if (k != null && o.values.some((x) => x.key === k)) out[o.dim] = k; }
+    return out;
+  }, [splits, sel]);
+  const filtered = Object.keys(activeSel).length > 0;
+  const splitStats = useMemo(() => (filtered ? aggregate(filterLines(sportLines, ctxOf, activeSel)) : null), [filtered, sportLines, ctxOf, activeSel]);
 
   // Name the nav bar after whose profile this is, so the header reads as a
   // breadcrumb (⟨ Aarav Mehta) rather than a generic "Sport".
@@ -88,12 +117,14 @@ export default function SportProfileScreen() {
   // Scope the stats to official / friendly / all. The toggle shows whenever the
   // player has any matches in this sport (consistent placement); an empty scope
   // just says so.
-  const countInSport = (s: typeof allStats) => s.bySport.find((b) => b.sport === sport)?.matches ?? 0;
+  const countInSport = (s: typeof allStats) => countInSportOf(s, sport);
   const hasSplit = countInSport(allStats) > 0;
-  const stats = !hasSplit ? allStats : scope === 'official' ? official : scope === 'friendly' ? friendly : allStats;
+  // No split chosen → exactly today's stats; else the filtered lines re-aggregated.
+  const stats = splitStats ?? baseStats ?? allStats;
 
   const bySport = stats.bySport.find((b) => b.sport === sport);
-  const emptyMsg = hasSplit && scope === 'friendly' ? `No friendly ${plugin.name.toLowerCase()} matches yet.`
+  const emptyMsg = filtered ? 'No matches for these filters.'
+    : hasSplit && scope === 'friendly' ? `No friendly ${plugin.name.toLowerCase()} matches yet.`
     : hasSplit && scope === 'official' ? `No official ${plugin.name.toLowerCase()} matches yet.`
     : `No ${plugin.name.toLowerCase()} matches recorded yet.`;
   const history = stats.recent.filter((l) => l.sport === sport);
@@ -124,6 +155,38 @@ export default function SportProfileScreen() {
             <SelectChip label={`All · ${countInSport(allStats)}`} active={scope === 'all'} onPress={() => setScope('all')} />
             <SelectChip label={`Official · ${countInSport(official)}`} active={scope === 'official'} onPress={() => setScope('official')} />
             <SelectChip label={`Friendly · ${countInSport(friendly)}`} active={scope === 'friendly'} onPress={() => setScope('friendly')} />
+          </View>
+        )}
+
+        {splits.length > 0 && (
+          <View style={{ gap: theme.spacing(2) }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipRow}>
+              {splits.map((o) => {
+                const cur = o.values.find((x) => x.key === activeSel[o.dim]);
+                return (
+                  <SelectChip
+                    key={o.dim}
+                    label={`${o.label}: ${cur?.label ?? 'All'} ${openDim === o.dim ? '▴' : '▾'}`}
+                    active={!!cur}
+                    onPress={() => setOpenDim(openDim === o.dim ? null : o.dim)}
+                  />
+                );
+              })}
+              {filtered && <SelectChip label="✕ Clear" active={false} onPress={() => { setSel({}); setOpenDim(null); }} />}
+            </ScrollView>
+            {(() => {
+              const o = splits.find((x) => x.dim === openDim);
+              if (!o) return null;
+              const pick = (k?: string) => setSel((p) => ({ ...p, [o.dim]: k }));
+              return (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipRow}>
+                  <SelectChip label="All" active={activeSel[o.dim] == null} onPress={() => pick(undefined)} />
+                  {o.values.map((x) => (
+                    <SelectChip key={x.key} label={`${x.label} · ${x.count}`} active={activeSel[o.dim] === x.key} onPress={() => pick(x.key)} />
+                  ))}
+                </ScrollView>
+              );
+            })()}
           </View>
         )}
 
@@ -318,6 +381,11 @@ export default function SportProfileScreen() {
   );
 }
 
+/** Appearances in one sport for a stats bundle. */
+function countInSportOf(s: { bySport: { sport: string; matches: number }[] }, sport: string): number {
+  return s.bySport.find((b) => b.sport === sport)?.matches ?? 0;
+}
+
 function Stat({
   value, label, coverage, open, onToggle, tone = 'accent',
 }: {
@@ -346,6 +414,7 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   scopeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  chipRow: { flexDirection: 'row', gap: theme.spacing(2), paddingRight: theme.spacing(2) },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
   statCardInner: { width: '100%', alignItems: 'center', gap: theme.spacing(1) },
   statCardWrap: { width: '30%', flexGrow: 1 },

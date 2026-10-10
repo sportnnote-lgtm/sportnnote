@@ -4,6 +4,8 @@ import type { SportStatSchema } from '../statSchema.ts';
 
 export const chessStats: SportStatSchema<'chess'> = {
   sport: 'chess',
+  /** SD-25 — career split chips (line context) */
+  splits: ['colour', 'timeControl', 'tournament', 'season', 'opponent'],
   stats: [
     { key: 'wins', label: 'Wins', short: 'wins', one: 'win', group: 'results', weight: 3, matchSummary: true },
     { key: 'draws', label: 'Draws', short: 'draws', one: 'draw', group: 'results', weight: 1, matchSummary: true },

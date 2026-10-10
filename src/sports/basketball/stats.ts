@@ -4,6 +4,8 @@ import { ASSISTS, BLOCKS, FOULS, POINTS } from '../sharedStats.ts';
 
 export const basketballStats: SportStatSchema<'basketball'> = {
   sport: 'basketball',
+  /** SD-25 — career split chips (line context) */
+  splits: ['format', 'tournament', 'season', 'opponent'],
   stats: [
     { ...POINTS, group: 'scoring', weight: 1 },
     { key: 'rebounds', label: 'Rebounds', short: 'reb', abbr: 'REB', group: 'defence', weight: 1.5, matchSummary: true },

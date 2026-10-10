@@ -4,6 +4,8 @@ import { POINTS } from '../sharedStats.ts';
 
 export const carromStats: SportStatSchema<'carrom'> = {
   sport: 'carrom',
+  /** SD-25 — career split chips (line context) */
+  splits: ['discipline', 'tournament', 'season', 'opponent'],
   stats: [
     { ...POINTS, group: 'scoring', weight: 1 },
     { key: 'boards', label: 'Boards', short: 'boards', one: 'board', group: 'scoring', weight: 1, matchSummary: true },

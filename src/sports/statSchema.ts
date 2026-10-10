@@ -198,12 +198,31 @@ export interface MeasuredEventDef {
   attempts?: number;
 }
 
+/** SD-25 (GEN-12) — a context split a career can be filtered by. Each line's
+ *  context is derived at read time from its match (`src/data/lineContext.ts`). */
+export type SplitDim =
+  | 'format' // cricket overs category, best-of, indoor / beach, n-a-side …
+  | 'ball' // cricket ball type
+  | 'discipline' // singles / doubles / mixed
+  | 'competition' // tournament vs friendly
+  | 'tournament' // which tournament
+  | 'season' // year, or a school season
+  | 'opponent'
+  | 'colour' // chess
+  | 'timeControl' // chess
+  | 'venue'
+  | 'homeAway';
+
 export interface SportStatSchema<S extends string = SportId> {
   sport: S;
   /** every stat, in display order; MVP weights keep this order */
   stats: StatDef[];
   /** named line filters used by `agg.over` (e.g. cricket 'batted') */
   filters?: Record<string, (l: StatLine) => boolean>;
+  /** SD-25 — the context splits this sport's career offers as filter chips,
+   *  in chip order. A chip shows only when the player's lines carry ≥ 2
+   *  values of it. Absent = no split chips (golf). */
+  splits?: SplitDim[];
   /** career sections, in order */
   sections?: SectionDef[];
   /** how the profile renders the career today: 'sections' from the schema,
