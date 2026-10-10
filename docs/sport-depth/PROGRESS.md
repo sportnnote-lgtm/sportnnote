@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-117 per-sport follow-ups — DONE (114d76d, 2026-10-11)
+- Slices a (football/hockey/basketball, f50d7a9), b (volleyball/kabaddi, ab68663), c (carrom/chess/golf/racket cues, 114d76d). See DEVLOG.
+- Remaining (move to own rows when picked up): chess mini-match/Armageddon; carrom penalty board (SD-68); golf SD-35/45/87/89; pickleball MLP freeze (PB-09); padel golden-point receiver prompt; squash cues; volleyball SD-58/71, kabaddi SD-59/72/83; football/hockey/basketball P2s listed under SD-117a. Note: one padel Ace marks the match as point-detail tracked (winners/errors written as 0).
+
 ## SD-117b volleyball + kabaddi follow-ups — DONE (2026-10-11)
 - See DEVLOG. Caveats: ✎ edit of a volleyball fault row drops its type/player (stats stay consistent via STAT_ADJUST); Undo label is plain "Undo" for kabaddi PAUSE/RESUME/TIMEOUT; volleyball with no lineup shows the whole squad. Remaining: SD-58 rotation + serve-error credit, SD-59, SD-71, SD-72, SD-83.
 
