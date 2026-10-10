@@ -2,6 +2,20 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-101 hockey, SD-94 swimming, SD-37/86 carrom — DONE (68dd087, 2026-10-11)
+- **Hockey:** a live sport (see DEVLOG).
+  - To verify against FIH: clock stops for PCs and after goals, yellow 5–10′, Hockey5s 2×10 with no PCs, the tie-break order.
+  - House choices: 2-match minimum for per-game leaders, 10 shots faced for save %, top-scorer tie-break goals → field goals → assists → fewer minutes. The shoot-out bonus forces shoot-outs on draws in that tournament.
+  - Not built: voice, a second-green rule, shoot-out keeper credit.
+- **Swimming:** a live sport on the shared event-sport layer; timed finals now also work for athletics.
+  - To confirm: the school programme by age group (a house choice).
+  - Not built: relay exchange times, relay lead-off as an individual PB, per-leg stroke DQ checks, 800 / 1500 lane 0 / 9 tie rule.
+- **Carrom:** doubles credit, 25-point cap, slams, statTotals, career.
+  - Not verified in the demo: doubles and the career page (unit-tested).
+  - Not built: breaker tracking (SD-78).
+- **Shared limit:** the main profile header shows Apps / W-D-L for athletes and swimmers.
+- No migration. Tests green · demo 8093 (the shared demo store is last-writer-wins across tabs).
+
 ## SD-91: athletics field events — DONE (3e6ea63, 2026-10-11)
 - **Built:** `results/field.ts` (programme by age, implement specs, TJ boards, round presets, attempt flow, bar progression / TR 26.4 check, jump-off, trial clock); the attempt card and HeightCard / HeightGrid / JumpOffCard UI; field stat lines and careers (PBs per implement).
 - **Engine fixes:** `levelKeys` groups by all earlier tie keys; attempt order reverses after rounds 3 and 5 (TR 25.6).
