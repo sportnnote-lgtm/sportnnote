@@ -10,6 +10,7 @@ import { theme } from '../core/theme';
 import { useAuth } from '../core/auth';
 import { registerForPush, setCurrentPlayerId } from '../core/notifications';
 import { followStore } from '../data/followStore';
+import { flushPendingResults } from '../data/pendingResults';
 import { getFollows, getFollowPrefs, savePushToken, getCaptainTeams, getMyPlayerId } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
@@ -228,6 +229,8 @@ export default function RootNavigator() {
     // Know my own player id so notify() can tell "for me" (show locally) from "for
     // someone else" (deliver as a remote push to their device).
     getMyPlayerId(profile?.id).then((id) => setCurrentPlayerId(id));
+    // SD-111: a match result held when the app was closed goes out now.
+    void flushPendingResults().catch(() => 0);
     registerForPush().then((token) => {
       if (token) void savePushToken(token, profile?.id);
     });

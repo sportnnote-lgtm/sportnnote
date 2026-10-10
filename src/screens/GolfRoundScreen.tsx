@@ -6,7 +6,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { confirmMatchAction } from '../components/ConfirmSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
+import { useKeepAwakeWhile } from '../core/keepAwake';
+import { tapFeedback } from '../core/haptics';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
@@ -95,6 +97,10 @@ export default function GolfRoundScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav, ev, board]);
 
+  // SD-110 — keep the marker's phone awake on the scorecard of a live round.
+  const focused = useIsFocused();
+  useKeepAwakeWhile(focused && canMark && ev?.status === 'live' && tab === 'card');
+
   if (loading) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, st.pad]}>Loading round…</Text></SafeAreaView>;
   if (!ev || !course || !fmt) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, st.pad]}>Round not found.</Text></SafeAreaView>;
 
@@ -104,6 +110,7 @@ export default function GolfRoundScreen() {
 
   const setStroke = async (e: FieldEntry, value: HoleScore, putts?: number | null) => {
     if (!canMark || ev.status === 'completed') return;
+    tapFeedback(); // SD-110
     const n = holes.length;
     const cur = cardFor(e, n);
     const card: GolfCard = { ...cur, strokes: [...cur.strokes] };

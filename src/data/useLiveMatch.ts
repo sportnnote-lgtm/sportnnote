@@ -31,6 +31,10 @@ import { effectiveLog, undoAmendDeltas, AMEND_TYPE, type AmendOp } from '../spor
 import { planAmendment } from './amendments';
 import { newUuid } from '../core/deviceId';
 import { canWriteWith, type LockStatus } from '../core/scoringLock';
+import { AppState } from 'react-native';
+import { createResultHold, type ResultHold } from './resultHold';
+import { pendingResults, flushPendingResults } from './pendingResults';
+import { tapFeedback, undoFeedback } from '../core/haptics';
 
 const toAction = (e: MatchEventRecord): ScoreAction => ({
   type: e.type,
@@ -64,6 +68,10 @@ export interface UseLiveMatch {
   /** SD-115 — the newest logged event (what Undo removes) with the state just
    *  before and after it, so the Undo bar can name it. Null when unknown. */
   lastStep: LastStep | null;
+  /** SD-111 — when the held result goes to followers (ms epoch); null = nothing held. */
+  resultSendsAt: number | null;
+  /** SD-111 — send the held result now (skip the rest of the wait). */
+  sendResultNow: () => void;
 }
 
 export interface LastStep { type: string; prev: unknown; next: unknown }
@@ -122,12 +130,43 @@ export function useLiveMatch(params: {
     return p;
   };
   // Persist the snapshot the plugin wants stored (cricket drops its derived ball log).
-  const persist = (s: unknown) =>
-    updateMatchSnapshot(matchId!, (plugin.snapshot?.(s as never) ?? s) as object, plugin.isComplete(s as never));
+  // Writes go out one after another, so an older "still open" snapshot can never
+  // land on top of a newer completed one (SD-111: a hold sent as the screen closes).
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const persist = (s: unknown, completed = plugin.isComplete(s as never)) => {
+    const id = matchId!;
+    const p = writeChainRef.current.then(() => updateMatchSnapshot(id, (plugin.snapshot?.(s as never) ?? s) as object, completed));
+    writeChainRef.current = p.catch(() => {});
+    return p;
+  };
+
+  // SD-111 — the match-deciding tap HOLDS the result for ~60 s: the board shows
+  // full time at once, but `status = completed` (which fires the "Full time" push
+  // to followers and writes the result back to the tournament) is written only
+  // when the hold runs out. Undo in the window cancels it. Leaving the screen or
+  // backgrounding the app sends it at once; a killed app sends it on next open
+  // (pendingResults). Only the scorer's dispatch arms it.
+  const sendHeldRef = useRef<() => Promise<void>>(async () => {});
+  const holdRef = useRef<ResultHold | null>(null);
+  if (!holdRef.current) holdRef.current = createResultHold(() => { void sendHeldRef.current().catch(() => {}); });
+  const hold = holdRef.current;
+  const heldForRef = useRef<string | null>(null); // the match the hold belongs to
+  const resultSendsAt = useSyncExternalStore(hold.subscribe, hold.sendsAt, hold.sendsAt);
   // Parity #19: at completion (and after an undo / correction that leaves the
   // match complete) write the ABSOLUTE figures, then the snapshot — so `won`
   // covers any line the sync inserted. Otherwise just the snapshot.
   const syncThenPersist = async (s: unknown) => {
+    if (matchId && hold.sendsAt() != null) {
+      if (plugin.isComplete(s as never)) {
+        // Still decided: save the board, keep the status open, keep counting.
+        hold.resume();
+        await persist(s, false);
+        return;
+      }
+      // Undo took the deciding tap back — nothing was sent, nothing will be.
+      hold.cancel();
+      void pendingResults.remove(matchId);
+    }
     // SD-11: the completion snapshot also writes appearance lines — let the
     // in-flight stat increments land first so neither insert clashes.
     if (matchId && plugin.isComplete(s as never)) await Promise.all([...statWritesRef.current]);
@@ -244,6 +283,7 @@ export function useLiveMatch(params: {
       const prevState = stateRef.current;
       const next = plugin.reducer(prevState, action);
       setBoth(next);
+      if (canScore && !readOnly) tapFeedback(); // SD-110: feel that the tap went in
 
       if (!matchId || !canWrite) return;
       setLastStep({ type: action.type, prev: prevState, next });
@@ -305,11 +345,12 @@ export function useLiveMatch(params: {
       if (seq === 1 && teamOrTourWants('start')) {
         void notify({ title: `🔴 ${matchLabel} is live`, body: getSport(sport).name, matchId });
       }
-      if (plugin.isComplete(next) && teamOrTourWants('result')) {
-        const sm = plugin.summary(next);
-        // SD-01: set/game sports add the per-set line — "2–1 · 21-18, 19-21, 21-15".
-        const line = plugin.scoreLine?.(next);
-        void notify({ title: `Full time — ${matchLabel}`, body: `${getSport(sport).name} · ${sm.homeScore}–${sm.awayScore}${line ? ` · ${line}` : ''}`, matchId });
+      // SD-111: the deciding tap holds the result (the "Full time" alert goes out
+      // with it — see sendHeld) instead of announcing it at once.
+      if (plugin.isComplete(next) && !plugin.isComplete(prevState as never)) {
+        hold.arm();
+        heldForRef.current = matchId;
+        void pendingResults.save({ matchId, sport, config, homeTeamName, awayTeamName, sendsAt: hold.sendsAt() ?? Date.now() });
       }
       const rec: MatchEventRecord = {
         seq,
@@ -327,7 +368,7 @@ export function useLiveMatch(params: {
       matchOutbox.enqueue(matchId, rec);
       void syncThenPersist(next).catch(() => {});
     },
-    [plugin, matchId, canWrite, sport, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId]
+    [plugin, matchId, canWrite, canScore, readOnly, sport, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config]
   );
 
   // Undo the last recorded event: drop it from the log, reverse any stat line it
@@ -335,15 +376,20 @@ export function useLiveMatch(params: {
   // walks the match back to any earlier point so the scorer can fix a mistake.
   const undo = useCallback(async () => {
     if (!matchId || !canWrite) return;
+    undoFeedback();
+    // SD-111: stop a held result's clock while the undo is in flight, so it can't
+    // go out between popping the deciding tap and re-deriving the board.
+    hold.pause();
     // Undo the freshest event wherever it lives: an unsynced tap comes off the
     // outbox; otherwise pop it from the backend log (only the active scorer may).
     let removed: MatchEventRecord | null;
     try {
       removed = matchOutbox.pendingCount(matchId) > 0 ? matchOutbox.popLast(matchId) : await popMatchEvent(matchId);
     } catch {
+      hold.resume();
       return; // scoring moved to another device — the screen shows why
     }
-    if (!removed) return;
+    if (!removed) { hold.resume(); return; }
     // Reverse every stat the event credited (attribution, its extras, and a second
     // attribution such as a fielder's catch) — otherwise an undone goal lingers.
     // A correction undoes exactly the stat changes it stored; anything else
@@ -362,6 +408,8 @@ export function useLiveMatch(params: {
   // to the initial state. The SCREEN gates who may do this and the time window.
   const reset = useCallback(async () => {
     if (!matchId || !canWrite) return;
+    hold.cancel();
+    void pendingResults.remove(matchId);
     matchOutbox.clear(matchId);
     await resetMatch(matchId);
     await rebuildFromLog();
@@ -397,5 +445,47 @@ export function useLiveMatch(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, canWrite, sport, config, plugin, rebuildFromLog, homeTeamName, awayTeamName]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend, lastStep };
+  // SD-111 — send a held result: write the completed snapshot (→ follower push +
+  // tournament write-back) if the board is still decided, plus this device's own
+  // "Full time" alert for a follower who is also the scorer.
+  sendHeldRef.current = async () => {
+    const heldFor = heldForRef.current;
+    heldForRef.current = null;
+    if (heldFor && heldFor !== matchId) {
+      // The screen moved on to another match before this ran: send the old one
+      // from its log, exactly as a next-open flush would.
+      pendingResults.release(heldFor);
+      await flushPendingResults();
+      return;
+    }
+    if (!matchId) return;
+    const s = stateRef.current;
+    if (plugin.isComplete(s as never)) {
+      await syncThenPersist(s);
+      const wants = (!!homeTeamId && followStore.wants('team', homeTeamId, 'result')) ||
+        (!!awayTeamId && followStore.wants('team', awayTeamId, 'result')) ||
+        (!!tournamentId && followStore.wants('tournament', tournamentId, 'result'));
+      if (wants) {
+        const sm = plugin.summary(s as never);
+        // SD-01: set/game sports add the per-set line — "2–1 · 21-18, 19-21, 21-15".
+        const line = plugin.scoreLine?.(s as never);
+        void notify({ title: `Full time — ${homeTeamName ?? 'Home'} vs ${awayTeamName ?? 'Away'}`, body: `${getSport(sport).name} · ${sm.homeScore}–${sm.awayScore}${line ? ` · ${line}` : ''}`, matchId });
+      }
+    }
+    await pendingResults.remove(matchId);
+  };
+  const sendResultNow = useCallback(() => { hold.sendNow(); }, [hold]);
+
+  // Never sit on a result: leaving this match (unmount / another match) or the
+  // app going to the background sends it straight away.
+  useEffect(() => {
+    if (!matchId) return;
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'background' || st === 'inactive') hold.sendNow(); });
+    return () => {
+      sub.remove();
+      if (!hold.sendNow()) pendingResults.release(matchId);
+    };
+  }, [matchId, hold]);
+
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend, lastStep, resultSendsAt, sendResultNow };
 }

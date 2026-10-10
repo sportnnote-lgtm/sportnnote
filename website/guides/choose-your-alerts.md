@@ -65,6 +65,9 @@ If you untick everything, the sheet says you'll get nothing for them. They stay 
 ### Will a corrected score send me the alert again?
 Usually not. After full time, an alert only goes out when a player's score goes up. Removing a goal that never happened sends nothing. If a goal is moved to the right player, that player's followers may get an alert for it.
 
+### Why did the result alert come a minute after the match ended?
+The scorer's last tap is held for about 60 seconds, so a wrong tap can be undone before anyone is told. See [Screen on, tap buzz and the 60-second result hold](/guides/scoring-phone-and-result-hold/).
+
 ### I follow a team and a player in it. Will I get two alerts?
 You may get one for the team and one for the player, because they're separate follows. Turn off **Match starts** or **Result** on one of them if that's too many.
 

@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-110 screen awake + tap buzz · SD-111 60-second result hold
+- **Keep awake (G6):** `useKeepAwakeWhile()` — web `src/core/keepAwake.ts` (Screen Wake Lock, re-acquired when the page is visible again), phone `keepAwake.native.ts` (expo-keep-awake via `requireOptionalNativeModule('ExpoKeepAwake')`, silent no-op on older APKs). On in LiveScoring (focused, scorer, started, not complete), ResultsEvent (Enter results, editable) and GolfRound (live scorecard, marker).
+- **Haptics (G7):** `tapFeedback()` on every scorer dispatch (useLiveMatch), golf stroke and results save; `undoFeedback()` on Undo. Web `navigator.vibrate` (12 ms / 18-60-18), phone expo-haptics (Light impact / Warning), lazy like react-native-share. Settings → **Buzz on scoring taps** (`src/core/hapticsPref.ts`, per device).
+- **Result hold (G4):** the follower "Full time" push is the `match_status_notify` trigger on `status → completed`, and the same write does the results write-back, so the hook now holds that write: the deciding dispatch arms `createResultHold` (`src/data/resultHold.ts`); during the hold snapshots are written with completed=false; Undo pauses then cancels; timer / Send now / unmount / AppState background writes the completed snapshot (abs. stat sync + winner + W/L) and the local "Full time" alert. Writes are serialised. A persisted record (`src/data/pendingResults.ts`, AsyncStorage) is flushed on sign-in (RootNavigator) if the app died mid-hold. Note UI: `src/components/ResultHoldNote.tsx`.
+- **Packages:** expo-keep-awake ~56.0.3, expo-haptics ~56.0.3 (`npx expo install`) — **new APK needed** for the phone parts; web works now.
+- **Guide:** new `scoring-phone-and-result-hold`; choose-your-alerts Q.
+- **Verified:** tests/result-hold.test.mts (8); tsc clean for these files; demo (static export served on 8097, 8093 kept reloading from concurrent edits): chess friendly → note "Result sent to followers in 0:57", status live; Undo → never completed; 60 s → completed, winner home; flush-on-open → completed; vibrate 12 / [18,60,18]; settings toggle persists. Wake lock request seen (denied by the embedded pane, as expected).
+
+---
+
 ### 2026-10-11 — SD-113 cricket scoring safety + flow
 - **No batter left:** when nobody (or only retired-hurt batters) can come in, the wicket panel offers **Confirm wicket — innings closed**; a "No one else can bat? Close the innings" option (with confirm) covers subs/fielders who can't bat. Engine: v:2 `noBatterLeft` closes the innings (`closedNoBatter`), NRR charges full overs; old logs unchanged.
 - **Subs:** Concussion and Impact sub moved from the scoring column to Quick options tiles, with an "X off → Y on. Confirm?" sheet.

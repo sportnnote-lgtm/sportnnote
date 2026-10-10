@@ -28,7 +28,9 @@ import { PersonPicker } from '../components/PersonPicker';
 import { useParamState } from '../navigation/useParamState';
 import { matchShareText, matchLink } from '../core/shareText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useKeepAwakeWhile } from '../core/keepAwake';
+import { ResultHoldNote } from '../components/ResultHoldNote';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { getSport } from '../sports/registry';
@@ -230,7 +232,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setLock(l);
   }, [matchId]);
 
-  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep, resultSendsAt, sendResultNow } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -874,6 +876,13 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const undoWhat = sport === 'cricket' ? null : undoLabel(lastStep, { home: homeName, away: awayName }, (s) => {
     try { const m = plugin.summary(s as never); return m.homeScore != null && m.awayScore != null ? `${m.homeScore}-${m.awayScore}` : null; } catch { return null; }
   });
+  // SD-110 — keep the phone awake while this scorer is on a match in progress.
+  const focused = useIsFocused();
+  useKeepAwakeWhile(focused && canScore && started && !complete && !retiredLocally);
+  // SD-111 — the deciding tap's result is held ~60 s; Undo here cancels it.
+  const resultHoldNote = canScore && resultSendsAt != null ? (
+    <ResultHoldNote sendsAt={resultSendsAt} onUndo={undo} onSendNow={sendResultNow} />
+  ) : null;
   const undoBar = canScore && eventCount > 0 ? (
     <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo${undoWhat ? `: ${undoWhat}` : ` last ${sport === 'cricket' ? 'ball' : 'update'}`}`} accessibilityHint="Tap repeatedly to rewind to any earlier point" onPress={undo}>
       <Text style={[st.undoText, { flexShrink: 1 }]} numberOfLines={1}>↶  Undo{undoWhat ? `: ${undoWhat}` : ''}</Text>
@@ -2141,6 +2150,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 )
               )}
               {retiredBanner}
+              {resultHoldNote}
               {undoBar}
               {liveEditBar}
               {strikeCard}

@@ -8,7 +8,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useKeepAwakeWhile } from '../core/keepAwake';
+import { tapFeedback } from '../core/haptics';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
@@ -192,6 +194,7 @@ export default function ResultsEventScreen() {
 
   const save = async (entry: FieldEntry, next: EntryResult) => {
     setError(null);
+    tapFeedback(); // SD-110: feel that the mark went in
     setLocal((m) => new Map(m).set(entry.id, next));
     try {
       setPending(await saveEntryResult(entry.id, next));
@@ -199,6 +202,10 @@ export default function ResultsEventScreen() {
     } catch (e) { setError((e as Error).message); }
   };
   const resultOf = (e: FieldEntry): EntryResult => (local.get(e.id) ?? (e.result as EntryResult) ?? {});
+
+  // SD-110 — keep the official's phone awake while entering results of an open event.
+  const focused = useIsFocused();
+  useKeepAwakeWhile(focused && editable && view === 'enter');
 
   if (loading) return <LoadingState />;
   if (!phase || !f || !def) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, { padding: 16 }]}>This event isn't available.</Text></SafeAreaView>;

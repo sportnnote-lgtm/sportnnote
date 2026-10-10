@@ -8,6 +8,7 @@ import { isSupabaseConfigured } from './src/core/supabase';
 import { hydrateDemo, startDemoAutosave } from './src/data/demoStore';
 import { hydrateReminderPrefs } from './src/data/reminderPrefs';
 import { hydrateTimeZone } from './src/core/time';
+import { hydrateHapticsPref } from './src/core/hapticsPref';
 import { startTelemetry } from './src/core/telemetry';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { ConfirmSheetHost } from './src/components/ConfirmSheet';
@@ -22,6 +23,7 @@ export default function App() {
   useEffect(() => {
     void hydrateReminderPrefs(); // user reminder timers (both demo + live)
     void hydrateTimeZone(); // viewer's display timezone (default IST)
+    void hydrateHapticsPref(); // SD-110: scoring-tap buzz on/off (this device)
     if (isSupabaseConfigured) return;
     let on = true;
     hydrateDemo().then(() => {

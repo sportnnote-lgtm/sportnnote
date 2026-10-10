@@ -20,6 +20,7 @@ import { isSupport } from '../core/roles';
 import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/time';
 import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
 import { onboardingStore } from '../data/onboardingStore';
+import { hapticsPref, useHapticsOn } from '../core/hapticsPref';
 import { getMyPlayerId } from '../data/repos';
 import { getUnreadThreadCount } from '../data/messages';
 import { useFocusEffect } from '@react-navigation/native';
@@ -88,6 +89,7 @@ export default function SettingsScreen() {
   const reminderSummary = reminders.length ? reminders.map((m) => formatLead(m).replace(' before', '')).join(' · ') : 'Off';
   const tz = useUserTimeZone();
   const [tzOpen, setTzOpen] = useState(false);
+  const hapticsOn = useHapticsOn();
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -105,6 +107,9 @@ export default function SettingsScreen() {
               ))}
             </View>
           )}
+          <View style={st.divider} />
+          {/* SD-110: a light buzz on each scoring tap — this phone only. */}
+          <Row icon="📳" label="Buzz on scoring taps" value={hapticsOn ? 'On' : 'Off'} onPress={() => hapticsPref.set(!hapticsOn)} />
         </Group>
 
         <Group title="Account">
