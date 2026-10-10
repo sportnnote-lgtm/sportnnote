@@ -68,3 +68,37 @@ describe('tennis serve — tiebreak point rotation', () => {
     assert.equal(serveInfo(s).side, first);
   });
 });
+
+describe('tennis serve — doubles tiebreak rotation (SD-103, ITF Rule 5(b))', () => {
+  const tag = (s: TennisState) => { const x = serveInfo(s); return `${x.side[0]}${x.slot}`; };
+  const toSixAll = (s: TennisState) => { for (let g = 0; g < 6; g++) { s = winGame(s, 'home'); s = winGame(s, 'away'); } return s; };
+
+  test('A1, B1 B1, A2 A2, B2 B2, A1 A1 — partners alternate turns inside the breaker', () => {
+    let s = toSixAll(init({ playersPerSide: 2 })); // 12 games: home served 0..10 (slots 0,1,0,1,0,1)
+    const seen: string[] = [];
+    for (let i = 0; i < 9; i++) { seen.push(tag(s)); s = run(s, point(i % 2 ? 'home' : 'away')); }
+    assert.deepEqual(seen, ['h0', 'a0', 'a0', 'h1', 'h1', 'a1', 'a1', 'h0', 'h0']);
+  });
+
+  test('away opening: the breaker starts with the away player due to serve', () => {
+    let s = toSixAll(init({ playersPerSide: 2, firstServer: 'away' }));
+    const seen: string[] = [];
+    for (let i = 0; i < 5; i++) { seen.push(tag(s)); s = run(s, point('home')); }
+    assert.deepEqual(seen, ['a0', 'h0', 'h0', 'a1', 'a1']);
+  });
+
+  test('after the breaker, the side that received first serves the next set (ITF Rule 5(b))', () => {
+    let s = toSixAll(init({ playersPerSide: 2 }));
+    assert.equal(serveInfo(s).side, 'home'); // home opened the breaker
+    s = run(s, ...Array.from({ length: 7 }, () => point('home'))); // 7-0 → set to home
+    assert.deepEqual(s.sets, [[7, 6]]);
+    assert.deepEqual(serveInfo(s), { side: 'away', slot: 0 });
+  });
+
+  test('singles tiebreak: side rotation unchanged', () => {
+    let s = toSixAll(init());
+    const sides: string[] = [];
+    for (let i = 0; i < 7; i++) { sides.push(serveInfo(s).side); s = run(s, point('home')); }
+    assert.deepEqual(sides, ['home', 'away', 'away', 'home', 'home', 'away', 'away']);
+  });
+});

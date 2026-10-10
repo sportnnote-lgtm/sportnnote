@@ -437,13 +437,12 @@ describe('replay: padel — Valencia Premier Padel P1 2026 final, Coello/Tapia b
     const sides = Array.from({ length: TB1.length }, (_, i) => padel.serveInfo(prefix(tbStart + i)).side);
     assert.deepEqual(sides, ['home', 'away', 'away', 'home', 'home', 'away', 'away', 'home', 'home', 'away', 'away']);
   });
-  test('doubles tiebreak: the partner serves the pair’s second turn (ITF/FIP serving order)',
-    { todo: 'serve.ts: the doubles slot is fixed for the whole tiebreak; it should rotate A1, B1, A2, B2 (also tennis doubles)' }, () => {
-      const tbStart = len(SET1);
-      // Set 1 home served games 0,2,..,10 with slots 0,1,0,1,0,1; away 1,3,..,11 the same.
-      const slots = Array.from({ length: 7 }, (_, i) => padel.serveInfo(prefix(tbStart + i)));
-      assert.deepEqual(slots.map((x) => `${x.side[0]}${x.slot}`), ['h0', 'a0', 'a0', 'h1', 'h1', 'a1', 'a1']);
-    });
+  test('doubles tiebreak: the partner serves the pair’s second turn (ITF/FIP serving order, SD-103)', () => {
+    const tbStart = len(SET1);
+    // Set 1 home served games 0,2,..,10 with slots 0,1,0,1,0,1; away 1,3,..,11 the same.
+    const slots = Array.from({ length: 11 }, (_, i) => padel.serveInfo(prefix(tbStart + i)));
+    assert.deepEqual(slots.map((x) => `${x.side[0]}${x.slot}`), ['h0', 'a0', 'a0', 'h1', 'h1', 'a1', 'a1', 'h0', 'h0', 'a0', 'a0']);
+  });
   test('scoreline + summary (SD-01)', () => {
     assert.equal(padel.scoreLine(s), '6-7(4), 6-1, 7-6(5)');
     assert.equal(padel.scoreLine(s, 'away'), '7-6(4), 1-6, 6-7(5)');
@@ -486,6 +485,10 @@ describe('replay: padel short sets + match tiebreak (synthetic FIP short-set for
     // 5 + 9 = 14 games played (set 2's tiebreak counted as one) → home, who received first in that breaker, serves first.
     const sides = Array.from({ length: 5 }, (_, i) => padel.serveInfo(playPadel(CFG, LOG.slice(0, mtbStart + i))).side);
     assert.deepEqual(sides, ['home', 'away', 'away', 'home', 'home']);
+    // SD-103: partners alternate turns in the match tiebreak too. Home is due with
+    // slot 1 (game index 14), away with slot 1 (its next game would be index 15).
+    const who = Array.from({ length: 9 }, (_, i) => padel.serveInfo(playPadel(CFG, LOG.slice(0, mtbStart + i))));
+    assert.deepEqual(who.map((x) => `${x.side[0]}${x.slot}`), ['h1', 'a1', 'a1', 'h0', 'h0', 'a0', 'a0', 'h1', 'h1']);
     const nine = playPadel(CFG, [...LOG.slice(0, mtbStart), ...L.tbPts('away', 8), ...L.tbPts('home', 9)]);
     assert.equal(nine.ended, false); // 9-8
   });
