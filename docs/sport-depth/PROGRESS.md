@@ -2,6 +2,13 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-91: athletics field events — DONE (3e6ea63, 2026-10-11)
+- **Built:** `results/field.ts` (programme by age, implement specs, TJ boards, round presets, attempt flow, bar progression / TR 26.4 check, jump-off, trial clock); the attempt card and HeightCard / HeightGrid / JumpOffCard UI; field stat lines and careers (PBs per implement).
+- **Engine fixes:** `levelKeys` groups by all earlier tie keys; attempt order reverses after rounds 3 and 5 (TR 25.6).
+- No migration. Tests: 30 new · 1705 total · demo 8093 (U14 Girls LJ with a tie at 8th, U14 Boys HJ with a jump-off).
+- **Founder / research to verify:** U12–U16 implement weights are labelled "check yours" (not checked against AFI / SGFI). TR 25.5 / 25.17 / 25.22 / 26.4 / 26.8–26.9 details were implemented from memory (the WA PDF was unreachable).
+- **Left:** road / XC, walks, combined (SD-92 / 93), steeplechase, 60 mH, per-athlete TJ board, vertical qualification stops, a historic school record book.
+
 ## SD-32: volleyball statTotals — DONE (8a9462b, 2026-10-11)
 - **Built:** `volleyball/totals.ts` makes points, attackPoints, blocks and aces absolute, merged with setsPlayed and sets W-L. Errors stay team-level (never player-attributed). The unresolved-name safeguard is in place, and the D2 resync heals pre-SD-04 aces and blocks into points.
 - Tests: 12 new · 1675 total · demo 8093.
