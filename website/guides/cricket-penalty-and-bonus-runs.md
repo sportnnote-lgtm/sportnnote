@@ -5,7 +5,7 @@ category: Cricket scoring
 audience: Scorers
 sports: cricket
 order: 60
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 Sometimes runs change hands without a ball being hit. The ball hits a fielder's helmet left on the ground, a batter runs on the pitch, or your inter-house league gives 2 bonus runs for hitting the net. Coaches also want to know who dropped a catch. Three buttons on the **Scoring** tab cover these: **⚖️ Penalty**, **± Runs** and **🧤 Fielding**. Each one shows a preview of the new score before you apply it.
@@ -18,15 +18,18 @@ Sometimes runs change hands without a ball being hit. The ball hits a fielder's 
 1. Tap **⚖️ Penalty**.
 2. Under "Who is penalised?", tap the team that broke the rule: the batting side or the fielding side.
 3. The runs are set to **5**. Type another number if your rules say so.
-4. Tap a reason. The list depends on which side is penalised, for example **Ball hit helmet** or **Illegal fielding** for the fielding side, and **Short run** or **Damaging pitch** for the batting side. Tap **Other** to type your own. The reason is optional.
+4. Tap a reason. The list depends on which side is penalised, for example **Ball hit helmet** or **Illegal fielding** for the fielding side, and **Short run** or **Damaging pitch** for the batting side. Tap **Other** to type your own. A reason is needed before you can apply.
 5. Check the preview, for example "Red House will be 87 (82+5)".
-6. Tap **Apply**.
+6. Tap **Apply now (between balls)**, or, if it happened on a delivery you haven't entered yet, tap **+5 on the next ball** (see below).
 
 Penalty runs go to the other team as extras. They don't count as a ball and aren't charged to any bowler or batter. They show as "pen" in the extras, and in the timeline, for example "5 penalty runs to Red House — Ball hit helmet".
 
 If the batting side is penalised, the runs go to the fielding side's own innings. In the second innings that is the team that batted first, so the target goes up by the same amount, and the preview says "target becomes …".
 
 > **Important:** Reasons marked with * mean the ball itself doesn't count as one of the over. If you already entered it, tap **↶ Undo** to remove it, then apply the penalty. Runs the batters completed before the offence (plus the one in progress if they had crossed) still count, so add them with **± Runs**. The app shows the same reminder when you pick a starred reason.
+
+## A penalty on a delivery
+If it happened on a ball (say the ball hit a helmet after the batters ran 1), tap **+5 on the next ball** instead of Apply. The line above the run buttons turns amber. Enter the ball as usual: the runs and the penalty go in as one entry, with one **↶ Undo**. Tap **⚖️ +5 ✕** to cancel. Starred reasons can't ride on a ball.
 
 ## Step by step: bonus or minus runs
 Use this for local rules, such as +2 for hitting the net or −5 for every dismissal in box cricket.

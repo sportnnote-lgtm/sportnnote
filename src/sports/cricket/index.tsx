@@ -17,7 +17,7 @@ import { theme } from '../../core/theme';
 import { useMask } from '../../core/disputeMask';
 import { playerLink, idByName } from '../playerLink';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
-import { confirmMatchAction } from '../../components/ConfirmSheet';
+import { askConfirm, confirmMatchAction } from '../../components/ConfirmSheet';
 import { RankBadge, podiumColor } from '../../components/Rank';
 import { LiveTimeline } from '../LiveTimeline';
 import { resolvePotm, type ResolvedPotm } from '../../data/ratings';
@@ -202,7 +202,7 @@ const roster0 = (r: Player[]) => r.length > 0;
 const MAIN_DISMISSALS: DismissalKind[] = ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket'];
 const MORE_DISMISSALS: DismissalKind[] = ['obstruct', 'hittwice', 'mankad', 'retired', 'retiredout', 'timedout'];
 /** On a free hit only these can happen (UI-only — the engine doesn't police it). */
-const FREE_HIT_DISMISSALS: DismissalKind[] = ['runout', 'obstruct', 'hittwice', 'mankad', 'retired', 'retiredout'];
+const FREE_HIT_DISMISSALS: DismissalKind[] = ['runout', 'obstruct', 'hittwice', 'mankad', 'retired', 'retiredout', 'timedout'];
 const needsFielder = (k: DismissalKind) => k === 'caught' || k === 'runout';
 const needsBatter = (k: DismissalKind) => k === 'runout' || k === 'obstruct' || k === 'retired' || k === 'retiredout' || k === 'timedout';
 /** Inline law hints (no modal). */
@@ -376,12 +376,15 @@ const digits2 = (t: string) => t.replace(/[^0-9]/g, '').slice(0, 2);
  * maths). `state` is the live (possibly Super-Over) innings, like the controls.
  */
 function MoreRunsPanel({
-  mode, state, dispatch, battingName, bowlingName, homeName, awayName, fielders, keeperId, inSuperOver, onClose,
+  mode, state, dispatch, battingName, bowlingName, homeName, awayName, fielders, keeperId, inSuperOver, onArm, onClose,
 }: {
   mode: MorePanel; state: CricketState; dispatch: (a: ScoreAction) => void;
   battingName: string; bowlingName: string; homeName: string; awayName: string;
   /** the fielding side's roster */
-  fielders: Player[]; keeperId?: string; inSuperOver: boolean; onClose: () => void;
+  fielders: Player[]; keeperId?: string; inSuperOver: boolean;
+  /** SD-113 (R2) — arm this penalty to ride on the next delivery (one ball, one Undo). */
+  onArm?: (p: { runs: number; against: 'batting' | 'fielding'; reason: string; teamName: string }) => void;
+  onClose: () => void;
 }) {
   const bat = state.battingSide;
   const nameOf = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
@@ -427,6 +430,10 @@ function MoreRunsPanel({
     const ok = !!next && next !== state;
     const before = state.scores[to].runs;
     const starred = PEN_REASONS[against].find(([l]) => l === reason)?.[1];
+    // A4 — a reason is required (no one-tap +5 with defaults).
+    const canApply = ok && !!why;
+    // R2 — on a delivery: only a reason where the ball still counts.
+    const canArm = !!onArm && !!why && !!r && r >= 1 && !starred;
     return (
       <View style={ctrl.wktPanel}>
         {head('⚖️ Penalty runs')}
@@ -455,7 +462,13 @@ function MoreRunsPanel({
             → {nameOf(to)} will be {next.scores[to].runs} ({before}+{r}){next.target !== state.target ? ` · target becomes ${next.target}` : ''}{chaseLine(next)}
           </Text>
         ) : null}
-        {apply(action, ok)}
+        {!why ? <Text style={ctrl.hint}>Pick a reason first.</Text> : null}
+        {onArm ? (
+          <Button label={`+${r || 5} on the next ball`} variant="ghost" disabled={!canArm}
+            accessibilityLabel="Add this penalty to the next delivery you enter"
+            onPress={() => { if (!canArm || !why) return; onArm({ runs: r, against, reason: why, teamName: nameOf(to) }); onClose(); }} />
+        ) : null}
+        {apply(action, canApply, 'Apply now (between balls)')}
       </View>
     );
   }
@@ -549,6 +562,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     fielder2?: Player | null;
     /** run out / obstructing: where the wicket was broken */
     end?: 'striker' | 'bowler';
+    /** SD-113 (A6) — the next batter picked; committed by "Confirm wicket" */
+    newBat?: Player;
   } | null>(null);
   const [extraMode, setExtraMode] = useState<'b' | 'lb' | 'nb' | 'wd' | 'more' | null>(null);
   // No-ball panel: runs run without hitting it are byes or leg byes (`runsAs`).
@@ -556,7 +571,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   // Overthrows builder (parity #15): runs completed + overthrows.
   const [otRan, setOtRan] = useState(0);
   const [otOver, setOtOver] = useState<number | null>(null);
-  const [impact, setImpact] = useState<{ side: 'home' | 'away'; out?: Player; kind?: 'impact' | 'concussion' } | null>(null);
+  // SD-113 (R2) — a five-run penalty armed to ride on the next delivery.
+  const [ballPen, setBallPen] = useState<{ runs: number; against: 'batting' | 'fielding'; reason: string; teamName: string } | null>(null);
+  // SD-113 (F2) — the bowler chips, collapsed to "Bowling: X · change" once a bowler is set.
+  const [showBowlers, setShowBowlers] = useState(false);
   // Bowling rules (parity #17): the mid-over replacement panel (with its reason)
   // and the "Allow anyway" quota override.
   const [bowlRepl, setBowlRepl] = useState<'injury' | 'suspended' | 'other' | null>(null);
@@ -571,7 +589,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const state = soActive ? rootState.superOver!.state : rootState;
   // A new over (or innings) closes a stale replacement panel / quota override.
   const overKey = `${soActive ? 'so' : ''}${state.innings}:${Math.floor(state.scores[state.battingSide].balls / state.ballsPerOver)}`;
-  useEffect(() => { setBowlRepl(null); setForceQuota(false); }, [overKey]);
+  useEffect(() => { setBowlRepl(null); setForceQuota(false); setShowBowlers(false); }, [overKey]);
+  // An armed penalty belongs to this innings only.
+  const innKey = `${soActive ? 'so' : ''}${state.innings}`;
+  useEffect(() => { setBallPen(null); }, [innKey]);
 
   // Regulation ended level (or a Super Over just tied) — offer the tie-breaker.
   if (rootState.pendingTie && !soActive) {
@@ -613,22 +634,17 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     else if (!nonStrikerId) dispatch({ type: 'SET_NONSTRIKER', payload: { id: p.id, name: p.fullName } });
   };
 
-  // ----- Impact Player flow (one substitution per side, format-gated) -----
-  const finishImpact = (inP: Player) => {
-    if (!impact?.out) return;
-    dispatch({
-      type: impact.kind === 'concussion' ? 'CONCUSSION_SUB' : 'IMPACT_SUB',
-      side: impact.side,
-      payload: { side: impact.side, outId: impact.out.id, outName: impact.out.fullName, inId: inP.id, inName: inP.fullName },
-    });
-    setImpact(null);
+  // SD-113 (R2): an armed penalty rides on the next delivery (v: 2), then disarms.
+  const penPayload = (): Record<string, unknown> => {
+    if (!ballPen) return {};
+    setBallPen(null);
+    return { v: 2, pen: { runs: ballPen.runs, against: ballPen.against, reason: ballPen.reason, teamName: ballPen.teamName } };
   };
-
   const ball = (extra: Partial<ScoreAction> & { type: string }) =>
     dispatch({
       ...extra,
       side: state.battingSide,
-      payload: { ...extra.payload, strikerId, strikerName, bowlerId, bowlerName },
+      payload: { ...extra.payload, strikerId, strikerName, bowlerId, bowlerName, ...penPayload() },
     } as ScoreAction);
 
   // `boundary`: 4/6 keys send true; all-run / overthrow / typed runs send false
@@ -647,7 +663,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const keeper = state.keepers[other(state.battingSide)];
   // Fielder pickers list the keeper first (marked †) — most run-outs end there.
   const keeperFirst = (r: Player[]) => (keeper ? [...r.filter((p) => p.id === keeper.id), ...r.filter((p) => p.id !== keeper.id)] : r);
-  const finishWicket = (newBat?: Player) => {
+  const finishWicket = (newBat?: Player, closeInnings = false) => {
     if (!wf?.kind) return;
     const kind = wf.kind;
     const takesRuns = RUNS_KINDS.includes(kind);
@@ -664,6 +680,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       newBatId: newBat?.id, newBatName: newBat?.fullName,
     };
     if (kind === 'runout' && wf.fielder2) { payload.fielder2Id = wf.fielder2.id; payload.fielder2Name = wf.fielder2.fullName; }
+    // SD-113 (A3/R1): no batter left to come in — the innings closes on this wicket.
+    if (closeInnings) { payload.v = 2; payload.noBatterLeft = true; }
+    // SD-113 (R2): an armed penalty rides on a delivery (not retired / timed out / Mankad).
+    if (!NO_DELIVERY.includes(kind)) Object.assign(payload, penPayload());
     if (takesRuns && wf.end) payload.end = wf.end;
     if (takesRuns && runsAs !== 'bat') payload.runsAs = runsAs;
     // One credit rule for the live UI and the ball editor (engine `wicketAttribution`).
@@ -696,14 +716,17 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       : wf.more ? [...MAIN_DISMISSALS, ...MORE_DISMISSALS] : MAIN_DISMISSALS;
     const showMore = !wf.offExtra && !state.freeHit && !wf.more;
     const takesRuns = !!k && RUNS_KINDS.includes(k);
-    const runsStep = takesRuns && wf.runs === undefined;
-    const fielderStep = !!k && needsFielder(k) && !wf.fielder && !runsStep;
-    const fielder2Step = k === 'runout' && !!wf.fielder && wf.fielder2 === undefined;
-    const fieldDone = !!k && (!needsFielder(k) || !!wf.fielder) && (k !== 'runout' || wf.fielder2 !== undefined);
-    const batterStep = !!k && needsBatter(k) && !wf.batterOut && !runsStep && fieldDone;
+    const runsN = takesRuns ? (wf.runs ?? 0) : 0;
+    // SD-113 (F3) — a run out in fewer taps: the runs completed default to 0 and
+    // sit on the same screen as the fielder; the 2nd fielder is optional (folded);
+    // who's out + which end is ONE pick.
+    const fielderStep = !!k && needsFielder(k) && !wf.fielder;
+    const fieldDone = !!k && (!needsFielder(k) || !!wf.fielder);
+    const runsBlock = takesRuns && !wf.end;
+    const outEndStep = takesRuns && fieldDone && !wf.end;
+    const batterStep = !!k && !takesRuns && needsBatter(k) && !wf.batterOut && fieldDone;
     const batterKnown = !!k && (!needsBatter(k) || !!wf.batterOut);
-    const endStep = takesRuns && !runsStep && fieldDone && batterKnown && !wf.end;
-    const newBatStep = !!k && !runsStep && fieldDone && batterKnown && (!takesRuns || !!wf.end);
+    const newBatStep = !!k && fieldDone && batterKnown && (!takesRuns || !!wf.end);
     // Live scorecard-style recap of the dismissal as the scorer builds it, so the
     // wicket reads back ("c Fielder b Bowler") before the final confirming tap.
     const keeperNm = keeper?.name;
@@ -713,11 +736,13 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     const descriptor = !k ? '' : haveFielder ? composeDismissal(k, bowlerName, wf.fielder?.fullName, keeperNm, wf.fielder2?.fullName) : WICKET_LABEL[k].toLowerCase();
     // e.g. "1 run", "2 byes", "1 leg bye", "2 run(s) off a wide", "1 bye off a no-ball"
     const unitOf = (x: string | undefined, n: number) => (x === 'bye' ? `bye${n === 1 ? '' : 's'}` : x === 'legbye' ? `leg bye${n === 1 ? '' : 's'}` : `run${n === 1 ? '' : 's'}`);
-    const runsTail = takesRuns && wf.runs != null
-      ? ` · ${wf.runs} ${unitOf(wf.runsAs === 'noball' ? wf.nbRunsAs : wf.runsAs, wf.runs)}${wf.runsAs === 'wide' ? ' off a wide' : wf.runsAs === 'noball' ? ' off a no-ball' : ''}`
+    const runsTail = takesRuns && (runsN > 0 || wf.runsAs === 'wide' || wf.runsAs === 'noball')
+      ? ` · ${runsN} ${unitOf(wf.runsAs === 'noball' ? wf.nbRunsAs : wf.runsAs, runsN)}${wf.runsAs === 'wide' ? ' off a wide' : wf.runsAs === 'noball' ? ' off a no-ball' : ''}`
       : '';
     const offTail = !takesRuns && wf.offExtra ? ` · off a ${wf.offExtra === 'wide' ? 'wide' : 'no-ball'}` : '';
-    const wktRecap = k ? `${batterKnown ? `${outName} ` : ''}${descriptor}${runsTail}${offTail}` : '';
+    const endTail = takesRuns && wf.end ? ` · ${wf.end === 'striker' ? 'striker' : 'bowler'}'s end` : '';
+    const nextTail = wf.newBat ? ` · next in: ${wf.newBat.fullName}` : '';
+    const wktRecap = k ? `${batterKnown ? `${outName} ` : ''}${descriptor}${runsTail}${offTail}${endTail}${nextTail}` : '';
     // "Next ball: X faces" — from where the wicket was broken (run out /
     // obstructing), else the new batter takes the vacated end; then the over end.
     const onExtraNow = takesRuns ? (wf.runsAs === 'wide' || wf.runsAs === 'noball' ? wf.runsAs : undefined) : wf.offExtra;
@@ -725,11 +750,26 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
     const ballsNow = state.ballsInOver >= state.ballsPerOver ? 0 : state.ballsInOver;
     const overEndNow = !!k && !NO_DELIVERY.includes(k) && legalNow && ballsNow + 1 >= state.ballsPerOver;
     const outEnd = k && takesRuns && wf.end ? wf.end : outWho === 'nonstriker' ? 'bowler' : 'striker';
-    const nextFaces = k ? creaseAfterWicket({ strikerId, strikerName, nonStrikerId, nonStrikerName }, outWho === 'nonstriker' ? 'nonstriker' : 'striker', outEnd, { id: '__new', name: 'the new batter' }, overEndNow) : undefined;
+    const newName = wf.newBat?.fullName ?? 'the new batter';
+    const nextFaces = k ? creaseAfterWicket({ strikerId, strikerName, nonStrikerId, nonStrikerName }, outWho === 'nonstriker' ? 'nonstriker' : 'striker', outEnd, { id: '__new', name: newName }, overEndNow) : undefined;
     // Legacy (no `end`) rotation isn't previewed for odd runs; every new wicket sends `end`.
     const facesText = nextFaces?.strikerName ? `Next ball: ${nextFaces.strikerName} faces${overEndNow ? ' (over ends)' : ''}` : '';
     const hint = k ? DISMISSAL_HINT[k] : undefined;
     const extraToggle = k === 'stumped' || k === 'hitwicket' ? 'wide' : k === 'hittwice' ? 'noball' : undefined;
+    // SD-113 (A3) — who can still come in. A retired-hurt batter is listed (they
+    // may resume, F5) but may not be able to: with only those left, the wicket
+    // can close the innings.
+    const freshLeft = newBatOptions.filter((p) => !state.batting[p.id]?.retired);
+    const wktWord = k === 'retired' ? 'Confirm' : 'Confirm wicket';
+    const closeInnings = async () => {
+      const ok = await askConfirm({
+        title: 'Close the innings?',
+        message: `No one else can come in to bat, so ${battingName}'s innings ends here (counts as all out).`,
+        yesLabel: 'Yes, close the innings', noLabel: 'No, pick a batter', tone: 'danger',
+      });
+      if (ok) finishWicket(undefined, true);
+    };
+    const bowlerP = bowlerId ? bowlingRoster.find((p) => p.id === bowlerId) : undefined;
     return (
       <View style={ctrl.wktPanel}>
         <View style={ctrl.creaseHead}>
@@ -754,16 +794,21 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         )}
 
         {/* Stumped / hit wicket can fall off a wide; hit twice off a no-ball. */}
-        {extraToggle && (
+        {extraToggle && !wf.newBat && (
           <View style={ctrl.chips}>
             <SelectChip label={extraToggle === 'wide' ? 'Off a wide' : 'Off a no-ball'} active={wf.offExtra === extraToggle}
               onPress={() => setWf({ ...wf, offExtra: wf.offExtra === extraToggle ? undefined : extraToggle })} />
           </View>
         )}
 
-        {runsStep && (
+        {runsBlock && (
           <>
-            <Text style={ctrl.meta}>Runs were</Text>
+            <Text style={ctrl.meta}>Runs completed before the {k === 'obstruct' ? 'obstruction' : 'run out'}</Text>
+            <View style={ctrl.chips}>
+              {[0, 1, 2, 3].map((n) => (
+                <SelectChip key={n} label={String(n)} active={runsN === n} onPress={() => setWf({ ...wf, runs: n })} />
+              ))}
+            </View>
             <View style={ctrl.chips}>
               {RUNS_WERE.filter(([v]) => (v !== 'bye' || R.byes) && (v !== 'legbye' || R.legByes)).map(([v, label]) => (
                 <SelectChip key={v} label={label} active={(wf.runsAs ?? 'bat') === v} onPress={() => setWf({ ...wf, runsAs: v })} />
@@ -777,12 +822,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
                 ))}
               </View>
             )}
-            <Text style={ctrl.meta}>Runs completed before the {k === 'obstruct' ? 'obstruction' : 'run out'}?</Text>
-            <View style={ctrl.chips}>
-              {[0, 1, 2, 3].map((n) => (
-                <SelectChip key={n} label={String(n)} active={false} onPress={() => setWf({ ...wf, runs: n })} />
-              ))}
-            </View>
             <RunsInput placeholder="Other runs completed (0–99)" addLabel={(n) => `${n} run${n === 1 ? '' : 's'}`} onAdd={(n) => setWf({ ...wf, runs: n })} />
           </>
         )}
@@ -791,21 +830,45 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <>
             <Text style={ctrl.meta}>{k === 'caught' ? 'Caught by?' : 'Run out by? (fielder)'}</Text>
             <View style={ctrl.chips}>
-              {keeperFirst(bowlingRoster).map((p) => (
+              {/* SD-113 (F4) — caught and bowled, one tap. */}
+              {k === 'caught' && bowlerP && (
+                <SelectChip label={`c & b ${bowlerP.fullName}`} active={false} onPress={() => setWf({ ...wf, fielder: bowlerP })} />
+              )}
+              {keeperFirst(bowlingRoster).filter((p) => k !== 'caught' || p.id !== bowlerId).map((p) => (
                 <SelectChip key={p.id} label={`${p.fullName}${p.id === keeper?.id ? ' †' : ''}`} active={false} onPress={() => setWf({ ...wf, fielder: p })} />
               ))}
             </View>
           </>
         )}
 
-        {fielder2Step && (
-          <>
-            <Text style={ctrl.meta}>2nd fielder (optional)</Text>
+        {/* Run out: the 2nd fielder is optional — folded, never a step. */}
+        {k === 'runout' && !!wf.fielder && (
+          wf.fielder2 === undefined ? (
             <View style={ctrl.chips}>
-              {keeperFirst(bowlingRoster).filter((p) => p.id !== wf.fielder?.id).map((p) => (
-                <SelectChip key={p.id} label={`${p.fullName}${p.id === keeper?.id ? ' †' : ''}`} active={false} onPress={() => setWf({ ...wf, fielder2: p })} />
+              <SelectChip label="+ 2nd fielder (optional)" active={false} onPress={() => setWf({ ...wf, fielder2: null })} />
+            </View>
+          ) : (
+            <>
+              <Text style={ctrl.meta}>2nd fielder (optional)</Text>
+              <View style={ctrl.chips}>
+                {keeperFirst(bowlingRoster).filter((p) => p.id !== wf.fielder?.id).map((p) => (
+                  <SelectChip key={p.id} label={`${p.fullName}${p.id === keeper?.id ? ' †' : ''}`} active={wf.fielder2?.id === p.id}
+                    onPress={() => setWf({ ...wf, fielder2: wf.fielder2?.id === p.id ? null : p })} />
+                ))}
+              </View>
+            </>
+          )
+        )}
+
+        {outEndStep && (
+          <>
+            <Text style={ctrl.meta}>Who's out, and at which end? (crossed → the far end)</Text>
+            <View style={ctrl.chips}>
+              {([['striker', 'striker'], ['nonstriker', 'bowler'], ['striker', 'bowler'], ['nonstriker', 'striker']] as const).map(([who, end]) => (
+                <SelectChip key={`${who}-${end}`}
+                  label={`${(who === 'striker' ? strikerName : nonStrikerName) ?? (who === 'striker' ? 'Striker' : 'Non-striker')}${who === 'nonstriker' ? ' (NS)' : ''} · ${end === 'striker' ? "striker's" : "bowler's"} end`}
+                  active={false} onPress={() => setWf({ ...wf, batterOut: who, end, runs: runsN })} />
               ))}
-              <SelectChip label="Skip" active={false} onPress={() => setWf({ ...wf, fielder2: null })} />
             </View>
           </>
         )}
@@ -820,16 +883,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           </>
         )}
 
-        {endStep && (
-          <>
-            <Text style={ctrl.meta}>Wicket broken at</Text>
-            <View style={ctrl.chips}>
-              <SelectChip label="Striker's end" active={false} onPress={() => setWf({ ...wf, end: 'striker' })} />
-              <SelectChip label="Bowler's end" active={false} onPress={() => setWf({ ...wf, end: 'bowler' })} />
-            </View>
-          </>
-        )}
-
         {newBatStep && (
           allOut ? (
             <Button label="Confirm wicket — all out" variant="danger" onPress={() => finishWicket(undefined)} />
@@ -839,54 +892,28 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
               <Text style={ctrl.meta}>Next batsman in</Text>
               {newBatOptions.length > 0 ? (
                 <View style={ctrl.chips}>
-                  {newBatOptions.map((p) => (
-                    <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => finishWicket(p)} />
-                  ))}
+                  {newBatOptions.map((p) => {
+                    const card = state.batting[p.id];
+                    // SD-113 (F5) — a retired-hurt batter coming back is labelled.
+                    const label = card?.retired ? `${p.fullName} (resumes, ${card.runs}*)` : p.fullName;
+                    return <SelectChip key={p.id} label={label} active={wf.newBat?.id === p.id} onPress={() => setWf({ ...wf, newBat: wf.newBat?.id === p.id ? undefined : p })} />;
+                  })}
                 </View>
-              ) : <Text style={ctrl.hint}>No batsmen left to come in.</Text>}
+              ) : null}
+              {/* SD-113 (A6) — picking the batter selects; this confirms. */}
+              {wf.newBat ? (
+                <Button label={`${wktWord} — ${wf.newBat.fullName} in`} variant="danger" onPress={() => finishWicket(wf.newBat)} />
+              ) : null}
+              {freshLeft.length === 0 ? (
+                <>
+                  <Text style={ctrl.hint}>{newBatOptions.length === 0 ? 'No batsmen left to come in.' : 'Only retired-hurt batters are left — pick one if they can resume.'}</Text>
+                  <Button label={`${wktWord} — innings closed`} variant="danger" onPress={() => finishWicket(undefined, true)} />
+                </>
+              ) : !wf.newBat ? (
+                <Button label="No one else can bat? Close the innings" variant="ghost" onPress={() => void closeInnings()} />
+              ) : null}
             </>
           )
-        )}
-      </View>
-    );
-  }
-
-  // Impact Player flow: choose who makes way (not currently batting/bowling),
-  // then the substitute coming in. One per side, enforced in the reducer.
-  if (impact) {
-    const sideName = impact.side === 'home' ? homeName : awayName;
-    const pool = rosterFor(impact.side);
-    const outOptions = pool.filter((p) => !isUnavailable(p.id) && !atCrease(p.id) && p.id !== bowlerId && !isOut(p.id));
-    const inOptions = pool.filter((p) => !isUnavailable(p.id) && p.id !== impact.out?.id && !state.batting[p.id] && !state.bowling[p.id]);
-    return (
-      <View style={ctrl.wktPanel}>
-        <View style={ctrl.creaseHead}>
-          <Text style={ctrl.label}>{impact.kind === 'concussion' ? '🚑 Concussion sub' : '⚡ Impact Player'} — {sideName}</Text>
-          <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => setImpact(null)} />
-        </View>
-        {impact.out ? <View style={ctrl.impactRecap}><Text style={ctrl.impactRecapText}>⚡ {impact.out.fullName} makes way</Text></View> : null}
-        {!impact.out ? (
-          <>
-            <Text style={ctrl.meta}>Who makes way? (takes no further part — can't be batting or bowling now)</Text>
-            {outOptions.length > 0 ? (
-              <View style={ctrl.chips}>
-                {outOptions.map((p) => (
-                  <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setImpact({ ...impact, out: p })} />
-                ))}
-              </View>
-            ) : <Text style={ctrl.hint}>No eligible player to replace right now.</Text>}
-          </>
-        ) : (
-          <>
-            <Text style={ctrl.meta}>Choose the {impact.kind === 'concussion' ? 'replacement' : 'Impact Player'} coming in</Text>
-            {inOptions.length > 0 ? (
-              <View style={ctrl.chips}>
-                {inOptions.map((p) => (
-                  <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => finishImpact(p)} />
-                ))}
-              </View>
-            ) : <Text style={ctrl.hint}>No unused substitute available — add one to the matchday squad.</Text>}
-          </>
         )}
       </View>
     );
@@ -895,8 +922,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const need = !strikerId ? 'striker' : !nonStrikerId ? 'a non-striker' : null;
   const wk = state.keepers[other(state.battingSide)]?.name;
   const pp = inPowerplay(state);
-  // Sides that still have their Impact Player available (format-gated).
-  const impactSides = (['home', 'away'] as const).filter((sd) => state.impactEnabled && !state.impactUsed[sd]);
 
   // Over-complete flow: the reducer clears the bowler after the 6th legal ball, so
   // `!bowlerId` with a whole number of overs bowled means an over just finished.
@@ -904,6 +929,14 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   const nextOverNo = oversDone + 1;
   const oversLabel = state.oversLimit < 100 ? ` of ${state.oversLimit}` : ''; // hide for timeless/Test
   const overJustDone = !bowlerId && cur.balls > 0 && cur.balls % state.ballsPerOver === 0;
+
+  // SD-113 (A2) — one fixed-height line above the run pad: the free hit, an armed
+  // penalty, or who's on strike. It never appears / disappears, so the pad never
+  // moves between taps; a free hit also tints the pad's frame.
+  const penLine = ballPen ? `⚖️ +${ballPen.runs} to ${ballPen.teamName} (${ballPen.reason}) on this ball` : '';
+  const slotText = state.freeHit
+    ? `🟢 FREE HIT — can’t be out bowled, caught, lbw or stumped${penLine ? ` · ${penLine}` : ''}`
+    : penLine || `🏏 ${strikerName ?? '—'} on strike${bowlerName ? ` · 🎯 ${bowlerName}` : ''}`;
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
@@ -945,12 +978,6 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         {need && <Text style={ctrl.hint}>Pick {need} to start scoring.</Text>}
       </View>
 
-      {state.freeHit && (
-        <View style={ctrl.freeHitBox}>
-          <Text style={ctrl.freeHitText}>🟢 FREE HIT — {strikerName ?? 'the batter'} can’t be out bowled, caught, lbw or stumped</Text>
-        </View>
-      )}
-
       {/* Overs & target (parity #18): change overs, a rain cut (DLS) or a typed
           target — one card. Not during a Super Over / the tie call, nor a Test. */}
       {!soActive && !rootState.ended && !rootState.pendingTie && rootState.oversLimit < 100 && (
@@ -963,83 +990,174 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         </View>
       ) : null}
 
-      {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
-      <View style={ctrl.row}>
-        {[0, 1, 2, 3, 4, 6].map((r) => (
-          <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]} disabled={!canScore}
-            accessibilityLabel={r === 4 ? 'Four (boundary)' : r === 6 ? 'Six (boundary)' : undefined}
-            onPress={() => (r === 4 || r === 6 ? runs(r, { boundary: true }) : runs(r))} />
-        ))}
-        {/* 7th key: rare run values (a compact ghost key so the pad stays one row). */}
-        <TouchableOpacity
-          style={[ctrl.flex, ctrl.moreKey, extraMode === 'more' && ctrl.moreKeyOn, !canScore && { opacity: 0.4 }]}
-          disabled={!canScore} activeOpacity={0.85} accessibilityRole="button"
-          accessibilityLabel="More runs: all run, overthrows, other" accessibilityState={{ disabled: !canScore, expanded: extraMode === 'more' }}
-          onPress={() => { const open = extraMode === 'more'; closeMore(); if (!open) setExtraMode('more'); }}>
-          <Text style={ctrl.moreKeyText} numberOfLines={1} adjustsFontSizeToFit>5·7·+</Text>
-        </TouchableOpacity>
-      </View>
-
-      {extraMode === 'more' && (() => {
-        const otTotal = otRan + (otOver ?? 0);
-        const credit = otOver === 4 || otTotal === 4 ? ' · not a four' : otTotal === 6 ? ' · not a six' : '';
+      {/* Bowler — must be (re)named at the start of each over. Parity #17: the
+          engine's canBowl drives every chip (quota, last over, suspended); once a
+          ball of the over is bowled the bowler is locked — only an inline
+          mid-over replacement can take over. Every SET_BOWLER here sends v: 2.
+          SD-113 (F2): once named, the chips collapse to "Bowling: X · Change" so
+          the run pad and Wicket / Wide / No ball sit together. */}
+      {(() => {
+        const locked = midOver(state) && !!bowlerId;
+        const q = state.bowlerQuota ?? 0;
+        const checks = bowlingRoster.map((p) => ({ p, c: canBowl(state, p.id) }));
+        const tagFor = (reason?: string) => reason === 'last-over' ? ' · last over' : reason === 'quota' ? ' · quota done'
+          : reason === 'barred' ? ' · suspended' : reason === 'this-over' ? ' · this over' : reason === 'unavailable' ? ' ⚡' : '';
+        const chipLabel = (p: Player, reason?: string) => {
+          const used = oversUsed(state, p.id);
+          const tally = q > 0 ? ` · ${used}/${q}` : used > 0 ? ` · ${used} ov` : '';
+          return `${p.fullName}${tally}${tagFor(reason)}`;
+        };
+        // Pickable now: ok, or held back only by the quota while "Allow anyway" is on.
+        const pickable = (c: { ok: boolean; reason?: string }) => c.ok || (forceQuota && c.reason === 'quota');
+        const pick = (p: Player, c: { ok: boolean; reason?: string }, reason?: 'injury' | 'suspended' | 'other') => {
+          dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName, v: 2, ...(reason ? { reason } : {}), ...(!c.ok && c.reason === 'quota' ? { force: true } : {}) } });
+          setForceQuota(false);
+          setBowlRepl(null);
+          setShowBowlers(false);
+        };
+        // Replacements: anyone but the current bowler (bowlers of THIS over are
+        // already blocked by canBowl).
+        const pool = checks.filter(({ p }) => p.id !== bowlerId);
+        const onlyQuota = (list: typeof checks) => list.length > 0 && !list.some(({ c }) => c.ok) && list.some(({ c }) => c.reason === 'quota');
+        const quotaOut = (list: typeof checks) => onlyQuota(list) && (
+          <View style={ctrl.rulesChip}>
+            <Text style={ctrl.rulesChipText}>Everyone has bowled their quota</Text>
+            {!forceQuota && <Button label="Allow anyway" variant="ghost" style={ctrl.swapBtn} onPress={() => setForceQuota(true)} />}
+          </View>
+        );
+        const card = bowlerId ? state.bowling[bowlerId] : undefined;
+        const figs = card ? ` · ${oversStr(card.balls, state.ballsPerOver)}-${card.runs}-${card.wickets}` : '';
+        const collapsed = !!bowlerId && !showBowlers && !bowlRepl;
+        if (collapsed) {
+          return (
+            <View style={ctrl.creaseHead}>
+              <Text style={[ctrl.label, ctrl.flex]} numberOfLines={1}>🎯 Bowling: {bowlerName}{figs}{wk ? `  ·  † ${wk}` : ''}</Text>
+              <Button label="Change" variant="ghost" style={ctrl.swapBtn}
+                accessibilityLabel={locked ? 'Replace the bowler mid-over' : 'Change the bowler'}
+                onPress={() => (locked ? setBowlRepl('injury') : setShowBowlers(true))} />
+            </View>
+          );
+        }
         return (
-          <View style={ctrl.morePanel}>
-            <Text style={ctrl.meta}>All run — not a boundary</Text>
-            <View style={ctrl.row}>
-              {[4, 5, 7].map((n) => (
-                <Button key={n} label={`${n} runs`} color={battingColor} style={ctrl.flex}
-                  onPress={() => { runs(n, { boundary: false }); closeMore(); }} />
-              ))}
+          <View style={{ gap: theme.spacing(2) }}>
+            {overJustDone ? <View style={ctrl.overDone}><Text style={ctrl.overDoneText}>✓ Over {oversDone} complete — new bowler needed</Text></View> : null}
+            <View style={ctrl.creaseHead}>
+              <Text style={[ctrl.label, ctrl.flex]}>
+                🎯 {bowlerId ? `Bowling: ${bowlerName}` : `Over ${nextOverNo}${oversLabel} — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
+              </Text>
+              {bowlerId && !locked && showBowlers ? <Button label="Done" variant="ghost" style={ctrl.swapBtn} onPress={() => setShowBowlers(false)} /> : null}
             </View>
-            <Text style={ctrl.meta}>Overthrows — runs completed, then the overthrows</Text>
-            <View style={[ctrl.chips, { alignItems: 'center' }]}>
-              <Text style={ctrl.moreLabel}>Ran</Text>
-              {[0, 1, 2, 3].map((n) => <SelectChip key={n} label={String(n)} active={otRan === n} onPress={() => setOtRan(n)} />)}
-            </View>
-            <View style={[ctrl.chips, { alignItems: 'center' }]}>
-              <Text style={ctrl.moreLabel}>Overthrows</Text>
-              {[1, 2, 3, 4].map((n) => <SelectChip key={n} label={n === 4 ? '4 (boundary)' : String(n)} active={otOver === n} onPress={() => setOtOver(n)} />)}
-            </View>
-            {otOver ? (
-              <>
-                <Text style={ctrl.morePreview}>= {otTotal} to {strikerName ?? 'the striker'}{credit}</Text>
-                <Button label={`Add ${otTotal} run${otTotal === 1 ? '' : 's'}`} color={battingColor}
-                  onPress={() => { runs(otTotal, { boundary: false, overthrows: otOver }); closeMore(); }} />
-              </>
-            ) : null}
-            <Text style={ctrl.meta}>Any other number</Text>
-            <RunsInput onAdd={(n) => { runs(n, { boundary: false }); closeMore(); }} addLabel={(n) => `Add ${n}`} />
+            {!locked && (
+              <View style={ctrl.chips}>
+                {checks.map(({ p, c }) => (
+                  <SelectChip
+                    key={p.id}
+                    label={chipLabel(p, p.id === bowlerId ? undefined : c.reason)}
+                    active={bowlerId === p.id}
+                    disabled={!pickable(c)}
+                    onPress={() => { if (p.id !== bowlerId) pick(p, c); else setShowBowlers(false); }}
+                  />
+                ))}
+              </View>
+            )}
+            {!locked && !bowlRepl && quotaOut(checks)}
+            {!locked && checks.some(({ p, c }) => p.id !== bowlerId && c.reason === 'unavailable') && (
+              <Text style={ctrl.hint}>⚡ = replaced by an Impact Player or concussion sub — can’t bowl.</Text>
+            )}
+            {!bowlerId && <Text style={ctrl.hint}>Bowlers of the last over (any part of it) can't bowl this one.</Text>}
+            {locked && bowlRepl && (
+              <View style={ctrl.morePanel}>
+                <View style={ctrl.creaseHead}>
+                  <Text style={[ctrl.label, ctrl.flex]}>Replace {bowlerName} at {oversStr(cur.balls, state.ballsPerOver)} — balls so far stay with them</Text>
+                  <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => { setBowlRepl(null); setForceQuota(false); }} />
+                </View>
+                <View style={ctrl.chips}>
+                  {([['injury', 'Injured'], ['suspended', 'Suspended'], ['other', 'Other']] as const).map(([v, l]) => (
+                    <SelectChip key={v} label={l} active={bowlRepl === v} onPress={() => setBowlRepl(v)} />
+                  ))}
+                </View>
+                {bowlRepl === 'suspended' && <Text style={ctrl.meta}>{bowlerName} can't bowl again this innings.</Text>}
+                <Text style={ctrl.meta}>Who finishes the over?</Text>
+                <View style={ctrl.chips}>
+                  {pool.map(({ p, c }) => (
+                    <SelectChip key={p.id} label={chipLabel(p, c.reason)} active={false} disabled={!pickable(c)} onPress={() => pick(p, c, bowlRepl)} />
+                  ))}
+                </View>
+                {quotaOut(pool)}
+              </View>
+            )}
           </View>
         );
       })()}
 
-      {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
+      {/* SD-113 (F2) — ONE scoring block: the run pad, then Wicket / Wide / No
+          ball, each panel opening right under its own buttons (F1). */}
       <View style={{ gap: theme.spacing(2) }}>
-        {(R.byes || R.legByes) && (
+        <View style={[ctrl.padSlot, state.freeHit && ctrl.padSlotFreeHit, !state.freeHit && !!ballPen && ctrl.padSlotPen]}
+          accessibilityLiveRegion="polite" accessibilityLabel={slotText}>
+          <Text style={[ctrl.padSlotText, state.freeHit && ctrl.freeHitText, !state.freeHit && !!ballPen && ctrl.padSlotPenText]} numberOfLines={1}>{slotText}</Text>
+        </View>
+        {/* Runs — credited to the on-strike batsman; strike rotates automatically. */}
+        <View style={[ctrl.padFrame, state.freeHit && ctrl.padFrameFreeHit]}>
           <View style={ctrl.row}>
-            {R.byes && <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />}
-            {R.legByes && <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />}
-          </View>
-        )}
-        {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
-          <View style={ctrl.row}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={[ctrl.flex, ctrl.padKey]}
-                onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
+            {[0, 1, 2, 3, 4, 6].map((r) => (
+              <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]} disabled={!canScore}
+                accessibilityLabel={r === 4 ? 'Four (boundary)' : r === 6 ? 'Six (boundary)' : undefined}
+                onPress={() => (r === 4 || r === 6 ? runs(r, { boundary: true }) : runs(r))} />
             ))}
+            {/* 7th key: rare run values (a compact ghost key so the pad stays one row). */}
+            <TouchableOpacity
+              style={[ctrl.flex, ctrl.moreKey, extraMode === 'more' && ctrl.moreKeyOn, !canScore && { opacity: 0.4 }]}
+              disabled={!canScore} activeOpacity={0.85} accessibilityRole="button"
+              accessibilityLabel="More runs: all run, overthrows, other" accessibilityState={{ disabled: !canScore, expanded: extraMode === 'more' }}
+              onPress={() => { const open = extraMode === 'more'; closeMore(); if (!open) setExtraMode('more'); }}>
+              <Text style={ctrl.moreKeyText} numberOfLines={1} adjustsFontSizeToFit>5·7·+</Text>
+            </TouchableOpacity>
           </View>
-        )}
-        {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
-          <>
-            <RunsInput min={1} placeholder={`Other ${extraMode === 'lb' ? 'leg byes' : 'byes'} (1–99)`}
-              addLabel={(n) => `Add ${extraMode === 'lb' ? 'LB' : 'B'} ${n}`}
-              onAdd={(n) => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
-            <Text style={ctrl.meta}>Overthrows off a bye → add them to the byes.</Text>
-          </>
-        )}
+        </View>
+
+        {extraMode === 'more' && (() => {
+          const otTotal = otRan + (otOver ?? 0);
+          const credit = otOver === 4 || otTotal === 4 ? ' · not a four' : otTotal === 6 ? ' · not a six' : '';
+          return (
+            <View style={ctrl.morePanel}>
+              <Text style={ctrl.meta}>All run — not a boundary</Text>
+              <View style={ctrl.row}>
+                {[4, 5, 7].map((n) => (
+                  <Button key={n} label={`${n} runs`} color={battingColor} style={ctrl.flex}
+                    onPress={() => { runs(n, { boundary: false }); closeMore(); }} />
+                ))}
+              </View>
+              <Text style={ctrl.meta}>Overthrows — runs completed, then the overthrows</Text>
+              <View style={[ctrl.chips, { alignItems: 'center' }]}>
+                <Text style={ctrl.moreLabel}>Ran</Text>
+                {[0, 1, 2, 3].map((n) => <SelectChip key={n} label={String(n)} active={otRan === n} onPress={() => setOtRan(n)} />)}
+              </View>
+              <View style={[ctrl.chips, { alignItems: 'center' }]}>
+                <Text style={ctrl.moreLabel}>Overthrows</Text>
+                {[1, 2, 3, 4].map((n) => <SelectChip key={n} label={n === 4 ? '4 (boundary)' : String(n)} active={otOver === n} onPress={() => setOtOver(n)} />)}
+              </View>
+              {otOver ? (
+                <>
+                  <Text style={ctrl.morePreview}>= {otTotal} to {strikerName ?? 'the striker'}{credit}</Text>
+                  <Button label={`Add ${otTotal} run${otTotal === 1 ? '' : 's'}`} color={battingColor}
+                    onPress={() => { runs(otTotal, { boundary: false, overthrows: otOver }); closeMore(); }} />
+                </>
+              ) : null}
+              <Text style={ctrl.meta}>Any other number</Text>
+              <RunsInput onAdd={(n) => { runs(n, { boundary: false }); closeMore(); }} addLabel={(n) => `Add ${n}`} />
+            </View>
+          );
+        })()}
+
+        <View style={ctrl.row}>
+          <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => { closeMore(); setWf({}); }} />
+          <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
+          <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
+        </View>
+
         {extraMode === 'nb' && (
-          <>
+          <View style={ctrl.morePanel}>
             <Text style={ctrl.meta}>No ball{R.noBallRuns !== STANDARD_RULES.noBallRuns ? ` (+${R.noBallRuns})` : ''}{R.noBallLegal ? ' · counts as a ball' : ''} — runs off the bat?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4, 5, 6].map((n) => (
@@ -1070,10 +1188,10 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             </View>
             <Button label="🎯 …or a WICKET off the no-ball" variant="danger" disabled={!canScore}
               onPress={() => { setExtraMode(null); setWf({ offExtra: 'noball' }); }} />
-          </>
+          </View>
         )}
         {extraMode === 'wd' && (
-          <>
+          <View style={ctrl.morePanel}>
             <Text style={ctrl.meta}>Wide{R.wideRuns !== STANDARD_RULES.wideRuns ? ` (+${R.wideRuns})` : ''}{R.wideLegal ? ' · counts as a ball' : ''} — any runs run (byes on the wide, or 4 if it beat the keeper)?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4].map((n) => (
@@ -1086,134 +1204,46 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
               onAdd={(n) => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
             <Button label="🎯 …or a WICKET off the wide" variant="danger" disabled={!canScore}
               onPress={() => { setExtraMode(null); setWf({ offExtra: 'wide' }); }} />
+          </View>
+        )}
+
+        {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
+        {(R.byes || R.legByes) && (
+          <View style={ctrl.row}>
+            {R.byes && <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />}
+            {R.legByes && <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />}
+          </View>
+        )}
+        {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
+          <>
+            <View style={ctrl.row}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={[ctrl.flex, ctrl.padKey]}
+                  onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
+              ))}
+            </View>
+            <RunsInput min={1} placeholder={`Other ${extraMode === 'lb' ? 'leg byes' : 'byes'} (1–99)`}
+              addLabel={(n) => `Add ${extraMode === 'lb' ? 'LB' : 'B'} ${n}`}
+              onAdd={(n) => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
+            <Text style={ctrl.meta}>Overthrows off a bye → add them to the byes.</Text>
           </>
         )}
       </View>
 
-      {/* Bowler — must be (re)named at the start of each over. Parity #17: the
-          engine's canBowl drives every chip (quota, last over, suspended); once a
-          ball of the over is bowled the bowler is locked — only an inline
-          mid-over replacement can take over. Every SET_BOWLER here sends v: 2. */}
-      {(() => {
-        const locked = midOver(state) && !!bowlerId;
-        const q = state.bowlerQuota ?? 0;
-        const checks = bowlingRoster.map((p) => ({ p, c: canBowl(state, p.id) }));
-        const tagFor = (reason?: string) => reason === 'last-over' ? ' · last over' : reason === 'quota' ? ' · quota done'
-          : reason === 'barred' ? ' · suspended' : reason === 'this-over' ? ' · this over' : reason === 'unavailable' ? ' ⚡' : '';
-        const chipLabel = (p: Player, reason?: string) => {
-          const used = oversUsed(state, p.id);
-          const tally = q > 0 ? ` · ${used}/${q}` : used > 0 ? ` · ${used} ov` : '';
-          return `${p.fullName}${tally}${tagFor(reason)}`;
-        };
-        // Pickable now: ok, or held back only by the quota while "Allow anyway" is on.
-        const pickable = (c: { ok: boolean; reason?: string }) => c.ok || (forceQuota && c.reason === 'quota');
-        const pick = (p: Player, c: { ok: boolean; reason?: string }, reason?: 'injury' | 'suspended' | 'other') => {
-          dispatch({ type: 'SET_BOWLER', payload: { id: p.id, name: p.fullName, v: 2, ...(reason ? { reason } : {}), ...(!c.ok && c.reason === 'quota' ? { force: true } : {}) } });
-          setForceQuota(false);
-          setBowlRepl(null);
-        };
-        // Replacements: anyone but the current bowler (bowlers of THIS over are
-        // already blocked by canBowl).
-        const pool = checks.filter(({ p }) => p.id !== bowlerId);
-        const onlyQuota = (list: typeof checks) => list.length > 0 && !list.some(({ c }) => c.ok) && list.some(({ c }) => c.reason === 'quota');
-        const quotaOut = (list: typeof checks) => onlyQuota(list) && (
-          <View style={ctrl.rulesChip}>
-            <Text style={ctrl.rulesChipText}>Everyone has bowled their quota</Text>
-            {!forceQuota && <Button label="Allow anyway" variant="ghost" style={ctrl.swapBtn} onPress={() => setForceQuota(true)} />}
-          </View>
-        );
-        return (
-          <View style={{ gap: theme.spacing(2) }}>
-            {overJustDone ? <View style={ctrl.overDone}><Text style={ctrl.overDoneText}>✓ Over {oversDone} complete — new bowler needed</Text></View> : null}
-            <Text style={ctrl.label}>
-              🎯 {bowlerId ? `Bowling: ${bowlerName}` : `Over ${nextOverNo}${oversLabel} — pick ${bowlingName} bowler`}{wk ? `  ·  † ${wk}` : ''}
-            </Text>
-            <View style={ctrl.chips}>
-              {checks.map(({ p, c }) => (
-                <SelectChip
-                  key={p.id}
-                  label={chipLabel(p, p.id === bowlerId ? undefined : c.reason)}
-                  active={bowlerId === p.id}
-                  disabled={locked ? p.id !== bowlerId : !pickable(c)}
-                  onPress={() => { if (!locked && p.id !== bowlerId) pick(p, c); }}
-                />
-              ))}
-            </View>
-            {!locked && !bowlRepl && quotaOut(checks)}
-            {checks.some(({ p, c }) => p.id !== bowlerId && c.reason === 'unavailable') && (
-              <Text style={ctrl.hint}>⚡ = replaced by an Impact Player or concussion sub — can’t bowl.</Text>
-            )}
-            {!bowlerId && <Text style={ctrl.hint}>Bowlers of the last over (any part of it) can't bowl this one.</Text>}
-            {locked && !bowlRepl && (
-              <Button label="🚑 Replace bowler mid-over" variant="ghost" onPress={() => setBowlRepl('injury')} />
-            )}
-            {locked && bowlRepl && (
-              <View style={ctrl.morePanel}>
-                <View style={ctrl.creaseHead}>
-                  <Text style={[ctrl.label, ctrl.flex]}>Replace {bowlerName} at {oversStr(cur.balls, state.ballsPerOver)} — balls so far stay with them</Text>
-                  <Button label="Cancel" variant="ghost" style={ctrl.swapBtn} onPress={() => { setBowlRepl(null); setForceQuota(false); }} />
-                </View>
-                <View style={ctrl.chips}>
-                  {([['injury', 'Injured'], ['suspended', 'Suspended'], ['other', 'Other']] as const).map(([v, l]) => (
-                    <SelectChip key={v} label={l} active={bowlRepl === v} onPress={() => setBowlRepl(v)} />
-                  ))}
-                </View>
-                {bowlRepl === 'suspended' && <Text style={ctrl.meta}>{bowlerName} can't bowl again this innings.</Text>}
-                <Text style={ctrl.meta}>Who finishes the over?</Text>
-                <View style={ctrl.chips}>
-                  {pool.map(({ p, c }) => (
-                    <SelectChip key={p.id} label={chipLabel(p, c.reason)} active={false} disabled={!pickable(c)} onPress={() => pick(p, c, bowlRepl)} />
-                  ))}
-                </View>
-                {quotaOut(pool)}
-              </View>
-            )}
-          </View>
-        );
-      })()}
-
-      {/* Impact Player (IPL-style) — one substitution per side, format-gated. */}
-      {(state.impactEnabled && (impactSides.length > 0 || state.impactUsed.home || state.impactUsed.away)) && (
-        <View style={{ gap: theme.spacing(2) }}>
-          <Text style={ctrl.label}>⚡ Impact Player</Text>
-          {(['home', 'away'] as const).map((sd) => {
-            const used = state.impactUsed[sd];
-            const nm = sd === 'home' ? homeName : awayName;
-            return used ? (
-              <Text key={sd} style={ctrl.meta}>{nm}: {used.inName} in for {used.outName}</Text>
-            ) : (
-              <Button key={sd} label={`⚡ Bring in Impact Player — ${nm}`} variant="ghost" onPress={() => setImpact({ side: sd, kind: 'impact' })} />
-            );
-          })}
-        </View>
-      )}
-
-      {/* Concussion / injury replacement — a like-for-like sub (any time, not the
-          IPL Impact Player). The injured player takes no further part. */}
-      {canScore && (
-        <View style={ctrl.row}>
-          <Button label={`🚑 Concussion sub — ${homeName}`} variant="ghost" style={ctrl.flex} onPress={() => setImpact({ side: 'home', kind: 'concussion' })} />
-          <Button label={`🚑 Concussion sub — ${awayName}`} variant="ghost" style={ctrl.flex} onPress={() => setImpact({ side: 'away', kind: 'concussion' })} />
-        </View>
-      )}
-
-      <View style={ctrl.row}>
-        <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => setWf({})} />
-        <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
-        <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
-      </View>
-      {/* Parity #20 — penalty to either side, bonus / minus runs, fielding notes. */}
+      {/* Parity #20 — penalty to either side, bonus / minus runs, fielding notes.
+          Concussion / Impact subs live in Quick options (SD-113 A1). */}
       <View style={ctrl.row}>
         {/* "± Runs" (not "Bonus / minus"): the longer label wraps at 375 px. */}
-        {([['pen', '⚖️ Penalty', 'Penalty runs'], ['adj', '± Runs', 'Bonus or minus runs'], ['field', '🧤 Fielding', 'Fielding: dropped catch, runs saved or missed']] as const).map(([k, l, a11y]) => (
+        {([['pen', ballPen ? `⚖️ +${ballPen.runs} ✕` : '⚖️ Penalty', ballPen ? 'Cancel the penalty on the next ball' : 'Penalty runs'], ['adj', '± Runs', 'Bonus or minus runs'], ['field', '🧤 Fielding', 'Fielding: dropped catch, runs saved or missed']] as const).map(([k, l, a11y]) => (
           <Button key={k} label={l} accessibilityLabel={a11y} variant="ghost" style={[ctrl.flex, ctrl.padKey]}
-            onPress={() => setMorePanel((m) => (m === k ? null : k))} />
+            onPress={() => { if (k === 'pen' && ballPen) { setBallPen(null); return; } setMorePanel((m) => (m === k ? null : k)); }} />
         ))}
       </View>
       {morePanel && (
         <MoreRunsPanel key={`${morePanel}:${state.innings}`} mode={morePanel} state={state} dispatch={dispatch}
           battingName={battingName} bowlingName={bowlingName} homeName={homeName} awayName={awayName}
           fielders={bowlingRoster.filter((p) => !isUnavailable(p.id))} keeperId={keeper?.id} inSuperOver={soActive}
+          onArm={soActive ? undefined : (p) => setBallPen(p)}
           onClose={() => setMorePanel(null)} />
       )}
 
@@ -1839,20 +1869,97 @@ const LiveExtras: NonNullable<SportPlugin<CricketState>['LiveExtras']> = ({ stat
 };
 
 /** Quick options (parity #13): 🧤 Change keeper — the fielding side's roster,
- *  † on the current keeper; a tap sends SET_KEEPER (logged once a ball is bowled). */
+ *  † on the current keeper; a tap sends SET_KEEPER (logged once a ball is bowled).
+ *  SD-113 (A1): 🚑 Concussion sub and ⚡ Impact Player live here (not in the
+ *  scoring column), and end in a "X off → Y on. Confirm?" recap. */
 function CricketQuickOptions({ state, dispatch, homeRoster, awayRoster, homeName, awayName, onDone }: QuickOptionsProps) {
-  const s = state as CricketState;
-  const [open, setOpen] = useState(false);
+  const root = state as CricketState;
+  // A Super Over is played by the nested mini-match; subs and keepers act on it.
+  const s = root.superOver && !root.superOver.state.ended ? root.superOver.state : root;
+  const [open, setOpen] = useState<null | 'keeper' | 'concussion' | 'impact'>(null);
+  const [sub, setSub] = useState<{ side?: 'home' | 'away'; out?: Player }>({});
   const fielding = other(s.battingSide);
   const roster = fielding === 'home' ? homeRoster : awayRoster;
   const cur = s.keepers[fielding];
   const unavailable = new Set(s.unavailable ?? []);
+  const nameOf = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
+  const rosterOf = (sd: 'home' | 'away') => (sd === 'home' ? homeRoster : awayRoster);
+  const toggle = (k: 'keeper' | 'concussion' | 'impact') => { setSub({}); setOpen((o) => (o === k ? null : k)); };
+  const impactSides = (['home', 'away'] as const).filter((sd) => s.impactEnabled && !s.impactUsed[sd]);
+  const usedLine = (['home', 'away'] as const).map((sd) => s.impactUsed[sd]).filter(Boolean)
+    .map((u) => `${u!.inName} for ${u!.outName}`).join(' · ');
+
+  const finishSub = async (kind: 'concussion' | 'impact', inP: Player) => {
+    const side = sub.side;
+    const out = sub.out;
+    if (!side || !out) return;
+    // Close the sheet first (and let its fade finish) so the confirm sheet isn't
+    // stacked on, or presented during the dismissal of, another modal (iOS).
+    onDone();
+    await new Promise((r) => setTimeout(r, 350));
+    const ok = await askConfirm({
+      title: kind === 'impact' ? 'Bring in the Impact Player?' : 'Make the concussion sub?',
+      message: `${out.fullName} off → ${inP.fullName} on (${nameOf(side)}). ${out.fullName} takes no further part. Confirm?`,
+      yesLabel: 'Yes, make the sub', noLabel: 'No, go back', tone: 'caution',
+    });
+    if (!ok) return;
+    dispatch({
+      type: kind === 'concussion' ? 'CONCUSSION_SUB' : 'IMPACT_SUB',
+      side,
+      payload: { side, outId: out.id, outName: out.fullName, inId: inP.id, inName: inP.fullName },
+    });
+  };
+
+  const subPanel = (kind: 'concussion' | 'impact') => {
+    const sides = kind === 'impact' ? impactSides : (['home', 'away'] as const);
+    const side = sub.side ?? (sides.length === 1 ? sides[0] : undefined);
+    const pool = side ? rosterOf(side) : [];
+    const atCrease = (id: string) => id === s.strikerId || id === s.nonStrikerId;
+    const outOptions = pool.filter((p) => !unavailable.has(p.id) && !atCrease(p.id) && p.id !== s.bowlerId && !s.batting[p.id]?.out);
+    const inOptions = pool.filter((p) => !unavailable.has(p.id) && p.id !== sub.out?.id && !s.batting[p.id] && !s.bowling[p.id]);
+    return (
+      <View style={{ gap: theme.spacing(2) }}>
+        <Text style={textStyles.muted}>
+          {kind === 'impact' ? 'One Impact Player per side, all match.' : 'A like-for-like injury / concussion replacement.'} The player going off takes no further part.
+        </Text>
+        <View style={ctrl.chips}>
+          {sides.map((sd) => (
+            <SelectChip key={sd} label={nameOf(sd)} active={side === sd} onPress={() => setSub({ side: sd })} />
+          ))}
+        </View>
+        {side && !sub.out && (
+          <>
+            <Text style={textStyles.muted}>Who goes off? (not batting or bowling right now)</Text>
+            <View style={ctrl.chips}>
+              {outOptions.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => setSub({ side, out: p })} />)}
+              {outOptions.length === 0 && <Text style={textStyles.muted}>No eligible player to replace right now.</Text>}
+            </View>
+          </>
+        )}
+        {side && sub.out && (
+          <>
+            <View style={ctrl.impactRecap}><Text style={ctrl.impactRecapText}>{sub.out.fullName} off → who comes on?</Text></View>
+            <View style={ctrl.chips}>
+              {inOptions.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => void finishSub(kind, p)} />)}
+              {inOptions.length === 0 && <Text style={textStyles.muted}>No unused substitute — add one to the matchday squad.</Text>}
+            </View>
+            <Button label="‹ Pick someone else to go off" variant="ghost" onPress={() => setSub({ side })} />
+          </>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) }}>
-        <Tile icon="🧤" label="Change keeper" hint={cur ? `Now: ${cur.name}` : 'No keeper set'} active={open} onPress={() => setOpen((o) => !o)} />
+        <Tile icon="🧤" label="Change keeper" hint={cur ? `Now: ${cur.name}` : 'No keeper set'} active={open === 'keeper'} onPress={() => toggle('keeper')} />
+        {!s.ended && <Tile icon="🚑" label="Concussion sub" hint="Injury replacement" active={open === 'concussion'} onPress={() => toggle('concussion')} />}
+        {s.impactEnabled && !s.ended && (impactSides.length > 0
+          ? <Tile icon="⚡" label="Impact Player" hint={usedLine || 'One sub per side'} active={open === 'impact'} onPress={() => toggle('impact')} />
+          : <Tile icon="⚡" label="Impact Player" hint={usedLine ? `Used: ${usedLine}` : 'Used by both sides'} onPress={() => undefined} />)}
       </View>
-      {open && (
+      {open === 'keeper' && (
         <View style={{ gap: theme.spacing(2) }}>
           <Text style={textStyles.muted}>{fielding === 'home' ? homeName : awayName} are fielding — who keeps wicket?</Text>
           <View style={ctrl.chips}>
@@ -1867,6 +1974,8 @@ function CricketQuickOptions({ state, dispatch, homeRoster, awayRoster, homeName
           </View>
         </View>
       )}
+      {open === 'concussion' && subPanel('concussion')}
+      {open === 'impact' && impactSides.length > 0 && subPanel('impact')}
     </View>
   );
 }
@@ -2007,8 +2116,16 @@ const ctrl = StyleSheet.create({
   freeHit: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.5 },
   rulesChip: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.accent, paddingVertical: theme.spacing(1.5), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   rulesChipText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
-  freeHitBox: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.primary, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   freeHitText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.3 },
+  // SD-113 (A2) — the fixed slot above the run pad, and the free-hit frame (a
+  // constant 2 px border that only changes colour, so nothing moves).
+  padSlot: { height: 34, justifyContent: 'center', paddingHorizontal: theme.spacing(3), borderRadius: theme.radius.sm, borderWidth: 1, borderColor: 'transparent' },
+  padSlotFreeHit: { backgroundColor: theme.colors.primary + '1A', borderColor: theme.colors.primary },
+  padSlotPen: { backgroundColor: theme.colors.accent + '1A', borderColor: theme.colors.accent },
+  padSlotText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  padSlotPenText: { color: theme.colors.accent, fontWeight: '900' },
+  padFrame: { borderWidth: 2, borderColor: 'transparent', borderRadius: theme.radius.md, padding: 2 },
+  padFrameFreeHit: { borderColor: theme.colors.primary },
   wktRecap: { backgroundColor: theme.colors.danger + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },
   wktRecapText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   impactRecap: { backgroundColor: theme.colors.accent + '1A', borderRadius: theme.radius.sm, paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3), alignSelf: 'flex-start' },

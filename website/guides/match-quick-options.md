@@ -31,7 +31,7 @@ The tiles are:
 - **Change scorer**: opens the Info tab with scorers and officials
 - **Full scorecard**: see the whole card
 - **Match settings**: local rules for this match only, when the sport has them. For cricket, see [Cricket local rules](/guides/cricket-local-rules/).
-- **Change keeper**: cricket only. See [Cricket dismissals](/guides/cricket-dismissals/).
+- **Change keeper**, **Concussion sub** and **Impact Player** (when the match allows one): cricket only. See [Cricket dismissals](/guides/cricket-dismissals/).
 
 ## Step by step: pause for a break
 1. **☰ Quick options** → **Match break**.

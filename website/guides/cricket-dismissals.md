@@ -5,10 +5,10 @@ category: Cricket scoring
 audience: Scorers
 sports: cricket
 order: 30
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
-Most wickets are bowled or caught, but sooner or later you'll see a Mankad, a stumping off a wide, or a run-out after byes. If any of these is recorded the wrong way, the batter, bowler and fielder all get the wrong figures. The wicket panel walks you through each kind one tap at a time. It shows the dismissal as it will read on the scorecard, for example "c Arjun b Kabir", before you confirm.
+Most wickets are bowled or caught, but sooner or later you'll see a Mankad, a stumping off a wide, or a run-out after byes. Recorded the wrong way, the batter, bowler and fielder all get wrong figures. The wicket panel walks you through each kind and shows how it will read on the scorecard, for example "c Arjun b Kabir", before you confirm.
 
 ## Before you start
 - You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
@@ -17,47 +17,50 @@ Most wickets are bowled or caught, but sooner or later you'll see a Mankad, a st
 ## Step by step: a normal wicket
 1. Tap **WICKET**.
 2. Tap how they were out: **Bowled**, **Caught**, **LBW**, **Run out**, **Stumped** or **Hit wicket**. Tap **More ▾** for the rarer kinds.
-3. For **Caught**, pick the fielder under "Caught by?". The keeper is listed first. If the bowler took it, pick the bowler and it reads "c & b".
-4. Under "Next batsman in", tap the new batter. On the last wicket you'll see **Confirm wicket — all out** instead.
+3. For **Caught**, pick the fielder under "Caught by?". The first chip, **c & b** and the bowler's name, is caught and bowled.
+4. Under "Next batsman in", tap the new batter, and check the line at the top, for example "Dev b Kabir · next in: Ravi".
+5. Tap **Confirm wicket — Ravi in** (on the last wicket, **Confirm wicket — all out**).
 
-After a wicket the new batter takes the end the out batter left, and the panel tells you who faces next, for example "Next ball: Dev faces". If it's wrong, tap **⇄ Swap**.
+The panel tells you who faces next, for example "Next ball: Dev faces". If it's wrong, tap **⇄ Swap**.
 
 ## Step by step: a run out
 1. Tap **WICKET**, then **Run out**.
-2. Under "Runs were", choose how the completed runs are scored: **Off the bat**, **Byes**, **Leg byes**, **Wide** or **No ball**.
-3. Under "Runs completed before the run out?", tap **0** to **3**, or type a bigger number.
-4. Pick the fielder under "Run out by? (fielder)".
-5. Pick a "2nd fielder (optional)", for example the keeper who broke the stumps, or tap **Skip**.
-6. Tap which batter is out. The non-striker is marked "(NS)".
-7. Under "Wicket broken at", tap **Striker's end** or **Bowler's end**. This decides where the new batter goes, so who faces next is right.
-8. Pick the next batter.
+2. If runs were completed, tap **1** to **3** under "Runs completed before the run out" (it starts at 0). Change **Off the bat** to **Byes**, **Leg byes**, **Wide** or **No ball** if that's how they're scored.
+3. Pick the fielder under "Run out by? (fielder)".
+4. Under "Who's out, and at which end?", tap one chip, for example "Dev (NS) · bowler's end". If they had crossed, pick the far end. This sets who faces next.
+5. Tap the next batter, then **Confirm wicket**.
 
-Runs off the bat go to the striker. Byes and leg byes go to extras, and the striker gets the ball faced but no runs. The run-out counts for the first fielder only. The second fielder appears in the scorecard text, for example "run out (Veer/Dev)".
+To add a second fielder (say, the keeper who broke the stumps), tap **+ 2nd fielder (optional)**.
+
+Runs off the bat go to the striker; byes and leg byes go to extras. The run-out counts for the first fielder only; a second fielder shows in the text, for example "run out (Veer/Dev)".
 
 ## The rarer dismissals
-Tap **More ▾** in the wicket panel to see these. The panel explains each one in a short line.
+Tap **More ▾** in the wicket panel. Each one is explained in a short line.
 
 - **Obstructing**: either batter, and it includes handling the ball. Completed runs count. Not the bowler's wicket.
 - **Hit twice**: striker only. Not the bowler's wicket. Tap **Off a no-ball** if it happened on a no-ball.
-- **Mankad**: the bowler ran out the non-striker for leaving the crease early. The app picks the non-striker for you. It is a wicket, but not a ball and not the bowler's wicket. The scorecard shows "run out (bowler's name)" and the bowler gets a run-out. This follows the 2022 Laws, which made it a normal run out.
+- **Mankad**: the bowler ran out the non-striker for leaving early. A wicket, but not a ball and not the bowler's wicket; the scorecard shows "run out (bowler's name)", as in the 2022 Laws.
 - **Retired hurt**: not a wicket. The batter can come back later: they stay in the "Next batsman in" list.
-- **Retired out**: the batter left without the umpire's permission. It is a wicket, no ball is bowled, and they can't bat again.
-- **Timed out**: the incoming batter wasn't ready to face within the time limit (3 minutes under the Laws, 2 in some competitions). A wicket, with no ball bowled, and not the bowler's wicket.
+- **Retired out**: left without the umpire's permission. A wicket, no ball bowled; they can't bat again.
+- **Timed out**: the incoming batter wasn't ready in time (3 minutes under the Laws). A wicket, no ball bowled, not the bowler's.
 
 ## Wickets off a wide or a no-ball
-- Stumped or hit wicket off a wide: tap **Stumped** or **Hit wicket**, then **Off a wide**. The team gets the wide runs, the ball doesn't count, and the bowler still gets the wicket.
-- Run out or obstructing off a wide or no-ball: tap **Wide** or **No ball**, then **🎯 …or a WICKET off the wide** (or off the no-ball). You can also choose **Wide** or **No ball** under "Runs were" in a run out.
+- Stumped or hit wicket off a wide: tap **Stumped** or **Hit wicket**, then **Off a wide**. The wide runs count and the bowler gets the wicket.
+- Run out or obstructing off a wide or no-ball: tap **Wide** or **No ball**, then **🎯 …or a WICKET off the wide** (or off the no-ball). You can also pick **Wide** or **No ball** in the run-out panel.
 
-> **Note:** On a free hit, the panel only offers dismissals that are possible on a free hit, such as a run out. You'll see "FREE HIT — no bowler's wicket counts".
+> **Note:** On a free hit, the panel only offers dismissals that are possible on a free hit, such as a run out or timed out. You'll see "FREE HIT — no bowler's wicket counts".
 
-## Changing the wicket-keeper
-If the keeper changes during the match, update it so stumpings go to the right player.
+## When no batter is left
+In a short squad, or when a retired-hurt batter can't come back, the innings can end before the usual last wicket.
 
-1. On the **Scoring** tab, tap **☰ Quick options**.
-2. Tap the **Change keeper** tile. It shows who is keeping now.
-3. Tap the new keeper. You'll see "Ravi is now keeping", and a **NEW KEEPER** line appears in the timeline.
+- Nobody left: tap **Confirm wicket — innings closed**.
+- Only retired-hurt batters left: they're listed with their score, for example "Ravi (resumes, 23*)". Pick one if they can bat, or tap **Confirm wicket — innings closed**.
+- A listed player can't bat (say, a substitute fielder): tap **No one else can bat? Close the innings** and confirm.
 
-See also [Match quick options](/guides/match-quick-options/).
+The innings counts as all out, also for net run rate, and the timeline shows **INNINGS CLOSED**.
+
+## New keeper, concussion sub or Impact Player
+These are in **☰ Quick options**, away from the scoring buttons. Tap **Change keeper** and the new keeper (stumpings go to them from now on). For **Concussion sub** or **Impact Player**, tap the team, who goes off and who comes on, then **Yes, make the sub** on the "Dev off → Sahil on" question. The player who went off takes no further part and shows ⚡. See [Match quick options](/guides/match-quick-options/).
 
 ## Common questions
 ### I picked the wrong dismissal. What now?

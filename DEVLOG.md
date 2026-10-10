@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-113 cricket scoring safety + flow
+- **No batter left:** when nobody (or only retired-hurt batters) can come in, the wicket panel offers **Confirm wicket — innings closed**; a "No one else can bat? Close the innings" option (with confirm) covers subs/fielders who can't bat. Engine: v:2 `noBatterLeft` closes the innings (`closedNoBatter`), NRR charges full overs; old logs unchanged.
+- **Subs:** Concussion and Impact sub moved from the scoring column to Quick options tiles, with an "X off → Y on. Confirm?" sheet.
+- **Steady pad:** a fixed status line above the run pad shows strike/bowler, FREE HIT (green frame on the pad) or an armed penalty — the pad no longer jumps. Wide / No ball panels open right under their buttons. Once a bowler is named the chips fold to "🎯 Bowling: X · 0.3-5-0 · Change".
+- **Wickets:** run out in 6 taps (2nd fielder optional, who's out + which end in one pick); "c & b {bowler}" first chip; next batter selects then "Confirm wicket — X in"; returning retired-hurt batters labelled "(resumes, 23*)"; timed out allowed during a free hit.
+- **Penalties:** a reason is required; "+N on the next ball" books a Law 28/41 penalty with that delivery as one action (one Undo; v:2).
+- **Files:** `src/sports/cricket/engine.ts`, `index.tsx`. Guides: new score-cricket (start-to-finish), cricket-dismissals, cricket-penalty-and-bonus-runs, cricket-bowling-rules, cricket-runs-and-extras, match-quick-options.
+- **Verified:** `tests/cricket-sd113.test.mts` (11, incl. legacy-path replay), suite green, tsc clean; demo 8093 375 px on m9 (toss → innings closed). Not visually checked: the Quick options sheet fade before the sub confirm (pane hidden).
+
+---
+
 ### 2026-10-11 — SD-116 one-tap match-deciders now confirm (chess, golf, carrom, hockey, basketball)
 - **Chess:** result tiles read arbiter-style (1-0 White wins / ½-½ / 0-1 Black wins, "X beat Y" under); "✓ Record 1-0…" opens "Record 0-1: {winner} beat {loser} by Resignation?". White pieces locked ("Colours wrong? Change…") — the change is only sent with the result.
 - **Golf:** one "🏳 Concede match…" at the bottom of match play (asks who, confirms with the hole state); stroke-play "Pick up (NR)" confirms it voids the card (Stableford pick-up unchanged); "Clear…" confirms.

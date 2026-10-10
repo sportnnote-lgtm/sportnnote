@@ -154,6 +154,11 @@ export interface CricketState {
   adj?: Adjustment[];
   /** parity #20 — dropped catches and runs saved / missed (FIELD_NOTE). Score-neutral. Older states: `?? []`. */
   fieldNotes?: FieldNote[];
+  /** SD-113 — innings the scorer closed because no batter was left to come in
+   *  (short squad, subs, a retired-hurt batter who can't resume) before
+   *  `wicketsLimit`. Set only by a `v: 2` wicket with `noBatterLeft: true`;
+   *  absent on older states (REVIEW Decision 8). Counts as all out (NRR too). */
+  closedNoBatter?: Partial<Record<'home' | 'away', true>>;
 }
 
 /** A bonus (+) or deduction (−) to one side's total (parity #20). */
@@ -491,6 +496,8 @@ export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.
  *  the retired-hurt batters who never resumed use up the order (ICC: a side
  *  that can't continue its innings counts as all out for NRR). */
 export function noBatterLeft(s: CricketState, side: 'home' | 'away'): boolean {
+  // SD-113 — the scorer closed it: nobody on the roster could come in.
+  if (s.closedNoBatter?.[side]) return true;
   const inn = s.scores[side];
   if (inn.wickets >= s.wicketsLimit) return true;
   const retired = Object.values(s.batting ?? {}).filter((c) => c.side === side && c.retired && !c.out).length;
@@ -607,8 +614,32 @@ export function canBowl(s: CricketState, id: string): { ok: boolean; reason?: Bo
   return { ok: true };
 }
 
-function inningsComplete(s: CricketState, inn: Innings): boolean {
-  return inn.balls >= s.oversLimit * s.ballsPerOver || inn.wickets >= s.wicketsLimit;
+/** Overs used up, all out by `wicketsLimit`, or (SD-113, roster-aware) the
+ *  scorer confirmed no batter was left to come in — `closedNoBatter`, which only
+ *  a `v: 2` wicket sets, so legacy logs close exactly as before. */
+function inningsComplete(s: CricketState, inn: Innings, side: 'home' | 'away' = s.battingSide): boolean {
+  return inn.balls >= s.oversLimit * s.ballsPerOver || inn.wickets >= s.wicketsLimit || !!s.closedNoBatter?.[side];
+}
+
+/** SD-113 (R2) — a Law 28 / 41 five-run penalty riding on one delivery
+ *  (`payload.pen`, `v: 2` only): the ball is applied, then the penalty, as one
+ *  logged action (one entry, one Undo). Null for anything else. */
+export interface BallPenalty { runs: number; against: 'batting' | 'fielding'; reason?: string; teamName?: string }
+export function ballPenaltyOf(a: ScoreAction): BallPenalty | null {
+  const p = a.payload;
+  if (!p || p.v !== 2 || !p.pen || typeof p.pen !== 'object') return null;
+  if (!BALL_TYPES.has(a.type)) return null;
+  // Retired / timed out / Mankad aren't deliveries — no ball to ride on.
+  if (a.type === 'WICKET' && NO_DELIVERY.includes(String(p.kind ?? 'bowled') as DismissalKind)) return null;
+  const q = p.pen as Record<string, unknown>;
+  const runs = Math.floor(Number(q.runs ?? 5));
+  if (!Number.isFinite(runs) || runs < 1 || runs > 99) return null;
+  return {
+    runs,
+    against: q.against === 'batting' ? 'batting' : 'fielding',
+    ...(textOf(q.reason) ? { reason: textOf(q.reason) } : {}),
+    ...(textOf(q.teamName) ? { teamName: textOf(q.teamName) } : {}),
+  };
 }
 
 export interface BallInfo {
@@ -841,9 +872,24 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
   const baseOver = newOver ? [] : s.thisOver;
   const baseBalls = newOver ? 0 : s.ballsInOver;
 
-  const settle = (state: CricketState): CricketState => {
+  // SD-113 (A3/R1) — a v:2 wicket confirmed with "no batter left": the innings
+  // closes on it even short of `wicketsLimit` (short squad, subs, a retired-hurt
+  // batter who can't resume). Only a WICKET / a wicket off an extra may carry it.
+  const closeNoBatter = a.payload?.v === 2 && a.payload?.noBatterLeft === true
+    && (a.type === 'WICKET' || (a.type === 'EXTRA' && !!(a.payload?.wicket || a.payload?.runout)));
+  const settle = (state0: CricketState): CricketState => {
+    let state = state0;
     const c = state.scores[state.battingSide];
     if (state.innings === 2 && state.target !== undefined && c.runs >= state.target) return { ...state, ended: true };
+    if (closeNoBatter && !state.closedNoBatter?.[state.battingSide] && !inningsComplete(state, c)) {
+      const sq = state.seq + 1;
+      state = {
+        ...state,
+        closedNoBatter: { ...state.closedNoBatter, [state.battingSide]: true },
+        events: [...state.events, { id: sq, stamp: oversStr(c.balls, state.ballsPerOver), icon: '🏁', label: 'INNINGS CLOSED', detail: `No batter left to come in — ${c.runs}/${c.wickets}, counts as all out`, side: state.battingSide }],
+        seq: sq,
+      };
+    }
     if (!inningsComplete(state, c)) return state;
     if (state.innings === 1) {
       return { ...state, innings: 2, battingSide: other(state.battingSide), ...chaseStart(state, c.runs), thisOver: [], ballsInOver: 0, ...clearCrease };
@@ -1551,10 +1597,38 @@ function ballRec(s: CricketState, a: ScoreAction, next: CricketState): BallRec {
  *  own recursive call, so a record is never pushed twice. A state without a
  *  `log` (a persisted snapshot) gets none — a partial log would mislead. */
 const reducer = (s: CricketState, a: ScoreAction): CricketState => {
+  const pen = ballPenaltyOf(a);
+  if (pen) return withBallPenalty(s, a, pen);
   const next = step(s, a);
   if (next === s || !s.log || !LOGGED.has(a.type) || next.seq <= s.seq || next.log !== s.log) return next;
   return { ...next, log: [...s.log, ballRec(s, a, next)] };
 };
+
+/** SD-113 (R2) — apply a ball, then the penalty that rode on it. `against` is
+ *  relative to the side batting when the ball was bowled: if that ball ended
+ *  the innings, it is flipped so the runs still reach the same team (in the
+ *  chase, runs to the side that batted first raise the target, as PENALTY
+ *  does). If the ball ended the match, the penalty is still booked and the
+ *  result re-settled from the new totals. */
+function withBallPenalty(s: CricketState, a: ScoreAction, pen: BallPenalty): CricketState {
+  const { pen: _pen, ...rest } = a.payload ?? {};
+  const afterBall = reducer(s, { ...a, payload: rest });
+  if (afterBall === s) return s;
+  const live = (x: CricketState) => (x.superOver && !x.superOver.state.ended ? x.superOver.state : x);
+  const flipped = live(afterBall).battingSide !== live(s).battingSide;
+  const against = flipped ? (pen.against === 'batting' ? 'fielding' : 'batting') : pen.against;
+  const penAction: ScoreAction = {
+    type: 'PENALTY', side: a.side,
+    payload: { runs: pen.runs, against, ...(pen.reason ? { reason: pen.reason } : {}), ...(pen.teamName ? { teamName: pen.teamName } : {}) },
+  };
+  const finished = !afterBall.superOver && (afterBall.ended || (afterBall.pendingTie && !s.pendingTie));
+  if (!finished) {
+    const next = reducer(afterBall, penAction);
+    return next;
+  }
+  const reopened = reducer({ ...afterBall, ended: false, pendingTie: undefined }, penAction);
+  return reopened;
+}
 
 /** The state to persist in `matches.state` (parity #19): without the derived
  *  `log` (incl. a Super Over's) — `getMatches` reads every match's state. */

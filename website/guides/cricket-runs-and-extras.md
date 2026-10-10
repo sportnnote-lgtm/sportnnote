@@ -5,7 +5,7 @@ category: Cricket scoring
 audience: Scorers
 sports: cricket
 order: 20
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 On school grounds the ball doesn't always reach the rope. Batters run four on a big outfield, a wild throw gives away 4 more, or a wide beats the keeper and they run two. Each of these is scored differently in the book. The run pad gives you one tap for the common runs and a small panel for the rare ones, and it tells you how each one is credited.
@@ -55,7 +55,7 @@ A wide isn't a legal ball unless your local rules say so, and all its runs are w
 2. If the batter hit it, tap the runs off the bat: **Nb** for none, or **+1** to **+6**. A **+4** or **+6** counts as a boundary. For an all-run 4 off a no-ball, type 4 in the box below and tap **Add Nb+4**.
 3. If the ball missed the bat and they ran, tap **Byes** or **Leg byes** (if leg byes are allowed), then **Nb+1b** to **Nb+5b** (or **Nb+1lb** to **Nb+5lb** for leg byes) instead.
 
-Runs off the bat on a no-ball are the batter's runs, and the batter is credited with a ball faced. The no-ball penalty is an extra charged to the bowler. Byes or leg byes off a no-ball are team extras, not charged to the bowler, and the scorecard lists them under b or lb. If free hits are on, the next ball shows a **FREE HIT** banner.
+Runs off the bat on a no-ball are the batter's runs, and the batter is credited with a ball faced. The no-ball penalty is an extra charged to the bowler. Byes or leg byes off a no-ball are team extras, not charged to the bowler, and the scorecard lists them under b or lb. If free hits are on, the line above the run buttons turns green and reads **FREE HIT**, and the run buttons get a green frame. The buttons don't move, so you won't tap the wrong one.
 
 > **Tip:** A wicket can fall on a wide or a no-ball. Tap **🎯 …or a WICKET off the wide** (or off the no-ball) in the same panel. See [Record every kind of dismissal](/guides/cricket-dismissals/).
 

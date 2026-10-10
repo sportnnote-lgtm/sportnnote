@@ -5,7 +5,7 @@ category: Cricket scoring
 audience: Scorers, Organisers
 sports: cricket
 order: 40
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 In a T20, nobody may bowl more than 4 overs, and nobody may bowl two overs in a row. When a bowler limps off mid-over, someone else finishes the over, and the Laws say neither of them may bowl the next one. The app keeps track of all of this for you. Each bowler's name shows how many overs they've bowled, and anyone who can't bowl right now is greyed out with the reason.
@@ -35,6 +35,8 @@ A part-over counts as a full over towards the limit. So a bowler who bowled 2 ba
 ## Picking the bowler for each over
 At the start of each over the scoring screen says, for example, "Over 5 of 20 — pick Blue House bowler". Tap a name. Each name shows overs bowled against the limit, for example "Kabir · 3/4".
 
+Once a bowler is picked, the names fold into one line, for example "Bowling: Kabir · 2.3-0-14-1", so the run buttons and **WICKET** sit together. Tap **Change** on that line to pick again before the first ball of the over.
+
 A greyed-out name tells you why that bowler can't bowl:
 - **· last over**: they bowled the previous over, or any part of it.
 - **· quota done**: they've used all their overs.
@@ -45,7 +47,7 @@ A greyed-out name tells you why that bowler can't bowl:
 ## Step by step: a bowler is injured mid-over
 Once the first ball of an over is bowled, the bowler is locked in, so a mis-tap can't change bowlers halfway through.
 
-1. Tap **🚑 Replace bowler mid-over** under the bowler names.
+1. Tap **Change** on the "Bowling:" line.
 2. The panel says, for example, "Replace Kabir at 4.2 — balls so far stay with them".
 3. Tap the reason: **Injured**, **Suspended** or **Other**.
 4. Under "Who finishes the over?", tap the new bowler.
