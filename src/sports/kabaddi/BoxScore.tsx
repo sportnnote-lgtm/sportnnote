@@ -10,24 +10,9 @@ import type { Player } from '../../core/types';
 import type { LiveEvent } from '../liveEvents';
 import { playerLink, idByName } from '../playerLink';
 
-interface Line { name: string; raid: number; tackle: number }
+import { tally, type Line } from './engine.ts';
 
-/** Tally raid/tackle points per player for one side; `scope` limits to one half. */
-export function tally(events: LiveEvent[], side: 'home' | 'away', scope: 'all' | number = 'all'): Line[] {
-  const byName = new Map<string, Line>();
-  const ensure = (name: string) => {
-    if (!byName.has(name)) byName.set(name, { name, raid: 0, tackle: 0 });
-    return byName.get(name)!;
-  };
-  for (const e of events) {
-    if (e.side !== side || !e.playerName || !e.points) continue;
-    if (scope !== 'all' && e.half !== scope) continue;
-    const l = ensure(e.playerName);
-    if (e.kind === 'raid') l.raid += e.points;
-    else if (e.kind === 'tackle') l.tackle += e.points;
-  }
-  return [...byName.values()].sort((a, b) => (b.raid + b.tackle) - (a.raid + a.tackle));
-}
+export { tally };
 
 function Table({ title, color, lines, roster, onPlayer }: { title: string; color: string; lines: Line[]; roster?: Player[]; onPlayer?: (playerId: string) => void }) {
   return (

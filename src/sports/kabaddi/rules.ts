@@ -39,6 +39,30 @@ export interface KabaddiDerived {
   emptyRaids: { home: number; away: number };
   /** an all-out ended the match (gaminee) */
   allOutEnded: boolean;
+  /** What each replayed raid scored, in raid order (SD-03). Shorter than the
+   *  input only when a gaminee all-out ended the match early. Derived only — the
+   *  totals above are computed exactly as before. */
+  perRaid: RaidBreakdown[];
+}
+
+/** One raid's points, split the way PKL's match centre counts them. */
+export interface RaidBreakdown {
+  side: Side;
+  /** touch + eligible bonus points — the raider's raid points */
+  raidPts: number;
+  touchPts: number;
+  bonusPts: number;
+  /** the raider ended up out: tackled, or a failed do-or-die raid */
+  raiderOut: boolean;
+  /** this was a do-or-die raid */
+  doOrDie: boolean;
+  /** the raider was out only because a do-or-die raid scored nothing (no tackle made) */
+  doOrDieFail: boolean;
+  /** points to the DEFENDING side for putting the raider out (2 = super tackle) */
+  tacklePts: number;
+  superTackle: boolean;
+  /** sides that scored an all-out (+2 each) at the end of this raid */
+  allOuts: Side[];
 }
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -65,6 +89,7 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
   const out = { home: 0, away: 0 };
   const emptyRaids = { home: 0, away: 0 };
   let allOutEnded = false;
+  const perRaid: RaidBreakdown[] = [];
 
   for (const r of raids) {
     if (allOutEnded) break;
@@ -90,10 +115,13 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
     }
 
     // Raider tackled ⇒ defence scores (super tackle when short-handed) + raider out.
+    let tacklePts = 0;
+    let superTackle = false;
     if (raiderOut) {
       const defendersOnMat = cfg.teamSize - (amar ? 0 : out[opp]);
-      const superTackle = cfg.proRules && !amar && defendersOnMat <= 3;
-      score[opp] += superTackle ? 2 : 1;
+      superTackle = cfg.proRules && !amar && defendersOnMat <= 3;
+      tacklePts = superTackle ? 2 : 1;
+      score[opp] += tacklePts;
       if (!amar) {
         out[r.side] = Math.min(cfg.teamSize, out[r.side] + 1);
         if (cfg.style === 'sanjeevani') out[opp] = Math.max(0, out[opp] - 1);
@@ -105,16 +133,23 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
     emptyRaids[r.side] = empty ? emptyRaids[r.side] + 1 : 0;
 
     // All-out: +2 to the opponent; gaminee ends, others revive everyone.
+    const allOuts: Side[] = [];
     if (!amar) {
       (['home', 'away'] as Side[]).forEach((t) => {
         if (out[t] >= cfg.teamSize) {
           score[other(t)] += 2;
+          allOuts.push(other(t));
           if (cfg.style === 'gaminee') allOutEnded = true;
           else out[t] = 0;
         }
       });
     }
+    perRaid.push({
+      side: r.side, raidPts, touchPts: r.touches, bonusPts: bonusCounts ? 1 : 0,
+      raiderOut, doOrDie: isDoOrDie, doOrDieFail: raiderOut && !r.raiderOut,
+      tacklePts, superTackle, allOuts,
+    });
   }
 
-  return { home: score.home, away: score.away, out, emptyRaids, allOutEnded };
+  return { home: score.home, away: score.away, out, emptyRaids, allOutEnded, perRaid };
 }

@@ -15,213 +15,16 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { kabaddiVoice } from '../voiceParsers';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
-import { replayRaids, sum, decideRaidShootout, type RaidOutcome, type KabaddiStyle } from './rules';
+import { sum } from './rules';
 
-export interface KabaddiState {
-  home: number;
-  away: number;
-  half: 1 | 2 | 3 | 4; // 3 & 4 = extra-time halves (tie-breaker)
-  startedAt?: number;
-  /** minutes per half (format: halfMinutes) */
-  halfMinutes: number;
-  /** minutes per extra-time half (format: extraTimeMinutes) */
-  extraTimeMinutes: number;
-  /** how a level result is settled: draw stands / extra time then Golden Raid /
-   *  Golden Raid straightaway (format: decider) */
-  decider: 'none' | 'extra_time' | 'golden_raid';
-  /** sudden-death Golden Raid under way — the next point wins the match */
-  goldenRaid: boolean;
-  /** 5-raid shootout tie-breaker (PKL) — points scored per raid per side; the
-   *  regulation score stays tied and the shootout totals decide the winner.
-   *  Undefined until a shootout starts. */
-  shootout?: { home: number[]; away: number[] };
-  /** substitutions allowed per side (format: substitutes) */
-  maxSubs: number;
-  subsUsed: { home: number; away: number };
-  /** names taken off — they can't be credited points once subbed out */
-  subbedOff: { home: string[]; away: string[] };
-  /** Pro-Kabaddi raid model (guided outcomes replayed for out-counts & revival). */
-  style: KabaddiStyle;
-  teamSize: number;
-  proRules: boolean;
-  raids: RaidOutcome[];
-  /** players currently off the mat (out) per side */
-  out: { home: number; away: number };
-  /** consecutive empty raids per side (3rd is do-or-die) */
-  emptyRaids: { home: number; away: number };
-  events: LiveEvent[];
-  seq: number;
-  ended: boolean;
-}
+import {
+  init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints,
+  type KabaddiState, type KabaddiEvent,
+} from './engine.ts';
 
-const init = (config?: Record<string, unknown>): KabaddiState => ({
-  home: 0, away: 0, half: 1,
-  halfMinutes: Number(config?.halfMinutes ?? 20),
-  extraTimeMinutes: Number(config?.extraTimeMinutes ?? 5),
-  decider: (config?.decider as KabaddiState['decider']) ?? 'extra_time',
-  goldenRaid: false,
-  maxSubs: Number(config?.substitutes ?? 0),
-  subsUsed: { home: 0, away: 0 },
-  subbedOff: { home: [], away: [] },
-  style: (config?.style as KabaddiStyle) ?? 'sanjeevani',
-  teamSize: Number(config?.playersPerSide ?? 7),
-  proRules: Boolean(config?.proRules ?? true),
-  raids: [],
-  out: { home: 0, away: 0 },
-  emptyRaids: { home: 0, away: 0 },
-  events: [], seq: 0, ended: false,
-});
+export { halfLabel, currentMinute };
+export type { KabaddiState };
 
-// Defensive against state persisted before the Pro-Kabaddi fields existed.
-const kabaddiCfg = (s: KabaddiState) => ({ teamSize: s.teamSize ?? 7, style: s.style ?? 'sanjeevani', proRules: s.proRules ?? true });
-const raidsOf = (s: KabaddiState) => s.raids ?? [];
-
-/** 1st/2nd half, then the two extra-time halves. */
-export const halfLabel = (h: number): string =>
-  h === 1 ? '1st Half' : h === 2 ? '2nd Half' : h === 3 ? 'Extra Time · 1st' : 'Extra Time · 2nd';
-
-export function currentMinute(s: KabaddiState): number {
-  const hm = s.halfMinutes, et = s.extraTimeMinutes;
-  const base = s.half === 1 ? 0 : s.half === 2 ? hm : s.half === 3 ? 2 * hm : 2 * hm + et;
-  if (!s.startedAt) return base;
-  // Hold at the half's end instead of drifting past it (the manual clock never
-  // auto-ends a half).
-  const cap = base + (s.half <= 2 ? hm : et);
-  return Math.min(base + Math.floor((Date.now() - s.startedAt) / 60000), cap);
-}
-
-const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
-  if (s.ended && a.type !== 'END') return s;
-  const minute = Number(a.payload?.minute ?? currentMinute(s));
-  const hf = Number(a.payload?.half ?? s.half);
-  const who = a.attribution?.playerName;
-  const pts = Number(a.payload?.points ?? 1);
-  const pushPt = (type: 'RAID' | 'TACKLE'): KabaddiState => {
-    if (!a.side) return s;
-    // a player who's been subbed off takes no further part
-    if (who && s.subbedOff[a.side].includes(who)) return s;
-    const gr = s.goldenRaid; // sudden death: this point decides the match
-    const kind = type === 'RAID' ? 'raid' : 'tackle';
-    const scored = { ...s, [a.side]: s[a.side] + pts } as KabaddiState;
-    return {
-      ...scored,
-      ...(gr ? { ended: true, startedAt: undefined } : null),
-      seq: s.seq + 1,
-      events: [...s.events, { id: s.seq + 1, stamp: gr ? 'GR' : `${minute}'`, icon: gr ? '⚡' : type === 'RAID' ? '🤼' : '🛡️', label: gr ? `Golden Raid — ${kind} +${pts}` : type === 'RAID' ? `Raid +${pts}` : `Tackle +${pts}`, detail: who, side: a.side, kind, points: pts, playerName: who, minute, half: hf }],
-    };
-  };
-  switch (a.type) {
-    case 'KICKOFF':
-      return { ...s, startedAt: Number(a.payload?.at) };
-    case 'RAID':
-      return pushPt('RAID');
-    case 'TACKLE':
-      return pushPt('TACKLE');
-    case 'RAID_OUTCOME': {
-      // Guided raid: touches / bonus / raider-out → the engine (replayed for
-      // correct revival, super tackle, do-or-die & all-out) sets the new score.
-      if (!a.side) return s;
-      if (who && s.subbedOff[a.side].includes(who)) return s;
-      const outcome: RaidOutcome = {
-        side: a.side,
-        touches: Math.max(0, Math.floor(Number(a.payload?.touches ?? 0))),
-        bonus: Boolean(a.payload?.bonus),
-        raiderOut: Boolean(a.payload?.raiderOut),
-      };
-      const cfg = kabaddiCfg(s);
-      const before = replayRaids(raidsOf(s), cfg);
-      const raids = [...raidsOf(s), outcome];
-      const after = replayRaids(raids, cfg);
-      const gr = s.goldenRaid;
-      const scored = after.home !== before.home || after.away !== before.away;
-      const finish = after.allOutEnded || (gr && scored);
-      const detail = [
-        outcome.touches ? `${outcome.touches} touch${outcome.touches === 1 ? '' : 'es'}` : null,
-        outcome.bonus ? 'bonus' : null,
-        outcome.raiderOut ? 'raider out' : null,
-      ].filter(Boolean).join(' · ') || 'empty raid';
-      return {
-        ...s,
-        home: s.home + (after.home - before.home),
-        away: s.away + (after.away - before.away),
-        out: after.out, emptyRaids: after.emptyRaids, raids,
-        ended: s.ended || finish,
-        startedAt: finish ? undefined : s.startedAt,
-        seq: s.seq + 1,
-        events: [...s.events, { id: s.seq + 1, stamp: gr ? 'GR' : `${minute}'`, icon: gr ? '⚡' : '🤼', label: gr ? `Golden Raid — ${detail}` : `Raid — ${detail}`, detail: who, side: a.side, kind: 'raid', points: (after.home - before.home) || (after.away - before.away), playerName: who, minute, half: hf }],
-      };
-    }
-    case 'SUB': {
-      if (!a.side || s.subsUsed[a.side] >= s.maxSubs) return s;
-      const offName = String(a.payload?.offName ?? '');
-      const onName = String(a.payload?.onName ?? '');
-      if (!offName || !onName) return s;
-      return {
-        ...s,
-        seq: s.seq + 1,
-        events: [...s.events, { id: s.seq + 1, stamp: `${minute}'`, icon: '🔄', label: 'Substitution', detail: `${onName} ⬆  ${offName} ⬇`, side: a.side, kind: 'sub', playerName: offName, minute, half: hf }],
-        subsUsed: { ...s.subsUsed, [a.side]: s.subsUsed[a.side] + 1 },
-        subbedOff: { ...s.subbedOff, [a.side]: [...s.subbedOff[a.side], offName] },
-      };
-    }
-    case 'REMOVE_EVENT': {
-      // Surgically remove one logged moment, reversing its score (raid/tackle) or
-      // its substitution. The stat line is reversed by this action's attribution.
-      const id = Number(a.payload?.id);
-      const ev = s.events.find((e) => e.id === id);
-      if (!ev || !ev.side) return s;
-      const events = s.events.filter((e) => e.id !== id);
-      // A guided raid → drop its raid entry & replay, so revival / super tackle /
-      // all-out all reverse correctly (its net point effect isn't just ev.points).
-      if (ev.kind === 'raid' && raidsOf(s).length) {
-        const ordinal = s.events.filter((e) => e.kind === 'raid').findIndex((e) => e.id === id);
-        if (ordinal >= 0 && ordinal < raidsOf(s).length) {
-          const cfg = kabaddiCfg(s);
-          const before = replayRaids(raidsOf(s), cfg);
-          const raids = raidsOf(s).filter((_, i) => i !== ordinal);
-          const after = replayRaids(raids, cfg);
-          return { ...s, events, raids, home: Math.max(0, s.home + (after.home - before.home)), away: Math.max(0, s.away + (after.away - before.away)), out: after.out, emptyRaids: after.emptyRaids };
-        }
-      }
-      let next = { ...s, events } as KabaddiState;
-      if (ev.kind === 'raid' || ev.kind === 'tackle') next = { ...next, [ev.side]: Math.max(0, next[ev.side] - (ev.points ?? 0)) } as KabaddiState;
-      else if (ev.kind === 'sub' && ev.playerName) next = { ...next, subsUsed: { ...next.subsUsed, [ev.side]: Math.max(0, next.subsUsed[ev.side] - 1) }, subbedOff: { ...next.subbedOff, [ev.side]: next.subbedOff[ev.side].filter((n) => n !== ev.playerName) } };
-      return next;
-    }
-    case 'NEXT_HALF':
-      // 1→2 (regulation) and 3→4 (extra time).
-      return s.half === 1 ? { ...s, half: 2, startedAt: undefined } : s.half === 3 ? { ...s, half: 4, startedAt: undefined } : s;
-    case 'START_EXTRA_TIME':
-      // Level after regulation → two extra-time halves.
-      return s.home === s.away && s.half === 2 && !s.ended && s.decider === 'extra_time' ? { ...s, half: 3, startedAt: undefined } : s;
-    case 'START_GOLDEN_RAID':
-      // Level after regulation or extra time → sudden-death Golden Raid.
-      return s.home === s.away && !s.ended ? { ...s, goldenRaid: true, startedAt: undefined } : s;
-    case 'START_SHOOTOUT':
-      // Level after regulation/extra time → a 5-raid shootout (PKL tie-breaker).
-      return s.home === s.away && !s.ended && !s.shootout ? { ...s, shootout: { home: [], away: [] }, startedAt: undefined } : s;
-    case 'SHOOTOUT_RAID': {
-      // One shootout raid: `points` scored (0 = failed/empty). The regulation
-      // score stays tied; the shootout totals decide the winner.
-      if (!s.shootout || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
-      const p = Math.max(0, Math.floor(Number(a.payload?.points ?? 0)));
-      const sh = { ...s.shootout, [a.side]: [...s.shootout[a.side], p] };
-      const winner = decideRaidShootout(sh.home, sh.away);
-      return {
-        ...s,
-        shootout: sh,
-        ended: winner != null,
-        startedAt: undefined,
-        seq: s.seq + 1,
-        events: [...s.events, { id: s.seq + 1, stamp: 'SO', icon: '🎯', label: `Shootout raid +${p}`, detail: who, side: a.side, kind: 'raid', points: p, playerName: who, minute, half: hf }],
-      };
-    }
-    case 'END':
-      return { ...s, ended: true, startedAt: undefined };
-    default:
-      return s;
-  }
-};
 
 const Row = ({ label, roster, onPick, onTeam }: { label: string; roster: Player[]; onPick: (p: Player) => void; onTeam?: () => void }) => (
   <View style={{ gap: theme.spacing(2) }}>
@@ -238,23 +41,25 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   const [sub, setSub] = useState<{ side: 'home' | 'away'; off?: Player } | null>(null);
   // Timeline correction: edit one past moment in place, or backfill a missed one.
   const [showEdit, setShowEdit] = useState(false);
-  const [edit, setEdit] = useState<LiveEvent | null>(null); // the raid/tackle being re-entered
+  const [edit, setEdit] = useState<LiveEvent | null>(null); // a legacy raid/tackle point being re-entered
   const [backfillText, setBackfillText] = useState('');
   const [backfillMin, setBackfillMin] = useState<number | null>(null);
   // Guided raid capture: who raided, how many touched, bonus, was the raider caught.
-  const [raidFlow, setRaidFlow] = useState<{ side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean; tackler?: Player } | null>(null);
+  // `editOf` = re-entering a past guided raid (its id), stamped at its moment.
+  const [raidFlow, setRaidFlow] = useState<{
+    side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean; tackler?: Player;
+    editOf?: number; at?: { minute: number; half: number };
+  } | null>(null);
 
   const hm = state.halfMinutes, et = state.extraTimeMinutes;
   const halfFromMin = (m: number): 1 | 2 | 3 | 4 => (m < hm ? 1 : m < 2 * hm ? 2 : m < 2 * hm + et ? 3 : 4);
   // While editing, stamp at the original moment; while backfilling, at the past
   // minute (its half derived); otherwise live.
   const stampFor = () =>
-    edit ? { minute: edit.minute ?? 0, half: edit.half ?? state.half } : backfillMin != null ? { minute: backfillMin, half: halfFromMin(backfillMin) } : { minute: currentMinute(state), half: state.half };
+    raidFlow?.at ? raidFlow.at
+    : edit ? { minute: edit.minute ?? 0, half: edit.half ?? state.half }
+    : backfillMin != null ? { minute: backfillMin, half: halfFromMin(backfillMin) } : { minute: currentMinute(state), half: state.half };
   const fire = (action: ScoreAction) => dispatch({ ...action, payload: { ...action.payload, ...stampFor() } });
-  const pt = (type: string, side: 'home' | 'away', stat: string, p: Player) =>
-    fire({ type, side, attribution: { playerId: p.id, stat, playerName: p.fullName } });
-  // Team point — no named player (keeps the scoreline correct without a roster).
-  const teamPt = (type: 'RAID' | 'TACKLE', side: 'home' | 'away') => fire({ type, side });
   // Pro-Kabaddi live figures, defensive against pre-upgrade state.
   const kOut = state.out ?? { home: 0, away: 0 };
   const kTeamSize = state.teamSize ?? 7;
@@ -262,21 +67,53 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
 
   // ----- Correct the timeline: remove / edit one specific past moment -----
   const STAT_KEY: Record<string, string> = { raid: 'raidPoints', tackle: 'tacklePoints' };
-  const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
-  const removeEvent = (e: LiveEvent) => {
+  const allPlayers = [...homeRoster, ...awayRoster];
+  const rosterId = (nm?: string) => allPlayers.find((p) => p.fullName === nm)?.id;
+  const byId = (id?: string, nm?: string) => allPlayers.find((p) => (id ? p.id === id : p.fullName === nm));
+  const raidRev = (e: KabaddiEvent) => raidReversals(state, e, rosterId);
+  const removeEvent = (e: KabaddiEvent) => {
+    // A guided raid (any of its lines) goes as a whole — raid, tackle, all-out.
+    if (e.group != null) {
+      dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.group, v: 2 }, ...raidRev(e) });
+      return;
+    }
     const pid = rosterId(e.playerName);
     const attribution = pid && e.kind && STAT_KEY[e.kind]
       ? { playerId: pid, stat: STAT_KEY[e.kind], by: -(e.points ?? 1), playerName: e.playerName }
       : undefined;
-    dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution });
+    dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id, v: 2 }, attribution });
   };
-  // Edit (raid/tackle only) = remove the old point, then re-credit it to the
-  // re-picked player, stamped at the same moment — score & tallies re-adjust.
-  const editEvent = (e: LiveEvent) => { removeEvent(e); setShowEdit(false); setEdit(e); };
+  // Edit a guided raid = re-open the raid form pre-filled; saving re-dispatches a
+  // RAID_OUTCOME that replaces it in place (same id, same slot in the raid order).
+  // Edit a legacy point = re-pick the player. Nothing changes until you save.
+  const editEvent = (e: KabaddiEvent) => {
+    setShowEdit(false);
+    const r = raidOfEvent(state, e);
+    if (r) {
+      const { raid } = r;
+      setRaidFlow({
+        side: raid.side, touches: raid.touches, bonus: raid.bonus, tackled: raid.raiderOut,
+        raider: byId(raid.raiderId, raid.raider), tackler: raid.raiderOut ? byId(raid.tacklerId, raid.tackler) : undefined,
+        editOf: raid.eid, at: { minute: raid.minute ?? 0, half: raid.half ?? state.half },
+      });
+      return;
+    }
+    setEdit(e);
+  };
   const commitEdit = (p: Player) => {
     if (!edit || !edit.side || !edit.kind) return;
+    removeEvent(edit);
     fire({ type: edit.kind.toUpperCase(), side: edit.side, payload: { points: edit.points ?? 1 }, attribution: { playerId: p.id, stat: STAT_KEY[edit.kind], by: edit.points ?? 1, playerName: p.fullName } });
     setEdit(null);
+  };
+  /** Log the guided raid (or its correction) — see raidActions. */
+  const recordRaid = () => {
+    if (!raidFlow) return;
+    for (const action of raidActions(state, raidFlow, rosterId)) {
+      if (action.type === 'REMOVE_EVENT') dispatch(action);
+      else fire(action);
+    }
+    setRaidFlow(null);
   };
 
   // Players subbed off this match take no further part.
@@ -285,7 +122,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   const rosterFor = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster);
   const subsLeft = (side: 'home' | 'away') => state.maxSubs - state.subsUsed[side];
 
-  if (!state.startedAt && !state.ended && !state.goldenRaid && !edit) {
+  if (!state.startedAt && !state.ended && !state.goldenRaid && !edit && raidFlow?.editOf == null) {
     const startLabel = state.half === 1 ? '▶ Start match' : state.half === 2 ? '▶ Start 2nd half' : `▶ Start ${halfLabel(state.half)}`;
     const startHint = state.half === 1 ? 'Start the match to run the clock.' : state.half === 2 ? 'Half time.' : state.half === 3 ? 'Extra time — first half.' : 'Extra time — second half.';
     return (
@@ -405,10 +242,11 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
       ) : (
         <View style={ctrl.raidPanel}>
           <View style={ctrl.subHead}>
-            <Text style={ctrl.label}>🤼 {raidFlow.side === 'home' ? homeName : awayName} raiding</Text>
+            <Text style={ctrl.label}>{raidFlow.editOf != null ? '✎' : '🤼'} {raidFlow.side === 'home' ? homeName : awayName} raiding</Text>
             <Button label="Cancel" variant="ghost" onPress={() => setRaidFlow(null)} />
           </View>
-          {(state.proRules ?? true) && kEmpty[raidFlow.side] >= 2 && (
+          {raidFlow.at && <Text style={ctrl.editBanner}>Editing the {raidFlow.at.minute}&apos; raid — saving replaces it in place.</Text>}
+          {raidFlow.editOf == null && (state.proRules ?? true) && kEmpty[raidFlow.side] >= 2 && (
             <Text style={ctrl.doOrDie}>⚠ DO-OR-DIE raid — the raider is out if this raid scores nothing.</Text>
           )}
           {onField(raidFlow.side, raidFlow.side === 'home' ? homeRoster : awayRoster).length > 0 && (
@@ -427,7 +265,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
               <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
             ))}
           </View>
-          <View style={ctrl.row}>
+          <View style={ctrl.chips}>
             <SelectChip label={`Bonus point: ${raidFlow.bonus ? 'Yes' : 'No'}`} active={raidFlow.bonus} onPress={() => setRaidFlow({ ...raidFlow, bonus: !raidFlow.bonus })} />
             <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler })} />
           </View>
@@ -447,22 +285,18 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
               </>
             ) : null;
           })()}
-          <Button
-            label="✓ Record raid"
-            onPress={() => {
-              const defSide = raidFlow.side === 'home' ? 'away' : 'home';
-              const amar = (state.style ?? 'sanjeevani') === 'amar';
-              const defOnMat = kTeamSize - (amar ? 0 : kOut[defSide]);
-              const superTackle = (state.proRules ?? true) && !amar && defOnMat <= 3;
-              fire({
-                type: 'RAID_OUTCOME', side: raidFlow.side,
-                attribution: raidFlow.raider ? { playerId: raidFlow.raider.id, stat: 'raidPoints', playerName: raidFlow.raider.fullName } : undefined,
-                attribution2: raidFlow.tackled && raidFlow.tackler ? { playerId: raidFlow.tackler.id, stat: 'tacklePoints', by: superTackle ? 2 : 1, playerName: raidFlow.tackler.fullName } : undefined,
-                payload: { touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled },
-              });
-              setRaidFlow(null);
-            }}
-          />
+          {(() => {
+            // What the engine will score for this raid — what the raider / tackler get.
+            const b = previewRaid(state, { side: raidFlow.side, touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled }, raidFlow.editOf);
+            if (!b) return null;
+            const bits = [
+              `raid +${b.raidPts}${raidFlow.bonus && !b.bonusPts ? ' (bonus void: under 6 defenders)' : ''}`,
+              b.raiderOut ? `${b.superTackle ? 'super tackle' : b.doOrDieFail ? 'do-or-die stop' : 'tackle'} +${b.tacklePts} to ${raidFlow.side === 'home' ? awayName : homeName}` : null,
+              b.allOuts.length ? `all out +2` : null,
+            ].filter(Boolean).join(' · ');
+            return <Text style={ctrl.meta}>Scores: {bits}</Text>;
+          })()}
+          <Button label={raidFlow.editOf != null ? '✓ Save raid' : '✓ Record raid'} onPress={recordRaid} />
         </View>
       )}
 
@@ -507,8 +341,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           </View>
           {showEdit && (
             <View style={{ gap: theme.spacing(1) }}>
-              <Text style={ctrl.meta}>Tap Edit on a raid/tackle to re-pick the player (stamped at the same minute — the score & tallies re-adjust), or Remove to delete it.</Text>
-              {[...state.events].sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0) || b.id - a.id).map((e) => (
+              <Text style={ctrl.meta}>Tap Edit on a raid to re-enter it — raider, touches, bonus, tackle — at the same minute (the score & tallies re-adjust), or ✕ to remove it along with its tackle / all-out points.</Text>
+              {/* one row per moment: a guided raid's tackle / all-out lines go with it */}
+              {[...state.events].filter((e) => e.group == null || isRaidHead(e)).sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0) || b.id - a.id).map((e) => (
                 <View key={e.id} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{e.stamp}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{e.icon} {e.label}{e.detail ? ` — ${e.detail}` : ''}</Text>
@@ -595,15 +430,17 @@ const KabaddiScoreboard: NonNullable<SportPlugin<KabaddiState>['Scoreboard']> = 
   const nH = Math.max(1, s.half);
   const shortHalf = (h: number) => (h <= 2 ? `H${h}` : `ET${h - 2}`);
   const columns = Array.from({ length: nH }, (_, i) => ({ label: shortHalf(i + 1), highlight: !s.ended && i + 1 === s.half }));
-  const pts = (side: 'home' | 'away', h: number) =>
-    s.events.filter((e) => e.side === side && e.half === h && (e.kind === 'raid' || e.kind === 'tackle')).reduce((a, e) => a + (e.points ?? 0), 0);
+  // Points per half from the timeline: raid, tackle and all-out lines each on the
+  // side that scored them; shootout raids aren't regulation points.
+  const pts = (side: 'home' | 'away', h: number) => halfPoints(s, side, h);
+  const w = s.ended ? kabaddiWinner(s) : undefined;
   return (
     <LineScoreboard
       live={live}
       clock={<LiveClock state={s} />}
       leadLabel="TOTAL"
       columns={columns}
-      winner={s.ended ? (s.home >= s.away ? 'home' : 'away') : undefined}
+      winner={w && w !== 'draw' ? w : undefined}
       home={{ name: homeName, color: homeColor ?? theme.colors.home, lead: String(s.home), cells: columns.map((_, i) => String(pts('home', i + 1))) }}
       away={{ name: awayName, color: awayColor ?? theme.colors.away, lead: String(s.away), cells: columns.map((_, i) => String(pts('away', i + 1))) }}
     />

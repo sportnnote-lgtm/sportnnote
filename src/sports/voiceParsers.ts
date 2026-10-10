@@ -4,7 +4,8 @@
  *  score. Football ships its own richer, stateful grammar separately. */
 import type { ScoreAction } from './types';
 import type { VoiceContext } from './types';
-import { deburr, resolveSide, attribution, numberFromText } from './voiceMatch';
+import { deburr, resolveSide, attribution, numberFromText } from './voiceMatch.ts';
+import { previewRaid, type KabaddiState } from './kabaddi/engine.ts';
 
 /** Rally/set-point sports (badminton, tennis, volleyball, padel, pickleball,
  *  squash): "point home", "point away", "<team> point", "<player> scores".
@@ -67,16 +68,25 @@ export function volleyballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
 /** Kabaddi: "raid [player]" = a 1-touch raid; "tackle [player]" = the named side
  *  tackled the opponent's raider. Both route through the RAID_OUTCOME engine (so
  *  they advance the out-count / all-out / do-or-die state), not the simple +1
- *  actions that only moved the score. */
+ *  actions that only moved the score. Credits match what the engine scores: a
+ *  tackle on a raider facing ≤3 defenders is a super tackle (2). */
 export function kabaddiVoice(text: string, ctx: VoiceContext): ScoreAction[] | null {
   const q = deburr(text);
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
   const opp = side === 'home' ? 'away' : 'home';
-  if (/\btackle\b/.test(q))
-    return [{ type: 'RAID_OUTCOME', side: opp, payload: { touches: 0, bonus: false, raiderOut: true }, attribution2: attribution(player, 'tacklePoints') }];
-  if (/\braid\b/.test(q))
-    return [{ type: 'RAID_OUTCOME', side, payload: { touches: 1, bonus: false, raiderOut: false }, attribution: attribution(player, 'raidPoints') }];
+  const state = ctx.state as KabaddiState | undefined;
+  const preview = (o: { side: 'home' | 'away'; touches: number; bonus: boolean; raiderOut: boolean }) => (state ? previewRaid(state, o) : undefined);
+  if (/\btackle\b/.test(q)) {
+    const outcome = { side: opp, touches: 0, bonus: false, raiderOut: true } as const;
+    const pts = preview(outcome)?.tacklePts ?? 1;
+    return [{ type: 'RAID_OUTCOME', side: opp, payload: { ...outcome, ...(player ? { tacklerId: player.id, tacklerName: player.fullName } : null) }, attribution2: attribution(player, 'tacklePoints', pts) }];
+  }
+  if (/\braid\b/.test(q)) {
+    const outcome = { side, touches: 1, bonus: false, raiderOut: false } as const;
+    const pts = preview(outcome)?.raidPts ?? 1;
+    return [{ type: 'RAID_OUTCOME', side, payload: { ...outcome, ...(player ? { raiderId: player.id, raiderName: player.fullName } : null) }, attribution: pts ? attribution(player, 'raidPoints', pts) : undefined }];
+  }
   return null;
 }
 

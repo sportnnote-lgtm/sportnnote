@@ -13,6 +13,35 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-03: kabaddi raid and tackle points go to the right player and team
+
+- **Bug:**
+  - every guided raid credited the raider +1, whatever happened;
+  - a tackle was logged as a raid point to the raiding side, so it went into the raider's column,
+    TCKL stayed 0 and the per-half board credited the wrong team.
+- **Fix:** pure `src/sports/kabaddi/engine.ts` (reducer, `previewRaid`, `raidActions`,
+  `raidReversals`, `raidEvents`, `kabaddiWinner`, `halfPoints`).
+  - **Raider** gets exactly the raid points (touches + bonus; 0 for an empty raid; "Super raid" for
+    3+).
+  - **Tackles** are a separate line for the defending side and the tackler (super tackle = 2).
+  - **Failed do-or-die and all-out** are their own lines.
+  - **Per-half columns** add up to the total; the box score splits RAID/TCKL by team; no winner
+    mark on a draw; voice "tackle" credits 2 on a super tackle.
+  - **Edit** reopens the raid form pre-filled and replaces the raid in place; Cancel now changes
+    nothing.
+  - **Remove** takes out the whole raid and reverses its credits.
+- **Event log:**
+  - Old team scores were already right (only the timeline lines were wrong), so `RAID_OUTCOME`
+    replays unchanged.
+  - The fixed remove ordinal applies only to `REMOVE_EVENT {v:2}`.
+  - 400 random logs × 40 steps replay identically against a frozen copy of the old reducer.
+- **Tests:** tsc + 865 (18 new kabaddi-attribution).
+- **Demo 8093 (m4):** empty raid, 2-point raid, tackle, super tackle, remove, reload → halves add
+  up and the box score is right.
+- Past player stat lines heal in SD-33 (D2).
+
+---
+
 ### 2026-10-10 — Sport depth SD-01/SD-02: real final scores everywhere; tennis tiebreak scores and Grand Slam deciding set
 
 - **Bug:** finished set and game matches showed "0–0" in the full-time alert, ticker/overlay,
