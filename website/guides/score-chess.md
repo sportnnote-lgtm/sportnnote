@@ -17,10 +17,10 @@ Chess is scored once per game: who won, or a draw, and how it ended. The app wri
 ## Step by step
 1. Open the game → **Scoring** tab and tap **▶ Start the match**.
 2. Check the colours. The panel says "♔ White pieces:" with a name, and under it who has Black.
-3. Under **Result (White first)**, tap **1-0** (White wins), **½-½** (Draw) or **0-1** (Black wins). Each box shows the names under it, for example "Anand beat Carlsen", so you can check the side.
+3. Under **Result (White first)**, tap **1-0** (White wins), **½-½** (Draw) or **0-1** (Black wins). Each box shows the names under it, for example "Aarav beat Ishaan", so you can check the side.
 4. Optionally, under **How (optional)**, tap how it ended. For a win: **Checkmate**, **Resignation**, **On time** or **Forfeit**. For a draw: **Draw agreed**, **Stalemate**, **Threefold repetition**, **50-move rule** or **Insufficient material**. You can also type the number of moves.
 5. Tap **✓ Record 1-0…** (the button shows the result you picked).
-6. A sheet asks, for example, "Record 0-1: Carlsen beat Anand by Resignation?". Tap **Yes, record result** to save it, or **No, go back** to change something.
+6. A sheet asks, for example, "Record 0-1: Ishaan beat Aarav by Resignation?". Tap **Yes, record result** to save it, or **No, go back** to change something.
 
 Once saved, the game closes, the table updates and followers get the result.
 
