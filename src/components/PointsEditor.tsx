@@ -7,7 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
-import { availableTieBreakers, noResultPoints, standingsConfigFromFormat, type TieBreaker } from '../data/standings';
+import { availableTieBreakers, noResultPoints, standingsConfigFromFormat, standingsPresets, type TieBreaker } from '../data/standings';
 import type { SportId } from '../core/types';
 
 const TB_LABEL: Record<TieBreaker, string> = {
@@ -38,11 +38,23 @@ export function PointsEditor({ sport, value, onChange }: {
   // No result / abandoned (parity #04): cricket shares 1 by default, others 0.
   const nr = noResultPoints(sport, cfg);
   const primary = cfg.order[0] ?? available[0];
+  const presets = standingsPresets(sport);
   const setPrimary = (p: TieBreaker) => onChange('tieBreak', [p, ...available.filter((x) => x !== p)].join(','));
 
   return (
     <View style={st.wrap}>
       <FieldLabel>Points &amp; tie-breakers</FieldLabel>
+      {presets.length > 0 && (
+        // One tap to the international system or the simple 2-1-0 (D1).
+        <View style={st.row}>
+          <Text style={st.label}>Points system</Text>
+          {presets.map((p) => (
+            <SelectChip key={p.label} label={p.label}
+              active={Object.entries(p.set).every(([k, v]) => (k === 'winPoints' ? cfg.win : k === 'drawPoints' ? cfg.draw : cfg.loss) === v)}
+              onPress={() => Object.entries(p.set).forEach(([k, v]) => onChange(k, v))} />
+          ))}
+        </View>
+      )}
       <View style={st.row}>
         <Text style={st.label}>Points per win</Text>
         {[1, 2, 3].map((n) => (

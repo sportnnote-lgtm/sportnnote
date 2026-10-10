@@ -23,7 +23,7 @@ import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer } from './tabletennis/serve';
-import { makeRallyEngine, rallySummary, rallyScoreLine, type RallyState } from './rallyEngine';
+import { makeRallyEngine, rallySummary, rallyScoreLine, rallyServingSide, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
 
@@ -46,6 +46,10 @@ export interface RallyOpts {
    *  (pickleball/squash); 'tt' = table tennis (2 serves each, 1 each from 10-10,
    *  opening server alternates by game). */
   serveRule?: 'winner' | 'tt';
+  /** SD-06 (pickleball): name the server by court position. Doubles: one
+   *  pre-serve "who starts on the right" pick per team, then the right-court
+   *  player by score parity; singles: right on an even score. */
+  courtPositions?: boolean;
 }
 
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
@@ -57,11 +61,41 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const point = (side: 'home' | 'away', p?: Player) =>
       dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
 
+    // SD-06 — court positions (pickleball): the server is the player in the
+    // right-hand court, derived from one pre-serve pick + the score.
+    const ids = { home: homeRoster.map((p) => p.id), away: awayRoster.map((p) => p.id) };
+    const byId = (id?: string) => (id ? [...homeRoster, ...awayRoster].find((p) => p.id === id) : undefined);
+    const spot = opts.courtPositions ? serveSpot(s) : null;
+    const positionedServer = spot ? byId(serverId(s, ids)) : undefined;
+    // "Who starts on the right?" — doubles, before the first point of a game.
+    const startPicker = opts.courtPositions && s.doubles && !s.ended && s.current.home === 0 && s.current.away === 0
+      ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.label}>Who starts on the right?</Text>
+          <Text style={ctrl.meta}>Each team's player in the right-hand court at 0-0 of this game. The first server serves from the right.</Text>
+          {(['home', 'away'] as const).map((t) => {
+            const roster = rosterOf(t).slice(0, 2);
+            if (roster.length < 2) return null;
+            const cur = startPair(s, t, ids[t]).starter;
+            return (
+              <View key={t} style={ctrl.chips}>
+                <Text style={[ctrl.meta, { alignSelf: 'center' }]}>{t === 'home' ? homeName : awayName}:</Text>
+                {roster.map((p) => (
+                  <SelectChip key={p.id} label={p.fullName} active={cur === p.id}
+                    onPress={() => dispatch({ type: 'SET_START_RIGHT', payload: { side: t, playerId: p.id, playerName: p.fullName } })} />
+                ))}
+              </View>
+            );
+          })}
+        </View>
+      ) : null;
+
     if (s.sideOut) {
-      // The current server's player (for credit + display): server 1/2 maps to the
-      // team's first two on-field players. Falls back to the team name if unknown.
+      // The current server's player (for credit + display). With court positions
+      // (pickleball) it's the right-court player at the start of the service
+      // turn; otherwise server 1/2 maps to the team's first two players.
       const serverIdx = s.doubles ? s.serverNo - 1 : 0;
-      const serverOf = (t: 'home' | 'away') => rosterOf(t)[serverIdx];
+      const serverOf = (t: 'home' | 'away') => (spot ? positionedServer : rosterOf(t)[serverIdx]);
       const servingTeam = s.serving === 'home' ? homeName : awayName;
       const serverP = serverOf(s.serving);
       const rallyWon = (team: 'home' | 'away') => point(team, team === s.serving ? serverOf(team) : undefined);
@@ -69,11 +103,21 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         <View style={{ gap: theme.spacing(4) }}>
           <View style={ctrl.serveBox}>
             <Text style={ctrl.label}>{opts.serveSystemLabel}</Text>
-            <Text style={ctrl.serve}>
-              🏓 Serving: {servingTeam}{serverP ? ` · ${serverP.fullName}` : ''}{s.doubles ? ` · server ${s.serverNo}` : ''}
-            </Text>
+            {spot ? (
+              <>
+                <Text style={ctrl.headline}>
+                  {opts.icon} Serving: {serverP?.fullName ?? servingTeam} ({spot.court}) · {spot.call}
+                </Text>
+                <Text style={ctrl.meta}>{servingTeam}{s.doubles ? ` · server ${s.serverNo}` : ''}</Text>
+              </>
+            ) : (
+              <Text style={ctrl.serve}>
+                🏓 Serving: {servingTeam}{serverP ? ` · ${serverP.fullName}` : ''}{s.doubles ? ` · server ${s.serverNo}` : ''}
+              </Text>
+            )}
             <Text style={ctrl.meta}>Tap who won each rally — points and the handout sequence are figured out for you.</Text>
           </View>
+          {startPicker}
           <View style={ctrl.row}>
             <Button label={`Rally won — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => rallyWon('home')} />
             <Button label={`Rally won — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => rallyWon('away')} />
@@ -86,16 +130,13 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // to the rally winner, so show who's serving (the last rally winner, or the
     // opening server before the first point). Doubles names the side; singles the
     // player. No service-court shown here — that rule differs by sport.
-    let serverSide: 'home' | 'away' = s.serving;
-    if (opts.serveRule === 'tt') {
-      serverSide = ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home');
-    } else {
-      for (let i = s.events.length - 1; i >= 0; i--) {
-        if (s.events[i].kind === 'point') { serverSide = s.events[i].side as 'home' | 'away'; break; }
-      }
-    }
+    const serverSide: 'home' | 'away' = opts.serveRule === 'tt'
+      ? ttServer(s.current.home, s.current.away, s.games.length, s.opening ?? 'home')
+      : rallyServingSide(s);
     const serverSideName = serverSide === 'home' ? homeName : awayName;
-    const serverName = s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;
+    const serverName = spot
+      ? `${positionedServer?.fullName ?? serverSideName} (${spot.court}) · ${spot.call}`
+      : s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;
     const Row = ({ label, roster, side, name }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string }) => (
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>{label}</Text>
@@ -111,6 +152,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     return (
       <View style={{ gap: theme.spacing(4) }}>
         <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>
+        {startPicker}
         <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
         <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} />
       </View>
@@ -172,6 +214,7 @@ const ctrl = StyleSheet.create({
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: theme.font.small },
   serve: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  headline: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   serveBox: { gap: theme.spacing(1), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   gamesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   gameChip: {

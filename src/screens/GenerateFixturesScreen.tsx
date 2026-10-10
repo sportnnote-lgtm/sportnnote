@@ -300,7 +300,7 @@ export default function GenerateFixturesScreen() {
       const myId = await getMyPlayerId(profile?.id);
       // Football's knockout decider applies only when every draft is a knockout tie.
       const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super' && !String(d.stage).startsWith('swiss'));
-      const format = matchFormatFor(tournament, sport, koLike, defaultsFor(getSport(sport).formatFields ?? []));
+      const format = matchFormatFor(tournament, sport, koLike, defaultsFor(getSport(sport).formatFields ?? [], 'tournament'));
       for (const d of drafts) {
         await createMatch({
           tournamentId: params.tournamentId, sport,

@@ -16,10 +16,12 @@ export type FormatVal = number | string | boolean;
  *  actually matches the preset shown as selected (otherwise a sport whose preset
  *  default names non-default siblings — e.g. padel "Premier" ⇒ golden point —
  *  would silently seed the wrong rules). */
-export const defaultsFor = (fields: FormatField[]): Record<string, FormatVal> => {
-  const out: Record<string, FormatVal> = Object.fromEntries(fields.map((f) => [f.key, f.default]));
+export const defaultsFor = (fields: FormatField[], ctx?: 'tournament'): Record<string, FormatVal> => {
   const preset = fields.find((f) => f.type === 'preset');
-  const chosen = preset?.options?.find((o) => o.value === preset.default);
+  // A preset may name a different default for tournaments (SD-06: pickleball).
+  const presetDefault = ctx === 'tournament' && preset?.tournamentDefault != null ? preset.tournamentDefault : preset?.default;
+  const out: Record<string, FormatVal> = Object.fromEntries(fields.map((f) => [f.key, f === preset ? presetDefault! : f.default]));
+  const chosen = preset?.options?.find((o) => o.value === presetDefault);
   if (chosen?.set) Object.assign(out, chosen.set);
   return out;
 };

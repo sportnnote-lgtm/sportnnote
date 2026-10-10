@@ -33,8 +33,11 @@ export function basketballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
   if (/\bblock\b|blocked\b|swat/.test(q)) return [{ type: 'BLOCK', side, attribution: attribution(player, 'blocks') }];
   if (/\bturnover\b|turned over|lost the ball/.test(q)) return [{ type: 'TURNOVER', side, attribution: attribution(player, 'turnovers') }];
   if (/\bfoul\b/.test(q)) return [{ type: 'FOUL', side, payload: { foulType: 'personal' }, attribution: attribution(player, 'fouls') }];
-  // A spoken free throw is a made free throw (say "miss" via the buttons).
-  if (/\bfree ?throw\b|foul shot/.test(q))
+  // A spoken free throw is a made free throw (say "miss" via the buttons). In a
+  // full-court (timed) game a spoken "one" is a free throw too, like the "+1 FT"
+  // button (SD-05); 3×3 / first-to-N games keep the 1-point basket.
+  const fullCourt = Number((ctx.state as { targetPoints?: number } | null)?.targetPoints ?? 0) === 0;
+  if (/\bfree ?throw\b|foul shot/.test(q) || (fullCourt && /\bone\b|one ?pointer/.test(q) && !/\btwo\b|\bthree\b|\bbasket\b|\bbucket\b|lay ?up|dunk|jumper|and one/.test(q)))
     return [{ type: 'FREE_THROW', side, payload: { made: true }, attribution: player ? { playerId: player.id, stat: 'points', by: 1, playerName: player.fullName, extra: { freeThrowsMade: 1, freeThrowsAtt: 1 } } : undefined }];
   let pts: number | undefined;
   if (/\bthree\b|three ?pointer|from (downtown|deep)/.test(q)) pts = 3;

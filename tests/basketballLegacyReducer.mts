@@ -1,11 +1,12 @@
 /**
- * Basketball — the PURE scoring core (state, reducer, and rule helpers). No React
- * or React Native imports, so it runs in tests and (later) on the server exactly
- * as it does on-device. The UI (controls, box score, timeline) lives in index.tsx
- * and imports from here. Mirrors cricket's engine.ts / kabaddi's rules.ts.
+ * FROZEN copy of the basketball engine as it was before SD-05 (git 5cbeaef,
+ * src/sports/basketball/engine.ts). Test oracle only: the legacy-replay identity
+ * tests replay the same old logs + stored configs through this and the current
+ * engine and require the same state and the same derived team fouls / bonus.
+ * Do not "fix" this file.
  */
-import type { ScoreAction } from '../types';
-import { pointsOf, type BBEvent, type FoulType, type ReboundType } from './events.ts';
+import type { ScoreAction } from '../src/sports/types.ts';
+import { pointsOf, type BBEvent, type FoulType, type ReboundType } from '../src/sports/basketball/events.ts';
 
 export interface BasketballState {
   home: number;
@@ -17,19 +18,8 @@ export interface BasketballState {
   ended: boolean;
   /** personal fouls that disqualify a player (format: foulsToFoulOut) */
   foulOutLimit: number;
-  /** team fouls in a period AFTER which every further foul gives the opponent
-   *  free throws (format: foulsForBonus). FIBA/NBA = 4: the penalty starts with
-   *  the 5th team foul. Old stored configs say 5 and keep replaying as they did. */
+  /** team fouls in a quarter that put the opponent in the bonus (format: foulsForBonus) */
   foulsForBonus: number;
-  /** FIBA (Art. 41.1.1): a player's technical foul is a team foul. NBA: it isn't.
-   *  Format key `techIsTeamFoul`; absent = legacy (technicals don't count). Only
-   *  put on the state when the stored config has the key, so old matches replay
-   *  to exactly the same state shape. */
-  techIsTeamFoul?: boolean;
-  /** FIBA (Art. 41.1.2): team fouls in overtime count as if in the last
-   *  regulation period, so they carry over instead of resetting. Format key
-   *  `otFoulsCarry`; absent = legacy (each OT period starts from 0). */
-  otFoulsCarry?: boolean;
   /** overtime period length in minutes (informational — the clock counts up) */
   overtimeMinutes: number;
   /** regulation periods before overtime: 4 quarters (default) or 2 halves */
@@ -60,9 +50,6 @@ export const init = (config?: Record<string, unknown>): BasketballState => ({
   winBy: Number(config?.winBy ?? 2),
   shotClock: Number(config?.shotClock ?? 24),
   timeouts: Number(config?.timeouts ?? 0),
-  // SD-05 rule flags — present only when the stored config carries them.
-  ...(config?.techIsTeamFoul != null ? { techIsTeamFoul: config.techIsTeamFoul === true } : {}),
-  ...(config?.otFoulsCarry != null ? { otFoulsCarry: config.otFoulsCarry === true } : {}),
 });
 
 /** Q1..Qn (or H1/H2 for a two-half game), then OT, OT2… for overtime periods. */
@@ -82,19 +69,10 @@ export const isEjected = (s: BasketballState, name?: string): boolean =>
 /** A player takes no further part — fouled out OR ejected. */
 export const isPlayerOut = (s: BasketballState, name?: string): boolean =>
   isFouledOut(s, name) || isEjected(s, name);
-/** Does this foul count as a team foul? Every foul does, except a technical
- *  when the format says technicals aren't team fouls (NBA, and legacy configs). */
-const isTeamFoul = (s: BasketballState, e: BBEvent): boolean =>
-  e.type === 'foul' && (e.foulType !== 'technical' || s.techIsTeamFoul === true);
-/** Is a foul logged in period `q` part of the current team-foul count? The
- *  current period only — except in overtime under FIBA (`otFoulsCarry`), where
- *  every OT period counts together with the last regulation period. */
-const inFoulPeriod = (s: BasketballState, q: number): boolean =>
-  s.otFoulsCarry === true && s.quarter > s.regPeriods ? q >= s.regPeriods : q === s.quarter;
-/** Team fouls committed by one side in the current period (see `isTeamFoul`
- *  for technicals and `inFoulPeriod` for overtime). */
+/** Team fouls committed by one side in the current quarter (technical fouls don't
+ *  count toward the team-foul bonus). */
 export const teamFoulsThisQuarter = (s: BasketballState, side: 'home' | 'away'): number =>
-  s.events.filter((e) => e.side === side && inFoulPeriod(s, e.quarter) && isTeamFoul(s, e)).length;
+  s.events.filter((e) => e.type === 'foul' && e.side === side && e.quarter === s.quarter && e.foulType !== 'technical').length;
 /** Timeouts a side has used so far (whole game). */
 export const timeoutsUsed = (s: BasketballState, side: 'home' | 'away'): number =>
   s.events.filter((e) => e.type === 'timeout' && e.side === side).length;
@@ -111,8 +89,7 @@ export const onCourtNames = (s: BasketballState, side: 'home' | 'away'): string[
   }
   return court;
 };
-/** A side is in the bonus (shoots free throws on every further foul) once the
- *  OTHER side has committed `foulsForBonus` team fouls this period. */
+/** A side is in the bonus (shoots free throws) once the OTHER side hits the team-foul limit this quarter. */
 export const inBonus = (s: BasketballState, side: 'home' | 'away'): boolean =>
   s.foulsForBonus > 0 && teamFoulsThisQuarter(s, side === 'home' ? 'away' : 'home') >= s.foulsForBonus;
 
@@ -222,3 +199,6 @@ export const reducer = (s: BasketballState, a: ScoreAction): BasketballState => 
       return s;
   }
 };
+
+// Aliases used by the SD-05 legacy-replay identity test.
+export { init as legacyInit, reducer as legacyReducer, teamFoulsThisQuarter as legacyTeamFouls, inBonus as legacyInBonus };

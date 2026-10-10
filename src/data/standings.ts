@@ -101,6 +101,43 @@ export function defaultStandingsConfig(sport: SportId): StandingsConfig {
   return { win, draw: 1, loss: 0, order };
 }
 
+/** Founder decision D1 (sport-depth PLAN): a tournament created from now on
+ *  starts on the sport's international points system. These keys are WRITTEN
+ *  into `formats[sport]` when a tournament (or a sport added to one) is created,
+ *  instead of changing `defaultStandingsConfig`, because that default is
+ *  computed at read time: changing it would silently re-score every existing
+ *  table. Old tournaments have no key stored, so they keep the legacy default.
+ *  Basketball (FIBA): win 2, loss 1 (a forfeit, 0, isn't modelled yet). */
+export const NEW_TOURNAMENT_POINTS: Partial<Record<SportId, Record<string, number>>> = {
+  basketball: { winPoints: 2, lossPoints: 1 },
+};
+
+/** A new tournament's format for one sport: the international points keys
+ *  under whatever the organiser already chose (their keys win). */
+export function withNewTournamentPoints<T extends Record<string, unknown>>(sport: SportId, fmt?: T | null): T {
+  return { ...(NEW_TOURNAMENT_POINTS[sport] ?? {}), ...(fmt ?? {}) } as T;
+}
+
+/** Every sport of a tournament being created, stamped with `withNewTournamentPoints`
+ *  (the choke point in `createTournament`, so every creation path gets D1). */
+export function newTournamentFormats<F extends Record<string, unknown>>(sports: SportId[], formats?: Partial<Record<SportId, F>> | null): Partial<Record<SportId, F>> {
+  const out: Partial<Record<SportId, F>> = { ...(formats ?? {}) };
+  for (const sp of sports) if (NEW_TOURNAMENT_POINTS[sp]) out[sp] = withNewTournamentPoints(sp, out[sp] ?? ({} as F));
+  return out;
+}
+
+/** One-tap points presets for the PointsEditor: the body's system and the
+ *  "Simple 2-1-0" fallback (D1). Empty for sports without a body preset yet. */
+export function standingsPresets(sport: SportId): { label: string; set: Record<string, number> }[] {
+  if (sport === 'basketball') {
+    return [
+      { label: 'FIBA 2-1 (loss = 1)', set: { winPoints: 2, drawPoints: 1, lossPoints: 1 } },
+      { label: 'Simple 2-1-0', set: { winPoints: 2, drawPoints: 1, lossPoints: 0 } },
+    ];
+  }
+  return [];
+}
+
 /** Points each side takes from a no result / abandoned match: the config's
  *  `noResult` (the organiser's `nrPoints`), else the sport default. */
 export function noResultPoints(sport: SportId, cfg?: StandingsConfig | null): number {

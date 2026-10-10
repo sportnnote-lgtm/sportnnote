@@ -21,7 +21,7 @@ import { LineScoreboard } from '../../components/LineScoreboard';
 
 import {
   type BasketballState, init, reducer, periodLabel, currentMinute,
-  isFouledOut, isPlayerOut, isEjected, inBonus, timeoutsUsed, onCourtNames,
+  isFouledOut, isPlayerOut, isEjected, inBonus, timeoutsUsed, onCourtNames, teamFoulsThisQuarter,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -71,8 +71,9 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
 
   // Half-court small-sided ball (3×3 / 2v2 / 1v1 — all first-to-N) scores 1s and
   // 2s only: a made shot is 1, from behind the arc it's 2. Full-court games keep
-  // the 1/2/3 buttons.
-  const pointValues = state.targetPoints > 0 ? [1, 2] : [1, 2, 3];
+  // the 1/2/3 buttons (used as-is when re-entering an old play).
+  const halfCourt = state.targetPoints > 0;
+  const pointValues = halfCourt ? [1, 2] : [1, 2, 3];
 
   // While editing, stamp the re-entered play at the original moment; while
   // backfilling, at the chosen quarter; otherwise live.
@@ -312,10 +313,16 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const fouledOut = (p: Player) => isPlayerOut(state, p.fullName);
   const outNames = [...homeRoster, ...awayRoster].filter(fouledOut)
     .map((p) => `${p.fullName}${isEjected(state, p.fullName) ? ' (ejected)' : ''}`);
-  // Team-foul bonus (format: foulsForBonus): once a side reaches the team-foul
-  // limit in a quarter, the opponent shoots free throws.
+  // Team-foul bonus (format: foulsForBonus): once a side has committed that many
+  // team fouls in a period, the opponent shoots free throws on every further foul
+  // (FIBA: from the 5th). Under FIBA, overtime fouls count with the last quarter.
   const homeBonus = inBonus(state, 'home');
   const awayBonus = inBonus(state, 'away');
+  const homeTF = teamFoulsThisQuarter(state, 'home');
+  const awayTF = teamFoulsThisQuarter(state, 'away');
+  const foulPeriod = state.quarter > state.regPeriods && state.otFoulsCarry
+    ? `${periodLabel(state.quarter, state.regPeriods)} (carried from ${periodLabel(state.regPeriods, state.regPeriods)})`
+    : periodLabel(state.quarter, state.regPeriods);
 
   // Shown while any overtime period is live (quarter 5+).
   const otBanner = state.quarter > state.regPeriods ? (
@@ -391,8 +398,12 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
           </View>
         )}
         <View style={ctrl.row}>
+          {/* SD-05: in a full-court game the only 1-point play is a free throw, so
+              "+1 FT" logs a made free throw (FTM/FTA counted), not a 1-pt basket. */}
           {pointValues.map((n) => (
-            <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
+            !halfCourt && n === 1
+              ? <Button key={n} label="+1 FT" variant={variant} style={ctrl.flex} onPress={() => freeThrow(side, true, selected)} />
+              : <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
           ))}
         </View>
         {/* And-one: score the basket AND open the bonus free throw for the scorer. */}
@@ -408,10 +419,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       {outNames.length > 0 && (
         <Text style={ctrl.fouledOut}>🚫 Out: {outNames.join(', ')}</Text>
       )}
-      {(homeBonus || awayBonus) && (
-        <Text style={ctrl.bonus}>
-          🎯 BONUS · {homeBonus ? homeName : awayName} shoots free throws ({state.foulsForBonus} team fouls on {homeBonus ? awayName : homeName} this quarter)
-        </Text>
+      {state.foulsForBonus > 0 && (
+        <Text style={ctrl.meta}>Team fouls {foulPeriod} · {homeName} {homeTF} · {awayName} {awayTF}</Text>
+      )}
+      {homeBonus && (
+        <Text style={ctrl.bonus}>🎯 BONUS · {homeName} shoots free throws on every foul ({awayName}: {awayTF} team fouls)</Text>
+      )}
+      {awayBonus && (
+        <Text style={ctrl.bonus}>🎯 BONUS · {awayName} shoots free throws on every foul ({homeName}: {homeTF} team fouls)</Text>
       )}
       <ScoreSide side="home" name={homeName} variant="home" />
       <ScoreSide side="away" name={awayName} variant="away" />
@@ -626,13 +641,13 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'fiba',
       options: [
-        { value: 'fiba', label: 'FIBA (4×10)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 10, foulsToFoulOut: 5, foulsForBonus: 5, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 5 } },
-        { value: 'nba', label: 'NBA (4×12)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 12, foulsToFoulOut: 6, foulsForBonus: 5, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 7 } },
-        { value: 'ncaa', label: 'NCAA (2×20 halves)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 2, periodMinutes: 20, foulsToFoulOut: 5, foulsForBonus: 7, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 30, timeouts: 4 } },
-        { value: '3x3', label: '3×3 (first to 21)', set: { playersPerSide: 3, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 7, overtimeMinutes: 0, targetPoints: 21, winBy: 1, shotClock: 12, timeouts: 1 } },
-        { value: '2v2', label: '2v2 (first to 15)', set: { playersPerSide: 2, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 7, overtimeMinutes: 0, targetPoints: 15, winBy: 2, shotClock: 0, timeouts: 0 } },
+        { value: 'fiba', label: 'FIBA (4×10)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 10, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 5 } },
+        { value: 'nba', label: 'NBA (4×12)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 12, foulsToFoulOut: 6, foulsForBonus: 4, techIsTeamFoul: false, otFoulsCarry: false, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 7 } },
+        { value: 'ncaa', label: 'NCAA (2×20 halves)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 2, periodMinutes: 20, foulsToFoulOut: 5, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 30, timeouts: 4 } },
+        { value: '3x3', label: '3×3 (first to 21)', set: { playersPerSide: 3, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 21, winBy: 1, shotClock: 12, timeouts: 1 } },
+        { value: '2v2', label: '2v2 (first to 15)', set: { playersPerSide: 2, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 7, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 15, winBy: 2, shotClock: 0, timeouts: 0 } },
         { value: '1v1', label: '1v1 (first to 11)', set: { playersPerSide: 1, substitutes: 0, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 0, overtimeMinutes: 0, targetPoints: 11, winBy: 2, shotClock: 0, timeouts: 0 } },
-        { value: 'school', label: 'School (4×8)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 4, periodMinutes: 8, foulsToFoulOut: 5, foulsForBonus: 5, overtimeMinutes: 4, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 4 } },
+        { value: 'school', label: 'School (4×8)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 4, periodMinutes: 8, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 4, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 4 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -649,7 +664,11 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     { key: 'targetPoints', label: 'First-to-N points', type: 'number', default: 0, min: 0, max: 50, advanced: true, hint: '0 = timed game · 21 for 3×3/streetball' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
     { key: 'foulsToFoulOut', label: 'Fouls to foul out', type: 'number', default: 5, min: 0, max: 10, advanced: true, hint: '0 = no foul-out (3×3)' },
-    { key: 'foulsForBonus', label: 'Team fouls for bonus', type: 'number', default: 5, min: 1, max: 10, advanced: true, hint: 'opponent shoots free throws after this many team fouls' },
+    // SD-05: the number of team fouls AFTER which the opponent shoots — FIBA/NBA 4
+    // (free throws from the 5th). Old matches stored 5 and keep their behaviour.
+    { key: 'foulsForBonus', label: 'Team fouls before free throws', type: 'number', default: 4, min: 1, max: 10, advanced: true, hint: 'FIBA 4: free throws from the 5th team foul in a quarter' },
+    { key: 'techIsTeamFoul', label: 'Technical fouls count as team fouls', type: 'toggle', default: true, advanced: true, hint: 'FIBA yes · NBA no' },
+    { key: 'otFoulsCarry', label: 'Overtime team fouls carry over from the last quarter', type: 'toggle', default: true, advanced: true, hint: 'FIBA yes · NBA resets' },
     { key: 'overtimeMinutes', label: 'Overtime length (min)', type: 'number', default: 5, min: 1, max: 10, advanced: true, hint: 'played when tied after regulation; repeats until decided' },
     { key: 'shotClock', label: 'Shot clock (sec)', type: 'number', default: 24, min: 0, max: 35, advanced: true, hint: 'shown for reference' },
     { key: 'timeouts', label: 'Timeouts per team', type: 'number', default: 0, min: 0, max: 9, advanced: true, hint: '0 = don’t track' },

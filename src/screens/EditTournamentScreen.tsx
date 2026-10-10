@@ -14,6 +14,7 @@ import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
+import { withNewTournamentPoints } from '../data/standings';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { updateTournament, patchTournamentFormat, formatDiff, deleteTournament, setTournamentLogo, setTournamentBanner, getMyPlayerId, getPlayer } from '../data/repos';
 import { useMatches, useTournamentById } from '../data/hooks';
@@ -115,7 +116,8 @@ export default function EditTournamentScreen() {
     setSports((prev) => {
       if (prev.includes(s)) return prev.filter((x) => x !== s);
       const fields = getSport(s).formatFields ?? [];
-      const seeded = fields.length ? defaultsFor(fields) : {};
+      // A sport added now starts on its international points system (D1).
+      const seeded = withNewTournamentPoints(s, fields.length ? defaultsFor(fields, 'tournament') : {});
       setFormats((f) => (f[s] ? f : { ...f, [s]: seeded }));
       if (!tournamentDraft.get(s) || Object.keys(tournamentDraft.get(s)).length === 0) tournamentDraft.setFormat(s, seeded);
       return [...prev, s];

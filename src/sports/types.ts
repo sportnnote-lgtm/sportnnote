@@ -194,6 +194,10 @@ export interface FormatField {
    *  every `preset` field is shown there anyway */
   onCreate?: boolean;
   default: number | string | boolean;
+  /** For a 'preset' field: the default when the format is seeded for a
+   *  TOURNAMENT (e.g. pickleball: side-out, as sanctioned events play). Absent →
+   *  `default`. One-off matches always use `default`. */
+  tournamentDefault?: number | string | boolean;
   /** for 'choice' and 'preset' */
   options?: FormatFieldOption[];
   /** for 'number' and 'count' */

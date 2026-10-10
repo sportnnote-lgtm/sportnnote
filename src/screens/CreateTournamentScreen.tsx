@@ -15,6 +15,7 @@ import { MedalScoringEditor } from '../components/MedalScoringEditor';
 import { SportSettingsButtons, coarseStructureFrom } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
+import { withNewTournamentPoints } from '../data/standings';
 import { CoHostPicker, type CoHost } from '../components/CoHostPicker';
 import { DivisionsEditor } from '../components/DivisionsEditor';
 import type { NewTournamentCategory } from '../core/types';
@@ -121,7 +122,8 @@ export default function CreateTournamentScreen() {
   const [sports, setSports] = useState<SportId[]>(initialSport ? [initialSport] : []);
   const [scoring, setScoring] = useState<TournamentScoring | undefined>(undefined);
   const [formats, setFormats] = useState<FormatMap>(
-    initialSport ? { [initialSport]: defaultsFor(getSport(initialSport).formatFields ?? []) } : {}
+    // A new tournament starts on each sport's international points system (D1).
+    initialSport ? { [initialSport]: withNewTournamentPoints(initialSport, defaultsFor(getSport(initialSport).formatFields ?? [], 'tournament')) } : {}
   );
   // Per-sport settings live on their own screens via the shared draft — seed it
   // once with the initial defaults, and pull edits back when we return.
@@ -141,7 +143,7 @@ export default function CreateTournamentScreen() {
         return prev.filter((x) => x !== s);
       }
       const fields = getSport(s).formatFields ?? [];
-      const seeded = fields.length ? defaultsFor(fields) : {};
+      const seeded = withNewTournamentPoints(s, fields.length ? defaultsFor(fields, 'tournament') : {});
       setFormats((f) => ({ ...f, [s]: seeded }));
       tournamentDraft.setFormat(s, seeded);
       return [...prev, s];

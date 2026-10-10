@@ -13,6 +13,38 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-05 + SD-06: basketball FIBA rules; pickleball side-out tournaments and the right-court server
+
+- **Basketball (SD-05):**
+  - **Free throws one foul earlier:** presets now give free throws from the 5th team foul (FIBA,
+    School, NBA = 4 before; NCAA and 3×3 = 6, the same off-by-one fixed).
+  - **Technicals count as team fouls** (FIBA; not NBA).
+  - **Overtime team fouls carry over** from Q4 (FIBA). Both are new advanced toggles plus presets.
+  - **Live display:** a team-foul line per period and a BONUS line per side.
+  - **"+1 FT":** in full-court games it logs a made free throw; voice "one" does the same.
+  - **Standings:** new tournaments (and a sport newly added to one) store win 2 / loss 1 (D1), and
+    the points editor offers "FIBA 2-1 (loss = 1)" / "Simple 2-1-0". Existing tables are unchanged
+    (the default is still computed as 2-1-0 for a format with no keys).
+  - **Old matches:** keep their stored `foulsForBonus` and have no flag keys, so they replay
+    identically (≈14,000 steps vs a frozen engine).
+- **Pickleball (SD-06):**
+  - **Presets:** tournament presets are side-out (best of 3 to 11, 1 game to 15 / 21, medal match
+    best of 5); MLP and rec presets stay rally. Tournaments default to side-out (new
+    `FormatField.tournamentDefault`); friendlies default to rec.
+  - **Doubles server:** the scorer picks who starts on the right per team at 0-0 (`SET_START_RIGHT`).
+    The engine derives court positions through points, the second server and side-outs, so the
+    call ("Bina Shah (right) · 0-0-2") and the point credit follow the real server. Singles uses
+    even/odd sides.
+  - **Old logs:** keep their recorded credit (fingerprints unchanged).
+- **Tests:** tsc + 914 (18 basketball-fiba, 14 pickleball-server).
+- **New public guides:** "How to score a basketball match", "How to score a pickleball match".
+- **Demo 8093:**
+  - a new tournament shows 2/1/1;
+  - a FIBA match reached the bonus via a technical and carried fouls into OT;
+  - a pickleball side-out doubles sequence gave the right server at every step.
+
+---
+
 ### 2026-10-10 — Sport depth SD-04: volleyball points say how they were won; errors credit nobody; aces and blocks count as points
 
 - **Bug:**

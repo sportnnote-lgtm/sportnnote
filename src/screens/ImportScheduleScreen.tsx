@@ -137,7 +137,7 @@ export default function ImportScheduleScreen() {
             startsAt: d.startsAt,
             venueName: d.venueName,
             hostIds: myId ? [myId] : [],
-            format: matchFormatFor(tournament, d.sport, isEliminationStage(d.stage), defaultsFor(getSport(d.sport).formatFields ?? [])),
+            format: matchFormatFor(tournament, d.sport, isEliminationStage(d.stage), defaultsFor(getSport(d.sport).formatFields ?? [], 'tournament')),
           });
         } catch (e) {
           setError(`Created ${done} of ${total}. Row #${r.line} failed: ${e instanceof Error ? e.message : String(e)}`);

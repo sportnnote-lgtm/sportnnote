@@ -28,6 +28,14 @@ export interface RallyState {
   /** who served first in game 1 — decided by the toss (table tennis, ITTF
    *  2.13.1). Absent on older matches → home. */
   opening?: 'home' | 'away';
+  /** SD-06 — per team, the player who starts the current game in the RIGHT-hand
+   *  court (doubles), set pre-serve by `SET_START_RIGHT`. Absent → roster order
+   *  (the first listed player). Carries over to the next game until changed. */
+  startRight?: { home?: string; away?: string };
+  /** SD-06 — derived (side-out doubles): is the current server the serving
+   *  team's right-court starter (true) or the partner (false)? Absent on older
+   *  snapshots → treated as true. Never affects the score. */
+  srvStarter?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -63,12 +71,22 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     serving: config?.firstServe === 'away' ? 'away' : 'home',
     opening: config?.firstServe === 'away' ? 'away' : 'home',
     serverNo: 2, // start-of-game "second server" exception: the first team's fault is a side-out
+    srvStarter: true, // the first server of a game serves from the right
     events: [],
     seq: 0,
     ended: false,
   });
 
   const reducer = (s: RallyState, a: ScoreAction): RallyState => {
+    // SD-06 — who starts this game in the right-hand court, per team. Pre-serve
+    // only (the game is still 0-0); no score effect and no timeline event.
+    if (a.type === 'SET_START_RIGHT') {
+      const side = a.payload?.side;
+      const playerId = a.payload?.playerId;
+      if (s.ended || (side !== 'home' && side !== 'away') || typeof playerId !== 'string' || !playerId) return s;
+      if (s.current.home !== 0 || s.current.away !== 0) return s;
+      return { ...s, startRight: { ...s.startRight, [side]: playerId } };
+    }
     if (a.type !== 'POINT' || !a.side || s.ended) return s;
     const gameNo = s.games.length + 1;
 
@@ -80,10 +98,12 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
       if (s.doubles && s.serverNo === 1) {
         // Hand serve to the 2nd server on the same team — not a side-out yet.
         events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: '2nd server', detail: 'serve → partner', side: s.serving });
-        return { ...s, serverNo: 2, events, seq };
+        return { ...s, serverNo: 2, srvStarter: !(s.srvStarter ?? true), events, seq };
       }
       events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: '🔁', label: opts.sideOutLabel, detail: `serve → ${a.side}`, side: a.side });
-      return { ...s, serving: a.side, serverNo: 1, events, seq };
+      // Server 1 at a side-out is whoever stands in the right court: the starter
+      // when the team's score is even, the partner when it's odd.
+      return { ...s, serving: a.side, serverNo: 1, srvStarter: s.current[a.side] % 2 === 0, events, seq };
     }
 
     const scorer = s.sideOut ? s.serving : a.side; // side-out: only the server scores
@@ -102,10 +122,75 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     events.push({ id: ++seq, stamp: 'Game', icon: '🎉', label: `Game ${gameNo} won`, detail: `${current.home}-${current.away}`, side: winner });
     if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${gamesWon.home}-${gamesWon.away} games`, side: winner });
     // New game: the winner serves first, again under the start-of-game exception.
-    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: winner, serverNo: 2, events, seq, ended };
+    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: winner, serverNo: 2, srvStarter: true, events, seq, ended };
   };
 
   return { init, reducer };
+}
+
+// ------------------------------------------------- SD-06 · court positions --
+// USA Pickleball rules. Doubles: each team's players switch courts only when
+// their team scores, so the game's right-court starter stands on the right
+// whenever the team's score is even. The first server of every service turn
+// serves from the right. Singles: the server is on the right with an even score.
+// Rally scoring uses the same positions; the server is the serving team's
+// right-court player. Everything here is derived from the state (the log).
+
+/** Rally scoring with the "rally winner serves" rule: who serves next. */
+export function rallyServingSide(s: RallyState): 'home' | 'away' {
+  if (s.sideOut) return s.serving;
+  for (let i = (s.events?.length ?? 0) - 1; i >= 0; i--) {
+    const e = s.events[i];
+    if (e.kind === 'point') return e.side as 'home' | 'away';
+  }
+  return s.serving;
+}
+
+export interface ServeSpot {
+  side: 'home' | 'away';
+  /** doubles: the server is the team's right-court starter (true) or the
+   *  partner (false). Singles: always true. */
+  starter: boolean;
+  court: 'right' | 'left';
+  /** the score call: "4-2-1" (side-out doubles), else "4-2" — server first */
+  call: string;
+}
+
+/** Who serves and from which court, as a pure function of the state. */
+export function serveSpot(s: RallyState): ServeSpot {
+  const side = rallyServingSide(s);
+  const own = s.current[side];
+  const even = own % 2 === 0;
+  const call2 = `${own}-${s.current[other(side)]}`;
+  if (!s.doubles) return { side, starter: true, court: even ? 'right' : 'left', call: call2 };
+  if (!s.sideOut) return { side, starter: even, court: 'right', call: call2 };
+  const starter = s.srvStarter ?? true;
+  return { side, starter, court: starter === even ? 'right' : 'left', call: `${call2}-${s.serverNo}` };
+}
+
+/** The ids of the team's starter (right court at 0) and partner, from the
+ *  `SET_START_RIGHT` pick, else roster order. `roster` = the team's player ids. */
+export function startPair(s: RallyState, side: 'home' | 'away', roster: string[]): { starter?: string; partner?: string } {
+  const pair = roster.slice(0, 2);
+  const picked = s.startRight?.[side];
+  const starter = picked && roster.includes(picked) ? picked : pair[0];
+  const partner = roster.find((id) => id !== starter);
+  return { starter, partner };
+}
+
+/** The player in the RIGHT-hand court for `side` right now (doubles). */
+export function rightCourtId(s: RallyState, side: 'home' | 'away', roster: string[]): string | undefined {
+  const { starter, partner } = startPair(s, side, roster);
+  return s.current[side] % 2 === 0 ? starter : partner;
+}
+
+/** The serving player's id (doubles: by court position; singles: the player). */
+export function serverId(s: RallyState, rosters: { home: string[]; away: string[] }): string | undefined {
+  const spot = serveSpot(s);
+  const roster = rosters[spot.side];
+  if (!s.doubles) return roster[0];
+  const { starter, partner } = startPair(s, spot.side, roster);
+  return spot.starter ? starter : partner;
 }
 
 /** SD-01 — the completed games, "11-7, 9-11, 11-5". */
@@ -121,9 +206,9 @@ export function rallySummary(s: RallyState, serveTag: string): ScoreSummary {
   return {
     homeScore: String(s.current.home),
     awayScore: String(s.current.away),
-    statusLine: `Game ${s.games.length + 1}${s.sideOut ? ` · ${serveTag}` : ''}`,
+    // SD-06: in side-out scoring the score call ("4-2-1") is the headline.
+    statusLine: `Game ${s.games.length + 1}${s.sideOut ? ` · ${serveTag} · ${serveSpot(s).call}` : ''}`,
     detailLine:
-      `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target}${s.winBy === 2 ? ' (win by 2)' : ''} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}` +
-      (s.sideOut && s.doubles ? ` · call ${s.current[s.serving]}-${s.current[other(s.serving)]}-${s.serverNo}` : ''),
+      `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target}${s.winBy === 2 ? ' (win by 2)' : ''} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}`,
   };
 }
