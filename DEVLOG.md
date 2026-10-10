@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-25: split a player's career by format, singles/doubles, season, opponent…
+
+- **Context per line:** each stat line gets a context derived from its match and tournament: cricket
+  format (T20 / ODI / T10 / Box / Hundred / Long), ball, singles / doubles, tournament or friendly,
+  season, opponent, chess colour and time control.
+- **Profile filter chips** (only meaningful ones per sport) recompute the whole career locally.
+- **New guide:** "filter-career-stats"; the cricket guide gains "Career by format".
+- **Tests:** tsc + 1244.
+
+---
+
 ### 2026-10-10 — Sport depth SD-17: every sport's official points and tie-break rules
 
 - **Presets for new tournaments:** each sport's international points system and tie-break order

@@ -2,6 +2,15 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-25: line context and career splits — DONE (9eaf301, 2026-10-10)
+- **Built:** pure `lineContext` (cricket format from the preset or overs / ball / players, singles / doubles, tournament vs friendly, season, opponent, chess colour and time control, venue, home/away). Schema `splits`. Profile filter chips that recompute career, record and history with no extra network calls.
+- No migration. Tests: 19 new · 1244 total · demo 8093 (cricket by format, badminton singles / doubles, chess by colour).
+- **Noted for SD-24:**
+  - the Win % tile truncates "100%" at 375 px;
+  - chess history reads "1 draws · 1 games" (plural).
+- Leaders and awards splits are not done (profile only).
+- Demo data added: `sd25-*` matches and lines.
+
 ## SD-17: standings rule kit — DONE (b39381c, 2026-10-10)
 - **Built:**
   - **Presets for new tournaments (D1):** FIFA/UEFA 3-1-0 (+ "goal difference first"), FIBA 2-1, FIVB 3-3-2-1, PKL 5-3-1 with the ≤7 losing bonus, BWF, ATP/ITF RR, FIP, pool play, WSF, ITTF 2-1, carrom, ICC, FIH (+ shoot-out bonus), IHF, plus "Simple 2-1-0" / "Simple 3-1-0".
