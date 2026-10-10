@@ -2,6 +2,20 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-15: per-sport stat schema — DONE (a5086ef, 2026-10-10)
+- **Built:** `statSchema.ts` (types), `statSchemas.ts` (an RN-free registry and lookups), one `<sport>/stats.ts` per sport, `rallyStats.ts` and `sharedStats.ts`. Every plugin now carries `statSchema`.
+- **What it replaces:** the old maps (`STAT_WEIGHTS`, `STAT_LABELS`, `SPORT_AWARDS`, `TOURNAMENT_AWARD_SLOTS`, `STAT_CATEGORIES`, the headline order, profile labels, the team unit). Their exports and signatures are kept. Cricket's career is computed from the schema (`careerFromSchema`) and renders identically.
+- **Tests:** 30 new (golden equality with the pre-refactor values, a scan for undeclared keys, hockey/handball/athletics expressiveness samples) · 1126 total.
+- **Deliberate label fixes:**
+  - correct singular forms ("1 win", "1 foul", …);
+  - real labels for keys that used to show raw names (e.g. "1 yellow card").
+- **Still bespoke, by design:**
+  - golf profile (until SD-28);
+  - other sports' career grid (SD-24);
+  - box score components (SD-23);
+  - max/min/perGame/perSet/qualifier aggregation (SD-16);
+  - hand-written award prose.
+
 ## SD-103: doubles tiebreak serving order — DONE (db8fcb2, 2026-10-10)
 - **Fix:** padel and doubles tennis tiebreaks (set and match) now rotate partners: h0, a0, a0, h1, h1, a1, a1… Before, it was h0, a0, a0, h0, h0, a0, a0.
 - **Unchanged:** the next-set first server already followed ITF 5(b). Scores and fingerprints are unchanged (the server is display-only).

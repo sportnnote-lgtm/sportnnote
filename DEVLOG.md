@@ -13,6 +13,21 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-15: one stat schema per sport (the shared foundation)
+
+- **What it is:** each sport now has a single declarative stat schema in `src/sports/<sport>/stats.ts`,
+  collected in `statSchemas.ts`. It defines keys, labels, formats (with lower/higher-is-better),
+  aggregation, career sections, box-score columns, leaders, award slots (incl. goalkeeper-only
+  eligibility), MVP weights, "optional / not tracked" coverage and suspension durations.
+- **What it replaces:** the 6+ maps that disagreed (ratings, stats, standings, team stats,
+  profile labels) are now derived from it, so existing callers are unchanged.
+- **Cricket career** renders identically from the schema (golden tests).
+- **Future sports:** sample hockey, handball and athletics schemas prove the shape covers them.
+- **Labels:** correct singulars, and no more raw keys like "yellowCards" in notifications.
+- **Tests:** tsc + 1126.
+
+---
+
 ### 2026-10-10 — Sport depth SD-11 to SD-13: every player gets a W/D/L/T/NR line; standings bugs; cricket NRR per ICC — Wave 0 complete
 
 - **Results and appearances (SD-11):**
