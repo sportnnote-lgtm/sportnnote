@@ -103,7 +103,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-83 | Kabaddi rule check: touches when the raider is caught | kabaddi | KB-11 | READY | Wave 3b R3 · S · D6 · new matches only (v2) |
 | SD-84 | Golf Handicap Index field, trend, unofficial differential | golf | GF-09 | READY | Wave 3b R3 · M |
 | SD-85 | Chess ratings (FIDE ID, per time control), rating-seeded R1, ARO, performance rating | chess | CH-07 | READY | Wave 3b R3 · M |
-| SD-86 | Carrom career remainder: games W/L, board % and points per board (need SD-37), slams, 25-0 games, best game | carrom | CR-05 | READY | Wave 3b R3 · M · needs SD-37, SD-78 · PARTIAL: rest delivered by SD-24 (b3fbe7e) match W-L, points per match, boards, queens, best match |
+| SD-86 | Carrom career remainder: games W/L, board % and points per board (need SD-37), slams, 25-0 games, best game | carrom | CR-05 | DONE | 68dd087 · Wave 3b R3 · M · needs SD-37, SD-78 · PARTIAL: rest delivered by SD-24 (b3fbe7e) match W-L, points per match, boards, queens, best match |
 | SD-87 | Golf match play with strokes (handicap dots, holes 10–18) | golf | GF-10 | READY | Wave 3b R4 · M |
 | SD-88 | Golf proper scorecard view | golf | GF-11 | READY | Wave 3b R4 · S |
 | SD-89 | Golf playoff tie-break option | golf | GF-12 (playoff) | READY | Wave 3b R4 · S |
