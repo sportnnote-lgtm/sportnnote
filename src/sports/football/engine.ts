@@ -295,6 +295,9 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
   // it (handles stoppage time + backfill correctly); else the current half.
   const evHalf: 1 | 2 | 3 | 4 = (a.payload?.half as 1 | 2 | 3 | 4 | undefined) ?? s.half;
   const name = a.attribution?.playerName;
+  // SD-30: new logs carry the credited player's id (optional key; older logs
+  // have names only and replay exactly as before — Decision 8).
+  const pid = typeof a.payload?.pid === 'string' && a.payload.pid ? { playerId: a.payload.pid } : {};
   switch (a.type) {
     case 'KICKOFF': {
       const at = Number(a.payload?.at);
@@ -354,13 +357,13 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
     case 'GOAL': {
       if (!a.side) return s;
       const scored = { ...s, [a.side]: s[a.side] + 1 } as FootballState;
-      return push(scored, { minute, half: evHalf, type: 'goal', side: a.side, playerName: name, goalType: a.payload?.goalType as FootballEvent['goalType'], bodyPart: a.payload?.bodyPart as BodyPart | undefined });
+      return push(scored, { minute, half: evHalf, type: 'goal', side: a.side, playerName: name, goalType: a.payload?.goalType as FootballEvent['goalType'], bodyPart: a.payload?.bodyPart as BodyPart | undefined, ...pid });
     }
     case 'OWN_GOAL': {
       if (!a.side) return s; // side = team awarded the goal
       const scored = { ...s, [a.side]: s[a.side] + 1 } as FootballState;
       // playerName = the opposing player who put it into their own net (no goal credited).
-      return push(scored, { minute, half: evHalf, type: 'owngoal', side: a.side, playerName: a.payload?.scorerName as string | undefined });
+      return push(scored, { minute, half: evHalf, type: 'owngoal', side: a.side, playerName: a.payload?.scorerName as string | undefined, ...pid });
     }
     case 'ASSIST': {
       if (!a.side || !name) return s;
@@ -369,7 +372,10 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       const events = [...s.events];
       for (let i = events.length - 1; i >= 0; i--) {
         if (events[i].type === 'goal' && events[i].side === a.side) {
-          events[i] = { ...events[i], secondName: name };
+          // SD-30: the assister's id rides in `secondId` (a later assist
+          // without one drops the earlier id with its name)
+          const { secondId: _old, ...goal } = events[i];
+          events[i] = { ...goal, secondName: name, ...(pid.playerId ? { secondId: pid.playerId } : {}) };
           return { ...s, events };
         }
       }
@@ -382,9 +388,9 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       // no scoring effect. `reason` (injury / var / cooling / other) is optional.
       return push(s, { minute, half: evHalf, type: 'stoppage', side: a.side ?? 'home', playerName: a.payload?.reason as string | undefined });
     case 'YELLOW':
-      return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name }) : s;
+      return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name, ...pid }) : s;
     case 'RED':
-      return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name, secondYellow: a.payload?.secondYellow as boolean | undefined }) : s;
+      return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name, secondYellow: a.payload?.secondYellow as boolean | undefined, ...pid }) : s;
     case 'SUSPEND': {
       // SD-29: a sin-bin — the player is off (his side a player down) for the
       // minutes, then back automatically (derived by src/sports/onField.ts).

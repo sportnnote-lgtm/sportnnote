@@ -22,7 +22,7 @@ import * as volleyball from '../src/sports/volleyball/engine.ts';
 import * as cricket from '../src/sports/cricket/engine.ts';
 import { statTotals as cricketTotals } from '../src/sports/cricket/scorecard.ts';
 import * as football from '../src/sports/football/engine.ts';
-import { keeperTotals } from '../src/sports/football/keepers.ts';
+import { footballStatTotals, FOOTBALL_DERIVED_KEYS } from '../src/sports/football/totals.ts';
 import { tennisTotals, padelTotals, badmintonTotals, rallyTotals, volleyballSetRecord, mergeTotals, RACKET_RECORD_KEYS, SET_RECORD_KEYS, SERVE_KEYS, SERVE_SET_KEYS } from '../src/sports/racketTotals.ts';
 import { correctionActions, pointInputs, type PointInput } from '../src/sports/rallyEdit.ts';
 import * as basketball from '../src/sports/basketball/engine.ts';
@@ -154,15 +154,15 @@ describe('SD-19 · contract: the sports that had totals before', () => {
     assertContract(sp, toRecords(acts), { every: 1 });
   });
 
-  test('football (partial: keeper / on-field keys are derived)', () => {
+  test('football (SD-30 box keys + own goals; SD-09 / SD-29 keeper / on-field keys derived)', () => {
     const sp: TotalsSport<football.FootballState> = {
-      name: 'football', init: football.init, reducer: football.reducer, statTotals: keeperTotals as never, partial: true,
-      derived: (k) => !['goals', 'assists', 'redCards', 'yellowCards'].includes(k),
+      name: 'football', init: football.init, reducer: football.reducer, statTotals: footballStatTotals, partial: true,
+      derived: FOOTBALL_DERIVED_KEYS,
     };
     const p = (id: string) => ({ id, name: id.toUpperCase() });
     const xi = (team: Side, gk: string, players: string[]): ScoreAction => ({ type: 'XI', payload: { team, gk: p(gk), players: players.map(p), keepers: [p(gk)] } });
     const goal = (side: Side, minute: number, half: 1 | 2, who: string): ScoreAction =>
-      ({ type: 'GOAL', side, payload: { minute, half, goalType: 'open' }, attribution: { playerId: who, stat: 'goals', playerName: who.toUpperCase() } });
+      ({ type: 'GOAL', side, payload: { minute, half, goalType: 'open', pid: who }, attribution: { playerId: who, stat: 'goals', playerName: who.toUpperCase(), extra: { shots: 1, shotsOnTarget: 1, openPlayGoals: 1 } } });
     const acts: ScoreAction[] = [
       { type: 'KICKOFF', payload: { at: 1, ord: true } },
       xi('home', 'hgk', ['hgk', 'hcb', 'hst']), xi('away', 'agk', ['agk', 'acb', 'ast']),

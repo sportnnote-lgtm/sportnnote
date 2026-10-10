@@ -24,7 +24,8 @@ import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
 import { emptyFormation } from './formation';
 import { isGoalkeeper } from './keepers';
-import { footballTotals, footballLiveField, liveClockMinutes } from './fieldTime';
+import { footballLiveField, liveClockMinutes } from './fieldTime';
+import { footballStatTotals, GOAL_STAT, STAT_KEY } from './totals';
 import { FieldBanner } from '../FieldBanner';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { footballBox } from '../boxSources';
@@ -188,16 +189,16 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   };
 
   const attr = (side: 'home' | 'away', type: string, stat: string, p: Player, extra?: Record<string, number>) =>
-    fire({ type, side, attribution: { playerId: p.id, stat, playerName: p.fullName, extra, tracked: trackedKeys() } });
+    fire({ type, side, payload: { pid: p.id }, attribution: { playerId: p.id, stat, playerName: p.fullName, extra, tracked: trackedKeys() } });
 
   // Record a card. A player's second yellow is also a red (sending off), flagged
   // so it shows as a red badge with a "2".
   const recordCard = (side: 'home' | 'away', color: 'yellow' | 'red', p: Player) => {
     if (color === 'red') { attr(side, 'RED', 'redCards', p); return; }
-    const secondYellow = state.events.some((e) => e.type === 'yellow' && e.playerName === p.fullName);
+    const secondYellow = state.events.some((e) => e.type === 'yellow' && e.side === side && (e.playerId ? e.playerId === p.id : e.playerName === p.fullName));
     attr(side, 'YELLOW', 'yellowCards', p);
     if (secondYellow) {
-      fire({ type: 'RED', side, payload: { secondYellow: true }, attribution: { playerId: p.id, stat: 'redCards', playerName: p.fullName, tracked: trackedKeys() } });
+      fire({ type: 'RED', side, payload: { secondYellow: true, pid: p.id }, attribution: { playerId: p.id, stat: 'redCards', playerName: p.fullName, tracked: trackedKeys() } });
     }
   };
 
@@ -215,7 +216,6 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     if (kind === 'tackle' || kind === 'interception' || kind === 'save' || kind === 'corner' || kind === 'defenceContribution' || kind === 'block') return side;
     return undefined; // shot / pass / cross / dribble / attacking play — possession unchanged
   };
-  const STAT_KEY: Partial<Record<StatKind, string>> = { shot: 'shots', foul: 'fouls', offside: 'offsides', tackle: 'tackles', interception: 'interceptions', save: 'saves', pass: 'passes', cross: 'crosses', dribble: 'dribbles', handball: 'handballs', attackContribution: 'attackingContributions', defenceContribution: 'defensiveContributions', penaltyWon: 'penaltiesWon', penaltyMissed: 'penaltiesMissed', block: 'blocks' };
   const recordStat = (kind: StatKind, side: 'home' | 'away', player?: Player, detail?: { onTarget?: boolean; complete?: boolean; blocked?: boolean }) => {
     const statKey = STAT_KEY[kind];
     // a shot on target also bumps shotsOnTarget; a completed pass bumps passesComplete
@@ -280,7 +280,6 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
 
   // Each goal credits the total (`goals`) and a type-specific tally so a profile
   // shows the open-play / penalty / free-kick split alongside the total.
-  const GOAL_STAT: Record<GoalType, string> = { open: 'openPlayGoals', header: 'openPlayGoals', penalty: 'penaltyGoals', freekick: 'freekickGoals' };
   // The team's current goalkeeper (the GK in the on-field XI) — saves default to
   // them, so the scorer doesn't pick a player for every save.
   const gkOf = (side: 'home' | 'away'): Player | undefined => {
@@ -291,9 +290,11 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   };
 
   const recordGoal = (side: 'home' | 'away', scorer: Player, goalType: GoalType, bodyPart?: BodyPart) =>
-    fire({ type: 'GOAL', side, payload: { goalType, bodyPart }, attribution: { playerId: scorer.id, stat: 'goals', playerName: scorer.fullName, extra: { shots: 1, shotsOnTarget: 1, [GOAL_STAT[goalType]]: 1 }, tracked: trackedKeys() } });
+    fire({ type: 'GOAL', side, payload: { goalType, bodyPart, pid: scorer.id }, attribution: { playerId: scorer.id, stat: 'goals', playerName: scorer.fullName, extra: { shots: 1, shotsOnTarget: 1, [GOAL_STAT[goalType]]: 1 }, tracked: trackedKeys() } });
   const recordOwnGoal = (side: 'home' | 'away', scorer: Player) => {
-    fire({ type: 'OWN_GOAL', side, payload: { scorerName: scorer.fullName } });
+    // SD-30: the player's id rides along — `ownGoals` is credited to him by the
+    // absolute totals at full time (not live: his line's opponent is this side).
+    fire({ type: 'OWN_GOAL', side, payload: { scorerName: scorer.fullName, pid: scorer.id } });
     setFlow(null);
   };
   // Team goal — no named scorer. Keeps the scoreline correct for a friendly whose
@@ -313,17 +314,18 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // its score/subs effect. Both are logged, so the correction replays cleanly.
   const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
   const removeEvent = (ev: FootballEvent) => {
-    const pid = rosterId(ev.playerName);
+    // SD-30: the id on the event (new logs) wins over a name lookup
+    const pid = ev.type === 'owngoal' ? undefined : ev.playerId ?? rosterId(ev.playerName);
     let attribution: ScoreAction['attribution'];
     if (ev.type === 'goal' && pid) attribution = { playerId: pid, stat: 'goals', by: -1, playerName: ev.playerName, extra: { shots: -1, shotsOnTarget: -1, [GOAL_STAT[ev.goalType ?? 'open']]: -1 } };
     else if (ev.type === 'yellow' && pid) attribution = { playerId: pid, stat: 'yellowCards', by: -1, playerName: ev.playerName };
     else if (ev.type === 'red' && pid) attribution = { playerId: pid, stat: 'redCards', by: -1, playerName: ev.playerName };
-    else if (ev.type === 'sinbin' && (ev.playerId ?? pid)) attribution = { playerId: (ev.playerId ?? pid)!, stat: 'sinBins', by: -1, playerName: ev.playerName };
+    else if (ev.type === 'sinbin' && pid) attribution = { playerId: pid, stat: 'sinBins', by: -1, playerName: ev.playerName };
     dispatch({ type: 'REMOVE_EVENT', payload: { id: ev.id, target: 'event' }, attribution });
     // A goal's assist is a separate log entry keyed to the goal's `secondName` —
     // reverse the assister's tally too so an edit/remove leaves no phantom assist.
     if (ev.type === 'goal' && ev.secondName) {
-      const aid = rosterId(ev.secondName);
+      const aid = ev.secondId ?? rosterId(ev.secondName);
       if (aid) dispatch({ type: 'REMOVE_EVENT', payload: { id: -1, target: 'stat' }, attribution: { playerId: aid, stat: 'assists', by: -1, playerName: ev.secondName } });
     }
   };
@@ -724,7 +726,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         // A goal-type/header refinement after the goal is already logged (voice
         // path) re-logs it with the corrected type so the score stays right.
         const refine = (nextType: GoalType, nextBody?: BodyPart) => {
-          if (flow.logged) { dispatch({ type: 'UNDO_GOAL', side: flow.side }); recordGoal(flow.side, flow.scorer, nextType, nextBody); }
+          // (SD-30: the undone goal's credits are reversed, as a removal does)
+          if (flow.logged) { dispatch({ type: 'UNDO_GOAL', side: flow.side, attribution: { playerId: flow.scorer.id, stat: 'goals', by: -1, playerName: flow.scorer.fullName, extra: { shots: -1, shotsOnTarget: -1, [GOAL_STAT[flow.goalType ?? 'open']]: -1 } } }); recordGoal(flow.side, flow.scorer, nextType, nextBody); }
           setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer, goalType: nextType, bodyPart: nextBody, logged: flow.logged });
         };
         const typeChips: { label: string; t: GoalType; b?: BodyPart }[] = [
@@ -1195,11 +1198,15 @@ export const footballPlugin: SportPlugin<FootballState> = {
   tickerFlash: footballTickerFlash,
   createInitialState: init,
   reducer,
-  // SD-09 + SD-29: every player's minutes (XI stamp + subs + reds + sin-bins)
-  // and the keepers' clean sheets and goals conceded, set absolutely at
-  // completion (incl. a shootout) and after every correction; every other
-  // football stat still moves by live increments / correction deltas.
-  statTotals: footballTotals,
+  // SD-30 + SD-09 + SD-29: every credited stat (goals by type, assists, shots,
+  // cards, saves, fouls…), own goals and headed goals, every player's minutes
+  // and the keepers' clean sheets / goals conceded, set absolutely at
+  // completion (incl. a shootout) and after every correction. Still partial:
+  // an older log whose names don't resolve to ids leaves its goal / card keys
+  // to the live increments / correction deltas (football/totals.ts).
+  statTotals: footballStatTotals,
+  // SD-30: the matchday squads resolve name-only events of older logs
+  statTotalsNeedsPlayers: true,
   // SD-17: FIFA fair-play points from the cards (the fairPlay tie-breaker).
   standingsUnits: (s) => ({ fairPlay: fairPlayScore(s.events ?? []) }),
   statTotalsPartial: true,

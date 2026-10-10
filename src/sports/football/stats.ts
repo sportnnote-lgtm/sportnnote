@@ -40,6 +40,11 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'openPlayGoals', label: 'Open-play goals', short: 'open-play', group: 'attack' },
     { key: 'penaltyGoals', label: 'Penalties', short: 'penalties', one: 'penalty', group: 'attack' },
     { key: 'freekickGoals', label: 'Free-kick goals', short: 'free-kick goals', one: 'free-kick goal', group: 'attack' },
+    // SD-30: written only by statTotals (never a live tap): goals struck with
+    // the head (when the scorer picked Header), and FB-13 own goals — credited
+    // to the player who put it in his own net, never as a goal
+    { key: 'headedGoals', label: 'Headed goals', short: 'headers', one: 'header', group: 'attack', coverage: 'present' },
+    { key: 'ownGoals', label: 'Own goals', short: 'own goals', one: 'own goal', group: 'discipline', coverage: 'present' },
     { key: 'passes', label: 'Passes', short: 'passes', one: 'pass', group: 'passing', ...opt('passes') },
     // SD-09 keeper lines (statTotals): goals let in
     { key: 'goalsConceded', label: 'Goals conceded', short: 'conceded', group: 'goalkeeping', format: { unit: 'count', better: 'lower' }, coverage: 'present' },
@@ -76,13 +81,14 @@ export const footballStats: SportStatSchema<'football'> = {
     keeper: (l) => l.stats != null && 'goalsConceded' in l.stats,
   },
   sections: [
-    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed'].map((stat) => ({ stat })) },
+    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed']
+      .map((stat) => (stat === 'headedGoals' ? { stat, hideZero: true } : { stat })) },
     { id: 'passing', title: 'Passing', rows: [{ stat: 'passes' }, { stat: 'passesComplete' }] },
     { id: 'defence', title: 'Defence', rows: [{ stat: 'tackles' }, { stat: 'interceptions' }, { stat: 'blocks' }, { stat: 'defensiveContributions' }] },
     { id: 'playing', title: 'Playing time', rows: [{ stat: 'minutes' }] },
     { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'savePct' }, { stat: 'concededPerGame' }] },
     { id: 'bests', title: 'Bests', rows: [{ stat: 'mostGoals', label: 'Most goals (match)', hideZero: true }, { stat: 'hatTricks', hideZero: true }] },
-    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }] },
+    { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }, { stat: 'ownGoals', hideZero: true }] },
   ],
   careerView: 'sections',
   // SD-23 (FB-09) — the per-player match table: Opta / FIFA match report order

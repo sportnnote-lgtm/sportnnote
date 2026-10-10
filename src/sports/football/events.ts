@@ -30,8 +30,10 @@ export interface FootballEvent {
   secondYellow?: boolean;
   /** goals: which body part struck it (left/right foot, head, chest) */
   bodyPart?: BodyPart;
-  /** SD-09: subs — the ids of the player going off / coming on (new matches;
-   *  older logs carry names only and resolve by name). */
+  /** SD-09: subs — the ids of the player going off / coming on. SD-30: also
+   *  the scorer / carded player / own-goal player (`playerId`) and the
+   *  assister (`secondId`) on goals. New matches only; older logs carry names
+   *  only and resolve by name (football/totals.ts). */
   playerId?: string;
   secondId?: string;
   /** SD-29: a sin-bin's length in minutes */
