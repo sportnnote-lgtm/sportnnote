@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-30: football statTotals — DONE (1bb66b4, 2026-10-11)
+- **Built:** `football/totals.ts` makes every live-credited key owned and absolute (merged with the minutes / keeper totals). `pid` is now on goal, assist, card and own-goal payloads. Own goals go to `ownGoals` (never goals). `headedGoals` is shown. Unresolved names drop the whole group (SD-40 pattern), so the D2 resync heals old lines where the names resolve.
+- **Bug fixed:** the voice "refine goal type" path double-counted the scorer's goal on their live line.
+- Tests: 12 new + contract · demo 8093.
+- **Not done:** shoot-out taker stats (FB-14 needs UI). One goal with two assists keeps only the latest in totals.
+
 ## SD-90 athletics track; SD-31/40/44 basketball shooting; SD-33/41/82 kabaddi depth — DONE (665c38f, 2026-10-11)
 - **SD-90:** athletics registered; event setup, round presets, lane draws, relays; results with keypad / hand times / reaction; stat lines; medal table; MR / SR; careers; hub; public `/r/`. No migration.
   - Limits: the main profile header still shows Apps / W-D-L / Win % for athlete-only users; same-team athletes aren't split across heats; no timed finals; no historic (pre-app) school records.
