@@ -12,6 +12,7 @@ import { Button, ScreenTitle, EmptyState, textStyles } from '../components/ui';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LeagueTable } from '../components/LeagueTable';
+import { columnsConfig } from '../data/standingsColumns';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { GolfTournamentHub } from '../components/golf/GolfTournamentHub';
@@ -49,7 +50,9 @@ export default function SportHubScreen() {
   const results = sportMatches.filter((m) => m.status === 'completed');
   const tournament = useTournamentById(tournamentId);
   // The first league phase's table (parity #07): never mixes in knockout results.
-  const table = useMemo(() => standingsPhases(divMatches, sport, standingsConfigFromFormat(sport, tournament?.formats?.[sport]))[0]?.rows ?? [], [divMatches, sport, tournament]);
+  // SD-18: the sport's column units (sets / games / rally points) filled in.
+  const tableCfg = useMemo(() => columnsConfig(sport, standingsConfigFromFormat(sport, tournament?.formats?.[sport])), [sport, tournament]);
+  const table = useMemo(() => standingsPhases(divMatches, sport, tableCfg)[0]?.rows ?? [], [divMatches, sport, tableCfg]);
   const categories = useMemo(() => categoryLeaders(lines, players, sport), [lines, players, sport]);
 
   const canScore = canScoreByRole(profile?.role);
@@ -112,6 +115,7 @@ export default function SportHubScreen() {
         </View>
         <LeagueTable
           sport={sport}
+          cfg={tableCfg}
           teams={table}
           onTeam={(teamId) => nav.navigate('Team', { teamId })}
           emptyLabel={`No completed ${plugin.name.toLowerCase()} matches yet.`}

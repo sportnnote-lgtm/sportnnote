@@ -1,13 +1,16 @@
 /** A compact, two-line league table that fits a phone: the headline line shows
  *  rank · team · points; the muted second line shows P/W/D/L and for/against/
  *  difference (plus no results, only when some team has one). Cricket: W/T/L/NR
- *  and NRR, no run difference (SD-12). Tapping a row opens the team. */
+ *  and NRR, no run difference (SD-12). SD-18: a third line lists the sport's
+ *  own extra columns (volleyball SR / PR, racket P± / G±, ATP S% / G%, chess
+ *  SB, …) from `tableColumns`. Tapping a row opens the team. */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, EmptyState, textStyles } from './ui';
 import { RankBadge, podiumColor } from './Rank';
-import { tableLabels, type TeamStanding } from '../data/standings';
+import { tableLabels, defaultStandingsConfig, type StandingsConfig, type TeamStanding } from '../data/standings';
+import { tableColumns, halfText } from '../data/standingsColumns';
 import type { SportId } from '../core/types';
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -28,8 +31,11 @@ export function LeagueTable({
   onTeam,
   emptyLabel = 'No completed matches yet.',
   sport,
+  cfg,
 }: {
   teams: TeamStanding[];
+  /** the table's points / tie-break config — picks the tie-break columns (SD-18) */
+  cfg?: StandingsConfig;
   /** the table's sport — cricket labels a tie "T", always shows NR and shows
    *  NRR instead of a run difference (SD-12) */
   sport?: SportId;
@@ -40,6 +46,7 @@ export function LeagueTable({
   // NR only earns its place once a match has been washed out / abandoned.
   const labels = tableLabels(sport);
   const showNr = labels.alwaysNr || teams.some((t) => (t.nr ?? 0) > 0);
+  const extras = sport ? tableColumns(sport, cfg ?? defaultStandingsConfig(sport), 'team', teams).columns.filter((c) => c.extra) : [];
   return (
     <Card style={{ gap: theme.spacing(1) }}>
       {teams.map((t, i) => {
@@ -55,11 +62,12 @@ export function LeagueTable({
                   {t.played}P · {t.won}W {t.drawn}{labels.draw} {t.lost}L{showNr ? ` ${t.nr ?? 0}NR` : ''}{labels.showDiff ? ` · ${t.for}:${t.against} (${sign(t.diff)})` : ''}
                   {t.nrr !== undefined ? ` · NRR ${signRate(t.nrr)}` : ''}
                 </Text>
+                {extras.length > 0 && <Text style={st.meta} numberOfLines={2}>{extras.map((c) => `${c.label} ${c.value(t, teams)}`).join(' · ')}</Text>}
                 {!!unplayed(t) && <Text style={st.meta} numberOfLines={1}>{unplayed(t)}</Text>}
                 {t.lots && <Text style={st.meta} numberOfLines={1}>Level on every tie-break · drawn by lot</Text>}
               </View>
               <View style={st.ptsCol}>
-                <Text style={st.pts}>{t.points}{t.adjust ? '*' : ''}</Text>
+                <Text style={st.pts}>{sport === 'chess' ? halfText(t.points) : t.points}{t.adjust ? '*' : ''}</Text>
                 <Text style={st.ptsLabel}>PTS</Text>
               </View>
             </View>

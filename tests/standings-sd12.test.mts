@@ -167,6 +167,9 @@ describe('CK-02 — cricket table labels', () => {
     assert.deepEqual(tableLabels('cricket'), { draw: 'T', alwaysNr: true, showDiff: false });
   });
   test('other sports keep D, NR only when needed, and the difference', () => {
-    for (const sp of ['football', 'kabaddi', undefined] as const) assert.deepEqual(tableLabels(sp), { draw: 'D', alwaysNr: false, showDiff: true });
+    for (const sp of ['football', 'basketball', undefined] as const) assert.deepEqual(tableLabels(sp), { draw: 'D', alwaysNr: false, showDiff: true });
+  });
+  test('kabaddi calls a level result a Tie (SD-18, PKL "T")', () => {
+    assert.deepEqual(tableLabels('kabaddi'), { draw: 'T', alwaysNr: false, showDiff: true });
   });
 });

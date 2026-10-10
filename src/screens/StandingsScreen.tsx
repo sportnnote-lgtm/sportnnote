@@ -2,7 +2,7 @@
  *  leaders. A sport selector appears for multi-sport meets; a single-sport
  *  tournament just shows that sport. */
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -12,11 +12,12 @@ import { Card, SelectChip, ScreenTitle, EmptyState, TextField, Button, textStyle
 import { RankBadge, podiumColor } from '../components/Rank';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { getSport } from '../sports/registry';
+import { getSport, participantMode } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canManageTournament } from '../core/org';
 import { useTournament, useTournamentById, useStandings, useDivisions, useOrganizations } from '../data/hooks';
-import { leaderStat, teamStandings, standingsConfigFromFormat, tableLabels, type PointsAdjustment, type TeamStanding } from '../data/standings';
+import { leaderStat, teamStandings, standingsConfigFromFormat, type PointsAdjustment, type StandingsConfig, type TeamStanding } from '../data/standings';
+import { columnsConfig, tableColumns, tieBreakNote, type StandingsColumn, type TableParticipant } from '../data/standingsColumns';
 import { unplayed } from '../components/LeagueTable';
 import { matchesInDivision, standingsPhases } from '../data/groups';
 import { structureFromFormat } from '../data/structureConfig';
@@ -46,7 +47,7 @@ export default function StandingsScreen() {
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params?.tournamentId);
   const table = useMemo(
     () => (activeCat
-      ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]), undefined, entries.map((e) => e.team))
+      ? teamStandings(matchesInDivision(matches, entries, activeCat), activeSport, columnsConfig(activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport])), undefined, entries.map((e) => e.team))
       : teams),
     [activeCat, matches, entries, activeSport, teams, tournament],
   );
@@ -55,8 +56,13 @@ export default function StandingsScreen() {
   const cfg = useMemo(() => {
     const fmt = { ...((tournament?.formats?.[activeSport] as Record<string, unknown>) ?? {}) };
     if (activeSport in adjOverride) fmt.pointsAdj = adjOverride[activeSport];
-    return standingsConfigFromFormat(activeSport, fmt);
+    // SD-18: with the sport's column units (sets / games / rally points).
+    return columnsConfig(activeSport, standingsConfigFromFormat(activeSport, fmt));
   }, [activeSport, tournament, adjOverride]);
+  // Who the rows are (SD-18 "Player" header): singles events list players —
+  // unless houses / the school team are the entrants in every sport.
+  const participant: TableParticipant = tournament?.participation === 'inter_house' || tournament?.participation === 'school_team'
+    ? 'team' : participantMode(activeSport, tournament?.formats?.[activeSport] as Record<string, unknown> | undefined);
   const phases = useMemo(
     () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg, entries.map((e) => e.team)),
     [activeCat, matches, entries, activeSport, cfg],
@@ -200,8 +206,8 @@ export default function StandingsScreen() {
             <Card><EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact /></Card>
           </>
         ) : phases.map((ph) => (
-          <PhaseTable key={ph.key} title={phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} Team standings` : ph.title}
-            sport={activeSport} phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
+          <PhaseTable key={ph.key} title={phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} ${participant === 'team' ? 'Team' : participant === 'pairs' ? 'Pair' : 'Player'} standings` : ph.title}
+            sport={activeSport} cfg={cfg} participant={participant} phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
             expanded={showTeams} onToggle={() => setShowTeams((v) => !v)}
             onTeam={(id) => nav.navigate('Team', { teamId: id })}
             onSave={(list, detail) => saveAdjustments(list, detail)} />
@@ -246,9 +252,16 @@ export default function StandingsScreen() {
 }
 
 /** One phase's table (league / Group A / Super Four / Swiss). Managers get a ±
- *  per row: a signed points adjustment with a public reason (parity #07). */
-function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave, sport }: {
+ *  per row: a signed points adjustment with a public reason (parity #07).
+ *  SD-18: the columns are the sport's own (`tableColumns`: GF/GA/GD, PF/PA/±,
+ *  Sets/SR/PR, G±/P±, SB, … plus the chain's tie-break columns), the name
+ *  header says "Player" / "Pair" for individual events, and when the numbers
+ *  don't fit (a phone at 375 px) the name column stays put while the numbers
+ *  scroll sideways — the page itself never overflows. */
+function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave, sport, cfg, participant }: {
   sport: SportId;
+  cfg: StandingsConfig;
+  participant: TableParticipant;
   title: string; phaseKey: string; rows: TeamStanding[]; adjustments: PointsAdjustment[]; canManage: boolean;
   expanded: boolean; onToggle: () => void; onTeam: (teamId: string) => void;
   onSave: (list: PointsAdjustment[], detail: string) => Promise<void>;
@@ -256,95 +269,149 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [delta, setDelta] = useState(0);
   const [reason, setReason] = useState('');
-  // Cricket: ties read "T" and the NR column is always there (SD-12).
-  const labels = tableLabels(sport);
-  const hasDraws = rows.some((t) => t.drawn > 0);
-  const hasNr = labels.alwaysNr || rows.some((t) => (t.nr ?? 0) > 0);
-  // Narrower number columns once the table carries several optional ones
-  // (cricket: T / NR / NRR), so team names stay readable at phone width.
-  const dense = [hasDraws, hasNr, rows.some((t) => t.nrr !== undefined), canManage].filter(Boolean).length >= 2;
-  const num = dense ? [st.num, st.numDense] : st.num;
-  const nrrW = dense ? 42 : 48;
-  const hasNrr = rows.some((t) => t.nrr !== undefined);
+  const win = useWindowDimensions();
+  const [boxW, setBoxW] = useState(Math.max(0, win.width - 64));
+  const { nameHeader, columns } = useMemo(() => tableColumns(sport, cfg, participant, rows), [sport, cfg, participant, rows]);
+  // Narrower number columns once the table carries several beyond P / W / L /
+  // Pts (cricket: T / NR / NRR, as in SD-12), so names stay readable.
+  const dense = columns.length - 4 + (canManage ? 1 : 0) >= 2;
+  const widthOf = (c: StandingsColumn) => (c.wide ? (dense ? 42 : 48) : dense ? 26 : 32);
+  const numsW = columns.reduce((s, c) => s + widthOf(c), 0) + (canManage ? ADJ_W + 2 : 0);
+  // Sticky-name layout when the name would get squeezed below ~7 characters (cricket without the Adjust column keeps its SD-12 single grid).
+  const split = boxW - POS_W - numsW - 16 < NAME_MIN;
+  const leftW = Math.min(200, Math.max(POS_W + NAME_MIN, Math.round(boxW * 0.5)));
+  const rowH = canManage ? 48 : 40;
   const phaseLabel = phaseKey === 'league' ? '' : ` (${title})`;
   const inPhase = (a: PointsAdjustment) => !a.phase || a.phase === phaseKey;
   const shown = expanded ? rows : rows.slice(0, SECTION_CAP);
   const nameOf = (id: string) => rows.find((r) => r.teamId === id)?.name ?? 'A team';
   const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`;
   const footnotes = adjustments.filter((a) => inPhase(a) && rows.some((r) => r.teamId === a.teamId));
+  // The familiar headers need no key; the sport-specific ones get one.
+  const legend = columns.filter((c) => !['P', 'W', 'D', 'T', 'L', 'NR', 'NRR', 'Pts', 'GF', 'GA', 'GD', 'PF', 'PA'].includes(c.label));
+  const note = tieBreakNote(sport, cfg);
+  // Podium tint (rounded, except where the two halves of a split row meet).
+  const tierBg = (i: number) => {
+    const tier = podiumColor(i);
+    return tier ? { backgroundColor: tier + '14', borderRadius: split ? 0 : theme.radius.sm } : i > 3 ? st.rowDivider : null;
+  };
+  const rowLabel = (t: TeamStanding, i: number) =>
+    `${i + 1}. ${t.name}, ${columns.map((c) => `${c.title} ${c.value(t, rows)}`).join(', ')}${t.adjust ? `, adjusted ${signed(t.adjust)}` : ''}`;
+  const cells = (t: TeamStanding) => columns.map((c) => (
+    <Text key={c.key} style={[st.num, { width: widthOf(c) }, c.emphasis && st.pts]} numberOfLines={1}>
+      {c.value(t, rows)}{c.emphasis ? `${t.adjust ? '*' : ''}${t.lots ? '‡' : ''}` : ''}
+    </Text>
+  ));
+  const heads = columns.map((c) => (
+    <Text key={c.key} style={[st.num, st.headText, { width: widthOf(c) }]} accessibilityLabel={c.title} numberOfLines={1}>{c.label}</Text>
+  ));
+  const adjButton = (t: TeamStanding) => (
+    <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
+      accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
+      onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>
+      <Text style={st.adjBtnIcon}>±</Text>
+      <Text style={st.adjBtnText}>Adjust</Text>
+    </TouchableOpacity>
+  );
+  const panel = (t: TeamStanding) => {
+    const mine = adjustments.filter((a) => a.teamId === t.teamId && inPhase(a));
+    return (
+      <View style={st.adjPanel}>
+        {split && <Text style={[textStyles.body, { fontWeight: '700' }]}>{t.name}</Text>}
+        <View style={st.adjStepper}>
+          <Button label="−" variant="ghost" onPress={() => setDelta((d) => Math.max(-20, d - 1))} />
+          <Text style={st.adjValue}>{signed(delta) || '0'}</Text>
+          <Button label="+" variant="ghost" onPress={() => setDelta((d) => Math.min(20, d + 1))} />
+        </View>
+        <TextField label="Reason (shown publicly)" value={reason} onChange={setReason} placeholder="e.g. late arrival" />
+        <Button label="Save adjustment" disabled={delta === 0 || reason.trim().length < 3} onPress={async () => {
+          const a: PointsAdjustment = { id: `adj-${Date.now()}`, teamId: t.teamId, points: delta, reason: reason.trim(), ...(phaseKey !== 'league' ? { phase: phaseKey } : {}), at: new Date().toISOString() };
+          await onSave([...adjustments, a], `${t.name} ${signed(delta)}${phaseLabel}: ${a.reason}`);
+          setOpenTeam(null);
+        }} />
+        {mine.map((a) => (
+          <View key={a.id} style={st.adjRow}>
+            <Text style={[textStyles.muted, { flex: 1 }]}>{signed(a.points)} · {a.reason}</Text>
+            <Text style={st.adjRemove} accessibilityRole="button" onPress={async () => {
+              if (!(await confirmAction('Remove this adjustment?', `${t.name} ${signed(a.points)} · ${a.reason}`, 'Remove', true))) return;
+              await onSave(adjustments.filter((x) => x.id !== a.id), `${t.name}: removed ${signed(a.points)}${phaseLabel} (${a.reason})`);
+            }}>✕</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+  const nameCell = (t: TeamStanding, i: number, style?: object) => (
+    <View style={[st.teamCol, st.teamCell, style]}>
+      <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
+      <Text style={[textStyles.body, { flexShrink: 1 }, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
+    </View>
+  );
+  const openRow = split ? shown.find((t) => t.teamId === openTeam) : undefined;
   return (
     <>
       <SectionHeader title={title} count={rows.length} onSeeAll={rows.length > SECTION_CAP ? onToggle : undefined} expanded={expanded} />
       <Card style={{ gap: theme.spacing(1) }}>
-        <View style={[st.row, st.head]}>
-          <View style={st.posCell}><Text style={st.headText}>#</Text></View>
-          <Text style={[st.teamCol, st.headText]}>Team</Text>
-          <Text style={[num, st.headText]}>P</Text>
-          <Text style={[num, st.headText]}>W</Text>
-          {hasDraws && <Text style={[num, st.headText]}>{labels.draw}</Text>}
-          <Text style={[num, st.headText]}>L</Text>
-          {hasNr && <Text style={[num, st.headText]}>NR</Text>}
-          {hasNrr && <Text style={[num, st.headText, { width: nrrW }]}>NRR</Text>}
-          <Text style={[num, st.headText]}>Pts</Text>
-          {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
-        </View>
-        {shown.map((t, i) => {
-          const tier = podiumColor(i);
-          const mine = adjustments.filter((a) => a.teamId === t.teamId && inPhase(a));
-          return (
-            <View key={t.teamId}>
-              <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => onTeam(t.teamId)}
-                accessibilityLabel={`${i + 1}. ${t.name}, ${t.points} points${t.adjust ? `, adjusted ${signed(t.adjust)}` : ''}`}>
-                <View style={[st.row, tier ? { backgroundColor: tier + '14', borderRadius: theme.radius.sm } : i > 3 && st.rowDivider]}>
-                  <RankBadge index={i} />
-                  <View style={[st.teamCol, st.teamCell]}>
-                    <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
-                    <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
-                  </View>
-                  <Text style={num}>{t.played}</Text>
-                  <Text style={num}>{t.won}</Text>
-                  {hasDraws && <Text style={num}>{t.drawn}</Text>}
-                  <Text style={num}>{t.lost}</Text>
-                  {hasNr && <Text style={num}>{t.nr ?? 0}</Text>}
-                  {hasNrr && <Text style={[num, { width: nrrW }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
-                  <Text style={[num, st.pts]}>{t.points}{t.adjust ? '*' : ''}{t.lots ? '‡' : ''}</Text>
-                  {canManage && (
-                    <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
-                      accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
-                      onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>
-                      <Text style={st.adjBtnIcon}>±</Text>
-                      <Text style={st.adjBtnText}>Adjust</Text>
-                    </TouchableOpacity>
-                  )}
+        <View onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w && w !== boxW) setBoxW(w); }}>
+          {split ? (
+            // Sticky names on the left; the numbers scroll sideways on the right.
+            <View style={{ flexDirection: 'row' }}>
+              <View style={{ width: leftW }}>
+                <View style={[st.row, st.head, st.splitHead]}>
+                  <View style={st.posCell}><Text style={st.headText}>#</Text></View>
+                  <Text style={[st.teamCol, st.headText]}>{nameHeader}</Text>
                 </View>
-              </TouchableOpacity>
-              {canManage && openTeam === t.teamId && (
-                <View style={st.adjPanel}>
-                  <View style={st.adjStepper}>
-                    <Button label="−" variant="ghost" onPress={() => setDelta((d) => Math.max(-20, d - 1))} />
-                    <Text style={st.adjValue}>{signed(delta) || '0'}</Text>
-                    <Button label="+" variant="ghost" onPress={() => setDelta((d) => Math.min(20, d + 1))} />
-                  </View>
-                  <TextField label="Reason (shown publicly)" value={reason} onChange={setReason} placeholder="e.g. late arrival" />
-                  <Button label="Save adjustment" disabled={delta === 0 || reason.trim().length < 3} onPress={async () => {
-                    const a: PointsAdjustment = { id: `adj-${Date.now()}`, teamId: t.teamId, points: delta, reason: reason.trim(), ...(phaseKey !== 'league' ? { phase: phaseKey } : {}), at: new Date().toISOString() };
-                    await onSave([...adjustments, a], `${t.name} ${signed(delta)}${phaseLabel}: ${a.reason}`);
-                    setOpenTeam(null);
-                  }} />
-                  {mine.map((a) => (
-                    <View key={a.id} style={st.adjRow}>
-                      <Text style={[textStyles.muted, { flex: 1 }]}>{signed(a.points)} · {a.reason}</Text>
-                      <Text style={st.adjRemove} accessibilityRole="button" onPress={async () => {
-                        if (!(await confirmAction('Remove this adjustment?', `${t.name} ${signed(a.points)} · ${a.reason}`, 'Remove', true))) return;
-                        await onSave(adjustments.filter((x) => x.id !== a.id), `${t.name}: removed ${signed(a.points)}${phaseLabel} (${a.reason})`);
-                      }}>✕</Text>
+                {shown.map((t, i) => (
+                  <TouchableOpacity key={t.teamId} accessibilityRole="button" activeOpacity={0.8} onPress={() => onTeam(t.teamId)} accessibilityLabel={rowLabel(t, i)}>
+                    <View style={[st.row, { height: rowH }, tierBg(i)]}>
+                      <RankBadge index={i} />
+                      {nameCell(t, i, { marginLeft: theme.spacing(1) })}
                     </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator style={{ flex: 1 }} contentContainerStyle={{ minWidth: '100%' }}>
+                <View>
+                  <View style={[st.row, st.head, st.splitHead]}>
+                    {heads}
+                    {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
+                  </View>
+                  {shown.map((t, i) => (
+                    <TouchableOpacity key={t.teamId} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" activeOpacity={0.8} onPress={() => onTeam(t.teamId)}>
+                      <View style={[st.row, { height: rowH }, tierBg(i)]}>
+                        {cells(t)}
+                        {canManage && adjButton(t)}
+                      </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
-              )}
+              </ScrollView>
             </View>
-          );
-        })}
+          ) : (
+            <>
+              <View style={[st.row, st.head]}>
+                <View style={st.posCell}><Text style={st.headText}>#</Text></View>
+                <Text style={[st.teamCol, st.headText]}>{nameHeader}</Text>
+                {heads}
+                {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
+              </View>
+              {shown.map((t, i) => (
+                <View key={t.teamId}>
+                  <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={() => onTeam(t.teamId)} accessibilityLabel={rowLabel(t, i)}>
+                    <View style={[st.row, tierBg(i)]}>
+                      <RankBadge index={i} />
+                      {nameCell(t, i)}
+                      {cells(t)}
+                      {canManage && adjButton(t)}
+                    </View>
+                  </TouchableOpacity>
+                  {canManage && openTeam === t.teamId && panel(t)}
+                </View>
+              ))}
+            </>
+          )}
+        </View>
+        {canManage && openRow && panel(openRow)}
         {footnotes.map((a) => (
           <Text key={a.id} style={textStyles.muted}>
             * {nameOf(a.teamId)} {signed(a.points)} · {a.reason}{a.byName ? ` · by ${a.byName}` : ''}, {new Date(a.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
@@ -363,10 +430,18 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
             Not games played (the points count): {rows.filter((t) => unplayed(t)).map((t) => `${t.name}: ${unplayed(t)}`).join('; ')}
           </Text>
         )}
+        {/* SD-18: what the sport's columns mean, and the tie-break order (head-to-head has no column). */}
+        {legend.length > 0 && <Text style={st.legend}>{legend.map((c) => `${c.label} ${c.title}`).join(' · ')}</Text>}
+        {!!note && <Text style={st.legend}>{note}</Text>}
       </Card>
     </>
   );
 }
+
+/** Rank badge cell width, and the narrowest the name column may get before
+ *  the table switches to sticky names + sideways-scrolling numbers. */
+const POS_W = 28;
+const NAME_MIN = 64;
 
 /** Width of the "± Adjust" button column (and its header spacer). */
 const ADJ_W = 40;
@@ -397,6 +472,8 @@ const st = StyleSheet.create({
   num: { width: 32, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
   numDense: { width: 26 },
   pts: { fontWeight: '900', color: theme.colors.primary },
+  legend: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  splitHead: { height: 30 },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },
   editRow: { gap: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing(3) },

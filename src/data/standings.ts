@@ -207,6 +207,10 @@ export interface CustomTieBreaker {
   seed?: (t: TeamStanding) => number | null;
   /** computed among the tied only (so a restart in 'h2h' mode follows it) */
   amongTied?: boolean;
+  /** the table column it shows while it is in the active chain (SD-18):
+   *  a short header ("BH") and the row's figure (`rows` = the whole table).
+   *  Absent = the overall `seed` value under its label, when it has one. */
+  column?: { short: string; value: (t: TeamStanding, rows: TeamStanding[]) => number | string | null };
 }
 const customTB = new Map<string, CustomTieBreaker>();
 /** Register (or, with null, remove) an extra tie-breaker under `key`. Saved
@@ -215,6 +219,8 @@ export function registerTieBreaker(key: string, def: CustomTieBreaker | null): v
   if ((BUILTIN_TB as string[]).includes(key)) throw new Error(`"${key}" is a built-in tie-breaker`);
   if (def) customTB.set(key, def); else customTB.delete(key);
 }
+/** A registered (non built-in) tie-breaker, if `key` is one. */
+export function customTieBreaker(key: string): CustomTieBreaker | undefined { return customTB.get(key); }
 const isTieBreaker = (s: string): s is TieBreaker => (BUILTIN_TB as string[]).includes(s) || customTB.has(s);
 
 /** What a sport's match score counts (`m.score` / `result()`): sets, games,
@@ -1016,10 +1022,12 @@ export function overallStandings(
 /** How a sport's league table labels its columns (SD-12, cricket CK-02):
  *  cricket calls a level result a Tie ("T"), always shows the NR column (a
  *  washout is part of the format) and ranks by NRR, so it shows no run
- *  difference. Other sports: "D", NR only once a match was abandoned, and the
- *  score difference. */
+ *  difference. Kabaddi also calls it a Tie (SD-18, PKL "T"). Other sports:
+ *  "D", NR only once a match was abandoned, and the score difference. The
+ *  full per-sport column set is `tableColumns` (standingsColumns.ts). */
 export function tableLabels(sport: SportId | undefined): { draw: 'T' | 'D'; alwaysNr: boolean; showDiff: boolean } {
   if (sport === 'cricket') return { draw: 'T', alwaysNr: true, showDiff: false };
+  if (sport === 'kabaddi') return { draw: 'T', alwaysNr: false, showDiff: true };
   return { draw: 'D', alwaysNr: false, showDiff: true };
 }
 

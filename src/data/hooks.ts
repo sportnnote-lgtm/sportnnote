@@ -38,6 +38,7 @@ import { aggregate, type PlayerStats } from './stats';
 import { lineResult } from './appearances';
 import { isSearchable, rankByName, type SearchResults, type SearchKind } from './search';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
+import { columnsConfig } from './standingsColumns';
 import { standingsPhases, type StandingsPhase } from './groups';
 import { followStore, type FollowType } from './followStore';
 import type { FollowPrefs } from './followPrefs';
@@ -473,7 +474,8 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
         const scopedLines = tournamentId ? lines.filter((l) => ids.has(l.matchId)) : lines;
         // Honour the tournament's points / tie-break overrides (else sport defaults).
         const tour = tournamentId ? tours.find((t) => t.id === tournamentId) : undefined;
-        const cfg = standingsConfigFromFormat(sport, tour?.formats?.[sport]);
+        // SD-18: with the sport's column units (sets / games / rally points).
+        const cfg = columnsConfig(sport, standingsConfigFromFormat(sport, tour?.formats?.[sport]));
         setData({
           // `entrants` names a Swiss bye-only entrant with no fixture yet (SD-10).
           teams: teamStandings(scopedMatches, sport, cfg, undefined, entrants),

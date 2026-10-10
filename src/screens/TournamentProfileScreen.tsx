@@ -12,6 +12,7 @@ import { theme } from '../core/theme';
 import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
+import { columnsConfig } from '../data/standingsColumns';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
 import { HostsCard } from '../components/HostsCard';
@@ -302,7 +303,8 @@ export default function TournamentProfileScreen() {
     return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [tournament, hostOrg, allPlayers]);
 
-  const stCfg = useMemo(() => (activeSport ? standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]) : undefined), [activeSport, tournament]);
+  // SD-18: with the sport's column units (sets / games / rally points) filled in.
+  const stCfg = useMemo(() => (activeSport ? columnsConfig(activeSport, standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport])) : undefined), [activeSport, tournament]);
   // SD-12: each sport scored by the organiser's points config (and adjustments).
   const overall = useMemo(() => overallStandings(matches, sports, tournament?.formats), [matches, sports, tournament?.formats]);
   // A medal meet ranks the overall table by position points, not match points.
@@ -922,7 +924,7 @@ export default function TournamentProfileScreen() {
               phases.map((ph) => (
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>
                   {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
-                  <LeagueTable sport={activeSport} teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+                  <LeagueTable sport={activeSport} cfg={stCfg} teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
                 </View>
               ))
             ) : activeSport ? (
