@@ -2,6 +2,18 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-14: racket replay safety net — DONE (0872473, 2026-10-10)
+- **Built:** `tests/replay-racket.test.mts` (39 tests: 36 pass, 3 todo). It replays reconstructed real matches with pinned fingerprints:
+  - squash: PSA 2024 Egyptian Open final, 1993 British Open (English scoring);
+  - pickleball: PPA LA Open 2024 side-out doubles, MLP 2024 rally 21, PPA OC Cup 2024 singles;
+  - padel: Premier Padel Valencia P1 2026, and a synthetic short-sets match.
+- No public point-by-point data exists, so the logs reproduce the published game scores, plus in-game scores where published.
+- **Engine gaps found (as todo tests):**
+  1. **Doubles tiebreak serve order (padel/tennis) — a real bug,** now queued as **SD-103**.
+  2. English squash "set one / set two" at 8-all (SQ-07).
+  3. MLP freeze at 20 (PB-09).
+- Also noted: pickleball game-2 first server (PB-11); padel Star Point (PD-07).
+
 ## SD-11 to SD-13: player results and appearances; standings fixes; cricket NRR — DONE (4994c8d, 2026-10-10) · Wave 0 complete
 - **Founder to run:** migration 0050 — `supabase/release/2026-10-stat-line-result-0050.sql` (adds `stat_lines.result` and a conservative backfill: W/L only when the side is certain, no row inserts). The app works before it runs.
 - Tests: 54 new · 1032 total · PGlite statlineresult 39/39 + bundle re-run · demo 8093 (football draw, carrom loser, profiles; standings meet with custom points, cricket tie / NR / DLS).
