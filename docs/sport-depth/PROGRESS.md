@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-32: volleyball statTotals — DONE (8a9462b, 2026-10-11)
+- **Built:** `volleyball/totals.ts` makes points, attackPoints, blocks and aces absolute, merged with setsPlayed and sets W-L. Errors stay team-level (never player-attributed). The unresolved-name safeguard is in place, and the D2 resync heals pre-SD-04 aces and blocks into points.
+- Tests: 12 new · 1675 total · demo 8093.
+- **Note:** the demo localStorage is last-writer-wins across tabs (parallel demo checks can overwrite each other's demo data; live is unaffected).
+
 ## SD-30: football statTotals — DONE (1bb66b4, 2026-10-11)
 - **Built:** `football/totals.ts` makes every live-credited key owned and absolute (merged with the minutes / keeper totals). `pid` is now on goal, assist, card and own-goal payloads. Own goals go to `ownGoals` (never goals). `headedGoals` is shown. Unresolved names drop the whole group (SD-40 pattern), so the D2 resync heals old lines where the names resolve.
 - **Bug fixed:** the voice "refine goal type" path double-counted the scorer's goal on their live line.
