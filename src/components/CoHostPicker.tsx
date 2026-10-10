@@ -9,7 +9,7 @@ import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, FieldLabel, textStyles } from './ui';
 import { lookupPeople, invitePerson } from '../data/repos';
 import { openWhatsApp, openSms } from '../core/connect';
-import { sendInviteEmail, inviteMessage, joinLink } from '../core/invite';
+import { sendInviteEmail, inviteMessage, joinLink, inviteLabel } from '../core/invite';
 import type { Player } from '../core/types';
 
 export interface CoHost { id: string; name: string; invited?: boolean }
@@ -22,7 +22,7 @@ export function CoHostPicker({
   onChange,
   inviterName,
   excludeIds = [],
-  context,
+  context: rawContext,
   label = 'Co-hosts (optional)',
   hideList = false,
 }: {
@@ -40,6 +40,8 @@ export function CoHostPicker({
    *  hosts (e.g. the tournament page's HostsCard) and this is add/invite only */
   hideList?: boolean;
 }) {
+  // "co-host Tournament Open Cup" — name the record (SD-108).
+  const context = rawContext?.trim() ? inviteLabel('Tournament', rawContext) : undefined;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Player[]>([]);

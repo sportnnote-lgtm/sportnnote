@@ -50,6 +50,7 @@ import { useParamState } from '../navigation/useParamState';
 import { openMatchViewer } from '../navigation/openMatch';
 import { RemindInstall } from '../components/RemindInstall';
 import { realName } from '../core/invite';
+import { tournamentRoleInviteText } from '../core/inviteText';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupChecklist, firstSportWithoutFormat, type SetupStep } from '../data/setupChecklist';
 import { SetupChecklist } from '../components/SetupChecklist';
@@ -149,8 +150,7 @@ export default function TournamentProfileScreen() {
   }, [nav, tournament, headerManage]);
   // People added as hosts from outside the loaded players (PersonPicker).
   const [extraPeople, setExtraPeople] = useState<Record<string, string>>({});
-  const hostInvite = (name?: string) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a host of ${tournament?.name ?? 'a tournament'} on SportnNote 🏆\n\n`
-    + `Open this link and sign in with this mobile number to help run it:\n${tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in'}`;
+  const hostInvite = (name?: string) => tournamentRoleInviteText({ role: 'host', name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in' });
   const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName ?? extraPeople[id];
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.
@@ -426,8 +426,7 @@ export default function TournamentProfileScreen() {
     }
     setOffTick((n) => n + 1);
   }
-  const officialInvite = (role: OfficialRole) => (name?: string) => `Hi${name ? ` ${name}` : ''}! ${profile?.fullName ?? 'A friend'} added you as a ${role} for ${tournament?.name ?? 'a tournament'} on SportnNote 🏆\n\n`
-    + `Open this link and sign in with this mobile number:\n${tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in'}`;
+  const officialInvite = (role: OfficialRole) => (name?: string) => tournamentRoleInviteText({ role, name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in' });
   // Fixtures still waiting for a scorer (drives "Assign scorers to fixtures").
   const unscoredCount = assignableMatches(matches).length;
 

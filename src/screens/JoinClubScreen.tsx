@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { Card, Button, TextField, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
 import { getClubInvite, claimClubInvite, getMyPlayerId } from '../data/repos';
+import { OpenInAppBanner } from '../components/OpenInAppBanner';
 import type { ClubInvite } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -59,6 +60,7 @@ export default function JoinClubScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Join a team" subtitle="Enter the invite code you were sent" />
+        {params?.token ? <OpenInAppBanner path={`join-club/${params.token}`} /> : null}
         <TextField label="Invite code" value={code} onChange={setCode} placeholder="JOIN-1001" autoCapitalize="characters" />
         <FormError message={error} />
         <Button label={busy ? 'Checking…' : 'Find team'} onPress={() => find()} disabled={busy} />

@@ -5,7 +5,7 @@ category: Tournaments
 audience: Organisers, Captains
 sports: all
 order: 30
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 A school meet can have 30 to 60 house and class teams. You can add them yourself, or share one link on WhatsApp so each captain enters their own team. This page covers both, plus fixing a misspelt team name and taking a team out.
@@ -26,12 +26,14 @@ A school meet can have 30 to 60 house and class teams. You can add them yourself
 
 ## Step by step: let captains join with one link
 1. On **Participating teams**, turn on **🔗 Teams can join by link**.
-2. A join code appears, such as `T-ABC123`. Tap **💬 WhatsApp** to send the invite to a group, or **Copy link** to paste it anywhere.
+2. A join code and a QR code appear, such as `T-ABC123`. Tap **📤 Share QR + message** to send the QR picture with the invite text in one go. The message starts "Enter your team in Tournament …", so captains know what it is. **💬 WhatsApp** sends the text only, and **Copy link** copies the link to paste anywhere.
 3. Each captain who opens the link picks their team, and it's in the tournament at once.
 4. When every team is in, turn the switch off. Anyone who opens the old link then sees "This link is turned off".
 
 ## Step by step: enter your team as a captain
-1. Open the link the organiser sent. Or go to **Settings** → **Join a team with a code** and type the `T-` code. The same box takes squad invite codes too.
+1. Open the link the organiser sent, or scan its QR code with your phone camera. Or go to **Settings** → **Join a team with a code** and type the `T-` code. The same box takes squad invite codes too.
+   - On Android, the page offers **📲 Open in the SportnNote app**. If the app isn't installed, it takes you to the download page. Tap **Continue on the web** to stay in the browser.
+   - On iPhone, carry on in the browser. To keep SportnNote like an app, tap Share → **Add to Home Screen**.
 2. On the **Enter a tournament** screen, check the tournament name. If you're asked, sign in. The app brings you back here.
 3. Under **Your teams**, tap the team you want to enter. If you haven't made it yet, tap **＋ New team**, fill in the **Team name** and **Short**, and tap **Create team**.
 4. If the tournament has divisions, pick yours.

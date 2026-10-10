@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-108 invite share: "Team …" prefix, QR image with the message, open-in-app join pages
+- **Why:** founder report — the WhatsApp invite "Join L&H on SportnNote!" didn't say what L&H is, and the QR on screen couldn't be shared.
+- **Text:** every invite now names the record type ("Join Team L&H…", "Enter your team in Tournament X…", scorer/host/co-host/manager lines), never doubled when the name already contains it. Builders in `src/core/inviteText.ts` (re-exported from `invite.ts`).
+- **QR:** the QR (holds the same https join link) is rendered to a captioned PNG and shared with the text — web via `navigator.share({files,text})`, fallback = PNG download + text share; Android app via `react-native-share@12.3.1` (needs a new APK; current APK falls back to text). `InviteQrShare.tsx`; Team page Members → 🔗 Invite and the tournament "Teams can join by link" card. Scanner accepts tournament QRs.
+- **Open in app:** on Android web, `/join-club/<code>` and `/join-tournament/<token>` show "📲 Open in the SportnNote app" (`intent://…;scheme=sportnnote;package=in.sportnnote.app;S.browser_fallback_url=sportnnote.in/#get`) plus "Continue on the web" (`OpenInAppBanner.tsx`). True App Links need assetlinks.json on a non-redirecting host + intentFilters + new APK (steps in docs/sport-depth/PROGRESS.md).
+- "Hrudhay Organizer" is that account's profile name, not something the app appends.
+- **Verified:** `tests/invite-share.test.mts` (10), tsc clean, demo 8093 at 375 px (share payload, QR decodes to the join link, fallback, join-page card). Guides: teams-join-a-tournament, who-can-edit-a-squad.
+
+---
+
 ### 2026-10-11 — Hockey and swimming are live; carrom statTotals and career
 
 - **Hockey (SD-101, FIH):**

@@ -18,6 +18,7 @@ import { getSport } from '../sports/registry';
 import { useCaptainships, useTournamentCategories } from '../data/hooks';
 import { getTournamentInvite, redeemTournamentInvite, getTeams, canManageTeam, getMyPlayerId, createTeam, type TournamentInviteInfo } from '../data/repos';
 import { filterTeams } from '../core/teamSearch';
+import { OpenInAppBanner } from '../components/OpenInAppBanner';
 import type { SportId, Team } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -130,6 +131,7 @@ export default function JoinTournamentScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="Enter a tournament" subtitle="Use the code or link the organiser shared" />
+        {params?.token ? <OpenInAppBanner path={`join-tournament/${params.token}`} /> : null}
 
         {guest ? (
           <Card style={{ gap: theme.spacing(2) }}>

@@ -27,8 +27,10 @@ import { useTournamentById, useTeams, useTournamentEntries, useTournamentCategor
 import { addTournamentTeams, removeTournamentTeam, createTeam, invitePerson, setTeamLeaders, createInvite, setTournamentTeamStatus, setTournamentTeamCheckIn, getTeamLeaders, enterOrgHousesAsTeams, getLiveTournamentInvite, setTournamentInvite, getTeamsSetup, canManageTeam, getMyPlayerId, isNeedsDbUpdate } from '../data/repos';
 import { filterTeams } from '../core/teamSearch';
 import { tournamentInviteMessage, tournamentJoinLink } from '../core/tournamentInvite';
+import { inviteLabel } from '../core/inviteText';
+import { InviteQrShare } from '../components/InviteQrShare';
 import { confirmAction, notice } from '../core/confirm';
-import { sendInviteEmail, joinLink, inviteMessage } from '../core/invite';
+import { sendInviteEmail, joinLink, inviteMessage, teamAtTournament } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
 import { notify } from '../core/notifications';
 import type { SportId, TournamentEntry } from '../core/types';
@@ -222,7 +224,7 @@ export default function TournamentTeamsScreen() {
       const mName = mgrName.trim();
       const mPhone = mgrPhone.trim();
       const mEmail = mgrEmail.trim();
-      const context = `${t.name}${tournament ? ` at ${tournament.name}` : ''}`;
+      const context = teamAtTournament(t.name, tournament?.name);
       if (mName || mPhone || mEmail) {
         const { player } = await invitePerson({ name: mName || t.name, phone: mPhone || undefined, email: mEmail || undefined });
         await setTeamLeaders(t.id, { captainId: player.id });
@@ -403,6 +405,14 @@ export default function TournamentTeamsScreen() {
             {inviteToken ? (
               <>
                 <Text style={textStyles.muted}>Captains open the link (or type the code under Settings → “Join a team with a code”) and pick their team — it’s in at once.</Text>
+                <InviteQrShare
+                  kind="tournament"
+                  name={tournament?.name ?? 'tournament'}
+                  token={inviteToken}
+                  size={148}
+                  message={tournamentInviteMessage({ tournamentName: tournament?.name ?? 'our tournament', inviterName: profile?.fullName, token: inviteToken })}
+                  caption={[`Enter your team in ${inviteLabel('Tournament', tournament?.name ?? '')}`, `SportnNote · code ${inviteToken}`]}
+                />
                 <Text style={st.code} selectable>{inviteToken}</Text>
                 <View style={st.chips}>
                   <Button label="💬 WhatsApp" variant="ghost" onPress={() => shareInviteWhatsApp(inviteToken)} />

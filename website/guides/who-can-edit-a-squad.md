@@ -5,7 +5,7 @@ category: Teams & players
 audience: Captains, Organisers, Parents & fans
 sports: all
 order: 20
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 A team's squad is public, but not everyone can change it. A parent who opens their child's house team sees the players and their roles, but none of the edit buttons. This page explains who can manage a squad, how to make someone a team admin, and what to do if you see a squad you can't edit.
@@ -60,6 +60,17 @@ The server checked and found you're not allowed to change this team. The squad g
 
 ### Where is the squad's invite link?
 At the bottom of the squad, managers see **📨 Invite the captain / coach** with **Generate invite link**. The person you send it to enters the code under **Settings** → **Join a team with a code**, and becomes able to manage the squad.
+
+### How do I invite teammates to my team with a QR code?
+On the team's page, under **Members**, a team admin taps **🔗 Invite**. A QR code and an invite code such as `JOIN-ZCK8AH5KUA` appear, and the share sheet opens with the QR picture and this message:
+
+> Join Team L&H on SportnNote! Hrudhay invited you 🛡️
+> Open this to join: https://app.sportnnote.in/join-club/JOIN-ZCK8AH5KUA
+> Or in the app, go to Join a team and enter code: JOIN-ZCK8AH5KUA
+
+Pick WhatsApp to send both. Tap **📤 Share QR + message** to send them again. If your browser can't share pictures, the QR is saved to your downloads so you can attach it yourself. Teammates scan the QR with their phone camera, or open **Join a team** in the app and type the code.
+
+> **Note:** In the Android app, sending the QR picture needs the next app update. Until then the app sends the message on its own, and teammates can still scan the QR from your screen.
 
 ### Can I fix a player's name or shirt number?
 Yes, for players who haven't joined the app themselves. See [Fix a player's details](/guides/fix-a-players-details/).

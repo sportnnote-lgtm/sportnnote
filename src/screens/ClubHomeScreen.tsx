@@ -3,8 +3,8 @@
  *  plays (tap a sport → its sport profile; admins can add/remove sports), and the
  *  MEMBERS with their team-level role (admin | member). Team administration lives
  *  here; sport-specific leadership (captains) lives inside each sport's profile. */
-import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -18,8 +18,9 @@ import {
   addClubSport, removeClubSport, addClubMember, removeClubMember, setClubMemberRole, invitePerson, createClubInvite, updateClub,
 } from '../data/repos';
 import { LogoPicker } from '../components/LogoPicker';
-import QRCode from 'react-native-qrcode-svg';
-import { clubInviteMessage, clubJoinLink } from '../core/invite';
+import { clubInviteMessage } from '../core/invite';
+import { inviteLabel } from '../core/inviteText';
+import { InviteQrShare, type InviteQrShareHandle } from '../components/InviteQrShare';
 import type { Club, ClubMemberView, Player, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -47,6 +48,7 @@ export default function ClubHomeScreen() {
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const qrShare = useRef<InviteQrShareHandle>(null);
 
   const load = useCallback(async () => {
     const [c, m, s, id, ps] = await Promise.all([
@@ -103,10 +105,12 @@ export default function ClubHomeScreen() {
     if (!club) return;
     setBusy(true);
     try {
-      const inv = await createClubInvite(clubId);
-      setInviteCode(inv.token);
-      const message = clubInviteMessage({ clubName: club.name, inviterName: profile?.fullName ?? 'A teammate', token: inv.token });
-      try { await Share.share({ message }); } catch { /* user dismissed the share sheet */ }
+      // Reuse the code already on screen; otherwise make one.
+      const token = inviteCode ?? (await createClubInvite(clubId)).token;
+      setInviteCode(token);
+      // Share the QR image + message by default (SD-108) — once the QR has drawn.
+      await new Promise((r) => setTimeout(r, 120));
+      await qrShare.current?.share();
     } finally { setBusy(false); }
   }
 
@@ -205,15 +209,17 @@ export default function ClubHomeScreen() {
         {inviteCode && (
           <Card style={{ gap: theme.spacing(2), alignItems: 'center' }}>
             <Text style={[textStyles.muted, { textAlign: 'center' }]}>Scan to join, or share the code below.</Text>
-            <View style={st.qrBox}>
-              <QRCode value={clubJoinLink(inviteCode)} size={168} backgroundColor="#ffffff" color="#04150F" />
-            </View>
-            <Text style={st.code}>{inviteCode}</Text>
-            <Text style={[textStyles.muted, { textAlign: 'center', fontSize: theme.font.small }]}>They install SportnNote, open “Join a team”, and enter this code.</Text>
-            <View style={st.memberActions}>
-              <TouchableOpacity onPress={invite} accessibilityRole="button"><Text style={st.link}>🔗 Share link</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => setInviteCode(null)} accessibilityRole="button"><Text style={textStyles.muted}>Hide</Text></TouchableOpacity>
-            </View>
+            <InviteQrShare
+              kind="club"
+              name={club.name}
+              token={inviteCode}
+              shareRef={qrShare}
+              message={clubInviteMessage({ clubName: club.name, inviterName: profile?.fullName ?? 'A teammate', token: inviteCode })}
+              caption={[`Join ${inviteLabel('Team', club.name)}`, `SportnNote · code ${inviteCode}`]}
+            />
+            <Text style={st.code} selectable>{inviteCode}</Text>
+            <Text style={[textStyles.muted, { textAlign: 'center', fontSize: theme.font.small }]}>Scan with the phone camera, or in the app open “Join a team” and enter this code.</Text>
+            <TouchableOpacity onPress={() => setInviteCode(null)} accessibilityRole="button"><Text style={textStyles.muted}>Hide</Text></TouchableOpacity>
           </Card>
         )}
 
@@ -303,7 +309,6 @@ const st = StyleSheet.create({
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   pending: { color: '#FFB454', fontSize: theme.font.small, fontWeight: '600' },
   code: { color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.h3, letterSpacing: 1 },
-  qrBox: { backgroundColor: '#ffffff', padding: theme.spacing(3), borderRadius: theme.radius.md },
   roleTag: { paddingHorizontal: theme.spacing(2), paddingVertical: 2, borderRadius: 10, backgroundColor: theme.colors.surfaceAlt },
   roleTagAdmin: { backgroundColor: theme.colors.primary },
   roleText: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.textMuted },

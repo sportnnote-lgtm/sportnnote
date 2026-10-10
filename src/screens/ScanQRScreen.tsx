@@ -11,6 +11,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { theme } from '../core/theme';
 import { Button, ScreenTitle, textStyles } from '../components/ui';
 import { parseClubToken } from '../core/invite';
+import { parseTournamentToken } from '../core/tournamentInvite';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -23,6 +24,9 @@ export default function ScanQRScreen() {
 
   const onScan = ({ data }: { data: string }) => {
     if (handled) return;
+    // A tournament join QR (…/join-tournament/T-XXXXXX) → enter-a-tournament.
+    const tour = /join-tournament/i.test(data) ? parseTournamentToken(data) : null;
+    if (tour) { setHandled(true); nav.replace('JoinTournament', { token: tour }); return; }
     const token = parseClubToken(data);
     if (!token) { setError('That QR isn’t a SportnNote team invite. Try another.'); return; }
     setHandled(true);
