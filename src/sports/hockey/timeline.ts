@@ -1,7 +1,7 @@
 /** SD-101 — hockey events as timeline rows (the shared LiveTimeline) and the
  *  scorer's correction list. PURE. */
 import type { LiveEvent } from '../liveEvents';
-import { minuteText, periodName, type HockeyEvent, type HockeyState } from './engine.ts';
+import { minuteText, periodName, PC_RESULT_LABEL, type HockeyEvent, type HockeyState } from './engine.ts';
 
 export const GOAL_LABEL = { field: 'Field goal', pc: 'Penalty-corner goal', stroke: 'Penalty-stroke goal' } as const;
 const CARD_ICON = { green: '🟩', yellow: '🟨', red: '🟥' } as const;
@@ -13,11 +13,11 @@ export function describeEvent(e: HockeyEvent, saver?: string): { icon: string; l
     case 'goal':
       return { icon: '🏑', label: GOAL_LABEL[e.goalType ?? 'field'], detail: [e.playerName ?? 'Team goal', e.secondName ? `assist ${e.secondName}` : ''].filter(Boolean).join(' · ') };
     case 'pc':
-      return { icon: '🚩', label: 'Penalty corner' };
+      return { icon: '🚩', label: 'Penalty corner', ...(e.pcResult ? { detail: PC_RESULT_LABEL[e.pcResult] } : {}) };
     case 'stroke':
       return { icon: '⚪', label: e.outcome === 'saved' ? 'Penalty stroke saved' : 'Penalty stroke missed', detail: [e.playerName, saver ? `save ${saver}` : ''].filter(Boolean).join(' · ') || undefined };
     case 'shot':
-      return { icon: '🎯', label: e.onGoal ? 'Shot on goal — saved' : 'Shot off target', detail: [e.playerName, saver ? `save ${saver}` : ''].filter(Boolean).join(' · ') || undefined };
+      return { icon: '🎯', label: `${e.onGoal ? 'Shot on goal — saved' : 'Shot off target'}${e.pcRef ? ' (from PC)' : ''}`, detail: [e.playerName, saver ? `save ${saver}` : ''].filter(Boolean).join(' · ') || undefined };
     case 'save':
       return { icon: '🧤', label: 'Save', detail: e.playerName };
     case 'card': {

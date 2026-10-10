@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-117a football / hockey / basketball scorer follow-ups
+- **Football:** foul → "Skip victim" and "Card for {fouler}?" (🟨 / 🟥 / sin-bin / ✓ No card, voice too); shootout asks "🪙 Who kicks first?" (Law 10; old logs keep home first); team officials can be carded (Law 12) — kept out of player stats, box score, red count and fair play; added time has a Change button.
+- **Hockey:** penalty-corner outcome panel (Goal / Saved / Wide / Defended / Stroke awarded / Re-awarded / Later) linked to the PC; one-tap "⭕ Circle entries" per side → team stat `circleEntries` ("not tracked" on old matches); "⏸ Clock stopped (goal) — restart at the centre pass ▶ Resume" bar.
+- **Basketball:** one 📋 row per team — pick the player, then the action (no more 12 identical chip rows); "🅰️ Assist on {scorer}'s +N?" after a make; free throws prefilled (technical 1, shooting/U/D/flagrant 2) and a personal foul over the limit opens 2; lists filter to the on-court five; And-one +2 / +3; FIBA Unsportsmanlike (U) and Disqualifying (D) fouls with an eject confirm on D / 2T / 2U / T+U.
+- **Files:** football events/engine/totals/fieldTime/keepers/LineupView/Timeline/index, `boxSources.ts`, hockey engine/stats/box/timeline/index, basketball events/engine/Timeline/index. No reducer change to old logs (new fields only from new payload keys); legacy oracle tests green.
+- **Verified:** `tests/sd117-scorer-flow.test.mts` (10), suite green, tsc clean; demo 8093 375 px — basketball assist / technical → eject, football added time / official card / shootout order, hockey circle entries + PC outcome. Not clicked: football foul → card (demo match has no roster), basketball bonus FTs and on-court filter (unit-tested). Guides: score-football, -hockey, -basketball.
+
+---
+
 ### 2026-10-11 — SD-110 screen awake + tap buzz · SD-111 60-second result hold
 - **Keep awake (G6):** `useKeepAwakeWhile()` — web `src/core/keepAwake.ts` (Screen Wake Lock, re-acquired when the page is visible again), phone `keepAwake.native.ts` (expo-keep-awake via `requireOptionalNativeModule('ExpoKeepAwake')`, silent no-op on older APKs). On in LiveScoring (focused, scorer, started, not complete), ResultsEvent (Enter results, editable) and GolfRound (live scorecard, marker).
 - **Haptics (G7):** `tapFeedback()` on every scorer dispatch (useLiveMatch), golf stroke and results save; `undoFeedback()` on Undo. Web `navigator.vibrate` (12 ms / 18-60-18), phone expo-haptics (Light impact / Warning), lazy like react-native-share. Settings → **Buzz on scoring taps** (`src/core/hapticsPref.ts`, per device).

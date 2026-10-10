@@ -57,6 +57,9 @@ export const hockeyStats: SportStatSchema<'hockey'> = {
     { key: 'pcs', label: 'Penalty corners', short: 'penalty corners', one: 'penalty corner', source: 'team' },
     { key: 'pcConversion', label: 'PC conversion', short: 'PC conversion', source: 'team', format: { unit: 'percent', dp: 0 } },
     { key: 'strokesAwarded', label: 'Penalty strokes', short: 'penalty strokes', one: 'penalty stroke', source: 'team' },
+    // SD-117 (H7): FIH circle entries — a team figure, only for a match that
+    // logged them (box.ts lists it "not tracked" otherwise, D8)
+    { key: 'circleEntries', label: 'Circle entries', short: 'circle entries', one: 'circle entry', source: 'team' },
   ],
   filters: {
     keeper: (l) => l.stats != null && 'goalsConceded' in l.stats,
@@ -89,7 +92,7 @@ export const hockeyStats: SportStatSchema<'hockey'> = {
     { key: 'redCards', abbr: 'RC', label: 'Red cards' },
   ] }],
   compare: [
-    'shots', 'shotsOnGoal', 'pcs', 'pcGoals', 'pcConversion', 'strokesAwarded', 'strokeGoals', 'fieldGoals', 'saves',
+    'circleEntries', 'shots', 'shotsOnGoal', 'pcs', 'pcGoals', 'pcConversion', 'strokesAwarded', 'strokeGoals', 'fieldGoals', 'saves',
     { key: 'greenCards', label: 'Green cards' }, { key: 'yellowCards', label: 'Yellow cards' }, { key: 'redCards', label: 'Red cards' },
   ],
   leaders: ['goals', 'fieldGoals', 'pcGoals', 'strokeGoals', 'assists', 'shotsOnGoal', 'goalsPerGame', 'saves', 'cleanSheets', 'savePct'],

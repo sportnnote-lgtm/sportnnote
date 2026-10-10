@@ -90,6 +90,7 @@ function nameIndex(s: FootballState, ctx?: StatTotalsContext): Record<Side, Map<
     for (const p of ctx?.players?.[side] ?? []) note(side, p.id, p.name);
   }
   for (const e of s.events ?? []) {
+    if (e.official) continue; // SD-117: a team official is on no stat line
     const side = e.type === 'owngoal' ? other(e.side) : e.side;
     note(side, e.playerId, e.playerName);
     note(e.side, e.secondId, e.secondName);
@@ -121,6 +122,7 @@ export function footballBoxTotals(s: FootballState, ctx?: StatTotalsContext): Re
     if (shots) add(eventLines, e.playerId, e.side, { shots, ...(shotsOnTarget ? { shotsOnTarget } : {}) });
   }
   for (const e of s.events ?? []) {
+    if (e.official) continue; // SD-117 (F13): a team official's card credits nobody
     if (e.type === 'owngoal') {
       if (!e.playerId && !e.playerName) continue;
       const id = resolve(other(e.side), e.playerId, e.playerName);

@@ -15,8 +15,8 @@ import { Timeline } from './Timeline';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { basketballBox } from '../boxSources';
 import { basketballStatTotals, shotsTracked } from './totals';
-import { creditAttribution, eventCredits, ftCredits, makeCredits, missCredits, reboundCredits } from './credits';
-import { BB_META, FOUL_LABEL, pointsOf, type BBEvent, type FoulType, type ReboundType } from './events';
+import { creditAttribution, eventCredits, ftCredits, isFieldGoal, makeCredits, missCredits, reboundCredits } from './credits';
+import { BB_META, DQ_LABEL, FOUL_LABEL, pointsOf, type BBEvent, type DqReason, type FoulType, type ReboundType } from './events';
 import type { Player } from '../../core/types';
 import type { LiveSettings, ScoreAction, SportPlugin } from '../types';
 import { basketballVoice } from '../voiceParsers';
@@ -28,7 +28,11 @@ import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 import {
   type BasketballState, init, reducer, periodLabel, currentMinute,
   isFouledOut, isPlayerOut, isEjected, inBonus, timeoutsUsed, onCourtNames, teamFoulsThisQuarter,
+  disqualifyingFoul, freeThrowsFor,
 } from "./engine";
+
+/** SD-117 (B12): the foul-type chips, FIBA's U and D included. */
+const FOUL_TYPES: FoulType[] = ['personal', 'shooting', 'offensive', 'technical', 'unsportsmanlike', 'disqualifying', 'flagrant'];
 
 /* ------------------------------- Controls ---------------------------------- */
 
@@ -51,6 +55,8 @@ const Row = ({ label, roster, onPick, disabledFor }: { label: string; roster: Pl
  *  a substitution, or setting the starting five. */
 type Flow =
   | { kind: 'ft'; side: 'home' | 'away'; shooter?: Player; reason?: string; remaining?: number; total?: number }
+  // SD-117 (B3): a player picked first, then the action — no row of look-alike chips to mis-tap
+  | { kind: 'act'; side: 'home' | 'away'; player: Player }
   | { kind: 'foul'; side: 'home' | 'away'; fouler?: Player }
   | { kind: 'rebound'; side: 'home' | 'away'; player: Player }
   | { kind: 'sub'; side: 'home' | 'away'; off?: string }
@@ -77,6 +83,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // Multi-step captures (free throws, foul type, rebound off/def, sub, starting five).
   const [flow, setFlow] = useState<Flow>(null);
   const [showSubs, setShowSubs] = useState(false);
+  // SD-117 (B6): right after a made basket — "Assist?" for the on-court teammates
+  const [assistFor, setAssistFor] = useState<{ side: 'home' | 'away'; scorer?: Player; points: number } | null>(null);
 
   // Half-court small-sided ball (3×3 / 2v2 / 1v1 — all first-to-N) scores 1s and
   // 2s only: a made shot is 1, from behind the arc it's 2. Full-court games keep
@@ -88,8 +96,11 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // backfilling, at the chosen quarter; otherwise live.
   const stampFor = () =>
     edit ? { quarter: edit.quarter, minute: edit.minute } : backfillQ != null ? { quarter: backfillQ, minute: 0 } : { quarter: state.quarter, minute: currentMinute(state) };
-  const fire = (action: ScoreAction) =>
+  // Any other play closes the "Assist?" prompt (a make re-opens it after).
+  const fire = (action: ScoreAction) => {
+    setAssistFor(null);
     dispatch({ ...action, payload: { ...action.payload, ...stampFor() } });
+  };
 
   // SD-31: "Track missed shots" (live settings) — Miss buttons, and every make
   // counts as an attempt (`fga`) so FGA / FG% / EFF are complete.
@@ -107,6 +118,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       payload: { points: pts, ...(fga ? { fga: true } : {}), ...pidOf(p) },
       attribution: p ? creditAttribution(p.id, p.fullName, makeCredits(pts, halfCourt, fga)) : undefined,
     });
+    // SD-117 (B6): a made field goal asks "Assist?" (live plays only, not an edit)
+    if (!edit && isFieldGoal(pts, halfCourt)) setAssistFor({ side, scorer: p, points: pts });
   };
   const miss = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side]) => {
     clearSel(side);
@@ -147,6 +160,15 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const opp = (side: 'home' | 'away') => (side === 'home' ? 'away' : 'home');
   const nameOf = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
   const rosterOf = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster);
+  // SD-117 (B9): once the on-court five is tracked, player rows list just them
+  // (the bench can't score, rebound or foul) — no long scroll past the squad.
+  const courtOf = (side: 'home' | 'away'): Player[] => {
+    const roster = rosterOf(side);
+    const five = state.onCourt ? onCourtNames(state, side) : [];
+    if (!five.length) return roster;
+    const on = roster.filter((p) => five.includes(p.fullName));
+    return on.length ? on : roster;
+  };
 
   // Free throw — one attempt; the panel stays open so 2- and 3-shot trips are quick.
   const freeThrow = (side: 'home' | 'away', made: boolean, shooter?: Player) =>
@@ -158,17 +180,31 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // SD-116 (B2): ejection asks first (ConfirmSheet), then logs EJECT.
   const eject = async (side: 'home' | 'away', p: Player) => {
     if (!(await confirmMatchAction('eject', { what: p.fullName }))) return;
-    fire({ type: 'EJECT', side, payload: pidOf(p), attribution: { playerId: p.id, stat: 'ejections', playerName: p.fullName } });
+    fireEject(side, p);
     setFlow(null);
   };
+  const fireEject = (side: 'home' | 'away', p: Player, reason?: DqReason) =>
+    fire({ type: 'EJECT', side, payload: { ...pidOf(p), ...(reason ? { reason } : {}) }, attribution: { playerId: p.id, stat: 'ejections', playerName: p.fullName } });
 
-  // Foul — logged with its type; a shooting/technical/flagrant foul flows straight
-  // into the opponent's free throws.
-  const recordFoul = (side: 'home' | 'away', fouler: Player, type: FoulType) => {
+  // Foul — logged with its type. SD-117: it flows straight into the other
+  // side's free throws with the count prefilled (B11: technical 1, shooting /
+  // U / D / flagrant 2) — and a personal foul once the fouling side is over the
+  // team-foul limit opens the bonus 2 (B8). A D foul, or a 2nd T / 2nd U / T + U,
+  // disqualifies (B12): asked first in the ConfirmSheet, then logged + ejected.
+  const recordFoul = async (side: 'home' | 'away', fouler: Player, type: FoulType) => {
+    const dq = disqualifyingFoul(state, fouler.fullName, type);
+    if (dq && !(await confirmMatchAction('eject', {
+      what: fouler.fullName,
+      detail: `${FOUL_LABEL[type]} — that's ${DQ_LABEL[dq]}, so the rules disqualify ${fouler.fullName}. The foul is logged and the player is ejected. Undo can bring it back.`,
+    }))) return;
+    const shots = freeThrowsFor(state, side, type);
+    const bonus = shots > 0 && (type === 'personal');
     fire({ type: 'FOUL', side, payload: { foulType: type, ...pidOf(fouler) }, attribution: { playerId: fouler.id, stat: 'fouls', playerName: fouler.fullName } });
-    if (type === 'shooting' || type === 'technical' || type === 'flagrant')
-      setFlow({ kind: 'ft', side: opp(side), reason: `${FOUL_LABEL[type]} foul on ${fouler.fullName} — free throws for ${nameOf(opp(side))}` });
-    else setFlow(null);
+    if (dq) fireEject(side, fouler, dq);
+    if (shots > 0) {
+      const why = bonus ? `Bonus — ${nameOf(side)} are over the team-foul limit` : `${FOUL_LABEL[type]} foul on ${fouler.fullName}`;
+      setFlow({ kind: 'ft', side: opp(side), remaining: shots, total: shots, reason: `${why}${dq ? ` · ${fouler.fullName} disqualified` : ''} — ${shots} free throw${shots > 1 ? 's' : ''} for ${nameOf(opp(side))}` });
+    } else setFlow(null);
   };
 
   const recordRebound = (side: 'home' | 'away', player: Player, rt: ReboundType) => {
@@ -196,7 +232,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     const nm = nameOf(flow.side);
     const cancel = <Button label="Cancel" variant="ghost" onPress={() => setFlow(null)} />;
     if (flow.kind === 'ft') {
-      const roster = rosterOf(flow.side);
+      const roster = courtOf(flow.side);
       // Count-aware mode: once the number of shots is known, each Made/Miss
       // auto-advances and the panel closes on the last shot — no "Done" tap.
       const counted = flow.remaining != null && flow.total != null;
@@ -241,6 +277,15 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
             </>
           ) : (
             <>
+              {/* SD-117 (B11): the count is prefilled from the foul — change it before the first shot */}
+              {flow.remaining === flow.total && (
+                <View style={ctrl.chips}>
+                  <Text style={ctrl.meta}>Shots:</Text>
+                  {[1, 2, 3].map((n) => (
+                    <SelectChip key={n} label={String(n)} active={flow.total === n} onPress={() => setFlow({ ...flow, remaining: n, total: n })} />
+                  ))}
+                </View>
+              )}
               <Text style={ctrl.meta}>Shot {(flow.total ?? 1) - (flow.remaining ?? 1) + 1} of {flow.total} — tap the outcome</Text>
               <View style={ctrl.row}>
                 <Button label="✅ Made +1" variant={flow.side} style={ctrl.flex} onPress={() => shoot(true)} />
@@ -252,7 +297,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       );
     }
     if (flow.kind === 'foul') {
-      const roster = rosterOf(flow.side);
+      const roster = courtOf(flow.side);
       return (
         <View style={ctrl.editPanel}>
           <View style={ctrl.editHead}><Text style={ctrl.label}>🟨 Foul — {nm}</Text>{cancel}</View>
@@ -269,11 +314,11 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
             <>
               <Text style={ctrl.meta}>{flow.fouler.fullName} — what kind of foul?</Text>
               <View style={ctrl.chips}>
-                {(['personal', 'shooting', 'technical', 'flagrant', 'offensive'] as FoulType[]).map((t) => (
-                  <SelectChip key={t} label={FOUL_LABEL[t]} active={false} onPress={() => recordFoul(flow.side, flow.fouler!, t)} />
+                {FOUL_TYPES.map((t) => (
+                  <SelectChip key={t} label={FOUL_LABEL[t]} active={false} onPress={() => void recordFoul(flow.side, flow.fouler!, t)} />
                 ))}
               </View>
-              <Text style={ctrl.meta}>Shooting, technical & flagrant fouls go to the free-throw line next.</Text>
+              <Text style={ctrl.meta}>Free throws open next with the count filled in: technical 1; shooting, U, D, flagrant 2; a personal foul in the bonus 2. A D foul, or a 2nd T / 2nd U / T + U, disqualifies (asks first).</Text>
               {/* SD-116 (B2): ejecting is a separate, confirmed step — set well
                   apart from the foul-type chips so a slip can't disqualify. */}
               <View style={ctrl.ejectZone}>
@@ -283,6 +328,29 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               </View>
             </>
           )}
+        </View>
+      );
+    }
+    if (flow.kind === 'act') {
+      // SD-117 (B3): the player is already picked — one labelled tap logs the stat.
+      const { side, player } = flow;
+      const one = (type: string, key: string) => { stat(side, type, key, player); setFlow(null); };
+      return (
+        <View style={ctrl.editPanel}>
+          <View style={ctrl.editHead}><Text style={ctrl.label} numberOfLines={1}>📋 {player.fullName} — {nm}</Text>{cancel}</View>
+          <View style={ctrl.row}>
+            <Button label="🔁 Def. rebound" variant={side} style={ctrl.flex} onPress={() => recordRebound(side, player, 'def')} />
+            <Button label="🔁 Off. rebound" variant="ghost" style={ctrl.flex} onPress={() => recordRebound(side, player, 'off')} />
+          </View>
+          <View style={ctrl.row}>
+            <Button label="🅰️ Assist" variant="ghost" style={ctrl.flex} onPress={() => one('ASSIST', 'assists')} />
+            <Button label="✋ Steal" variant="ghost" style={ctrl.flex} onPress={() => one('STEAL', 'steals')} />
+          </View>
+          <View style={ctrl.row}>
+            <Button label="🛡️ Block" variant="ghost" style={ctrl.flex} onPress={() => one('BLOCK', 'blocks')} />
+            <Button label="🔄 Turnover" variant="ghost" style={ctrl.flex} onPress={() => one('TURNOVER', 'turnovers')} />
+          </View>
+          <Button label="🟨 Foul…" variant="ghost" onPress={() => setFlow({ kind: 'foul', side, fouler: player })} />
         </View>
       );
     }
@@ -425,7 +493,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const timeoutSpent = (side: 'home' | 'away') => { const l = toLeft(side); return l != null && l <= 0; };
 
   const ScoreSide = ({ side, name, variant }: { side: 'home' | 'away'; name: string; variant: 'home' | 'away' }) => {
-    const roster = side === 'home' ? homeRoster : awayRoster;
+    const roster = courtOf(side);
     const selected = sel[side];
     return (
       <View style={{ gap: theme.spacing(2) }}>
@@ -456,9 +524,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
             ))}
           </View>
         )}
-        {/* And-one: score the basket AND open the bonus free throw for the scorer. */}
-        <Button label="🔗 And-one (+2 & the foul shot)" variant="ghost"
-          onPress={() => { score(side, 2); setFlow({ kind: 'ft', side, shooter: selected, remaining: 1, total: 1, reason: 'And-one — the bonus free throw' }); }} />
+        {/* And-one: score the basket AND open the bonus free throw for the scorer.
+            SD-117 (B10): a 3 + 1 too (half-court: 1 + 1 and 2 + 1). */}
+        <View style={ctrl.row}>
+          {(halfCourt ? [1, 2] : [2, 3]).map((n) => (
+            <Button key={n} label={`🔗 And-one +${n}`} variant="ghost" style={ctrl.flex}
+              onPress={() => { score(side, n); setFlow({ kind: 'ft', side, shooter: selected, remaining: 1, total: 1, reason: `And-one — +${n} and the bonus free throw` }); }} />
+          ))}
+        </View>
       </View>
     );
   };
@@ -466,6 +539,24 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {backfillBar}
+      {/* SD-117 (B6): "Assist?" right after a make — the on-court teammates, or Skip */}
+      {assistFor && (() => {
+        const mates = courtOf(assistFor.side).filter((p) => p.id !== assistFor.scorer?.id && !fouledOut(p));
+        if (!mates.length) return null;
+        return (
+          <View style={ctrl.assistBox}>
+            <View style={ctrl.editHead}>
+              <Text style={[ctrl.label, ctrl.flex]} numberOfLines={2}>🅰️ Assist on {assistFor.scorer ? `${assistFor.scorer.fullName}'s` : 'the'} +{assistFor.points}?</Text>
+              <Button label="Skip" variant="ghost" onPress={() => setAssistFor(null)} />
+            </View>
+            <View style={ctrl.chips}>
+              {mates.map((p) => (
+                <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => stat(assistFor.side, 'ASSIST', 'assists', p)} />
+              ))}
+            </View>
+          </View>
+        );
+      })()}
       {otBanner}
       {outNames.length > 0 && (
         <Text style={ctrl.fouledOut}>🚫 Out: {outNames.join(', ')}</Text>
@@ -488,18 +579,13 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
         <Button label={`🎯 Free throws — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => setFlow({ kind: 'ft', side: 'away' })} />
       </View>
 
-      <Row label={`🔁 Rebound — ${homeName}`} roster={homeRoster} onPick={(p) => setFlow({ kind: 'rebound', side: 'home', player: p })} disabledFor={fouledOut} />
-      <Row label={`🔁 Rebound — ${awayName}`} roster={awayRoster} onPick={(p) => setFlow({ kind: 'rebound', side: 'away', player: p })} disabledFor={fouledOut} />
-      <Row label={`🅰️ Assist — ${homeName}`} roster={homeRoster} onPick={(p) => stat('home', 'ASSIST', 'assists', p)} disabledFor={fouledOut} />
-      <Row label={`🅰️ Assist — ${awayName}`} roster={awayRoster} onPick={(p) => stat('away', 'ASSIST', 'assists', p)} disabledFor={fouledOut} />
-      <Row label={`✋ Steal — ${homeName}`} roster={homeRoster} onPick={(p) => stat('home', 'STEAL', 'steals', p)} disabledFor={fouledOut} />
-      <Row label={`✋ Steal — ${awayName}`} roster={awayRoster} onPick={(p) => stat('away', 'STEAL', 'steals', p)} disabledFor={fouledOut} />
-      <Row label={`🛡️ Block — ${homeName}`} roster={homeRoster} onPick={(p) => stat('home', 'BLOCK', 'blocks', p)} disabledFor={fouledOut} />
-      <Row label={`🛡️ Block — ${awayName}`} roster={awayRoster} onPick={(p) => stat('away', 'BLOCK', 'blocks', p)} disabledFor={fouledOut} />
-      <Row label={`🔄 Turnover — ${homeName}`} roster={homeRoster} onPick={(p) => stat('home', 'TURNOVER', 'turnovers', p)} disabledFor={fouledOut} />
-      <Row label={`🔄 Turnover — ${awayName}`} roster={awayRoster} onPick={(p) => stat('away', 'TURNOVER', 'turnovers', p)} disabledFor={fouledOut} />
-      <Row label={`🟨 Foul — ${homeName}`} roster={homeRoster} onPick={(p) => setFlow({ kind: 'foul', side: 'home', fouler: p })} disabledFor={fouledOut} />
-      <Row label={`🟨 Foul — ${awayName}`} roster={awayRoster} onPick={(p) => setFlow({ kind: 'foul', side: 'away', fouler: p })} disabledFor={fouledOut} />
+      {/* SD-117 (B3): one row per side — tap the player, then the action
+          (rebound / assist / steal / block / turnover / foul) in a labelled panel. */}
+      {(['home', 'away'] as const).map((side) => (
+        <Row key={side} label={`📋 Rebound · assist · steal · block · TO · foul — ${nameOf(side)}`} roster={courtOf(side)}
+          onPick={(p) => setFlow({ kind: 'act', side, player: p })} disabledFor={fouledOut} />
+      ))}
+      <Text style={ctrl.meta}>Tap the player first, then pick what they did.</Text>
 
       {/* Timeouts */}
       <View style={ctrl.row}>
@@ -763,6 +849,7 @@ const ctrl = StyleSheet.create({
   editPanel: { gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4) },
   editHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   editBanner: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700', backgroundColor: theme.colors.accent + '22', padding: theme.spacing(2), borderRadius: theme.radius.sm },
+  assistBox: { gap: theme.spacing(2), backgroundColor: theme.colors.primary + '14', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3) },
   addedBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   editMin: { color: theme.colors.accent, fontWeight: '800', width: 40, fontSize: theme.font.small },

@@ -99,6 +99,10 @@ type Flow =
   | { mode: 'foul'; step: 'team' }
   | { mode: 'foul'; step: 'by'; side: 'home' | 'away' }
   | { mode: 'foul'; step: 'victim'; side: 'home' | 'away'; fouler: Player }
+  // SD-117 (F10): straight after a foul — a card for the fouler? (one tap, or Close)
+  | { mode: 'foul'; step: 'card'; side: 'home' | 'away'; fouler: Player }
+  // SD-117 (F13, Law 12): a card for a team official (coach / staff) — not a player
+  | { mode: 'stat'; kind: 'card'; step: 'official'; side: 'home' | 'away' }
   | { mode: 'stat'; kind: StatKind | 'card'; step: 'team' }
   | { mode: 'stat'; kind: StatKind | 'card'; step: 'player'; side: 'home' | 'away' }
   | { mode: 'stat'; kind: StatKind | 'card'; step: 'detail'; side: 'home' | 'away'; player: Player }
@@ -152,6 +156,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const [editHalf, setEditHalf] = useState<1 | 2 | 3 | 4 | null>(null);
   // Scorer-adjustable extra-time half length (knockout ties).
   const [etMins, setEtMins] = useState(state.etMinutes);
+  // SD-117 (F12): the "Who kicks first?" step before a shootout starts.
+  const [pickFirst, setPickFirst] = useState(false);
+  // SD-117 (F7): reopen the +1…+8 added-time chips once a figure is set.
+  const [changeAdded, setChangeAdded] = useState(false);
+  // SD-117 (F13): the carded team official's name (optional).
+  const [officialName, setOfficialName] = useState('');
   const opp = (side: 'home' | 'away') => (side === 'home' ? 'away' : 'home');
   // Re-render every few seconds so time-based prompts (added time) keep up.
   const [, tick] = useState(0);
@@ -208,6 +218,17 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     if (secondYellow) {
       fire({ type: 'RED', side, payload: { secondYellow: true, pid: p.id }, attribution: { playerId: p.id, stat: 'redCards', playerName: p.fullName, tracked: trackedKeys() } });
     }
+  };
+
+  // SD-117 (F13, Law 12): a card for a team official — no player, no stat line,
+  // nobody leaves the pitch. A second yellow is a red, as for a player.
+  const recordOfficialCard = (side: 'home' | 'away', color: 'yellow' | 'red', typed: string) => {
+    const nm = typed.trim() || 'Team official';
+    const payload = { official: true, officialName: nm };
+    if (color === 'red') { fire({ type: 'RED', side, payload }); return; }
+    const secondYellow = state.events.some((e) => e.type === 'yellow' && e.side === side && e.official && e.playerName === nm);
+    fire({ type: 'YELLOW', side, payload });
+    if (secondYellow) fire({ type: 'RED', side, payload: { ...payload, secondYellow: true } });
   };
 
   // SD-29: a sin-bin (when the format has one) — off for the minutes, the side
@@ -272,7 +293,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // subbed on; a sending-off leaves the side a player down).
   const sentOff = (side: 'home' | 'away'): Set<string> => {
     const names = new Set<string>();
-    for (const e of state.events) if (e.type === 'red' && e.side === side && e.playerName) names.add(e.playerName);
+    for (const e of state.events) if (e.type === 'red' && e.side === side && e.playerName && !e.official) names.add(e.playerName);
     return names;
   };
   // The bench = squad members not currently on the pitch (and, for fixed subs,
@@ -325,7 +346,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const pairedRed = (ev: FootballEvent) => pairedSecondYellowRed(state.events, ev);
   const removalActions = (ev: FootballEvent, withPair = true): ScoreAction[] => {
     // SD-30: the id on the event (new logs) wins over a name lookup
-    const pid = ev.type === 'owngoal' ? undefined : ev.playerId ?? rosterId(ev.playerName);
+    const pid = ev.type === 'owngoal' || ev.official ? undefined : ev.playerId ?? rosterId(ev.playerName);
     let attribution: ScoreAction['attribution'];
     if (ev.type === 'goal' && pid) attribution = { playerId: pid, stat: 'goals', by: -1, playerName: ev.playerName, extra: { shots: -1, shotsOnTarget: -1, [GOAL_STAT[ev.goalType ?? 'open']]: -1 } };
     else if (ev.type === 'yellow' && pid) attribution = { playerId: pid, stat: 'yellowCards', by: -1, playerName: ev.playerName };
@@ -370,6 +391,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     setShowEdit(false);
     if (ev.type === 'goal') setFlow({ mode: 'goal', side: ev.side, step: 'scorer' });
     else if (ev.type === 'owngoal') setFlow({ mode: 'goal', side: ev.side, step: 'og' });
+    else if (ev.official) { setOfficialName(ev.playerName ?? ''); setFlow({ mode: 'stat', kind: 'card', step: 'official', side: ev.side }); }
     else if (ev.type === 'yellow' || ev.type === 'red' || ev.type === 'sinbin') setFlow({ mode: 'stat', kind: 'card', step: 'player', side: ev.side });
     else if (ev.type === 'sub') setSub({ side: ev.side });
   };
@@ -382,13 +404,15 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     else if (playerNeeded(st.kind)) setFlow({ mode: 'stat', kind: st.kind, step: 'player', side: st.side });
     else setFlow({ mode: 'stat', kind: st.kind, step: 'team' });
   };
-  const recordFoul = (side: 'home' | 'away', fouler: Player, victim: Player) => {
+  // SD-117 (F10): the victim is optional ("Skip victim"), and when cards are
+  // tracked the foul flows straight into "🟨 / 🟥 for {fouler}?".
+  const recordFoul = (side: 'home' | 'away', fouler: Player, victim: Player | null) => {
     fire({
       type: 'STAT', side,
-      payload: { kind: 'foul', possSide: opp(side), at: Date.now(), playerName: fouler.fullName, secondName: victim.fullName },
+      payload: { kind: 'foul', possSide: opp(side), at: Date.now(), playerName: fouler.fullName, ...(victim ? { secondName: victim.fullName } : {}) },
       attribution: { playerId: fouler.id, stat: 'fouls', playerName: fouler.fullName, tracked: trackedKeys() },
     });
-    setFlow(null);
+    setFlow(t.cards ? { mode: 'foul', step: 'card', side, fouler } : null);
   };
 
   // Penalty in open play: credit who won it, then the outcome — a scored goal, or
@@ -478,7 +502,14 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       if (flow.mode === 'foul') {
         if (flow.step === 'team') { const s = matchTeam(text, homeTeams, awayTeams); if (s) { setFlow({ mode: 'foul', step: 'by', side: s }); say('Who committed the foul?'); } else say('Which team committed it?'); return; }
         if (flow.step === 'by') { const p = matchPlayer(text, xi(flow.side)); if (p) { setFlow({ mode: 'foul', step: 'victim', side: flow.side, fouler: p }); say(`${p.fullName} fouled whom?`); } else say("Didn't catch the player."); return; }
-        const v = matchPlayer(text, xi(opp(flow.side))); if (v) { recordFoul(flow.side, flow.fouler, v); say(`Foul: ${flow.fouler.fullName} on ${v.fullName}.`); } else say("Didn't catch the player."); return;
+        if (flow.step === 'card') {
+          const col = /red/.test(deburr(text)) ? 'red' : /yellow/.test(deburr(text)) ? 'yellow' : null;
+          if (col) { recordCard(flow.side, col, flow.fouler); setFlow(null); say(`${col} card: ${flow.fouler.fullName}.`); }
+          else { setFlow(null); say('No card.'); }
+          return;
+        }
+        if (/skip|no one|nobody|don.?t know/.test(deburr(text))) { recordFoul(flow.side, flow.fouler, null); say(`Foul: ${flow.fouler.fullName}. Card? (yellow / red / no)`); return; }
+        const v = matchPlayer(text, xi(opp(flow.side))); if (v) { recordFoul(flow.side, flow.fouler, v); say(`Foul: ${flow.fouler.fullName} on ${v.fullName}.${t.cards ? ' Card? (yellow / red / no)' : ''}`); } else say("Didn't catch the player — or say \"skip\"."); return;
       }
       // generic stat (shot / corner / card / save / tackle / …)
       if (flow.mode === 'stat') {
@@ -501,6 +532,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           recordStat(flow.kind as StatKind, flow.side, p); say(`${STAT_META[flow.kind as StatKind].label}: ${p.fullName}.`); return;
         }
         // detail
+        if (flow.step === 'official') { say('Use the Yellow / Red buttons for a team official.'); return; }
         const { kind, side, player } = flow;
         if (kind === 'card') { const col = /red/.test(deburr(text)) ? 'red' : /yellow/.test(deburr(text)) ? 'yellow' : null; if (!col) { say('Yellow or red?'); return; } recordCard(side, col, player); setFlow(null); say(`${col} card: ${player.fullName}.`); return; }
         if (kind === 'shot') { const on = isYes(text) ? true : isNo(text) ? false : undefined; if (on === undefined) { say('On target or off target?'); return; } recordStat('shot', side, player, { onTarget: on }); say(`Shot ${on ? 'on' : 'off'} target: ${player.fullName}.`); return; }
@@ -673,7 +705,14 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
               <Button label={`▶ Extra time · 2×${etMins}′ · +${state.etExtraSubs} sub`} variant="home" onPress={() => dispatch({ type: 'START_EXTRA_TIME', payload: { etMinutes: etMins } })} />
             </>
           )}
-          <Button label="Penalty shootout →" variant="danger" onPress={() => dispatch({ type: 'START_SHOOTOUT' })} />
+          {pickFirst ? (
+            // SD-117 (F12, Law 10): the referee's toss decides who kicks first.
+            <FirstKicker homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac}
+              onPick={(first) => { setPickFirst(false); dispatch({ type: 'START_SHOOTOUT', payload: { first } }); }}
+              onCancel={() => setPickFirst(false)} />
+          ) : (
+            <Button label="Penalty shootout →" variant="danger" onPress={() => setPickFirst(true)} />
+          )}
         </View>
       </View>
     );
@@ -794,8 +833,27 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           <PlayerTable players={xi(flow.side)} onPick={(p) => setFlow({ mode: 'foul', step: 'victim', side: flow.side, fouler: p })} />
         ));
       }
-      return panel(`🟫 ${flow.fouler.fullName} fouled…`, 'Who was fouled?', (
-        <PlayerTable players={xi(opp(flow.side))} onPick={(v) => recordFoul(flow.side, flow.fouler, v)} />
+      if (flow.step === 'card') {
+        // SD-117 (F10): a card for the fouler, one tap — or Close (no card).
+        const { side, fouler } = flow;
+        return panel(`🟫 Foul logged — ${fouler.fullName}`, `Card for ${fouler.fullName}?`, (
+          <View style={{ gap: theme.spacing(2) }}>
+            <View style={ctrl.row}>
+              <Button label={`🟨 Yellow for ${fouler.fullName}`} variant="home" style={[ctrl.flex, { backgroundColor: theme.colors.accent }]} onPress={() => { recordCard(side, 'yellow', fouler); setFlow(null); }} />
+              <Button label="🟥 Red" variant="danger" style={ctrl.flex} onPress={() => { recordCard(side, 'red', fouler); setFlow(null); }} />
+            </View>
+            {(state.sinBinMinutes ?? 0) > 0 && (
+              <Button label={`⏱️ Sin-bin ${state.sinBinMinutes}'`} variant="ghost" onPress={() => { recordSinBin(side, fouler); setFlow(null); }} />
+            )}
+            <Button label="✓ No card" variant="ghost" onPress={() => setFlow(null)} />
+          </View>
+        ), 'Close');
+      }
+      return panel(`🟫 ${flow.fouler.fullName} fouled…`, 'Who was fouled? (optional)', (
+        <>
+          <PlayerTable players={xi(opp(flow.side))} onPick={(v) => recordFoul(flow.side, flow.fouler, v)} />
+          <Button label="Skip victim" variant="ghost" onPress={() => recordFoul(flow.side, flow.fouler, null)} />
+        </>
       ));
     }
 
@@ -845,11 +903,31 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     if (flow.step === 'player') {
       const sideName = flow.side === 'home' ? homeName : awayName;
       return panel(`${meta.icon} ${meta.label} — ${sideName}`, 'Who?', (
-        <PlayerTable players={xi(flow.side)} onPick={(p) => (
-          detailNeeded(flow.kind)
-            ? setFlow({ mode: 'stat', kind: flow.kind, step: 'detail', side: flow.side, player: p })
-            : recordStat(flow.kind as StatKind, flow.side, p)
-        )} />
+        <>
+          <PlayerTable players={xi(flow.side)} onPick={(p) => (
+            detailNeeded(flow.kind)
+              ? setFlow({ mode: 'stat', kind: flow.kind, step: 'detail', side: flow.side, player: p })
+              : recordStat(flow.kind as StatKind, flow.side, p)
+          )} />
+          {/* SD-117 (F13, Law 12): coaches and staff can be cautioned / sent off too. */}
+          {flow.kind === 'card' && (
+            <Button label="👔 Team official (coach / staff)" variant="ghost"
+              onPress={() => { setOfficialName(''); setFlow({ mode: 'stat', kind: 'card', step: 'official', side: flow.side }); }} />
+          )}
+        </>
+      ));
+    }
+    if (flow.step === 'official') {
+      const { side } = flow;
+      const sideName = side === 'home' ? homeName : awayName;
+      return panel(`👔 Card — ${sideName} team official`, 'Name (optional), then the card. Not a player: no stat line, nobody leaves the pitch.', (
+        <View style={{ gap: theme.spacing(2) }}>
+          <TextField label="" value={officialName} onChange={setOfficialName} placeholder="e.g. Head coach" />
+          <View style={ctrl.row}>
+            <Button label="🟨 Yellow" variant="home" style={[ctrl.flex, { backgroundColor: theme.colors.accent }]} onPress={() => { recordOfficialCard(side, 'yellow', officialName); setFlow(null); }} />
+            <Button label="🟥 Red" variant="danger" style={ctrl.flex} onPress={() => { recordOfficialCard(side, 'red', officialName); setFlow(null); }} />
+          </View>
+        </View>
       ));
     }
     const { kind, side, player } = flow;
@@ -1008,7 +1086,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         </View>
         {showEdit && (() => {
           const items = [
-            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}`, onRemove: () => removeEvent(e), detail: removeDetail(e), onEdit: () => editEvent(e) })),
+            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}${e.official ? ' (team official)' : ''}`, onRemove: () => removeEvent(e), detail: removeDetail(e), onEdit: () => editEvent(e) })),
             ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, half: eventHalf(st, fmt), order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), detail: undefined as string | undefined, onEdit: () => editStat(st) })),
           ].sort(byMatchTimeDesc);
           if (items.length === 0) return <Text style={ctrl.meta}>Nothing logged yet.</Text>;
@@ -1035,23 +1113,32 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         const min = currentMinute(state);
         // `?? 0` covers matches saved before ET halves were keyed here.
         const stop = state.stoppage[state.half] ?? 0;
-        if (stop === 0 && min >= base - 2) {
+        if ((stop === 0 && min >= base - 2) || (stop > 0 && changeAdded)) {
           return (
             <View style={ctrl.addedBox}>
               <Text style={ctrl.label}>⏱ Added time</Text>
-              <Text style={ctrl.meta}>The {HALF_NAME[state.half]} is nearly up — enter the minutes of added (injury) time.</Text>
+              <Text style={ctrl.meta}>{stop > 0 ? `Now +${stop}′ — pick the new figure the 4th official shows.` : `The ${HALF_NAME[state.half]} is nearly up — enter the minutes of added (injury) time.`}</Text>
               <View style={ctrl.chips}>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((m) => (
-                  <Button key={m} label={`+${m}`} variant="ghost" style={ctrl.actionBtn} onPress={() => dispatch({ type: 'SET_STOPPAGE', payload: { minutes: m } })} />
+                {[1, 2, 3, 4, 5, 6, 7, 8, ...(stop > 8 ? [stop] : [])].map((m) => (
+                  <Button key={m} label={`+${m}`} variant="ghost" style={ctrl.actionBtn} color={m === stop ? theme.colors.primary : undefined}
+                    onPress={() => { dispatch({ type: 'SET_STOPPAGE', payload: { minutes: m } }); setChangeAdded(false); }} />
                 ))}
               </View>
+              {stop > 0 && <Button label="Keep it" variant="ghost" onPress={() => setChangeAdded(false)} />}
             </View>
           );
         }
+        // SD-117 (F7): "Change" reopens the chips when the 4th official adds more.
+        const change = <Button label="Change" variant="ghost" onPress={() => setChangeAdded(true)} />;
         if (stop > 0 && min >= base + stop) {
-          return <Text style={ctrl.endNudge}>⏱ {stop}′ added time is up — {state.half === 1 || state.half === 3 ? `end the ${HALF_NAME[state.half]}` : 'end the match'}.</Text>;
+          return (
+            <View style={ctrl.addedRow}>
+              <Text style={[ctrl.endNudge, ctrl.flex]}>⏱ {stop}′ added time is up — {state.half === 1 || state.half === 3 ? `end the ${HALF_NAME[state.half]}` : 'end the match'}.</Text>
+              {change}
+            </View>
+          );
         }
-        if (stop > 0) return <Text style={ctrl.meta}>⏱ +{stop}′ added time signalled</Text>;
+        if (stop > 0) return <View style={ctrl.addedRow}><Text style={[ctrl.meta, ctrl.flex]}>⏱ +{stop}′ added time signalled</Text>{change}</View>;
         return null;
       })()}
 
@@ -1112,6 +1199,24 @@ function PossessionBar({
   );
 }
 
+/** SD-117 (F12, Law 10): "Who kicks first?" — the referee tosses a coin and the
+ *  winning captain chooses; the shootout then alternates from that side. */
+function FirstKicker({ homeName, awayName, homeColor, awayColor, onPick, onCancel }: {
+  homeName: string; awayName: string; homeColor?: string; awayColor?: string; onPick: (first: 'home' | 'away') => void; onCancel?: () => void;
+}) {
+  return (
+    <View style={{ gap: theme.spacing(2) }}>
+      <Text style={ctrl.label}>🪙 Who kicks first?</Text>
+      <Text style={ctrl.meta}>The referee tosses a coin; the winning captain chooses.</Text>
+      <View style={ctrl.row}>
+        <Button label={`${homeName} first`} variant="home" color={homeColor} style={ctrl.flex} onPress={() => onPick('home')} />
+        <Button label={`${awayName} first`} variant="away" color={awayColor} style={ctrl.flex} onPress={() => onPick('away')} />
+      </View>
+      {onCancel && <Button label="Back" variant="ghost" onPress={onCancel} />}
+    </View>
+  );
+}
+
 /** Penalty shootout panel — shown when a knockout tie is level at full time. */
 function ShootoutControls({
   state, dispatch, homeName, awayName,
@@ -1127,11 +1232,14 @@ function ShootoutControls({
       <View style={{ gap: theme.spacing(3) }}>
         <Text style={ctrl.label}>⚖️ Level {state.home}–{state.away} at full time</Text>
         <Text style={ctrl.meta}>Extra time settled nothing — it goes to a penalty shootout.</Text>
-        <Button label="▶ Start penalty shootout" onPress={() => dispatch({ type: 'START_SHOOTOUT' })} />
+        <FirstKicker homeName={homeName} awayName={awayName} onPick={(first) => dispatch({ type: 'START_SHOOTOUT', payload: { first } })} />
       </View>
     );
   }
-  const nextSide: 'home' | 'away' = state.shootout.home.length <= state.shootout.away.length ? 'home' : 'away';
+  // SD-117 (F12): the side that won the toss's choice kicks first (older logs: home).
+  const first = state.shootout.first ?? 'home';
+  const second = first === 'home' ? 'away' : 'home';
+  const nextSide: 'home' | 'away' = state.shootout[first].length <= state.shootout[second].length ? first : second;
   const nextName = nextSide === 'home' ? homeName : awayName;
   const dot = (scored: boolean, i: number) => (
     <Text key={i} style={[ctrl.penDot, { color: scored ? theme.colors.primary : theme.colors.textMuted }]}>{scored ? '●' : '○'}</Text>
@@ -1275,8 +1383,8 @@ export const footballPlugin: SportPlugin<FootballState> = {
         ? 'Full Time'
         : s.half === 1 ? '1st Half' : s.half === 2 ? '2nd Half' : s.half === 3 ? 'Extra Time (1st)' : 'Extra Time (2nd)',
       detailLine: s.shootout ? `Shootout · ${pens.home}–${pens.away}` : undefined,
-      homeReds: s.events.filter((e) => e.type === 'red' && e.side === 'home').length,
-      awayReds: s.events.filter((e) => e.type === 'red' && e.side === 'away').length,
+      homeReds: s.events.filter((e) => e.type === 'red' && e.side === 'home' && !e.official).length,
+      awayReds: s.events.filter((e) => e.type === 'red' && e.side === 'away' && !e.official).length,
     };
   },
   ScoringControls,
@@ -1357,6 +1465,7 @@ const ctrl = StyleSheet.create({
   ppos: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700' },
   addedBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   endNudge: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800', textAlign: 'center' },
+  addedRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   voiceBar: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   voiceHeard: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700', fontStyle: 'italic' },
   voiceFeedback: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },

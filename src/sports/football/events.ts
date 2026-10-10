@@ -40,7 +40,14 @@ export interface FootballEvent {
   suspendMinutes?: number;
   /** SD-29: a sin-bin's exact match-clock second (the live countdown) */
   sec?: number;
+  /** SD-117 (F13, Law 12): a card shown to a team official (coach / staff),
+   *  not a player — `playerName` is the official's name (or "Team official").
+   *  Never on a player's stat line, never sends a player off. New logs only. */
+  official?: true;
 }
+
+/** SD-117 (F13): is this card a player's (not a team official's)? */
+export const isPlayerCard = (e: Pick<FootballEvent, 'official'>): boolean => e.official !== true;
 
 export const GOAL_TYPE_LABEL: Record<GoalType, string> = {
   open: 'Open play',

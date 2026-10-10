@@ -5,7 +5,7 @@
  * and imports from here. Mirrors cricket's engine.ts / kabaddi's rules.ts.
  */
 import type { ScoreAction } from '../types';
-import { pointsOf, type BBEvent, type FoulType, type ReboundType } from './events.ts';
+import { pointsOf, type BBEvent, type DqReason, type FoulType, type ReboundType } from './events.ts';
 
 export interface BasketballState {
   home: number;
@@ -139,6 +139,36 @@ export const onCourtNames = (s: BasketballState, side: 'home' | 'away'): string[
   }
   return court;
 };
+const isDqReason = (r: unknown): r is DqReason => r === 'D' || r === '2T' || r === '2U' || r === 'T+U';
+
+/** SD-117 (B12) — does this foul disqualify its player (FIBA Art. 36.2.3,
+ *  37, 38)? A disqualifying foul does; so does a 2nd technical, a 2nd
+ *  unsportsmanlike, or a technical + an unsportsmanlike. Counts the player's
+ *  fouls already logged plus this one. */
+export function disqualifyingFoul(s: BasketballState, name: string | undefined, type: FoulType): DqReason | undefined {
+  if (!name) return undefined;
+  if (type === 'disqualifying') return 'D';
+  if (type !== 'technical' && type !== 'unsportsmanlike') return undefined;
+  const mine = s.events.filter((e) => e.type === 'foul' && e.playerName === name);
+  const t = mine.filter((e) => e.foulType === 'technical').length + (type === 'technical' ? 1 : 0);
+  const u = mine.filter((e) => e.foulType === 'unsportsmanlike').length + (type === 'unsportsmanlike' ? 1 : 0);
+  if (type === 'technical' && t >= 2) return '2T';
+  if (type === 'unsportsmanlike' && u >= 2) return '2U';
+  return t >= 1 && u >= 1 ? 'T+U' : undefined;
+}
+
+/** SD-117 (B8 / B11) — free throws a foul gives the other side, before the
+ *  shooter's own count is known: technical 1 (FIBA), unsportsmanlike /
+ *  disqualifying / flagrant 2, shooting 2 (3 on a three — the scorer can
+ *  change it), any other non-offensive foul 2 once the fouling side is over
+ *  the team-foul limit (the bonus). 0 = no free throws. */
+export function freeThrowsFor(s: BasketballState, side: 'home' | 'away', type: FoulType): number {
+  if (type === 'technical') return 1;
+  if (type === 'unsportsmanlike' || type === 'disqualifying' || type === 'flagrant' || type === 'shooting') return 2;
+  if (type === 'offensive') return 0;
+  return inBonus(s, side === 'home' ? 'away' : 'home') ? 2 : 0;
+}
+
 /** A side is in the bonus (shoots free throws on every further foul) once the
  *  OTHER side has committed `foulsForBonus` team fouls this period. */
 export const inBonus = (s: BasketballState, side: 'home' | 'away'): boolean =>
@@ -231,7 +261,10 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
     case 'EJECT':
       // Remove a player for the rest of the game (2 technicals / flagrant-2 /
       // fighting) — independent of the personal-foul limit. Blocks further credit.
-      return a.side && name && !isEjected(s, name) ? push(s, { minute, type: 'eject', side: a.side, playerName: name }, quarter) : s;
+      // SD-117 (B12): a rule-forced ejection carries its reason (new logs only).
+      return a.side && name && !isEjected(s, name)
+        ? push(s, { minute, type: 'eject', side: a.side, playerName: name, ...(isDqReason(a.payload?.reason) ? { reason: a.payload.reason } : {}) }, quarter)
+        : s;
     case 'SET_LINEUP': {
       const home = (a.payload?.home as string[] | undefined) ?? s.onCourt?.home ?? [];
       const away = (a.payload?.away as string[] | undefined) ?? s.onCourt?.away ?? [];

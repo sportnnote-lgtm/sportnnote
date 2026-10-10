@@ -7,7 +7,7 @@
  */
 import type { Player } from '../../core/types';
 import type { BoxRowInput, BoxSideInput, MatchBoxSource } from '../boxScore.ts';
-import { eventCredits, periodName, teamFigures, pcConversion, type HockeyState, type Side } from './engine.ts';
+import { eventCredits, periodName, teamFigures, pcConversion, circlesTracked, type HockeyState, type Side } from './engine.ts';
 import { hockeyTotals } from './totals.ts';
 
 export interface HockeyBoxContext { homeRoster?: Player[]; awayRoster?: Player[] }
@@ -22,6 +22,8 @@ export function hockeyBox(s: HockeyState, ctx: HockeyBoxContext = {}): MatchBoxS
     emptyText: 'No players yet.',
     tickMs: s.clock.since ? 5000 : undefined,
     data: (scope) => {
+      // SD-117 (H7): circle entries only for a match that logged them (D8)
+      const circles = circlesTracked(s);
       const totals = scope === 'all' ? hockeyTotals(s) : {};
       const side = (sd: Side): BoxSideInput => {
         const roster = (sd === 'home' ? ctx.homeRoster : ctx.awayRoster) ?? [];
@@ -73,10 +75,10 @@ export function hockeyBox(s: HockeyState, ctx: HockeyBoxContext = {}): MatchBoxS
         return {
           rows: [...rows.values()],
           ...(Object.keys(teamStats).length ? { team: { label: 'Team', stats: teamStats } } : {}),
-          teamStats: { pcs: f.pcs, strokesAwarded: f.strokes, ...(conv !== null ? { pcConversion: conv } : {}) },
+          teamStats: { pcs: f.pcs, strokesAwarded: f.strokes, ...(conv !== null ? { pcConversion: conv } : {}), ...(circles ? { circleEntries: f.circleEntries } : {}) },
         };
       };
-      return { home: side('home'), away: side('away') };
+      return { home: side('home'), away: side('away'), ...(circles ? null : { untracked: ['circleEntries'] }) };
     },
   };
 }

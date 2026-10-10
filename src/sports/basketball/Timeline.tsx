@@ -5,7 +5,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import type { Player } from '../../core/types';
-import { BB_META, FOUL_LABEL, type BBEvent } from './events';
+import { BB_META, DQ_LABEL, FOUL_LABEL, type BBEvent } from './events';
 import { playerLink, idByName } from '../playerLink';
 
 function describe(e: BBEvent): string {
@@ -15,6 +15,7 @@ function describe(e: BBEvent): string {
   if (e.type === 'freethrow') return `${e.made ? '✅ made' : '❌ miss'}  ${who}`;
   if (e.type === 'sub' && e.onName) return `${who} ▸ ${e.onName}`;
   if (e.type === 'foul' && e.foulType) return `${FOUL_LABEL[e.foulType]} · ${who}`;
+  if (e.type === 'eject' && e.reason) return `${who} · ${DQ_LABEL[e.reason]}`;
   if (e.type === 'rebound' && e.reboundType) return `${e.reboundType === 'off' ? 'Off.' : 'Def.'} · ${who}`;
   return who;
 }

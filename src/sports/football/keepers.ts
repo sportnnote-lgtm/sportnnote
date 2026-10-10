@@ -134,7 +134,7 @@ export function keeperSpells(s: FootballState, side: Side): KeeperSpell[] {
       }
       continue;
     }
-    if (e.type === 'red' && isCur(undefined, e.playerName)) {
+    if (e.type === 'red' && !e.official && isCur(undefined, e.playerName)) {
       close(at);
       cur = null;
     }

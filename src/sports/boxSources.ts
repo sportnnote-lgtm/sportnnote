@@ -310,7 +310,7 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
         for (const p of xi?.players ?? (xi?.gk ? [xi.gk] : [])) row(p.name, p.id).starter = true;
         for (const e of s.events) if (e.side === sd && e.type === 'sub' && e.secondName) row(e.secondName, e.secondId);
         for (const e of scoped.events) {
-          if (e.side !== sd || !e.playerName) continue;
+          if (e.side !== sd || !e.playerName || e.official) continue; // SD-117: an official's card is no player's
           if (e.type === 'goal') {
             const r = row(e.playerName);
             r.stats.goals += 1; bump(r, 'shots'); bump(r, 'shotsOnTarget'); // a goal is a shot on target

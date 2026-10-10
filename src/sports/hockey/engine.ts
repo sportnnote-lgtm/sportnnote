@@ -30,6 +30,12 @@ export type Side = 'home' | 'away';
 export type GoalType = 'field' | 'pc' | 'stroke';
 export type CardColour = 'green' | 'yellow' | 'red';
 export type Decider = 'none' | 'shootout';
+/** SD-117 (H6): how a penalty corner ended — a goal, a shot saved / wide, the
+ *  defence cleared it, a penalty stroke awarded, or the corner re-awarded. */
+export type PcResult = 'goal' | 'saved' | 'wide' | 'defended' | 'stroke' | 'reawarded';
+export const PC_RESULT_LABEL: Record<PcResult, string> = {
+  goal: 'goal', saved: 'shot saved', wide: 'shot wide', defended: 'defended', stroke: 'stroke awarded', reawarded: 're-awarded',
+};
 
 export interface Who { id?: string; name?: string }
 
@@ -59,7 +65,14 @@ export interface HockeyEvent {
   minutes?: number;
   /** save: the shot / stroke (its id) the keeper saved */
   ref?: string;
+  /** SD-117 (H6): a goal / shot / stroke taken from a penalty corner — the PC's id */
+  pcRef?: string;
+  /** SD-117 (H6): a penalty corner's outcome (new logs only) */
+  pcResult?: PcResult;
 }
+
+/** SD-117 (H7): one circle entry (an attack into the shooting circle). */
+export interface CircleEntry { side: Side; sec: number; period: number }
 
 export interface SoKick { scored: boolean; playerId?: string; playerName?: string }
 
@@ -92,6 +105,9 @@ export interface HockeyState {
   shootoutWinner?: Side;
   /** who started (from the line-up), stamped at the first push-back / full time */
   xi?: { home?: XiStamp; away?: XiStamp };
+  /** SD-117 (H7): circle entries, once the scorer logs the first one (absent
+   *  = not tracked: older matches keep their exact state shape). */
+  circles?: CircleEntry[];
 }
 
 /* --------------------------------- format ---------------------------------- */
@@ -268,6 +284,12 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
     ({ ...st, seq: st.seq + 1, events: [...st.events, { id: uid, sec, period, ...e } as HockeyEvent] });
   const who1 = p1?.playerId ? { playerId: p1.playerId, ...(p1.playerName ? { playerName: p1.playerName } : {}) } : {};
   const who2 = p2?.playerId ? { secondId: p2.playerId, ...(p2.playerName ? { secondName: p2.playerName } : {}) } : {};
+  // SD-117 (H6): an attempt from a penalty corner carries the PC's id; it also
+  // writes the PC's outcome. Only new logs carry `pcRef` — old states unchanged.
+  const pcRef = typeof a.payload?.pcRef === 'string' && a.payload.pcRef ? (a.payload.pcRef as string) : undefined;
+  const linkPc = (st: HockeyState, result: PcResult | undefined): HockeyState =>
+    pcRef && result ? setPcResult(st, pcRef, result) : st;
+  const ref = pcRef ? { pcRef } : {};
   switch (a.type) {
     case 'CLOCK': {
       // start / stop the game clock (`run`), at epoch `at`
@@ -293,22 +315,40 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
       if (!side) return s;
       const goalType: GoalType = a.payload?.goalType === 'pc' || a.payload?.goalType === 'stroke' ? a.payload.goalType : 'field';
       const scored = { ...s, [side]: s[side] + 1 } as HockeyState;
-      const next = push(scored, { type: 'goal', side, goalType, ...who1, ...who2 });
+      const next = linkPc(push(scored, { type: 'goal', side, goalType, ...who1, ...who2, ...ref }), 'goal');
       return s.stopClock && !a.payload?.edit ? { ...next, clock: stopAt(next, at) } : next;
     }
     case 'PC': {
       if (!side) return s;
-      const next = push(s, { type: 'pc', side });
+      // SD-117 (H6): a corner re-awarded marks the one it replaces
+      const again = typeof a.payload?.reawardOf === 'string' ? (a.payload.reawardOf as string) : undefined;
+      const next = push(again ? setPcResult(s, again, 'reawarded') : s, { type: 'pc', side });
       return s.stopClock && !a.payload?.edit ? { ...next, clock: stopAt(next, at) } : next;
     }
     case 'STROKE': {
       // a penalty stroke NOT scored (a scored stroke is a GOAL of type stroke)
       if (!side) return s;
-      return push(s, { type: 'stroke', side, outcome: a.payload?.outcome === 'saved' ? 'saved' : 'missed', ...who1 });
+      return push(s, { type: 'stroke', side, outcome: a.payload?.outcome === 'saved' ? 'saved' : 'missed', ...who1, ...ref });
     }
     case 'SHOT': {
       if (!side) return s;
-      return push(s, { type: 'shot', side, onGoal: a.payload?.onGoal === true, ...who1 });
+      return linkPc(push(s, { type: 'shot', side, onGoal: a.payload?.onGoal === true, ...who1, ...ref }), a.payload?.onGoal === true ? 'saved' : 'wide');
+    }
+    case 'PC_OUTCOME': {
+      // SD-117 (H6): defended / stroke awarded (no attempt of its own to carry it)
+      const r = a.payload?.result as PcResult | undefined;
+      const id = String(a.payload?.id ?? '');
+      return r && r in PC_RESULT_LABEL && id ? setPcResult(s, id, r) : s;
+    }
+    case 'CIRCLE': {
+      // SD-117 (H7): one circle entry for a side (`undo` takes its last one back)
+      if (!side) return s;
+      const list = s.circles ?? [];
+      if (a.payload?.undo === true) {
+        const i = list.map((c) => c.side).lastIndexOf(side);
+        return i < 0 ? s : { ...s, circles: list.filter((_, j) => j !== i) };
+      }
+      return { ...s, circles: [...list, { side, sec, period }] };
     }
     case 'SAVE': {
       // the keeper's save (side = the keeper's team), linked to the shot / stroke
@@ -343,7 +383,9 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
       const id = String(a.payload?.id ?? '');
       const ev = s.events.find((e) => e.id === id);
       if (!ev) return s;
-      const next = { ...s, events: s.events.filter((e) => e !== ev) };
+      let next = { ...s, events: s.events.filter((e) => e !== ev) };
+      // SD-117 (H6): the attempt that settled a PC takes the PC's outcome with it
+      if (ev.pcRef) next = { ...next, events: next.events.map((e) => (e.id === ev.pcRef && e.type === 'pc' ? withoutResult(e) : e)) };
       if (ev.type === 'goal') return { ...next, [ev.side]: Math.max(0, next[ev.side] - 1) } as HockeyState;
       return next;
     }
@@ -375,6 +417,24 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
       return s;
   }
 };
+
+/** SD-117 (H6): set one penalty corner's outcome (by its id). */
+function setPcResult(s: HockeyState, id: string, result: PcResult): HockeyState {
+  if (!s.events.some((e) => e.id === id && e.type === 'pc')) return s;
+  return { ...s, events: s.events.map((e) => (e.id === id && e.type === 'pc' ? { ...e, pcResult: result } : e)) };
+}
+const withoutResult = (e: HockeyEvent): HockeyEvent => { const { pcResult: _r, ...rest } = e; return rest; };
+
+/** SD-117 (H7): did this match track circle entries (D8: absent = "not tracked")? */
+export const circlesTracked = (s: Pick<HockeyState, 'circles'>): boolean => Array.isArray(s.circles);
+/** SD-117 (H6): the latest penalty corner a side was awarded that has no outcome yet. */
+export function openPc(s: HockeyState, side: Side): HockeyEvent | undefined {
+  for (let i = s.events.length - 1; i >= 0; i--) {
+    const e = s.events[i];
+    if (e.type === 'pc' && e.side === side) return e.pcResult ? undefined : e;
+  }
+  return undefined;
+}
 
 /* ----------------------------- derived figures ----------------------------- */
 
@@ -409,9 +469,12 @@ export interface HockeyTeamFigures {
   goals: number; fieldGoals: number; pcGoals: number; strokeGoals: number;
   shots: number; shotsOnGoal: number; pcs: number; strokes: number; saves: number;
   greenCards: number; yellowCards: number; redCards: number;
+  /** SD-117 (H7): circle entries (0 when the match didn't track them — see circlesTracked) */
+  circleEntries: number;
 }
 export function teamFigures(s: HockeyState, side: Side, scope: 'all' | number = 'all'): HockeyTeamFigures {
-  const f: HockeyTeamFigures = { goals: 0, fieldGoals: 0, pcGoals: 0, strokeGoals: 0, shots: 0, shotsOnGoal: 0, pcs: 0, strokes: 0, saves: 0, greenCards: 0, yellowCards: 0, redCards: 0 };
+  const f: HockeyTeamFigures = { goals: 0, fieldGoals: 0, pcGoals: 0, strokeGoals: 0, shots: 0, shotsOnGoal: 0, pcs: 0, strokes: 0, saves: 0, greenCards: 0, yellowCards: 0, redCards: 0, circleEntries: 0 };
+  for (const c of s.circles ?? []) if (c.side === side && (scope === 'all' || c.period === scope)) f.circleEntries++;
   for (const e of s.events) {
     if (scope !== 'all' && e.period !== scope) continue;
     if (e.side === side) {

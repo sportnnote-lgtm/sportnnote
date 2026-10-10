@@ -48,12 +48,17 @@ function eventItem(e: FootballEvent, homeName: string, awayName: string, rosters
     case 'sub':
       detail = `${e.secondName ?? '—'} ◂ ${who}`;
       break;
+    case 'yellow':
+    case 'red':
+      // SD-117 (F13): a team official's card (Law 12)
+      if (e.official) { label = `${label} · team official`; detail = `${e.playerName ?? 'Team official'} (${team})`; }
+      break;
     case 'sinbin':
       if (e.suspendMinutes) label = `${EVENT_META.sinbin.label} · ${e.suspendMinutes}'`;
       break;
   }
   const tone = e.type === 'goal' || e.type === 'owngoal' ? 'boundary' : e.type === 'red' ? 'wicket' : e.type === 'yellow' || e.type === 'sinbin' ? 'extra' : undefined;
-  const playerId = idByName(e.type === 'sub' ? e.secondName ?? e.playerName : e.playerName, ...rosters);
+  const playerId = e.official ? undefined : idByName(e.type === 'sub' ? e.secondName ?? e.playerName : e.playerName, ...rosters);
   return { key: `e${e.id}`, minute: e.minute, half: eventHalf(e, f), order: e.id, icon: EVENT_META[e.type].icon, label, detail, side: e.side, tone, playerId };
 }
 

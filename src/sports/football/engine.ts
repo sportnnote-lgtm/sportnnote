@@ -4,6 +4,7 @@
  *  cricket / kabaddi engines. */
 import type { ScoreAction, LiveSettings, FormatField } from "../types";
 import type { FootballEvent, GoalType, BodyPart, StatEvent, StatKind } from "./events";
+import { isPlayerCard } from "./events.ts";
 import type { Player } from "../../core/types";
 export type Decider = 'none' | 'extra_time' | 'penalties';
 
@@ -29,8 +30,10 @@ export interface FootballState {
   /** how a level result at full time is settled: draw stands / extra time then
    *  penalties / straight to penalties */
   decider: Decider;
-  /** penalty shootout kicks (true = scored); null until the shootout starts */
-  shootout: { home: boolean[]; away: boolean[] } | null;
+  /** penalty shootout kicks (true = scored); null until the shootout starts.
+   *  `first` (SD-117, F12 — Law 10 toss): who kicks first; absent on older logs
+   *  (home kicked first). */
+  shootout: { home: boolean[]; away: boolean[]; first?: 'home' | 'away' } | null;
   /** who won the shootout, once decided */
   shootoutWinner?: 'home' | 'away';
   /** minutes per half (format: halfMinutes) — editable last-minute */
@@ -298,6 +301,9 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
   // SD-30: new logs carry the credited player's id (optional key; older logs
   // have names only and replay exactly as before — Decision 8).
   const pid = typeof a.payload?.pid === 'string' && a.payload.pid ? { playerId: a.payload.pid } : {};
+  // SD-117 (F13): a team official's card (new logs only — an absent key keeps
+  // old states identical).
+  const official = a.payload?.official === true ? { official: true as const } : {};
   switch (a.type) {
     case 'KICKOFF': {
       const at = Number(a.payload?.at);
@@ -388,9 +394,9 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       // no scoring effect. `reason` (injury / var / cooling / other) is optional.
       return push(s, { minute, half: evHalf, type: 'stoppage', side: a.side ?? 'home', playerName: a.payload?.reason as string | undefined });
     case 'YELLOW':
-      return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name, ...pid }) : s;
+      return a.side ? push(s, { minute, half: evHalf, type: 'yellow', side: a.side, playerName: name ?? (a.payload?.officialName as string | undefined), ...pid, ...official }) : s;
     case 'RED':
-      return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name, secondYellow: a.payload?.secondYellow as boolean | undefined, ...pid }) : s;
+      return a.side ? push(s, { minute, half: evHalf, type: 'red', side: a.side, playerName: name ?? (a.payload?.officialName as string | undefined), secondYellow: a.payload?.secondYellow as boolean | undefined, ...pid, ...official }) : s;
     case 'SUSPEND': {
       // SD-29: a sin-bin — the player is off (his side a player down) for the
       // minutes, then back automatically (derived by src/sports/onField.ts).
@@ -460,7 +466,8 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
     case 'START_SHOOTOUT':
       // only from a level result at full time of a knockout tie
       if (!s.ended || s.home !== s.away || s.shootout) return s;
-      return { ...s, shootout: { home: [], away: [] } };
+      // SD-117 (F12): the toss winner's choice of who kicks first (Law 10).
+      return { ...s, shootout: { home: [], away: [], ...(a.payload?.first === 'home' || a.payload?.first === 'away' ? { first: a.payload.first } : {}) } };
     case 'PEN': {
       if (!s.shootout || s.shootoutWinner || (a.side !== 'home' && a.side !== 'away')) return s;
       const scored = Boolean(a.payload?.scored);
@@ -484,7 +491,7 @@ export const cardCount = (events: FootballEvent[], type: 'yellow' | 'red', side:
  *  (removed by its own REMOVE_EVENT — no reducer change, old logs replay as-is). */
 export function pairedSecondYellowRed(events: FootballEvent[], ev: FootballEvent): FootballEvent | undefined {
   if (ev.type !== 'yellow') return undefined;
-  const same = (e: FootballEvent) => e.side === ev.side && (ev.playerId && e.playerId ? e.playerId === ev.playerId : e.playerName === ev.playerName);
+  const same = (e: FootballEvent) => e.side === ev.side && isPlayerCard(e) === isPlayerCard(ev) && (ev.playerId && e.playerId ? e.playerId === ev.playerId : e.playerName === ev.playerName);
   if (events.filter((e) => e.type === 'yellow' && same(e)).length !== 2) return undefined;
   return events.find((e) => e.type === 'red' && e.secondYellow && same(e));
 }
@@ -493,6 +500,7 @@ export function fairPlayScore(events: FootballEvent[]): { home: number; away: nu
   const by = new Map<string, { side: 'home' | 'away'; y: number; secondY: boolean; red: boolean }>();
   for (const e of events ?? []) {
     if (e.type !== 'yellow' && e.type !== 'red') continue;
+    if (!isPlayerCard(e)) continue; // SD-117: a team official's card is not a player's
     const who = e.playerId ?? e.playerName;
     const key = `${e.side}|${who ?? `#${e.id}`}`;
     const r = by.get(key) ?? { side: e.side, y: 0, secondY: false, red: false };
@@ -555,8 +563,8 @@ export function footballStats(s: FootballState, nowMs: number) {
   }
   for (const e of s.events) {
     if (e.type === 'goal') { totals[e.side].shots++; totals[e.side].shotsOnTarget++; } // a goal is a shot on target
-    else if (e.type === 'yellow') totals[e.side].yellow++;
-    else if (e.type === 'red') totals[e.side].red++;
+    else if (e.type === 'yellow' && isPlayerCard(e)) totals[e.side].yellow++;
+    else if (e.type === 'red' && isPlayerCard(e)) totals[e.side].red++;
   }
   const poss = possessionPct(s, nowMs);
   const passAcc = (t: TeamStatTotals) => (t.passes ? Math.round((t.passesComplete / t.passes) * 100) : 0);

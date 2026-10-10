@@ -45,7 +45,7 @@ export function footballFieldLog(s: FootballState, clock: Clock = 'reg', upTo?: 
     const t = at(e.type === 'sinbin' && typeof e.sec === 'number' ? e.sec / 60 : e.minute, e.half);
     if (scoring) events.push({ kind: 'score', t, side: e.side, points: 1 });
     else if (e.type === 'sub') events.push({ kind: 'sub', t, side: e.side, off: { id: e.playerId, name: e.playerName }, on: { id: e.secondId, name: e.secondName } });
-    else if (e.type === 'red' && e.playerName) events.push({ kind: 'off', t, side: e.side, who: { id: e.playerId, name: e.playerName } });
+    else if (e.type === 'red' && e.playerName && !e.official) events.push({ kind: 'off', t, side: e.side, who: { id: e.playerId, name: e.playerName } });
     else if (e.type === 'sinbin' && (e.playerName || e.playerId)) events.push({ kind: 'suspend', t, side: e.side, who: { id: e.playerId, name: e.playerName }, minutes: Number(e.suspendMinutes ?? s.sinBinMinutes ?? 0) });
   }
   const last = events.reduce((m, e) => Math.max(m, e.t), 0);

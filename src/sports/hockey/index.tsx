@@ -66,10 +66,11 @@ function PlayerGrid({ players, onPick, skip }: { players: Player[]; onPick: (p: 
   );
 }
 
+// `pc` (SD-117, H6): the attempt comes from this penalty corner (its id).
 type Flow =
-  | { mode: 'goal'; side: Side; step: 'type' | 'scorer' | 'assist'; goalType?: GoalType; scorer?: Player | null }
-  | { mode: 'shot'; side: Side; step: 'result' | 'player'; onGoal?: boolean }
-  | { mode: 'stroke'; side: Side; step: 'result' | 'player'; outcome?: 'saved' | 'missed' }
+  | { mode: 'goal'; side: Side; step: 'type' | 'scorer' | 'assist'; goalType?: GoalType; scorer?: Player | null; pc?: string }
+  | { mode: 'shot'; side: Side; step: 'result' | 'player'; onGoal?: boolean; pc?: string }
+  | { mode: 'stroke'; side: Side; step: 'result' | 'player'; outcome?: 'saved' | 'missed'; pc?: string }
   | { mode: 'card'; side: Side; step: 'colour' | 'player'; card?: CardColour; minutes?: number }
   | { mode: 'sub'; side: Side; step: 'off' | 'on'; off?: Player }
   | { mode: 'gk'; side: Side };
@@ -83,7 +84,8 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
   // event); `s` is the view as if it were removed. See usePendingEdit.
   const { view: s, dispatch, begin: holdRemoval, cancel: dropHeldRemoval } = usePendingEdit(liveState, rawDispatch, reducer);
   const [flow, setFlow] = useState<Flow | null>(null);
-  const [pcOpen, setPcOpen] = useState<Side | null>(null);
+  // SD-117 (H6): the penalty corner awaiting its outcome (side + its event id)
+  const [pcOpen, setPcOpen] = useState<{ side: Side; id: string } | null>(null);
   const [editAt, setEditAt] = useState<{ sec: number; period: number } | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [clockText, setClockText] = useState('');
@@ -153,8 +155,9 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     const cr = eventCredits(e);
     return { attribution: creditAttribution(cr.first, 1, TRACKED), attribution2: creditAttribution(cr.second, 1, TRACKED) };
   };
-  const goal = (sd: Side, goalType: GoalType, scorer: Player | null, assist: Player | null) => {
-    fire({ type: 'GOAL', side: sd, payload: { goalType }, ...credit({ type: 'goal', goalType, playerId: scorer?.id, playerName: scorer?.fullName, secondId: assist?.id, secondName: assist?.fullName }) });
+  const pcLink = (pc?: string) => (pc ? { pcRef: pc } : {});
+  const goal = (sd: Side, goalType: GoalType, scorer: Player | null, assist: Player | null, pc?: string) => {
+    fire({ type: 'GOAL', side: sd, payload: { goalType, ...pcLink(pc) }, ...credit({ type: 'goal', goalType, playerId: scorer?.id, playerName: scorer?.fullName, secondId: assist?.id, secondName: assist?.fullName }) });
     setFlow(null); setPcOpen(null);
   };
   // the keeper's save: its own action on the keeper's side, linked to the shot
@@ -162,15 +165,16 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     const gk = keeper(keeperSide);
     fire({ type: 'SAVE', side: keeperSide, payload: { ref }, ...credit({ type: 'save', playerId: gk?.id, playerName: gk?.fullName }) });
   };
-  const shot = (sd: Side, onGoal: boolean, p: Player | null) => {
+  const shot = (sd: Side, onGoal: boolean, p: Player | null, pc?: string) => {
     const id = uid();
-    fire({ type: 'SHOT', side: sd, payload: { onGoal, uid: id }, ...credit({ type: 'shot', onGoal, playerId: p?.id, playerName: p?.fullName }) });
+    fire({ type: 'SHOT', side: sd, payload: { onGoal, uid: id, ...pcLink(pc) }, ...credit({ type: 'shot', onGoal, playerId: p?.id, playerName: p?.fullName }) });
     if (onGoal) save(opp(sd), id);
     setFlow(null);
+    if (pc) setPcOpen(null);
   };
-  const stroke = (sd: Side, outcome: 'saved' | 'missed', p: Player | null) => {
+  const stroke = (sd: Side, outcome: 'saved' | 'missed', p: Player | null, pc?: string) => {
     const id = uid();
-    fire({ type: 'STROKE', side: sd, payload: { outcome, uid: id }, ...credit({ type: 'stroke', outcome, playerId: p?.id, playerName: p?.fullName }) });
+    fire({ type: 'STROKE', side: sd, payload: { outcome, uid: id, ...pcLink(pc) }, ...credit({ type: 'stroke', outcome, playerId: p?.id, playerName: p?.fullName }) });
     if (outcome === 'saved') save(opp(sd), id);
     setFlow(null);
   };
@@ -203,9 +207,10 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     holdRemoval(removalActions(e));
     setEditAt({ sec: e.sec, period: e.period });
     setShowEdit(false);
-    if (e.type === 'goal') setFlow({ mode: 'goal', side: e.side, step: 'type' });
-    else if (e.type === 'shot') setFlow({ mode: 'shot', side: e.side, step: 'result' });
-    else if (e.type === 'stroke') setFlow({ mode: 'stroke', side: e.side, step: 'result' });
+    const pc = e.pcRef ? { pc: e.pcRef } : {};
+    if (e.type === 'goal') setFlow({ mode: 'goal', side: e.side, step: 'type', ...pc });
+    else if (e.type === 'shot') setFlow({ mode: 'shot', side: e.side, step: 'result', ...pc });
+    else if (e.type === 'stroke') setFlow({ mode: 'stroke', side: e.side, step: 'result', ...pc });
     else if (e.type === 'card') setFlow({ mode: 'card', side: e.side, step: 'colour' });
     else if (e.type === 'sub') setFlow({ mode: 'sub', side: e.side, step: 'off' });
     else if (e.type === 'gk') setFlow({ mode: 'gk', side: e.side });
@@ -324,14 +329,14 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
         if (flow.step === 'scorer') return (
           <View style={c.panel}>{head(GOAL_LABEL[flow.goalType ?? 'field'])}
             <Text style={c.small}>Who scored?</Text>
-            <PlayerGrid players={onField(sd)} onPick={(p) => (flow.goalType === 'stroke' ? goal(sd, 'stroke', p, null) : setFlow({ ...flow, scorer: p, step: 'assist' }))}
-              skip={{ label: 'Team goal (no scorer)', onPress: () => goal(sd, flow.goalType ?? 'field', null, null) }} />
+            <PlayerGrid players={onField(sd)} onPick={(p) => (flow.goalType === 'stroke' ? goal(sd, 'stroke', p, null, flow.pc) : setFlow({ ...flow, scorer: p, step: 'assist' }))}
+              skip={{ label: 'Team goal (no scorer)', onPress: () => goal(sd, flow.goalType ?? 'field', null, null, flow.pc) }} />
           </View>
         );
         return (
           <View style={c.panel}>{head('Assist')}
-            <PlayerGrid players={onField(sd).filter((p) => p.id !== flow.scorer?.id)} onPick={(p) => goal(sd, flow.goalType ?? 'field', flow.scorer ?? null, p)}
-              skip={{ label: 'No assist', onPress: () => goal(sd, flow.goalType ?? 'field', flow.scorer ?? null, null) }} />
+            <PlayerGrid players={onField(sd).filter((p) => p.id !== flow.scorer?.id)} onPick={(p) => goal(sd, flow.goalType ?? 'field', flow.scorer ?? null, p, flow.pc)}
+              skip={{ label: 'No assist', onPress: () => goal(sd, flow.goalType ?? 'field', flow.scorer ?? null, null, flow.pc) }} />
           </View>
         );
       case 'shot':
@@ -346,14 +351,14 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
         );
         return (
           <View style={c.panel}>{head(flow.onGoal ? 'Shot on goal' : 'Shot off target')}
-            <PlayerGrid players={onField(sd)} onPick={(p) => shot(sd, !!flow.onGoal, p)} skip={{ label: 'Skip player', onPress: () => shot(sd, !!flow.onGoal, null) }} />
+            <PlayerGrid players={onField(sd)} onPick={(p) => shot(sd, !!flow.onGoal, p, flow.pc)} skip={{ label: 'Skip player', onPress: () => shot(sd, !!flow.onGoal, null, flow.pc) }} />
           </View>
         );
       case 'stroke':
         if (flow.step === 'result') return (
           <View style={c.panel}>{head('Penalty stroke')}
             <View style={c.row}>
-              <Button label="Scored" color={color(sd)} style={c.flex} onPress={() => setFlow({ mode: 'goal', side: sd, step: 'scorer', goalType: 'stroke' })} />
+              <Button label="Scored" color={color(sd)} style={c.flex} onPress={() => setFlow({ mode: 'goal', side: sd, step: 'scorer', goalType: 'stroke', ...(flow.pc ? { pc: flow.pc } : {}) })} />
               <Button label="Saved" variant="ghost" style={c.flex} onPress={() => setFlow({ ...flow, outcome: 'saved', step: 'player' })} />
               <Button label="Missed" variant="ghost" style={c.flex} onPress={() => setFlow({ ...flow, outcome: 'missed', step: 'player' })} />
             </View>
@@ -361,7 +366,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
         );
         return (
           <View style={c.panel}>{head('Stroke taker')}
-            <PlayerGrid players={onField(sd)} onPick={(p) => stroke(sd, flow.outcome ?? 'missed', p)} skip={{ label: 'Skip player', onPress: () => stroke(sd, flow.outcome ?? 'missed', null) }} />
+            <PlayerGrid players={onField(sd)} onPick={(p) => stroke(sd, flow.outcome ?? 'missed', p, flow.pc)} skip={{ label: 'Skip player', onPress: () => stroke(sd, flow.outcome ?? 'missed', null, flow.pc) }} />
           </View>
         );
       case 'card':
@@ -412,7 +417,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
         <Text style={[c.team, { color: color(sd) }]} numberOfLines={1}>{name(sd)}</Text>
         <Button label="🏑 Goal" color={color(sd)} onPress={() => setFlow({ mode: 'goal', side: sd, step: 'type' })} />
         {s.penaltyCorners ? (
-          <Button label="🚩 PC" accessibilityLabel="Penalty corner" variant="ghost" onPress={() => { fire({ type: 'PC', side: sd }); setPcOpen(sd); }} />
+          <Button label="🚩 PC" accessibilityLabel="Penalty corner" variant="ghost" onPress={() => { const id = uid(); fire({ type: 'PC', side: sd, payload: { uid: id } }); setPcOpen({ side: sd, id }); }} />
         ) : null}
         <Button label="🎯 Shot" variant="ghost" onPress={() => setFlow({ mode: 'shot', side: sd, step: 'result' })} />
         <Button label="⚪ Stroke" variant="ghost" onPress={() => setFlow({ mode: 'stroke', side: sd, step: 'result' })} />
@@ -451,18 +456,63 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
         ) : null}
         {/* (the suspension banner sits in the board above, with the clock) */}
         {periodSec(s, now) >= s.periodMinutes * 60 && running(s) ? <Text style={c.short}>Time is up — finish any penalty corner, then end the {s.periods === 4 ? 'quarter' : 'period'}.</Text> : null}
+        {/* SD-117 (H5): a stopped clock mid-period says so, with Resume right there */}
+        {!running(s) && periodStarted(s) && periodSec(s, now) < s.periodMinutes * 60 ? (() => {
+          const lastEv = s.events[s.events.length - 1];
+          const why = lastEv?.type === 'goal' ? ' (goal) — restart at the centre pass' : lastEv?.type === 'pc' ? ' (penalty corner)' : '';
+          return (
+            <View style={c.stopped} accessibilityRole="alert">
+              <Text style={c.stoppedTxt}>⏸ Clock stopped{why}</Text>
+              <Button label="▶ Resume" onPress={startStop} />
+            </View>
+          );
+        })() : null}
       </View>
 
-      {pcOpen && !flow ? (
-        <View style={c.panel}>
-          <Text style={[c.h, { color: color(pcOpen) }]}>🚩 Penalty corner · {name(pcOpen)}</Text>
-          <View style={c.row}>
-            <Button label="🏑 PC goal" color={color(pcOpen)} style={c.flex} onPress={() => setFlow({ mode: 'goal', side: pcOpen, step: 'scorer', goalType: 'pc' })} />
-            <Button label="🎯 Shot" variant="ghost" style={c.flex} onPress={() => { const sd = pcOpen; setPcOpen(null); setFlow({ mode: 'shot', side: sd, step: 'result' }); }} />
-            <Button label="No goal" variant="ghost" style={c.flex} onPress={() => setPcOpen(null)} />
+      {/* SD-117 (H7): one tap per circle entry — the FIH attacking-entry stat */}
+      {!flow ? (
+        <View style={c.circlePanel}>
+          <Text style={c.small}>⭕ Circle entries — tap on each one</Text>
+          <View style={c.cols}>
+            {(['home', 'away'] as const).map((sd) => {
+              const n = (s.circles ?? []).filter((x) => x.side === sd).length;
+              return (
+                <View key={sd} style={[c.circleRow, { flex: 1 }]}>
+                  <Button label={`${name(sd)} · ${n}`} accessibilityLabel={`Circle entry ${name(sd)}, ${n} so far`} variant="ghost" color={color(sd)} style={c.flex} onPress={() => fire({ type: 'CIRCLE', side: sd })} />
+                  {n > 0 ? <Button label="−1" accessibilityLabel={`Take back a circle entry for ${name(sd)}`} variant="ghost" onPress={() => fire({ type: 'CIRCLE', side: sd, payload: { undo: true } })} /> : null}
+                </View>
+              );
+            })}
           </View>
         </View>
       ) : null}
+
+      {pcOpen && !flow ? (() => {
+        // SD-117 (H6): how the corner ended — each outcome is linked to the PC
+        const { side: sd, id } = pcOpen;
+        const settle = (result: 'defended' | 'stroke') => fire({ type: 'PC_OUTCOME', side: sd, payload: { id, result } });
+        return (
+          <View style={c.panel}>
+            <View style={c.flowHead}>
+              <Text style={[c.h, { color: color(sd) }]}>🚩 Penalty corner · {name(sd)}</Text>
+              <Button label="Later" variant="ghost" onPress={() => setPcOpen(null)} />
+            </View>
+            <Text style={c.small}>How did it end?</Text>
+            <View style={c.row}>
+              <Button label="🏑 Goal" color={color(sd)} style={c.flex} onPress={() => setFlow({ mode: 'goal', side: sd, step: 'scorer', goalType: 'pc', pc: id })} />
+              <Button label="🧤 Saved" variant="ghost" style={c.flex} onPress={() => setFlow({ mode: 'shot', side: sd, step: 'player', onGoal: true, pc: id })} />
+            </View>
+            <View style={c.row}>
+              <Button label="↗ Wide" variant="ghost" style={c.flex} onPress={() => setFlow({ mode: 'shot', side: sd, step: 'player', onGoal: false, pc: id })} />
+              <Button label="🛡 Defended" variant="ghost" style={c.flex} onPress={() => { settle('defended'); setPcOpen(null); }} />
+            </View>
+            <View style={c.row}>
+              <Button label="⚪ Stroke awarded" variant="ghost" style={c.flex} onPress={() => { settle('stroke'); setPcOpen(null); setFlow({ mode: 'stroke', side: sd, step: 'result', pc: id }); }} />
+              <Button label="🔁 Re-awarded" variant="ghost" style={c.flex} onPress={() => { const next = uid(); fire({ type: 'PC', side: sd, payload: { uid: next, reawardOf: id } }); setPcOpen({ side: sd, id: next }); }} />
+            </View>
+          </View>
+        );
+      })() : null}
 
       {flowPanel ?? (
         <View style={c.cols}>{sideCol('home')}{sideCol('away')}</View>
@@ -663,6 +713,10 @@ const c = StyleSheet.create({
   soRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   soTeam: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700', width: 110 },
   soDots: { color: theme.colors.text, fontSize: theme.font.body, letterSpacing: 1, flex: 1 },
+  stopped: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), padding: theme.spacing(2), borderRadius: theme.radius.sm, backgroundColor: theme.colors.accent + '22', borderWidth: 1, borderColor: theme.colors.accent },
+  stoppedTxt: { flex: 1, color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  circlePanel: { gap: theme.spacing(1) },
+  circleRow: { flexDirection: 'row', gap: theme.spacing(1), alignItems: 'center', minWidth: 0 },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   editWhen: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800', width: 56 },

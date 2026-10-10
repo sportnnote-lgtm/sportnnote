@@ -15,8 +15,14 @@ export type BBEventType =
 
 /** Foul kinds a scorer distinguishes at the ground. Shooting/technical/flagrant
  *  send a player to the free-throw line; technical fouls don't count toward the
- *  team-foul bonus. */
-export type FoulType = 'personal' | 'shooting' | 'technical' | 'flagrant' | 'offensive';
+ *  team-foul bonus. SD-117 (B12): FIBA's unsportsmanlike (U) and disqualifying
+ *  (D) fouls — both 2 free throws; a D, or 2 U / 2 T / T + U, disqualifies. */
+export type FoulType = 'personal' | 'shooting' | 'technical' | 'flagrant' | 'offensive' | 'unsportsmanlike' | 'disqualifying';
+/** SD-117 (B12): why a player was disqualified by rule (FIBA Art. 36–38). */
+export type DqReason = 'D' | '2T' | '2U' | 'T+U';
+export const DQ_LABEL: Record<DqReason, string> = {
+  D: 'disqualifying foul', '2T': '2 technical fouls', '2U': '2 unsportsmanlike fouls', 'T+U': 'a technical and an unsportsmanlike foul',
+};
 export type ReboundType = 'off' | 'def';
 
 export interface BBEvent {
@@ -39,6 +45,8 @@ export interface BBEvent {
   reboundType?: ReboundType;
   /** substitution: the player coming ON (playerName = the player going off) */
   onName?: string;
+  /** SD-117 (B12): an ejection the foul rules forced (absent: the scorer's own call) */
+  reason?: DqReason;
 }
 
 export const BB_META: Record<BBEventType, { icon: string; label: string }> = {
@@ -66,4 +74,6 @@ export const FOUL_LABEL: Record<FoulType, string> = {
   technical: 'Technical',
   flagrant: 'Flagrant',
   offensive: 'Offensive',
+  unsportsmanlike: 'Unsportsmanlike (U)',
+  disqualifying: 'Disqualifying (D)',
 };

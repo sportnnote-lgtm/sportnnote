@@ -17,10 +17,10 @@ Log each play as it happens; the app keeps the score by quarter, player stats an
 
 ## Step by step: score the game
 1. Open the match → **Scoring** tab and tap "▶ Start Q1" at the tip-off.
-2. For a basket, tap the scorer's name in that team's "Basket" panel (the panel title shows "for" that player), then **+2** or **+3**. The name clears after each shot, so pick the scorer every time; with nobody picked, the basket goes to the team.
-3. For a made free throw by that player, tap **+1 FT**. It counts as a free throw, not a basket.
-4. For an and-one, pick the scorer, tap **🔗 And-one (+2 & the foul shot)**, then log the extra shot.
-5. For free throws after a foul, tap "Free throws" for that team, choose **1 (and-one / tech)**, "2 shots" or "3 shots", then tap **✅ Made +1** or **❌ Miss** for each shot.
+2. For a basket, tap the scorer's name in that team's "Basket" panel, then **+2** or **+3**. The name clears after each shot; with nobody picked, the basket goes to the team.
+3. After a basket, "Assist on …?" shows the teammates on court. Tap the passer, or **Skip**.
+4. **+1 FT** logs a made free throw. For an and-one, pick the scorer and tap **🔗 And-one +2** or **🔗 And-one +3**, then log the extra shot.
+5. For rebounds, assists, steals, blocks, turnovers and fouls, tap the player in that team's 📋 row first, then what they did (**Def. rebound**, **Assist**, **Foul…** and so on).
 6. At the end of each quarter, tap "End Q1 →" (then Q2, Q3), and "▶ Start Q2" when play restarts.
 
 > **Tip:** In 3×3 and other first-to-N games you see **+1** and **+2**; the game ends itself at the target.
@@ -37,25 +37,22 @@ With tracking on, the box score shows field goals and 3-pointers made-attempted 
 > **Note:** Switched on mid-game? Earlier misses weren't recorded, so that game's FG% only covers what you logged.
 
 ## Fouls, the bonus and technicals
-1. Tap the player's name in the "Foul" row for their team.
-2. Pick **Personal**, **Shooting**, **Technical**, **Flagrant** or **Offensive**.
-3. A shooting, technical or flagrant foul opens the other team's free throws straight away.
+1. Tap the player in the 📋 row, then **Foul…**.
+2. Pick **Personal**, **Shooting**, **Offensive**, **Technical**, **Unsportsmanlike (U)**, **Disqualifying (D)** or **Flagrant**.
+3. Free throws open with the count filled in: technical 1; shooting, U, D and flagrant 2. Change it under "Shots" before the first shot (3 for a fouled three).
 
-Above the scoring panels you see this quarter's team fouls. Under FIBA rules, from a team's 5th foul in a quarter every foul gives free throws; a "BONUS" line reminds you. FIBA counts technicals as team fouls. A player at the foul limit is greyed out.
+Above the scoring panels you see this quarter's team fouls. Under FIBA rules, from a team's 5th foul in a quarter every foul gives free throws: a personal foul then opens 2 shots by itself. A player at the foul limit is greyed out.
 
-To send a player off, tap their name in the "Foul" row, then **🟥 Eject** at the bottom of the panel, set apart from the foul types. It asks first: tap **Yes, eject**.
-
-> **Note:** Matches set up before this update keep their old foul count. Their scores and stats don't change.
+A D foul disqualifies the player, and so do 2 technicals, 2 unsportsmanlike fouls, or one of each (FIBA). The app asks first, then logs the foul and the ejection. To send a player off for anything else, use **🟥 Eject** at the bottom of the foul panel.
 
 ## The box score
 It's on the **Score** and **Summary** tabs, in FIBA order: PTS, FGM-A, FG%, 3PM-A, 3P%, FTM-A, FT%, OREB, DREB, REB, AST, STL, BLK, TO, PF and EFF.
-- EFF is points + rebounds + assists + steals + blocks − missed shots and free throws − turnovers (missed field goals only when tracked).
 - OREB and DREB come from the **Offensive** / **Defensive** choice after you tap a rebounder.
 - Under the tables, "Team fouls" lists each team's fouls per quarter.
 - Plays logged without a player go on a "Team" row.
 
 ## Minutes and plus/minus
-Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app follows every **🔀 Substitute** and adds **MIN** (approximate) and **+/-** to the Overall view.
+Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app follows every **🔀 Substitute**, adds **MIN** and **+/-**, and the player rows then list only the five on court.
 
 ## Player profiles
 At the end, every figure is recounted from the play-by-play, so edits can't leave stats wrong. A profile shows FG and 3P made-attempted, FG% and 3P% over games with misses tracked (a ☁ shows how many), efficiency per game and career highs. Tournament leaders and Player of the Tournament rank by efficiency per game.

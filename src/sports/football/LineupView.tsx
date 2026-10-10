@@ -46,6 +46,7 @@ function deriveMarks(events: FootballEvent[], f: MinuteFormat): Record<string, M
     return (out[name] = out[name] ?? {});
   };
   for (const e of events) {
+    if (e.official) continue; // SD-117: a team official's card isn't on the lineup
     if (e.type === 'yellow') { const x = m(e.playerName); if (x) x.card = x.card === 'yellow' ? 'two-yellow' : x.card ?? 'yellow'; }
     else if (e.type === 'red') { const x = m(e.playerName); if (x) x.card = e.secondYellow ? 'two-yellow' : 'red'; }
     else if (e.type === 'sub') { const x = m(e.playerName); if (x) x.subOff = minuteText(e.minute, e.half, f); } // playerName = off
