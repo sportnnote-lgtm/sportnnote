@@ -96,7 +96,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-63 | Squash Let / Stroke / No Let decisions | squash | SQ-03 | READY | Wave 3b R1 · M |
 | SD-64 | Padel Star Point deuce option | padel | PD-07 | READY | Wave 3b R1 · S · D5 (verify FIP 2026 text) |
 | SD-65 | Pickleball "Serves first" picker (the engine already accepts SET_FIRST_SERVER); verify pickleball's game-2 first server | squash, pickleball | SQ-06, PB-11 | READY | Wave 3b R1 · S · PARTIAL: squash (and TT) first-server picker delivered by SD-104 (b3fbe7e) |
-| SD-66 | Golf gross and net boards side by side (Best Gross / Best Net) | golf | GF-06 | READY | Wave 3b R1 · S |
+| SD-66 | Golf gross and net boards side by side (Best Gross / Best Net) | golf | GF-06 | DONE | fc9f370 · Wave 3b R1 · S |
 | SD-67 | Chess more results (double forfeit, dead position, adjudication, arbiter decision); name in "has White"; exact time control | chess | CH-08 | READY | Wave 3b R1 · S |
 | SD-68 | Carrom ICF score sheet (breaker, running total, penalty boards) | carrom | CR-03 | READY | Wave 3b R1 · S |
 | SD-69 | Cricket captain and keeper flags → Captaincy section, keeper dismissals | cricket | CK-04 | READY | Wave 3b R1 · S · backfill replay script |
@@ -119,7 +119,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-86 | Carrom career remainder: games W/L, board % and points per board (need SD-37), slams, 25-0 games, best game | carrom | CR-05 | DONE | 68dd087 · Wave 3b R3 · M · needs SD-37, SD-78 · PARTIAL: rest delivered by SD-24 (b3fbe7e) match W-L, points per match, boards, queens, best match |
 | SD-87 | Golf match play with strokes (handicap dots, holes 10–18) | golf | GF-10 | READY | Wave 3b R4 · M |
 | SD-88 | Golf proper scorecard view | golf | GF-11 | READY | Wave 3b R4 · S |
-| SD-89 | Golf playoff tie-break option | golf | GF-12 (playoff) | READY | Wave 3b R4 · S |
+| SD-89 | Golf playoff tie-break option | golf | GF-12 (playoff) | DONE | fc9f370 · Wave 3b R4 · S |
 | SD-90 | Athletics: track (sprints, hurdles, middle/long distance, steeplechase, relays): heats → semis → final with Q/q, lanes, times to 0.01 (hand times flagged), wind for 100/200/hurdles; DNS/DNF/DQ with rule ref; PB/SB/records; relay teams | athletics | World Athletics Technical Rules / Competition Rules | DONE | 665c38f · Wave 4 · L · needs SD-28 · D9 picks the first event list |
 | SD-91 | Athletics: field (LJ, TJ, HJ, PV, SP, discus, hammer, javelin): attempt cards (3 + 3 for top 8), best mark with countback on the next best, height progression with O/X/– and jump-off, wind for horizontal jumps, NM | athletics | World Athletics Technical Rules (field events) | DONE | 3e6ea63 · Wave 4 · L · needs SD-28 |
 | SD-92 | Athletics: road and cross-country (marathon/half/10 km, race walks, XC), team scoring by placings | athletics | World Athletics road / XC rules | READY | Wave 4 · M · needs SD-28 |
