@@ -382,6 +382,11 @@ export interface SportPlugin<S = unknown> {
    *  absolutely; every other stat keeps moving by live increments and #05
    *  correction deltas. Absent = the totals own the whole line (cricket). */
   statTotalsPartial?: boolean;
+  /** SD-15 (GEN-02) — the sport's declarative stat schema: keys, labels,
+   *  formats, aggregation, box / career / leaders / awards / MVP weights. Set
+   *  for every sport by the registry from `statSchemas.ts` (pure, so the data
+   *  layer reads it there without importing plugins). */
+  statSchema?: import('./statSchema').SportStatSchema<SportId>;
   /** Parity #19 — the state to persist in `matches.state` (e.g. cricket drops
    *  its derived ball log, which replay rebuilds). Omitted = the state as is. */
   snapshot?: (state: S) => S;

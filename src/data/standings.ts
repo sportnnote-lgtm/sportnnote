@@ -5,6 +5,7 @@
  */
 import type { Match, Player, SportId, StatLine } from '../core/types';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
+import { STAT_SPORTS, leaderCategories, eligibilityOf } from '../sports/statSchemas.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -575,58 +576,11 @@ export function tableLabels(sport: SportId | undefined): { draw: 'T' | 'D'; alwa
 }
 
 /** Per-sport leaderboard categories — the stats we rank players by. The first
- *  is the headline (used for compact summaries). */
-export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> = {
-  football: [
-    { key: 'goals', label: 'Goals' },
-    { key: 'openPlayGoals', label: 'Open-play goals' },
-    { key: 'penaltyGoals', label: 'Penalties' },
-    { key: 'freekickGoals', label: 'Free-kick goals' },
-    { key: 'assists', label: 'Assists' },
-    { key: 'cleanSheets', label: 'Clean sheets' },
-    { key: 'shots', label: 'Shots' },
-    { key: 'shotsOnTarget', label: 'Shots on target' },
-    { key: 'tackles', label: 'Tackles' },
-    { key: 'interceptions', label: 'Interceptions' },
-    { key: 'saves', label: 'Saves' },
-    { key: 'passes', label: 'Passes' },
-    { key: 'attackingContributions', label: 'Attacking plays' },
-    { key: 'defensiveContributions', label: 'Defensive plays' },
-  ],
-  cricket: [
-    { key: 'runs', label: 'Runs' },
-    { key: 'wickets', label: 'Wickets' },
-    { key: 'catches', label: 'Catches' },
-  ],
-  basketball: [
-    { key: 'points', label: 'Points' },
-    { key: 'rebounds', label: 'Rebounds' },
-    { key: 'assists', label: 'Assists' },
-    { key: 'steals', label: 'Steals' },
-    { key: 'blocks', label: 'Blocks' },
-  ],
-  badminton: [{ key: 'points', label: 'Points' }],
-  tennis: [
-    { key: 'points', label: 'Points' },
-    { key: 'aces', label: 'Aces' },
-  ],
-  volleyball: [
-    { key: 'points', label: 'Points' },
-    { key: 'aces', label: 'Aces' },
-    { key: 'blocks', label: 'Blocks' },
-  ],
-  kabaddi: [
-    { key: 'raidPoints', label: 'Raid pts' },
-    { key: 'tacklePoints', label: 'Tackle pts' },
-  ],
-  pickleball: [{ key: 'points', label: 'Points' }],
-  padel: [{ key: 'points', label: 'Points' }],
-  squash: [{ key: 'points', label: 'Points' }],
-  tabletennis: [{ key: 'points', label: 'Points' }],
-  chess: [{ key: 'wins', label: 'Wins' }, { key: 'draws', label: 'Draws' }],
-  carrom: [{ key: 'points', label: 'Points' }, { key: 'queens', label: 'Queens' }],
-  golf: [{ key: 'birdies', label: 'Birdies' }, { key: 'holesWon', label: 'Holes won' }],
-};
+ *  is the headline (used for compact summaries). Derived from the stat schema
+ *  (`leaders`, SD-15). */
+export const STAT_CATEGORIES: Record<SportId, { key: string; label: string }[]> = Object.fromEntries(
+  STAT_SPORTS.map((sp) => [sp, leaderCategories(sp)]),
+) as Record<SportId, { key: string; label: string }[]>;
 
 /** The headline stat used to rank individuals in each sport. */
 export const leaderStat = (sport: SportId) => {
@@ -659,9 +613,9 @@ export function leadersByKey(lines: StatLine[], players: Player[], sport: SportI
     totalGames.set(l.playerId, (totalGames.get(l.playerId) ?? 0) + 1);
     if (l.tracked ? l.tracked.includes(key) : true) trackedGames.set(l.playerId, (trackedGames.get(l.playerId) ?? 0) + 1);
   }
-  // SD-09: football clean sheets rank goalkeepers only — older clean sheets
+  // SD-09: football clean sheets rank goalkeepers only (schema `eligible`) — older clean sheets
   // credited to defenders stay on their lines until the stat backfill.
-  const keepers = sport === 'football' && key === 'cleanSheets'
+  const keepers = eligibilityOf(sport, key) === 'goalkeeper'
     ? new Set(lines.filter((l) => l.sport === sport && (
         isGoalkeeper(byId.get(l.playerId)?.sportDetails?.football?.position) || (l.stats && 'goalsConceded' in l.stats)
       )).map((l) => l.playerId))

@@ -1,0 +1,6085 @@
+{
+ "STAT_WEIGHTS": {
+  "football": [
+   [
+    "goals",
+    10
+   ],
+   [
+    "assists",
+    6
+   ],
+   [
+    "cleanSheets",
+    8
+   ],
+   [
+    "shotsOnTarget",
+    1.5
+   ],
+   [
+    "shots",
+    0.5
+   ],
+   [
+    "saves",
+    2
+   ],
+   [
+    "tackles",
+    1
+   ],
+   [
+    "interceptions",
+    1
+   ],
+   [
+    "attackingContributions",
+    1
+   ],
+   [
+    "defensiveContributions",
+    1
+   ],
+   [
+    "passesComplete",
+    0.05
+   ],
+   [
+    "crosses",
+    0.5
+   ],
+   [
+    "dribbles",
+    0.5
+   ],
+   [
+    "blocks",
+    1
+   ],
+   [
+    "penaltiesWon",
+    2
+   ],
+   [
+    "penaltiesMissed",
+    -3
+   ],
+   [
+    "fouls",
+    -1
+   ],
+   [
+    "offsides",
+    -0.5
+   ],
+   [
+    "handballs",
+    -1
+   ],
+   [
+    "yellowCards",
+    -2
+   ],
+   [
+    "redCards",
+    -6
+   ]
+  ],
+  "basketball": [
+   [
+    "points",
+    1
+   ],
+   [
+    "rebounds",
+    1.5
+   ],
+   [
+    "assists",
+    2
+   ],
+   [
+    "fouls",
+    -1
+   ]
+  ],
+  "volleyball": [
+   [
+    "points",
+    1
+   ],
+   [
+    "aces",
+    2
+   ],
+   [
+    "blocks",
+    1
+   ]
+  ],
+  "badminton": [
+   [
+    "points",
+    1
+   ]
+  ],
+  "tennis": [
+   [
+    "points",
+    1
+   ],
+   [
+    "aces",
+    2
+   ]
+  ],
+  "kabaddi": [
+   [
+    "raidPoints",
+    2
+   ],
+   [
+    "tacklePoints",
+    2
+   ]
+  ],
+  "cricket": [
+   [
+    "runs",
+    1
+   ],
+   [
+    "wickets",
+    18
+   ],
+   [
+    "catches",
+    8
+   ],
+   [
+    "cleanSheets",
+    0
+   ]
+  ],
+  "pickleball": [
+   [
+    "points",
+    1
+   ]
+  ],
+  "padel": [
+   [
+    "points",
+    1
+   ]
+  ],
+  "squash": [
+   [
+    "points",
+    1
+   ]
+  ],
+  "tabletennis": [
+   [
+    "points",
+    1
+   ]
+  ],
+  "chess": [
+   [
+    "wins",
+    3
+   ],
+   [
+    "draws",
+    1
+   ]
+  ],
+  "carrom": [
+   [
+    "points",
+    1
+   ],
+   [
+    "boards",
+    1
+   ],
+   [
+    "queens",
+    2
+   ]
+  ],
+  "golf": [
+   [
+    "holesWon",
+    1
+   ],
+   [
+    "birdies",
+    3
+   ],
+   [
+    "eagles",
+    6
+   ]
+  ]
+ },
+ "STAT_LABELS": {
+  "goals": "goals",
+  "assists": "assists",
+  "cleanSheets": "clean sheets",
+  "yellowCards": "yellow",
+  "redCards": "red",
+  "shots": "shots",
+  "shotsOnTarget": "on target",
+  "saves": "saves",
+  "tackles": "tackles",
+  "interceptions": "interceptions",
+  "attackingContributions": "att. plays",
+  "defensiveContributions": "def. plays",
+  "passesComplete": "passes",
+  "crosses": "crosses",
+  "dribbles": "dribbles",
+  "offsides": "offside",
+  "handballs": "handball",
+  "penaltiesWon": "pen won",
+  "penaltiesMissed": "pen missed",
+  "points": "pts",
+  "rebounds": "reb",
+  "fouls": "fouls",
+  "aces": "aces",
+  "blocks": "blocks",
+  "attackPoints": "attack pts",
+  "raidPoints": "raid pts",
+  "tacklePoints": "tackle pts",
+  "runs": "runs",
+  "wickets": "wkts",
+  "catches": "catches",
+  "games": "games",
+  "wins": "wins",
+  "draws": "draws",
+  "losses": "losses",
+  "boards": "boards",
+  "queens": "queens",
+  "holesWon": "holes won",
+  "birdies": "birdies",
+  "eagles": "eagles",
+  "rounds": "rounds"
+ },
+ "SINGULAR_LABELS": {
+  "goals": "goal",
+  "assists": "assist",
+  "cleanSheets": "clean sheet",
+  "shots": "shot",
+  "saves": "save",
+  "tackles": "tackle",
+  "interceptions": "interception",
+  "attackingContributions": "att. play",
+  "defensiveContributions": "def. play",
+  "passesComplete": "pass",
+  "crosses": "cross",
+  "dribbles": "dribble",
+  "fouls": "foul",
+  "aces": "ace",
+  "blocks": "block",
+  "runs": "run",
+  "games": "game",
+  "catches": "catch"
+ },
+ "INVARIANT_LABELS": [
+  "yellowCards",
+  "redCards",
+  "shotsOnTarget",
+  "offsides",
+  "handballs",
+  "penaltiesWon",
+  "penaltiesMissed",
+  "points",
+  "rebounds",
+  "raidPoints",
+  "tacklePoints",
+  "wickets",
+  "attackPoints"
+ ],
+ "SPORT_AWARDS": {
+  "football": [
+   {
+    "icon": "⚽",
+    "label": "Top scorer",
+    "stat": "goals"
+   },
+   {
+    "icon": "🅰️",
+    "label": "Playmaker",
+    "stat": "assists"
+   },
+   {
+    "icon": "🧤",
+    "label": "Clean sheet",
+    "stat": "cleanSheets"
+   }
+  ],
+  "basketball": [
+   {
+    "icon": "🏀",
+    "label": "Top scorer",
+    "stat": "points"
+   },
+   {
+    "icon": "💪",
+    "label": "Rebounds",
+    "stat": "rebounds"
+   },
+   {
+    "icon": "🎯",
+    "label": "Playmaker",
+    "stat": "assists"
+   }
+  ],
+  "volleyball": [
+   {
+    "icon": "🏐",
+    "label": "Top scorer",
+    "stat": "points"
+   },
+   {
+    "icon": "💥",
+    "label": "Aces",
+    "stat": "aces"
+   }
+  ],
+  "badminton": [
+   {
+    "icon": "🏸",
+    "label": "Top scorer",
+    "stat": "points"
+   }
+  ],
+  "tennis": [
+   {
+    "icon": "🎾",
+    "label": "Top scorer",
+    "stat": "points"
+   },
+   {
+    "icon": "💥",
+    "label": "Aces",
+    "stat": "aces"
+   }
+  ],
+  "kabaddi": [
+   {
+    "icon": "🤼",
+    "label": "Top raider",
+    "stat": "raidPoints"
+   },
+   {
+    "icon": "🛡️",
+    "label": "Top defender",
+    "stat": "tacklePoints"
+   }
+  ],
+  "cricket": [],
+  "pickleball": [
+   {
+    "icon": "🥒",
+    "label": "Top scorer",
+    "stat": "points"
+   }
+  ],
+  "padel": [
+   {
+    "icon": "🟡",
+    "label": "Top scorer",
+    "stat": "points"
+   }
+  ],
+  "squash": [
+   {
+    "icon": "⚫",
+    "label": "Top scorer",
+    "stat": "points"
+   }
+  ],
+  "tabletennis": [
+   {
+    "icon": "🏓",
+    "label": "Top scorer",
+    "stat": "points"
+   }
+  ],
+  "chess": [],
+  "carrom": [
+   {
+    "icon": "🎱",
+    "label": "Top scorer",
+    "stat": "points"
+   },
+   {
+    "icon": "👑",
+    "label": "Queens",
+    "stat": "queens"
+   }
+  ],
+  "golf": [
+   {
+    "icon": "🐦",
+    "label": "Most birdies",
+    "stat": "birdies"
+   }
+  ]
+ },
+ "TOURNAMENT_AWARD_SLOTS": {
+  "football": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "goals",
+    "label": "Top scorer",
+    "icon": "⚽",
+    "stat": "goals"
+   },
+   {
+    "slot": "assists",
+    "label": "Playmaker",
+    "icon": "🅰️",
+    "stat": "assists"
+   },
+   {
+    "slot": "cleanSheets",
+    "label": "Golden Glove",
+    "icon": "🧤",
+    "stat": "cleanSheets"
+   }
+  ],
+  "basketball": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🏀",
+    "stat": "points"
+   },
+   {
+    "slot": "rebounds",
+    "label": "Rebounds",
+    "icon": "💪",
+    "stat": "rebounds"
+   },
+   {
+    "slot": "assists",
+    "label": "Playmaker",
+    "icon": "🎯",
+    "stat": "assists"
+   }
+  ],
+  "volleyball": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🏐",
+    "stat": "points"
+   },
+   {
+    "slot": "aces",
+    "label": "Aces",
+    "icon": "💥",
+    "stat": "aces"
+   }
+  ],
+  "badminton": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🏸",
+    "stat": "points"
+   }
+  ],
+  "tennis": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🎾",
+    "stat": "points"
+   },
+   {
+    "slot": "aces",
+    "label": "Aces",
+    "icon": "💥",
+    "stat": "aces"
+   }
+  ],
+  "kabaddi": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "raidPoints",
+    "label": "Top raider",
+    "icon": "🤼",
+    "stat": "raidPoints"
+   },
+   {
+    "slot": "tacklePoints",
+    "label": "Top defender",
+    "icon": "🛡️",
+    "stat": "tacklePoints"
+   }
+  ],
+  "cricket": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "runs",
+    "label": "Best batter",
+    "icon": "🏏",
+    "stat": "runs"
+   },
+   {
+    "slot": "wickets",
+    "label": "Best bowler",
+    "icon": "🎯",
+    "stat": "wickets"
+   }
+  ],
+  "pickleball": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🥒",
+    "stat": "points"
+   }
+  ],
+  "padel": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🟡",
+    "stat": "points"
+   }
+  ],
+  "squash": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "⚫",
+    "stat": "points"
+   }
+  ],
+  "tabletennis": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🏓",
+    "stat": "points"
+   }
+  ],
+  "chess": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "wins",
+    "label": "Most wins",
+    "icon": "♟️",
+    "stat": "wins"
+   }
+  ],
+  "carrom": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "points",
+    "label": "Top scorer",
+    "icon": "🎱",
+    "stat": "points"
+   },
+   {
+    "slot": "queens",
+    "label": "Queens",
+    "icon": "👑",
+    "stat": "queens"
+   }
+  ],
+  "golf": [
+   {
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "icon": "🏆"
+   },
+   {
+    "slot": "birdies",
+    "label": "Most birdies",
+    "icon": "🐦",
+    "stat": "birdies"
+   }
+  ]
+ },
+ "STAT_LABEL": {
+  "goals": "goals",
+  "openPlayGoals": "open-play",
+  "penaltyGoals": "penalties",
+  "freekickGoals": "free-kick goals",
+  "assists": "assists",
+  "cleanSheets": "clean sheets",
+  "shots": "shots",
+  "shotsOnTarget": "shots on target",
+  "tackles": "tackles",
+  "interceptions": "interceptions",
+  "saves": "saves",
+  "passes": "passes",
+  "attackingContributions": "attacking plays",
+  "defensiveContributions": "defensive plays",
+  "goalsConceded": "conceded",
+  "minutes": "mins",
+  "runs": "runs",
+  "wickets": "wkts",
+  "points": "pts",
+  "rebounds": "reb",
+  "aces": "aces",
+  "blocks": "blocks",
+  "attackPoints": "attack pts",
+  "raidPoints": "raid pts",
+  "tacklePoints": "tackle pts",
+  "games": "games",
+  "wins": "wins",
+  "draws": "draws",
+  "losses": "losses",
+  "boards": "boards",
+  "queens": "queens",
+  "rounds": "rounds",
+  "birdies": "birdies",
+  "eagles": "eagles",
+  "holesWon": "holes won"
+ },
+ "STAT_LABEL_ONE": {
+  "goals": "goal",
+  "penaltyGoals": "penalty",
+  "freekickGoals": "free-kick goal",
+  "assists": "assist",
+  "cleanSheets": "clean sheet",
+  "shots": "shot",
+  "shotsOnTarget": "shot on target",
+  "tackles": "tackle",
+  "interceptions": "interception",
+  "saves": "save",
+  "passes": "pass",
+  "attackingContributions": "attacking play",
+  "defensiveContributions": "defensive play",
+  "runs": "run",
+  "aces": "ace",
+  "blocks": "block",
+  "games": "game",
+  "wins": "win",
+  "draws": "draw",
+  "losses": "loss",
+  "boards": "board",
+  "queens": "queen",
+  "rounds": "round",
+  "birdies": "birdie",
+  "eagles": "eagle",
+  "holesWon": "hole won"
+ },
+ "HEADLINE_ORDER": {
+  "football": [
+   "goals",
+   "assists",
+   "shotsOnTarget",
+   "tackles",
+   "saves",
+   "passes"
+  ],
+  "cricket": [
+   "runs",
+   "wickets"
+  ],
+  "basketball": [
+   "points",
+   "rebounds",
+   "assists"
+  ],
+  "kabaddi": [
+   "raidPoints",
+   "tacklePoints"
+  ],
+  "tennis": [
+   "points",
+   "aces"
+  ],
+  "volleyball": [
+   "points",
+   "aces"
+  ],
+  "badminton": [
+   "points"
+  ],
+  "pickleball": [
+   "points"
+  ],
+  "padel": [
+   "points"
+  ],
+  "squash": [
+   "points"
+  ],
+  "tabletennis": [
+   "points"
+  ],
+  "chess": [
+   "wins",
+   "draws",
+   "games"
+  ],
+  "carrom": [
+   "points",
+   "boards",
+   "queens"
+  ],
+  "golf": [
+   "rounds",
+   "birdies",
+   "eagles"
+  ]
+ },
+ "STAT_CATEGORIES": {
+  "football": [
+   {
+    "key": "goals",
+    "label": "Goals"
+   },
+   {
+    "key": "openPlayGoals",
+    "label": "Open-play goals"
+   },
+   {
+    "key": "penaltyGoals",
+    "label": "Penalties"
+   },
+   {
+    "key": "freekickGoals",
+    "label": "Free-kick goals"
+   },
+   {
+    "key": "assists",
+    "label": "Assists"
+   },
+   {
+    "key": "cleanSheets",
+    "label": "Clean sheets"
+   },
+   {
+    "key": "shots",
+    "label": "Shots"
+   },
+   {
+    "key": "shotsOnTarget",
+    "label": "Shots on target"
+   },
+   {
+    "key": "tackles",
+    "label": "Tackles"
+   },
+   {
+    "key": "interceptions",
+    "label": "Interceptions"
+   },
+   {
+    "key": "saves",
+    "label": "Saves"
+   },
+   {
+    "key": "passes",
+    "label": "Passes"
+   },
+   {
+    "key": "attackingContributions",
+    "label": "Attacking plays"
+   },
+   {
+    "key": "defensiveContributions",
+    "label": "Defensive plays"
+   }
+  ],
+  "cricket": [
+   {
+    "key": "runs",
+    "label": "Runs"
+   },
+   {
+    "key": "wickets",
+    "label": "Wickets"
+   },
+   {
+    "key": "catches",
+    "label": "Catches"
+   }
+  ],
+  "basketball": [
+   {
+    "key": "points",
+    "label": "Points"
+   },
+   {
+    "key": "rebounds",
+    "label": "Rebounds"
+   },
+   {
+    "key": "assists",
+    "label": "Assists"
+   },
+   {
+    "key": "steals",
+    "label": "Steals"
+   },
+   {
+    "key": "blocks",
+    "label": "Blocks"
+   }
+  ],
+  "badminton": [
+   {
+    "key": "points",
+    "label": "Points"
+   }
+  ],
+  "tennis": [
+   {
+    "key": "points",
+    "label": "Points"
+   },
+   {
+    "key": "aces",
+    "label": "Aces"
+   }
+  ],
+  "volleyball": [
+   {
+    "key": "points",
+    "label": "Points"
+   },
+   {
+    "key": "aces",
+    "label": "Aces"
+   },
+   {
+    "key": "blocks",
+    "label": "Blocks"
+   }
+  ],
+  "kabaddi": [
+   {
+    "key": "raidPoints",
+    "label": "Raid pts"
+   },
+   {
+    "key": "tacklePoints",
+    "label": "Tackle pts"
+   }
+  ],
+  "pickleball": [
+   {
+    "key": "points",
+    "label": "Points"
+   }
+  ],
+  "padel": [
+   {
+    "key": "points",
+    "label": "Points"
+   }
+  ],
+  "squash": [
+   {
+    "key": "points",
+    "label": "Points"
+   }
+  ],
+  "tabletennis": [
+   {
+    "key": "points",
+    "label": "Points"
+   }
+  ],
+  "chess": [
+   {
+    "key": "wins",
+    "label": "Wins"
+   },
+   {
+    "key": "draws",
+    "label": "Draws"
+   }
+  ],
+  "carrom": [
+   {
+    "key": "points",
+    "label": "Points"
+   },
+   {
+    "key": "queens",
+    "label": "Queens"
+   }
+  ],
+  "golf": [
+   {
+    "key": "birdies",
+    "label": "Birdies"
+   },
+   {
+    "key": "holesWon",
+    "label": "Holes won"
+   }
+  ]
+ },
+ "PROFILE_LABELS": {
+  "goals": "Goals",
+  "openPlayGoals": "Open-play goals",
+  "penaltyGoals": "Penalties",
+  "freekickGoals": "Free-kick goals",
+  "assists": "Assists",
+  "runs": "Runs",
+  "wickets": "Wickets",
+  "cleanSheets": "Clean sheets",
+  "yellowCards": "Yellow",
+  "redCards": "Red",
+  "points": "Points",
+  "rebounds": "Rebounds",
+  "fouls": "Fouls",
+  "aces": "Aces",
+  "blocks": "Blocks",
+  "attackPoints": "Attack pts",
+  "raidPoints": "Raid pts",
+  "tacklePoints": "Tackle pts",
+  "golds": "Golds",
+  "silvers": "Silvers",
+  "games": "Games",
+  "shots": "Shots",
+  "shotsOnTarget": "Shots on target",
+  "tackles": "Tackles",
+  "interceptions": "Interceptions",
+  "saves": "Saves",
+  "passes": "Passes",
+  "passesComplete": "Passes completed",
+  "offsides": "Offsides",
+  "corners": "Corners",
+  "goalsConceded": "Goals conceded",
+  "minutes": "Minutes",
+  "attackingContributions": "Attacking plays",
+  "defensiveContributions": "Defensive plays",
+  "ballsFaced": "Balls faced",
+  "fours": "4s",
+  "sixes": "6s",
+  "innings": "Innings",
+  "notOut": "Not out",
+  "ballsBowled": "Balls bowled",
+  "runsConceded": "Runs conceded",
+  "maidens": "Maidens",
+  "dots": "Dots",
+  "wides": "Wides",
+  "noBalls": "No balls",
+  "catches": "Catches",
+  "stumpings": "Stumpings",
+  "runouts": "Run outs",
+  "dropped": "Drops",
+  "runsSaved": "Runs saved",
+  "runsMissed": "Runs missed"
+ },
+ "UNIT": {
+  "football": "goals",
+  "cricket": "runs",
+  "basketball": "points",
+  "kabaddi": "points",
+  "volleyball": "sets"
+ },
+ "awardFormula": {
+  "football": {
+   "mvp": "Points summed over every match in this tournament: goals ×10, clean sheets ×8, assists ×6, red −6, pen missed −3, saves ×2. Ties go by name. You choose the winner.",
+   "goals": "Total goals in this tournament's matches. Ties go by name. You choose the winner.",
+   "assists": "Total assists in this tournament's matches. Ties go by name. You choose the winner.",
+   "cleanSheets": "Goalkeepers only (anyone who kept goal in these matches, or is listed as a GK). Most clean sheets, then most saves, then fewest goals conceded. A clean sheet goes to the keeper on the pitch longest when their team let in no goal (penalty shootouts don't count). You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "basketball": {
+   "mvp": "Points summed over every match in this tournament: assists ×2, reb ×1.5, pts ×1, fouls −1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "rebounds": "Total reb in this tournament's matches. Ties go by name. You choose the winner.",
+   "assists": "Total assists in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "volleyball": {
+   "mvp": "Points summed over every match in this tournament: aces ×2, pts ×1, blocks ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "aces": "Total aces in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "badminton": {
+   "mvp": "Points summed over every match in this tournament: pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "tennis": {
+   "mvp": "Points summed over every match in this tournament: aces ×2, pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "aces": "Total aces in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "kabaddi": {
+   "mvp": "Points summed over every match in this tournament: raid pts ×2, tackle pts ×2. Ties go by name. You choose the winner.",
+   "raidPoints": "Total raid pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "tacklePoints": "Total tackle pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "cricket": {
+   "mvp": "Points summed over every match in this tournament: wkts ×18, catches ×8, runs ×1. Ties go by name. You choose the winner.",
+   "runs": "Total runs in this tournament's matches. Ties go by name. You choose the winner.",
+   "wickets": "Total wkts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "pickleball": {
+   "mvp": "Points summed over every match in this tournament: pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "padel": {
+   "mvp": "Points summed over every match in this tournament: pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "squash": {
+   "mvp": "Points summed over every match in this tournament: pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "tabletennis": {
+   "mvp": "Points summed over every match in this tournament: pts ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "chess": {
+   "mvp": "Points summed over every match in this tournament: wins ×3, draws ×1. Ties go by name. You choose the winner.",
+   "wins": "Total wins in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "carrom": {
+   "mvp": "Points summed over every match in this tournament: queens ×2, pts ×1, boards ×1. Ties go by name. You choose the winner.",
+   "points": "Total pts in this tournament's matches. Ties go by name. You choose the winner.",
+   "queens": "Total queens in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  },
+  "golf": {
+   "mvp": "Points summed over every match in this tournament: eagles ×6, birdies ×3, holes won ×1. Ties go by name. You choose the winner.",
+   "birdies": "Total birdies in this tournament's matches. Ties go by name. You choose the winner.",
+   "someCustomKey": "Total goals in this tournament's matches. Ties go by name. You choose the winner."
+  }
+ },
+ "awardIcon": {
+  "football": {
+   "mvp": "🏆",
+   "goals": "⚽",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏅",
+   "cleanSheets": "🧤",
+   "x": "🏅"
+  },
+  "basketball": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏀",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "volleyball": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏐",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "badminton": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏸",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "tennis": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🎾",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "kabaddi": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏅",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "cricket": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏏",
+   "wickets": "🎯",
+   "wins": "🏅",
+   "points": "🏅",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "pickleball": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🥒",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "padel": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🟡",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "squash": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "⚫",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "tabletennis": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏓",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "chess": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "♟️",
+   "points": "🏅",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "carrom": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🎱",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  },
+  "golf": {
+   "mvp": "🏆",
+   "goals": "🏅",
+   "runs": "🏅",
+   "wickets": "🏅",
+   "wins": "🏅",
+   "points": "🏅",
+   "cleanSheets": "🏅",
+   "x": "🏅"
+  }
+ },
+ "leaderStat": {
+  "football": {
+   "key": "goals",
+   "label": "goals"
+  },
+  "basketball": {
+   "key": "points",
+   "label": "points"
+  },
+  "volleyball": {
+   "key": "points",
+   "label": "points"
+  },
+  "badminton": {
+   "key": "points",
+   "label": "points"
+  },
+  "tennis": {
+   "key": "points",
+   "label": "points"
+  },
+  "kabaddi": {
+   "key": "raidPoints",
+   "label": "raid pts"
+  },
+  "cricket": {
+   "key": "runs",
+   "label": "runs"
+  },
+  "pickleball": {
+   "key": "points",
+   "label": "points"
+  },
+  "padel": {
+   "key": "points",
+   "label": "points"
+  },
+  "squash": {
+   "key": "points",
+   "label": "points"
+  },
+  "tabletennis": {
+   "key": "points",
+   "label": "points"
+  },
+  "chess": {
+   "key": "wins",
+   "label": "wins"
+  },
+  "carrom": {
+   "key": "points",
+   "label": "points"
+  },
+  "golf": {
+   "key": "birdies",
+   "label": "birdies"
+  }
+ },
+ "cricketCareer": {
+  "mixed": {
+   "batting": [
+    {
+     "key": "runs",
+     "label": "Runs",
+     "value": "337"
+    },
+    {
+     "key": "innings",
+     "label": "Innings",
+     "value": "6"
+    },
+    {
+     "key": "notOut",
+     "label": "Not out",
+     "value": "2"
+    },
+    {
+     "key": "highest",
+     "label": "Highest",
+     "value": "102"
+    },
+    {
+     "key": "avg",
+     "label": "Avg",
+     "value": "75.33"
+    },
+    {
+     "key": "sr",
+     "label": "SR",
+     "value": "147.71"
+    },
+    {
+     "key": "fours",
+     "label": "4s",
+     "value": "18"
+    },
+    {
+     "key": "sixes",
+     "label": "6s",
+     "value": "4"
+    },
+    {
+     "key": "fifties",
+     "label": "50s",
+     "value": "2"
+    },
+    {
+     "key": "hundreds",
+     "label": "100s",
+     "value": "1"
+    }
+   ],
+   "bowling": [
+    {
+     "key": "overs",
+     "label": "Overs",
+     "value": "11.1"
+    },
+    {
+     "key": "wickets",
+     "label": "Wickets",
+     "value": "9"
+    },
+    {
+     "key": "runsConceded",
+     "label": "Runs",
+     "value": "54"
+    },
+    {
+     "key": "maidens",
+     "label": "Maidens",
+     "value": "1"
+    },
+    {
+     "key": "dots",
+     "label": "Dots",
+     "value": "19"
+    },
+    {
+     "key": "econ",
+     "label": "Econ",
+     "value": "4.84"
+    },
+    {
+     "key": "bowlAvg",
+     "label": "Avg",
+     "value": "6.75"
+    },
+    {
+     "key": "bowlSr",
+     "label": "SR",
+     "value": "8.4"
+    },
+    {
+     "key": "best",
+     "label": "Best",
+     "value": "3/12"
+    }
+   ],
+   "fielding": [
+    {
+     "key": "catches",
+     "label": "Catches",
+     "value": "3"
+    },
+    {
+     "key": "stumpings",
+     "label": "Stumpings",
+     "value": "1"
+    },
+    {
+     "key": "runouts",
+     "label": "Run outs",
+     "value": "1"
+    },
+    {
+     "key": "dropped",
+     "label": "Drops",
+     "value": "1"
+    },
+    {
+     "key": "runsSaved",
+     "label": "Runs saved",
+     "value": "3"
+    },
+    {
+     "key": "runsMissed",
+     "label": "Runs missed",
+     "value": "4"
+    }
+   ]
+  },
+  "empty": {
+   "batting": [
+    {
+     "key": "runs",
+     "label": "Runs",
+     "value": "0"
+    },
+    {
+     "key": "innings",
+     "label": "Innings",
+     "value": "0"
+    },
+    {
+     "key": "notOut",
+     "label": "Not out",
+     "value": "0"
+    },
+    {
+     "key": "highest",
+     "label": "Highest",
+     "value": "–"
+    },
+    {
+     "key": "avg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "sr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "fours",
+     "label": "4s",
+     "value": "0"
+    },
+    {
+     "key": "sixes",
+     "label": "6s",
+     "value": "0"
+    },
+    {
+     "key": "fifties",
+     "label": "50s",
+     "value": "0"
+    },
+    {
+     "key": "hundreds",
+     "label": "100s",
+     "value": "0"
+    }
+   ],
+   "bowling": [
+    {
+     "key": "overs",
+     "label": "Overs",
+     "value": "0.0"
+    },
+    {
+     "key": "wickets",
+     "label": "Wickets",
+     "value": "0"
+    },
+    {
+     "key": "runsConceded",
+     "label": "Runs",
+     "value": "0"
+    },
+    {
+     "key": "maidens",
+     "label": "Maidens",
+     "value": "0"
+    },
+    {
+     "key": "dots",
+     "label": "Dots",
+     "value": "0"
+    },
+    {
+     "key": "econ",
+     "label": "Econ",
+     "value": "–"
+    },
+    {
+     "key": "bowlAvg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "bowlSr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "best",
+     "label": "Best",
+     "value": "–"
+    }
+   ],
+   "fielding": [
+    {
+     "key": "catches",
+     "label": "Catches",
+     "value": "0"
+    },
+    {
+     "key": "stumpings",
+     "label": "Stumpings",
+     "value": "0"
+    },
+    {
+     "key": "runouts",
+     "label": "Run outs",
+     "value": "0"
+    },
+    {
+     "key": "dropped",
+     "label": "Drops",
+     "value": "0"
+    },
+    {
+     "key": "runsSaved",
+     "label": "Runs saved",
+     "value": "0"
+    },
+    {
+     "key": "runsMissed",
+     "label": "Runs missed",
+     "value": "0"
+    }
+   ]
+  },
+  "legacyOnly": {
+   "batting": [
+    {
+     "key": "runs",
+     "label": "Runs",
+     "value": "7"
+    },
+    {
+     "key": "innings",
+     "label": "Innings",
+     "value": "1"
+    },
+    {
+     "key": "notOut",
+     "label": "Not out",
+     "value": "0"
+    },
+    {
+     "key": "highest",
+     "label": "Highest",
+     "value": "7"
+    },
+    {
+     "key": "avg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "sr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "fours",
+     "label": "4s",
+     "value": "0"
+    },
+    {
+     "key": "sixes",
+     "label": "6s",
+     "value": "0"
+    },
+    {
+     "key": "fifties",
+     "label": "50s",
+     "value": "0"
+    },
+    {
+     "key": "hundreds",
+     "label": "100s",
+     "value": "0"
+    }
+   ],
+   "bowling": [
+    {
+     "key": "overs",
+     "label": "Overs",
+     "value": "0.0"
+    },
+    {
+     "key": "wickets",
+     "label": "Wickets",
+     "value": "2"
+    },
+    {
+     "key": "runsConceded",
+     "label": "Runs",
+     "value": "0"
+    },
+    {
+     "key": "maidens",
+     "label": "Maidens",
+     "value": "0"
+    },
+    {
+     "key": "dots",
+     "label": "Dots",
+     "value": "0"
+    },
+    {
+     "key": "econ",
+     "label": "Econ",
+     "value": "–"
+    },
+    {
+     "key": "bowlAvg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "bowlSr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "best",
+     "label": "Best",
+     "value": "–"
+    }
+   ],
+   "fielding": [
+    {
+     "key": "catches",
+     "label": "Catches",
+     "value": "0"
+    },
+    {
+     "key": "stumpings",
+     "label": "Stumpings",
+     "value": "0"
+    },
+    {
+     "key": "runouts",
+     "label": "Run outs",
+     "value": "0"
+    },
+    {
+     "key": "dropped",
+     "label": "Drops",
+     "value": "0"
+    },
+    {
+     "key": "runsSaved",
+     "label": "Runs saved",
+     "value": "0"
+    },
+    {
+     "key": "runsMissed",
+     "label": "Runs missed",
+     "value": "0"
+    }
+   ]
+  },
+  "bowlOnly": {
+   "batting": [
+    {
+     "key": "runs",
+     "label": "Runs",
+     "value": "0"
+    },
+    {
+     "key": "innings",
+     "label": "Innings",
+     "value": "0"
+    },
+    {
+     "key": "notOut",
+     "label": "Not out",
+     "value": "0"
+    },
+    {
+     "key": "highest",
+     "label": "Highest",
+     "value": "–"
+    },
+    {
+     "key": "avg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "sr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "fours",
+     "label": "4s",
+     "value": "0"
+    },
+    {
+     "key": "sixes",
+     "label": "6s",
+     "value": "0"
+    },
+    {
+     "key": "fifties",
+     "label": "50s",
+     "value": "0"
+    },
+    {
+     "key": "hundreds",
+     "label": "100s",
+     "value": "0"
+    }
+   ],
+   "bowling": [
+    {
+     "key": "overs",
+     "label": "Overs",
+     "value": "1.0"
+    },
+    {
+     "key": "wickets",
+     "label": "Wickets",
+     "value": "0"
+    },
+    {
+     "key": "runsConceded",
+     "label": "Runs",
+     "value": "0"
+    },
+    {
+     "key": "maidens",
+     "label": "Maidens",
+     "value": "1"
+    },
+    {
+     "key": "dots",
+     "label": "Dots",
+     "value": "6"
+    },
+    {
+     "key": "econ",
+     "label": "Econ",
+     "value": "0.00"
+    },
+    {
+     "key": "bowlAvg",
+     "label": "Avg",
+     "value": "–"
+    },
+    {
+     "key": "bowlSr",
+     "label": "SR",
+     "value": "–"
+    },
+    {
+     "key": "best",
+     "label": "Best",
+     "value": "0/0"
+    }
+   ],
+   "fielding": [
+    {
+     "key": "catches",
+     "label": "Catches",
+     "value": "0"
+    },
+    {
+     "key": "stumpings",
+     "label": "Stumpings",
+     "value": "0"
+    },
+    {
+     "key": "runouts",
+     "label": "Run outs",
+     "value": "0"
+    },
+    {
+     "key": "dropped",
+     "label": "Drops",
+     "value": "0"
+    },
+    {
+     "key": "runsSaved",
+     "label": "Runs saved",
+     "value": "0"
+    },
+    {
+     "key": "runsMissed",
+     "label": "Runs missed",
+     "value": "0"
+    }
+   ]
+  }
+ },
+ "cricketFixtures": {
+  "mixed": [
+   {
+    "id": "l1",
+    "matchId": "m1",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 54,
+     "ballsFaced": 40,
+     "fours": 6,
+     "sixes": 1,
+     "innings": 1,
+     "notOut": 0,
+     "catches": 1,
+     "stumpings": 0,
+     "runouts": 0
+    },
+    "won": false
+   },
+   {
+    "id": "l2",
+    "matchId": "m2",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 20,
+     "ballsFaced": 10,
+     "fours": 2,
+     "sixes": 0,
+     "innings": 1,
+     "notOut": 1,
+     "catches": 0,
+     "stumpings": 0,
+     "runouts": 1
+    },
+    "won": false
+   },
+   {
+    "id": "l3",
+    "matchId": "m3",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 102,
+     "ballsFaced": 70,
+     "fours": 10,
+     "sixes": 3,
+     "innings": 1,
+     "notOut": 0,
+     "wickets": 3,
+     "ballsBowled": 24,
+     "runsConceded": 12,
+     "maidens": 1,
+     "dots": 15,
+     "catches": 0,
+     "stumpings": 0,
+     "runouts": 0
+    },
+    "won": false
+   },
+   {
+    "id": "l4",
+    "matchId": "m4",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "wickets": 2,
+     "ballsBowled": 19,
+     "runsConceded": 30,
+     "dots": 4,
+     "catches": 2,
+     "stumpings": 1,
+     "runouts": 0,
+     "dropped": 1,
+     "runsSaved": 3,
+     "runsMissed": 4
+    },
+    "won": false
+   },
+   {
+    "id": "l5",
+    "matchId": "m5",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 12,
+     "wickets": 1
+    },
+    "won": false
+   },
+   {
+    "id": "l6",
+    "matchId": "m6",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 0,
+     "ballsFaced": 3,
+     "innings": 1,
+     "notOut": 0,
+     "wickets": 3,
+     "ballsBowled": 24,
+     "runsConceded": 12
+    },
+    "won": false
+   },
+   {
+    "id": "l7",
+    "matchId": "m7",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 50,
+     "ballsFaced": 30,
+     "innings": 1,
+     "notOut": 1
+    },
+    "won": false
+   },
+   {
+    "id": "l8",
+    "matchId": "m8",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 99,
+     "innings": 0
+    },
+    "won": false
+   },
+   {
+    "id": "l9",
+    "matchId": "m9",
+    "playerId": "p",
+    "sport": "football",
+    "stats": {
+     "runs": 9
+    },
+    "won": false
+   }
+  ],
+  "empty": [],
+  "legacyOnly": [
+   {
+    "id": "l10",
+    "matchId": "m10",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "runs": 7
+    },
+    "won": false
+   },
+   {
+    "id": "l11",
+    "matchId": "m11",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "wickets": 2
+    },
+    "won": false
+   }
+  ],
+  "bowlOnly": [
+   {
+    "id": "l12",
+    "matchId": "m12",
+    "playerId": "p",
+    "sport": "cricket",
+    "stats": {
+     "wickets": 0,
+     "ballsBowled": 6,
+     "runsConceded": 0,
+     "maidens": 1,
+     "dots": 6
+    },
+    "won": false
+   }
+  ]
+ },
+ "lines": [
+  {
+   "id": "x1",
+   "matchId": "m1",
+   "playerId": "a",
+   "sport": "football",
+   "stats": {
+    "cleanSheets": 1,
+    "saves": 4,
+    "goalsConceded": 0,
+    "minutes": 90
+   },
+   "won": false
+  },
+  {
+   "id": "x2",
+   "matchId": "m2",
+   "playerId": "b",
+   "sport": "football",
+   "stats": {
+    "goals": 2,
+    "assists": 1,
+    "shots": 4,
+    "shotsOnTarget": 3,
+    "openPlayGoals": 2,
+    "tackles": 2,
+    "yellowCards": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x3",
+   "matchId": "m3",
+   "playerId": "c",
+   "sport": "football",
+   "stats": {
+    "goals": 1,
+    "assists": 2,
+    "passesComplete": 30,
+    "interceptions": 3,
+    "cleanSheets": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x4",
+   "matchId": "m4",
+   "playerId": "d",
+   "sport": "football",
+   "stats": {
+    "saves": 2,
+    "goalsConceded": 1,
+    "cleanSheets": 0,
+    "minutes": 45,
+    "redCards": 1,
+    "fouls": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x5",
+   "matchId": "m5",
+   "playerId": "b",
+   "sport": "football",
+   "stats": {
+    "goals": 1,
+    "penaltyGoals": 1,
+    "shots": 1,
+    "shotsOnTarget": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x6",
+   "matchId": "m6",
+   "playerId": "a",
+   "sport": "cricket",
+   "stats": {
+    "runs": 54,
+    "ballsFaced": 40,
+    "innings": 1,
+    "notOut": 0,
+    "catches": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x7",
+   "matchId": "m7",
+   "playerId": "b",
+   "sport": "cricket",
+   "stats": {
+    "wickets": 3,
+    "ballsBowled": 24,
+    "runsConceded": 18,
+    "runs": 4,
+    "innings": 1,
+    "notOut": 1,
+    "ballsFaced": 5
+   },
+   "won": false
+  },
+  {
+   "id": "x8",
+   "matchId": "m8",
+   "playerId": "c",
+   "sport": "cricket",
+   "stats": {
+    "runs": 30,
+    "wickets": 1,
+    "catches": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x9",
+   "matchId": "m9",
+   "playerId": "a",
+   "sport": "basketball",
+   "stats": {
+    "points": 20,
+    "rebounds": 5,
+    "assists": 3,
+    "fouls": 2,
+    "steals": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x10",
+   "matchId": "m10",
+   "playerId": "b",
+   "sport": "basketball",
+   "stats": {
+    "points": 12,
+    "rebounds": 9,
+    "assists": 7,
+    "blocks": 2,
+    "turnovers": 3,
+    "freeThrowsMade": 2,
+    "freeThrowsAtt": 4
+   },
+   "won": false
+  },
+  {
+   "id": "x11",
+   "matchId": "m11",
+   "playerId": "a",
+   "sport": "volleyball",
+   "stats": {
+    "points": 10,
+    "attackPoints": 7,
+    "aces": 2,
+    "blocks": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x12",
+   "matchId": "m12",
+   "playerId": "b",
+   "sport": "volleyball",
+   "stats": {
+    "points": 8,
+    "blocks": 3,
+    "aces": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x13",
+   "matchId": "m13",
+   "playerId": "a",
+   "sport": "kabaddi",
+   "stats": {
+    "raidPoints": 9,
+    "tacklePoints": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x14",
+   "matchId": "m14",
+   "playerId": "b",
+   "sport": "kabaddi",
+   "stats": {
+    "tacklePoints": 5
+   },
+   "won": false
+  },
+  {
+   "id": "x15",
+   "matchId": "m15",
+   "playerId": "a",
+   "sport": "badminton",
+   "stats": {
+    "points": 21
+   },
+   "won": false
+  },
+  {
+   "id": "x16",
+   "matchId": "m16",
+   "playerId": "b",
+   "sport": "badminton",
+   "stats": {
+    "points": 15
+   },
+   "won": false
+  },
+  {
+   "id": "x17",
+   "matchId": "m17",
+   "playerId": "a",
+   "sport": "pickleball",
+   "stats": {
+    "points": 21
+   },
+   "won": false
+  },
+  {
+   "id": "x18",
+   "matchId": "m18",
+   "playerId": "b",
+   "sport": "pickleball",
+   "stats": {
+    "points": 15
+   },
+   "won": false
+  },
+  {
+   "id": "x19",
+   "matchId": "m19",
+   "playerId": "a",
+   "sport": "padel",
+   "stats": {
+    "points": 21
+   },
+   "won": false
+  },
+  {
+   "id": "x20",
+   "matchId": "m20",
+   "playerId": "b",
+   "sport": "padel",
+   "stats": {
+    "points": 15
+   },
+   "won": false
+  },
+  {
+   "id": "x21",
+   "matchId": "m21",
+   "playerId": "a",
+   "sport": "squash",
+   "stats": {
+    "points": 21
+   },
+   "won": false
+  },
+  {
+   "id": "x22",
+   "matchId": "m22",
+   "playerId": "b",
+   "sport": "squash",
+   "stats": {
+    "points": 15
+   },
+   "won": false
+  },
+  {
+   "id": "x23",
+   "matchId": "m23",
+   "playerId": "a",
+   "sport": "tabletennis",
+   "stats": {
+    "points": 21
+   },
+   "won": false
+  },
+  {
+   "id": "x24",
+   "matchId": "m24",
+   "playerId": "b",
+   "sport": "tabletennis",
+   "stats": {
+    "points": 15
+   },
+   "won": false
+  },
+  {
+   "id": "x25",
+   "matchId": "m25",
+   "playerId": "a",
+   "sport": "tennis",
+   "stats": {
+    "points": 40,
+    "aces": 5,
+    "doubleFaults": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x26",
+   "matchId": "m26",
+   "playerId": "b",
+   "sport": "tennis",
+   "stats": {
+    "points": 30,
+    "aces": 1
+   },
+   "won": false
+  },
+  {
+   "id": "x27",
+   "matchId": "m27",
+   "playerId": "a",
+   "sport": "chess",
+   "stats": {
+    "games": 2,
+    "wins": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x28",
+   "matchId": "m28",
+   "playerId": "b",
+   "sport": "chess",
+   "stats": {
+    "games": 2,
+    "draws": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x29",
+   "matchId": "m29",
+   "playerId": "c",
+   "sport": "chess",
+   "stats": {
+    "games": 2,
+    "losses": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x30",
+   "matchId": "m30",
+   "playerId": "a",
+   "sport": "carrom",
+   "stats": {
+    "points": 25,
+    "boards": 3,
+    "queens": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x31",
+   "matchId": "m31",
+   "playerId": "b",
+   "sport": "carrom",
+   "stats": {
+    "points": 18,
+    "boards": 2,
+    "queens": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x32",
+   "matchId": "m32",
+   "playerId": "a",
+   "sport": "golf",
+   "stats": {
+    "holesWon": 5,
+    "birdies": 2
+   },
+   "won": false
+  },
+  {
+   "id": "x33",
+   "matchId": "m33",
+   "playerId": "b",
+   "sport": "golf",
+   "stats": {
+    "holesWon": 3,
+    "eagles": 2,
+    "birdies": 2
+   },
+   "won": false
+  }
+ ],
+ "players": [
+  {
+   "id": "a",
+   "fullName": "Asha",
+   "houseName": "Red",
+   "sportDetails": {
+    "football": {
+     "position": "GK"
+    }
+   }
+  },
+  {
+   "id": "b",
+   "fullName": "Bala",
+   "houseName": "Blue"
+  },
+  {
+   "id": "c",
+   "fullName": "Chitra",
+   "houseName": "Red"
+  },
+  {
+   "id": "d",
+   "fullName": "Dev"
+  }
+ ],
+ "rankAwardCandidates": {
+  "football": {
+   "mvp": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 44.5,
+     "games": 2,
+     "detail": "2 m · 3 goals · 1 assist · 4 on target"
+    },
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 34.5,
+     "games": 1,
+     "detail": "1 m · 2 assists · 1 goal · 1 clean sheet"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 16,
+     "games": 1,
+     "detail": "1 m · 1 clean sheet · 4 saves"
+    }
+   ],
+   "goals": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 3,
+     "games": 2,
+     "detail": "3 goals · 2 m"
+    },
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 1,
+     "games": 1,
+     "detail": "1 goal · 1 m"
+    }
+   ],
+   "assists": [
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 2,
+     "games": 1,
+     "detail": "2 assists · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 1,
+     "games": 2,
+     "detail": "1 assist · 2 m"
+    }
+   ],
+   "cleanSheets": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 1,
+     "games": 1,
+     "detail": "1 clean sheet · 4 saves · 0 conceded · 1 m"
+    }
+   ]
+  },
+  "basketball": {
+   "mvp": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 39.5,
+     "games": 1,
+     "detail": "1 m · 7 assists · 9 reb · 12 pts"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 31.5,
+     "games": 1,
+     "detail": "1 m · 20 pts · 5 reb · 3 assists"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 20,
+     "games": 1,
+     "detail": "20 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 12,
+     "games": 1,
+     "detail": "12 pts · 1 m"
+    }
+   ],
+   "rebounds": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 9,
+     "games": 1,
+     "detail": "9 reb · 1 m"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 5,
+     "games": 1,
+     "detail": "5 reb · 1 m"
+    }
+   ],
+   "assists": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 7,
+     "games": 1,
+     "detail": "7 assists · 1 m"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 3,
+     "games": 1,
+     "detail": "3 assists · 1 m"
+    }
+   ]
+  },
+  "volleyball": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 10 pts · 2 aces · 1 block"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 13,
+     "games": 1,
+     "detail": "1 m · 8 pts · 3 blocks · 1 ace"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 10,
+     "games": 1,
+     "detail": "10 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 8,
+     "games": 1,
+     "detail": "8 pts · 1 m"
+    }
+   ],
+   "aces": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 2,
+     "games": 1,
+     "detail": "2 aces · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 1,
+     "games": 1,
+     "detail": "1 ace · 1 m"
+    }
+   ]
+  },
+  "badminton": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 21 pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 15 pts"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "21 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "15 pts · 1 m"
+    }
+   ]
+  },
+  "tennis": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 50,
+     "games": 1,
+     "detail": "1 m · 40 pts · 5 aces"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 32,
+     "games": 1,
+     "detail": "1 m · 30 pts · 1 ace"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 40,
+     "games": 1,
+     "detail": "40 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 30,
+     "games": 1,
+     "detail": "30 pts · 1 m"
+    }
+   ],
+   "aces": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 5,
+     "games": 1,
+     "detail": "5 aces · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 1,
+     "games": 1,
+     "detail": "1 ace · 1 m"
+    }
+   ]
+  },
+  "kabaddi": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 20,
+     "games": 1,
+     "detail": "1 m · 9 raid pts · 1 tackle pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 10,
+     "games": 1,
+     "detail": "1 m · 5 tackle pts"
+    }
+   ],
+   "raidPoints": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 9,
+     "games": 1,
+     "detail": "9 raid pts · 1 m"
+    }
+   ],
+   "tacklePoints": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 5,
+     "games": 1,
+     "detail": "5 tackle pts · 1 m"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 1,
+     "games": 1,
+     "detail": "1 tackle pts · 1 m"
+    }
+   ]
+  },
+  "cricket": {
+   "mvp": [
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 64,
+     "games": 1,
+     "detail": "1 m · 30 runs · 1 wkts · 2 catches"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 62,
+     "games": 1,
+     "detail": "1 m · 54 runs · 1 catch"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 58,
+     "games": 1,
+     "detail": "1 m · 3 wkts · 4 runs"
+    }
+   ],
+   "runs": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 54,
+     "games": 1,
+     "detail": "54 runs · 1 inns · avg 54.00 · SR 135.00"
+    },
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 30,
+     "games": 1,
+     "detail": "30 runs · 1 inns"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 4,
+     "games": 1,
+     "detail": "4 runs · 1 inns · SR 80.00"
+    }
+   ],
+   "wickets": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 3,
+     "games": 1,
+     "detail": "3 wkts · 1 m · econ 4.50 · avg 6.00"
+    },
+    {
+     "playerId": "c",
+     "name": "Chitra",
+     "teamName": "Red",
+     "value": 1,
+     "games": 1,
+     "detail": "1 wkts · 1 m"
+    }
+   ]
+  },
+  "pickleball": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 21 pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 15 pts"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "21 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "15 pts · 1 m"
+    }
+   ]
+  },
+  "padel": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 21 pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 15 pts"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "21 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "15 pts · 1 m"
+    }
+   ]
+  },
+  "squash": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 21 pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 15 pts"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "21 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "15 pts · 1 m"
+    }
+   ]
+  },
+  "tabletennis": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 21 pts"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "1 m · 15 pts"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 21,
+     "games": 1,
+     "detail": "21 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 15,
+     "games": 1,
+     "detail": "15 pts · 1 m"
+    }
+   ]
+  },
+  "chess": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 6,
+     "games": 1,
+     "detail": "1 m · 2 wins"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 2,
+     "games": 1,
+     "detail": "1 m · 2 draws"
+    }
+   ],
+   "wins": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 2,
+     "games": 1,
+     "detail": "2 wins · 1 m"
+    }
+   ]
+  },
+  "carrom": {
+   "mvp": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 32,
+     "games": 1,
+     "detail": "1 m · 25 pts · 2 queens · 3 boards"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 24,
+     "games": 1,
+     "detail": "1 m · 18 pts · 2 queens · 2 boards"
+    }
+   ],
+   "points": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 25,
+     "games": 1,
+     "detail": "25 pts · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 18,
+     "games": 1,
+     "detail": "18 pts · 1 m"
+    }
+   ],
+   "queens": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 2,
+     "games": 1,
+     "detail": "2 queens · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 2,
+     "games": 1,
+     "detail": "2 queens · 1 m"
+    }
+   ]
+  },
+  "golf": {
+   "mvp": [
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 21,
+     "games": 1,
+     "detail": "1 m · 2 eagles · 2 birdies · 3 holes won"
+    },
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 11,
+     "games": 1,
+     "detail": "1 m · 2 birdies · 5 holes won"
+    }
+   ],
+   "birdies": [
+    {
+     "playerId": "a",
+     "name": "Asha",
+     "teamName": "Red",
+     "value": 2,
+     "games": 1,
+     "detail": "2 birdies · 1 m"
+    },
+    {
+     "playerId": "b",
+     "name": "Bala",
+     "teamName": "Blue",
+     "value": 2,
+     "games": 1,
+     "detail": "2 birdies · 1 m"
+    }
+   ]
+  }
+ },
+ "defaultAwards": {
+  "football": [
+   {
+    "id": "football:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "football",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 44.5,
+    "detail": "2 m · 3 goals · 1 assist · 4 on target"
+   },
+   {
+    "id": "football:goals",
+    "slot": "goals",
+    "label": "Top scorer",
+    "sport": "football",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 3,
+    "detail": "3 goals · 2 m"
+   },
+   {
+    "id": "football:assists",
+    "slot": "assists",
+    "label": "Playmaker",
+    "sport": "football",
+    "playerId": "c",
+    "playerName": "Chitra",
+    "teamName": "Red",
+    "value": 2,
+    "detail": "2 assists · 1 m"
+   },
+   {
+    "id": "football:cleanSheets",
+    "slot": "cleanSheets",
+    "label": "Golden Glove",
+    "sport": "football",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 1,
+    "detail": "1 clean sheet · 4 saves · 0 conceded · 1 m"
+   }
+  ],
+  "basketball": [
+   {
+    "id": "basketball:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "basketball",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 39.5,
+    "detail": "1 m · 7 assists · 9 reb · 12 pts"
+   },
+   {
+    "id": "basketball:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "basketball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 20,
+    "detail": "20 pts · 1 m"
+   },
+   {
+    "id": "basketball:rebounds",
+    "slot": "rebounds",
+    "label": "Rebounds",
+    "sport": "basketball",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 9,
+    "detail": "9 reb · 1 m"
+   },
+   {
+    "id": "basketball:assists",
+    "slot": "assists",
+    "label": "Playmaker",
+    "sport": "basketball",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 7,
+    "detail": "7 assists · 1 m"
+   }
+  ],
+  "volleyball": [
+   {
+    "id": "volleyball:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "volleyball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 15,
+    "detail": "1 m · 10 pts · 2 aces · 1 block"
+   },
+   {
+    "id": "volleyball:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "volleyball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 10,
+    "detail": "10 pts · 1 m"
+   },
+   {
+    "id": "volleyball:aces",
+    "slot": "aces",
+    "label": "Aces",
+    "sport": "volleyball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 2,
+    "detail": "2 aces · 1 m"
+   }
+  ],
+  "badminton": [
+   {
+    "id": "badminton:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "badminton",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "1 m · 21 pts"
+   },
+   {
+    "id": "badminton:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "badminton",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "21 pts · 1 m"
+   }
+  ],
+  "tennis": [
+   {
+    "id": "tennis:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "tennis",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 50,
+    "detail": "1 m · 40 pts · 5 aces"
+   },
+   {
+    "id": "tennis:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "tennis",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 40,
+    "detail": "40 pts · 1 m"
+   },
+   {
+    "id": "tennis:aces",
+    "slot": "aces",
+    "label": "Aces",
+    "sport": "tennis",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 5,
+    "detail": "5 aces · 1 m"
+   }
+  ],
+  "kabaddi": [
+   {
+    "id": "kabaddi:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "kabaddi",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 20,
+    "detail": "1 m · 9 raid pts · 1 tackle pts"
+   },
+   {
+    "id": "kabaddi:raidPoints",
+    "slot": "raidPoints",
+    "label": "Top raider",
+    "sport": "kabaddi",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 9,
+    "detail": "9 raid pts · 1 m"
+   },
+   {
+    "id": "kabaddi:tacklePoints",
+    "slot": "tacklePoints",
+    "label": "Top defender",
+    "sport": "kabaddi",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 5,
+    "detail": "5 tackle pts · 1 m"
+   }
+  ],
+  "cricket": [
+   {
+    "id": "cricket:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "cricket",
+    "playerId": "c",
+    "playerName": "Chitra",
+    "teamName": "Red",
+    "value": 64,
+    "detail": "1 m · 30 runs · 1 wkts · 2 catches"
+   },
+   {
+    "id": "cricket:runs",
+    "slot": "runs",
+    "label": "Best batter",
+    "sport": "cricket",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 54,
+    "detail": "54 runs · 1 inns · avg 54.00 · SR 135.00"
+   },
+   {
+    "id": "cricket:wickets",
+    "slot": "wickets",
+    "label": "Best bowler",
+    "sport": "cricket",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 3,
+    "detail": "3 wkts · 1 m · econ 4.50 · avg 6.00"
+   }
+  ],
+  "pickleball": [
+   {
+    "id": "pickleball:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "pickleball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "1 m · 21 pts"
+   },
+   {
+    "id": "pickleball:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "pickleball",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "21 pts · 1 m"
+   }
+  ],
+  "padel": [
+   {
+    "id": "padel:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "padel",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "1 m · 21 pts"
+   },
+   {
+    "id": "padel:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "padel",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "21 pts · 1 m"
+   }
+  ],
+  "squash": [
+   {
+    "id": "squash:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "squash",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "1 m · 21 pts"
+   },
+   {
+    "id": "squash:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "squash",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "21 pts · 1 m"
+   }
+  ],
+  "tabletennis": [
+   {
+    "id": "tabletennis:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "tabletennis",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "1 m · 21 pts"
+   },
+   {
+    "id": "tabletennis:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "tabletennis",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 21,
+    "detail": "21 pts · 1 m"
+   }
+  ],
+  "chess": [
+   {
+    "id": "chess:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "chess",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 6,
+    "detail": "1 m · 2 wins"
+   },
+   {
+    "id": "chess:wins",
+    "slot": "wins",
+    "label": "Most wins",
+    "sport": "chess",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 2,
+    "detail": "2 wins · 1 m"
+   }
+  ],
+  "carrom": [
+   {
+    "id": "carrom:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "carrom",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 32,
+    "detail": "1 m · 25 pts · 2 queens · 3 boards"
+   },
+   {
+    "id": "carrom:points",
+    "slot": "points",
+    "label": "Top scorer",
+    "sport": "carrom",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 25,
+    "detail": "25 pts · 1 m"
+   },
+   {
+    "id": "carrom:queens",
+    "slot": "queens",
+    "label": "Queens",
+    "sport": "carrom",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 2,
+    "detail": "2 queens · 1 m"
+   }
+  ],
+  "golf": [
+   {
+    "id": "golf:mvp",
+    "slot": "mvp",
+    "label": "Player of the Tournament",
+    "sport": "golf",
+    "playerId": "b",
+    "playerName": "Bala",
+    "teamName": "Blue",
+    "value": 21,
+    "detail": "1 m · 2 eagles · 2 birdies · 3 holes won"
+   },
+   {
+    "id": "golf:birdies",
+    "slot": "birdies",
+    "label": "Most birdies",
+    "sport": "golf",
+    "playerId": "a",
+    "playerName": "Asha",
+    "teamName": "Red",
+    "value": 2,
+    "detail": "2 birdies · 1 m"
+   }
+  ]
+ },
+ "categoryLeaders": {
+  "football": [
+   {
+    "key": "goals",
+    "label": "Goals",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 3,
+      "trackedGames": 2,
+      "totalGames": 2
+     },
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "openPlayGoals",
+    "label": "Open-play goals",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "penaltyGoals",
+    "label": "Penalties",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 1,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "assists",
+    "label": "Assists",
+    "leaders": [
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 1,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "cleanSheets",
+    "label": "Clean sheets",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "shots",
+    "label": "Shots",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 5,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "shotsOnTarget",
+    "label": "Shots on target",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 4,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "tackles",
+    "label": "Tackles",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 2,
+      "totalGames": 2
+     }
+    ]
+   },
+   {
+    "key": "interceptions",
+    "label": "Interceptions",
+    "leaders": [
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 3,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "saves",
+    "label": "Saves",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 4,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "d",
+      "name": "Dev",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "basketball": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 20,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 12,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "rebounds",
+    "label": "Rebounds",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 9,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 5,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "assists",
+    "label": "Assists",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 7,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 3,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "steals",
+    "label": "Steals",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "blocks",
+    "label": "Blocks",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "volleyball": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 10,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 8,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "aces",
+    "label": "Aces",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "blocks",
+    "label": "Blocks",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 3,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "badminton": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 21,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 15,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "tennis": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 40,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 30,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "aces",
+    "label": "Aces",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 5,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "kabaddi": [
+   {
+    "key": "raidPoints",
+    "label": "Raid pts",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 9,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "tacklePoints",
+    "label": "Tackle pts",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 5,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "cricket": [
+   {
+    "key": "runs",
+    "label": "Runs",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 54,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 30,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 4,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "wickets",
+    "label": "Wickets",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 3,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "catches",
+    "label": "Catches",
+    "leaders": [
+     {
+      "playerId": "c",
+      "name": "Chitra",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 1,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "pickleball": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 21,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 15,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "padel": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 21,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 15,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "squash": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 21,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 15,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "tabletennis": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 21,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 15,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "chess": [
+   {
+    "key": "wins",
+    "label": "Wins",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "draws",
+    "label": "Draws",
+    "leaders": [
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "carrom": [
+   {
+    "key": "points",
+    "label": "Points",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 25,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 18,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "queens",
+    "label": "Queens",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ],
+  "golf": [
+   {
+    "key": "birdies",
+    "label": "Birdies",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 2,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   },
+   {
+    "key": "holesWon",
+    "label": "Holes won",
+    "leaders": [
+     {
+      "playerId": "a",
+      "name": "Asha",
+      "houseName": "Red",
+      "value": 5,
+      "trackedGames": 1,
+      "totalGames": 1
+     },
+     {
+      "playerId": "b",
+      "name": "Bala",
+      "houseName": "Blue",
+      "value": 3,
+      "trackedGames": 1,
+      "totalGames": 1
+     }
+    ]
+   }
+  ]
+ },
+ "matchRatings": {
+  "football": {
+   "players": [
+    {
+     "id": "c",
+     "name": "Chitra",
+     "side": "away",
+     "points": 34.5,
+     "detail": "2 assists · 1 goal · 1 clean sheet · 3 interceptions · 30 passes",
+     "stats": {
+      "goals": 1,
+      "assists": 2,
+      "passesComplete": 30,
+      "interceptions": 3,
+      "cleanSheets": 1
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 32.5,
+     "detail": "2 goals · 1 assist · 3 on target · 4 shots · 2 tackles · 1 yellow",
+     "stats": {
+      "goals": 2,
+      "assists": 1,
+      "shots": 4,
+      "shotsOnTarget": 3,
+      "openPlayGoals": 2,
+      "tackles": 2,
+      "yellowCards": 1
+     },
+     "rating": 5
+    },
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 16,
+     "detail": "1 clean sheet · 4 saves",
+     "stats": {
+      "cleanSheets": 1,
+      "saves": 4,
+      "goalsConceded": 0,
+      "minutes": 90
+     },
+     "rating": 3
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 12,
+     "detail": "1 goal · 1 on target · 1 shot",
+     "stats": {
+      "goals": 1,
+      "penaltyGoals": 1,
+      "shots": 1,
+      "shotsOnTarget": 1
+     },
+     "rating": 2.5
+    },
+    {
+     "id": "d",
+     "name": "Dev",
+     "side": "away",
+     "points": -4,
+     "detail": "1 red · 2 saves · 2 fouls",
+     "stats": {
+      "saves": 2,
+      "goalsConceded": 1,
+      "cleanSheets": 0,
+      "minutes": 45,
+      "redCards": 1,
+      "fouls": 2
+     },
+     "rating": 1
+    }
+   ],
+   "mvp": {
+    "id": "c",
+    "name": "Chitra",
+    "side": "away",
+    "points": 34.5,
+    "detail": "2 assists · 1 goal · 1 clean sheet · 3 interceptions · 30 passes",
+    "stats": {
+     "goals": 1,
+     "assists": 2,
+     "passesComplete": 30,
+     "interceptions": 3,
+     "cleanSheets": 1
+    },
+    "rating": 5
+   }
+  },
+  "basketball": {
+   "players": [
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 39.5,
+     "detail": "7 assists · 9 reb · 12 pts · 2 blocks",
+     "stats": {
+      "points": 12,
+      "rebounds": 9,
+      "assists": 7,
+      "blocks": 2,
+      "turnovers": 3,
+      "freeThrowsMade": 2,
+      "freeThrowsAtt": 4
+     },
+     "rating": 5
+    },
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 31.5,
+     "detail": "20 pts · 5 reb · 3 assists · 2 fouls",
+     "stats": {
+      "points": 20,
+      "rebounds": 5,
+      "assists": 3,
+      "fouls": 2,
+      "steals": 1
+     },
+     "rating": 4.5
+    }
+   ],
+   "mvp": {
+    "id": "b",
+    "name": "Bala",
+    "side": "home",
+    "points": 39.5,
+    "detail": "7 assists · 9 reb · 12 pts · 2 blocks",
+    "stats": {
+     "points": 12,
+     "rebounds": 9,
+     "assists": 7,
+     "blocks": 2,
+     "turnovers": 3,
+     "freeThrowsMade": 2,
+     "freeThrowsAtt": 4
+    },
+    "rating": 5
+   }
+  },
+  "volleyball": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 15,
+     "detail": "10 pts · 2 aces · 1 block · 7 attack pts",
+     "stats": {
+      "points": 10,
+      "attackPoints": 7,
+      "aces": 2,
+      "blocks": 1
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 13,
+     "detail": "8 pts · 3 blocks · 1 ace",
+     "stats": {
+      "points": 8,
+      "blocks": 3,
+      "aces": 1
+     },
+     "rating": 4.5
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 15,
+    "detail": "10 pts · 2 aces · 1 block · 7 attack pts",
+    "stats": {
+     "points": 10,
+     "attackPoints": 7,
+     "aces": 2,
+     "blocks": 1
+    },
+    "rating": 5
+   }
+  },
+  "badminton": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 15,
+     "detail": "15 pts",
+     "stats": {
+      "points": 15
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 21,
+    "detail": "21 pts",
+    "stats": {
+     "points": 21
+    },
+    "rating": 5
+   }
+  },
+  "tennis": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 50,
+     "detail": "40 pts · 5 aces",
+     "stats": {
+      "points": 40,
+      "aces": 5,
+      "doubleFaults": 2
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 32,
+     "detail": "30 pts · 1 ace",
+     "stats": {
+      "points": 30,
+      "aces": 1
+     },
+     "rating": 3.5
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 50,
+    "detail": "40 pts · 5 aces",
+    "stats": {
+     "points": 40,
+     "aces": 5,
+     "doubleFaults": 2
+    },
+    "rating": 5
+   }
+  },
+  "kabaddi": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 20,
+     "detail": "9 raid pts · 1 tackle pts",
+     "stats": {
+      "raidPoints": 9,
+      "tacklePoints": 1
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 10,
+     "detail": "5 tackle pts",
+     "stats": {
+      "tacklePoints": 5
+     },
+     "rating": 3.5
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 20,
+    "detail": "9 raid pts · 1 tackle pts",
+    "stats": {
+     "raidPoints": 9,
+     "tacklePoints": 1
+    },
+    "rating": 5
+   }
+  },
+  "cricket": {
+   "players": [
+    {
+     "id": "c",
+     "name": "Chitra",
+     "side": "away",
+     "points": 64,
+     "detail": "30 runs · 1 wkts · 2 catches",
+     "stats": {
+      "runs": 30,
+      "wickets": 1,
+      "catches": 2
+     },
+     "rating": 5
+    },
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 62,
+     "detail": "54 runs · 1 catch",
+     "stats": {
+      "runs": 54,
+      "ballsFaced": 40,
+      "innings": 1,
+      "notOut": 0,
+      "catches": 1
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 58,
+     "detail": "3 wkts · 4 runs",
+     "stats": {
+      "wickets": 3,
+      "ballsBowled": 24,
+      "runsConceded": 18,
+      "runs": 4,
+      "innings": 1,
+      "notOut": 1,
+      "ballsFaced": 5
+     },
+     "rating": 4.5
+    }
+   ],
+   "mvp": {
+    "id": "c",
+    "name": "Chitra",
+    "side": "away",
+    "points": 64,
+    "detail": "30 runs · 1 wkts · 2 catches",
+    "stats": {
+     "runs": 30,
+     "wickets": 1,
+     "catches": 2
+    },
+    "rating": 5
+   }
+  },
+  "pickleball": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 15,
+     "detail": "15 pts",
+     "stats": {
+      "points": 15
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 21,
+    "detail": "21 pts",
+    "stats": {
+     "points": 21
+    },
+    "rating": 5
+   }
+  },
+  "padel": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 15,
+     "detail": "15 pts",
+     "stats": {
+      "points": 15
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 21,
+    "detail": "21 pts",
+    "stats": {
+     "points": 21
+    },
+    "rating": 5
+   }
+  },
+  "squash": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 15,
+     "detail": "15 pts",
+     "stats": {
+      "points": 15
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 21,
+    "detail": "21 pts",
+    "stats": {
+     "points": 21
+    },
+    "rating": 5
+   }
+  },
+  "tabletennis": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 15,
+     "detail": "15 pts",
+     "stats": {
+      "points": 15
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 21,
+    "detail": "21 pts",
+    "stats": {
+     "points": 21
+    },
+    "rating": 5
+   }
+  },
+  "chess": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 6,
+     "detail": "2 wins · 2 games",
+     "stats": {
+      "games": 2,
+      "wins": 2
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 2,
+     "detail": "2 draws · 2 games",
+     "stats": {
+      "games": 2,
+      "draws": 2
+     },
+     "rating": 2.5
+    },
+    {
+     "id": "c",
+     "name": "Chitra",
+     "side": "away",
+     "points": 0,
+     "detail": "2 games · 2 losses",
+     "stats": {
+      "games": 2,
+      "losses": 2
+     },
+     "rating": 1
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 6,
+    "detail": "2 wins · 2 games",
+    "stats": {
+     "games": 2,
+     "wins": 2
+    },
+    "rating": 5
+   }
+  },
+  "carrom": {
+   "players": [
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 32,
+     "detail": "25 pts · 2 queens · 3 boards",
+     "stats": {
+      "points": 25,
+      "boards": 3,
+      "queens": 2
+     },
+     "rating": 5
+    },
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 24,
+     "detail": "18 pts · 2 queens · 2 boards",
+     "stats": {
+      "points": 18,
+      "boards": 2,
+      "queens": 2
+     },
+     "rating": 4
+    }
+   ],
+   "mvp": {
+    "id": "a",
+    "name": "Asha",
+    "side": "home",
+    "points": 32,
+    "detail": "25 pts · 2 queens · 3 boards",
+    "stats": {
+     "points": 25,
+     "boards": 3,
+     "queens": 2
+    },
+    "rating": 5
+   }
+  },
+  "golf": {
+   "players": [
+    {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 21,
+     "detail": "2 eagles · 2 birdies · 3 holes won",
+     "stats": {
+      "holesWon": 3,
+      "eagles": 2,
+      "birdies": 2
+     },
+     "rating": 5
+    },
+    {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 11,
+     "detail": "2 birdies · 5 holes won",
+     "stats": {
+      "holesWon": 5,
+      "birdies": 2
+     },
+     "rating": 3.5
+    }
+   ],
+   "mvp": {
+    "id": "b",
+    "name": "Bala",
+    "side": "home",
+    "points": 21,
+    "detail": "2 eagles · 2 birdies · 3 holes won",
+    "stats": {
+     "holesWon": 3,
+     "eagles": 2,
+     "birdies": 2
+    },
+    "rating": 5
+   }
+  }
+ },
+ "awardsFor": {
+  "football": [
+   {
+    "icon": "⚽",
+    "label": "Top scorer",
+    "stat": "goals",
+    "player": {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 32.5,
+     "detail": "2 goals · 1 assist · 3 on target · 4 shots · 2 tackles · 1 yellow",
+     "stats": {
+      "goals": 2,
+      "assists": 1,
+      "shots": 4,
+      "shotsOnTarget": 3,
+      "openPlayGoals": 2,
+      "tackles": 2,
+      "yellowCards": 1
+     },
+     "rating": 5
+    },
+    "value": 2
+   },
+   {
+    "icon": "🅰️",
+    "label": "Playmaker",
+    "stat": "assists",
+    "player": {
+     "id": "c",
+     "name": "Chitra",
+     "side": "away",
+     "points": 34.5,
+     "detail": "2 assists · 1 goal · 1 clean sheet · 3 interceptions · 30 passes",
+     "stats": {
+      "goals": 1,
+      "assists": 2,
+      "passesComplete": 30,
+      "interceptions": 3,
+      "cleanSheets": 1
+     },
+     "rating": 5
+    },
+    "value": 2
+   },
+   {
+    "icon": "🧤",
+    "label": "Clean sheet",
+    "stat": "cleanSheets",
+    "player": {
+     "id": "c",
+     "name": "Chitra",
+     "side": "away",
+     "points": 34.5,
+     "detail": "2 assists · 1 goal · 1 clean sheet · 3 interceptions · 30 passes",
+     "stats": {
+      "goals": 1,
+      "assists": 2,
+      "passesComplete": 30,
+      "interceptions": 3,
+      "cleanSheets": 1
+     },
+     "rating": 5
+    },
+    "value": 1
+   }
+  ],
+  "basketball": [
+   {
+    "icon": "🏀",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 31.5,
+     "detail": "20 pts · 5 reb · 3 assists · 2 fouls",
+     "stats": {
+      "points": 20,
+      "rebounds": 5,
+      "assists": 3,
+      "fouls": 2,
+      "steals": 1
+     },
+     "rating": 4.5
+    },
+    "value": 20
+   },
+   {
+    "icon": "💪",
+    "label": "Rebounds",
+    "stat": "rebounds",
+    "player": {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 39.5,
+     "detail": "7 assists · 9 reb · 12 pts · 2 blocks",
+     "stats": {
+      "points": 12,
+      "rebounds": 9,
+      "assists": 7,
+      "blocks": 2,
+      "turnovers": 3,
+      "freeThrowsMade": 2,
+      "freeThrowsAtt": 4
+     },
+     "rating": 5
+    },
+    "value": 9
+   },
+   {
+    "icon": "🎯",
+    "label": "Playmaker",
+    "stat": "assists",
+    "player": {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 39.5,
+     "detail": "7 assists · 9 reb · 12 pts · 2 blocks",
+     "stats": {
+      "points": 12,
+      "rebounds": 9,
+      "assists": 7,
+      "blocks": 2,
+      "turnovers": 3,
+      "freeThrowsMade": 2,
+      "freeThrowsAtt": 4
+     },
+     "rating": 5
+    },
+    "value": 7
+   }
+  ],
+  "volleyball": [
+   {
+    "icon": "🏐",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 15,
+     "detail": "10 pts · 2 aces · 1 block · 7 attack pts",
+     "stats": {
+      "points": 10,
+      "attackPoints": 7,
+      "aces": 2,
+      "blocks": 1
+     },
+     "rating": 5
+    },
+    "value": 10
+   },
+   {
+    "icon": "💥",
+    "label": "Aces",
+    "stat": "aces",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 15,
+     "detail": "10 pts · 2 aces · 1 block · 7 attack pts",
+     "stats": {
+      "points": 10,
+      "attackPoints": 7,
+      "aces": 2,
+      "blocks": 1
+     },
+     "rating": 5
+    },
+    "value": 2
+   }
+  ],
+  "badminton": [
+   {
+    "icon": "🏸",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    "value": 21
+   }
+  ],
+  "tennis": [
+   {
+    "icon": "🎾",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 50,
+     "detail": "40 pts · 5 aces",
+     "stats": {
+      "points": 40,
+      "aces": 5,
+      "doubleFaults": 2
+     },
+     "rating": 5
+    },
+    "value": 40
+   },
+   {
+    "icon": "💥",
+    "label": "Aces",
+    "stat": "aces",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 50,
+     "detail": "40 pts · 5 aces",
+     "stats": {
+      "points": 40,
+      "aces": 5,
+      "doubleFaults": 2
+     },
+     "rating": 5
+    },
+    "value": 5
+   }
+  ],
+  "kabaddi": [
+   {
+    "icon": "🤼",
+    "label": "Top raider",
+    "stat": "raidPoints",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 20,
+     "detail": "9 raid pts · 1 tackle pts",
+     "stats": {
+      "raidPoints": 9,
+      "tacklePoints": 1
+     },
+     "rating": 5
+    },
+    "value": 9
+   },
+   {
+    "icon": "🛡️",
+    "label": "Top defender",
+    "stat": "tacklePoints",
+    "player": {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 10,
+     "detail": "5 tackle pts",
+     "stats": {
+      "tacklePoints": 5
+     },
+     "rating": 3.5
+    },
+    "value": 5
+   }
+  ],
+  "cricket": [],
+  "pickleball": [
+   {
+    "icon": "🥒",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    "value": 21
+   }
+  ],
+  "padel": [
+   {
+    "icon": "🟡",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    "value": 21
+   }
+  ],
+  "squash": [
+   {
+    "icon": "⚫",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    "value": 21
+   }
+  ],
+  "tabletennis": [
+   {
+    "icon": "🏓",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 21,
+     "detail": "21 pts",
+     "stats": {
+      "points": 21
+     },
+     "rating": 5
+    },
+    "value": 21
+   }
+  ],
+  "chess": [],
+  "carrom": [
+   {
+    "icon": "🎱",
+    "label": "Top scorer",
+    "stat": "points",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 32,
+     "detail": "25 pts · 2 queens · 3 boards",
+     "stats": {
+      "points": 25,
+      "boards": 3,
+      "queens": 2
+     },
+     "rating": 5
+    },
+    "value": 25
+   },
+   {
+    "icon": "👑",
+    "label": "Queens",
+    "stat": "queens",
+    "player": {
+     "id": "a",
+     "name": "Asha",
+     "side": "home",
+     "points": 32,
+     "detail": "25 pts · 2 queens · 3 boards",
+     "stats": {
+      "points": 25,
+      "boards": 3,
+      "queens": 2
+     },
+     "rating": 5
+    },
+    "value": 2
+   }
+  ],
+  "golf": [
+   {
+    "icon": "🐦",
+    "label": "Most birdies",
+    "stat": "birdies",
+    "player": {
+     "id": "b",
+     "name": "Bala",
+     "side": "home",
+     "points": 21,
+     "detail": "2 eagles · 2 birdies · 3 holes won",
+     "stats": {
+      "holesWon": 3,
+      "eagles": 2,
+      "birdies": 2
+     },
+     "rating": 5
+    },
+    "value": 2
+   }
+  ]
+ },
+ "statLabel": {
+  "goals": [
+   "goal",
+   "goals",
+   "goals"
+  ],
+  "assists": [
+   "assist",
+   "assists",
+   "assists"
+  ],
+  "cleanSheets": [
+   "clean sheet",
+   "clean sheets",
+   "clean sheets"
+  ],
+  "yellowCards": [
+   "yellow",
+   "yellow",
+   "yellow"
+  ],
+  "redCards": [
+   "red",
+   "red",
+   "red"
+  ],
+  "shots": [
+   "shot",
+   "shots",
+   "shots"
+  ],
+  "shotsOnTarget": [
+   "on target",
+   "on target",
+   "on target"
+  ],
+  "saves": [
+   "save",
+   "saves",
+   "saves"
+  ],
+  "tackles": [
+   "tackle",
+   "tackles",
+   "tackles"
+  ],
+  "interceptions": [
+   "interception",
+   "interceptions",
+   "interceptions"
+  ],
+  "attackingContributions": [
+   "att. play",
+   "att. plays",
+   "att. plays"
+  ],
+  "defensiveContributions": [
+   "def. play",
+   "def. plays",
+   "def. plays"
+  ],
+  "passesComplete": [
+   "pass",
+   "passes",
+   "passes"
+  ],
+  "crosses": [
+   "cross",
+   "crosses",
+   "crosses"
+  ],
+  "dribbles": [
+   "dribble",
+   "dribbles",
+   "dribbles"
+  ],
+  "offsides": [
+   "offside",
+   "offside",
+   "offside"
+  ],
+  "handballs": [
+   "handball",
+   "handball",
+   "handball"
+  ],
+  "penaltiesWon": [
+   "pen won",
+   "pen won",
+   "pen won"
+  ],
+  "penaltiesMissed": [
+   "pen missed",
+   "pen missed",
+   "pen missed"
+  ],
+  "points": [
+   "pts",
+   "pts",
+   "pts"
+  ],
+  "rebounds": [
+   "reb",
+   "reb",
+   "reb"
+  ],
+  "fouls": [
+   "foul",
+   "fouls",
+   "fouls"
+  ],
+  "aces": [
+   "ace",
+   "aces",
+   "aces"
+  ],
+  "blocks": [
+   "block",
+   "blocks",
+   "blocks"
+  ],
+  "attackPoints": [
+   "attack pts",
+   "attack pts",
+   "attack pts"
+  ],
+  "raidPoints": [
+   "raid pts",
+   "raid pts",
+   "raid pts"
+  ],
+  "tacklePoints": [
+   "tackle pts",
+   "tackle pts",
+   "tackle pts"
+  ],
+  "runs": [
+   "run",
+   "runs",
+   "runs"
+  ],
+  "wickets": [
+   "wkts",
+   "wkts",
+   "wkts"
+  ],
+  "catches": [
+   "catch",
+   "catches",
+   "catches"
+  ],
+  "games": [
+   "game",
+   "games",
+   "games"
+  ],
+  "wins": [
+   "wins",
+   "wins",
+   "wins"
+  ],
+  "draws": [
+   "draws",
+   "draws",
+   "draws"
+  ],
+  "losses": [
+   "losses",
+   "losses",
+   "losses"
+  ],
+  "boards": [
+   "boards",
+   "boards",
+   "boards"
+  ],
+  "queens": [
+   "queens",
+   "queens",
+   "queens"
+  ],
+  "holesWon": [
+   "holes won",
+   "holes won",
+   "holes won"
+  ],
+  "birdies": [
+   "birdies",
+   "birdies",
+   "birdies"
+  ],
+  "eagles": [
+   "eagles",
+   "eagles",
+   "eagles"
+  ],
+  "rounds": [
+   "rounds",
+   "rounds",
+   "rounds"
+  ],
+  "openPlayGoals": [
+   "openPlayGoals",
+   "openPlayGoals",
+   "openPlayGoals"
+  ],
+  "penaltyGoals": [
+   "penaltyGoals",
+   "penaltyGoals",
+   "penaltyGoals"
+  ],
+  "freekickGoals": [
+   "freekickGoals",
+   "freekickGoals",
+   "freekickGoals"
+  ],
+  "passes": [
+   "passes",
+   "passes",
+   "passes"
+  ],
+  "goalsConceded": [
+   "goalsConceded",
+   "goalsConceded",
+   "goalsConceded"
+  ],
+  "minutes": [
+   "minutes",
+   "minutes",
+   "minutes"
+  ],
+  "golds": [
+   "golds",
+   "golds",
+   "golds"
+  ],
+  "silvers": [
+   "silvers",
+   "silvers",
+   "silvers"
+  ],
+  "corners": [
+   "corners",
+   "corners",
+   "corners"
+  ],
+  "ballsFaced": [
+   "ballsFaced",
+   "ballsFaced",
+   "ballsFaced"
+  ],
+  "fours": [
+   "fours",
+   "fours",
+   "fours"
+  ],
+  "sixes": [
+   "sixes",
+   "sixes",
+   "sixes"
+  ],
+  "innings": [
+   "innings",
+   "innings",
+   "innings"
+  ],
+  "notOut": [
+   "notOut",
+   "notOut",
+   "notOut"
+  ],
+  "ballsBowled": [
+   "ballsBowled",
+   "ballsBowled",
+   "ballsBowled"
+  ],
+  "runsConceded": [
+   "runsConceded",
+   "runsConceded",
+   "runsConceded"
+  ],
+  "maidens": [
+   "maidens",
+   "maidens",
+   "maidens"
+  ],
+  "dots": [
+   "dots",
+   "dots",
+   "dots"
+  ],
+  "wides": [
+   "wides",
+   "wides",
+   "wides"
+  ],
+  "noBalls": [
+   "noBalls",
+   "noBalls",
+   "noBalls"
+  ],
+  "stumpings": [
+   "stumpings",
+   "stumpings",
+   "stumpings"
+  ],
+  "runouts": [
+   "runouts",
+   "runouts",
+   "runouts"
+  ],
+  "dropped": [
+   "dropped",
+   "dropped",
+   "dropped"
+  ],
+  "runsSaved": [
+   "runsSaved",
+   "runsSaved",
+   "runsSaved"
+  ],
+  "runsMissed": [
+   "runsMissed",
+   "runsMissed",
+   "runsMissed"
+  ],
+  "somethingNew": [
+   "somethingNew",
+   "somethingNew",
+   "somethingNew"
+  ]
+ },
+ "statLabelShort": {
+  "goals": [
+   "goal",
+   "goals",
+   "goals"
+  ],
+  "assists": [
+   "assist",
+   "assists",
+   "assists"
+  ],
+  "cleanSheets": [
+   "clean sheet",
+   "clean sheets",
+   "clean sheets"
+  ],
+  "yellowCards": [
+   "yellowCards",
+   "yellowCards",
+   "yellowCards"
+  ],
+  "redCards": [
+   "redCards",
+   "redCards",
+   "redCards"
+  ],
+  "shots": [
+   "shot",
+   "shots",
+   "shots"
+  ],
+  "shotsOnTarget": [
+   "shot on target",
+   "shots on target",
+   "shots on target"
+  ],
+  "saves": [
+   "save",
+   "saves",
+   "saves"
+  ],
+  "tackles": [
+   "tackle",
+   "tackles",
+   "tackles"
+  ],
+  "interceptions": [
+   "interception",
+   "interceptions",
+   "interceptions"
+  ],
+  "attackingContributions": [
+   "attacking play",
+   "attacking plays",
+   "attacking plays"
+  ],
+  "defensiveContributions": [
+   "defensive play",
+   "defensive plays",
+   "defensive plays"
+  ],
+  "passesComplete": [
+   "passesComplete",
+   "passesComplete",
+   "passesComplete"
+  ],
+  "crosses": [
+   "crosses",
+   "crosses",
+   "crosses"
+  ],
+  "dribbles": [
+   "dribbles",
+   "dribbles",
+   "dribbles"
+  ],
+  "offsides": [
+   "offsides",
+   "offsides",
+   "offsides"
+  ],
+  "handballs": [
+   "handballs",
+   "handballs",
+   "handballs"
+  ],
+  "penaltiesWon": [
+   "penaltiesWon",
+   "penaltiesWon",
+   "penaltiesWon"
+  ],
+  "penaltiesMissed": [
+   "penaltiesMissed",
+   "penaltiesMissed",
+   "penaltiesMissed"
+  ],
+  "points": [
+   "pts",
+   "pts",
+   "pts"
+  ],
+  "rebounds": [
+   "reb",
+   "reb",
+   "reb"
+  ],
+  "fouls": [
+   "fouls",
+   "fouls",
+   "fouls"
+  ],
+  "aces": [
+   "ace",
+   "aces",
+   "aces"
+  ],
+  "blocks": [
+   "block",
+   "blocks",
+   "blocks"
+  ],
+  "attackPoints": [
+   "attack pts",
+   "attack pts",
+   "attack pts"
+  ],
+  "raidPoints": [
+   "raid pts",
+   "raid pts",
+   "raid pts"
+  ],
+  "tacklePoints": [
+   "tackle pts",
+   "tackle pts",
+   "tackle pts"
+  ],
+  "runs": [
+   "run",
+   "runs",
+   "runs"
+  ],
+  "wickets": [
+   "wkts",
+   "wkts",
+   "wkts"
+  ],
+  "catches": [
+   "catches",
+   "catches",
+   "catches"
+  ],
+  "games": [
+   "game",
+   "games",
+   "games"
+  ],
+  "wins": [
+   "win",
+   "wins",
+   "wins"
+  ],
+  "draws": [
+   "draw",
+   "draws",
+   "draws"
+  ],
+  "losses": [
+   "loss",
+   "losses",
+   "losses"
+  ],
+  "boards": [
+   "board",
+   "boards",
+   "boards"
+  ],
+  "queens": [
+   "queen",
+   "queens",
+   "queens"
+  ],
+  "holesWon": [
+   "hole won",
+   "holes won",
+   "holes won"
+  ],
+  "birdies": [
+   "birdie",
+   "birdies",
+   "birdies"
+  ],
+  "eagles": [
+   "eagle",
+   "eagles",
+   "eagles"
+  ],
+  "rounds": [
+   "round",
+   "rounds",
+   "rounds"
+  ],
+  "openPlayGoals": [
+   "open-play",
+   "open-play",
+   "open-play"
+  ],
+  "penaltyGoals": [
+   "penalty",
+   "penalties",
+   "penalties"
+  ],
+  "freekickGoals": [
+   "free-kick goal",
+   "free-kick goals",
+   "free-kick goals"
+  ],
+  "passes": [
+   "pass",
+   "passes",
+   "passes"
+  ],
+  "goalsConceded": [
+   "conceded",
+   "conceded",
+   "conceded"
+  ],
+  "minutes": [
+   "mins",
+   "mins",
+   "mins"
+  ],
+  "golds": [
+   "golds",
+   "golds",
+   "golds"
+  ],
+  "silvers": [
+   "silvers",
+   "silvers",
+   "silvers"
+  ],
+  "corners": [
+   "corners",
+   "corners",
+   "corners"
+  ],
+  "ballsFaced": [
+   "ballsFaced",
+   "ballsFaced",
+   "ballsFaced"
+  ],
+  "fours": [
+   "fours",
+   "fours",
+   "fours"
+  ],
+  "sixes": [
+   "sixes",
+   "sixes",
+   "sixes"
+  ],
+  "innings": [
+   "innings",
+   "innings",
+   "innings"
+  ],
+  "notOut": [
+   "notOut",
+   "notOut",
+   "notOut"
+  ],
+  "ballsBowled": [
+   "ballsBowled",
+   "ballsBowled",
+   "ballsBowled"
+  ],
+  "runsConceded": [
+   "runsConceded",
+   "runsConceded",
+   "runsConceded"
+  ],
+  "maidens": [
+   "maidens",
+   "maidens",
+   "maidens"
+  ],
+  "dots": [
+   "dots",
+   "dots",
+   "dots"
+  ],
+  "wides": [
+   "wides",
+   "wides",
+   "wides"
+  ],
+  "noBalls": [
+   "noBalls",
+   "noBalls",
+   "noBalls"
+  ],
+  "stumpings": [
+   "stumpings",
+   "stumpings",
+   "stumpings"
+  ],
+  "runouts": [
+   "runouts",
+   "runouts",
+   "runouts"
+  ],
+  "dropped": [
+   "dropped",
+   "dropped",
+   "dropped"
+  ],
+  "runsSaved": [
+   "runsSaved",
+   "runsSaved",
+   "runsSaved"
+  ],
+  "runsMissed": [
+   "runsMissed",
+   "runsMissed",
+   "runsMissed"
+  ],
+  "somethingNew": [
+   "somethingNew",
+   "somethingNew",
+   "somethingNew"
+  ]
+ },
+ "sportSummary": {
+  "football": "4 goals · 3 assists · 4 shots on target",
+  "basketball": "32 pts · 14 reb · 10 assists",
+  "volleyball": "18 pts · 3 aces",
+  "badminton": "36 pts",
+  "tennis": "70 pts · 6 aces",
+  "kabaddi": "9 raid pts · 6 tackle pts",
+  "cricket": "88 runs · 4 wkts",
+  "pickleball": "36 pts",
+  "padel": "36 pts",
+  "squash": "36 pts",
+  "tabletennis": "36 pts",
+  "chess": "2 wins · 2 draws · 6 games",
+  "carrom": "43 pts · 5 boards · 4 queens",
+  "golf": "4 birdies"
+ }
+}

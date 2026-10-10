@@ -5,6 +5,7 @@
  * played for this team in each match.
  */
 import type { Match, SportId, StatLine } from '../core/types';
+import { statSchema } from '../sports/statSchemas.ts';
 
 /** W / D / L, plus a cricket tie ('T') and a no result / abandoned match
  *  ('NR'), which counts as played (SD-12) — the same Played as the table. */
@@ -34,7 +35,6 @@ export interface TeamStats {
   appearances: { playerId: string; matches: number }[];
 }
 
-const UNIT: Partial<Record<SportId, string>> = { football: 'goals', cricket: 'runs', basketball: 'points', kabaddi: 'points', volleyball: 'sets' };
 
 export function resultFor(m: Match, teamId: string): Result | null {
   if (m.status !== 'completed') return null;
@@ -84,7 +84,8 @@ export function computeTeamStats(
     tally(row);
     h2h.set(opp.id, row);
   }
-  out.unit = sports.size === 1 ? UNIT[[...sports][0]] : undefined;
+  // what the score counts, from the stat schema (SD-15)
+  out.unit = sports.size === 1 ? statSchema([...sports][0])?.scoreUnit : undefined;
   out.headToHead = [...h2h.values()].sort((x, y) => y.played - x.played || x.opponentName.localeCompare(y.opponentName));
 
   // Top performers: only lines from this team's matches, by players who played for it.

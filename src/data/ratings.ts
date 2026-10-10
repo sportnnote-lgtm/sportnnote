@@ -7,106 +7,34 @@
  */
 import type { Player, SportId, StatLine, TournamentAward } from '../core/types';
 import { leadersByKey } from './standings.ts';
+import { STAT_SPORTS, mvpWeights, matchSummaryLabels, labelCompact, matchAwards, tournamentAwards, eligibilityOf, awardDef } from '../sports/statSchemas.ts';
 import { cricketCareer } from './cricketCareer.ts';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
 
-/** Points per unit of each stat, per sport. Negatives penalise (cards, fouls). */
-export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = {
-  football: {
-    goals: 10, assists: 6, cleanSheets: 8,
-    shotsOnTarget: 1.5, shots: 0.5, saves: 2, tackles: 1, interceptions: 1,
-    attackingContributions: 1, defensiveContributions: 1, passesComplete: 0.05,
-    crosses: 0.5, dribbles: 0.5, blocks: 1, // a block (SD-08) weighs what "defensive play" did
-    penaltiesWon: 2, penaltiesMissed: -3,
-    fouls: -1, offsides: -0.5, handballs: -1, yellowCards: -2, redCards: -6,
-  },
-  basketball: { points: 1, rebounds: 1.5, assists: 2, fouls: -1 },
-  // `points` includes aces & blocks (SD-04), so these are the bonus on top: an
-  // ace still totals 3 and a block 2, as before.
-  volleyball: { points: 1, aces: 2, blocks: 1 },
-  badminton: { points: 1 },
-  tennis: { points: 1, aces: 2 },
-  kabaddi: { raidPoints: 2, tacklePoints: 2 },
-  // Per match, cricket uses its own Summary; these weights drive the tournament
-  // "Player of the Tournament" ranking (catch +8 = the per-match fielding weight).
-  cricket: { runs: 1, wickets: 18, catches: 8, cleanSheets: 0 },
-  pickleball: { points: 1 },
-  padel: { points: 1 },
-  squash: { points: 1 },
-  tabletennis: { points: 1 },
-  chess: { wins: 3, draws: 1 },
-  carrom: { points: 1, boards: 1, queens: 2 },
-  golf: { holesWon: 1, birdies: 3, eagles: 6 },
-};
+/** SD-15: every map below is a derived view of the per-sport stat schema
+ *  (src/sports/<sport>/stats.ts) — edit the schema, not these. */
 
-/** Short (plural) labels for the per-player stat detail line. */
-export const STAT_LABELS: Record<string, string> = {
-  goals: 'goals', assists: 'assists', cleanSheets: 'clean sheets', yellowCards: 'yellow', redCards: 'red',
-  shots: 'shots', shotsOnTarget: 'on target', saves: 'saves', tackles: 'tackles', interceptions: 'interceptions',
-  attackingContributions: 'att. plays', defensiveContributions: 'def. plays', passesComplete: 'passes',
-  crosses: 'crosses', dribbles: 'dribbles', offsides: 'offside', handballs: 'handball',
-  penaltiesWon: 'pen won', penaltiesMissed: 'pen missed',
-  points: 'pts', rebounds: 'reb', fouls: 'fouls', aces: 'aces', blocks: 'blocks', attackPoints: 'attack pts',
-  raidPoints: 'raid pts', tacklePoints: 'tackle pts', runs: 'runs', wickets: 'wkts', catches: 'catches', games: 'games',
-  wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
-  holesWon: 'holes won', birdies: 'birdies', eagles: 'eagles', rounds: 'rounds',
-};
+/** Points per unit of each stat, per sport (schema `weight`, in schema order).
+ *  Negatives penalise (cards, fouls). Volleyball's `points` includes aces &
+ *  blocks (SD-04), so theirs is the bonus on top. Per match, cricket uses its
+ *  own Summary; its weights drive "Player of the Tournament". */
+export const STAT_WEIGHTS: Record<SportId, Record<string, number>> = Object.fromEntries(
+  STAT_SPORTS.map((sp) => [sp, mvpWeights(sp)]),
+) as Record<SportId, Record<string, number>>;
 
-/** Labels that read the same for one or many (mass nouns, abbreviations, adjectives). */
-const INVARIANT_LABELS = new Set([
-  'yellowCards', 'redCards', 'shotsOnTarget', 'offsides', 'handballs',
-  'penaltiesWon', 'penaltiesMissed', 'points', 'rebounds', 'raidPoints', 'tacklePoints', 'wickets', 'attackPoints',
-]);
+/** Short (plural) labels for the per-player stat detail line — the keys the
+ *  schema lists on the per-match rating line (`matchSummary`). */
+export const STAT_LABELS: Record<string, string> = matchSummaryLabels();
 
-/** Singular form for count === 1, only where it differs from the plural label. */
-const SINGULAR_LABELS: Record<string, string> = {
-  goals: 'goal', assists: 'assist', cleanSheets: 'clean sheet', shots: 'shot', saves: 'save',
-  tackles: 'tackle', interceptions: 'interception', attackingContributions: 'att. play',
-  defensiveContributions: 'def. play', passesComplete: 'pass', crosses: 'cross', dribbles: 'dribble',
-  fouls: 'foul', aces: 'ace', blocks: 'block', runs: 'run', games: 'game', catches: 'catch',
-};
+/** Count-aware stat label — "1 goal" / "2 goals", invariant labels unchanged.
+ *  Pass the sport for a sport-specific label (all sports agree today). */
+export const statLabel = (stat: string, count: number, sport?: SportId): string => labelCompact(stat, count, sport);
 
-/** Count-aware stat label — "1 goal" / "2 goals", invariant labels unchanged. */
-export const statLabel = (stat: string, count: number): string => {
-  const plural = STAT_LABELS[stat] ?? stat;
-  if (count === 1 && !INVARIANT_LABELS.has(stat)) return SINGULAR_LABELS[stat] ?? plural;
-  return plural;
-};
-
-/** Sport-specific "best in role" awards — the top player by a single stat. */
-export const SPORT_AWARDS: Record<SportId, { icon: string; label: string; stat: string }[]> = {
-  football: [
-    { icon: '⚽', label: 'Top scorer', stat: 'goals' },
-    { icon: '🅰️', label: 'Playmaker', stat: 'assists' },
-    { icon: '🧤', label: 'Clean sheet', stat: 'cleanSheets' },
-  ],
-  basketball: [
-    { icon: '🏀', label: 'Top scorer', stat: 'points' },
-    { icon: '💪', label: 'Rebounds', stat: 'rebounds' },
-    { icon: '🎯', label: 'Playmaker', stat: 'assists' },
-  ],
-  volleyball: [
-    { icon: '🏐', label: 'Top scorer', stat: 'points' },
-    { icon: '💥', label: 'Aces', stat: 'aces' },
-  ],
-  badminton: [{ icon: '🏸', label: 'Top scorer', stat: 'points' }],
-  tennis: [
-    { icon: '🎾', label: 'Top scorer', stat: 'points' },
-    { icon: '💥', label: 'Aces', stat: 'aces' },
-  ],
-  kabaddi: [
-    { icon: '🤼', label: 'Top raider', stat: 'raidPoints' },
-    { icon: '🛡️', label: 'Top defender', stat: 'tacklePoints' },
-  ],
-  cricket: [], // cricket ships its own richer summary
-  pickleball: [{ icon: '🥒', label: 'Top scorer', stat: 'points' }],
-  padel: [{ icon: '🟡', label: 'Top scorer', stat: 'points' }],
-  squash: [{ icon: '⚫', label: 'Top scorer', stat: 'points' }],
-  tabletennis: [{ icon: '🏓', label: 'Top scorer', stat: 'points' }],
-  chess: [], // one result per game — no in-game leaders
-  carrom: [{ icon: '🎱', label: 'Top scorer', stat: 'points' }, { icon: '👑', label: 'Queens', stat: 'queens' }],
-  golf: [{ icon: '🐦', label: 'Most birdies', stat: 'birdies' }],
-};
+/** Sport-specific "best in role" awards — the top player by a single stat
+ *  (schema awards shown per match). */
+export const SPORT_AWARDS: Record<SportId, { icon: string; label: string; stat: string }[]> = Object.fromEntries(
+  STAT_SPORTS.map((sp) => [sp, matchAwards(sp).map((a) => ({ icon: a.icon, label: a.label, stat: a.stat }))]),
+) as Record<SportId, { icon: string; label: string; stat: string }[]>;
 
 export interface MatchRating {
   id: string;
@@ -190,31 +118,19 @@ export interface AwardSlot {
 }
 
 const MVP_SLOT: AwardSlot = { slot: 'mvp', label: 'Player of the Tournament', icon: '🏆' };
-/** Tournament-only slots for sports whose per-match SPORT_AWARDS are empty. */
-const EXTRA_SLOTS: Partial<Record<SportId, AwardSlot[]>> = {
-  cricket: [
-    { slot: 'runs', label: 'Best batter', icon: '🏏', stat: 'runs' },
-    { slot: 'wickets', label: 'Best bowler', icon: '🎯', stat: 'wickets' },
-  ],
-  chess: [{ slot: 'wins', label: 'Most wins', icon: '♟️', stat: 'wins' }],
-};
 
-/** Tournament names for a per-match role award (same slot key, so awards
- *  already published keep matching their slot and their stored label). */
-const TOURNAMENT_LABELS: Partial<Record<SportId, Record<string, string>>> = {
-  football: { cleanSheets: 'Golden Glove' }, // SD-09 / FB-11: goalkeepers only
-};
-
-/** The fixed award slots per sport: Player of the Tournament + the sport's role awards. */
+/** The fixed award slots per sport: Player of the Tournament + the schema's
+ *  tournament awards (a tournament name such as "Golden Glove" keeps the same
+ *  slot key, so awards already published keep matching their slot). */
 export const TOURNAMENT_AWARD_SLOTS: Record<SportId, AwardSlot[]> = Object.fromEntries(
-  (Object.keys(SPORT_AWARDS) as SportId[]).map((sp) => [
+  STAT_SPORTS.map((sp) => [
     sp,
-    [MVP_SLOT, ...(EXTRA_SLOTS[sp] ?? SPORT_AWARDS[sp].map((a) => ({ slot: a.stat, label: TOURNAMENT_LABELS[sp]?.[a.stat] ?? a.label, icon: a.icon, stat: a.stat })))],
+    [MVP_SLOT, ...tournamentAwards(sp).map((a) => ({ slot: a.stat, label: a.tournamentLabel ?? a.label, icon: a.icon, stat: a.stat }))],
   ]),
 ) as Record<SportId, AwardSlot[]>;
 
-/** SD-09: football's Golden Glove ranks goalkeepers only. */
-const isGoldenGlove = (sport: SportId, slot: string) => sport === 'football' && slot === 'cleanSheets';
+/** SD-09: football's Golden Glove ranks goalkeepers only (schema `eligible`). */
+const isGoldenGlove = (sport: SportId, slot: string) => eligibilityOf(sport, slot) === 'goalkeeper';
 
 /** Icon for an award (custom awards get a medal). */
 export const awardIcon = (sport: SportId, slot: string): string =>
@@ -244,6 +160,14 @@ export interface AwardCandidate {
   detail: string;
 }
 
+/** Higher tie-break values first, criterion by criterion. */
+const tieCmp = (a: number[], b: number[]) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (b[i] ?? 0) - (a[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+};
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const dashless = (parts: (string | false | undefined)[]) => parts.filter((p): p is string => !!p && !p.includes('–'));
 
@@ -296,7 +220,9 @@ export function rankAwardCandidates(
     return `${value} ${statLabel(slot, value)} · ${m}`;
   };
 
-  // Tie-breaks after the value (Golden Glove: more saves, then fewer conceded).
+  // Tie-breaks after the value, from the schema's award (Golden Glove: more
+  // saves, then fewer conceded) — higher-is-better values rank first.
+  const tieOf = (ls: StatLine[]) => (awardDef(sport, slot)?.tieBreak ?? []).map((t) => (t.better === 'higher' ? 1 : -1) * sum(ls, t.key));
   let rows: { playerId: string; value: number; games: number; tie?: number[] }[];
   if (isGoldenGlove(sport, slot)) {
     // Keepers: listed as a GK, or kept goal in one of these matches (a keeper
@@ -304,7 +230,7 @@ export function rankAwardCandidates(
     // don't qualify.
     rows = [...linesOf.entries()]
       .filter(([pid, ls]) => isGoalkeeper(byId.get(pid)?.sportDetails?.football?.position) || ls.some((l) => l.stats && 'goalsConceded' in l.stats))
-      .map(([pid, ls]) => ({ playerId: pid, value: sum(ls, 'cleanSheets'), games: ls.length, tie: [sum(ls, 'saves'), -sum(ls, 'goalsConceded')] }));
+      .map(([pid, ls]) => ({ playerId: pid, value: sum(ls, slot), games: ls.length, tie: tieOf(ls) }));
   } else if (slot === 'mvp') {
     const w = STAT_WEIGHTS[sport] ?? {};
     rows = [...linesOf.entries()].map(([pid, ls]) => ({
@@ -325,7 +251,7 @@ export function rankAwardCandidates(
         value: r.value, games: r.games, detail: detailFor(r.playerId, r.value, r.games), tie: r.tie ?? [],
       };
     })
-    .sort((a, b) => b.value - a.value || (b.tie[0] ?? 0) - (a.tie[0] ?? 0) || (b.tie[1] ?? 0) - (a.tie[1] ?? 0) || a.name.localeCompare(b.name))
+    .sort((a, b) => b.value - a.value || tieCmp(a.tie, b.tie) || a.name.localeCompare(b.name))
     .map(({ tie: _tie, ...c }) => c)
     .slice(0, limit);
 }

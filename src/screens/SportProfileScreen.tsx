@@ -15,7 +15,9 @@ import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
 import { statCoverage, winRateOf, APPEARANCE_KEYS } from '../data/stats';
 import { lineResult, RESULT_PILL } from '../data/appearances';
-import { cricketCareer, cricketMatchLine } from '../data/cricketCareer';
+import { cricketMatchLine } from '../data/cricketCareer';
+import { statSchema, labelLong } from '../sports/statSchemas';
+import { careerFromSchema } from '../sports/statSchema';
 import { golfProfileSummary } from '../sports/golf/engine';
 import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
 import type { EditAccess } from '../core/playerEditAccess';
@@ -24,24 +26,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { isGuestSession, promptSignIn } from '../core/guest';
 import { ageOf } from '../core/age';
 
-const LABELS: Record<string, string> = {
-  goals: 'Goals', openPlayGoals: 'Open-play goals', penaltyGoals: 'Penalties', freekickGoals: 'Free-kick goals',
-  assists: 'Assists', runs: 'Runs', wickets: 'Wickets', cleanSheets: 'Clean sheets', yellowCards: 'Yellow', redCards: 'Red',
-  points: 'Points', rebounds: 'Rebounds', fouls: 'Fouls', aces: 'Aces', blocks: 'Blocks', attackPoints: 'Attack pts', raidPoints: 'Raid pts', tacklePoints: 'Tackle pts',
-  golds: 'Golds', silvers: 'Silvers', games: 'Games',
-  // football granular stats
-  shots: 'Shots', shotsOnTarget: 'Shots on target', tackles: 'Tackles', interceptions: 'Interceptions',
-  saves: 'Saves', passes: 'Passes', passesComplete: 'Passes completed', offsides: 'Offsides', corners: 'Corners',
-  goalsConceded: 'Goals conceded', minutes: 'Minutes', // SD-09 keeper lines
-  attackingContributions: 'Attacking plays', defensiveContributions: 'Defensive plays',
-  // cricket (parity #19)
-  ballsFaced: 'Balls faced', fours: '4s', sixes: '6s', innings: 'Innings', notOut: 'Not out',
-  ballsBowled: 'Balls bowled', runsConceded: 'Runs conceded', maidens: 'Maidens', dots: 'Dots',
-  wides: 'Wides', noBalls: 'No balls', catches: 'Catches', stumpings: 'Stumpings', runouts: 'Run outs',
-  // cricket fielding notes (parity #20)
-  dropped: 'Drops', runsSaved: 'Runs saved', runsMissed: 'Runs missed',
-};
-const label = (k: string) => LABELS[k] ?? k;
+
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -194,22 +179,21 @@ export default function SportProfileScreen() {
             )}
             {/* Counting stats — a second, quieter tier so they read as detail,
                 not as more headline numbers. */}
-            {sport === 'cricket' ? (() => {
-              // Batting / bowling / fielding figures computed from the lines (parity #19).
-              const c = cricketCareer(stats.recent);
-              const section = (title: string, rows: { key: string; label: string; value: string }[]) => (
-                <>
-                  <Text style={st.totalsLabel}>{title}</Text>
-                  <View style={st.statGrid}>
-                    {rows.map((r) => <Stat key={r.key} value={r.value} label={r.label} tone="neutral" />)}
-                  </View>
-                </>
-              );
+            {statSchema(sport)?.careerView === 'sections' ? (() => {
+              // Career sections straight from the sport's stat schema (SD-15) —
+              // cricket's Batting / Bowling / Fielding (parity #19).
+              const schema = statSchema(sport)!;
+              const c = careerFromSchema(schema, stats.recent.filter((l) => l.sport === sport));
               return (
                 <>
-                  {section('Batting', c.batting)}
-                  {section('Bowling', c.bowling)}
-                  {section('Fielding', c.fielding)}
+                  {(schema.sections ?? []).map((sec) => (
+                    <React.Fragment key={sec.id}>
+                      <Text style={st.totalsLabel}>{sec.title}</Text>
+                      <View style={st.statGrid}>
+                        {(c[sec.id] ?? []).map((r) => <Stat key={r.key} value={r.value} label={r.label} tone="neutral" />)}
+                      </View>
+                    </React.Fragment>
+                  ))}
                 </>
               );
             })() : Object.keys(bySport.totals).length > 0 && (
@@ -222,7 +206,7 @@ export default function SportProfileScreen() {
                     const partial = cov.tracked < cov.total ? cov : undefined;
                     return (
                       <Stat
-                        key={k} value={String(v)} label={label(k)} tone="neutral"
+                        key={k} value={String(v)} label={labelLong(k, sport)} tone="neutral"
                         coverage={partial} open={openStat === k}
                         onToggle={() => setOpenStat(openStat === k ? null : k)}
                       />
@@ -309,7 +293,7 @@ export default function SportProfileScreen() {
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k)).map(([k, v]) => `${v} ${label(k).toLowerCase()}`)].filter(Boolean).join(' · ')}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k)).map(([k, v]) => `${v} ${labelLong(k, sport).toLowerCase()}`)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pill

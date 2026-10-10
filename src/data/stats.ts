@@ -5,6 +5,7 @@
  * on client or server.
  */
 import type { LineResult, SportId, StatLine } from '../core/types';
+import { labelShort, statSchema } from '../sports/statSchemas.ts';
 
 export interface Record5 {
   /** appearances: every line is one match the player took part in */
@@ -117,53 +118,12 @@ export function statCoverage(lines: StatLine[], sport: SportId, statKey: string)
   return { tracked, total: sportLines.length };
 }
 
-/** Short (plural) labels for compact per-sport stat summaries (profile rows, Discover). */
-const STAT_LABEL: Record<string, string> = {
-  goals: 'goals', openPlayGoals: 'open-play', penaltyGoals: 'penalties', freekickGoals: 'free-kick goals',
-  assists: 'assists', cleanSheets: 'clean sheets', shots: 'shots', shotsOnTarget: 'shots on target',
-  tackles: 'tackles', interceptions: 'interceptions', saves: 'saves', passes: 'passes',
-  attackingContributions: 'attacking plays', defensiveContributions: 'defensive plays',
-  goalsConceded: 'conceded', minutes: 'mins',
-  runs: 'runs', wickets: 'wkts', points: 'pts', rebounds: 'reb', aces: 'aces', blocks: 'blocks', attackPoints: 'attack pts', raidPoints: 'raid pts', tacklePoints: 'tackle pts', games: 'games',
-  wins: 'wins', draws: 'draws', losses: 'losses', boards: 'boards', queens: 'queens',
-  rounds: 'rounds', birdies: 'birdies', eagles: 'eagles', holesWon: 'holes won',
-};
-/** Singular form for count === 1, only where it differs from the plural label.
- *  Keys absent here (mass nouns / abbreviations like "pts", "wkts", "open-play")
- *  read the same for one or many, so they fall back to the plural label. */
-const STAT_LABEL_ONE: Record<string, string> = {
-  goals: 'goal', penaltyGoals: 'penalty', freekickGoals: 'free-kick goal', assists: 'assist',
-  cleanSheets: 'clean sheet', shots: 'shot', shotsOnTarget: 'shot on target', tackles: 'tackle',
-  interceptions: 'interception', saves: 'save', passes: 'pass', attackingContributions: 'attacking play',
-  defensiveContributions: 'defensive play', runs: 'run', aces: 'ace', blocks: 'block', games: 'game',
-  wins: 'win', draws: 'draw', losses: 'loss', boards: 'board', queens: 'queen',
-  rounds: 'round', birdies: 'birdie', eagles: 'eagle', holesWon: 'hole won',
-};
 /** Readable short label for a stat key, e.g. "raidPoints" → "raid pts". Pass the
- *  count to get the singular for exactly one ("1 goal" vs "2 goals"). Falls back
- *  to the raw key so a new stat still renders (just un-prettified). */
-export const statLabelShort = (key: string, count?: number): string => {
-  const plural = STAT_LABEL[key] ?? key;
-  return count === 1 ? (STAT_LABEL_ONE[key] ?? plural) : plural;
-};
+ *  count to get the singular for exactly one ("1 goal" vs "2 goals"). Read from
+ *  the stat schema (SD-15); falls back to the raw key so an undeclared stat
+ *  still renders (just un-prettified). */
+export const statLabelShort = (key: string, count?: number, sport?: SportId): string => labelShort(key, count, sport);
 
-/** Per-sport priority of which stats to surface first in a compact summary. */
-const HEADLINE_ORDER: Partial<Record<SportId, string[]>> = {
-  football: ['goals', 'assists', 'shotsOnTarget', 'tackles', 'saves', 'passes'],
-  cricket: ['runs', 'wickets'],
-  basketball: ['points', 'rebounds', 'assists'],
-  kabaddi: ['raidPoints', 'tacklePoints'],
-  tennis: ['points', 'aces'],
-  volleyball: ['points', 'aces'],
-  badminton: ['points'],
-  pickleball: ['points'],
-  padel: ['points'],
-  squash: ['points'],
-  tabletennis: ['points'],
-  chess: ['wins', 'draws', 'games'],
-  carrom: ['points', 'boards', 'queens'],
-  golf: ['rounds', 'birdies', 'eagles'],
-};
 /** A compact "8 goals · 2 assists · 9 shots on target" line for one sport. */
 export function sportSummary(b: SportBreakdown): string {
   if (b.sport === 'golf') {
@@ -177,9 +137,10 @@ export function sportSummary(b: SportBreakdown): string {
       t.birdies ? `${t.birdies} ${statLabelShort('birdies', t.birdies)}` : '',
     ].filter(Boolean).join(' · ');
   }
-  const order = HEADLINE_ORDER[b.sport] ?? Object.keys(b.totals);
+  // which stats lead the summary: the schema's headline order
+  const order = statSchema(b.sport)?.headline ?? Object.keys(b.totals);
   const keys = order.filter((k) => (b.totals[k] ?? 0) > 0).slice(0, 3);
-  return keys.map((k) => `${b.totals[k]} ${statLabelShort(k, b.totals[k])}`).join(' · ');
+  return keys.map((k) => `${b.totals[k]} ${statLabelShort(k, b.totals[k], b.sport)}`).join(' · ');
 }
 
 /** Whether any of a player's stats in a sport were tracked in fewer games than played. */

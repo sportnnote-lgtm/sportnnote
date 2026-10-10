@@ -19,6 +19,7 @@ import { tableTennisPlugin } from './tabletennis';
 import { chessPlugin } from './chess';
 import { carromPlugin } from './carrom';
 import { golfPlugin } from './golf';
+import { STAT_SCHEMAS } from './statSchemas';
 
 export const SPORTS: Record<SportId, SportPlugin<any>> = {
   football: footballPlugin,
@@ -36,6 +37,10 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
   carrom: carromPlugin,
   golf: golfPlugin,
 };
+
+// SD-15: every plugin carries its stat schema (defined next to the plugin in
+// `<sport>/stats.ts`, collected RN-free in statSchemas.ts).
+for (const id of Object.keys(SPORTS) as SportId[]) SPORTS[id].statSchema = STAT_SCHEMAS[id] as SportPlugin<any>['statSchema'];
 
 export const SPORT_LIST = Object.values(SPORTS);
 
