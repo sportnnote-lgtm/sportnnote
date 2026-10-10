@@ -203,7 +203,7 @@ export function setTiebreaks(s: TennisState): Array<Pair | null> {
 }
 
 /** Which completed sets were a whole-set match (champions') tiebreak → "[10-8]". */
-const matchTbSets = (s: TennisState): boolean[] =>
+export const matchTbSets = (s: TennisState): boolean[] =>
   (s.sets ?? []).map((_, i) => s.finalSetTiebreak > 0 && i === s.setsToWin * 2 - 2);
 
 /** "6-4, 3-6, 7-6(4)" — the completed sets, tiebreak points included. */
@@ -222,4 +222,24 @@ export function summary(s: TennisState): ScoreSummary {
     statusLine: `Set ${s.setsWon.home + s.setsWon.away + 1}${inTiebreak(s) ? ' · TIEBREAK' : ''} · ${s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}`,
     detailLine: `Games ${s.games.home}-${s.games.away}${line ? ' · ' + line : ''}`,
   };
+}
+
+/** SD-17 standings units: games won by each side over the match (ATP / FIP
+ *  "% of games won", games difference). A set tiebreak counts as the 7-6 it
+ *  produced; a match (champions') tiebreak counts as ONE game to its winner
+ *  (ATP rule), however its points are stored. Plus the games of an unfinished
+ *  set. Sets come from the match score. */
+export function standingsUnits(s: TennisState): { games: { home: number; away: number } } | null {
+  if (!s || !Array.isArray(s.sets)) return null;
+  const mtb = matchTbSets(s);
+  const tbs = setTiebreaks(s);
+  const games = { home: s.games?.home ?? 0, away: s.games?.away ?? 0 };
+  s.sets.forEach(([h, a], i) => {
+    if (mtb[i]) {
+      const tb = tbs[i];
+      const homeWon = tb ? tb[0] > tb[1] : h > a;
+      if (homeWon) games.home += 1; else games.away += 1;
+    } else { games.home += h; games.away += a; }
+  });
+  return { games };
 }

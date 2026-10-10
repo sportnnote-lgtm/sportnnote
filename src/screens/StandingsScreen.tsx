@@ -307,7 +307,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
                   <Text style={num}>{t.lost}</Text>
                   {hasNr && <Text style={num}>{t.nr ?? 0}</Text>}
                   {hasNrr && <Text style={[num, { width: nrrW }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
-                  <Text style={[num, st.pts]}>{t.points}{t.adjust ? '*' : ''}</Text>
+                  <Text style={[num, st.pts]}>{t.points}{t.adjust ? '*' : ''}{t.lots ? '‡' : ''}</Text>
                   {canManage && (
                     <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
                       accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
@@ -350,6 +350,13 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
             * {nameOf(a.teamId)} {signed(a.points)} · {a.reason}{a.byName ? ` · by ${a.byName}` : ''}, {new Date(a.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
           </Text>
         ))}
+        {/* SD-17: teams level on every tie-break are ordered by drawing lots — said
+            out loud instead of a silent name order. */}
+        {rows.some((t) => t.lots) && (
+          <Text style={textStyles.muted}>
+            ‡ Drawn by lot — level on every tie-break: {rows.filter((t) => t.lots).map((t) => t.name).join(', ')}. The organiser draws lots for the final order.
+          </Text>
+        )}
         {/* SD-10: Swiss byes and chess forfeits score but aren't games played (P / W / D / L). */}
         {rows.some((t) => unplayed(t)) && (
           <Text style={textStyles.muted}>

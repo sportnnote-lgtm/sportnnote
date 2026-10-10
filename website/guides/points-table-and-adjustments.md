@@ -1,6 +1,6 @@
 ---
 title: Read the points table and adjust points
-description: See one table per group or league stage, and add or remove bonus or penalty points with a reason everyone can read.
+description: See one table per stage, how each sport awards points and breaks ties, and add bonus or penalty points with a public reason.
 category: Tournaments
 audience: Organisers, Captains, Parents & fans
 sports: all
@@ -8,7 +8,7 @@ order: 60
 updated: 2026-10-10
 ---
 
-When a meet runs Group A and Group B and then semi-finals, one long table mixing everyone is confusing. SportnNote shows a separate table for each group or league stage, and keeps knockout matches out of the tables. Organisers can also give a team bonus or penalty points, such as −2 for arriving late. They must give a reason, and the reason is shown to everyone.
+SportnNote shows a separate table for each group or league stage, keeps knockout matches out, and ranks teams by each sport's own rules. Organisers can also give a team bonus or penalty points, such as −2 for arriving late, with a reason everyone can read.
 
 ## Open the points table
 Anyone can view it:
@@ -19,13 +19,7 @@ Anyone can view it:
 Organisers can also open it from **⚙ Manage** → **Points table**.
 
 ## How to read it
-You'll see one table for each stage that has fixtures:
-- **League** (or just the sport name when it's the only stage)
-- **Group A**, **Group B** and so on
-- a Super round, such as **Super Four**
-- **Swiss** rounds
-
-Knockout matches (quarter-finals, semi-finals, the final, play-offs) never appear in a table. The bracket shows those.
+There is one table per stage with fixtures: **League**, **Group A**, **Group B**, a Super round such as **Super Four**, or **Swiss** rounds. Knockout matches are in the bracket, never in a table.
 
 The columns are:
 - **P** played, **W** won, **L** lost, **Pts** points. Played includes no-result matches.
@@ -33,18 +27,33 @@ The columns are:
 - **NR** no result, only when some team has one (see [End a match early](/guides/end-a-match-early/))
 - **NRR** net run rate, for cricket
 
-Cricket tables are a little different, as in international cricket:
-- A tied match shows as **T**, not D.
-- The **NR** column is always there.
-- Teams are compared on **NRR**, so the table doesn't show a run difference. Rain-shortened matches count by the ICC rules; see [Rain, fewer overs and DLS targets](/guides/cricket-rain-and-dls/).
+In cricket a tie shows as **T**, the **NR** column is always there, and rain-shortened matches count by the ICC rules (see [Rain, fewer overs and DLS targets](/guides/cricket-rain-and-dls/)).
 
 A star after the points, like `12*`, means the team's points were adjusted by hand. The reason is listed under the table, for example "* Red House −2 · late arrival · by Priya, 12 Oct".
 
-Below the tables, **Top performers** lists the players leading the main stat for that sport.
+A `‡` after the points means teams are level on every tie-break. The note under the table says **Drawn by lot**: the organiser draws lots for their order.
+
+## Points systems per sport
+A new tournament starts on each sport's international system:
+- Football: 3-1-0. Ties: head-to-head points, goal difference, goals; then overall; then fair play (cards).
+- Basketball (FIBA): 2 a win, 1 a loss, 0 a forfeit. Ties: head-to-head first, then overall.
+- Volleyball (FIVB): matches won first. A 3-0 or 3-1 win is worth 3; a 3-2 win gives 2 and 1. Ties: set ratio, then point ratio.
+- Kabaddi (PKL): 5 a win, 3 a tie, 1 for a loss by 7 or fewer. Ties: score difference, then wins.
+- Badminton (BWF): two level are split by their own match; three or more by games, then points difference.
+- Tennis: two level by head-to-head, three or more by % of sets, then % of games.
+- Padel, pickleball, carrom, table tennis, squash and cricket follow their own usual orders.
+
+Every chain ends in drawing lots. Tournaments created before these systems keep their points, so old tables don't change.
+
+## Change the points system
+1. Open **⚙ Manage** and tap the sport's **format & points** row.
+2. Under **Points system**, tap the sport's system or **Simple 2-1-0**.
+3. To reorder ties, tap **Tie-break order (advanced)**, then **↑**, **↓**, **✕** or a rule under **Add**.
+4. Tap **Save**.
 
 ## Before you adjust points
 - You must be a host of the tournament.
-- A team only appears in a table once it has finished at least one match in that stage. You can only adjust a team that's in the table.
+- You can only adjust a team that has finished a match in that stage.
 - Each adjustment belongs to one stage. A penalty in Group A doesn't carry into the Super Four.
 
 ## Step by step: add bonus or penalty points
@@ -54,7 +63,7 @@ Below the tables, **Top performers** lists the players leading the main stat for
 4. Type the **Reason (shown publicly)**, for example "late arrival" or "fielded an ineligible player".
 5. Tap **Save adjustment**.
 
-The team's points and position update straight away, and the reason appears under the table with your name and the date.
+The table updates straight away and shows the reason with your name and the date.
 
 > **Important:** Write the reason as if the parents of both teams will read it, because they will. Keep it factual and short.
 
@@ -65,11 +74,11 @@ The team's points and position update straight away, and the reason appears unde
 
 ## Rules behind the feature
 - Adjustments add to the points, not to the results. Wins, losses and goals stay as played.
-- Head-to-head tie-breaks ignore adjustments. When two teams are level and the rules compare their own match against each other, only that real result counts.
-- Every change is recorded in the tournament's activity history, including removals.
-- Win, draw and no-result points are set per sport under **⚙ Manage** → the sport's **format & points** row. Changing them there updates the whole table.
+- Head-to-head tie-breaks ignore adjustments: only the real result counts.
+- Every adjustment is recorded in the tournament's activity history, including removals.
+- Changing the points or the tie-break order updates the whole table straight away.
 - In a multi-sport meet, **Overall standings** on the tournament page adds up each sport's table, using that sport's points and adjustments. So a house's overall total always matches its sport tables.
-- When the best-placed teams from different groups go through (for example the best third-placed teams), they are compared on points, then the same tie-breaks as the group tables. Head-to-head is skipped, because those teams never played each other. In table tennis the games and points ratios are taken over all their matches, and in chess Sonneborn-Berger and wins are used as usual.
+- Best-placed teams from different groups are compared on points, then the group tie-breaks over all their matches. Head-to-head is skipped, because they never met.
 
 ## Common questions
 
@@ -80,7 +89,7 @@ No. Only the tournament's hosts can. Captains and parents see the adjustments an
 Tables fill in as results come in. A stage appears once it has fixtures, and a team appears once it has finished a match in that stage.
 
 ### Can I give a team extra points for a match that was rained off?
-Use **🏁 End match…** and choose **No result** or **Abandoned** instead. Each team then gets the sport's "no result" points automatically, and the table shows it in the **NR** column. See [End a match early](/guides/end-a-match-early/).
+Use **🏁 End match…** and choose **No result** or **Abandoned**: each team gets the sport's "no result" points. See [End a match early](/guides/end-a-match-early/).
 
-### Does a points penalty change a team's stats?
-No. Player and team stats come from the matches only.
+### Why is a team with fewer points above another in volleyball?
+Volleyball ranks by matches won first, as FIVB does, then by points.

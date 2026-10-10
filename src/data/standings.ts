@@ -51,6 +51,18 @@ export interface TeamStanding {
    *  seed across groups (SD-12). Present only when the order uses `h2hPoints`. */
   rallyFor?: number;
   rallyAgainst?: number;
+  /** SD-17 units, present only when the chain (or `withUnits`) needs them:
+   *  sets / games won and lost over the team's matches, and the fair-play
+   *  score (FIFA disciplinary points, ≤ 0 — higher is better). Rally points
+   *  ride on `rallyFor` / `rallyAgainst`. */
+  setsFor?: number;
+  setsAgainst?: number;
+  gamesFor?: number;
+  gamesAgainst?: number;
+  fairPlay?: number;
+  /** level on every tie-breaker of a chain that ends in `lots`: the order
+   *  shown is by name and must be settled by drawing lots ("Drawn by lot") */
+  lots?: boolean;
 }
 
 /** One round of a team's record (SD-10). `points` are the game points it took
@@ -88,16 +100,33 @@ export interface PointsAdjustment {
  *  sport (football 3-1-0, chess 1-½-0, table tennis ITTF 2-1, others 2-1-0); the
  *  tie-break order is applied within any cluster still level after points.
  *
- *  Tie-breakers:
+ *  Tie-breakers (SD-17 standings rule kit — every one is "higher is better"):
  *   • h2h       — points from matches played only among the tied teams
- *   • nrr       — net run rate (cricket)
- *   • diff      — overall score difference;  for — overall score for
- *   • wins      — number of wins (FIDE)
- *   • sb        — Sonneborn-Berger (FIDE round robin)
+ *   • h2hDiff   — score difference in those matches (FIBA / UEFA / IHF mini-league)
+ *   • h2hFor    — score scored in those matches
  *   • h2hRatio  — score ratio (e.g. games won ÷ lost) among the tied teams only (ITTF)
  *   • h2hPoints — rally-point ratio among the tied teams only (ITTF), from the
- *                 sport's `standingsPoints` (points won in every game) */
-export type TieBreaker = 'h2h' | 'nrr' | 'diff' | 'for' | 'wins' | 'sb' | 'h2hRatio' | 'h2hPoints';
+ *                 sport's points provider (points won in every game)
+ *   • nrr       — net run rate (cricket)
+ *   • diff      — overall score difference;  for — overall score for
+ *   • wins      — number of wins (FIDE: incl. forfeit wins and a full-point bye)
+ *   • played    — matches played (ATP: a player who withdrew ranks below)
+ *   • sb        — Sonneborn-Berger (FIDE round robin)
+ *   • setRatio / setsPct   — sets won ÷ lost / sets won ÷ played (FIVB, ATP)
+ *   • pointRatio / pointsDiff — rally points won ÷ lost / won − lost (FIVB, BWF, pickleball)
+ *   • gamesDiff / gamesPct — games won − lost / games won ÷ played (BWF, ATP, padel)
+ *   • fairPlay  — fewest disciplinary points (FIFA: Y −1, 2nd Y −3, R −4, Y+R −5)
+ *   • lots      — explicit drawing of lots: teams still level are flagged
+ *                 `lots` ("Drawn by lot") instead of a silent name order
+ *  plus any tie-breaker registered with `registerTieBreaker` (chess Buchholz &
+ *  co., SD-26). */
+export type BuiltinTieBreaker =
+  | 'h2h' | 'nrr' | 'diff' | 'for' | 'wins' | 'sb' | 'h2hRatio' | 'h2hPoints'
+  | 'h2hDiff' | 'h2hFor' | 'setRatio' | 'pointRatio' | 'gamesDiff' | 'pointsDiff'
+  | 'setsPct' | 'gamesPct' | 'played' | 'fairPlay' | 'lots';
+/** A built-in tie-breaker, or the key of one added with `registerTieBreaker`. */
+export type TieBreaker = BuiltinTieBreaker | (string & { readonly __customTieBreaker?: never });
+
 export interface StandingsConfig {
   win: number;
   draw: number;
@@ -106,16 +135,41 @@ export interface StandingsConfig {
    *  Absent = the sport default — always read it through `noResultPoints()`. */
   noResult?: number;
   order: TieBreaker[];
-  /** ITTF-style: when a criterion separates SOME of the tied teams, the ones
-   *  still level start the whole procedure again among themselves only (so
-   *  "among the tied" criteria are recomputed for the smaller group). */
-  restart?: boolean;
+  /** When a criterion separates SOME of the tied teams, the ones still level
+   *  start the whole procedure again among themselves only (so "among the
+   *  tied" criteria are recomputed for the smaller group). `true` = after any
+   *  criterion (ITTF, FIBA, BWF); `'h2h'` = only after a head-to-head criterion
+   *  (UEFA / IHF: re-apply the h2h criteria, then go on to the overall ones). */
+  restart?: boolean | 'h2h';
   /** organiser points adjustments (parity #07) — absent when there are none */
   adjustments?: PointsAdjustment[];
   /** points for a Swiss pairing-allocated bye (SD-10, the organiser's
    *  `byePoints`: 1, ½ or 0). Absent = the sport default — always read it
    *  through `byePointsFor()`. */
   bye?: number;
+  // ── SD-17 rule kit (all absent = the legacy behaviour) ──
+  /** the chain used when exactly TWO teams are level (BWF / ATP: "2 tied →
+   *  head-to-head"); `order` is then the 3+ chain. Applied at the start of a
+   *  procedure and on every restart. */
+  pairOrder?: TieBreaker[];
+  /** what is compared before the points: 'wins' = matches won first, then
+   *  points (FIVB: "number of matches won, match points, …"). Absent = points. */
+  rankBy?: 'points' | 'wins';
+  /** match points by the sets score, winner-first "3-2" → [winner, loser]
+   *  (FIVB 3-0 / 3-1 → 3-0, 3-2 → 2-1). A score not listed uses win / loss. */
+  setPoints?: Record<string, [number, number]>;
+  /** a losing side within `margin` (score difference ≤ margin) also takes
+   *  `points` (PKL: +1 for a loss by 7 or fewer). */
+  lossBonus?: { margin: number; points: number };
+  /** a match level on the score and won in a shoot-out (FIH variant: winner 2,
+   *  loser 1). Absent = a normal win / loss. */
+  shootout?: { win: number; loss: number };
+  /** points for the losing side of a walkover / forfeit (FIBA: 0, while a
+   *  played loss is 1). Absent = a normal loss. */
+  forfeitLoss?: number;
+  /** compute sets / games / rally points / fair play for every row even when
+   *  no tie-breaker asks for them (for columns, SD-18). */
+  withUnits?: boolean;
 }
 
 /** Points for a Swiss bye: the organiser's `byePoints`, else the sport default —
@@ -137,15 +191,55 @@ export function isChessForfeit(m: Match): boolean {
   const st = m.state as { method?: unknown } | null | undefined;
   return !!st && typeof st === 'object' && st.method === 'forfeit';
 }
-const ALL_TB: TieBreaker[] = ['h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints'];
-const isTieBreaker = (s: string): s is TieBreaker => (ALL_TB as string[]).includes(s);
+const BUILTIN_TB: BuiltinTieBreaker[] = [
+  'h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints',
+  'h2hDiff', 'h2hFor', 'setRatio', 'pointRatio', 'gamesDiff', 'pointsDiff', 'setsPct', 'gamesPct', 'played', 'fairPlay', 'lots',
+];
+/** The criteria computed only from matches among the tied teams. */
+const AMONG_TIED = new Set<string>(['h2h', 'h2hDiff', 'h2hFor', 'h2hRatio', 'h2hPoints']);
+
+/** A tie-breaker added from outside the kit (chess Buchholz / Cut-1 / Median /
+ *  Progressive in SD-26). `value` is higher-is-better; `seed` is its value
+ *  across groups (null = skip; default `value` against a one-team cluster). */
+export interface CustomTieBreaker {
+  label: string;
+  value: (t: TeamStanding, ctx: { cluster: TeamStanding[]; matches: Match[]; cfg: StandingsConfig }) => number;
+  seed?: (t: TeamStanding) => number | null;
+  /** computed among the tied only (so a restart in 'h2h' mode follows it) */
+  amongTied?: boolean;
+}
+const customTB = new Map<string, CustomTieBreaker>();
+/** Register (or, with null, remove) an extra tie-breaker under `key`. Saved
+ *  chains (`tieBreak`) may then name it. */
+export function registerTieBreaker(key: string, def: CustomTieBreaker | null): void {
+  if ((BUILTIN_TB as string[]).includes(key)) throw new Error(`"${key}" is a built-in tie-breaker`);
+  if (def) customTB.set(key, def); else customTB.delete(key);
+}
+const isTieBreaker = (s: string): s is TieBreaker => (BUILTIN_TB as string[]).includes(s) || customTB.has(s);
+
+/** What a sport's match score counts (`m.score` / `result()`): sets, games,
+ *  goals, points or runs. Drives the sets / games fallbacks and the labels. */
+export type ScoreUnit = 'goals' | 'points' | 'runs' | 'sets' | 'games';
+export function scoreUnit(sport: SportId | string): ScoreUnit {
+  switch (sport) {
+    case 'football': case 'hockey': case 'handball': return 'goals';
+    case 'cricket': return 'runs';
+    case 'volleyball': case 'tennis': case 'padel': return 'sets';
+    case 'badminton': case 'tabletennis': case 'squash': case 'pickleball': case 'carrom': return 'games';
+    default: return 'points';
+  }
+}
 
 /** Sensible defaults: football is the modern 3 points a win; cricket ranks ties
  *  by net run rate; chess and table tennis follow FIDE / ITTF; everything else
  *  by points difference. Head-to-head first, which is how most real
  *  competitions read a two-team tie. A no result is worth 1 in cricket (common
  *  league practice, the washout shares the points) and 0 elsewhere (usually
- *  replayed) — see `noResultPoints`. */
+ *  replayed) — see `noResultPoints`.
+ *
+ *  This is the LEGACY read-time default (existing tournaments store no keys and
+ *  read this). New tournaments store their sport's body preset instead (D1,
+ *  `newTournamentFormats`), so this function must not change. */
 export function defaultStandingsConfig(sport: SportId): StandingsConfig {
   // Chess: game points 1 / ½ / 0. FIDE (C.07) leaves the order to each event;
   // elite round robins (Candidates 2024, Tata Steel 2024) rank ties by
@@ -160,16 +254,130 @@ export function defaultStandingsConfig(sport: SportId): StandingsConfig {
   return { win, draw: 1, loss: 0, order };
 }
 
+/** A one-tap points system for the PointsEditor (SD-17). `set` holds EVERY
+ *  reserved rule key, so picking a preset fully defines the table ('' clears a
+ *  key: absent = legacy). */
+export interface PointsPreset {
+  id: string;
+  label: string;
+  /** one line for the editor: the points and the order */
+  note: string;
+  set: Record<string, number | string | boolean>;
+}
+
+/** The rule keys a preset writes — '' = not used. */
+const CLEAR: Record<string, string | boolean> = {
+  setPoints: '', lossBonusMargin: '', lossBonusPoints: '', soWinPoints: '', soLossPoints: '', forfeitLossPoints: '',
+  tieBreak: '', tieBreak2: '', tieRestart: false, rankBy: 'points',
+};
+const preset = (id: string, label: string, note: string, set: Record<string, number | string | boolean>): PointsPreset =>
+  ({ id, label, note, set: { ...CLEAR, ...set } });
+
+/** "Simple 2-1-0" (D1's fallback): win 2, draw 1, loss 0 and the plain legacy
+ *  chain (football keeps 3-1-0: its simple system). */
+function simplePreset(sport: SportId | string): PointsPreset {
+  const d = defaultStandingsConfig((['chess', 'tabletennis', 'cricket', 'football'].includes(sport) ? sport : 'basketball') as SportId);
+  const win = sport === 'football' ? 3 : 2;
+  const order = sport === 'tabletennis' || sport === 'chess' ? ['h2h', 'diff', 'for'] : d.order;
+  return preset('simple', `Simple ${win}-1-0`, `${win} a win, 1 a draw, 0 a loss; ties on head-to-head, then difference, then scored`,
+    { winPoints: win, drawPoints: 1, lossPoints: 0, tieBreak: order.join(',') });
+}
+
+const FIVB_SETS = '3-0:3/0,3-1:3/0,3-2:2/1,2-0:3/0,2-1:2/1';
+
+/** Each sport's international points system(s) (D1), first = the default a
+ *  NEW tournament stores. Keyed by string so the Wave-4 sports (hockey,
+ *  handball) are declared before their plugins exist. */
+const BODY_PRESETS: Record<string, PointsPreset[]> = {
+  football: [
+    preset('fifa', 'FIFA / UEFA 3-1-0', '3-1-0; ties: head-to-head points, goal difference, goals; then overall goal difference, goals; fair play; lots',
+      { winPoints: 3, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,fairPlay,lots', tieRestart: 'h2h' }),
+    preset('fifa22', 'Goal difference first', '3-1-0; ties: goal difference, goals, then head-to-head, fair play, lots (FIFA 2022)',
+      { winPoints: 3, drawPoints: 1, lossPoints: 0, tieBreak: 'diff,for,h2h,h2hDiff,h2hFor,fairPlay,lots' }),
+  ],
+  basketball: [
+    preset('fiba', 'FIBA 2-1 (loss = 1)', '2 a win, 1 a loss, 0 a forfeit; ties: head-to-head points, difference, scored; then overall',
+      { winPoints: 2, drawPoints: 1, lossPoints: 1, forfeitLossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: true }),
+  ],
+  volleyball: [
+    preset('fivb', 'FIVB 3-3-2-1', 'Wins first; 3-0 / 3-1 → 3 pts, 3-2 → 2 and 1; ties: set ratio, point ratio, head-to-head',
+      { winPoints: 3, drawPoints: 0, lossPoints: 0, setPoints: FIVB_SETS, rankBy: 'wins', tieBreak: 'setRatio,pointRatio,h2h,lots' }),
+  ],
+  kabaddi: [
+    preset('pkl', 'PKL 5-3-1', '5 a win, 3 a tie, +1 for a loss by 7 or fewer; ties: score difference, wins, head-to-head',
+      { winPoints: 5, drawPoints: 3, lossPoints: 0, lossBonusMargin: 7, lossBonusPoints: 1, tieBreak: 'diff,wins,h2h,for,lots' }),
+  ],
+  badminton: [
+    preset('bwf', 'BWF', 'Matches won; 2 tied → head-to-head; 3+ tied → games difference, points difference',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'diff,pointsDiff,lots', tieBreak2: 'h2h,lots', tieRestart: true }),
+  ],
+  tennis: [
+    preset('atp', 'ATP / ITF round robin', 'Wins; matches played; 2 tied → head-to-head; 3+ → % sets, % games',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'played,setsPct,gamesPct,h2h,lots', tieBreak2: 'played,h2h,lots', tieRestart: true }),
+  ],
+  padel: [
+    preset('fip', 'FIP', 'Wins; ties: head-to-head, set difference, games difference',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,diff,gamesDiff,lots', tieRestart: true }),
+  ],
+  pickleball: [
+    preset('pickleball', 'Pool play', 'Wins; ties: head-to-head, then point differential',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,pointsDiff,lots', tieRestart: true }),
+  ],
+  squash: [
+    preset('wsf', 'WSF round robin', 'Wins; ties among the tied: match points, games ratio, points ratio',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,h2hRatio,h2hPoints,lots', tieRestart: true }),
+  ],
+  tabletennis: [
+    preset('ittf', 'ITTF 2-1', '2 a win, 1 a loss; ties among the tied: match points, games ratio, points ratio',
+      { winPoints: 2, drawPoints: 0, lossPoints: 1, tieBreak: 'h2h,h2hRatio,h2hPoints,lots', tieRestart: true }),
+  ],
+  carrom: [
+    preset('carrom', 'Carrom league', 'Wins; ties: head-to-head, games difference, board points difference',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,diff,pointsDiff,lots' }),
+  ],
+  cricket: [
+    preset('icc', 'ICC events', '2 a win, 1 a tie or no result; ties: wins, net run rate, head-to-head',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'wins,nrr,h2h,lots' }),
+  ],
+  // Wave 4 (no plugin yet): declared so the sport is born with its body's rules.
+  hockey: [
+    preset('fih', 'FIH 3-1-0', '3-1-0; ties: wins, goal difference, goals, head-to-head',
+      { winPoints: 3, drawPoints: 1, lossPoints: 0, tieBreak: 'wins,diff,for,h2h,lots' }),
+    preset('fih-so', 'FIH + shoot-out bonus', '3 a win; a draw goes to a shoot-out: winner 2, loser 1',
+      { winPoints: 3, drawPoints: 1, lossPoints: 0, soWinPoints: 2, soLossPoints: 1, tieBreak: 'wins,diff,for,h2h,lots' }),
+  ],
+  handball: [
+    preset('ihf', 'IHF 2-1-0', '2-1-0; ties: head-to-head points, goal difference, goals; then overall',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: 'h2h' }),
+  ],
+};
+
+/** One-tap points presets for the PointsEditor: the body's system(s), then the
+ *  "Simple 2-1-0" fallback (D1). Chess has none (Swiss / round-robin
+ *  tie-breaks are their own item, SD-26); golf has no table. */
+export function standingsPresets(sport: SportId | string): PointsPreset[] {
+  const body = BODY_PRESETS[sport];
+  return body ? [...body, simplePreset(sport)] : [];
+}
+
+/** The keys a NEW tournament's format stores for a sport (D1): its default
+ *  body preset, without the '' (unused) keys. */
+function newTournamentKeys(sport: SportId | string): Record<string, number | string | boolean> | undefined {
+  const p = BODY_PRESETS[sport]?.[0];
+  if (!p) return undefined;
+  return Object.fromEntries(Object.entries(p.set).filter(([k, v]) => v !== '' && !(k === 'tieRestart' && v === false) && !(k === 'rankBy' && v === 'points')));
+}
+
 /** Founder decision D1 (sport-depth PLAN): a tournament created from now on
  *  starts on the sport's international points system. These keys are WRITTEN
  *  into `formats[sport]` when a tournament (or a sport added to one) is created,
  *  instead of changing `defaultStandingsConfig`, because that default is
  *  computed at read time: changing it would silently re-score every existing
  *  table. Old tournaments have no key stored, so they keep the legacy default.
- *  Basketball (FIBA): win 2, loss 1 (a forfeit, 0, isn't modelled yet). */
-export const NEW_TOURNAMENT_POINTS: Partial<Record<SportId, Record<string, number>>> = {
-  basketball: { winPoints: 2, lossPoints: 1 },
-};
+ *  SD-05 began it with basketball; SD-17 covers every sport with a body preset. */
+export const NEW_TOURNAMENT_POINTS: Partial<Record<SportId, Record<string, number | string | boolean>>> = Object.fromEntries(
+  Object.keys(BODY_PRESETS).map((sp) => [sp, newTournamentKeys(sp)!]),
+) as Partial<Record<SportId, Record<string, number | string | boolean>>>;
 
 /** A new tournament's format for one sport: the international points keys
  *  under whatever the organiser already chose (their keys win). */
@@ -185,16 +393,32 @@ export function newTournamentFormats<F extends Record<string, unknown>>(sports: 
   return out;
 }
 
-/** One-tap points presets for the PointsEditor: the body's system and the
- *  "Simple 2-1-0" fallback (D1). Empty for sports without a body preset yet. */
-export function standingsPresets(sport: SportId): { label: string; set: Record<string, number> }[] {
-  if (sport === 'basketball') {
-    return [
-      { label: 'FIBA 2-1 (loss = 1)', set: { winPoints: 2, drawPoints: 1, lossPoints: 1 } },
-      { label: 'Simple 2-1-0', set: { winPoints: 2, drawPoints: 1, lossPoints: 0 } },
-    ];
+/** Which preset (if any) a saved format is on — compares the resulting rules,
+ *  so a format that spells the same rules differently still matches. */
+export function activePreset(sport: SportId, fmt?: Record<string, unknown> | null): PointsPreset | undefined {
+  const rules = (c: StandingsConfig) => JSON.stringify([c.win, c.draw, c.loss, c.order, c.pairOrder ?? null, c.restart ?? false, c.rankBy ?? 'points',
+    c.setPoints ?? null, c.lossBonus ?? null, c.shootout ?? null, c.forfeitLoss ?? null]);
+  const now = rules(standingsConfigFromFormat(sport, fmt));
+  return standingsPresets(sport).find((p) => rules(standingsConfigFromFormat(sport, { ...(fmt ?? {}), ...p.set })) === now);
+}
+
+/** Short points text for a settings row: the preset's name, else "w/d/l". */
+export function pointsSystemLabel(sport: SportId, fmt?: Record<string, unknown> | null): string {
+  const p = activePreset(sport, fmt);
+  if (p) return p.label;
+  const c = standingsConfigFromFormat(sport, fmt);
+  return `${c.win}/${c.draw}/${c.loss}`;
+}
+
+/** "3-0:3/0,3-2:2/1" → { '3-0': [3, 0], '3-2': [2, 1] }; malformed parts dropped. */
+export function parseSetPoints(raw: unknown): Record<string, [number, number]> | undefined {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const out: Record<string, [number, number]> = {};
+  for (const part of raw.split(',')) {
+    const m = /^\s*(\d+)-(\d+)\s*:\s*(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\s*$/.exec(part);
+    if (m) out[`${m[1]}-${m[2]}`] = [Number(m[3]), Number(m[4])];
   }
-  return [];
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Points each side takes from a no result / abandoned match: the config's
@@ -203,11 +427,55 @@ export function noResultPoints(sport: SportId, cfg?: StandingsConfig | null): nu
   return cfg?.noResult ?? (sport === 'cricket' ? 1 : 0);
 }
 
-/** The tie-breakers an organiser can put first for a sport (PointsEditor). */
+/** The tie-breakers an organiser can use for a sport (PointsEditor's
+ *  advanced order), most useful first. */
 export function availableTieBreakers(sport: SportId): TieBreaker[] {
-  if (sport === 'chess') return ['sb', 'wins', 'h2h'];
-  if (sport === 'tabletennis') return ['h2h', 'h2hRatio', 'h2hPoints'];
-  return sport === 'cricket' ? ['h2h', 'nrr', 'for'] : ['h2h', 'diff', 'for'];
+  if (sport === 'chess') return ['sb', 'wins', 'h2h', ...customTB.keys(), 'lots'];
+  if (sport === 'cricket') return ['h2h', 'nrr', 'for', 'wins', 'played', 'lots'];
+  switch (scoreUnit(sport)) {
+    case 'sets':
+      return sport === 'volleyball'
+        ? ['wins', 'setRatio', 'pointRatio', 'h2h', 'diff', 'setsPct', 'pointsDiff', 'played', 'lots']
+        : ['wins', 'played', 'h2h', 'setsPct', 'gamesPct', 'diff', 'gamesDiff', 'setRatio', 'lots'];
+    case 'games':
+      return sport === 'tabletennis'
+        ? ['h2h', 'h2hRatio', 'h2hPoints', 'diff', 'pointsDiff', 'pointRatio', 'gamesPct', 'wins', 'played', 'lots']
+        : ['h2h', 'diff', 'pointsDiff', 'h2hRatio', 'h2hPoints', 'pointRatio', 'gamesPct', 'wins', 'played', 'lots'];
+    case 'goals':
+      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', ...(sport === 'football' ? ['fairPlay' as const] : []), 'played', 'lots'];
+    default:
+      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', 'played', 'lots'];
+  }
+}
+
+/** A tie-breaker in plain words, in the sport's unit ("goal difference",
+ *  "set ratio"). */
+export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): string {
+  const u = scoreUnit(sport ?? '');
+  const unit = u === 'goals' ? 'goal' : u === 'runs' ? 'run' : u === 'sets' ? 'set' : u === 'games' ? 'games' : 'points';
+  const scored = u === 'goals' ? 'goals scored' : u === 'runs' ? 'runs scored' : u === 'sets' ? 'sets won' : u === 'games' ? 'games won' : 'points scored';
+  switch (tb) {
+    case 'h2h': return 'head-to-head';
+    case 'h2hDiff': return `head-to-head ${unit} difference`;
+    case 'h2hFor': return `head-to-head ${scored}`;
+    case 'h2hRatio': return 'games ratio (among tied)';
+    case 'h2hPoints': return 'points ratio (among tied)';
+    case 'nrr': return 'net run rate';
+    case 'diff': return u === 'points' ? 'points difference' : `${unit} difference`;
+    case 'for': return scored;
+    case 'wins': return 'number of wins';
+    case 'played': return 'matches played';
+    case 'sb': return 'Sonneborn-Berger';
+    case 'setRatio': return 'set ratio';
+    case 'pointRatio': return 'point ratio';
+    case 'gamesDiff': return 'games difference';
+    case 'pointsDiff': return sport === 'carrom' ? 'board points difference' : 'points difference';
+    case 'setsPct': return '% of sets won';
+    case 'gamesPct': return '% of games won';
+    case 'fairPlay': return 'fair play (cards)';
+    case 'lots': return 'drawing of lots';
+    default: return customTB.get(tb)?.label ?? tb;
+  }
 }
 
 /** The saved points adjustments in a sport's format (`pointsAdj`, a JSON
@@ -231,23 +499,38 @@ export function pointsAdjustmentsFromFormat(fmt?: Record<string, unknown> | null
   });
 }
 
+const parseOrder = (raw: unknown): TieBreaker[] =>
+  typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(isTieBreaker) : [];
+
 /** Read a tournament's per-sport override from its `formats[sport]` (reserved
  *  `winPoints`/`drawPoints`/`lossPoints`/`nrPoints`/`byePoints`/`tieBreak`/`pointsAdj`
- *  keys), falling back to the sport defaults. Zero-migration: rides on the
- *  existing formats jsonb. `noResult` is set only when the organiser chose
- *  `nrPoints`; `adjustments` only when there are any. */
+ *  keys, and the SD-17 rule keys `tieBreak2`/`tieRestart`/`rankBy`/`setPoints`/
+ *  `lossBonusMargin`+`lossBonusPoints`/`soWinPoints`+`soLossPoints`/
+ *  `forfeitLossPoints`), falling back to the sport defaults. Zero-migration:
+ *  rides on the existing formats jsonb. Each optional rule is set only when its
+ *  key is stored, so an old format reads exactly as before. */
 export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, unknown> | null): StandingsConfig {
   const d = defaultStandingsConfig(sport);
   if (!fmt) return d;
-  const num = (k: string, dv: number) => (typeof fmt[k] === 'number' ? (fmt[k] as number) : dv);
-  const order = typeof fmt.tieBreak === 'string'
-    ? (fmt.tieBreak as string).split(',').map((s) => s.trim()).filter(isTieBreaker)
-    : [];
+  const has = (k: string) => typeof fmt[k] === 'number' && Number.isFinite(fmt[k]);
+  const num = (k: string, dv: number) => (has(k) ? (fmt[k] as number) : dv);
+  const order = parseOrder(fmt.tieBreak);
+  const pairOrder = parseOrder(fmt.tieBreak2);
   const adjustments = pointsAdjustmentsFromFormat(fmt);
-  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order, ...(d.restart ? { restart: true } : {}),
+  const setPoints = parseSetPoints(fmt.setPoints);
+  const restart = fmt.tieRestart === true || fmt.tieRestart === 'h2h' ? fmt.tieRestart : fmt.tieRestart === false ? undefined : d.restart;
+  return { win: num('winPoints', d.win), draw: num('drawPoints', d.draw), loss: num('lossPoints', d.loss), order: order.length ? order : d.order,
+    ...(restart ? { restart } : {}),
     ...(typeof fmt.nrPoints === 'number' ? { noResult: fmt.nrPoints } : {}),
-    ...(typeof fmt.byePoints === 'number' && Number.isFinite(fmt.byePoints) ? { bye: fmt.byePoints } : {}),
-    ...(adjustments.length ? { adjustments } : {}) };
+    ...(has('byePoints') ? { bye: fmt.byePoints as number } : {}),
+    ...(adjustments.length ? { adjustments } : {}),
+    ...(pairOrder.length ? { pairOrder } : {}),
+    ...(fmt.rankBy === 'wins' ? { rankBy: 'wins' as const } : {}),
+    ...(setPoints ? { setPoints } : {}),
+    ...(has('lossBonusMargin') && has('lossBonusPoints') && (fmt.lossBonusPoints as number) !== 0
+      ? { lossBonus: { margin: fmt.lossBonusMargin as number, points: fmt.lossBonusPoints as number } } : {}),
+    ...(has('soWinPoints') ? { shootout: { win: fmt.soWinPoints as number, loss: num('soLossPoints', num('lossPoints', d.loss)) } } : {}),
+    ...(has('forfeitLossPoints') ? { forfeitLoss: fmt.forfeitLossPoints as number } : {}) };
 }
 
 /** DI so `standings.ts` can compute NRR without importing the sport registry
@@ -266,6 +549,21 @@ type PointsProvider = (sport: SportId, state: unknown) => { home: number; away: 
 let pointsProvider: PointsProvider | null = null;
 export function setStandingsPointsProvider(fn: PointsProvider | null): void { pointsProvider = fn; }
 
+/** A match's sub-units for the standings rule kit (SD-17): sets, games and
+ *  rally / board points won by each side, and each side's fair-play score
+ *  (≤ 0, FIFA disciplinary points). Any may be absent. The plugin hook is
+ *  `standingsUnits` (registry.ts); a sport whose match score already IS sets
+ *  or games needs no hook for that unit (see `scoreUnit`). */
+export interface StandingsUnits {
+  sets?: { home: number; away: number };
+  games?: { home: number; away: number };
+  points?: { home: number; away: number };
+  fairPlay?: { home: number; away: number };
+}
+type UnitsProvider = (sport: SportId, state: unknown) => StandingsUnits | null;
+let unitsProvider: UnitsProvider | null = null;
+export function setStandingsUnitsProvider(fn: UnitsProvider | null): void { unitsProvider = fn; }
+
 /** Runs (score) each side is credited with in the table, when the sport says
  *  they differ from the result score — cricket's ICC NRR crediting in a chase
  *  to a revised target (SD-13). Same DI pattern; null = use the score. */
@@ -277,6 +575,71 @@ export function setStandingsScoreProvider(fn: ScoreProvider | null): void { scor
  *  counts as played, each side takes `noResult` points. */
 export const isNoResultMatch = (m: Match): boolean =>
   m.result?.kind === 'no_result' || m.result?.kind === 'abandoned';
+
+/** The score a match counts in the table: a hand-ended result's score, else
+ *  the sport's table crediting (SD-13), else the match score. */
+function tableScore(m: Match): { home: number; away: number } | null {
+  return m.result?.score ?? (m.result ? null : scoreProvider?.(m.sport, m.state)) ?? m.score ?? null;
+}
+
+/** Rally / board points won by each side (the sport's points provider). */
+function pointsOf(m: Match): { home: number; away: number } | null {
+  const u = m.state != null ? unitsProvider?.(m.sport, m.state) ?? null : null;
+  return u?.points ?? pointsProvider?.(m.sport, m.state) ?? null;
+}
+
+/** A match's sets / games / points / fair play (SD-17): the plugin's units,
+ *  with the match score standing in for sets or games when that is what the
+ *  sport's score counts (volleyball's score is sets, badminton's is games). */
+export function matchUnits(m: Match): StandingsUnits {
+  const u = m.state != null ? unitsProvider?.(m.sport, m.state) ?? null : null;
+  const score = tableScore(m) ?? undefined;
+  const unit = scoreUnit(m.sport);
+  const points = u?.points ?? pointsProvider?.(m.sport, m.state) ?? undefined;
+  return {
+    ...(u?.sets ?? (unit === 'sets' ? score : undefined) ? { sets: u?.sets ?? score } : {}),
+    ...(u?.games ?? (unit === 'games' ? score : undefined) ? { games: u?.games ?? score } : {}),
+    ...(points ? { points } : {}),
+    ...(u?.fairPlay ? { fairPlay: u.fairPlay } : {}),
+  };
+}
+
+/** Match points each side takes from one finished match (SD-17 margin-aware
+ *  points): no result → `noResult` each; draw → `draw` each; otherwise win /
+ *  loss, replaced by the forfeit loss for a walkover, the shoot-out points for
+ *  a match level on the score, or the sets-score table (FIVB 3-2 → 2-1); then
+ *  the losing bonus when the margin is within `lossBonus.margin` (PKL ≤ 7).
+ *  With none of those rules set, exactly the legacy win / draw / loss. */
+export function matchPoints(m: Match, cfg: StandingsConfig): { home: number; away: number } {
+  if (isNoResultMatch(m)) { const n = noResultPoints(m.sport, cfg); return { home: n, away: n }; }
+  if (m.winner === 'draw') return { home: cfg.draw, away: cfg.draw };
+  let w = cfg.win;
+  let l = cfg.loss;
+  const score = cfg.shootout || cfg.lossBonus ? tableScore(m) : null;
+  if (m.walkover && cfg.forfeitLoss !== undefined) l = cfg.forfeitLoss;
+  else if (cfg.shootout && score && score.home === score.away) { w = cfg.shootout.win; l = cfg.shootout.loss; }
+  else if (cfg.setPoints) {
+    const sets = matchUnits(m).sets;
+    if (sets) {
+      const p = cfg.setPoints[m.winner === 'home' ? `${sets.home}-${sets.away}` : `${sets.away}-${sets.home}`];
+      if (p) [w, l] = p;
+    }
+  }
+  if (cfg.lossBonus && !m.walkover && score && Math.abs(score.home - score.away) <= cfg.lossBonus.margin) l += cfg.lossBonus.points;
+  return m.winner === 'home' ? { home: w, away: l } : { home: l, away: w };
+}
+
+/** Which units a config's tie-breakers read. */
+function unitNeeds(cfg: StandingsConfig) {
+  const tbs = new Set<string>([...cfg.order, ...(cfg.pairOrder ?? [])]);
+  const all = !!cfg.withUnits;
+  return {
+    sets: all || tbs.has('setRatio') || tbs.has('setsPct'),
+    games: all || tbs.has('gamesDiff') || tbs.has('gamesPct'),
+    points: all || tbs.has('h2hPoints') || tbs.has('pointRatio') || tbs.has('pointsDiff'),
+    fair: all || tbs.has('fairPlay'),
+  };
+}
 
 /** League table for a sport, ranked by the config's points + tie-breakers.
  *  `phaseKey` ('league' | 'group:A' | 'super' | 'swiss') picks which of the
@@ -306,7 +669,7 @@ export function teamStandings(
   // Per-round records (C.07 tie-break data) for chess, or wherever a bye scores.
   const keepGames = sport === 'chess' || byePts !== undefined;
   const log = (t: TeamStanding, g: GameRecord) => { if (keepGames) (t.games ??= []).push(g); };
-  const wantRally = cfg.order.includes('h2hPoints');
+  const need = unitNeeds(cfg);
   const resultOf = (pts: number): GameRecord['result'] => (pts >= cfg.win ? 'win' : pts > cfg.loss ? 'draw' : 'loss');
   const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
   for (const m of played) {
@@ -335,7 +698,7 @@ export function teamStandings(
     const counts = m.result?.countNrr !== false;
     // SD-13: a scored (not hand-ended) match may credit different runs for the
     // table (cricket: target − 1 for the side batting first after a revision).
-    const score = m.result?.score ?? (m.result ? null : scoreProvider?.(sport, m.state)) ?? m.score;
+    const score = tableScore(m);
     if (score && counts) {
       h.for += score.home; h.against += score.away;
       a.for += score.away; a.against += score.home;
@@ -345,27 +708,37 @@ export function teamStandings(
       h.forUnits += rate.home; h.againstUnits += rate.away;
       a.forUnits += rate.away; a.againstUnits += rate.home;
     }
-    // Rally points for cross-group seeding (SD-12) — only when the order asks.
-    if (wantRally && !forfeit) {
-      const rp = pointsProvider?.(sport, m.state) ?? null;
-      if (rp) {
-        h.rallyFor = (h.rallyFor ?? 0) + rp.home; h.rallyAgainst = (h.rallyAgainst ?? 0) + rp.away;
-        a.rallyFor = (a.rallyFor ?? 0) + rp.away; a.rallyAgainst = (a.rallyAgainst ?? 0) + rp.home;
+    // Rally points for cross-group seeding (SD-12) and the SD-17 units — only
+    // when the order asks (so a legacy row carries exactly its old fields).
+    if (!forfeit) {
+      const add = (k: 'rally' | 'sets' | 'games', pair: { home: number; away: number } | undefined | null) => {
+        if (!pair) return;
+        const [f, ag] = k === 'rally' ? ['rallyFor', 'rallyAgainst'] as const : k === 'sets' ? ['setsFor', 'setsAgainst'] as const : ['gamesFor', 'gamesAgainst'] as const;
+        h[f] = (h[f] ?? 0) + pair.home; h[ag] = (h[ag] ?? 0) + pair.away;
+        a[f] = (a[f] ?? 0) + pair.away; a[ag] = (a[ag] ?? 0) + pair.home;
+      };
+      if (need.points) add('rally', pointsOf(m));
+      if (need.sets || need.games || need.fair) {
+        const u = matchUnits(m);
+        if (need.sets) add('sets', u.sets);
+        if (need.games) add('games', u.games);
+        if (need.fair && u.fairPlay) { h.fairPlay = (h.fairPlay ?? 0) + u.fairPlay.home; a.fairPlay = (a.fairPlay ?? 0) + u.fairPlay.away; }
       }
     }
     const kind: GameRecord['kind'] = forfeit ? 'forfeit' : 'played';
+    const mp = matchPoints(m, cfg);
+    h.points += mp.home; a.points += mp.away;
     if (m.winner === 'draw') {
       if (!forfeit) { h.drawn += 1; a.drawn += 1; }
-      h.points += cfg.draw; a.points += cfg.draw;
-      log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: cfg.draw });
-      log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: cfg.draw });
+      log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: mp.home });
+      log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: mp.away });
     } else {
       const [w, l] = m.winner === 'home' ? [h, a] : [a, h];
       if (forfeit) { w.forfeitWins = (w.forfeitWins ?? 0) + 1; l.forfeitLosses = (l.forfeitLosses ?? 0) + 1; }
       else { w.won += 1; l.lost += 1; }
-      w.points += cfg.win; l.points += cfg.loss;
-      log(w, { ...base, kind, unplayed: forfeit, opponentId: l.teamId, result: 'win', points: cfg.win });
-      log(l, { ...base, kind, unplayed: forfeit, opponentId: w.teamId, result: 'loss', points: cfg.loss });
+      const [wp, lp] = m.winner === 'home' ? [mp.home, mp.away] : [mp.away, mp.home];
+      log(w, { ...base, kind, unplayed: forfeit, opponentId: l.teamId, result: 'win', points: wp });
+      log(l, { ...base, kind, unplayed: forfeit, opponentId: w.teamId, result: 'loss', points: lp });
     }
   }
   // Swiss byes: once per (round, entrant), from any drawn (not cancelled)
@@ -397,6 +770,10 @@ export function teamStandings(
   for (const t of table.values()) {
     t.diff = t.for - t.against;
     if (t.forUnits > 0 && t.againstUnits > 0) t.nrr = t.for / t.forUnits - t.against / t.againstUnits;
+    // SD-17 units: every row gets them (0 when none recorded) once asked for.
+    if (need.sets) { t.setsFor ??= 0; t.setsAgainst ??= 0; }
+    if (need.games) { t.gamesFor ??= 0; t.gamesAgainst ??= 0; }
+    if (need.fair) t.fairPlay ??= 0;
   }
   // Organiser adjustments — only for teams already in this table (a team with
   // no result in the phase has no row to adjust).
@@ -426,60 +803,102 @@ export function teamStandings(
   return rankTeams([...table.values()], played, cfg);
 }
 
-/** Rank rows: by points, then break each still-tied cluster with the config's
- *  ordered tie-breakers (head-to-head runs a mini-league among just that
- *  cluster). Recursive so a partial tie falls through to the next criterion. */
+/** Rank rows: by points (FIVB `rankBy: 'wins'`: by wins, then points), then
+ *  break each still-tied cluster with the config's ordered tie-breakers
+ *  (head-to-head runs a mini-league among just that cluster; a two-team
+ *  cluster uses `pairOrder` when set). Recursive so a partial tie falls
+ *  through to the next criterion. */
 export function rankTeams(rows: TeamStanding[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
   const out: TeamStanding[] = [];
-  const byPoints = [...rows].sort((x, y) => y.points - x.points);
+  const byWins = cfg.rankBy === 'wins';
+  const level = (x: TeamStanding, y: TeamStanding) => x.points === y.points && (!byWins || winsOf(x) === winsOf(y));
+  const byPoints = [...rows].sort((x, y) => (byWins ? winsOf(y) - winsOf(x) : 0) || y.points - x.points);
   for (let i = 0; i < byPoints.length; ) {
     let j = i;
-    while (j < byPoints.length && byPoints[j].points === byPoints[i].points) j++;
-    out.push(...orderCluster(byPoints.slice(i, j), cfg.order, matches, cfg));
+    while (j < byPoints.length && level(byPoints[j], byPoints[i])) j++;
+    const cluster = byPoints.slice(i, j);
+    out.push(...orderCluster(cluster, chainFor(cluster.length, cfg), matches, cfg));
     i = j;
   }
   return out;
 }
 
-function numericKey(t: TeamStanding, tb: 'nrr' | 'diff' | 'for' | 'wins' | 'sb'): number {
+/** The chain a level cluster starts (or restarts) with: the two-team chain
+ *  when there is one and exactly two are level (BWF / ATP), else `order`. */
+const chainFor = (size: number, cfg: StandingsConfig): TieBreaker[] =>
+  size === 2 && cfg.pairOrder?.length ? cfg.pairOrder : cfg.order;
+
+/** FIDE C.07 WIN: rounds won with or without playing — over-the-board wins,
+ *  forfeit wins and a full-point bye (forfeits used to sit in `won`). */
+const winsOf = (t: TeamStanding) =>
+  t.won + (t.forfeitWins ?? 0) + (t.games ?? []).filter((g) => g.kind === 'bye' && g.result === 'win').length;
+
+/** won ÷ (won + lost); 0 when nothing was played. */
+const pct = (won: number, lost: number) => (won + lost === 0 ? 0 : won / (won + lost));
+
+/** A tie-breaker computed over ALL the team's matches (not just among the
+ *  tied); null for the among-the-tied ones. Higher is better. */
+function overallKey(t: TeamStanding, tb: TieBreaker): number | null {
   switch (tb) {
     case 'nrr': return t.nrr ?? 0;
     case 'diff': return t.diff;
-    // FIDE C.07 WIN: rounds won with or without playing — over-the-board wins,
-    // forfeit wins and a full-point bye (forfeits used to sit in `won`).
-    case 'wins': return t.won + (t.forfeitWins ?? 0) + (t.games ?? []).filter((g) => g.kind === 'bye' && g.result === 'win').length;
+    case 'for': return t.for;
+    case 'wins': return winsOf(t);
     case 'sb': return t.sb ?? 0;
-    default: return t.for;
+    case 'played': return t.played;
+    case 'setRatio': return ratio(t.setsFor ?? 0, t.setsAgainst ?? 0);
+    case 'setsPct': return pct(t.setsFor ?? 0, t.setsAgainst ?? 0);
+    case 'gamesDiff': return (t.gamesFor ?? 0) - (t.gamesAgainst ?? 0);
+    case 'gamesPct': return pct(t.gamesFor ?? 0, t.gamesAgainst ?? 0);
+    case 'pointRatio': return ratio(t.rallyFor ?? 0, t.rallyAgainst ?? 0);
+    case 'pointsDiff': return (t.rallyFor ?? 0) - (t.rallyAgainst ?? 0);
+    case 'fairPlay': return t.fairPlay ?? 0;
+    default: return null;
   }
 }
 
 /** A tie-breaker's value for ranking teams from DIFFERENT groups (SD-12): the
  *  sport's own chain, with the "among the tied" criteria swapped for their
- *  overall equivalents — h2h itself is skipped (they never met), the ITTF
- *  games ratio becomes the team's overall score ratio, the points ratio its
- *  overall rally-point ratio. Higher is better. */
+ *  overall equivalents — h2h (and its difference / scored) is skipped (they
+ *  never met), the ITTF games ratio becomes the team's overall score ratio, the
+ *  points ratio its overall rally-point ratio; lots is skipped. Higher is better. */
 export function seedKey(t: TeamStanding, tb: TieBreaker): number | null {
-  if (tb === 'h2h') return null;
+  if (tb === 'h2h' || tb === 'h2hDiff' || tb === 'h2hFor' || tb === 'lots') return null;
   if (tb === 'h2hRatio') return ratio(t.for, t.against);
-  if (tb === 'h2hPoints') return t.rallyFor === undefined ? null : ratio(t.rallyFor, t.rallyAgainst ?? 0);
-  return numericKey(t, tb);
+  if (tb === 'h2hPoints' || tb === 'pointRatio' || tb === 'pointsDiff') {
+    if (t.rallyFor === undefined) return null;
+    return tb === 'pointsDiff' ? t.rallyFor - (t.rallyAgainst ?? 0) : ratio(t.rallyFor, t.rallyAgainst ?? 0);
+  }
+  const custom = customTB.get(tb);
+  if (custom) return custom.seed ? custom.seed(t) : null;
+  return overallKey(t, tb);
 }
 
 /** won ÷ lost, with nothing lost ranking above any finite ratio. */
 const ratio = (won: number, lost: number) => (lost === 0 ? (won > 0 ? Number.POSITIVE_INFINITY : 0) : won / lost);
 
-/** Score ratio (e.g. games) — or, with `rally`, rally-point ratio — counting only
- *  matches played among the cluster (ITTF 3.7.5.2). */
-function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match[], rally: boolean): number {
+/** The matches played among the cluster that involve `teamId` (no results
+ *  excluded), with the team's side. */
+function amongTied(teamId: string, cluster: TeamStanding[], matches: Match[]): { m: Match; isHome: boolean }[] {
   const ids = new Set(cluster.map((c) => c.teamId));
-  let won = 0;
-  let lost = 0;
+  const out: { m: Match; isHome: boolean }[] = [];
   for (const m of matches) {
     if (!ids.has(m.homeTeam.id) || !ids.has(m.awayTeam.id)) continue;
     const isHome = m.homeTeam.id === teamId;
     if (!isHome && m.awayTeam.id !== teamId) continue;
+    out.push({ m, isHome });
+  }
+  return out;
+}
+
+/** Score ratio (e.g. games) — or, with `rally`, rally-point ratio — counting only
+ *  matches played among the cluster (ITTF 3.7.5.2). */
+function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match[], rally: boolean): number {
+  let won = 0;
+  let lost = 0;
+  for (const { m, isHome } of amongTied(teamId, cluster, matches)) {
     if (isNoResultMatch(m)) continue;
-    const sc = rally ? pointsProvider?.(m.sport, m.state) ?? null : m.score ?? null;
+    const sc = rally ? pointsOf(m) : m.score ?? null;
     if (!sc) continue;
     won += isHome ? sc.home : sc.away;
     lost += isHome ? sc.away : sc.home;
@@ -487,35 +906,63 @@ function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match
   return ratio(won, lost);
 }
 
-/** Points a team took from matches played *only among the given cluster*. */
+/** Score difference (or scored) in the matches among the cluster only — the
+ *  FIBA / UEFA / IHF mini-league. */
+function headToHeadScore(teamId: string, cluster: TeamStanding[], matches: Match[], what: 'diff' | 'for'): number {
+  let f = 0;
+  let ag = 0;
+  for (const { m, isHome } of amongTied(teamId, cluster, matches)) {
+    if (isNoResultMatch(m)) continue;
+    const sc = tableScore(m);
+    if (!sc) continue;
+    f += isHome ? sc.home : sc.away;
+    ag += isHome ? sc.away : sc.home;
+  }
+  return what === 'diff' ? f - ag : f;
+}
+
+/** Points a team took from matches played *only among the given cluster*
+ *  (the same match points as the table, margins included). */
 function headToHeadPoints(teamId: string, cluster: TeamStanding[], matches: Match[], cfg: StandingsConfig): number {
-  const ids = new Set(cluster.map((c) => c.teamId));
   let pts = 0;
-  for (const m of matches) {
-    if (!ids.has(m.homeTeam.id) || !ids.has(m.awayTeam.id)) continue;
-    const isHome = m.homeTeam.id === teamId;
-    const isAway = m.awayTeam.id === teamId;
-    if (!isHome && !isAway) continue;
-    // A winner-less no result shares `noResult` (it used to read as an away win).
-    if (isNoResultMatch(m)) pts += noResultPoints(m.sport, cfg);
-    else if (m.winner === 'draw') pts += cfg.draw;
-    else if ((m.winner === 'home') === isHome) pts += cfg.win;
-    else pts += cfg.loss;
+  for (const { m, isHome } of amongTied(teamId, cluster, matches)) {
+    const mp = matchPoints(m, cfg);
+    pts += isHome ? mp.home : mp.away;
   }
   return pts;
 }
 
 function tieKey(t: TeamStanding, tb: TieBreaker, cluster: TeamStanding[], matches: Match[], cfg: StandingsConfig): number {
-  if (tb === 'h2h') return headToHeadPoints(t.teamId, cluster, matches, cfg);
-  if (tb === 'h2hRatio') return headToHeadRatio(t.teamId, cluster, matches, false);
-  if (tb === 'h2hPoints') return headToHeadRatio(t.teamId, cluster, matches, true);
-  return numericKey(t, tb);
+  switch (tb) {
+    case 'h2h': return headToHeadPoints(t.teamId, cluster, matches, cfg);
+    case 'h2hRatio': return headToHeadRatio(t.teamId, cluster, matches, false);
+    case 'h2hPoints': return headToHeadRatio(t.teamId, cluster, matches, true);
+    case 'h2hDiff': return headToHeadScore(t.teamId, cluster, matches, 'diff');
+    case 'h2hFor': return headToHeadScore(t.teamId, cluster, matches, 'for');
+  }
+  const custom = customTB.get(tb);
+  if (custom) return custom.value(t, { cluster, matches, cfg });
+  return overallKey(t, tb) ?? 0;
+}
+
+/** Does a criterion that separated some teams send the still-level ones back
+ *  to the start of the procedure? */
+function restartsAfter(tb: TieBreaker, cfg: StandingsConfig): boolean {
+  if (cfg.restart === true) return true;
+  return cfg.restart === 'h2h' && (AMONG_TIED.has(tb) || !!customTB.get(tb)?.amongTied);
 }
 
 function orderCluster(cluster: TeamStanding[], tbs: TieBreaker[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
   if (cluster.length <= 1) return cluster;
-  if (tbs.length === 0) return [...cluster].sort((a, b) => a.name.localeCompare(b.name));
+  const byName = () => [...cluster].sort((a, b) => a.name.localeCompare(b.name));
+  if (tbs.length === 0) return byName();
   const [tb, ...rest] = tbs;
+  // Explicit drawing of lots: still level after every criterion. Shown in name
+  // order, flagged so the table says "Drawn by lot" (not before any result).
+  if (tb === 'lots') {
+    if (cluster.some((t) => t.played + (t.byes ?? 0) + (t.forfeitWins ?? 0) + (t.forfeitLosses ?? 0) > 0)) for (const t of cluster) t.lots = true;
+    return byName();
+  }
   const keyed = cluster.map((t) => ({ t, k: tieKey(t, tb, cluster, matches, cfg) }));
   keyed.sort((a, b) => b.k - a.k);
   // Not separated at all by this criterion → straight on to the next one.
@@ -524,11 +971,11 @@ function orderCluster(cluster: TeamStanding[], tbs: TieBreaker[], matches: Match
   for (let i = 0; i < keyed.length; ) {
     let j = i;
     while (j < keyed.length && keyed[j].k === keyed[i].k) j++;
-    // A sub-group still level: ITTF restarts the whole order among just them
-    // (it's strictly smaller, so recursion terminates); otherwise continue with
-    // the NEXT tie-breaker.
+    // A sub-group still level: ITTF / FIBA / BWF restart the whole order among
+    // just them (UEFA / IHF only after a head-to-head criterion) — it's strictly
+    // smaller, so recursion terminates; otherwise continue with the NEXT one.
     const sub = keyed.slice(i, j).map((x) => x.t);
-    res.push(...orderCluster(sub, cfg.restart ? cfg.order : rest, matches, cfg));
+    res.push(...orderCluster(sub, restartsAfter(tb, cfg) ? chainFor(sub.length, cfg) : rest, matches, cfg));
     i = j;
   }
   return res;

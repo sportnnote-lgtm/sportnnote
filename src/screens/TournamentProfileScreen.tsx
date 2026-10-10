@@ -33,7 +33,7 @@ import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
 import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole, TournamentAwards } from '../core/types';
 import { notify } from '../core/notifications';
-import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat } from '../data/standings';
+import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat, pointsSystemLabel } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
 import { medalStandings } from '../data/medalStandings';
 import { MedalTable } from '../components/MedalTable';
@@ -657,10 +657,9 @@ export default function TournamentProfileScreen() {
             {tournament.sports.map((sp) => {
               const fmt = tournament.formats?.[sp] as Record<string, unknown> | undefined;
               const cfg = structureFromFormat(fmt);
-              const pts = standingsConfigFromFormat(sp, fmt);
               return (
                 <HubRow key={sp} icon={getSport(sp).icon} title={`${getSport(sp).name} — format & points`}
-                  status={`${cfg ? describeStructure(cfg) : 'Not set yet'} · ${pts.win}/${pts.draw}/${pts.loss}`}
+                  status={`${cfg ? describeStructure(cfg) : 'Not set yet'} · ${pointsSystemLabel(sp, fmt)}`}
                   onPress={() => nav.navigate('SportSettings', { sport: sp, tournamentId: tournament.id })} />
               );
             })}

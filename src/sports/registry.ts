@@ -4,7 +4,7 @@
  */
 import type { SportId } from '../core/types';
 import type { SportPlugin } from './types';
-import { setStandingsPointsProvider, setStandingsRateProvider, setStandingsScoreProvider } from '../data/standings';
+import { setStandingsPointsProvider, setStandingsRateProvider, setStandingsScoreProvider, setStandingsUnitsProvider } from '../data/standings';
 import { footballPlugin } from './football';
 import { cricketPlugin } from './cricket';
 import { basketballPlugin } from './basketball';
@@ -74,6 +74,8 @@ export function getSport(id: SportId): SportPlugin<any> {
     });
     setStandingsPointsProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsPoints?.(state) ?? null));
     setStandingsScoreProvider((sport, state) => (state == null ? null : SPORTS[sport].standingsScore?.(state) ?? null));
+    // SD-17: sets / games / rally points / fair play for the standings rule kit.
+    setStandingsUnitsProvider((sport, state) => (state == null ? null : SPORTS[sport]?.standingsUnits?.(state) ?? null));
   }
   return SPORTS[id];
 }

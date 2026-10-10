@@ -15,7 +15,7 @@ import { pointVoice } from '../voiceParsers';
 import { BadmintonBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, serve, summary, scoreLine, type BadmintonState } from './engine';
+import { init, reducer, serve, summary, scoreLine, standingsUnits, type BadmintonState } from './engine';
 export { serve, type BadmintonState } from './engine';
 
 const PointRow = ({ label, roster, side, name, onPoint }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string; onPoint: (side: 'home' | 'away', p?: Player) => void }) => (
@@ -123,6 +123,8 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   reducer,
   isComplete: (s) => s.ended,
   result: (s) => (s.ended ? { winner: s.gamesWon.home > s.gamesWon.away ? 'home' : s.gamesWon.away > s.gamesWon.home ? 'away' : 'draw', home: s.gamesWon.home, away: s.gamesWon.away } : null),
+  // SD-17: rally points over every game (BWF points difference).
+  standingsUnits,
   Scoreboard: BadmintonScoreboard,
   // SD-01: once ended → games won + "21-18, 19-21, 21-15" (never the reset 0–0).
   summary,

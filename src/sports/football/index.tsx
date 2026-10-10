@@ -38,7 +38,7 @@ import {
   type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
   clockLabel, clockTime, possessionPct, cardCount, footballStats, FOOTBALL_LIVE_SETTINGS,
-  minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, type XiStamp,
+  minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, type XiStamp,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -1314,6 +1314,8 @@ export const footballPlugin: SportPlugin<FootballState> = {
   // completion (incl. a shootout) and after every correction; every other
   // football stat still moves by live increments / correction deltas.
   statTotals: keeperTotals,
+  // SD-17: FIFA fair-play points from the cards (the fairPlay tie-breaker).
+  standingsUnits: (s) => ({ fairPlay: fairPlayScore(s.events ?? []) }),
   statTotalsPartial: true,
   // A level knockout tie isn't complete until the shootout produces a winner.
   isComplete: (s) => s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null),

@@ -10,7 +10,7 @@ import { theme } from '../../core/theme';
 import { Button, SelectChip, textStyles } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
-import { init, reducer, result, boardPoints, summary, scoreLine, type CarromState, type Side } from './engine';
+import { init, reducer, result, boardPoints, summary, scoreLine, standingsUnits, type CarromState, type Side } from './engine';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
@@ -103,6 +103,8 @@ export const carromPlugin: SportPlugin<CarromState> = {
   reducer,
   isComplete: (s) => s.ended,
   result: (s) => result(s),
+  // SD-17: board points over every game (points-difference tie-break).
+  standingsUnits,
   // SD-01: once ended → games won + "25-18, 12-25, 25-20" (never the reset 0 : 0).
   summary,
   scoreLine,

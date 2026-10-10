@@ -193,3 +193,23 @@ export function summary(s: PadelState): ScoreSummary {
     detailLine: `Games ${s.games.home}-${s.games.away}${s.goldenPoint ? ' · golden pt' : ''}${line ? ' · ' + line : ''}`,
   };
 }
+
+/** SD-17 standings units: games won by each side over the match (ATP / FIP
+ *  "% of games won", games difference). A set tiebreak counts as the 7-6 it
+ *  produced; a match (champions') tiebreak counts as ONE game to its winner
+ *  (ATP rule), however its points are stored. Plus the games of an unfinished
+ *  set. Sets come from the match score. */
+export function standingsUnits(s: PadelState): { games: { home: number; away: number } } | null {
+  if (!s || !Array.isArray(s.sets)) return null;
+  const mtb = (s.sets ?? []).map((_, i) => !!s.matchTbDecider && i === s.setsToWin * 2 - 2);
+  const tbs = setTiebreaks(s);
+  const games = { home: s.games?.home ?? 0, away: s.games?.away ?? 0 };
+  s.sets.forEach(([h, a], i) => {
+    if (mtb[i]) {
+      const tb = tbs[i];
+      const homeWon = tb ? tb[0] > tb[1] : h > a;
+      if (homeWon) games.home += 1; else games.away += 1;
+    } else { games.home += h; games.away += a; }
+  });
+  return { games };
+}

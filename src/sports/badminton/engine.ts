@@ -131,3 +131,11 @@ export function summary(s: BadmintonState): ScoreSummary {
     detailLine: `Games — ${s.gamesWon.home}:${s.gamesWon.away}${line ? ` (${line})` : ''} · to ${s.target} · ${s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}`,
   };
 }
+
+/** SD-17 standings units: rally points won by each side over every game (plus
+ *  an unfinished one) — the BWF points difference. Games come from the score. */
+export function standingsUnits(s: BadmintonState): { points: { home: number; away: number } } | null {
+  if (!s || !Array.isArray(s.games)) return null;
+  const points = s.games.reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: s.current?.home ?? 0, away: s.current?.away ?? 0 });
+  return { points };
+}

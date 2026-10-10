@@ -195,3 +195,11 @@ export function tally(events: LiveEvent[], side: 'home' | 'away', scope: 'all' |
   return [...byName.values()].sort((a, b) => b.points - a.points || b.aces - a.aces);
 }
 
+
+/** SD-17 standings units: rally points won by each side over every set (plus
+ *  an unfinished one) — the FIVB point ratio. Sets come from the match score. */
+export function standingsUnits(s: VolleyballState): { points: { home: number; away: number } } | null {
+  if (!s || !Array.isArray(s.sets)) return null;
+  const points = s.sets.reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: s.current?.home ?? 0, away: s.current?.away ?? 0 });
+  return { points };
+}

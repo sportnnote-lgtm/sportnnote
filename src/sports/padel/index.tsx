@@ -21,7 +21,7 @@ import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
-import { init, reducer, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, type PadelState } from './engine';
+import { init, reducer, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, setTiebreaks, standingsUnits, type PadelState } from './engine';
 import { setScore } from '../scoreline';
 export type { PadelState } from './engine';
 
@@ -109,6 +109,8 @@ export const padelPlugin: SportPlugin<PadelState> = {
   reducer,
   isComplete: (s) => s.ended,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
+  // SD-17: games won (FIP games difference) — a match tiebreak counts as one game.
+  standingsUnits,
   // SD-01: once ended → sets won + "6-4, 3-6, [10-7]" (never the reset 0–0).
   summary,
   scoreLine,

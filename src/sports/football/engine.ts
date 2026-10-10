@@ -452,6 +452,29 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
 export const cardCount = (events: FootballEvent[], type: 'yellow' | 'red', side: 'home' | 'away') =>
   events.filter((e) => e.type === type && e.side === side).length;
 
+/** SD-17 fair-play score per side (FIFA / UEFA team conduct, ≤ 0; higher is
+ *  better): per player per match only the worst applies — yellow −1, a red for
+ *  a second yellow −3, a direct red −4, a yellow then a direct red −5. A card
+ *  without a player is its own entry. */
+export function fairPlayScore(events: FootballEvent[]): { home: number; away: number } {
+  const by = new Map<string, { side: 'home' | 'away'; y: number; secondY: boolean; red: boolean }>();
+  for (const e of events ?? []) {
+    if (e.type !== 'yellow' && e.type !== 'red') continue;
+    const who = e.playerId ?? e.playerName;
+    const key = `${e.side}|${who ?? `#${e.id}`}`;
+    const r = by.get(key) ?? { side: e.side, y: 0, secondY: false, red: false };
+    if (e.type === 'yellow') r.y += 1;
+    else if (e.secondYellow) r.secondY = true;
+    else r.red = true;
+    by.set(key, r);
+  }
+  const out = { home: 0, away: 0 };
+  for (const r of by.values()) {
+    out[r.side] -= r.red ? (r.y > 0 ? 5 : 4) : r.secondY || r.y >= 2 ? 3 : r.y > 0 ? 1 : 0;
+  }
+  return out;
+}
+
 export interface TeamStatTotals {
   shots: number; shotsOnTarget: number; blockedShots: number; fouls: number; yellow: number; red: number;
   offsides: number; corners: number; tackles: number; interceptions: number; saves: number;

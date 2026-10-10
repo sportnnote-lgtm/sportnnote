@@ -128,8 +128,9 @@ describe('SD-05 — standings: FIBA 2-1 for new tournaments only', () => {
 
   test('a new tournament stores win 2 / loss 1 → a loss is worth 1', () => {
     const fmts = newTournamentFormats(['basketball', 'football'], { basketball: { preset: 'fiba' } });
-    assert.deepEqual(fmts.basketball, { winPoints: 2, lossPoints: 1, preset: 'fiba' });
-    assert.equal(fmts.football, undefined, 'other sports untouched until their own D1 item');
+    // SD-17 extended D1: the FIBA preset also stores its forfeit loss and tie-break chain.
+    assert.deepEqual(fmts.basketball, { winPoints: 2, drawPoints: 1, lossPoints: 1, forfeitLossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: true, preset: 'fiba' });
+    assert.equal(fmts.football?.winPoints, 3, 'football now gets its own D1 preset (SD-17)');
     const cfg = standingsConfigFromFormat('basketball', fmts.basketball);
     assert.equal(cfg.win, 2); assert.equal(cfg.loss, 1);
     assert.deepEqual(pts(fmts.basketball), { A: 3, B: 3, C: 3 });
@@ -144,7 +145,8 @@ describe('SD-05 — standings: FIBA 2-1 for new tournaments only', () => {
     const simple = standingsPresets('basketball').find((p) => p.label === 'Simple 2-1-0')!;
     const fmt = withNewTournamentPoints('basketball', { ...simple.set });
     assert.equal(standingsConfigFromFormat('basketball', fmt).loss, 0);
-    assert.deepEqual(newTournamentFormats(['basketball'], { basketball: { lossPoints: 0 } }).basketball, { winPoints: 2, lossPoints: 0 });
+    const own = newTournamentFormats(['basketball'], { basketball: { lossPoints: 0 } }).basketball!;
+    assert.equal(own.winPoints, 2); assert.equal(own.lossPoints, 0);
   });
 });
 

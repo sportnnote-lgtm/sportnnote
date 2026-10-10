@@ -17,7 +17,7 @@ import { courtFormation, makeCourt } from '../courts';
 import { VolleyballBoxScore } from './BoxScore';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { RallyPointEditor } from '../RallyPointEditor';
-import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, type VolleyballState, type VbOutcome } from './engine';
+import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, type VolleyballState, type VbOutcome } from './engine';
 
 export { isDecider, setTarget } from './engine';
 export type { VolleyballState } from './engine';
@@ -154,6 +154,8 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   reducer,
   isComplete: (s) => s.ended,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),
+  // SD-17: rally points over every set (FIVB point ratio).
+  standingsUnits,
   Scoreboard: VolleyballScoreboard,
   // SD-01: once ended → sets won + "25-21, 23-25, 15-12" (never the reset 0–0).
   scoreLine: (s, perspective) => scoreLine(s?.sets, { perspective }),

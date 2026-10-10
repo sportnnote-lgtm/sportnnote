@@ -56,6 +56,7 @@ export function LeagueTable({
                   {t.nrr !== undefined ? ` · NRR ${signRate(t.nrr)}` : ''}
                 </Text>
                 {!!unplayed(t) && <Text style={st.meta} numberOfLines={1}>{unplayed(t)}</Text>}
+                {t.lots && <Text style={st.meta} numberOfLines={1}>Level on every tie-break · drawn by lot</Text>}
               </View>
               <View style={st.ptsCol}>
                 <Text style={st.pts}>{t.points}{t.adjust ? '*' : ''}</Text>

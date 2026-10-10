@@ -309,6 +309,12 @@ export interface SportPlugin<S = unknown> {
   /** Rally points won by each side over the match (every game's points) — the
    *  ITTF "points ratio" league tie-break. Rally sports supply it. */
   standingsPoints?: (state: S) => { home: number; away: number } | null;
+  /** SD-17 standings rule kit: what the table's set / point ratio, games
+   *  difference / % and fair-play tie-breakers read — sets, games and rally
+   *  (or board) points won by each side, and each side's fair-play score (≤ 0).
+   *  Give only what the match score doesn't already count (volleyball's score
+   *  is sets, badminton's games); `standingsPoints` stands in for `points`. */
+  standingsUnits?: (state: S) => import('../data/standings').StandingsUnits | null;
   /** The scorer's control panel for this sport. */
   ScoringControls: React.FC<ScoringControlsProps<S>>;
   /** Optional rich widget shown on the live page (e.g. football pitch map). */
