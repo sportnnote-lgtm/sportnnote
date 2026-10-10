@@ -346,7 +346,7 @@ export default function ScheduleMatchScreen() {
             <Text style={textStyles.muted}>
               🏃 Athletics isn’t a match: each race is an event with heats and a final. Add the event, its athletes (or relay teams), rounds and lanes, then enter times heat by heat.
             </Text>
-            <Button label="🏃 Set up a track event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId })} />
+            <Button label="🏃 Set up an athletics event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId })} />
           </>
         ) : golfField ? (
           <>

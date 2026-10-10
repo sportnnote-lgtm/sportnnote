@@ -28,7 +28,9 @@ import {
   fieldFinalists, firstRoundsDone, attemptOrder, formatMark, parseMark, attemptText, summarizeHeights, addTry,
   eventAwards, categoryKey, categoryLabel, usesLanes,
   digitsToTime, handTime, handNote, reactionFalseStart, moveLane, startListText, resultsText, meetSettings, hurdleHeight,
+  looseLegal, attemptNextUp, trialsFor, verticalState, jumpOffStatus, jumpOffTry, jumpOffStart, trialSeconds, barProgressionError,
   type DisciplineDef, type EntryResult, type MarkHistory, type RankedEntry, type RecordMark, type ResultStatus, type LiftAttempt,
+  type ResultEntry, type JumpOff, type VerticalState, type Attempt,
 } from '../data/results';
 import { useAuth } from '../core/auth';
 import { canOrganize } from '../core/roles';
@@ -116,7 +118,7 @@ export default function ResultsEventScreen() {
   // Ranking per heat with Q / q and PB / SB / MR flags.
   const ranked = useMemo(() => {
     if (!def || !f || !phase) return new Map<number, RankedEntry[]>();
-    const byHeat = rankByHeat(resEntries, def, { handLegal: f.handTimed });
+    const byHeat = rankByHeat(resEntries, def, { handLegal: looseLegal(f) });
     const q = f.progression ? qualify(byHeat, def, f.progression) : null;
     const ctx = { history, records: [...records, ...srBook], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
     return new Map([...byHeat].map(([h, rows]) => [h, withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx)]));
@@ -127,7 +129,11 @@ export default function ResultsEventScreen() {
   const heatEntries = merged.filter((e) => e.groupNo === activeHeat);
   const editable = canEdit && phase?.status !== 'completed';
   const finalists = useMemo(() => (def?.capture === 'attempts' ? fieldFinalists(resEntries.filter((e) => e.heat === activeHeat), def) : new Set<string>()), [def, resEntries, activeHeat]);
-  const extraOpen = def?.capture === 'attempts' && firstRoundsDone(resEntries.filter((e) => e.heat === activeHeat), def);
+  // SD-91: a qualification round has 3 trials only — no extra three.
+  const extraOpen = def?.capture === 'attempts' && f?.phase !== 'qualification' && firstRoundsDone(resEntries.filter((e) => e.heat === activeHeat), def);
+  const heatRes = useMemo(() => resEntries.filter((e) => e.heat === activeHeat), [resEntries, activeHeat]);
+  const nextUp = useMemo(() => (def?.capture === 'attempts' ? attemptNextUp(heatRes, def, { phase: f?.phase, standard: f?.progression?.standard }) : null), [def, heatRes, f?.phase, f?.progression?.standard]);
+  const vState = useMemo(() => (def?.capture === 'heights' ? verticalState(heatRes, f?.bar ?? []) : null), [def, heatRes, f?.bar]);
   const windByHeat = useMemo(() => new Map(heats.map((h) => [h, (merged.find((e) => e.groupNo === h && (e.result as EntryResult)?.wind != null)?.result as EntryResult | undefined)?.wind])), [heats, merged]);
 
   const save = async (entry: FieldEntry, next: EntryResult) => {
@@ -165,7 +171,8 @@ export default function ResultsEventScreen() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   const finish = async () => {
-    const ok = await confirmAction('Finish and lock the results?', 'Places, medals and any new record are final. You can still view the sheet.', 'Finish');
+    const jo = [...ranked.values()].flat().some((r) => r.needsDecider && r.flags.includes('JO'));
+    const ok = await confirmAction('Finish and lock the results?', `${jo ? 'The tie for 1st has no jump-off result — the athletes will share 1st. ' : ''}Places, medals and any new record are final. You can still view the sheet.`, 'Finish');
     if (!ok) return;
     setBusy(true);
     try {
@@ -182,12 +189,52 @@ export default function ResultsEventScreen() {
   const awards = f.phase === 'final' ? eventAwards([...ranked.values()].flat(), meet ? { positionPoints: meet.positionPoints } : {}) : [];
   const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length; });
   const hurdles = hurdleHeight(def.key, f.category ?? {});
+  // SD-91: the field event's set-up line (implement, board, wind gauge)
+  const fieldNote = [f.implement ? `Implement ${f.implement}` : '', f.board ? `Take-off board ${f.board} m` : '', f.noWindGauge ? 'No wind gauge — jumps without a reading count for records' : ''].filter(Boolean).join(' · ');
+  const curBar = def.capture === 'heights' ? (bar != null && (f.bar ?? []).includes(bar) ? bar : vState?.height ?? bar) : null;
+  const saveAttempt = (id: string, round: number, a: Attempt) => {
+    const e = merged.find((x) => x.id === id);
+    if (!e) return;
+    const r = resultOf(e);
+    const list = [...(r.attempts ?? [])];
+    if (list.length < round - 1) return;
+    list[round - 1] = a;
+    void save(e, { ...r, attempts: list });
+  };
+  const saveTry = (id: string, height: number, t: 'O' | 'X' | '-') => {
+    const e = merged.find((x) => x.id === id);
+    if (!e) return;
+    const r = resultOf(e);
+    const list = r.heights ?? [];
+    const cur = list.find((h) => Math.abs(h.height - height) < 1e-9)?.tries ?? '';
+    const next = addTry(cur, t);
+    if (next === cur) return;
+    void save(e, { ...r, heights: [...list.filter((h) => Math.abs(h.height - height) >= 1e-9), { height, tries: next }].sort((a, b) => a.height - b.height) });
+  };
+  const addBar = async (h: number) => {
+    const list = [...new Set([...(f.bar ?? []), h])].sort((a, b) => a - b);
+    await patchPhaseFormat(phase.id, { bar: list });
+    setPhase({ ...phase, format: { ...phase.format, results: { ...f, bar: list } } });
+    setBar(h);
+  };
+  // Jump-off for 1st (TR 26.9): stored on the phase; its places become each tied athlete's `decider`.
+  const writeJumpOff = async (jo: JumpOff | undefined, places: Map<string, number>, ids: string[]) => {
+    await patchPhaseFormat(phase.id, { jumpOff: jo });
+    setPhase({ ...phase, format: { ...phase.format, results: { ...f, jumpOff: jo } } });
+    for (const id of ids) {
+      const e = merged.find((x) => x.id === id);
+      if (!e) continue;
+      const r = resultOf(e);
+      const d = places.get(id);
+      if (r.decider !== d) await save(e, { ...r, decider: d });
+    }
+  };
 
   // Share: the start list before anyone has a mark, the results after.
   const share = () => {
     const rows = [...ranked].flatMap(([h, rs]) => rs.map((r) => ({
       heat: h, lane: r.entry.result.lane, order: r.entry.result.order, name: r.entry.name, team: r.entry.team?.name,
-      mark: r.bestText || (r.status !== 'ok' ? r.status : ''), place: r.label && r.position != null ? r.label : '', flags: r.flags.filter((x) => x !== 'w' && x !== 'h'),
+      mark: (r.bestText ? r.bestText + (def.wind === 'attempt' && r.wind != null ? ` (${windText(r.wind)})` : '') : '') || (r.status !== 'ok' ? r.status : ''), place: r.label && r.position != null ? r.label : '', flags: r.flags.filter((x) => x !== 'w' && x !== 'h'),
     })));
     const title = `${f.eventTitle ?? def.label} — ${phaseLabel(f.phase)}`;
     void shareMessage(anyMark ? resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id)) : startListText(title, rows, resultsLink(phase.id)), 'results');
@@ -230,6 +277,7 @@ export default function ResultsEventScreen() {
           <SelectChip label="📤 Share" active={false} onPress={share} />
         </View>
         {hurdles ? <Text style={textStyles.muted}>Hurdle height {hurdles} (World Athletics, {categoryLabel(f.category)}).</Text> : null}
+        {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
 
@@ -266,10 +314,21 @@ export default function ResultsEventScreen() {
               </View>
             )}
 
+            {def.capture === 'attempts' && editable && (
+              <AttemptCard def={def} up={nextUp} rows={heatRows} heatRes={heatRes} phaseKind={f.phase} onSave={saveAttempt} />
+            )}
+            {def.capture === 'heights' && editable && (
+              <HeightCard def={def} vs={vState} bar={f.bar ?? []} onTry={saveTry} onAdd={(h) => void addBar(h)} />
+            )}
+            {def.capture === 'heights' && (
+              <JumpOffCard def={def} rows={heatRows} vs={vState} bar={f.bar ?? []} jo={f.jumpOff} editable={editable} onWrite={(jo, places, ids) => void writeJumpOff(jo, places, ids).catch((e) => setError((e as Error).message))} />
+            )}
+            {def.capture === 'heights' && <HeightGrid def={def} entries={orderFor(heatEntries).map((e) => toResultEntry({ ...e, result: resultOf(e) }, nameOf))} current={curBar} />}
+
             {def.capture === 'attempts' && (
               <View style={st.wrap}>
-                <Text style={textStyles.muted}>Round</Text>
-                {Array.from({ length: (def.attempts?.count ?? 3) + (def.attempts?.extra ?? 0) }, (_, i) => i + 1).map((r) => (
+                <Text style={textStyles.muted}>{editable ? 'Edit round' : 'Round'}</Text>
+                {Array.from({ length: trialsFor(def, f.phase) }, (_, i) => i + 1).map((r) => (
                   <SelectChip key={r} label={String(r)} active={round === r} disabled={r > (def.attempts?.count ?? 3) && !extraOpen} onPress={() => setRound(r)} />
                 ))}
               </View>
@@ -279,8 +338,7 @@ export default function ResultsEventScreen() {
             ) : null}
 
             {def.capture === 'heights' && (
-              <BarHeights def={def} bar={f.bar ?? []} current={bar} onPick={setBar} editable={editable}
-                onAdd={async (h) => { await patchPhaseFormat(phase.id, { bar: [...new Set([...(f.bar ?? []), h])].sort((a, b) => a - b) }); setBar(h); await load(); }} />
+              <BarHeights def={def} bar={f.bar ?? []} current={curBar} onPick={setBar} editable={editable} onAdd={addBar} />
             )}
 
             {orderFor(heatEntries).map((e) => {
@@ -312,7 +370,7 @@ export default function ResultsEventScreen() {
                     <AttemptCells def={def} r={r} round={round} editable={editable && (r.status ?? 'ok') === 'ok'}
                       extraAllowed={extraOpen && finalists.has(e.id)} onChange={(n) => void save(e, n)} />
                   )}
-                  {def.capture === 'heights' && <HeightRow def={def} r={r} bar={bar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
+                  {def.capture === 'heights' && <HeightRow def={def} r={r} bar={curBar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
                   {def.capture === 'lifts' && <LiftCells r={r} editable={editable && (r.status ?? 'ok') === 'ok'} nextSeq={1 + Math.max(0, ...merged.flatMap((x) => [...((x.result as EntryResult)?.lifts?.snatch ?? []), ...((x.result as EntryResult)?.lifts?.cj ?? [])].map((l) => l.seq ?? 0)))} onChange={(n) => void save(e, n)} />}
                   {f.reaction && def.unit === 'time' && editable && (
                     <ReactionField value={r.reaction} onSave={(v) => void save(e, { ...r, reaction: v })} />
@@ -335,6 +393,7 @@ export default function ResultsEventScreen() {
         {view === 'sheet' && (
           <>
             <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)} · ${phase.startsAt.slice(0, 10)}`} heats={ranked} wind={windByHeat} />
+            {f.jumpOff ? <Text style={textStyles.muted}>{jumpOffText(f.jumpOff, def, resEntries)}</Text> : null}
             {awards.length > 0 && (
               <Card style={{ gap: theme.spacing(1) }}>
                 <Text style={textStyles.h3}>Medals & points</Text>
@@ -617,6 +676,217 @@ function LiftCells({ r, editable, nextSeq, onChange }: { r: EntryResult; editabl
   );
 }
 
+/* ------------------------- SD-91: field events -------------------------- */
+
+const ord = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][n % 100] ?? 'th'}`;
+
+/** TR 25.17 trial clock: tap to start; the last 15 s show in red (the yellow flag). */
+function TrialClock({ seconds, resetKey }: { seconds: number; resetKey: string }) {
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => { setLeft(null); }, [resetKey]);
+  useEffect(() => {
+    if (left == null || left <= 0) return;
+    const t = setTimeout(() => setLeft((x) => (x == null ? x : x - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  const mmss = (v: number) => `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
+  return (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Trial clock" onPress={() => setLeft(left == null ? seconds : null)}
+      style={[st.clock, left != null && left <= 15 && { borderColor: theme.colors.danger }]}>
+      <Text style={[st.clockTxt, left != null && left <= 15 && { color: theme.colors.danger }]}>⏱ {left == null ? mmss(seconds) : left <= 0 ? 'Time' : mmss(left)}</Text>
+    </TouchableOpacity>
+  );
+}
+
+/** The attempt card: who is up (round order, top 8 in reverse after round 3),
+ *  their series and standing, and one-tap mark / X foul / – pass. Saving moves
+ *  straight on to the next athlete. */
+function AttemptCard({ def, up, rows, heatRes, phaseKind, onSave }: {
+  def: DisciplineDef; up: { round: number; entry: ResultEntry } | null; rows: RankedEntry[]; heatRes: ResultEntry[]; phaseKind: string;
+  onSave: (id: string, round: number, a: Attempt) => void;
+}) {
+  const [t, setT] = useState('');
+  const [w, setW] = useState('');
+  const [bad, setBad] = useState(false);
+  const key = up ? `${up.entry.id}:${up.round}` : 'done';
+  useEffect(() => { setT(''); setW(''); setBad(false); }, [key]);
+  if (!up) {
+    const total = trialsFor(def, phaseKind as never);
+    return (
+      <Card style={st.upCard}>
+        <Text style={textStyles.h3}>All trials taken</Text>
+        <Text style={textStyles.muted}>{phaseKind === 'qualification' ? 'Every athlete has had 3 trials (or reached the standard).' : `Every athlete has had their trials (${total} for the finalists).`} Check the ranking, then finish below. Tap “Edit round” to correct a trial.</Text>
+      </Card>
+    );
+  }
+  const me = rows.find((r) => r.id === up.entry.id);
+  const lead = rows.find((r) => r.position === 1);
+  const list = up.entry.result.attempts ?? [];
+  const wind = def.wind === 'attempt';
+  const commit = () => {
+    const p = parseMark(t, def);
+    if (!p) { setBad(true); return; }
+    const wv = num(w);
+    onSave(up.entry.id, up.round, { mark: p.mark, ...(wind && wv != null ? { wind: wv } : {}) });
+  };
+  const inRound = heatRes.filter((e) => (e.result.attempts ?? []).length >= up.round).length;
+  return (
+    <Card style={st.upCard}>
+      <View style={st.headRow}>
+        <Text style={st.upRound}>R{up.round}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={st.upName} numberOfLines={1}>{up.entry.name}</Text>
+          <Text style={textStyles.muted} numberOfLines={1}>
+            {[up.entry.team?.name, `#${up.entry.result.order ?? '–'}`, me?.position ? `now ${me.label.startsWith('=') ? '=' : ''}${ord(me.position)}` : 'no mark yet'].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+        <TrialClock seconds={trialSeconds(def, heatRes.length)} resetKey={key} />
+      </View>
+      <Text style={textStyles.muted} numberOfLines={1}>
+        {list.length ? `Series: ${list.map((a) => attemptText(a, def)).join('  ')}` : 'First trial'}{lead && lead.id !== up.entry.id ? `  ·  leader ${lead.entry.name.split(' ')[0]} ${lead.bestText}` : lead ? '  ·  leading' : ''}
+      </Text>
+      <View style={st.inline}>
+        <TextInput style={[st.input, st.markInput, bad && st.bad]} value={t} onChangeText={(x) => { setT(x); setBad(false); }} placeholder="5.12"
+          placeholderTextColor={theme.colors.textMuted} keyboardType="decimal-pad" accessibilityLabel={`Round ${up.round} mark for ${up.entry.name}`}
+          onSubmitEditing={commit} autoFocus={false} />
+        {wind && (
+          <TextInput style={[st.input, { width: 72 }]} value={w} onChangeText={setW} placeholder="wind" placeholderTextColor={theme.colors.textMuted}
+            keyboardType="numbers-and-punctuation" accessibilityLabel={`Round ${up.round} wind`} onSubmitEditing={commit} />
+        )}
+      </View>
+      <View style={st.inline}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Save mark" onPress={commit} style={[st.bigBtn, st.bigOk]}><Text style={st.bigTxt}>✓ Mark</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Foul" onPress={() => onSave(up.entry.id, up.round, { foul: true })} style={[st.bigBtn, st.bigX]}><Text style={st.bigTxt}>X foul</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Pass" onPress={() => onSave(up.entry.id, up.round, { pass: true })} style={[st.bigBtn, st.bigPass]}><Text style={st.bigTxtDark}>– pass</Text></TouchableOpacity>
+      </View>
+      {bad ? <Text style={st.badTxt}>Type the mark in metres, e.g. 5.12</Text> : null}
+      <Text style={textStyles.muted}>{inRound}/{heatRes.length} have jumped / thrown in round {up.round}.{wind ? ' Wind in m/s (+ = tail).' : ''} Marks are measured down to the centimetre.</Text>
+    </Card>
+  );
+}
+
+/** HJ / PV: the bar now, who is up and their try, and O / X / – (pass). */
+function HeightCard({ def, vs, bar, onTry, onAdd }: { def: DisciplineDef; vs: VerticalState | null; bar: number[]; onTry: (id: string, h: number, t: 'O' | 'X' | '-') => void; onAdd: (h: number) => void }) {
+  const warn = barProgressionError(bar, def);
+  if (!vs) return null;
+  if (!bar.length) return <Card style={st.upCard}><Text style={textStyles.muted}>Add the opening height below to start.</Text></Card>;
+  if (!vs.up || vs.height == null) {
+    const one = vs.active.length === 1 ? vs.active[0] : null;
+    return (
+      <Card style={st.upCard}>
+        <Text style={textStyles.h3}>{vs.active.length === 0 ? 'Competition over' : one ? `${one.name} has won` : 'Raise the bar'}</Text>
+        <Text style={textStyles.muted}>
+          {vs.active.length === 0 ? 'Everyone is out. Check the ranking (and any jump-off for 1st), then finish below.'
+            : one ? `${one.name.split(' ')[0]} may keep jumping at heights they choose — or finish below.` : 'Everyone has finished at the listed heights.'}
+        </Text>
+        {vs.suggestNext != null && <SelectChip label={`＋ Next height ${formatMark(vs.suggestNext, def)}`} active={false} onPress={() => onAdd(vs.suggestNext!)} />}
+      </Card>
+    );
+  }
+  const h = vs.height;
+  return (
+    <Card style={st.upCard}>
+      <View style={st.headRow}>
+        <Text style={st.upRound}>{formatMark(h, def)}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={st.upName} numberOfLines={1}>{vs.up.name}</Text>
+          <Text style={textStyles.muted} numberOfLines={1}>{[vs.up.team?.name, `try ${vs.attempt} of 3`, `${vs.active.length} still in`].filter(Boolean).join(' · ')}</Text>
+        </View>
+        <TrialClock seconds={trialSeconds(def, vs.active.length)} resetKey={`${vs.up.id}:${h}:${vs.attempt}`} />
+      </View>
+      <View style={st.inline}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cleared" onPress={() => onTry(vs.up!.id, h, 'O')} style={[st.bigBtn, st.bigOk]}><Text style={st.bigTxt}>O clear</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Failed" onPress={() => onTry(vs.up!.id, h, 'X')} style={[st.bigBtn, st.bigX]}><Text style={st.bigTxt}>X fail</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Pass" onPress={() => onTry(vs.up!.id, h, '-')} style={[st.bigBtn, st.bigPass]}><Text style={st.bigTxtDark}>– pass</Text></TouchableOpacity>
+      </View>
+      <Text style={textStyles.muted}>Three failures in a row (at any heights) and the athlete is out. Pass a height an athlete doesn’t want to jump.</Text>
+      {warn ? <Text style={st.badTxt}>{warn}</Text> : null}
+    </Card>
+  );
+}
+
+/** The HJ / PV card: athletes × heights, O / X / – per height. */
+function HeightGrid({ def, entries, current }: { def: DisciplineDef; entries: ResultEntry[]; current: number | null }) {
+  const heights = [...new Set([...entries.flatMap((e) => (e.result.heights ?? []).filter((h) => h.tries).map((h) => h.height)), ...(current != null ? [current] : [])])].sort((a, b) => a - b);
+  if (!heights.length) return null;
+  return (
+    <Card style={{ padding: theme.spacing(2) }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
+        <View>
+          <View style={st.gridRow}>
+            <Text style={[st.gridName, st.gridHead]}>Athlete</Text>
+            {heights.map((h) => <Text key={h} style={[st.gridCell, st.gridHead, h === current && st.gridCur]}>{formatMark(h, def)}</Text>)}
+          </View>
+          {entries.map((e) => {
+            const sum = summarizeHeights(e.result.heights);
+            return (
+              <View key={e.id} style={st.gridRow}>
+                <Text style={[st.gridName, sum.eliminated && { color: theme.colors.textMuted }]} numberOfLines={1}>{e.name.split(' ')[0]}{sum.eliminated ? ' ·out' : ''}</Text>
+                {heights.map((h) => <Text key={h} style={[st.gridCell, h === current && st.gridCur]}>{(e.result.heights ?? []).find((x) => Math.abs(x.height - h) < 1e-9)?.tries ?? ''}</Text>)}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </Card>
+  );
+}
+
+/** "Jump-off: 1.47 Asha O, Riya X → Asha 1st" for the sheet. */
+function jumpOffText(jo: JumpOff, def: DisciplineDef, entries: ResultEntry[]): string {
+  const name = (id: string) => entries.find((e) => e.id === id)?.name ?? '?';
+  if (jo.shared) return `Jump-off: not held — ${jo.athletes.map(name).join(' and ')} agreed to share 1st (TR 26.9).`;
+  const rounds = jo.rounds.map((r) => `${formatMark(r.height, def)} ${Object.entries(r.tries).map(([id, t]) => `${name(id).split(' ')[0]} ${t}`).join(', ')}`);
+  return `Jump-off: ${rounds.join(' · ') || 'not started'}`;
+}
+
+/** A tie for 1st in HJ / PV once everyone is out: a jump-off (one try per
+ *  height, bar down 2 cm / 5 cm after all fail, up after several clear) or the
+ *  athletes agree to share 1st (TR 26.9). */
+function JumpOffCard({ def, rows, vs, bar, jo, editable, onWrite }: {
+  def: DisciplineDef; rows: RankedEntry[]; vs: VerticalState | null; bar: number[]; jo?: JumpOff; editable: boolean;
+  onWrite: (jo: JumpOff | undefined, places: Map<string, number>, ids: string[]) => void;
+}) {
+  const tied = rows.filter((r) => r.position === 1 && r.tie);
+  const ids = jo?.athletes ?? tied.map((r) => r.id);
+  if (!jo && (tied.length < 2 || (vs?.active.length ?? 0) > 0)) return null;
+  const tieHeight = (jo ? rows.find((r) => r.id === jo.athletes[0])?.best : tied[0]?.best) ?? 0;
+  const start = jumpOffStart(bar, tieHeight, def);
+  const name = (id: string) => rows.find((r) => r.id === id)?.entry.name ?? '?';
+  const status = jo ? jumpOffStatus(jo, def, start) : null;
+  const reset = () => onWrite(undefined, new Map(), ids);
+  return (
+    <Card style={[st.upCard, { borderColor: theme.colors.danger }]}>
+      <Text style={textStyles.h3}>{jo?.shared ? 'Shared 1st' : status?.decided ? 'Jump-off decided' : `Tie for 1st at ${formatMark(tieHeight, def)}`}</Text>
+      <Text style={textStyles.muted}>{ids.map(name).join(', ')}{!jo ? ' — same failures at that height and in total.' : ''}</Text>
+      {!jo && editable && (
+        <View style={st.inline}>
+          <SelectChip label={`Start jump-off at ${formatMark(start, def)}`} active={false} onPress={() => onWrite({ athletes: ids, rounds: [] }, new Map(), ids)} />
+          <SelectChip label="They share 1st" active={false} onPress={() => onWrite({ athletes: ids, shared: true, rounds: [] }, new Map(ids.map((id) => [id, 1])), ids)} />
+        </View>
+      )}
+      {status && !status.decided && status.up && status.height != null && (
+        <>
+          <Text style={st.label}>Bar {formatMark(status.height, def)} · {name(status.up)} — one try</Text>
+          {editable && (
+            <View style={st.inline}>
+              {(['O', 'X'] as const).map((t) => (
+                <TouchableOpacity key={t} accessibilityRole="button" accessibilityLabel={t === 'O' ? 'Jump-off clear' : 'Jump-off fail'}
+                  onPress={() => { const next = jumpOffTry(jo!, def, start, status.up!, t); const s2 = jumpOffStatus(next, def, start); onWrite(next, s2.decided ? s2.places : new Map(), ids); }}
+                  style={[st.bigBtn, t === 'O' ? st.bigOk : st.bigX]}><Text style={st.bigTxt}>{t === 'O' ? 'O clear' : 'X fail'}</Text></TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <Text style={textStyles.muted}>All fail → the bar comes down {def.key === 'ath.pv' ? '5' : '2'} cm; more than one clears → it goes up {def.key === 'ath.pv' ? '5' : '2'} cm. The jump-off decides 1st only — its heights don’t count as marks.</Text>
+        </>
+      )}
+      {status?.decided && !jo?.shared && <Text style={textStyles.body}>{[...status.places].sort((a, b) => a[1] - b[1]).map(([id, p]) => `${ord(p)} ${name(id)}`).join(' · ')}</Text>}
+      {jo && <Text style={textStyles.muted}>{jumpOffText(jo, def, rows.map((r) => r.entry))}</Text>}
+      {jo && editable && <SelectChip label="Reset the jump-off" active={false} onPress={reset} />}
+    </Card>
+  );
+}
+
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3), paddingBottom: theme.spacing(12) },
@@ -647,4 +917,20 @@ const st = StyleSheet.create({
   cellOff: { opacity: 0.35 },
   cellTxt: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800', fontVariant: ['tabular-nums'] },
   cellWind: { color: theme.colors.textMuted, fontSize: 9 },
+  upCard: { gap: theme.spacing(2), padding: theme.spacing(3), borderWidth: 2, borderColor: theme.colors.primary },
+  upRound: { color: theme.colors.primary, fontWeight: '900', fontSize: theme.font.h3, minWidth: 40, fontVariant: ['tabular-nums'] },
+  upName: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '800' },
+  bigBtn: { flexGrow: 1, minWidth: 88, paddingVertical: theme.spacing(3), borderRadius: theme.radius.sm, alignItems: 'center' },
+  bigOk: { backgroundColor: theme.colors.primary },
+  bigX: { backgroundColor: theme.colors.danger },
+  bigPass: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border },
+  bigTxt: { color: '#fff', fontWeight: '900', fontSize: theme.font.body },
+  bigTxtDark: { color: theme.colors.text, fontWeight: '900', fontSize: theme.font.body },
+  clock: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
+  clockTxt: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  gridRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  gridName: { width: 84, color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
+  gridCell: { width: 44, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
+  gridHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  gridCur: { backgroundColor: theme.colors.primary + '22' },
 });

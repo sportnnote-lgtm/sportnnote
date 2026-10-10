@@ -78,7 +78,7 @@ export type RootStackParamList = {
   GolfRoundSetup: { tournamentId?: string; nextOf?: string; competition?: string; holes?: string } | undefined;
   /** Results engine (SD-28): one phase of a timed / measured event — entry + sheet. */
   ResultsEvent: { phaseId: string; tab?: 'enter' | 'sheet' };
-  /** SD-90: add a track event (category, entrants, rounds, lanes) to a meet. */
+  /** SD-90 / SD-91: add a track or field event (category, entrants, rounds, lanes / order, bar heights) to a meet. */
   AthleticsEventSetup: { tournamentId?: string } | undefined;
   /** Hidden dev entry point for the results engine (URL /ResultsLab only). */
   ResultsLab: undefined;

@@ -34,7 +34,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <View style={st.grid}>
-        <Tile value={String(c.races + c.relays)} label="Races" />
+        <Tile value={String(c.races + c.relays + c.field)} label={c.field ? 'Events' : 'Races'} />
         <Tile value={String(c.finals)} label={c.finals === 1 ? 'Final' : 'Finals'} />
         <Tile value={String(c.golds + c.silvers + c.bronzes)} label="Medals" />
       </View>
@@ -57,7 +57,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
               <View style={st.bestRow}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={textStyles.body} numberOfLines={1}>{b.label}</Text>
-                  <Text style={textStyles.muted} numberOfLines={1}>{[b.pb.category, b.pb.date ? formatDay(b.pb.date) : ''].filter(Boolean).join(' · ')}</Text>
+                  <Text style={textStyles.muted} numberOfLines={1}>{[b.pb.category, b.pb.wind != null && /ath\.(lj|tj)/.test(b.pb.discipline) ? `wind ${b.pb.wind > 0 ? '+' : ''}${b.pb.wind.toFixed(1)}` : '', b.pb.date ? formatDay(b.pb.date) : ''].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <Text style={[st.mark, st.col]}>{b.pb.text}</Text>
                 <Text style={[st.markSb, st.col]}>{b.sb?.text ?? '–'}</Text>
@@ -74,7 +74,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
             <TouchableOpacity key={`${h.eventId}${i}`} accessibilityRole="button" activeOpacity={0.85} disabled={!h.eventId} onPress={() => nav.navigate('ResultsEvent', { phaseId: h.eventId, tab: 'sheet' })}>
               <Card style={[st.hist, { borderLeftWidth: 3, borderLeftColor: h.medal ? theme.colors.accent : theme.colors.border }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.body} numberOfLines={1}>🏃 {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
+                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
                   <Text style={textStyles.muted}>{[h.text, ...h.flags].filter(Boolean).join(' · ')}</Text>
                 </View>
                 {h.medal ? <Text style={{ fontSize: 20 }}>{MEDAL[h.medal]}</Text> : h.place ? <Pill label={`${h.place}`} /> : null}

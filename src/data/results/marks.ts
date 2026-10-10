@@ -75,17 +75,19 @@ export interface AttemptSummary {
   taken: number;
 }
 
-export const windLegal = (wind: number | undefined, def: Pick<DisciplineDef, 'wind' | 'windLimit'>): boolean =>
-  !def.wind || (wind != null && wind <= (def.windLimit ?? 2.0) + EPS);
+/** A wind reading is record-legal: at most the limit (+2.0 m/s). `noGauge` (a
+ *  meet / pit without a gauge, SD-90 / SD-91): a missing reading counts too. */
+export const windLegal = (wind: number | undefined, def: Pick<DisciplineDef, 'wind' | 'windLimit'>, noGauge = false): boolean =>
+  !def.wind || (wind == null ? noGauge : wind <= (def.windLimit ?? 2.0) + EPS);
 
 /** Best of N attempts (`upTo` = only the first N, e.g. "after 3 rounds"). */
-export function summarizeAttempts(attempts: Attempt[] | undefined, def: DisciplineDef, upTo?: number): AttemptSummary {
-  const list = (attempts ?? []).slice(0, upTo ?? Infinity);
+export function summarizeAttempts(attempts: Attempt[] | undefined, def: DisciplineDef, upTo?: number, noGauge = false): AttemptSummary {
+  const list = (attempts ?? []).filter((a): a is Attempt => !!a).slice(0, upTo ?? Infinity);
   const sign = def.better === 'higher' ? 1 : -1;
   const valid = list.filter((a) => a.mark != null && !a.foul && !a.pass);
   const sorted = [...valid].sort((a, b) => sign * ((b.mark as number) - (a.mark as number)));
   const best = sorted[0];
-  const legal = sorted.find((a) => windLegal(a.wind, def));
+  const legal = sorted.find((a) => windLegal(a.wind, def, noGauge));
   return {
     valid: sorted.map((a) => a.mark as number),
     best: best ? (best.mark as number) : null,

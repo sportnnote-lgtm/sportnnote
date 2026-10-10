@@ -27,7 +27,8 @@ export interface RankOptions {
   upToAttempt?: number;
   /** SD-90: a hand-timed meet — hand times are record-legal (still flagged "h"),
    *  and a race with no wind reading counts (no gauge); a reading over the
-   *  limit still doesn't */
+   *  limit still doesn't. SD-91: also a LJ / TJ attempt with no reading
+   *  (`looseLegal(format)`: hand-timed meet or no gauge at the pit). */
   handLegal?: boolean;
 }
 
@@ -42,7 +43,7 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
   const flags: ResultFlag[] = [];
   switch (def.capture) {
     case 'attempts': {
-      const s = summarizeAttempts(r.attempts, def, upToAttempt);
+      const s = summarizeAttempts(r.attempts, def, upToAttempt, !!handLegal);
       const slots = (def.attempts?.count ?? 3) + (def.attempts?.extra ?? 0);
       const series = [...s.valid.map((v) => sign * v)];
       while (series.length < slots) series.push(-Infinity);
@@ -79,13 +80,18 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
  * x < y, x = z, y = z. Drop it for that whole group (in place), so the tie stands.
  */
 export function levelKeys(perfs: { keys: (number | undefined)[] }[]): void {
-  const byMain = new Map<number | undefined, { keys: (number | undefined)[] }[]>();
-  for (const p of perfs) byMain.set(p.keys[0], [...(byMain.get(p.keys[0]) ?? []), p]);
-  for (const group of byMain.values()) {
-    if (group.length < 2) continue;
-    const width = Math.max(...group.map((p) => p.keys.length));
-    for (let i = 1; i < width; i++) {
-      if (group.some((p) => p.keys[i] === undefined)) for (const p of group) p.keys[i] = undefined;
+  // SD-91: group by every key BEFORE index i (not just the main mark), so a
+  // row already separated earlier (an HJ athlete with more failures) doesn't
+  // cancel the jump-off places of the rows still level with each other.
+  const width = Math.max(0, ...perfs.map((p) => p.keys.length));
+  for (let i = 1; i < width; i++) {
+    const groups = new Map<string, { keys: (number | undefined)[] }[]>();
+    for (const p of perfs) {
+      const k = JSON.stringify(p.keys.slice(0, i).map((x) => (x === undefined ? 'u' : x === Infinity ? 'inf' : x === -Infinity ? '-inf' : x)));
+      groups.set(k, [...(groups.get(k) ?? []), p]);
+    }
+    for (const group of groups.values()) {
+      if (group.length > 1 && group.some((p) => p.keys[i] === undefined)) for (const p of group) p.keys[i] = undefined;
     }
   }
 }
@@ -117,7 +123,10 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
     const row = make(x, position, `${tie ? prefix : ''}${position}`, tie);
     // A tie the rules send to a jump-off (HJ / PV, 1st place — TR 26.9) or a
     // shoot-off (archery / shooting medal places) that hasn't been held yet.
-    if (tie && ((def.tie === 'vertical' && position === 1) || (def.tie === 'inner-count' && position <= 3))) {
+    // SD-91: a group where every row carries a decider has settled it (a held
+    // jump-off, or athletes who agreed to share — all decider 1).
+    const settled = ranked.filter((_y, j) => places[j].position === position).every((y) => y.entry.result?.decider != null);
+    if (tie && !settled && ((def.tie === 'vertical' && position === 1) || (def.tie === 'inner-count' && position <= 3))) {
       row.needsDecider = true;
       row.flags.push(def.tie === 'vertical' ? 'JO' : 'SO');
     }

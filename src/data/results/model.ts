@@ -129,7 +129,30 @@ export interface PhaseFormat {
   handTimed?: boolean;
   /** SD-90: reaction times are read at this meet (start-information system) */
   reaction?: boolean;
+  /** SD-91: no wind gauge at the jumps pit — LJ / TJ marks without a reading
+   *  count for PB / SB / records (a reading over +2.0 still doesn't) */
+  noWindGauge?: boolean;
+  /** SD-91: the implement for this category ("4 kg", "600 g") — throws */
+  implement?: string;
+  /** SD-91: triple-jump take-off board, metres from the landing area */
+  board?: number;
+  /** SD-91: a vertical-jump jump-off for 1st (TR 26.9), or the tied athletes' choice to share */
+  jumpOff?: JumpOff;
 }
+
+/** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
+export interface JumpOff {
+  /** entry ids of the athletes tied for 1st */
+  athletes: string[];
+  /** the tied athletes agreed not to jump further and share 1st */
+  shared?: boolean;
+  /** each jump-off height in order, with each remaining athlete's try ('O' / 'X') */
+  rounds: { height: number; tries: Record<string, 'O' | 'X'> }[];
+}
+
+/** Lenient legality for a phase: a hand-timed meet (SD-90) or a jumps pit with
+ *  no wind gauge (SD-91) — a missing wind reading doesn't stop a mark counting. */
+export const looseLegal = (f?: Pick<PhaseFormat, 'handTimed' | 'noWindGauge'> | null): boolean => !!(f?.handTimed || f?.noWindGauge);
 
 export interface Attempt {
   /** the mark; absent on a foul or pass */
@@ -247,8 +270,9 @@ const swim = (key: string, label: string, extra: Partial<DisciplineDef> = {}): D
 /**
  * Disciplines the engine knows today: the D9 school-meet core for athletics
  * (100–3000 m, sprint hurdles, 4 × 100 / 4 × 400, LJ / HJ / TJ, shot, discus,
- * javelin) plus one example per other family so the tie rules are exercised.
- * Wave 4 adds the rest (steeplechase, PV, hammer, road, walks, combined, the
+ * javelin; SD-91 adds pole vault and hammer as optional events) plus one
+ * example per other family so the tie rules are exercised.
+ * Wave 4 adds the rest (steeplechase, road, walks, combined, the
  * full swimming / archery / shooting / lifting programmes).
  */
 export const DISCIPLINES: DisciplineDef[] = [
@@ -270,7 +294,9 @@ export const DISCIPLINES: DisciplineDef[] = [
   horizontal('sp', 'Shot put', false),
   horizontal('dt', 'Discus throw', false),
   horizontal('jt', 'Javelin throw', false),
+  horizontal('ht', 'Hammer throw', false),
   vertical('hj', 'High jump'),
+  vertical('pv', 'Pole vault'),
   swim('50free', '50 m freestyle'),
   swim('100free', '100 m freestyle'),
   swim('4x50free', '4 × 50 m freestyle relay', { teamSize: 4 }),

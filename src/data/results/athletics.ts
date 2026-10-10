@@ -6,16 +6,18 @@
  * athletes' profiles, the measured career (PB / SB per event, medals, finals),
  * meet leaders, the medal-table input and a derived school record book. Pure.
  *
- * Field events (SD-91), road / cross-country (SD-92) and combined events
- * (SD-93) add their own disciplines on the same engine.
+ * Field events (SD-91) live in field.ts and share the meet views, stat lines
+ * and career here. Road / cross-country (SD-92) and combined events (SD-93)
+ * add their own disciplines on the same engine.
  */
 import type { Category, DisciplineDef, PhaseFormat, PhaseKind, Progression, RankedEntry, ResultEntry } from './model.ts';
 import type { RecordMark } from './records.ts';
-import { categoryKey, categoryLabel, disciplineOf } from './model.ts';
+import { categoryKey, categoryLabel, disciplineOf, looseLegal } from './model.ts';
 import { formatMark } from './marks.ts';
 import { rankEntries, betterMark } from './rank.ts';
 import { eventAwards, type Award, type FieldResultInput, type PointsConfig } from './medals.ts';
 import type { PlannedPhase } from './plan.ts';
+import { fieldRoundPresets } from './field.ts';
 import { phaseLabel } from './plan.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
@@ -139,6 +141,7 @@ const feed = (heats: number, size: number): Progression => {
 /** The recommended rounds for `n` entries (World Athletics tables where they
  *  apply). Lane races: straight final up to the lane count. */
 export function recommendedRounds(def: DisciplineDef, n: number): PlannedPhase[] {
+  if (def.capture !== 'single') return fieldRoundPresets(n)[0].plan;
   const lanes = def.lanes;
   if (!lanes) {
     const size = OPEN_FINAL[def.key] ?? 12;
@@ -182,10 +185,12 @@ export function heatsSemisFinal(def: DisciplineDef, n: number): PlannedPhase[] {
   ];
 }
 
-export interface RoundsPreset { key: 'wa' | 'final' | 'heats' | 'semis'; label: string; plan: PlannedPhase[] }
+export interface RoundsPreset { key: 'wa' | 'final' | 'heats' | 'semis' | 'qual'; label: string; plan: PlannedPhase[] }
 
-/** The round choices the setup screen offers for `n` entries (no duplicates). */
+/** The round choices the setup screen offers for `n` entries (no duplicates).
+ *  Field events (SD-91): straight final or qualification → final of 12. */
 export function roundPresets(def: DisciplineDef, n: number): RoundsPreset[] {
+  if (def.capture !== 'single') return fieldRoundPresets(n);
   const out: RoundsPreset[] = [{ key: 'wa', label: 'Recommended (World Athletics)', plan: recommendedRounds(def, n) }];
   const add = (p: RoundsPreset) => { if (!out.some((x) => JSON.stringify(x.plan) === JSON.stringify(p.plan))) out.push(p); };
   if (!def.lanes || n <= def.lanes) add({ key: 'final', label: 'Straight final', plan: [{ phase: 'final', heats: 1 }] });
@@ -198,6 +203,10 @@ export function roundPresets(def: DisciplineDef, n: number): RoundsPreset[] {
 export function describePlan(plan: { phase: PhaseKind; heats: number; progression?: Progression }[]): string {
   return plan.map((p) => {
     if (p.phase === 'final') return 'Final';
+    if (p.phase === 'qualification') {
+      const pr = p.progression;
+      return `Qualification${p.heats > 1 ? ` (${p.heats} groups)` : ''}${pr?.fillTo ? ` — ${pr.standard != null ? `standard ${pr.standard.toFixed(2)} m or ` : ''}best ${pr.fillTo}` : ''}`;
+    }
     const name = p.phase === 'semi' ? (p.heats === 1 ? 'semi-final' : 'semi-finals') : p.heats === 1 ? 'heat' : 'heats';
     const pr = p.progression;
     const how = pr ? [pr.byPlace ? `first ${pr.byPlace}` : '', pr.byMark ? `${pr.byMark} fastest` : ''].filter(Boolean).join(' + ') : '';
@@ -359,11 +368,14 @@ export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked:
       for (const m of r.entry.result.members ?? []) if (m.playerId) out.push({ playerId: m.playerId, stats: { ...s }, won: a?.medal === 'gold' });
       continue;
     }
-    s.races = 1;
+    // SD-91: a field event counts as an event, not a race
+    if (def.capture === 'single') s.races = 1; else s.field = 1;
     if (a && a.points > 0) s.posPoints = a.points;
     if (r.best != null) s.mark = r.best;
     if (r.bestLegal != null) s[markKey(def.key)] = r.bestLegal;
     if (r.entry.result.wind != null && def.wind === 'race') s.wind = r.entry.result.wind;
+    // the best jump's wind (LJ / TJ)
+    if (def.wind === 'attempt' && r.wind != null) s.wind = r.wind;
     if (r.entry.result.hand) s.hand = 1;
     out.push({ playerId: r.entry.athleteId!, stats: s, won: a?.medal === 'gold' });
   }
@@ -373,13 +385,16 @@ export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked:
 /* --------------------------------- career --------------------------------- */
 
 /** What the career needs to know about a phase a line came from. */
-export interface PhaseInfo { discipline: string; category?: Category; phase: PhaseKind; title: string; date: string; eventTitle?: string }
+export interface PhaseInfo { discipline: string; category?: Category; phase: PhaseKind; title: string; date: string; eventTitle?: string; implement?: string }
 
-export interface CareerBest { discipline: string; label: string; category?: string; value: number; text: string; date: string; eventId: string; wind?: number; hand?: boolean }
+export interface CareerBest { discipline: string; label: string; category?: string; value: number; text: string; date: string; eventId: string; wind?: number; hand?: boolean; implement?: string }
 export interface CareerRace { eventId: string; title: string; date: string; discipline?: string; text: string; place?: number; medal?: 'gold' | 'silver' | 'bronze'; flags: string[] }
 export interface AthleticsCareer {
   races: number; relays: number; finals: number; golds: number; silvers: number; bronzes: number; points: number;
-  /** personal bests per event (hurdles per event + category: the barrier height differs) */
+  /** SD-91: field events competed in (one per round) */
+  field: number;
+  /** personal bests per event (hurdles per event + category: the barrier height
+   *  differs; throws per implement — a 3 kg and a 4 kg shot are different events) */
   bests: { key: string; label: string; pb: CareerBest; sb?: CareerBest }[];
   history: CareerRace[];
 }
@@ -392,14 +407,14 @@ export function athleticsCareer(
   phases: Map<string, PhaseInfo>,
   seasonFrom: string,
 ): AthleticsCareer {
-  const c: AthleticsCareer = { races: 0, relays: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, bests: [], history: [] };
+  const c: AthleticsCareer = { races: 0, relays: 0, field: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, bests: [], history: [] };
   const bests = new Map<string, { key: string; label: string; pb: CareerBest; sb?: CareerBest }>();
   // Oldest first, so a PB / SB flag on the history reads "at the time".
   const sorted = [...lines].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const pbSoFar = new Map<string, number>();
   for (const l of sorted) {
     const s = l.stats ?? {};
-    c.races += s.races ?? 0; c.relays += s.relays ?? 0; c.finals += s.finals ?? 0;
+    c.races += s.races ?? 0; c.relays += s.relays ?? 0; c.field += s.field ?? 0; c.finals += s.finals ?? 0;
     c.golds += s.golds ?? 0; c.silvers += s.silvers ?? 0; c.bronzes += s.bronzes ?? 0;
     c.points += s.posPoints ?? 0;
     const info = l.eventId ? phases.get(l.eventId) : undefined;
@@ -413,14 +428,17 @@ export function athleticsCareer(
     if (def && key && s[key] != null) {
       const v = s[key];
       const hurdles = /mh$/.test(def.key);
-      const bk = hurdles ? `${def.key}|${categoryKey(info?.category)}` : def.key;
+      const throwKey = THROWS.includes(def.key);
+      const implement = throwKey ? info?.implement : undefined;
+      const bk = hurdles || (throwKey && !implement) ? `${def.key}|${categoryKey(info?.category)}` : implement ? `${def.key}|${implement}` : def.key;
       const best: CareerBest = {
         discipline: def.key, label: def.label, category: info?.category ? categoryLabel(info.category) : undefined, value: v,
-        text: formatMark(v, def) + (s.hand ? 'h' : ''), date, eventId: l.eventId ?? '', wind: s.wind, hand: !!s.hand,
+        text: formatMark(v, def) + (s.hand ? 'h' : ''), date, eventId: l.eventId ?? '', wind: s.wind, hand: !!s.hand, ...(implement ? { implement } : {}),
       };
       const prev = pbSoFar.get(bk);
       if (prev == null || betterMark(v, prev, def)) { if (prev != null) flags.push('PB'); pbSoFar.set(bk, v); }
-      const row = bests.get(bk) ?? { key: bk, label: hurdles && best.category ? `${def.label} (${best.category})` : def.label, pb: best };
+      const label = implement ? `${def.label} (${implement})` : (hurdles || throwKey) && best.category ? `${def.label} (${best.category})` : def.label;
+      const row = bests.get(bk) ?? { key: bk, label, pb: best };
       if (betterMark(v, row.pb.value, def)) row.pb = best;
       if (day >= seasonFrom && (!row.sb || betterMark(v, row.sb.value, def))) row.sb = best;
       bests.set(bk, row);
@@ -434,7 +452,7 @@ export function athleticsCareer(
       s.wind != null ? `(${s.wind > 0 ? '+' : ''}${s.wind.toFixed(1)})` : '',
       s.relays ? 'relay' : '',
     ].filter(Boolean).join(' ');
-    c.history.push({ eventId: l.eventId ?? '', title: info?.title ?? l.opponent ?? 'Race', date, discipline, text, place: s.place, medal, flags });
+    c.history.push({ eventId: l.eventId ?? '', title: info?.title ?? l.opponent ?? (s.field ? 'Field event' : 'Race'), date, discipline, text, place: s.place, medal, flags });
   }
   c.points = Math.round(c.points * 100) / 100;
   c.bests = [...bests.values()].sort((a, b) => order(a.pb.discipline) - order(b.pb.discipline) || a.key.localeCompare(b.key));
@@ -442,7 +460,9 @@ export function athleticsCareer(
   return c;
 }
 
-const ORDER = ['ath.100m', 'ath.200m', 'ath.400m', 'ath.800m', 'ath.1500m', 'ath.3000m', 'ath.80mh', 'ath.100mh', 'ath.110mh', 'ath.300mh', 'ath.400mh'];
+const ORDER = ['ath.100m', 'ath.200m', 'ath.400m', 'ath.800m', 'ath.1500m', 'ath.3000m', 'ath.80mh', 'ath.100mh', 'ath.110mh', 'ath.300mh', 'ath.400mh',
+  'ath.lj', 'ath.tj', 'ath.hj', 'ath.pv', 'ath.sp', 'ath.dt', 'ath.jt', 'ath.ht'];
+const THROWS = ['ath.sp', 'ath.dt', 'ath.jt', 'ath.ht'];
 const order = (d: string) => { const i = ORDER.indexOf(d); return i < 0 ? 99 : i; };
 export const ordSuffix = (n: number) => { const v = n % 100; return ['th', 'st', 'nd', 'rd'][(v - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][v] ?? 'th'; };
 
@@ -482,7 +502,7 @@ function finalAwards(e: MeetEvent, cfg: PointsSettings, handLegal?: boolean): { 
   const fin = e.phases.find((p) => p.format.phase === 'final' && p.status === 'completed');
   const def = disciplineOf(e.discipline);
   if (!fin || !def) return null;
-  const rows = rankEntries(fin.entries, def, { handLegal: handLegal ?? fin.format.handTimed });
+  const rows = rankEntries(fin.entries, def, { handLegal: handLegal ?? looseLegal(fin.format) });
   let awards = eventAwards(rows, cfg);
   if (def.teamSize && cfg.relayFactor && cfg.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * cfg.relayFactor! * 100) / 100 }));
   return { awards, fin };
@@ -501,8 +521,9 @@ export function meetFieldResults(events: MeetEvent[], cfg: PointsSettings = {}, 
 
 export interface EventLeader { eventKey: string; title: string; category: string; discipline: string; name: string; team?: string; athleteId?: string; mark: number; text: string; legal: boolean; flags: string[] }
 
-/** The best mark of each event over all its rounds (fastest time) — "fastest
- *  per event per category". Wind-aided / hand marks are shown with w / h. */
+/** The best mark of each event over all its rounds (fastest time; SD-91: the
+ *  longest / highest) — per event per category. Wind-aided / hand marks are
+ *  shown with w / h. */
 export function eventLeaders(events: MeetEvent[]): EventLeader[] {
   const out: EventLeader[] = [];
   for (const e of events) {
@@ -510,7 +531,7 @@ export function eventLeaders(events: MeetEvent[]): EventLeader[] {
     if (!def) continue;
     let best: EventLeader | undefined;
     for (const p of e.phases) {
-      for (const r of rankEntries(p.entries, def, { handLegal: p.format.handTimed })) {
+      for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
         if (r.position == null || r.best == null) continue;
         if (!best || betterMark(r.best, best.mark, def)) {
           best = { eventKey: e.eventKey, title: e.title, category: categoryLabel(e.category), discipline: def.key, name: r.entry.name, team: r.entry.team?.name, athleteId: r.entry.athleteId, mark: r.best, text: r.bestText, legal: r.legal, flags: r.flags.filter((x) => x === 'w' || x === 'h') };
@@ -559,7 +580,7 @@ export function deriveRecordBook(events: MeetEvent[], scope: 'MR' | 'SR'): Recor
     const cat = categoryKey(e.category);
     for (const p of e.phases) {
       if (p.status !== 'completed') continue;
-      for (const r of rankEntries(p.entries, def, { handLegal: p.format.handTimed })) {
+      for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
         if (r.position == null || r.bestLegal == null) continue;
         const k = `${def.key}|${cat}`;
         const cur = out.get(k);

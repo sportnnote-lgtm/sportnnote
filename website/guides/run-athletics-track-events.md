@@ -17,7 +17,7 @@ Athletics works the way a sports day does: each race is an event (say 100 m U14 
 
 ## Step by step: add an event
 1. Open the tournament, then **Manage** → **Athletics — events** (or tap 🏃 Athletics on the tournament page).
-2. Tap **＋ Add a track event**.
+2. Tap **＋ Add an event**.
 3. **Category:** pick the age group (U10 to U20, or Open) and Boys, Girls or Mixed. The event list follows it: 3000 m starts at U16, and hurdles depend on age and gender.
 4. **Event:** pick the race.
 5. **Athletes:** tap a house to see its athletes, or search any player, and tap each one to enter them. Players whose gender or age doesn't fit the category are hidden; tap the category chip to show everyone.
@@ -49,7 +49,7 @@ Athletics works the way a sports day does: each race is an event (say 100 m U14 
 
 ## What everyone sees
 - **House table:** on the Athletics page and the tournament's **Stats** tab. Tied places share the points.
-- **Fastest by event**, **Best athletes (points)** (individual finals only) and **Meet records**. When a school hosts, **School records** show the best marks from its earlier meets in the app.
+- **Best by event**, **Best athletes (points)** (individual finals only) and **Meet records**. When a school hosts, **School records** show the best marks from its earlier meets in the app.
 - **Athlete profiles:** races, finals, medals, a personal best and season best per event, and every result.
 
 ## Common questions
@@ -57,5 +57,5 @@ Athletics works the way a sports day does: each race is an event (say 100 m U14 
 Yes. Open **⚙ Points & timing** and pick another points scheme, or make relays score double.
 
 ### Where are long jump, high jump and the throws?
-Field events, road races and combined events are coming next. This guide covers track events only.
+See [Run athletics field events](/guides/run-athletics-field-events/). Road races and combined events are coming next.
 

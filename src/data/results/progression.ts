@@ -86,15 +86,18 @@ export function firstRoundsDone(entries: ResultEntry[], def: DisciplineDef): boo
 
 /**
  * Who jumps / throws in what order in round `round` (1-based). Rounds 1 … count:
- * the drawn start order. Later rounds: the finalists in REVERSE order of the
- * ranking after `count` rounds (TR 25.6 — the leader goes last).
+ * the drawn start order. Rounds 4 and 5: the finalists in REVERSE order of the
+ * ranking after `count` rounds; the last round (6): reverse order of the
+ * ranking after round 5 (World Athletics TR 25.6 — the leader goes last).
  */
 export function attemptOrder(entries: ResultEntry[], def: DisciplineDef, round: number): ResultEntry[] {
   const count = def.attempts?.count ?? 3;
+  const last = count + (def.attempts?.extra ?? 0);
   const byStart = [...entries].sort((a, b) => (a.result?.order ?? 999) - (b.result?.order ?? 999));
   if (round <= count) return byStart;
   const finalists = fieldFinalists(entries, def);
-  const ranked = rankEntries(entries.filter((e) => finalists.has(e.id)), def, { upToAttempt: count });
+  const after = round === last && last > count + 1 ? last - 1 : count;
+  const ranked = rankEntries(entries.filter((e) => finalists.has(e.id)), def, { upToAttempt: after });
   return ranked.map((r) => r.entry).reverse();
 }
 

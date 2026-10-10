@@ -1,6 +1,6 @@
 /** SD-90 — athletics inside a tournament: the programme (events by category,
  *  each with its current round), the house table from finished finals, the
- *  fastest mark per event, the best athletes by points, and the meet / school
+ *  best mark per event (fastest / longest / highest — SD-91 field events), the best athletes by points, and the meet / school
  *  record books. Organisers add events from here. */
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -54,7 +54,7 @@ export function AthleticsHub({ tournament, canOrganize }: { tournament: Tourname
     <View style={{ gap: theme.spacing(3) }}>
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Button label="＋ Add a track event" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id })} />
+          <Button label="＋ Add an event" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id })} />
           <Button label="⚙ Points & timing" variant="ghost" onPress={() => nav.navigate('SportSettings', { sport: 'athletics', tournamentId: tournament.id })} />
         </View>
       )}
@@ -73,7 +73,7 @@ export function AthleticsHub({ tournament, canOrganize }: { tournament: Tourname
                 <View style={st.row}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[textStyles.body, st.bold]} numberOfLines={1}>{e.title}</Text>
-                    <Text style={textStyles.muted} numberOfLines={1}>{s.label} · {first?.entries.length ?? 0} {disciplineOf(e.discipline)?.teamSize ? 'teams' : 'athletes'}</Text>
+                    <Text style={textStyles.muted} numberOfLines={1}>{s.label} · {first?.entries.length ?? 0} {disciplineOf(e.discipline)?.teamSize ? 'teams' : 'athletes'}{first?.format.implement ? ` · ${first.format.implement}` : ''}</Text>
                   </View>
                   <Pill label={s.done ? 'FINAL' : s.live ? 'LIVE' : e.phases.length > 1 ? `ROUND ${e.phases.length}` : 'START LIST'}
                     color={s.live ? theme.colors.danger : theme.colors.surfaceAlt} textColor={s.live ? '#fff' : theme.colors.textMuted} />
@@ -90,7 +90,7 @@ export function AthleticsHub({ tournament, canOrganize }: { tournament: Tourname
 
       {leaders.length > 0 && (
         <>
-          <SectionHeader title="⚡ Fastest by event" count={leaders.length} />
+          <SectionHeader title="⚡ Best by event" count={leaders.length} />
           <Card style={{ gap: theme.spacing(2) }}>
             {leaders.map((l) => (
               <TouchableOpacity key={l.eventKey} accessibilityRole="button" disabled={!l.athleteId} onPress={() => l.athleteId && nav.navigate('PlayerProfile', { playerId: l.athleteId })}>

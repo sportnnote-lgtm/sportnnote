@@ -20,7 +20,7 @@ import {
   groupMeet, deriveRecordBook, meetFieldResults, seedOrder,
   type Category, type DisciplineDef, type EntryResult, type MarkHistory, type PhaseFormat, type PlannedPhase,
   type RecordMark, type RecordScope, type ResultEntry, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
-  type FieldResultInput,
+  type FieldResultInput, looseLegal, seededRng,
 } from './results';
 
 const live = () => isSupabaseConfigured && !!supabase;
@@ -58,6 +58,11 @@ export interface NewResultsEvent {
   /** SD-90 meet settings carried on every phase */
   handTimed?: boolean;
   reaction?: boolean;
+  /** SD-91 field events: bar heights (HJ / PV), implement, TJ board, no wind gauge at the pit */
+  bar?: number[];
+  implement?: string;
+  board?: number;
+  noWindGauge?: boolean;
 }
 
 const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase'>) => `${eventTitle} — ${phaseLabel(f.phase)}`;
@@ -122,6 +127,8 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     discipline: def.key, category: input.category, phase: first.phase, phaseNo: 1, heats: first.heats,
     progression: first.progression, eventKey: genId('rev'), plan, eventTitle,
     ...(input.handTimed ? { handTimed: true } : {}), ...(input.reaction ? { reaction: true } : {}),
+    ...(input.bar?.length ? { bar: input.bar } : {}), ...(input.implement ? { implement: input.implement } : {}),
+    ...(input.board ? { board: input.board } : {}), ...(input.noWindGauge ? { noWindGauge: true } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -131,7 +138,10 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
   const rng = input.rng ?? Math.random;
   // A draw also shuffles the unseeded entrants; else the given order stands.
   const ordered = draw ? seedOrder(input.entrants.map((e, i) => ({ ...e, id: String(i) })), def, rng) : bySeed(input.entrants, def);
-  const seeded = seedHeats(ordered.map((_, i) => String(i)), first.heats, def, draw ? rng : undefined, { drawAll: draw });
+  let seeded = seedHeats(ordered.map((_, i) => String(i)), first.heats, def, draw ? rng : undefined, { drawAll: draw });
+  // SD-91 field events: seeds are spread over the qualification groups; the
+  // order inside a group is drawn (TR 25.5), or — not drawn — the best seed goes last.
+  if (def.capture !== 'single') seeded = fieldOrder(seeded, draw ? rng : undefined);
   await insertEntries(ev.id, seeded.map((s) => {
     const e = ordered[Number(s.id)];
     return {
@@ -140,6 +150,18 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     };
   }));
   return ev;
+}
+
+/** Re-number the order inside each group: a draw (shuffle), else reversed (best seed last). */
+function fieldOrder<T extends { heat: number; order: number }>(rows: T[], rng?: () => number): T[] {
+  const out: T[] = [];
+  for (const h of [...new Set(rows.map((r) => r.heat))]) {
+    const g = rows.filter((r) => r.heat === h);
+    if (rng) for (let i = g.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; }
+    else g.reverse();
+    g.forEach((r, i) => out.push({ ...r, order: i + 1 }));
+  }
+  return out;
 }
 
 /** Every results-engine phase (newest first) — for the dev lab / hubs. */
@@ -200,15 +222,17 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   const next = f.plan?.[f.phaseNo];
   if (!next || !f.progression) throw new Error('This is the last round.');
   const res = entries.map((e) => toResultEntry(e, nameOf));
-  const byHeat = rankByHeat(res, def, { handLegal: f.handTimed });
+  const byHeat = rankByHeat(res, def, { handLegal: looseLegal(f) });
   const q = qualify(byHeat, def, f.progression);
   if (!q.marks.size) throw new Error('Nobody has qualified yet — enter the results first.');
   if (def.sport === 'athletics') {
     const ranked = [...byHeat.values()].flatMap((rows) => withQualification(rows, q));
     await writePhaseLines(phase, f, phaseLines(f, ranked));
   }
-  const seeded = nextRound(byHeat, def, q, next.heats);
-  const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: next.heats, progression: next.progression, bar: undefined };
+  let seeded = nextRound(byHeat, def, q, next.heats);
+  // SD-91: a field final's order is drawn afresh (TR 25.5); a vertical final keeps the bar heights.
+  if (def.capture !== 'single') seeded = fieldOrder(seeded, seededRng(Date.now()));
+  const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: next.heats, progression: next.progression, bar: def.capture === 'heights' ? f.bar : undefined, jumpOff: undefined };
   const ev = await insertPhase({
     tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: fmt.phaseNo,
     startsAt: new Date().toISOString(), format: { results: fmt }, hostIds: phase.hostIds ?? [],
@@ -243,7 +267,7 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   const f = phaseOf(phase);
   const def = f && disciplineOf(f.discipline);
   if (!f || !def) throw new Error('Not a results event');
-  const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: f.handTimed });
+  const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
   if (def.sport === 'athletics') {
     let awards = eventAwards(rows, points ?? {});
     if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
@@ -281,7 +305,7 @@ export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], e
   const dateOf = new Map(phases.map((p) => [p.id, p.startsAt.slice(0, 10)]));
   const out: MarkHistory[] = [];
   for (const e of entries) {
-    const p = performanceOf(toResultEntry(e, () => ''), def, undefined, phaseOf(phases.find((x) => x.id === e.eventId)!)?.handTimed);
+    const p = performanceOf(toResultEntry(e, () => ''), def, undefined, looseLegal(phaseOf(phases.find((x) => x.id === e.eventId)!)));
     if (p.status === 'ok' && p.bestLegal != null) out.push({ athleteId: e.playerId, discipline: def.key, value: p.bestLegal, date: dateOf.get(e.eventId) ?? '' });
   }
   return out;
@@ -382,7 +406,7 @@ export async function getPhaseInfos(ids: string[]): Promise<Map<string, PhaseInf
   }
   for (const e of evs) {
     const f = phaseOf(e);
-    if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle });
+    if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle, implement: f.implement });
   }
   return out;
 }
