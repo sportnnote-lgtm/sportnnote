@@ -12,7 +12,7 @@ Newest at the top. One entry per item: what was built, files, migration (if any)
   - the settings row reads "FIDE round robin" where nothing was saved.
 - **Pairing limits:** the full C.04.3 quality criteria (float history, top-scorer exception, accelerated pairings, requested byes) are not built. Near-complete round robins may need a flagged relaxation.
 
-## SD-20: game/set score line everywhere; ret. / def. / w/o / abandoned; LineScoreboard for every set/game sport — BUILT, uncommitted (2026-10-10)
+## SD-20: game/set score line everywhere; ret. / def. / w/o / abandoned; LineScoreboard for every set/game sport — DONE (a845a64, 2026-10-10)
 - **Built:**
   - `scoreline.ts`: the line score as data (`LineScore`, `plugin.lineScore` on tennis / padel / badminton / TT / squash / pickleball / carrom / volleyball); `lineText` (completed sets = the SD-01 `scoreLine`, byte-identical; `partial` adds the unfinished set); `resultMark` + `markedLine` + `matchScoreLine` ("6-4, 3-2 ret.", "21-15, 8-3 def.", "w/o", "11-4 abandoned"); `finalBoard` (sets won + marked line); `lineGrid` (the board model); `compactResult`, `bracketCellText`.
   - `matchLine.ts` (registry-aware): `matchLine(m)`, `matchLineFor(m, teamId)`, `resultWords`.
