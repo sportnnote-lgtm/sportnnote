@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-115 racket point-entry safety — DONE (6f7a8f3, 2026-10-11)
+- Big team-coloured side buttons in all racket sports, no default server (fixable mid-match, v:2), pressure chip, named Undo (all sports but cricket), Fast4 sudden death. See DEVLOG.
+- Not done: true 2-a-side doubles not demoed (multi-player rosters used); padel/TT tests only; chip/Undo use short side names; haptics/keep-awake (SD-110), match-point confirm (SD-111), tennis change-ends banner (SD-117).
+
 ## SD-114 live scoring bugs — DONE (e6213e3, 2026-10-11)
 - Football double goal + goal lost on Cancel fixed; ✕ confirm + edit-cancel keeps the event across football/hockey/basketball/kabaddi/rally editor; backfill bar; second-yellow red follows its yellow; kabaddi touch cap (v:2). See DEVLOG.
 - Not demoed: hockey, basketball, second-yellow (tests only). Racket guides get the ✕/insert notes with SD-115.
