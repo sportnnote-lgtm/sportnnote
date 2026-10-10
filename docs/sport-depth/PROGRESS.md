@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-103: doubles tiebreak serving order — DONE (db8fcb2, 2026-10-10)
+- **Fix:** padel and doubles tennis tiebreaks (set and match) now rotate partners: h0, a0, a0, h1, h1, a1, a1… Before, it was h0, a0, a0, h0, h0, a0, a0.
+- **Unchanged:** the next-set first server already followed ITF 5(b). Scores and fingerprints are unchanged (the server is display-only).
+- **Not supported:** a pair choosing afresh which partner serves first in a new set (needs a stored per-set choice); the engine continues the rotation by game count.
+
 ## SD-14: racket replay safety net — DONE (0872473, 2026-10-10)
 - **Built:** `tests/replay-racket.test.mts` (39 tests: 36 pass, 3 todo). It replays reconstructed real matches with pinned fingerprints:
   - squash: PSA 2024 Egyptian Open final, 1993 British Open (English scoring);
