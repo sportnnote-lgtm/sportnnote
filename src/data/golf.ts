@@ -60,12 +60,12 @@ export function validateHoles(holes: Hole[]): void {
 
 /* ----------------------------- events/entries --------------------------- */
 
-const toEvent = (r: any): FieldEvent => ({
+export const toEvent = (r: any): FieldEvent => ({
   id: r.id, tournamentId: r.tournament_id ?? undefined, sport: r.sport, title: r.title, roundNo: r.round_no ?? 1,
   startsAt: r.starts_at, status: r.status, format: r.format ?? {}, hostIds: r.host_ids ?? [], createdBy: r.created_by ?? undefined,
 });
-const toEntry = (r: any): FieldEntry => ({
-  id: r.id, eventId: r.event_id, playerId: r.player_id, groupNo: r.group_no ?? 1, teeTime: r.tee_time ?? undefined,
+export const toEntry = (r: any): FieldEntry => ({
+  id: r.id, eventId: r.event_id, playerId: r.player_id ?? '', teamId: r.team_id ?? undefined, groupNo: r.group_no ?? 1, teeTime: r.tee_time ?? undefined,
   startHole: r.start_hole ?? undefined, handicapIndex: r.handicap_index ?? undefined, result: r.result ?? null,
   status: r.status, updatedAt: r.updated_at ?? undefined,
 });
@@ -154,7 +154,9 @@ export async function getFieldEntries(eventIds: string[]): Promise<FieldEntry[]>
 // prefer the pending copy so the marker always sees what they entered.
 
 const OUTBOX_KEY = 'sportfolio.golfOutbox.v1';
-type Pending = { card: GolfCard; status?: FieldEntryStatus };
+// The outbox is generic over field results: a golf card, or a results-engine
+// EntryResult (athletics / swimming … — data/resultsStore.ts).
+type Pending = { card: unknown; status?: FieldEntryStatus };
 const pending = new Map<string, Pending>();
 let hydrated = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -168,7 +170,7 @@ async function hydrate() {
   } catch { /* storage unavailable — in-memory only */ }
 }
 const persist = () => AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(Object.fromEntries(pending))).catch(() => {});
-const pendingCard = (entryId: string): GolfCard | undefined => pending.get(entryId)?.card;
+const pendingCard = (entryId: string): GolfCard | undefined => pending.get(entryId)?.card as GolfCard | undefined;
 export const pendingCardCount = () => pending.size;
 
 async function pushEntry(entryId: string, p: Pending): Promise<boolean> {
@@ -196,6 +198,11 @@ export async function flushGolfOutbox(): Promise<number> {
  *  failure — the card stays queued and the returned count says how many are
  *  waiting to sync. Throws only for a permission error from the server. */
 export async function saveCard(entryId: string, card: GolfCard, status?: FieldEntryStatus): Promise<number> {
+  return saveFieldResult(entryId, card, status);
+}
+
+/** The same offline-safe save for any field entry's result payload. */
+export async function saveFieldResult(entryId: string, card: unknown, status?: FieldEntryStatus): Promise<number> {
   await hydrate();
   pending.set(entryId, { card, status: status ?? pending.get(entryId)?.status });
   void persist();

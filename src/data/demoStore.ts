@@ -4,6 +4,7 @@
  * organizer creates while offline show up immediately. When Supabase is
  * configured, none of this is used; the repos hit Postgres instead.
  */
+import type { RecordMark } from './results/records';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TOURNAMENTS, MATCHES } from '../core/mockData';
 import { WC_TOURNAMENT, WC_MATCH, WC_PLAYERS, WC_LINEUP, WC_SQUADS } from './worldCupSeed';
@@ -858,6 +859,8 @@ export const demo = {
   /** field events (golf rounds…) + their entries — docs/sports/GOLF_DESIGN.md */
   fieldEvents: [] as FieldEvent[],
   fieldEntries: [] as FieldEntry[],
+  /** results-engine record books (meet / school records) by tournament id ('' = casual) — SD-28 */
+  resultRecords: {} as Record<string, RecordMark[]>,
   golfCourses: [
     {
       id: 'course-demo',

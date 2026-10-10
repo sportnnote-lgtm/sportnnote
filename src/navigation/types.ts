@@ -76,6 +76,10 @@ export type RootStackParamList = {
   GolfRound: { eventId: string };
   /** competition/holes are primitives so the web URL round-trips (no objects). */
   GolfRoundSetup: { tournamentId?: string; nextOf?: string; competition?: string; holes?: string } | undefined;
+  /** Results engine (SD-28): one phase of a timed / measured event — entry + sheet. */
+  ResultsEvent: { phaseId: string; tab?: 'enter' | 'sheet' };
+  /** Hidden dev entry point for the results engine (URL /ResultsLab only). */
+  ResultsLab: undefined;
   TryNewSport: { sports?: SportId[] } | undefined;
   PlayerProfile: { playerId: string };
   SportProfile: { playerId: string; sport: SportId };

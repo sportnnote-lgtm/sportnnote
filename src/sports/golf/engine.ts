@@ -14,6 +14,7 @@
  * We never issue an official Handicap Index (only authorised associations can);
  * players enter their own and we apply it.
  */
+import { sharedPositions, topNAndTies } from '../../data/results/positions.ts';
 
 /* ------------------------------- courses -------------------------------- */
 
@@ -339,13 +340,10 @@ export function rankLeaderboard(inputs: RankInput[], o: RankOptions): RankRow[] 
     a.total === b.total && (!useCountback(a.total) || a.cb.every((v, i) => v === b.cb[i]));
 
   const out: RankRow[] = [];
+  // Shared position with the first equal row above (results-engine primitive).
+  const places = sharedPositions(ranked, tied);
   ranked.forEach((x, i) => {
-    let pos = i + 1;
-    // Shared position with the first equal row above.
-    let j = i;
-    while (j > 0 && tied(ranked[j - 1], x)) j--;
-    pos = j + 1;
-    const isTie = (i > 0 && tied(ranked[i - 1], x)) || (i < ranked.length - 1 && tied(ranked[i + 1], x));
+    const { position: pos, tie: isTie } = places[i];
     out.push({ id: x.r.id, position: pos, positionLabel: `${isTie ? 'T' : ''}${pos}`, status: x.status, total: x.total, today: x.today, thru: x.thru, grossTotal: x.gross, noReturn: x.noReturn });
   });
   others
@@ -364,9 +362,7 @@ export function makesCut(rows: RankRow[], rule: CutRule, scoring: GolfScoring = 
   const ranked = rows.filter((r) => r.position != null);
   if (rule.type === 'none') return ranked.map((r) => r.id);
   if (rule.type === 'top') {
-    if (ranked.length <= rule.n) return ranked.map((r) => r.id);
-    const line = ranked[rule.n - 1].total;
-    return ranked.filter((r, i) => i < rule.n || r.total === line).map((r) => r.id);
+    return topNAndTies(ranked, rule.n, (a, b) => a.total === b.total).map((r) => r.id);
   }
   if (!ranked.length) return [];
   const lead = ranked[0].total;

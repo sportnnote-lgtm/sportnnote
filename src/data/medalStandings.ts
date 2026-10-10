@@ -10,6 +10,7 @@
  *  it's unit-testable and works in demo and live alike. */
 import type { Match, SportId, TournamentScoring, SportFormat } from '../core/types';
 import { teamStandings, standingsConfigFromFormat } from './standings.ts';
+import type { FieldResultInput } from './results/medals.ts';
 
 /** A contingent's result in one sport. */
 export interface SportPlacement {
@@ -35,6 +36,19 @@ export interface MedalRow {
   silvers: number;
   bronzes: number;
   perSport: SportPlacement[];
+  /** timed / measured events (results engine): one line per placing that scored */
+  perEvent?: EventPlacement[];
+}
+
+/** A contingent's placing in one timed / measured event (athletics 100 m …). */
+export interface EventPlacement {
+  sport: string;
+  event: string;
+  position: number;
+  /** who placed (athlete or relay team) */
+  name: string;
+  /** weighted points earned */
+  points: number;
 }
 
 /** Points for finishing `position` (1-based), before the per-sport weight. */
@@ -56,6 +70,10 @@ export function medalStandings(
   sports: SportId[],
   scoring: TournamentScoring | undefined,
   formats?: Partial<Record<SportId, SportFormat>>,
+  /** timed / measured events (results engine, SD-28): each event's medals and
+   *  position points go to the athlete's / relay's contingent (matched by name,
+   *  like the sports above). Entries without a team don't score. */
+  fieldResults?: FieldResultInput[],
 ): MedalRow[] {
   const rows = new Map<string, MedalRow>();
   const ensure = (name: string, teamId: string, colorHex?: string): MedalRow => {
@@ -79,6 +97,20 @@ export function medalStandings(
       else if (position === 3) row.bronzes += 1;
       row.perSport.push({ sport, position, fieldSize, played: t.played, points });
     });
+  }
+
+  for (const ev of fieldResults ?? []) {
+    const weight = scoring?.sportWeights?.[ev.sport as SportId] ?? 1;
+    for (const a of ev.awards) {
+      if (!a.team?.name) continue;
+      const row = ensure(a.team.name, a.team.id ?? a.team.name, a.team.colorHex);
+      const points = a.points * weight;
+      row.total += points;
+      if (a.medal === 'gold') row.golds += 1;
+      else if (a.medal === 'silver') row.silvers += 1;
+      else if (a.medal === 'bronze') row.bronzes += 1;
+      (row.perEvent ??= []).push({ sport: ev.sport, event: ev.event, position: a.position, name: a.name, points });
+    }
   }
 
   return [...rows.values()].sort(

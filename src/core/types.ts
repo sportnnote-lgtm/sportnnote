@@ -921,7 +921,11 @@ export type FieldEntryStatus = 'playing' | 'finished' | 'dnf' | 'wd' | 'dq';
 export interface FieldEntry {
   id: UUID;
   eventId: UUID;
+  /** '' for a team-only entry (a relay / crew — migration 0051) */
   playerId: UUID;
+  /** the team the entry scores for: relay team / crew, or the athlete's school /
+   *  house / contingent; golf team stroke play (migration 0051) */
+  teamId?: UUID;
   /** playing group (golf 3/4-ball), 1-based */
   groupNo: number;
   teeTime?: string;
