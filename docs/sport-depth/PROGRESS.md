@@ -2,6 +2,14 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Kabaddi feedback from the guide writer (2026-10-10), for KB items later in the queue
+These are small kabaddi issues the guide writer found. Each is listed with what it means for us.
+- **"Pro rules (do-or-die, super tackle, bonus)" toggle:** the label suggests the bonus depends on Pro rules, but it doesn't (bonus needs 6+ defenders either way). Relabel it.
+- **Touches still score when the raider is tackled:** this is open item KB-11 / D6, to align with the AKFI rule. It needs v:2.
+- **No toss / first-raid choice:** add one with KB items.
+- **Two close "Edit" controls in "Correct the timeline":** the **Edit**/**Done** toggle and each row's **✎ Edit**.
+- **Do-or-die warning:** it only shows on new raids, and a void bonus counts as an empty raid toward do-or-die. Make both clear in the UI.
+
 ## SD-03: kabaddi raid/tackle attribution — DONE (c4dd6fd, 2026-10-10)
 - **Built:** a pure kabaddi engine with correct raider/tackler credit, separate tackle, do-or-die stop and all-out lines, per-half columns that add up, edit-in-place of a raid, whole-raid remove with credit reversal, and the voice super tackle.
 - No migration. Tests: 18 new · 865 total · 400×40 randomised legacy replays identical vs the frozen old reducer · demo 8093 m4.
