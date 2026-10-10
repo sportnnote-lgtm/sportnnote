@@ -2,6 +2,13 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-27: leaderboards and award slots from the schema — DONE (526d50e, 2026-10-10) · **Wave 1 complete**
+- **Built:** a `result` agg kind (W/L), qualifier units, the `leaderMins` per-tournament overrides UI (`LeaderMinimums`), `rankAwardCandidates` / `awardFormula` generated from the schema, per-sport categories and award slots (see the SD-27 report table in DEVLOG), and new POTM weights for racket sports and chess.
+- No migration. Tests: 32 new · 1529 total · demo 8093.
+- **Founder / research:** the default minimums are house choices, not from a rulebook. Confirm or adjust: basketball 2 games, volleyball 5 sets, racket 3 matches / 30 service points / 6 service games / 5 BP chances, football 180 minutes / 10 shots faced, kabaddi and carrom 2 matches.
+- **Regression to fix (queued as SD-105):** team pages for badminton, TT, squash, padel and pickleball no longer show top performers (they came from the removed per-match "Top scorer").
+- Not built: volleyball attack efficiency (needs attempts); chess performance rating (needs ratings).
+
 ## SD-24 + SD-104: career framework; racket rule/UX fixes — DONE (b3fbe7e, 2026-10-10)
 - **SD-24:**
   - Built: `career.ts` with schema-driven sections for all sports but golf; best run, titles / finals (stage-tagged finals), singles / doubles split, partner records; history key stats; Win % tile fix.
