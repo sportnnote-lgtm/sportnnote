@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-116 one-tap match deciders — DONE (3e93e03, 2026-10-11)
+- Chess record-result confirm + colour lock + 1-0/½-½/0-1 tiles; golf Concede match… / Pick up (NR) / Clear… confirms; carrom no default coins; hockey Full time locked until the last period; basketball Eject confirm + scorer clears. New score-chess guide.
+- Left out: Armageddon draw rule, carrom board editor, other golf/hockey/basketball P1–P2 (→ SD-117). Chess colour lock applies to every game (plugin can't see config.white).
+
 ## SD-115 racket point-entry safety — DONE (6f7a8f3, 2026-10-11)
 - Big team-coloured side buttons in all racket sports, no default server (fixable mid-match, v:2), pressure chip, named Undo (all sports but cricket), Fast4 sudden death. See DEVLOG.
 - Not done: true 2-a-side doubles not demoed (multi-player rosters used); padel/TT tests only; chip/Undo use short side names; haptics/keep-awake (SD-110), match-point confirm (SD-111), tennis change-ends banner (SD-117).
