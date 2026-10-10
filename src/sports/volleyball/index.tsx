@@ -16,8 +16,7 @@ import { volleyballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { volleyballBox } from '../boxSources';
-import { volleyballTotals } from './fieldTime';
-import { mergeTotals, volleyballSetRecord } from '../racketTotals';
+import { volleyballStatTotals } from './totals';
 import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { init, reducer, isDecider, setTarget, VB_OUTCOMES, volleyballCredits, outcomeAction, standingsUnits, lineScore, type VolleyballState, type VbOutcome } from './engine';
@@ -166,7 +165,10 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   // absolutely at completion — the per-set denominator (FIVB). Other stats
   // stay incremental.
   // SD-19: + the team's setsWon / setsLost on every player's line.
-  statTotals: (s, ctx) => mergeTotals(volleyballTotals(s), volleyballSetRecord(s, ctx)),
+  // SD-32: + points / attackPoints / blocks / aces from the point log (left
+  // out whole if a credited name can't be matched to an id). Partial: an old
+  // line whose names don't resolve keeps moving by live increments.
+  statTotals: volleyballStatTotals,
   statTotalsPartial: true,
   statTotalsNeedsPlayers: true,
   result: (s) => (s.ended ? { winner: s.setsWon.home > s.setsWon.away ? 'home' : s.setsWon.away > s.setsWon.home ? 'away' : 'draw', home: s.setsWon.home, away: s.setsWon.away } : null),

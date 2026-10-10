@@ -1,0 +1,75 @@
+/**
+ * SD-32 (VB-03) — volleyball's absolute `statTotals`: the point credits the
+ * log gives each player, keyed by player id. PURE.
+ *
+ *  - Box keys: exactly what the controls credit live (`volleyballCredits`) —
+ *    `points` (every credited point: attack, block, ace, or an outcome not
+ *    recorded), `attackPoints` (kills), `blocks` (block points) and `aces`,
+ *    summed over the log. Edits (EDIT_LOG + STAT_ADJUST), undos and a retried
+ *    upload can't drift. Older lines heal: before SD-04 an ace / block didn't
+ *    also credit `points` live; the re-sync (D2) sets the line to the log.
+ *  - Serve errors / errors are NOT player keys: SD-04 credits an opponent's
+ *    error (OPP_ERROR / SERVE_ERROR) to nobody and the engine never keeps a
+ *    player on one, so they stay team-level (`oppErrors` / `serveErrors`,
+ *    src/sports/boxSources.ts). Nothing to own until a player is recorded.
+ *  - `setsPlayed` (SD-29, fieldTime.ts) and `setsWon` / `setsLost` (SD-19,
+ *    racketTotals.ts) are merged in.
+ *
+ * Ids: once a court is stamped (SD-29, `LINEUP`) each credited point carries
+ * its `playerId`. Older logs carry names only — they resolve per side through
+ * the stamped court and the matchday squads (`ctx`). If ANY credited name
+ * can't be resolved (or is ambiguous), the box keys are left out entirely and
+ * the lines keep moving by live increments, as before — the sync zeroes owned
+ * keys for players missing from the totals, so a partial guess would wipe
+ * real stats (the SD-40 / SD-30 safeguard).
+ */
+import type { StatTotalsContext, StatTotalsEntry } from '../types';
+import { mergeTotals, volleyballSetRecord } from '../racketTotals.ts';
+import { volleyballCredits, type VolleyballState } from './engine.ts';
+import { volleyballTotals } from './fieldTime.ts';
+import type { PointKind } from '../rallyEdit.ts';
+
+type Side = 'home' | 'away';
+
+/** The box keys the totals own (all of them, or none). */
+export const VOLLEYBALL_BOX_KEYS = ['points', 'attackPoints', 'blocks', 'aces'] as const;
+/** Owned here but never credited live. */
+export const VOLLEYBALL_DERIVED_KEYS = ['setsPlayed', 'setsWon', 'setsLost'] as const;
+
+const CREDITED = new Set<string>(['point', 'attack', 'block', 'ace']);
+
+/** name → id per side (court stamp + ctx); a name with two ids is ambiguous. */
+function nameIndex(s: VolleyballState, ctx?: StatTotalsContext): Record<Side, Map<string, string | null>> {
+  const idx: Record<Side, Map<string, string | null>> = { home: new Map(), away: new Map() };
+  const note = (side: Side, id?: string, name?: string) => {
+    if (!id || !name) return;
+    const cur = idx[side].get(name);
+    if (cur === undefined) idx[side].set(name, id);
+    else if (cur !== id) idx[side].set(name, null);
+  };
+  for (const side of ['home', 'away'] as const) {
+    for (const p of s.lineup?.[side] ?? []) note(side, p.id, p.name);
+    for (const p of ctx?.players?.[side] ?? []) note(side, p.id, p.name);
+  }
+  for (const e of s.events ?? []) if (e.side === 'home' || e.side === 'away') note(e.side, e.playerId, e.playerName);
+  return idx;
+}
+
+/** The box keys per player id — empty when any credited name is unresolved. */
+export function volleyballBoxTotals(s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> {
+  const out: Record<string, StatTotalsEntry> = {};
+  if (!s?.events) return out;
+  const idx = nameIndex(s, ctx);
+  for (const e of s.events) {
+    if (!CREDITED.has(e.kind ?? '') || !e.playerName || (e.side !== 'home' && e.side !== 'away')) continue;
+    const id = e.playerId || idx[e.side].get(e.playerName) || undefined;
+    if (!id) return {}; // the safeguard: leave the whole group out
+    const line = out[id] ?? (out[id] = { side: e.side, stats: Object.fromEntries(VOLLEYBALL_BOX_KEYS.map((k) => [k, 0])) });
+    for (const [k, v] of Object.entries(volleyballCredits(e.kind as PointKind))) line.stats[k] = (line.stats[k] ?? 0) + v;
+  }
+  return out;
+}
+
+/** The plugin's `statTotals`: box keys, SD-29 sets played, SD-19 set record. */
+export const volleyballStatTotals = (s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> =>
+  mergeTotals(mergeTotals(volleyballBoxTotals(s, ctx), volleyballTotals(s)), volleyballSetRecord(s, ctx));
