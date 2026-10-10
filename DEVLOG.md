@@ -13,6 +13,25 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-28: results engine for timed and measured events (foundation for athletics, swimming and the rest)
+
+- **What it is:** a pure, sport-agnostic engine in `src/data/results/`.
+- **Event structure:** phases (heat / semi / qualification / final) with Q/q progression, serpentine
+  seeding and World Athletics lane groups.
+- **Marks:** times, distances, heights (O/X/–), kg lifts, points; statuses NM / DNF / FS / DQ (rule
+  ref) / WD / DNS; wind readings and legality.
+- **Ties:** per-discipline tie rules.
+- **Records:** PB / SB / MR / SR flags with a record book.
+- **Medals and points:** medals and position points, and relays and crews.
+- **Screens:** a results-entry screen and results sheet for one official on a phone (hidden
+  `/ResultsLab` for now).
+- **Golf** now shares its positions / cut code (identical results, 9000 randomised checks).
+- **Migration 0051:** team rows for relays / houses, plus a security fix — marking another
+  player's entry is now golf-only, so heat-mates can't edit each other's times.
+- **Tests:** tsc + 1224.
+
+---
+
 ### 2026-10-10 — Sport depth SD-16: aggregate engine and cricket records leaders
 
 - **Engine:** the stat schema now computes every aggregate generically — single-match best (keeps

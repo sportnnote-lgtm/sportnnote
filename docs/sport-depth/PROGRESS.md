@@ -2,6 +2,20 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-28: results engine for timed / measured events — DONE (ff88a73, 2026-10-10)
+- **Built:** `src/data/results/*`:
+  - mark parsing and formatting, ranking with discipline tie rules (photo, stands, countback, vertical, lifted-first, inner-count);
+  - Q/q progression, serpentine seeding, World Athletics lanes, field finalists and attempt order;
+  - PB / SB / MR / SR records (legal marks only), medals and position points with ties.
+- **Also:** `resultsStore` on `field_events` / `field_entries` with the offline outbox; the `ResultsEvent` screen (enter + sheet); a hidden `/ResultsLab` dev entry; the medal table accepts field results. Golf's positions and cut now come from the engine, identical on 9000 randomised leaderboards.
+- **Founder to run:** migration 0051 — `supabase/release/2026-10-field-results-0051.sql`:
+  - `field_entries.team_id` (relay / crew / house rows; `player_id` nullable with a check; unique per event + team);
+  - **security fix:** 0028's `can_mark_field_entry` let anyone in the same group edit another entry (golf's marker rule). In a heat, that let a sprinter edit rivals' times. It is now golf-only, and markers can't change `team_id`.
+  - Without 0051, individual results still save, but relay inserts show "needs the latest database update".
+- Tests: 43 new · 1224 total · PGlite fieldresults 21/21, golf 28/28 · demo 8093 (100 m heats → final with wind, FS/DNS/DNF/DQ, Q/q, lanes, tie for 3rd, MR; long jump with countback and top-8 + ties; high jump, relay, swim).
+- **Wave 4 still needs per sport:** registering each sport, event setup screens, discipline-specific UIs (lane draw, jump-off, splits, end-by-end archery and series entry, weigh-in), road / combined scoring, career PB / SB on profiles, the medal-table loader wiring, an org-level school record book, and a public results link.
+- Not verified: the live Supabase path; real typing beyond 100 m heat 1; native.
+
 ## SD-16: aggregate engine — DONE (acb7669, 2026-10-10)
 - **Built:** `aggregateValue` / `rankPlayers` for every agg kind, with coverage ("not tracked" → undefined), qualifiers (overridable), and tie chains (value, then best-figure `by`, then the stat's `tieBreak`, then stable order).
 - **Cricket records leaders in the Stats tab:** Highest score, Best bowling, Best batting average (min 3 innings), Best strike rate (min 30 balls), Best economy (min 10 overs), Most 50s / 100s.
