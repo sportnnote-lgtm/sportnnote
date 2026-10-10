@@ -17,6 +17,8 @@ import { badmintonBox } from '../boxSources';
 import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
+import { PointDetailRow } from '../PointDetailRow';
+import { detailLiveSettings } from '../pointDetailSettings';
 import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, type BadmintonState } from './engine';
 import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
@@ -62,9 +64,11 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
       )}
       <PointRow label={`🏸 Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} onPoint={point} />
       <PointRow label={`🏸 Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} onPoint={point} />
+      {/* SD-107 — optional "how was it won?" for the last rally */}
+      <PointDetailRow sport="badminton" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🏸"
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🏸" detailSport="badminton"
         periodLabel={(e) => `Game ${e.game ?? 1}`}
       />
     </View>
@@ -133,6 +137,8 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   retireTerms: true,
   ScoringControls,
   LiveExtras,
+  // SD-107 — the optional point-detail setting (event mode: from the next point)
+  liveSettings: detailLiveSettings('badminton'),
   formation: () => courtFormation('badminton'),
   Court: makeCourt('badminton'),
   voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },

@@ -46,10 +46,11 @@ describe('SD-27 — sport-correct leader categories', () => {
     assert.deepEqual(keys('kabaddi'), ['matchPoints', 'raidPoints', 'tacklePoints', 'ptsPerMatch', 'raidPerMatch', 'tacklePerMatch', 'super10s', 'high5s']);
     assert.deepEqual(keys('chess'), ['score', 'scorePct', 'wins']);
     assert.deepEqual(keys('carrom'), ['points', 'boards', 'queens', 'pointsPerMatch']);
-    assert.deepEqual(keys('tennis'), ['matchesWon', 'winPct', 'setsWon', 'gamesWon', 'aces', 'srvPtsPct', 'holdPct', 'bpWonPct']);
-    assert.deepEqual(keys('padel'), ['matchesWon', 'winPct', 'setsWon', 'gamesWon', 'srvPtsPct', 'holdPct', 'bpWonPct']);
+    // SD-107 appended "Most winners per match" (point detail) before the serve rates
+    assert.deepEqual(keys('tennis'), ['matchesWon', 'winPct', 'setsWon', 'gamesWon', 'aces', 'winnersPerMatch', 'srvPtsPct', 'holdPct', 'bpWonPct']);
+    assert.deepEqual(keys('padel'), ['matchesWon', 'winPct', 'setsWon', 'gamesWon', 'winnersPerMatch', 'srvPtsPct', 'holdPct', 'bpWonPct']);
     for (const sp of ['badminton', 'tabletennis', 'squash', 'pickleball'] as SportId[]) {
-      assert.deepEqual(keys(sp), ['matchesWon', 'winPct', 'gamesWon', 'gamesPct', 'srvPtsPct'], sp);
+      assert.deepEqual(keys(sp), ['matchesWon', 'winPct', 'gamesWon', 'gamesPct', 'winnersPerMatch', 'srvPtsPct'], sp);
     }
     // football keeps its 14 and appends goals per 90 / save %; cricket keeps SD-16's records
     assert.deepEqual(keys('football').slice(-2), ['goalsPer90', 'savePct']);
@@ -93,8 +94,9 @@ describe('SD-27 — award slots and MVP weights from the schema', () => {
   test('MVP weights: basketball = EFF, tennis double fault −1, racket results, chess = score', () => {
     assert.deepEqual(STAT_WEIGHTS.basketball, { points: 1, rebounds: 1, assists: 1, steals: 1, blocks: 1, turnovers: -1, freeThrowsMade: 1, freeThrowsAtt: -1, fgMissed: -1 });
     assert.equal(STAT_WEIGHTS.tennis.doubleFaults, -1);
-    assert.deepEqual(STAT_WEIGHTS.badminton, { points: 1, gamesWon: 2 });
-    assert.deepEqual(STAT_WEIGHTS.padel, { points: 1, gamesWon: 2, setsWon: 4 });
+    // SD-107: point detail — winners +1, unforced errors / service faults −1 (aces +2)
+    assert.deepEqual(STAT_WEIGHTS.badminton, { points: 1, gamesWon: 2, winners: 1, unforcedErrors: -1, serviceFaults: -1 });
+    assert.deepEqual(STAT_WEIGHTS.padel, { points: 1, gamesWon: 2, setsWon: 4, aces: 2, serviceWinners: 1, winners: 1, unforcedErrors: -1 });
     assert.deepEqual(STAT_WEIGHTS.chess, { wins: 1, draws: 0.5 });
     // unchanged where already right
     assert.deepEqual(STAT_WEIGHTS.volleyball, { points: 1, aces: 2, blocks: 1 });
@@ -203,7 +205,7 @@ describe('SD-27 — minimums and the organiser override', () => {
       ['spg', 2, 2, 'min 2 games'], ['bpg', 2, 2, 'min 2 games'], ['effPg', 2, 2, 'min 2 games'],
     ]);
     assert.deepEqual(minimumRows('tennis').map((r) => [r.key, r.text]), [
-      ['winPct', 'min 3 matches'], ['srvPtsPct', 'min 30 service points'], ['holdPct', 'min 6 service games'], ['bpWonPct', 'min 5 break point chances'],
+      ['winPct', 'min 3 matches'], ['winnersPerMatch', 'min 3 matches'], ['srvPtsPct', 'min 30 service points'], ['holdPct', 'min 6 service games'], ['bpWonPct', 'min 5 break point chances'],
     ]);
     assert.deepEqual(minimumRows('cricket').map((r) => [r.key, r.text]), [['avg', 'min 3 innings'], ['sr', 'min 30 balls'], ['econ', 'min 10 overs']]);
     assert.deepEqual(minimumRows('golf'), []);

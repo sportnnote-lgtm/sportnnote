@@ -5,65 +5,71 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: badminton
 order: 58
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-In badminton every rally scores a point, and the side that wins the rally serves next. You tap who won each rally. The app keeps the score, ends each game at the right moment, and shows who serves from which court.
+In badminton every rally scores, and the rally winner serves next. You tap who won each rally. The app keeps the score, ends each game and shows who serves from which court.
 
 ## Before you start
-- You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
-- The organiser picks the **Format** when scheduling: **BWF · 21 rally**, **5×11 (rally, cap 15)**, **15-point**, **Single game to 21** or **Custom**.
-- In the BWF format a game is won at 21 by two clear points. At 20-all play goes on until someone leads by two, and at 29-all the next point wins, so no game goes past 30.
-- Tap **⚙ Customize this format** to change **Points per game**, the **Deuce cap**, **Match length**, or **At the cap**: **Golden point (next wins)** or **Win by 2 (no golden point)**.
-- Under **Players**, pick **Singles** or **Doubles**, and add the players.
+- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
+- **Format**: **BWF · 21 rally**, **5×11 (rally, cap 15)**, **15-point**, **Single game to 21** or **Custom**.
+- In BWF a game is won at 21 by two. From 20-all play goes on until someone leads by two; at 29-all the next point wins, so no game passes 30.
+- **⚙ Customize this format** changes **Points per game**, the **Deuce cap**, **Match length**, or **At the cap**: **Golden point (next wins)** or **Win by 2 (no golden point)**.
+- Under **Players**, pick **Singles** or **Doubles**.
 
 ## Step by step: score a rally
 1. Open the match → **Scoring** tab.
-2. Under "Who serves first?", tap the side that will serve the first rally. You can change it until the first point.
-3. Read the serving line, for example "Serving: Asha Rao · right court".
-4. After each rally, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
-5. Repeat. When a game ends, the next one starts at 0-0.
+2. Under "Who serves first?", tap the side serving first (changeable until the first point).
+3. Read the serving line, e.g. "Serving: Asha Rao · right court".
+4. After each rally, tap the winner under "Point — Red House" (or the other row). With no players added, tap "+1 Red House".
+5. Repeat. Each new game starts at 0-0.
 
 ## How the app follows the serve
-- The winner of each rally serves the next one.
-- The server serves from the right court when their own score is even, and from the left when it is odd. That is the BWF rule, and the serving line shows it.
-- In singles the line names the player. In doubles it names the pair, because which partner serves depends on where they are standing.
+- The rally winner serves next: from the right court on an even score, the left on odd (BWF rule).
+- Singles names the server; doubles names the pair, since which partner serves depends on where they stand.
 
 ## Reading the board
-The scoreboard has GAMES won and one column of points per game, with the game in play highlighted and a 🏸 dot next to the serving side. The header shows the game number and "best of 3". When the match ends, the result reads like "2–1 · 21-18, 19-21, 21-15".
+GAMES won and a points column per game, with a 🏸 dot by the serving side. The header shows the game number and "best of 3". The result reads like "2–1 · 21-18, 19-21, 21-15".
 
 ## Match stats
-The **Score** tab shows a "Match stats" panel once the first rally is played. From the second game, the chips switch between **Match** and each game.
+The **Score** tab's "Match stats" (chips: **Match** or each game) show:
+- Total points won, and points won on serve and on receive.
+- Most points in a row; biggest lead in a game.
+- Game and match points saved.
 
-- Total points won, points won on serve and points won on receive.
-- Most points in a row, and the biggest lead in a game.
-- Game points saved and match points saved, when there were any.
+They come from the rally log, so older matches show them and corrections update them. In doubles serve figures are for the pair.
 
-Nothing extra is tapped. The app works these out from the rally log, so older matches show them too, and a correction updates them straight away.
+## Point detail (optional)
+Off by default, so a rally stays one tap. Turn it on with **On** in the "🔎 Point detail (optional)" row under the scoring buttons, or the **Point detail** toggle under "Stats captured" in "⚙️ Scoring settings" (Info tab or ☰ Quick options; mid-match, **Apply** starts it from the next rally).
 
-> **Note:** In doubles the serve figures are for the pair, because the app doesn't name which partner served.
+After each rally, "How was it won? · Asha Rao" appears. Tap a chip (again to clear) or **Skip**; nothing is required.
+- **Winner** + **Smash**, **Net kill**, **Drop**, **Clear**, **Drive**, **Push / lift**.
+- **Forced error**, or **Unforced error** + **Net**, **Out**, **Fault** (touch or double hit).
+- **Service fault** (receiver won).
+
+Winners count for the rally winner; errors and service faults against the opponent (doubles: pick who under "By:"). Match stats add a "Point detail" block (winners, errors, Winners / UE, by stroke); the box score adds **W**, **UE**, **FE**. Older matches are unchanged.
 
 ## Fix a mistake
-- Tapped the wrong side just now? Tap **Undo**.
-- To fix an older rally, tap **Edit** next to "Correct the timeline" on the **Scoring** tab. Every point is listed, newest first.
-1. Tap ✎ on the point. Change who won it and, if you like, the player, or tap **Team (no player)**. Tap **Save**.
-2. To delete a point, tap ✕. To add one you missed, tap ＋ on the point before it, or **＋ Insert a point at the very start**.
+- Wrong tap just now? Tap **Undo**.
+- Older rally: tap **Edit** next to "Correct the timeline" on the **Scoring** tab.
+1. Tap ✎ on the point to change the winner, player (or **Team (no player)**) or "How was it won? (optional)". Tap **Save**.
+2. Tap ✕ to delete. To add a missed point, tap ＋ on the point before it, or **＋ Insert a point at the very start**.
 3. Tap **Done**.
 
-The app replays the match from the first rally. The score, games, server and player points all recalculate, even if the fix changes who won a game. After the match, use [Correct a match after full time](/guides/correct-a-finished-match/).
+The app replays the match, so score, games, server and stats follow, even if a game changes hands. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends by itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** and choose **Retired**. For a player put out by the umpire, choose **Default**. The result keeps the points played, such as "21-15, 8-3 ret.". A retirement before the first point shows "w/o". See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired**; for an umpire's default, **Default**. The result keeps the points played, e.g. "21-15, 8-3 ret."; before the first point it shows "w/o". See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-When the match ends, each player's badminton page adds it to **Apps**, **W-L** and **Win %**. **Match play** gives W-L and won % for games and points, plus deciding games. **Serve & return** has service and return points won %, from singles only, because the server isn't named in doubles. **Scoring** has points scored. Players with both formats also get **Singles / doubles**, and doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
+The player's badminton page adds **Apps**, **W-L** and **Win %**. **Match play** has games, points and deciding games. **Serve & return** has service and return points won % (singles only). **Shot making** has winners, errors and Winners / UE from point-detail matches (☁ when only some tracked it). **Scoring** has points. Players with both formats get **Singles / doubles**; doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 ## Common questions
 ### Do I need to tap who served?
-No. The app knows the server from who won the last rally. You only choose the first server.
+No. The app knows the server from the last rally. You only choose the first server.
 
 ### What is the golden point?
-At 29-all in a 21-point game, the next rally wins the game 30-29. Choose **Win by 2 (no golden point)** under **At the cap** if your event plays on instead.
+At 29-all in a 21-point game, the next rally wins 30-29. Choose **Win by 2 (no golden point)** under **At the cap** if your event plays on.
 
 ### Why is the player list missing?
-If a side has no players added, you get one "+1" button per side. The score works the same, but no player gets credit.
+A side with no players gets one "+1" button. The score works the same, but no player gets credit.

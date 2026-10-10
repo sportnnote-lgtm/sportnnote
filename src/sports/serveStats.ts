@@ -88,6 +88,12 @@ export interface SideServe {
   turns: number;
   /** side-out doubles: rallies lost by server 1 (serve → partner) */
   handovers: number;
+  /** tennis: double faults served (points marked `df`) */
+  dfs: number;
+  /** SD-107 tennis 1st / 2nd serve (points carrying `serve` only): service
+   *  points tracked, 1st serves in, won on the 1st serve, 2nd-serve points
+   *  (double faults included), won on the 2nd serve */
+  s1Pts: number; s1In: number; s1Won: number; s2Pts: number; s2Won: number;
 }
 
 /** The serving player's figures (keyed by player id). */
@@ -99,6 +105,8 @@ export interface PlayerServe {
   held: number;
   bpFaced: number;
   bpSaved: number;
+  /** SD-107 — 1st / 2nd serve (tracked points only) */
+  s1Pts: number; s1In: number; s1Won: number; s2Pts: number; s2Won: number;
 }
 
 export interface ServeBlock {
@@ -126,6 +134,11 @@ export interface ServeStats {
   /** the replay reproduced the state's score (false = a snapshot whose log
    *  doesn't rebuild it — figures are from the log) */
   consistent: boolean;
+  /** SD-107 — some point carried a 1st / 2nd serve (tennis serve tracking) */
+  serveTracked: boolean;
+  /** SD-107 — who served the last rally and who won it (the point-detail row
+   *  offers service options by it); absent before the first rally */
+  last?: { server: Side; winner: Side };
 }
 
 /** Player ids per side, in roster order (doubles slot 0 / 1). */
@@ -138,6 +151,7 @@ const zeroSide = (): SideServe => ({
   gpOpps: 0, gpWon: 0, gpFaced: 0, gpSaved: 0, spOpps: 0, spWon: 0, spFaced: 0, spSaved: 0,
   mpOpps: 0, mpWon: 0, mpFaced: 0, mpSaved: 0,
   run: 0, maxLead: 0, sideOuts: 0, turns: 0, handovers: 0,
+  dfs: 0, s1Pts: 0, s1In: 0, s1Won: 0, s2Pts: 0, s2Won: 0,
 });
 const zeroBlock = (): ServeBlock => ({ rallies: 0, home: zeroSide(), away: zeroSide(), players: {} });
 
@@ -318,6 +332,8 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
   const golden = sport === 'padel' ? !!(s0 as padel.PadelState).goldenPoint : sport === 'tennis' ? !!(s0 as tennis.TennisState).noAd : false;
   let lastWinner: Side | undefined;
   let serverKnown = true;
+  let serveTracked = false;
+  let last: ServeStats['last'];
   // runs: whole match + the current period's
   const run = { side: null as Side | null, n: 0, pSide: null as Side | null, pn: 0 };
   let lastPeriod = 0;
@@ -343,7 +359,8 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
     // a whole-set match tiebreak starts at 0-0 in games (a set tiebreak at N-N)
     const matchTb = fam === 'set' && srv.tb && (base as SetState).games.home === 0 && (base as SetState).games.away === 0;
     if (!srv.id) serverKnown = false;
-    const pl = (b: ServeBlock) => (srv.id ? (b.players[srv.id] ??= { side: S, srvPlayed: 0, srvWon: 0, svcGames: 0, held: 0, bpFaced: 0, bpSaved: 0 }) : null);
+    const pl = (b: ServeBlock) => (srv.id ? (b.players[srv.id] ??= { side: S, srvPlayed: 0, srvWon: 0, svcGames: 0, held: 0, bpFaced: 0, bpSaved: 0, s1Pts: 0, s1In: 0, s1Won: 0, s2Pts: 0, s2Won: 0 }) : null);
+    if (p.serve) serveTracked = true;
 
     both((b) => {
       b.rallies += 1;
@@ -354,6 +371,16 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
       const ps = pl(b);
       if (ps) { ps.srvPlayed += 1; if (W === S) ps.srvWon += 1; }
       if (p.kind === 'ace') b[W].aces += 1;
+      if (p.df) b[S].dfs += 1;
+      // SD-107 — 1st / 2nd serve, on tracked points only (a double fault is a 2nd-serve point lost)
+      if (p.serve) {
+        const won = W === S;
+        for (const x of [b[S], ps]) {
+          if (!x) continue;
+          x.s1Pts += 1;
+          if (p.serve === 1) { x.s1In += 1; if (won) x.s1Won += 1; } else { x.s2Pts += 1; if (won) x.s2Won += 1; }
+        }
+      }
       // game / set / match points
       for (const X of SIDES) {
         const O = opp(X), r = lv[X];
@@ -400,13 +427,14 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
         if (d > 0) { match[X].maxLead = Math.max(match[X].maxLead, d); blk[X].maxLead = Math.max(blk[X].maxLead, d); }
       }
     }
+    last = { server: S, winner: W };
     lastWinner = W; // rally scoring: the rally winner serves next (side-out reads state.serving)
     cur = next;
   }
   // A period with no rally yet (the next game at 0-0) isn't listed.
   for (let i = 0; i < periods.length; i++) periods[i] ??= zeroBlock();
   const consistent = ad.key(cur) === ad.key({ ...s0, events: [] } as AnyState);
-  return { sport, unit: fam === 'set' ? 'set' : 'game', sideOut, doubles, golden, match, periods, serverKnown, consistent };
+  return { sport, unit: fam === 'set' ? 'set' : 'game', sideOut, doubles, golden, match, periods, serverKnown, consistent, serveTracked, ...(last ? { last } : {}) };
 }
 
 // -------------------------------------------------- career keys (SD-19) --
@@ -418,7 +446,7 @@ export const SERVE_KEYS = ['srvPts', 'srvPtsWon', 'rcvPts', 'rcvPtsWon'] as cons
  *  (svcGames, svcHeld, bpFaced, bpSaved) are the serving player's; return-side
  *  keys (rtnGames, breaks, bpOpps, bpWon) the side's. */
 export const SERVE_SET_KEYS = ['svcGames', 'svcHeld', 'bpFaced', 'bpSaved', 'rtnGames', 'breaks', 'bpOpps', 'bpWon'] as const;
-const SERVER_KEYS = new Set(['srvPts', 'srvPtsWon', 'svcGames', 'svcHeld', 'bpFaced', 'bpSaved']);
+const SERVER_KEYS = new Set(['srvPts', 'srvPtsWon', 'svcGames', 'svcHeld', 'bpFaced', 'bpSaved', 'srv1Pts', 'srv1In', 'srv1Won', 'srv2Pts', 'srv2Won']);
 
 /**
  * The career keys for one player of `side`. Coverage-aware (D8): when the
@@ -438,6 +466,8 @@ export function serveCareerKeys(st: ServeStats | null, side: Side, playerId: str
     out.srvPts = own?.srvPlayed ?? 0;
     out.srvPtsWon = own?.srvWon ?? 0;
     if (st.unit === 'set') Object.assign(out, { svcGames: own?.svcGames ?? 0, svcHeld: own?.held ?? 0, bpFaced: own?.bpFaced ?? 0, bpSaved: own?.bpSaved ?? 0 });
+    // SD-107 — 1st / 2nd serve keys, only for a match that tracked them (D8)
+    if (st.serveTracked) Object.assign(out, { srv1Pts: own?.s1Pts ?? 0, srv1In: own?.s1In ?? 0, srv1Won: own?.s1Won ?? 0, srv2Pts: own?.s2Pts ?? 0, srv2Won: own?.s2Won ?? 0 });
   }
   return out;
 }
@@ -468,6 +498,13 @@ export function serveRows(st: ServeStats, block: ServeBlock): ServeRow[] {
   const leadUnit = st.unit === 'set' ? 'Biggest lead (games)' : 'Biggest lead';
   if (st.unit === 'set') {
     if (st.sport === 'tennis') count('aces', 'Aces', (x) => x.aces);
+    if (st.sport === 'tennis' && h.dfs + a.dfs > 0) count('dfs', 'Double faults', (x) => x.dfs);
+    // SD-107 — 1st / 2nd serve (ATP order), when the match tracked them
+    if (h.s1Pts + a.s1Pts > 0) {
+      ratio('s1in', '1st serve in', (x) => x.s1In, (x) => x.s1Pts);
+      ratio('s1won', '1st serve points won', (x) => x.s1Won, (x) => x.s1In);
+      ratio('s2won', '2nd serve points won', (x) => x.s2Won, (x) => x.s2Pts);
+    }
     ratio('srv', 'Service points won', (x) => x.srvWon, (x) => x.srvPlayed);
     ratio('rcv', 'Return points won', (x) => x.rcvWon, (x) => x.rcvPlayed);
     ratio('tot', 'Total points won', (x) => x.won, () => block.rallies);

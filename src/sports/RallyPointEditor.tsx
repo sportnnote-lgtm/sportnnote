@@ -16,6 +16,7 @@ import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 import { pointRows, correctionActions, defaultCredits, type EditRow, type PointCredits, type PointInput, type PointKind } from './rallyEdit';
+import { DETAIL_HOWS, STROKES, howDef, pdText, type DetailSport, type How, type PointDetail } from './pointDetail';
 
 /** One choosable point type in the editor. `credited: false` = nobody on the
  *  scoring side gets credit (an opponent's error) → no player picker. */
@@ -32,6 +33,8 @@ interface Draft {
   kind: PointKind | 'df';
   playerId?: string;
   playerName?: string;
+  /** SD-107 — how the point was won (optional) */
+  pd?: PointDetail;
 }
 
 export function RallyPointEditor({
@@ -52,6 +55,7 @@ export function RallyPointEditor({
   rowsOf = pointRows,
   normalize,
   doubleFault = false,
+  detailSport,
 }: {
   events: LiveEvent[];
   homeName: string;
@@ -85,6 +89,8 @@ export function RallyPointEditor({
   /** SD-104 (tennis) — offer "Double fault" as a point type: the point goes to
    *  the receiver and the faulting server's doubleFaults follow the correction. */
   doubleFault?: boolean;
+  /** SD-107 — offer the sport's optional "How?" point detail on each point */
+  detailSport?: DetailSport;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -120,7 +126,10 @@ export function RallyPointEditor({
       // no type choice → a plain "won the rally" point (the engine re-derives side-outs)
       side: draft.side, kind: choices.length && draft.kind !== 'rally' ? draft.kind : 'point',
       playerName: credited ? draft.playerName : undefined, playerId: credited ? draft.playerId : undefined,
+      ...(draft.pd ? { pd: draft.pd } : {}),
     };
+    // SD-107 — an edited point keeps its 1st / 2nd serve (it was served the same way)
+    if (draft.mode === 'edit' && list[draft.index]?.serve) item.serve = list[draft.index].serve;
     if (draft.mode === 'edit') {
       commit(list.map((p, i) => (i === draft.index ? item : p)));
     } else {
@@ -133,7 +142,7 @@ export function RallyPointEditor({
   const beginEdit = (index: number) => {
     const p = list[index];
     if (p.df) setDraft({ mode: 'edit', index, side: p.side, kind: 'df', playerName: p.df.playerName, playerId: p.df.playerId ?? rosterId(p.df.playerName) });
-    else setDraft({ mode: 'edit', index, side: p.side, kind: p.kind, playerName: p.playerName, playerId: rosterId(p.playerName) });
+    else setDraft({ mode: 'edit', index, side: p.side, kind: p.kind, playerName: p.playerName, playerId: rosterId(p.playerName), ...(p.pd ? { pd: p.pd } : {}) });
   };
   const beginInsert = (afterIndex: number) =>
     setDraft({ mode: 'insert', index: afterIndex, side: 'home', kind: defaultKind, playerName: undefined, playerId: undefined });
@@ -157,8 +166,8 @@ export function RallyPointEditor({
               <Text style={st.meta}>Who won the rally?</Text>
               {normalize && <Text style={st.meta}>Serve and side-outs are worked out again from the rallies.</Text>}
               <View style={st.chips}>
-                <SelectChip label={homeName} active={draft.side === 'home'} onPress={() => setDraft({ ...draft, side: 'home', playerId: undefined, playerName: undefined })} />
-                <SelectChip label={awayName} active={draft.side === 'away'} onPress={() => setDraft({ ...draft, side: 'away', playerId: undefined, playerName: undefined })} />
+                <SelectChip label={homeName} active={draft.side === 'home'} onPress={() => setDraft({ ...draft, side: 'home', playerId: undefined, playerName: undefined, pd: undefined })} />
+                <SelectChip label={awayName} active={draft.side === 'away'} onPress={() => setDraft({ ...draft, side: 'away', playerId: undefined, playerName: undefined, pd: undefined })} />
               </View>
               {choices.length > 0 && (
                 <>
@@ -188,6 +197,42 @@ export function RallyPointEditor({
               ) : (
                 <Text style={st.meta}>An opponent&apos;s error — no player is credited.</Text>
               )}
+              {detailSport && draft.kind !== 'df' && (() => {
+                // SD-107 — optional point detail (no serve filter here: the scorer knows)
+                const pd = draft.pd;
+                const sel = pd ? howDef(detailSport, pd.how) : undefined;
+                const loser = rosterFor(draft.side === 'home' ? 'away' : 'home');
+                const setPd = (next?: PointDetail) => setDraft({ ...draft, pd: next });
+                const pick = (how: How) => {
+                  if (pd?.how === how) return setPd(undefined);
+                  const d = howDef(detailSport, how);
+                  setPd({ how, ...(d?.credit === 'loser' && loser.length === 1 ? { err: { playerId: loser[0].id, playerName: loser[0].fullName } } : {}) });
+                };
+                return (
+                  <>
+                    <Text style={st.meta}>How was it won? (optional)</Text>
+                    <View style={st.chips}>
+                      {DETAIL_HOWS[detailSport].map((h) => <SelectChip key={h.how} label={h.chip} active={pd?.how === h.how} onPress={() => pick(h.how)} />)}
+                    </View>
+                    {sel?.strokes && pd && (
+                      <View style={st.chips}>
+                        {sel.strokes.map((k) => (
+                          <SelectChip key={k} label={STROKES[k]?.chip ?? k} active={pd.stroke === k}
+                            onPress={() => setPd({ ...pd, stroke: pd.stroke === k ? undefined : k })} />
+                        ))}
+                      </View>
+                    )}
+                    {sel?.credit === 'loser' && pd && loser.length >= 2 && (
+                      <View style={st.chips}>
+                        {loser.map((p) => (
+                          <SelectChip key={p.id} label={`By ${p.fullName}`} active={pd.err?.playerId === p.id}
+                            onPress={() => setPd({ ...pd, err: pd.err?.playerId === p.id ? undefined : { playerId: p.id, playerName: p.fullName } })} />
+                        ))}
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
               <View style={st.row}>
                 <Button label="Save" variant={draft.side} style={{ flex: 1 }} onPress={saveDraft} />
                 <Button label="Cancel" variant="ghost" onPress={() => setDraft(null)} />
@@ -210,7 +255,7 @@ export function RallyPointEditor({
                   <Text style={st.rowLabel} numberOfLines={1}>
                     {p.df
                       ? `⚠️ Double fault${p.df.playerName ? ` by ${p.df.playerName}` : ''} → point ${side === 'home' ? homeName : awayName}`
-                      : `${ROW_ICON[p.kind] ?? pointIcon} ${side === 'home' ? homeName : awayName}${rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}`}
+                      : `${ROW_ICON[p.kind] ?? pointIcon} ${side === 'home' ? homeName : awayName}${rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}${p.pd ? ` · ${pdText(p.pd, false)}` : ''}`}
                   </Text>
                   {!draft && (
                     <>

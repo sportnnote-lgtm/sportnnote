@@ -18,6 +18,7 @@
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 import { DOUBLE_FAULT_STAT } from './tennis/doubleFault.ts';
+import type { PointDetail } from './pointDetail.ts';
 
 /** Kinds of scored point a rally sport logs — each is a single point for `side`.
  *  'point' = a point whose outcome wasn't recorded (every legacy point). The rest
@@ -42,6 +43,11 @@ export interface PointInput {
    *  server, if named). Replays as a double fault, so a correction that keeps,
    *  changes or drops it moves the server's `doubleFaults` with it. */
   df?: { playerId?: string; playerName?: string };
+  /** SD-107 — how the point was won (optional point detail); replayed as a
+   *  POINT_DETAIL right after the point. */
+  pd?: PointDetail;
+  /** SD-107 — tennis: served on the 1st or 2nd serve (serve tracking on). */
+  serve?: 1 | 2;
 }
 
 /** Every scored-point kind (skip game/set/match banner rows). Must match the
@@ -59,10 +65,10 @@ export const pointRows = (events: LiveEvent[]): EditRow[] =>
     .map((e) => ({
       e,
       p: e.kind === 'rally'
-        ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const }
+        ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const, ...(e.pd ? { pd: { ...e.pd } } : {}) }
         // SD-19: the credited player's id rides along when the event has one,
         // so an EDIT_LOG keeps ids (absolute statTotals) instead of names only.
-        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}) },
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}), ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.serve ? { serve: e.serve } : {}) },
     }));
 
 /** Reconstruct the ordered scoring inputs from a sport's point log, so replaying
@@ -86,7 +92,11 @@ export const defaultCredits: PointCredits = (kind) => (kind === 'rally' ? {} : {
  *  downstream game/set boundary recomputes correctly. `cleared` = the match reset
  *  to 0-0 with its format/config kept. */
 export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S, points: PointInput[]): S {
-  return points.reduce((s, p) => reducer(s, replayAction(p)), cleared);
+  return points.reduce((s, p) => {
+    const next = reducer(s, replayAction(p));
+    // SD-107 — the point's detail rides along (old lists carry none)
+    return p.pd ? reducer(next, { type: 'POINT_DETAIL', payload: { pd: p.pd } }) : next;
+  }, cleared);
 }
 
 /** The action one corrected point replays as. */
@@ -95,13 +105,15 @@ function replayAction(p: PointInput): ScoreAction {
   // fault marked on the server); the reducer re-records the marker.
   if (p.df) {
     return {
-      type: 'POINT', side: p.side, payload: { df: true },
+      type: 'POINT', side: p.side, payload: { df: true, ...(p.serve ? { serve: p.serve } : {}) },
       attribution2: p.df.playerName ? { playerId: p.df.playerId ?? '', stat: DOUBLE_FAULT_STAT, playerName: p.df.playerName } : undefined,
     };
   }
   return {
     type: ACTION_OF[p.kind],
     side: p.side,
+    // SD-107 — a tracked point keeps its 1st / 2nd serve (only such points carry it)
+    ...(p.serve ? { payload: { serve: p.serve } } : {}),
     // Only a creditable kind carries a player (an opponent's error never does).
     attribution: p.playerName && p.kind !== 'opperror' && p.kind !== 'serveerror' && p.kind !== 'rally'
       ? { playerId: p.playerId ?? '', stat: statOf(p.kind), playerName: p.playerName }

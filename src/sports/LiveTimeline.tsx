@@ -6,6 +6,7 @@ import { useMask } from '../core/disputeMask';
 import type { Player } from '../core/types';
 import type { LiveEvent } from './liveEvents';
 import { playerLink, idByName } from './playerLink';
+import { pdText } from './pointDetail';
 
 export function LiveTimeline({
   events,
@@ -53,7 +54,7 @@ export function LiveTimeline({
             <Text style={[st.stamp, { color: sideColor }]} numberOfLines={1}>{e.stamp}</Text>
             <Text style={st.icon}>{e.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[st.label, (e.tone === 'boundary' || e.tone === 'wicket') && { color: toneColor! }]}>{e.label}</Text>
+              <Text style={[st.label, (e.tone === 'boundary' || e.tone === 'wicket') && { color: toneColor! }]}>{e.label}{e.pd ? ` · ${pdText(e.pd, false)}` : ''}{e.serve === 2 && !e.df ? ' · 2nd serve' : ''}</Text>
               {e.detail ? <Text style={st.detail} {...playerLink(pid, mask.text(e.detail), onPlayer)}>{mask.text(e.detail)}</Text> : null}
             </View>
             {latest ? <Text style={st.latestTag}>LATEST</Text> : null}

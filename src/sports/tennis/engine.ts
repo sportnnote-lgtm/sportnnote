@@ -10,6 +10,7 @@ import { replayPoints, type PointInput } from '../rallyEdit.ts';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import type { ScoreSummary } from '../types';
+import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 
 export const SETS_TO_WIN = 2;
 
@@ -50,6 +51,12 @@ export interface TennisState {
   /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
    *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
   serveOrder?: ServeOrder;
+  /** SD-107 — optional point detail (how each point was won) is being
+   *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
+  pointDetail?: boolean;
+  /** SD-107 — 1st / 2nd serve tracking: points served while on carry
+   *  `serve` (1, or 2 after a 1st-serve fault / a double fault). */
+  serveDetail?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -74,6 +81,7 @@ export const init = (config?: Record<string, unknown>): TennisState => {
     tb: [],
     doubles: Number(config?.playersPerSide ?? 1) >= 2,
     firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
+    ...initDetailFlags(config),
     events: [],
     seq: 0,
     ended: false,
@@ -127,7 +135,7 @@ function winSet(s: TennisState, side: 'home' | 'away', games: { home: number; aw
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean, whoId?: string, df?: { playerId?: string; playerName?: string }): TennisState {
+function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefined, ace: boolean, whoId?: string, df?: { playerId?: string; playerName?: string }, serve?: 1 | 2): TennisState {
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -138,8 +146,10 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   // points & aces per player, filtered by set — the timeline ignores them.
   // SD-104: a double fault is a plain point for the receiver (so every count of
   // points stays as before) carrying a `df` marker naming the faulting server.
-  if (df) events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1 });
-  else events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1 });
+  // SD-107: `serve` only on points served while 1st / 2nd serve tracking was on.
+  const sv = serve ? { serve } : {};
+  if (df) events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1, ...sv });
+  else events.push({ id: ++seq, stamp: `Set ${setNo}${tb ? ' · TB' : ''}`, icon: ace ? '🎯' : '🎾', label: ace ? 'Ace' : tb ? `Tiebreak ${pts.home}-${pts.away}` : 'Point', detail: who, side, kind: ace ? 'ace' : 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1, ...sv });
 
   if (tb) {
     // First to the tiebreak target, win by 2. A match tiebreak records its own
@@ -174,7 +184,18 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
   // effect); EDIT_LOG replays a corrected point list so games/sets re-derive.
   if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  if (a.type === 'EDIT_LOG') {
+    // SD-107: each corrected point carries its own 1st / 2nd serve, so replay
+    // with serve tracking off (a point from before it was switched on stays
+    // untracked), then restore the setting.
+    const r = replayPoints(reducer, clearMatch({ ...s, serveDetail: undefined }), (a.payload?.points as PointInput[]) ?? []);
+    const { serveDetail: _drop, ...rest } = r;
+    return s.serveDetail === undefined ? rest : { ...rest, serveDetail: s.serveDetail };
+  }
+  // SD-107 — capture settings (from the next point) and a point's detail
+  // (annotates the last point; allowed after the match point too).
+  if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
+  if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
   // Who serves first — settable only before the first point (like a tennis
   // toss); serve alternates from there. No `side` on this action.
   // SD-104 — doubles: which player of a pair serves its first game of this set
@@ -192,12 +213,17 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   // SD-104: a double fault dispatched with `payload.df` (new UI / voice) marks the
   // point; the faulting server rides on attribution2 (live) or the persisted
   // `_attr2` (replay from the log). Older double faults (no flag) are plain points.
-  if (a.type === 'POINT' && a.payload?.df === true) {
+  // SD-107: the 1st / 2nd serve — given on a replayed point, else 1 (2 for a
+  // double fault) while tracking is on; untracked points carry none.
+  const given = a.payload?.serve === 1 || a.payload?.serve === 2 ? a.payload.serve : undefined;
+  const isDf = a.type === 'POINT' && a.payload?.df === true;
+  const serve: 1 | 2 | undefined = given ?? (s.serveDetail ? (isDf ? 2 : 1) : undefined);
+  if (isDf) {
     const f = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);
-    return scorePoint(s, a.side, undefined, false, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) });
+    return scorePoint(s, a.side, undefined, false, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) }, serve);
   }
-  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false, a.attribution?.playerId || undefined);
-  if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true, a.attribution?.playerId || undefined);
+  if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, false, a.attribution?.playerId || undefined, undefined, serve);
+  if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true, a.attribution?.playerId || undefined, undefined, serve);
   return s;
 };
 

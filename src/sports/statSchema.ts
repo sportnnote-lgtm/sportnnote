@@ -167,8 +167,11 @@ export interface StatDef extends StatLabels {
   /** D8: 'optional' stats are captured only in a detail mode (`mode`); a line
    *  whose `tracked` list omits the key reads "not tracked", never 0.
    *  'present' (SD-24) = tracked wherever the key is on the line, whatever
-   *  the `tracked` list says (absolute keys statTotals writes) */
-  coverage?: 'core' | 'optional' | 'present';
+   *  the `tracked` list says (absolute keys statTotals writes)
+   *  'keyed' (SD-107) = tracked ONLY on a line that carries the key itself
+   *  (racket point detail: statTotals writes it only for a match that
+   *  captured it — a racket line's record keys don't make it a 0) */
+  coverage?: 'core' | 'optional' | 'present' | 'keyed';
   mode?: string;
   /** who can lead / win on this stat (football clean sheets: keepers only) */
   eligible?: 'goalkeeper';
@@ -378,6 +381,7 @@ export const isTracked = (l: StatLine, key: string): boolean => (l.tracked ? l.t
  *  outside the line's `tracked` list: football minutes and keeper goals
  *  conceded, racket / volleyball record keys). */
 export function trackedIn<S extends string>(schema: SportStatSchema<S>, l: StatLine, key: string): boolean {
+  if (statDefIn(schema, key)?.coverage === 'keyed') return hasKey(l, key);
   if (isTracked(l, key)) return true;
   if (statDefIn(schema, key)?.coverage !== 'present') return false;
   // on the line, or the line carries a sibling 'present' key (statTotals wrote
@@ -710,7 +714,7 @@ export function rankPlayers<S extends string>(schema: SportStatSchema<S>, def: S
     })];
     rows.push({
       playerId, value: v.value, text: v.text, games: v.games, den: v.den, line: v.line, order,
-      trackedGames: ls.filter((l) => inputs.every((k) => isTracked(l, k))).length, totalGames: ls.length,
+      trackedGames: ls.filter((l) => inputs.every((k) => trackedIn(schema, l, k))).length, totalGames: ls.length,
     });
   }
   const cmp = (a: number[], b: number[]) => {

@@ -8,6 +8,7 @@ import type { ScoreAction, ScoreSummary } from '../types';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 
 const SETS_TO_WIN = 2;
 
@@ -35,6 +36,9 @@ export interface PadelState {
   /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
    *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
   serveOrder?: ServeOrder;
+  /** SD-107 — optional point detail (how each point was won) is being
+   *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
+  pointDetail?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -52,6 +56,7 @@ export const init = (config?: Record<string, unknown>): PadelState => ({
   tb: [],
   doubles: Number(config?.playersPerSide ?? 2) >= 2,
   firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
+  ...initDetailFlags(config),
   events: [],
   seq: 0,
   ended: false,
@@ -156,6 +161,10 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
     if (played || (side !== 'home' && side !== 'away')) return s;
     return { ...s, firstServer: side };
   }
+  // SD-107 — capture setting (from the next point) and a point's detail
+  // (annotates the last point; allowed after the match point too).
+  if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
+  if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).
   if (a.type === 'POINT') return scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined);

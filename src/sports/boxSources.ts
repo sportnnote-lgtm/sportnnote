@@ -33,6 +33,7 @@ import type { PadelState } from './padel/engine.ts';
 import type { BadmintonState } from './badminton/engine.ts';
 import { creditedPoints as carromCredited, type CarromState } from './carrom/engine.ts';
 import { hockeyBox } from './hockey/box.ts';
+import { DETAIL_BOX_KEYS, detailPlayerCredits, detailTracked, type DetailSport } from './pointDetail.ts';
 import type { HockeyState } from './hockey/engine.ts';
 
 type Side = 'home' | 'away';
@@ -372,37 +373,71 @@ export function pointTally(events: LiveEvent[], side: Side, opts: {
 
 function pointBox(events: LiveEvent[], ctx: BoxContext, periods: { value: number; label: string }[], o: {
   periodOf: (e: LiveEvent) => number | undefined; kinds: string[]; listRoster: boolean; aces?: boolean;
+  /** SD-107 — the sport's point detail, when the match tracked it */
+  detail?: DetailSport;
 }): MatchBoxSource {
   return {
     periods,
     emptyText: 'No points yet.',
     data: (scope) => {
+      // SD-107 — winners / UE / FE per player (by name) in scope; a credit no
+      // player can take (doubles, nobody named) stays off the table.
+      const detail = o.detail ? detailByName(o.detail, events.filter((e) => scope === 'all' || o.periodOf(e) === scope), ctx) : null;
       const side = (sd: Side): BoxSideInput => {
         const roster = rosterOf(ctx, sd);
-        return {
-          rows: pointTally(events, sd, { scope, periodOf: o.periodOf, kinds: o.kinds, roster: o.listRoster ? roster : undefined, aces: o.aces })
-            .map((l) => withId({ name: l.name, stats: { points: l.points, ...(o.aces ? { aces: l.aces } : null) } }, roster)),
-        };
+        const rows = pointTally(events, sd, { scope, periodOf: o.periodOf, kinds: o.kinds, roster: o.listRoster ? roster : undefined, aces: o.aces })
+          .map((l) => withId({ name: l.name, stats: { points: l.points, ...(o.aces ? { aces: l.aces } : null) } }, roster));
+        if (detail) {
+          // a player credited only with an error still gets a row
+          for (const key of detail.keys()) {
+            const [dSide, name] = key.split('|');
+            if (dSide !== sd || rows.some((r) => r.name === name)) continue;
+            rows.push(withId({ name, stats: { points: 0, ...(o.aces ? { aces: 0 } : null) } }, roster));
+          }
+          for (const r of rows) {
+            const mine = detail.get(`${sd}|${r.name}`) ?? {};
+            Object.assign(r.stats, Object.fromEntries(DETAIL_BOX_KEYS.map((k) => [k, mine[k] ?? 0])));
+          }
+        }
+        return { rows };
       };
       return { home: side('home'), away: side('away') };
     },
   };
 }
 
+/** SD-107 — point-detail credits per "side|player name" (singles: the side's
+ *  one player when the point names nobody). */
+function detailByName(sport: DetailSport, events: LiveEvent[], ctx: BoxContext): Map<string, Record<string, number>> {
+  const solo = (sd: Side): string | undefined => {
+    const r = rosterOf(ctx, sd);
+    if (r.length === 1) return r[0].fullName;
+    const named = new Set(events.filter((e) => e.side === sd && e.playerName && (e.kind === 'point' || e.kind === 'ace')).map((e) => e.playerName!));
+    return r.length === 0 && named.size === 1 ? [...named][0] : undefined;
+  };
+  const credits = detailPlayerCredits(sport, events, (sd, p) => {
+    const name = p?.playerName ?? (p?.playerId ? rosterOf(ctx, sd).find((x) => x.id === p.playerId)?.fullName : undefined) ?? solo(sd);
+    return name ? `${sd}|${name}` : undefined;
+  });
+  return credits;
+}
+
 /** Table tennis / squash / pickleball (the rally engine): per game. */
-export const rallyBox = (s: RallyState, ctx: BoxContext = {}): MatchBoxSource =>
-  pointBox(s.events, ctx, numbered(Math.max(1, s.games.length + 1), 'Game'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true });
+/** Table tennis / squash / pickleball (the rally engine): per game. `sport`
+ *  names the point-detail options (SD-107; the rally state doesn't know it). */
+export const rallyBox = (s: RallyState, ctx: BoxContext = {}, sport?: 'tabletennis' | 'squash' | 'pickleball'): MatchBoxSource =>
+  pointBox(s.events, ctx, numbered(Math.max(1, s.games.length + 1), 'Game'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: sport && detailTracked(s) ? sport : undefined });
 
 export const padelBox = (s: PadelState, ctx: BoxContext = {}): MatchBoxSource =>
-  pointBox(s.events, ctx, numbered(Math.max(1, s.sets.length + 1), 'Set'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true });
+  pointBox(s.events, ctx, numbered(Math.max(1, s.sets.length + 1), 'Set'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: detailTracked(s) ? 'padel' : undefined });
 
 export function tennisBox(s: TennisState, ctx: BoxContext = {}): MatchBoxSource {
   const currentSet = s.setsWon.home + s.setsWon.away + 1;
-  return pointBox(s.events, ctx, numbered(s.ended ? s.sets.length : currentSet, 'Set'), { periodOf: (e) => e.set, kinds: ['point', 'ace'], listRoster: false, aces: true });
+  return pointBox(s.events, ctx, numbered(s.ended ? s.sets.length : currentSet, 'Set'), { periodOf: (e) => e.set, kinds: ['point', 'ace'], listRoster: false, aces: true, detail: detailTracked(s) ? 'tennis' : undefined });
 }
 
 export function badmintonBox(s: BadmintonState, ctx: BoxContext = {}): MatchBoxSource {
-  return pointBox(s.events, ctx, numbered(s.ended ? s.games.length : s.games.length + 1, 'Game'), { periodOf: (e) => e.game, kinds: ['point'], listRoster: false });
+  return pointBox(s.events, ctx, numbered(s.ended ? s.games.length : s.games.length + 1, 'Game'), { periodOf: (e) => e.game, kinds: ['point'], listRoster: false, detail: detailTracked(s) ? 'badminton' : undefined });
 }
 
 /* ---------------------------------- carrom ---------------------------------- */
@@ -440,7 +475,7 @@ export function matchBoxSource(sport: SportId, state: unknown, ctx: BoxContext =
     case 'tennis': return tennisBox(state as TennisState, ctx);
     case 'badminton': return badmintonBox(state as BadmintonState, ctx);
     case 'padel': return padelBox(state as PadelState, ctx);
-    case 'tabletennis': case 'squash': case 'pickleball': return rallyBox(state as RallyState, ctx);
+    case 'tabletennis': case 'squash': case 'pickleball': return rallyBox(state as RallyState, ctx, sport);
     case 'carrom': return carromBox(state as CarromState);
     case 'hockey': return hockeyBox(state as HockeyState, ctx);
     default: return undefined;

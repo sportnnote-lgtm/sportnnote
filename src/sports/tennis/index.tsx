@@ -18,6 +18,8 @@ import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
 import { ServeOrderPicker } from '../ServeOrderPicker';
+import { PointDetailRow } from '../PointDetailRow';
+import { detailLiveSettings } from '../pointDetailSettings';
 import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type TennisState } from './engine';
 import { tennisTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
@@ -82,9 +84,11 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
         <Button label={`🎯 Ace by ${by}`} variant={serve.side} style={ctrl.flex} onPress={() => act('ACE', serve.side, 'aces', serverP)} />
         <Button label={`⚠️ Double fault by ${by} → point ${receiverSideName}`} variant="ghost" style={ctrl.flex} onPress={() => doubleFault(serve.side, serverP)} />
       </View>
+      {/* SD-107 — optional "how was it won?" for the last point */}
+      <PointDetailRow sport="tennis" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾" doubleFault
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce pointIcon="🎾" doubleFault detailSport="tennis"
         periodLabel={(e) => `Set ${e.set ?? 1}`}
       />
     </View>
@@ -159,6 +163,8 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   retireTerms: true,
   ScoringControls,
   LiveExtras,
+  // SD-107 — Point detail / 1st & 2nd serve (event mode: from the next point)
+  liveSettings: detailLiveSettings('tennis'),
   formation: () => courtFormation('tennis'),
   Court: makeCourt('tennis'),
   voice: { hints: ['point home', 'ace {name}', 'double fault {name}'], parse: tennisVoice },

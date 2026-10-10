@@ -1,7 +1,7 @@
 /** SD-15 — tennis's stat schema (see ../statSchema.ts). PURE. */
 import type { SportStatSchema } from '../statSchema.ts';
 import { ACES, POINTS } from '../sharedStats.ts';
-import { BEST_SERVER, racketCareerStats, racketLeaders, racketMvp, racketRecordStats, racketResultStats, racketSections, racketServeStats } from '../rallyStats.ts';
+import { BEST_SERVER, DETAIL_BOX, pointDetailStats, racketCareerStats, racketLeaders, racketMvp, racketRecordStats, racketResultStats, racketSections, racketServeStats, serveDetailStats, shotSection } from '../rallyStats.ts';
 
 export const tennisStats: SportStatSchema<'tennis'> = {
   sport: 'tennis',
@@ -20,12 +20,18 @@ export const tennisStats: SportStatSchema<'tennis'> = {
     ...racketCareerStats(true),
     // SD-27 — matches won / win % for the leaders and the Player of the Tournament
     ...racketResultStats('setsPct'),
+    // SD-107 — optional point detail and 1st / 2nd serve
+    ...pointDetailStats('tennis'),
+    ...serveDetailStats(),
   ],
-  sections: racketSections(true, [{ stat: 'aces' }, { stat: 'doubleFaults' }]),
+  sections: [
+    ...racketSections(true, [{ stat: 'aces' }, { stat: 'doubleFaults' }, { stat: 'firstServePct' }, { stat: 'firstServeWonPct' }, { stat: 'secondServeWonPct' }]),
+    shotSection('tennis'),
+  ],
   careerView: 'sections',
-  box: [{ columns: ['points', 'aces', 'doubleFaults'] }],
+  box: [{ columns: ['points', 'aces', 'doubleFaults', ...DETAIL_BOX] }],
   // SD-27 (TN-10): results first, never rally points
-  leaders: racketLeaders(true, ['aces']),
+  leaders: racketLeaders(true, ['aces', 'winnersPerMatch']),
   mvp: racketMvp(true),
   headline: ['points', 'aces'],
   awards: [

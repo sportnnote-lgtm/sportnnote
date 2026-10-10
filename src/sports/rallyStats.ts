@@ -5,7 +5,8 @@
  *  from the point log (src/sports/serveStats.ts). PURE. */
 import type { SportId } from '../core/types';
 import type { AwardDef, MvpDef, Qualifier, SectionDef, SportStatSchema, StatDef } from './statSchema.ts';
-import { POINTS } from './sharedStats.ts';
+import { ACES, POINTS } from './sharedStats.ts';
+import { DETAIL_HOWS, HOW_KEY, NET_KEY, STROKES, STROKES_CONCEDED, hasNetFlag, strokeKey, type DetailSport } from './pointDetail.ts';
 
 // 'present' (SD-24): absolute statTotals keys, tracked wherever they're on the line
 const rec = (key: string, label: string, short: string, one: string): StatDef =>
@@ -159,7 +160,90 @@ export function racketServeStats(sets: boolean): StatDef[] {
   ];
 }
 
+// ------------------------------------------------ SD-107 point detail --
+
+/** A point-detail key: written by statTotals only on a match that tracked
+ *  point detail ('present' — a line without it reads "not tracked"). */
+const shot = (key: string, label: string, short: string, one: string, extra: Partial<StatDef> = {}): StatDef =>
+  ({ key, label, short, one, group: 'shots', coverage: 'keyed', ...extra });
+
+const HOW_DEFS: Record<string, StatDef> = {
+  winners: shot('winners', 'Winners', 'winners', 'winner', { abbr: 'W', weight: 1 }),
+  unforcedErrors: shot('unforcedErrors', 'Unforced errors', 'unforced errors', 'unforced error', { abbr: 'UE', format: { unit: 'count', better: 'lower' }, weight: -1 }),
+  forcedErrors: shot('forcedErrors', 'Forced errors', 'forced errors', 'forced error', { abbr: 'FE', format: { unit: 'count', better: 'lower' } }),
+  serviceWinners: shot('serviceWinners', 'Service winners', 'service winners', 'service winner', { abbr: 'SW', weight: 1 }),
+  serviceFaults: shot('serviceFaults', 'Service faults', 'service faults', 'service fault', { abbr: 'SF', format: { unit: 'count', better: 'lower' }, weight: -1 }),
+  aces: { ...ACES, group: 'shots', coverage: 'keyed', weight: 2 },
+  strokesWon: shot('strokesWon', 'Strokes won', 'strokes won', 'stroke won'),
+  [STROKES_CONCEDED]: shot(STROKES_CONCEDED, 'Strokes conceded', 'strokes conceded', 'stroke conceded', { format: { unit: 'count', better: 'lower' } }),
+  noLets: shot('noLets', 'No lets', 'no lets', 'no let', { format: { unit: 'count', better: 'lower' } }),
+  [NET_KEY]: shot(NET_KEY, 'Net points won', 'net points won', 'net point won'),
+};
+
+/** SD-107 — the point-detail stats of `sport`: winners / errors (+ by stroke),
+ *  its serve outcomes, per-match rates and the winners / UE ratio. */
+export function pointDetailStats(sport: DetailSport): StatDef[] {
+  const out: StatDef[] = [];
+  for (const h of DETAIL_HOWS[sport]) {
+    out.push(HOW_DEFS[HOW_KEY[h.how]]);
+    if (h.how === 'stroke') out.push(HOW_DEFS[STROKES_CONCEDED]);
+  }
+  if (hasNetFlag(sport)) out.push(HOW_DEFS[NET_KEY]);
+  for (const h of DETAIL_HOWS[sport]) {
+    for (const st of h.strokes ?? []) {
+      const lab = STROKES[st]?.label ?? st;
+      out.push(h.how === 'winner'
+        ? shot(strokeKey('winner', st)!, `${lab} winners`, `${lab.toLowerCase()} winners`, `${lab.toLowerCase()} winner`)
+        : shot(strokeKey('ue', st)!, `Unforced errors (${lab.toLowerCase()})`, `unforced errors (${lab.toLowerCase()})`, `unforced error (${lab.toLowerCase()})`, { format: { unit: 'count', better: 'lower' } }));
+    }
+  }
+  out.push(
+    { key: 'winnersPerMatch', label: 'Winners per match', leaderLabel: 'Most winners per match', source: 'derived', group: 'shots', format: { unit: 'decimal', dp: 1 },
+      agg: { kind: 'perGame', key: 'winners', dp: 1, qualifier: RACKET_MINIMUMS.matches }, tieBreak: [{ key: 'winners', better: 'higher' }] },
+    { key: 'uePerMatch', label: 'Unforced errors per match', source: 'derived', group: 'shots', format: { unit: 'decimal', dp: 1, better: 'lower' },
+      agg: { kind: 'perGame', key: 'unforcedErrors', dp: 1 } },
+    { key: 'wueRatio', label: 'Winners / UE ratio', source: 'derived', group: 'shots', format: { unit: 'ratio', dp: 2 },
+      agg: { kind: 'rate', num: 'winners', den: 'unforcedErrors', dp: 2 } },
+  );
+  return out;
+}
+
+/** SD-107 — the career "Shot making" section (rows nobody tracked hide; a
+ *  stroke row shows once the player has one). */
+export function shotSection(sport: DetailSport): SectionDef {
+  const main = ['winners', 'winnersPerMatch', 'unforcedErrors', 'uePerMatch', 'wueRatio', 'forcedErrors'];
+  const extra: string[] = [];
+  for (const h of DETAIL_HOWS[sport]) {
+    const k = HOW_KEY[h.how];
+    if (!main.includes(k)) extra.push(k);
+    if (h.how === 'stroke') extra.push(STROKES_CONCEDED);
+  }
+  if (hasNetFlag(sport)) extra.push(NET_KEY);
+  const strokes = DETAIL_HOWS[sport].flatMap((h) => (h.strokes ?? []).map((st) => strokeKey(h.how, st)!));
+  return { id: 'shots', title: 'Shot making', rows: [...main.map((stat) => ({ stat })), ...extra.map((stat) => ({ stat })), ...strokes.map((stat) => ({ stat, hideZero: true }))] };
+}
+
+/** SD-107 — box columns: winners, unforced and forced errors (shown only when
+ *  the match tracked point detail). */
+export const DETAIL_BOX = ['winners', 'unforcedErrors', 'forcedErrors'];
+
+/** SD-107 — tennis 1st / 2nd serve (the serving player's keys, tracked only
+ *  where "1st / 2nd serve" was on) and their ATP rates. */
+export function serveDetailStats(): StatDef[] {
+  return [
+    { ...rec('srv1Pts', 'Service points (serve tracked)', 'tracked service points', 'tracked service point'), coverage: 'keyed' },
+    { ...rec('srv1In', '1st serves in', '1st serves in', '1st serve in'), coverage: 'keyed' },
+    { ...rec('srv1Won', '1st serve points won', '1st serve points won', '1st serve point won'), coverage: 'keyed' },
+    { ...rec('srv2Pts', '2nd serve points', '2nd serve points', '2nd serve point'), coverage: 'keyed' },
+    { ...rec('srv2Won', '2nd serve points won', '2nd serve points won', '2nd serve point won'), coverage: 'keyed' },
+    rate('firstServePct', '1st serve in %', 'srv1In', 'srv1Pts'),
+    rate('firstServeWonPct', '1st serve points won %', 'srv1Won', 'srv1In'),
+    rate('secondServeWonPct', '2nd serve points won %', 'srv2Won', 'srv2Pts'),
+  ];
+}
+
 export function rallyStats<S extends SportId>(sport: S, icon: string, opts: { sets?: boolean } = {}): SportStatSchema<S> {
+  const ds = sport as unknown as DetailSport;
   return {
     sport,
     /** SD-25 — career split chips (line context) */
@@ -168,13 +252,15 @@ export function rallyStats<S extends SportId>(sport: S, icon: string, opts: { se
       { ...POINTS, group: 'points', weight: 1 },
       ...racketRecordStats(!!opts.sets, true), ...racketServeStats(!!opts.sets), ...racketCareerStats(!!opts.sets),
       ...racketResultStats(opts.sets ? 'setsPct' : 'gamesPct'),
+      // SD-107 — optional point detail
+      ...pointDetailStats(ds),
     ],
-    sections: racketSections(!!opts.sets),
+    sections: [...racketSections(!!opts.sets), shotSection(ds)],
     careerView: 'sections',
-    box: [{ columns: ['points'] }],
+    box: [{ columns: ['points', ...DETAIL_BOX] }],
     // SD-27 (GEN-14): racket leaders and awards rank by results, not rally
     // points; "Top scorer" is retired (kept so published awards keep their icon)
-    leaders: racketLeaders(!!opts.sets),
+    leaders: racketLeaders(!!opts.sets, ['winnersPerMatch']),
     mvp: racketMvp(!!opts.sets),
     headline: ['points'],
     awards: [{ stat: 'points', icon, label: 'Top scorer', match: false, tournament: false }, BEST_SERVER],

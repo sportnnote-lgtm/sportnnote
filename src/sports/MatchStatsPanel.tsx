@@ -12,6 +12,8 @@ import { theme } from '../core/theme';
 import { SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
 import { serveStats, serveRows, playerServeLine, type ServeSport } from './serveStats';
+import { detailRows } from './pointDetail';
+import type { LiveEvent } from './liveEvents';
 
 export function MatchStatsPanel({
   sport, state, homeName, awayName, homeRoster = [], awayRoster = [],
@@ -39,6 +41,9 @@ export function MatchStatsPanel({
   const active = scope !== 'all' && scope > periods ? 'all' : scope;
   const block = active === 'all' ? st.match : st.periods[active - 1];
   const rows = serveRows(st, block);
+  // SD-107 — point detail (winners / errors / by stroke), when the match tracked it
+  const events = (state as { events?: LiveEvent[] } | null)?.events;
+  const dRows = detailRows(sport, events, active === 'all' ? undefined : active);
   const word = st.unit === 'set' ? 'Set' : 'Game';
   const nameOf = (id: string) => [...homeRoster, ...awayRoster].find((p) => p.id === id)?.fullName ?? id;
   const players = Object.entries(block.players).filter(([, p]) => p.srvPlayed > 0)
@@ -76,6 +81,28 @@ export function MatchStatsPanel({
           </View>
         );
       })}
+      {dRows.length > 0 && (
+        <View style={{ gap: theme.spacing(1), marginTop: theme.spacing(1) }} accessibilityLabel="Point detail">
+          <Text style={st_.sub}>Point detail · from the points described</Text>
+          {dRows.map((r) => {
+            const tot = r.hv + r.av;
+            const hw = tot > 0 ? r.hv / tot : 0.5;
+            return (
+              <View key={r.key} style={st_.row} accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
+                <View style={st_.vals}>
+                  <Text style={[st_.val, r.hv > r.av && st_.lead]}>{r.home}</Text>
+                  <Text style={st_.label}>{r.label}</Text>
+                  <Text style={[st_.val, st_.right, r.av > r.hv && st_.lead]}>{r.away}</Text>
+                </View>
+                <View style={st_.bar}>
+                  <View style={{ flex: hw, backgroundColor: homeColor, opacity: tot > 0 ? 1 : 0.25 }} />
+                  <View style={{ flex: 1 - hw, backgroundColor: awayColor, opacity: tot > 0 ? 1 : 0.25 }} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
       {players.length > 0 && st.doubles && (
         <View style={{ gap: theme.spacing(1), marginTop: theme.spacing(1) }}>
           <Text style={st_.sub}>Service points won, by server</Text>

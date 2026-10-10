@@ -5,66 +5,72 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: squash
 order: 60
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-Squash has two scoring systems. In PAR (point-a-rally) scoring, used by the PSA and most events, every rally is a point. In English scoring only the server can score, and losing a rally as server is a hand-out. You tap who won each rally, and the app applies the right system.
+In PAR (point-a-rally) squash, used by the PSA, every rally is a point. In English scoring only the server scores; a lost serve is a hand-out. You tap each rally's winner; the app does the rest.
 
 ## Before you start
-- You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
-- The organiser picks the **Format** when scheduling: **PSA (PAR 11 · best of 5)**, **American (PARS 15)**, **Club English (to 9)**, **Short (PAR 11 · best of 3)** or **Custom**.
-- In PAR 11 a game is won at 11 by two clear points, so 10-all goes on to 12-10. **Club English (to 9)** is first to 9. There is no choice at 8-all to play to 10.
-- Tap **⚙ Customize this format** for **Scoring** (**PAR (point-a-rally)** or **English (hand-out)**), **Points to win** and **Win by**.
-- Under **Players**, pick **Singles** or **Doubles**, and add the players.
+- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
+- **Format**: **PSA (PAR 11 · best of 5)**, **American (PARS 15)**, **Club English (to 9)**, **Short (PAR 11 · best of 3)** or **Custom**.
+- PAR 11 games need a two-point lead (12-10). **Club English (to 9)** is first to 9, with no play-to-10 option.
+- **⚙ Customize this format** sets **Scoring** (**PAR (point-a-rally)** or **English (hand-out)**), **Points to win** and **Win by**.
+- Under **Players**, pick **Singles** or **Doubles**.
 
 ## Step by step: PAR scoring
 1. Open the match → **Scoring** tab.
-2. Under "Who serves first?", tap the side that won the spin of the racket. You can change it until the first rally.
-3. Check the serving line, for example "Serving: Asha Rao".
-4. After each rally, tap the player who won it under "Point — Red House" (or the other side's row). With no players added, tap "+1 Red House".
-5. The rally winner serves next, and the winner of a game serves first in the next game.
+2. Under "Who serves first?", tap the side that won the spin (changeable until the first rally).
+3. Check the serving line, e.g. "Serving: Asha Rao".
+4. After each rally, tap the winner under "Point — Red House" (or the other row). With no players added, tap "+1 Red House".
+5. The rally winner serves next; a game's winner serves first in the next.
 
 ## Step by step: English scoring
-1. Open the match → **Scoring** tab. The box at the top says "English scoring" and shows who is serving.
-2. Under "Who serves first?", tap the side that serves the first rally. It matters here, because only the server can score.
+1. On the **Scoring** tab, the top box says "English scoring" and shows the server.
+2. Under "Who serves first?", tap the first server.
 3. After each rally, tap "Rally won — Red House" or "Rally won — Blue House".
-4. If the server won, they score a point and keep serving.
-5. If the receiver won, it's a hand-out: the serve passes over and nobody scores.
+4. Server won: a point, and they keep serving. Receiver won: a hand-out; the serve passes and nobody scores.
 
-The scoreboard header shows the call with the server's score first, for example "Game 1 · English · 5-3". In doubles the box also shows server 1 or server 2.
+The header gives the call, server first, e.g. "Game 1 · English · 5-3"; doubles adds server 1 or 2.
 
 ## Reading the board
-The scoreboard has GAMES won and one column of points per game, with the game in play highlighted and a dot next to the serving side. When the match ends, the result reads like "3–1 · 11-7, 9-11, 11-5, 11-8".
+GAMES won and a points column per game, with a dot by the serving side. The result reads like "3–1 · 11-7, 9-11, 11-5, 11-8".
 
 ## Match stats
-The **Score** tab shows a "Match stats" panel once the first rally is played. From the second game, the chips switch between **Match** and each game.
+The **Score** tab's "Match stats" (chips: **Match** or each game) show:
+- PAR: total points won, and points won on serve and on receive.
+- English: rallies won, points on serve, receive rallies won, hand-outs won, hand-ins (service turns) and points per service turn.
+- Both: most points in a row, biggest lead in a game, game or match points saved.
 
-- PAR scoring: total points won, points won on serve and points won on receive.
-- English scoring: rallies won, points on serve, receive rallies won, hand-outs won, hand-ins (each service turn), and points per service turn.
-- Both: most points in a row, the biggest lead in a game, and game or match points saved when there were any.
+Corrections update them. Doubles serve figures are per pair.
 
-Nothing extra is tapped. The app works these out from the rally log, so a correction updates them straight away.
+## Point detail (optional)
+Off by default, so a rally stays one tap. Turn it on with **On** in the "🔎 Point detail (optional)" row under the scoring buttons, or the **Point detail** toggle under "Stats captured" in "⚙️ Scoring settings" (Info tab or ☰ Quick options; mid-match, **Apply** starts it from the next rally).
 
-> **Note:** In doubles the serve figures are for the pair, not each player.
+After each rally, "How was it won? · Asha Rao" appears. Tap a chip (again to clear) or **Skip**; nothing is required.
+- **Winner** + **Drive**, **Drop**, **Boast**, **Volley**, **Nick**.
+- **Forced error**, **Unforced error** + **Tin**, **Out**, or **Service fault**.
+- Referee decisions: **Stroke** (awarded to the rally winner) and **No let** (appeal refused). A plain let isn't recorded yet.
+
+Winners and strokes count for the rally winner; errors, service faults and no lets against the opponent (doubles: pick who under "By:"). Match stats add a "Point detail" block (winners, errors, strokes, no lets, by stroke); the box score adds **W**, **UE**, **FE**. Older matches are unchanged.
 
 ## Fix a mistake
-- Tapped the wrong side just now? Tap **Undo**.
-- To fix an older rally, tap **Edit** next to "Correct the timeline" on the **Scoring** tab. Every rally is listed, newest first. In English scoring the hand-outs are listed too.
-1. Tap ✎ on the rally. Change who won it, and the player if you like. Tap **Save**.
-2. To delete a rally, tap ✕. To add one you missed, tap ＋ on the rally before it, or **＋ Insert a point at the very start**.
+- Wrong tap just now? Tap **Undo**.
+- Older rally: tap **Edit** next to "Correct the timeline" on the **Scoring** tab. English scoring lists hand-outs too.
+1. Tap ✎ to change the winner, player or "How was it won? (optional)". Tap **Save**.
+2. Tap ✕ to delete, or ＋ on the rally before a missed one (or **＋ Insert a point at the very start**).
 3. Tap **Done**.
 
-The app replays the match from the first rally. In English scoring one fix can turn a point into a hand-out, or a hand-out into a point, and the serve for every later rally follows. After the match, use [Correct a match after full time](/guides/correct-a-finished-match/).
+The app replays the match. In English scoring a fix can turn a point into a hand-out or back, and later serves follow. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends by itself when a player wins enough games. If a player can't go on, tap **🏁 End match…** and choose **Retired**. If the referee puts a player out, choose **Default**. The result keeps the points played, such as "11-7, 5-3 ret.". See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a player wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired**; if the referee puts a player out, **Default**. The result keeps the points played, e.g. "11-7, 5-3 ret.". See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-When the match ends, each player's squash page adds it to **Apps**, **W-L** and **Win %**. **Match play** gives W-L and won % for games and points, plus deciding games. **Serve & return** has service and return points won %, from singles only, because the server isn't named in doubles. **Scoring** has points scored. Players with both formats also get **Singles / doubles**, and doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
+The player's squash page adds **Apps**, **W-L** and **Win %**. **Match play** has games, points and deciding games. **Serve & return** has service and return points won % (singles only). **Shot making** has winners, errors, Winners / UE and strokes from point-detail matches (☁ when only some tracked it). **Scoring** has points. Players with both formats get **Singles / doubles**; doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 ## Common questions
 ### The away player serves first. What do I do?
-Tap the away side under "Who serves first?" before the first rally. Once a rally is logged the choice is locked.
+Tap the away side under "Who serves first?" before the first rally. After that it is locked.
 
 ### Why didn't the score change?
-In English scoring the receiver won the rally, so it was a hand-out. Only the server can score.
+In English scoring the receiver won the rally: a hand-out. Only the server scores.

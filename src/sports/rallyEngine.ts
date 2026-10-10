@@ -7,6 +7,7 @@ import type { LiveEvent } from './liveEvents';
 import type { ScoreAction, ScoreSummary } from './types';
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from './scoreline.ts';
 import { pointRows, replayPoints, type EditRow, type PointInput } from './rallyEdit.ts';
+import { applyPointDetail, detailFlags, initDetailFlags } from './pointDetail.ts';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -37,6 +38,9 @@ export interface RallyState {
    *  team's right-court starter (true) or the partner (false)? Absent on older
    *  snapshots → treated as true. Never affects the score. */
   srvStarter?: boolean;
+  /** SD-107 — optional point detail (how each rally was won) is being
+   *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
+  pointDetail?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -73,6 +77,7 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     opening: config?.firstServe === 'away' ? 'away' : 'home',
     serverNo: 2, // start-of-game "second server" exception: the first team's fault is a side-out
     srvStarter: true, // the first server of a game serves from the right
+    ...initDetailFlags(config),
     events: [],
     seq: 0,
     ended: false,
@@ -112,6 +117,10 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
       if (s.events.length || s.games.length || s.current.home || s.current.away) return s;
       return { ...s, opening: side, serving: side };
     }
+    // SD-107 — capture setting (from the next point) and a point's detail
+    // (annotates the last point; allowed after the match point too).
+    if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
+    if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
     if (a.type !== 'POINT' || !a.side || s.ended) return s;
     const gameNo = s.games.length + 1;
 

@@ -6,6 +6,7 @@
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
 import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
 
 const TARGET = 21;
@@ -28,6 +29,9 @@ export interface BadmintonState {
   doubles: boolean;
   /** who serves the very first rally; after that the rally winner serves */
   firstServer: 'home' | 'away';
+  /** SD-107 — optional point detail (how each point was won) is being
+   *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
+  pointDetail?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -45,6 +49,7 @@ export const init = (config?: Record<string, unknown>): BadmintonState => {
     gamesToWin: Number(config?.gamesToWin ?? GAMES_TO_WIN),
     doubles: Number(config?.playersPerSide ?? 1) >= 2,
     firstServer: (config?.firstServer as 'home' | 'away') ?? 'home',
+    ...initDetailFlags(config),
     events: [],
     seq: 0,
     ended: false,
@@ -92,6 +97,10 @@ export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
     if (played || (side !== 'home' && side !== 'away')) return s;
     return { ...s, firstServer: side };
   }
+  // SD-107 — capture setting (from the next point) and a point's detail
+  // (annotates the last point; allowed after the match point too).
+  if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
+  if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
   if (a.type !== 'POINT' || !a.side || s.ended) return s;
   const who = a.attribution?.playerName;
   // SD-19: keep the credited player's id on the point (absolute statTotals).

@@ -20,6 +20,8 @@ import { MatchBoxScore } from '../components/BoxScore';
 import { rallyBox } from './boxSources';
 import { RallyPointEditor } from './RallyPointEditor';
 import { MatchStatsPanel } from './MatchStatsPanel';
+import { PointDetailRow } from './PointDetailRow';
+import { detailLiveSettings } from './pointDetailSettings';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
@@ -73,9 +75,13 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
         homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon={opts.icon}
         periodLabel={(e) => `Game ${e.game ?? 1}`}
-        rowsOf={rallyRows}
+        rowsOf={rallyRows} detailSport={opts.id}
         normalize={s.sideOut ? (pts) => rallyInputs(reducer(s, { type: 'EDIT_LOG', payload: { points: pts } }).events) : undefined}
       />
+    );
+    // SD-107 — optional "how was it won?" for the last rally (side-out rallies too)
+    const detailRow = (
+      <PointDetailRow sport={opts.id} state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} rowsOf={rallyRows} />
     );
     const rosterOf = (t: 'home' | 'away') => (t === 'home' ? homeRoster : awayRoster);
     const point = (side: 'home' | 'away', p?: Player) =>
@@ -157,6 +163,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
             <Button label={`Rally won — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => rallyWon('home')} />
             <Button label={`Rally won — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => rallyWon('away')} />
           </View>
+          {detailRow}
           {editor}
         </View>
       );
@@ -192,6 +199,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         {startPicker}
         <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
         <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} />
+        {detailRow}
         {editor}
       </View>
     );
@@ -212,7 +220,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         {/* SD-22: serve / return figures replayed from the point log, per set */}
         <MatchStatsPanel sport={opts.id} state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
         <Text style={ctrl.label}>Box score</Text>
-        <MatchBoxScore sport={opts.id} source={rallyBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
+        <MatchBoxScore sport={opts.id} source={rallyBox(s, { homeRoster, awayRoster }, opts.id)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
         <Text style={ctrl.label}>Rally log</Text>
         <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       </View>
@@ -267,6 +275,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     statTotalsNeedsPlayers: true,
     ScoringControls,
     LiveExtras,
+    // SD-107 — the optional point-detail setting (event mode: from the next rally)
+    liveSettings: detailLiveSettings(opts.id) as SportPlugin<RallyState>['liveSettings'],
     voice: { hints: ['rally home', 'rally away', 'point home'], parse: pointVoice },
     formation: opts.hasCourt ? () => courtFormation(opts.id) : undefined,
     Court: opts.hasCourt ? makeCourt(opts.id) : undefined,

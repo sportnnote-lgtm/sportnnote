@@ -5,74 +5,79 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: pickleball
 order: 56
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-In pickleball tournaments only the serving team can score, and in doubles each team gets two servers before the serve passes over. The hard part for a scorer is keeping track of who is serving and from which side. You only tap who won each rally. The app works out the score call, such as 4-2-1, and names the player who should be serving.
+In tournament pickleball only the serving team scores, and each doubles team gets two servers. You tap who won each rally. The app works out the call, such as 4-2-1, and names the server.
 
 ## Before you start
-- You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
-- The organiser picks the **Format** when scheduling. Tournament play uses side-out scoring: **Tournament (side-out · best of 3 to 11)**, **Tournament (side-out · 1 game to 15)**, **Tournament (side-out · 1 game to 21)** or **Medal match (side-out · best of 5 to 11)**. For rally scoring there is **MLP (rally · 1 game to 21)**, **Rec (rally · 11)** and **Rec quick (rally · 11 · win by 1)**. With **Custom** you choose the scoring, points to win, win by and match length.
-- New tournaments start on the side-out Tournament format. A match keeps the format it was created with, so changing the presets never changes a match that is already set up.
-- Add both pairs (or both players in singles). The server can only be named if the players are on the match.
+- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
+- **Format**, side-out: **Tournament (side-out · best of 3 to 11)**, **Tournament (side-out · 1 game to 15)**, **Tournament (side-out · 1 game to 21)**, **Medal match (side-out · best of 5 to 11)**. Rally: **MLP (rally · 1 game to 21)**, **Rec (rally · 11)**, **Rec quick (rally · 11 · win by 1)**. **Custom** sets everything.
+- New tournaments default to side-out Tournament. A match keeps the format it was created with.
+- Add the players, or the server can't be named.
 
 ## Step by step: start a doubles game
 1. Open the match → **Scoring** tab.
-2. Under "Who starts on the right?", tap the player of each team who is standing in the right-hand court at 0-0. If you skip this, the first player listed for each team is used.
-3. Check the serving line, for example "Serving: Bina Shah (right) · 0-0-2". The first team starts as server 2, so a fault on the very first serve passes the serve straight to the other team.
-4. After each rally, tap **Rally won —** and the team that won it. That is the only tap you need.
+2. Under "Who starts on the right?", tap each team's right-court player at 0-0 (default: the first listed).
+3. Check the serving line, e.g. "Serving: Bina Shah (right) · 0-0-2". The first team starts as server 2.
+4. After each rally, tap **Rally won —** and the winning team. That's the only tap.
 
-You can change the right-court player for either team until the first point of the game is scored. The choice carries over to the next game, and you can change it again at 0-0.
-
-> **Tip:** Ask the players at the start of each game who is on the right. Teams often swap who starts.
+You can change it until each game's first point. Ask the players: teams often swap.
 
 ## How the app follows the serve
-- When the serving team wins a rally, it gets a point. The server swaps sides with their partner and keeps serving.
-- When the serving team loses a rally, the partner becomes server 2. The call ends in 2, and the partner serves from whichever side they are standing on.
-- When server 2 loses a rally, it is a side-out. The other team's first server is whoever is standing in the right-hand court.
-- Players only change sides when their own team scores. So the player who started on the right is on the right whenever their team's score is even.
+- Serving team wins: a point; the server swaps sides and serves again.
+- Serving team loses: the partner becomes server 2 and serves from where they stand.
+- Server 2 loses: side-out. The other team's right-court player serves.
+- Players change sides only when their team scores.
 
-The serving line always shows the server's name, their side and the call. The call is the serving team's score, then the receiving team's score, then the server number, for example "Serving: Asha Rao (left) · 2-2-1". The scoreboard header shows the same call.
+The call is serving score, receiving score, server number, e.g. "Serving: Asha Rao (left) · 2-2-1".
 
 ## Singles and rally scoring
-- Singles: the server serves from the right when their own score is even and from the left when it is odd. The call has two numbers, for example 3-1.
-- Rally scoring: every rally is a point for whoever wins it, and the winner serves next. Tap the player who won the point. In doubles the serving line names the serving team's player in the right-hand court.
+- Singles: serve from the right on an even score, left on odd. The call has two numbers, e.g. 3-1.
+- Rally scoring: every rally is a point and its winner serves. Tap the player who won. Doubles names the serving team's right-court player.
 
 ## Points for players
-In side-out scoring, a point is credited to the player who served it. That is why naming the right player at the start matters. In rally scoring, the point goes to the player you tap.
-
-On the **Score** tab, "Box score" shows each player's points, and the rally log lists every point, side-out and change to server 2.
+In side-out scoring a point goes to its server; in rally scoring, to the player you tap. "Box score" on the **Score** tab shows each player's points; the rally log lists every point, side-out and change to server 2.
 
 ## Match stats
-The **Score** tab shows a "Match stats" panel once the first rally is played. It compares the two sides row by row, and the chips on top switch between the whole **Match** and each game (**Game 1**, **Game 2**…).
+The **Score** tab's "Match stats" (chips: **Match**, **Game 1**, **Game 2**…) show:
+- Side-out: rallies won, points on serve, receive rallies won, side-outs, service turns, points per turn, 2nd-server turns (doubles).
+- Rally: total points won, and on serve and on receive.
+- Both: most points in a row, biggest lead, game or match points saved.
+- Doubles: "Service points won, by server".
 
-- Side-out scoring shows: rallies won, points on serve, receive rallies won, side-outs, service turns, points per service turn and, in doubles, how often the serve passed to the 2nd server.
-- Rally scoring shows: total points won, and points won on serve and on receive.
-- Both show the most points in a row, the biggest lead, and game points or match points saved when there were any.
-- In doubles, "Service points won, by server" lists each player's own serves, using the same right-court rule as the serving line.
+Older matches show them too.
 
-Nothing extra is tapped for these stats. The app works them out from the rally log, so older matches show them too, and a correction updates them straight away.
+## Point detail (optional)
+Off by default, so a rally stays one tap. Turn it on with **On** in the "🔎 Point detail (optional)" row under the scoring buttons, or the **Point detail** toggle under "Stats captured" in "⚙️ Scoring settings" (Info tab or ☰ Quick options; mid-match, **Apply** starts it from the next rally).
+
+After each rally, "How was it won? · Asha Rao" appears, even for a side-out rally. Tap a chip (again to clear) or **Skip**; nothing is required.
+- **Winner** + **Drive**, **Dink**, **Volley**, **Overhead**, **Erne**, **ATP**, **Lob**.
+- **Forced error**, or **Unforced error** + **Net**, **Out**.
+- **Service fault** (receiver won).
+
+Winners count for the rally winner, errors against the opponent (doubles: pick who under "By:"). Match stats add a "Point detail" block (winners, errors, Winners / UE, by stroke); the box score adds **W**, **UE**, **FE**; profiles get **Shot making**. Older matches are unchanged.
 
 ## Games and the end of the match
-- A game ends when a team reaches the target (11, 15 or 21) and leads by two, unless the format is win by 1.
-- The team that won the game serves first in the next game, again starting as server 2.
-- When a team wins enough games, the match ends and the result shows the games won and each game's score, for example 2–1 with 11-7, 8-11, 11-9.
-- To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
+- A game ends at the target (11, 15 or 21) with a two-point lead, unless the format is win by 1.
+- The game's winner serves first next game, as server 2.
+- The result reads like 2–1 with 11-7, 8-11, 11-9.
+- To stop early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
 ## Fix a mistake
-- Tapped the wrong team just now? Tap **Undo** to step back one action. The score, the server and the call all go back with it.
-- To fix an older rally, go to the **Scoring** tab and tap **Edit** next to "Correct the timeline". Every rally is listed, newest first, including side-outs and changes to server 2.
-1. Find the rally and tap ✎. Change who won the rally, and the player if it was a point. Tap **Save**.
-2. To delete a rally, tap ✕. To add a rally you missed, tap ＋ on the rally just before it, or **＋ Insert a point at the very start**.
-3. Tap **Done** to close the editor.
+- Wrong tap just now? Tap **Undo**; score, server and call go back too.
+- Older rally: tap **Edit** next to "Correct the timeline" on the **Scoring** tab.
+1. Tap ✎ to change the winner, player (for a point) or "How was it won? (optional)". Tap **Save**.
+2. Tap ✕ to delete, or ＋ on the rally before a missed one (or **＋ Insert a point at the very start**).
+3. Tap **Done**.
 
-The app replays the match from the first rally, so the score, server, call and games all recalculate. In side-out scoring one fix can turn a side-out into a point, or a point into a side-out, and later rallies follow the new serve. Player points recalculate too.
+The app replays the match; later serves follow any change.
 
-> **Note:** The player named on each later point stays as it was. If a fix changes who was serving later in the game, check those points in the list.
+> **Note:** Players named on later points stay as they were. If a fix changes who served, check them.
 
 ## Common questions
 ### The app named the wrong server. What do I do?
-If it's still 0-0 in the game, tap the correct player under "Who starts on the right?". Later in the game, tap **Undo** back to 0-0 and pick again, then re-enter the rallies.
+At 0-0, tap the right player under "Who starts on the right?". Later, **Undo** back to 0-0, pick again and re-enter the rallies.
 
 ### What about matches scored before this change?
-Their scores are unchanged. Points already recorded keep the player they were credited to. Only new taps use the right-court server.
+Scores and credited players are unchanged.

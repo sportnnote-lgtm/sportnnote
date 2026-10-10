@@ -20,6 +20,8 @@ import { padelBox } from '../boxSources';
 import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
 import { ServeOrderPicker } from '../ServeOrderPicker';
+import { PointDetailRow } from '../PointDetailRow';
+import { detailLiveSettings } from '../pointDetailSettings';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
@@ -76,10 +78,12 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
       {deucePoint && <Text style={ctrl.serve}>⚡ Golden point — next point wins the game.</Text>}
       <Row label={`🟡 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('home', p)} fallback={`Point ${homeName}`} />
       <Row label={`🟡 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('away', p)} fallback={`Point ${awayName}`} />
+      {/* SD-107 — optional "how was it won?" for the last point */}
+      <PointDetailRow sport="padel" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       {/* SD-21 — edit / delete / insert a past point; the engine replays it (EDIT_LOG). */}
       <RallyPointEditor
         events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
-        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🟡"
+        homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} hasAce={false} pointIcon="🟡" detailSport="padel"
         periodLabel={(e) => (e.stamp === 'Match TB' ? 'Match TB' : `Set ${e.set ?? 1}`)}
       />
     </View>
@@ -151,6 +155,8 @@ export const padelPlugin: SportPlugin<PadelState> = {
   Scoreboard: PadelScoreboard,
   ScoringControls,
   LiveExtras,
+  // SD-107 — the optional point-detail setting (event mode: from the next point)
+  liveSettings: detailLiveSettings('padel'),
   formation: () => courtFormation('padel'),
   Court: makeCourt('padel'),
   voice: { hints: ['point home', 'point away', '{name} scores'], parse: pointVoice },

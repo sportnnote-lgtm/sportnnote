@@ -30,6 +30,12 @@ export interface LiveEvent {
    *  fault; the faulting server, if named. Only on points recorded with the
    *  `df` payload flag (older double faults carry no marker). */
   df?: { playerId?: string; playerName?: string };
+  /** SD-107 — optional point detail (racket sports, "Point detail" on): how
+   *  the point was won. Set by POINT_DETAIL; absent on every older point. */
+  pd?: import('./pointDetail').PointDetail;
+  /** SD-107 — tennis 1st / 2nd serve, on points served while "1st / 2nd
+   *  serve" tracking was on (absent = not tracked). A double fault is 2. */
+  serve?: 1 | 2;
   /** Optional outcome accent for the timeline node/label — e.g. cricket colours a
    *  boundary green, a wicket red, an extra amber. Absent → node uses the side colour. */
   tone?: 'boundary' | 'wicket' | 'extra';
