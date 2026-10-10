@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-96 shooting, SD-35/42/45/66/89 golf, SD-118 — DONE (fc9f370, 2026-10-11)
+- See DEVLOG. No migration.
+- **Shooting — check with ISSF GTR (PDF unreadable):** decimal series countback on decimal vs integer series totals; 3P tie order (positions vs X); 3P final 40→45 per 2022+ rules; smaller finals scaling (house); shoot-off for medal places with no final (house); 50% low-series threshold (house). Not built: 25 m / shotgun / mixed-team medal-match finals, relays, clocks, decimal per-shot inner-ten count.
+- **Golf — confirm:** gross/net prize places = 1 per 4 players (1–3); carrom doubles still shows Partners. Not built: projected cut line; WD/DQ after a finished round doesn't rewrite that round's stat lines.
+
 ## SD-102 handball, SD-97 weightlifting — DONE (73317eb, 2026-10-11)
 - Two new live sports (see DEVLOG). No migration.
 - **Handball — check with an IHF source:** sudden-death 7 m order (same team first?), 1 time-out in the last 5 min and limits for youth halves (2:10), clock not stopped for 7 m (2:9), 3rd suspension = 2′ + disqualification in stats (16:3/16:6d/16:8), team warning limit only a hint (16:2). House minimums: save % 20 shots, shooting % 20 attempts, 7 m % 5 throws, per-game 2 matches. Not built: voice, beach handball, passive play, empty-goal, shot zones, per-thrower shoot-out keeper credit, demo seed.
