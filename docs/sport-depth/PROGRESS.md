@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-105: racket team top performers — DONE (6ad1171, 2026-10-11)
+- **Built:** team pages for the 6 racket sports show "Most wins" and "Best win %" (min 3 decided matches) from the schema leaders, counting team members only. Other sports are unchanged (golden; volleyball also shows SD-27's Blocks award).
+- Tests: 17 new · demo 8093 (`sd105-*` badminton ties added to demo data).
+
 ## SD-27: leaderboards and award slots from the schema — DONE (526d50e, 2026-10-10) · **Wave 1 complete**
 - **Built:** a `result` agg kind (W/L), qualifier units, the `leaderMins` per-tournament overrides UI (`LeaderMinimums`), `rankAwardCandidates` / `awardFormula` generated from the schema, per-sport categories and award slots (see the SD-27 report table in DEVLOG), and new POTM weights for racket sports and chess.
 - No migration. Tests: 32 new · 1529 total · demo 8093.
