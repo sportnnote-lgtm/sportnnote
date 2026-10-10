@@ -2,6 +2,17 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-17: standings rule kit — DONE (b39381c, 2026-10-10)
+- **Built:**
+  - **Presets for new tournaments (D1):** FIFA/UEFA 3-1-0 (+ "goal difference first"), FIBA 2-1, FIVB 3-3-2-1, PKL 5-3-1 with the ≤7 losing bonus, BWF, ATP/ITF RR, FIP, pool play, WSF, ITTF 2-1, carrom, ICC, FIH (+ shoot-out bonus), IHF, plus "Simple 2-1-0" / "Simple 3-1-0".
+  - **Tie-breaker library:** h2h mini-league with restart rules, set / point / games ratios and diffs, sets % / games %, played, FIFA fair play, explicit lots (‡ "Drawn by lot").
+  - **Other:** BWF 2-way vs 3-way branching, a `standingsUnits` plugin hook, `registerTieBreaker` (for SD-26), and the PointsEditor preset chips with an advanced reorder.
+- **Unchanged:** old tables — a stored format without the new keys equals `defaultStandingsConfig` (tested for 10 sports).
+- No migration. Tests: 34 new · 1224 total · demo 8093 (FIVB point-ratio ordering, PKL losing bonus).
+- **To check against current rulebooks:** PKL and FIH tie-break order; the volleyball best-of-3 points adaptation.
+- **Known gap:** the end-match preview still shows a flat "+win". The advanced editor edits only the 3+ chain.
+- **Choice:** badminton and tennis keep 2 points per win (house tables sum points; the order is identical).
+
 ## SD-28: results engine for timed / measured events — DONE (ff88a73, 2026-10-10)
 - **Built:** `src/data/results/*`:
   - mark parsing and formatting, ranking with discipline tie rules (photo, stands, countback, vertical, lifted-first, inner-count);

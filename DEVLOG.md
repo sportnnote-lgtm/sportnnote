@@ -13,6 +13,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-17: every sport's official points and tie-break rules
+
+- **Presets for new tournaments:** each sport's international points system and tie-break order
+  (FIVB 3-3-2-1, PKL 5-3-1 incl. +1 for losing by 7 or fewer, FIBA 2-1 with an h2h mini-league,
+  FIFA/UEFA h2h + fair play, BWF two-way vs three-way, ATP/ITF, FIP, WSF, ITTF, ICC, plus FIH and
+  IHF ready for hockey and handball). Existing tables are unchanged.
+- **Tie-breaker library:** set / point ratios, games diff / %, fair play, and explicit "Drawn by lot".
+- **Points editor:** preset chips plus an advanced tie-break reorder.
+- **Tests:** tsc + 1224. **Guide:** points-table-and-adjustments rewritten for systems and tie-breaks.
+
+---
+
 ### 2026-10-10 — Sport depth SD-28: results engine for timed and measured events (foundation for athletics, swimming and the rest)
 
 - **What it is:** a pure, sport-agnostic engine in `src/data/results/`.
