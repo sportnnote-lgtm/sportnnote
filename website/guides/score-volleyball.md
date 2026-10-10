@@ -5,13 +5,13 @@ category: Live scoring
 audience: Scorers, Organisers
 sports: volleyball
 order: 55
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-Every volleyball rally ends with a point for one team. For the stats, what matters is how it was won: a kill, block or ace belongs to a player, but a point from the other team's mistake belongs to nobody. You record each rally once, and the app keeps the sets and each player's points.
+Every rally ends with a point for one team. A kill, block or ace belongs to a player; a point from the other team's mistake belongs to nobody. You record each rally once, and the app keeps the sets and each player's points.
 
 ## Before you start
-- You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
+- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - The organiser picks the **Format** when scheduling: **Indoor (25 · dec 15)**, **Beach (21 · dec 15)**, **9-a-side (21 · best of 3)**, **Single set to 25** or **Custom**. With **Custom** you can set the **Match length**, **Points per set**, **Deciding-set points** and **Set ending** (win by 2, or first to the target).
 - Add both squads first. Names are optional, but only named players appear in the player stats.
 
@@ -33,8 +33,6 @@ Every volleyball rally ends with a point for one team. For the stats, what matte
 
 So a player's points always include their aces and blocks, everywhere in the app.
 
-> **Note:** Matches scored before this change counted aces and blocks separately from points. Those older totals will be corrected by a later update.
-
 ## Sets, timeouts and the end of the match
 - A set ends by itself when a team reaches the target and leads by two (unless the organiser chose first to the target). The next set starts at 0–0.
 - When both teams are one set from winning, the next set is the decider. It is a shorter race, to 15 in the standard formats. The scoreboard says "Decider".
@@ -55,7 +53,7 @@ When you score the first point, the app notes who is on court: the six in the li
 - To fix an older point, go to the **Scoring** tab and tap **Edit** next to "Correct the timeline".
 1. Find the point and tap ✎. You can change who won the rally, the point type and the player. If you choose **Opp. error** or **Opp. serve error**, the player list goes away, because nobody is credited.
 2. Tap **Save**. The score, the sets and every player's stats recalculate, even if the fix moves the end of a set.
-3. To delete a point, tap ✕. To add a point you missed, tap ＋ on the point just before it, or **＋ Insert a point at the very start**.
+3. To delete a point, tap ✕ and confirm. To add a point you missed, tap ＋ on the point just before it, or **＋ Insert a point at the very start**, then pick who won it.
 4. Tap **Done** to close the editor.
 
 ## Common questions

@@ -37,6 +37,8 @@ import { hockeyBox } from './box';
 import { hockeyTimeline, describeEvent, eventWhen, timelineEvents, GOAL_LABEL } from './timeline';
 import { hockeyTickerDetail, hockeyTickerFlash } from './ticker';
 import { hockeyFormation, HockeyPitch } from './pitch';
+import { usePendingEdit } from '../usePendingEdit';
+import { RowAction, confirmRemove } from '../TimelineControls';
 
 const opp = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -75,9 +77,11 @@ type Flow =
 /* -------------------------------- controls --------------------------------- */
 
 const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
-  state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [],
+  state: liveState, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [],
 }) => {
-  const s = state;
+  // SD-114: Edit holds the removal until the re-entry commits (Cancel keeps the
+  // event); `s` is the view as if it were removed. See usePendingEdit.
+  const { view: s, dispatch, begin: holdRemoval, cancel: dropHeldRemoval } = usePendingEdit(liveState, rawDispatch, reducer);
   const [flow, setFlow] = useState<Flow | null>(null);
   const [pcOpen, setPcOpen] = useState<Side | null>(null);
   const [editAt, setEditAt] = useState<{ sec: number; period: number } | null>(null);
@@ -91,7 +95,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, [s.clock.since, s.ended]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (flow === null && editAt) setEditAt(null); }, [flow]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (flow === null && editAt) { setEditAt(null); dropHeldRemoval(); } }, [flow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = Date.now();
   const name = (sd: Side) => (sd === 'home' ? homeName : awayName);
@@ -184,14 +188,19 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
   };
 
   /* ---- correct the timeline ---- */
-  const remove = (e: HockeyEvent) => {
+  const removalActions = (e: HockeyEvent): ScoreAction[] => {
     const cr = eventCredits(e);
-    dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution: creditAttribution(cr.first, -1), attribution2: creditAttribution(cr.second, -1) });
-    // a shot / stroke takes its keeper's save with it (the save's own side)
-    for (const sv of s.events.filter((x) => x.type === 'save' && x.ref === e.id)) remove(sv);
+    return [
+      { type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution: creditAttribution(cr.first, -1), attribution2: creditAttribution(cr.second, -1) },
+      // a shot / stroke takes its keeper's save with it (the save's own side)
+      ...s.events.filter((x) => x.type === 'save' && x.ref === e.id).flatMap(removalActions),
+    ];
   };
+  const remove = (e: HockeyEvent) => { for (const a of removalActions(e)) dispatch(a); };
+  // SD-114: held until the re-entry commits — Cancel keeps the event as it was.
   const edit = (e: HockeyEvent) => {
-    remove(e);
+    if (e.type === 'pc' || e.type === 'save') { remove(e); return; }
+    holdRemoval(removalActions(e));
     setEditAt({ sec: e.sec, period: e.period });
     setShowEdit(false);
     if (e.type === 'goal') setFlow({ mode: 'goal', side: e.side, step: 'type' });
@@ -200,7 +209,6 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     else if (e.type === 'card') setFlow({ mode: 'card', side: e.side, step: 'colour' });
     else if (e.type === 'sub') setFlow({ mode: 'sub', side: e.side, step: 'off' });
     else if (e.type === 'gk') setFlow({ mode: 'gk', side: e.side });
-    else setEditAt(null); // a PC or an unlinked save: removed; re-log it if needed
   };
 
   /* ---- clock ---- */
@@ -479,8 +487,9 @@ function EditList({ s, show, setShow, onRemove, onEdit, homeName, awayName }: {
           <View key={e.id} style={c.editRow}>
             <Text style={c.editWhen}>{eventWhen(s, e)}</Text>
             <Text style={c.editLabel} numberOfLines={2}>{d.icon} {d.label} · {e.side === 'home' ? homeName : awayName}{d.detail ? ` · ${d.detail}` : ''}</Text>
-            {onEdit && e.type !== 'pc' && e.type !== 'save' ? <Text style={c.link} accessibilityRole="button" onPress={() => onEdit(e)}>Edit</Text> : null}
-            <Text style={c.remove} accessibilityRole="button" onPress={() => onRemove(e)}>✕</Text>
+            {onEdit && e.type !== 'pc' && e.type !== 'save' ? <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${d.label}`} onPress={() => onEdit(e)} /> : null}
+            <RowAction label="✕" tone="remove" a11y={`Remove ${d.label}`} onPress={() => void confirmRemove(`${d.label} (${eventWhen(s, e)})`, () => onRemove(e),
+              s.events.some((x) => x.type === 'save' && x.ref === e.id) ? 'The keeper\'s save on it goes too. The score and player stats re-adjust.' : undefined)} />
           </View>
         );
       }) : null}
@@ -654,5 +663,4 @@ const c = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderTopWidth: 1, borderTopColor: theme.colors.border },
   editWhen: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '800', width: 56 },
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
-  remove: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '800', paddingHorizontal: theme.spacing(1) },
 });

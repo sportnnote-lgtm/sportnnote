@@ -134,6 +134,17 @@ export function previewRaid(s: KabaddiState, outcome: RaidOutcome, replaces?: nu
   return replayRaids(list, kabaddiCfg(s)).perRaid[idx >= 0 ? idx : list.length - 1];
 }
 
+/** SD-114: defenders on the mat facing a raid by `side` — now, or (editing)
+ *  just before raid `replaces`. The raid form disables touch chips above it. */
+export function defendersOnMat(s: KabaddiState, side: Side, replaces?: number): number {
+  const cfg = kabaddiCfg(s);
+  if (cfg.style === 'amar') return cfg.teamSize;
+  const raids = raidsOf(s);
+  const idx = replaces != null ? raids.findIndex((r) => r.eid === replaces) : -1;
+  const before = replayRaids(idx >= 0 ? raids.slice(0, idx) : raids, cfg);
+  return Math.max(0, cfg.teamSize - before.out[other(side)]);
+}
+
 type Who = { id: string; fullName: string };
 /** The guided-raid form's answers. `editOf` = the id of a past raid being re-entered. */
 export interface RaidForm { side: Side; touches: number; bonus: boolean; tackled: boolean; raider?: Who; tackler?: Who; editOf?: number }
@@ -159,7 +170,8 @@ export function raidReversals(s: KabaddiState, e: KabaddiEvent, idOf: (name?: st
  *  matches no line: a stat carrier only), then replaces the raid in place. */
 export function raidActions(s: KabaddiState, f: RaidForm, idOf?: (name?: string) => string | undefined): ScoreAction[] {
   const out: ScoreAction[] = [];
-  const outcome: RaidOutcome = { side: f.side, touches: f.touches, bonus: f.bonus, raiderOut: f.tackled };
+  // SD-114: the form logs v2 raids — touches capped at the defenders on the mat.
+  const outcome: RaidOutcome = { side: f.side, touches: f.touches, bonus: f.bonus, raiderOut: f.tackled, v: 2 };
   const b = previewRaid(s, outcome, f.editOf);
   if (f.editOf != null) {
     const head = s.events.find((x) => x.id === f.editOf);
@@ -280,6 +292,9 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
         touches: Math.max(0, Math.floor(Number(p.touches ?? 0))),
         bonus: Boolean(p.bonus),
         raiderOut: Boolean(p.raiderOut),
+        // SD-114: a v2 raid's touches are capped at the defenders on the mat
+        // (in the replay); an un-versioned one replays its raw touches.
+        ...(Number(p.v) >= 2 ? { v: 2 as const } : null),
       };
       const cfg = kabaddiCfg(s);
       const prev = raidsOf(s);

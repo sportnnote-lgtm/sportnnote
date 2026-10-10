@@ -26,6 +26,10 @@ export interface RaidOutcome {
   bonus: boolean;
   /** the raider was tackled (caught) — the defence scores, the raider goes out */
   raiderOut: boolean;
+  /** SD-114: logged by the v2 raid form — touches are capped at the defenders
+   *  on the mat. Absent on older logs, which replay their raw touches exactly
+   *  as they scored then (REVIEW Decision 8). */
+  v?: 2;
 }
 
 export interface KabaddiCfg { teamSize: number; style: KabaddiStyle; proRules: boolean }
@@ -100,7 +104,9 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
     // apply, so it's always allowed.
     const defendersBefore = amar ? cfg.teamSize : cfg.teamSize - out[opp];
     const bonusCounts = r.bonus && (cfg.teamSize < 6 || defendersBefore >= 6);
-    const raidPts = r.touches + (bonusCounts ? 1 : 0);
+    // SD-114 (v2 only): you can't touch more defenders than are on the mat.
+    const touches = r.v === 2 ? Math.max(0, Math.min(r.touches, defendersBefore)) : r.touches;
+    const raidPts = touches + (bonusCounts ? 1 : 0);
 
     // Do-or-die: a 3rd straight empty raid that fails ⇒ the raider is out.
     const isDoOrDie = cfg.proRules && emptyRaids[r.side] >= 2;
@@ -109,9 +115,9 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
 
     // Raid points + defenders sent out (+ raiding side's revival).
     score[r.side] += raidPts;
-    if (!amar && r.touches > 0) {
-      out[opp] = Math.min(cfg.teamSize, out[opp] + r.touches);
-      if (cfg.style === 'sanjeevani') out[r.side] = Math.max(0, out[r.side] - r.touches);
+    if (!amar && touches > 0) {
+      out[opp] = Math.min(cfg.teamSize, out[opp] + touches);
+      if (cfg.style === 'sanjeevani') out[r.side] = Math.max(0, out[r.side] - touches);
     }
 
     // Raider tackled ⇒ defence scores (super tackle when short-handed) + raider out.
@@ -145,7 +151,7 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg): KabaddiDeriv
       });
     }
     perRaid.push({
-      side: r.side, raidPts, touchPts: r.touches, bonusPts: bonusCounts ? 1 : 0,
+      side: r.side, raidPts, touchPts: touches, bonusPts: bonusCounts ? 1 : 0,
       raiderOut, doOrDie: isDoOrDie, doOrDieFail: raiderOut && !r.raiderOut,
       tacklePts, superTackle, allOuts,
     });

@@ -17,11 +17,12 @@ import type { ScoreAction, SportPlugin } from '../types';
 import { kabaddiVoice } from '../voiceParsers';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
+import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 import { sum } from './rules';
 import { kabaddiTotals } from './totals.ts';
 
 import {
-  init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints,
+  init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints, defendersOnMat,
   type KabaddiState, type KabaddiEvent,
 } from './engine.ts';
 
@@ -86,6 +87,12 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
       : undefined;
     dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id, v: 2 }, attribution });
   };
+  // SD-114: what a ✕ takes with it — a guided raid goes with its tackle / all-out lines.
+  const removeDetail = (e: KabaddiEvent): string | undefined => {
+    if (e.group == null) return undefined;
+    const lines = state.events.filter((x) => x.group === e.group).map((x) => x.label.replace(/ — .*$/, ''));
+    return lines.length > 1 ? `Removes all of it: ${lines.join(', ')}. The score, players on the mat and stats re-derive.` : undefined;
+  };
   // Edit a guided raid = re-open the raid form pre-filled; saving re-dispatches a
   // RAID_OUTCOME that replaces it in place (same id, same slot in the raid order).
   // Edit a legacy point = re-pick the player. Nothing changes until you save.
@@ -137,11 +144,19 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   }
 
   // Substitution flow (format: substitutes) — pick who comes off, then who comes on.
+  // SD-114 (P0): pinned at the top of the controls while backfilling — every
+  // raid is stamped at the past minute until the scorer goes back to live.
+  const backToLive = () => { setBackfillMin(null); setBackfillText(''); };
+  const backfillBar = backfillMin != null && !raidFlow?.at && !edit
+    ? <BackfillBar at={`${backfillMin}′ (${halfLabel(halfFromMin(backfillMin))})`} onLive={backToLive} /> : null;
+
   if (sub) {
     const sideName = sub.side === 'home' ? homeName : awayName;
     const offOpts = onField(sub.side, rosterFor(sub.side));
     const onOpts = rosterFor(sub.side).filter((p) => p.id !== sub.off?.id && !offNames(sub.side).includes(p.fullName));
     return (
+      <View style={{ gap: theme.spacing(3) }}>
+      {backfillBar}
       <View style={ctrl.subPanel}>
         <View style={ctrl.subHead}>
           <Text style={ctrl.label}>🔄 Substitution — {sideName}</Text>
@@ -169,6 +184,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
             ) : <Text style={textStyles.muted}>No available substitute in the squad.</Text>}
           </>
         )}
+      </View>
       </View>
     );
   }
@@ -225,6 +241,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {backfillBar}
       {state.goldenRaid && (
         <View style={ctrl.grBanner}>
           <Text style={ctrl.grTitle}>⚡ GOLDEN RAID — SUDDEN DEATH</Text>
@@ -262,12 +279,22 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
               </View>
             </>
           )}
-          <Text style={ctrl.meta}>Defenders touched (they go out)</Text>
-          <View style={ctrl.chips}>
-            {[0, 1, 2, 3, 4, 5].map((n) => (
-              <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
-            ))}
-          </View>
+          {(() => {
+            // SD-114: you can't touch more defenders than are on the mat (the
+            // engine caps v2 raids the same way).
+            const onMat = defendersOnMat(state, raidFlow.side, raidFlow.editOf);
+            return (
+              <>
+                <Text style={ctrl.meta}>Defenders touched (they go out) · {onMat} on the mat</Text>
+                <View style={ctrl.chips}>
+                  {[0, 1, 2, 3, 4, 5].map((n) => (
+                    <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} disabled={n > onMat} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
+                  ))}
+                </View>
+                {raidFlow.touches > onMat && <Text style={ctrl.doOrDie}>Only {onMat} defender{onMat === 1 ? '' : 's'} on the mat — this raid counts {onMat} touch{onMat === 1 ? '' : 'es'}.</Text>}
+              </>
+            );
+          })()}
           <View style={ctrl.chips}>
             <SelectChip label={`Bonus point: ${raidFlow.bonus ? 'Yes' : 'No'}`} active={raidFlow.bonus} onPress={() => setRaidFlow({ ...raidFlow, bonus: !raidFlow.bonus })} />
             <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler })} />
@@ -290,7 +317,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           })()}
           {(() => {
             // What the engine will score for this raid — what the raider / tackler get.
-            const b = previewRaid(state, { side: raidFlow.side, touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled }, raidFlow.editOf);
+            const b = previewRaid(state, { side: raidFlow.side, touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled, v: 2 }, raidFlow.editOf);
             if (!b) return null;
             const bits = [
               `raid +${b.raidPts}${raidFlow.bonus && !b.bonusPts ? ' (bonus void: under 6 defenders)' : ''}`,
@@ -329,7 +356,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
             <View style={ctrl.addedBox}>
               <Text style={ctrl.label}>⏪ Backfilling at {backfillMin}&apos; ({halfLabel(halfFromMin(backfillMin))})</Text>
               <Text style={ctrl.meta}>Every point you log now is stamped at {backfillMin}&apos;. Log it above, then go back to live.</Text>
-              <Button label="Back to live scoring" variant="ghost" onPress={() => { setBackfillMin(null); setBackfillText(''); }} />
+              <Button label="Back to live scoring" variant="ghost" onPress={backToLive} />
             </View>
           )}
         </View>
@@ -344,14 +371,14 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           </View>
           {showEdit && (
             <View style={{ gap: theme.spacing(1) }}>
-              <Text style={ctrl.meta}>Tap Edit on a raid to re-enter it — raider, touches, bonus, tackle — at the same minute (the score & tallies re-adjust), or ✕ to remove it along with its tackle / all-out points.</Text>
+              <Text style={ctrl.meta}>Tap Edit on a raid to re-enter it — raider, touches, bonus, tackle — at the same minute (the score & tallies re-adjust), or ✕ to remove it along with its tackle / all-out points (asks first).</Text>
               {/* one row per moment: a guided raid's tackle / all-out lines go with it */}
               {[...state.events].filter((e) => e.group == null || isRaidHead(e)).sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0) || b.id - a.id).map((e) => (
                 <View key={e.id} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{e.stamp}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{e.icon} {e.label}{e.detail ? ` — ${e.detail}` : ''}</Text>
-                  {(e.kind === 'raid' || e.kind === 'tackle') && <Text style={ctrl.editEdit} onPress={() => editEvent(e)}>✎ Edit</Text>}
-                  <Text style={ctrl.editRemove} onPress={() => removeEvent(e)}>✕</Text>
+                  {(e.kind === 'raid' || e.kind === 'tackle') && <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${e.label}`} onPress={() => editEvent(e)} />}
+                  <RowAction label="✕" tone="remove" a11y={`Remove ${e.label}`} onPress={() => void confirmRemove(`${e.label.replace(/ — .*$/, '')} (${e.stamp})`, () => removeEvent(e), removeDetail(e))} />
                 </View>
               ))}
             </View>
@@ -544,6 +571,4 @@ const ctrl = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   editMin: { color: theme.colors.accent, fontWeight: '800', width: 40, fontSize: theme.font.small },
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
-  editEdit: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
-  editRemove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
 });

@@ -22,6 +22,8 @@ import type { LiveSettings, ScoreAction, SportPlugin } from '../types';
 import { basketballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
 import { LineScoreboard } from '../../components/LineScoreboard';
+import { usePendingEdit } from '../usePendingEdit';
+import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 
 import {
   type BasketballState, init, reducer, periodLabel, currentMinute,
@@ -56,13 +58,16 @@ type Flow =
   | null;
 
 const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
-  state,
-  dispatch,
+  state: liveState,
+  dispatch: rawDispatch,
   homeName,
   awayName,
   homeRoster = [],
   awayRoster = [],
 }) => {
+  // SD-114: ✎ Edit holds the removal until the re-entry commits (Cancel keeps
+  // the play); `state` is the view as if it were removed. See usePendingEdit.
+  const { view: state, dispatch, begin: holdRemoval, cancel: dropHeldRemoval } = usePendingEdit(liveState, rawDispatch, reducer);
   const [sel, setSel] = useState<{ home?: Player; away?: Player }>({});
   // Timeline correction: edit one past play in place, or backfill a missed one.
   const [showEdit, setShowEdit] = useState(false);
@@ -110,16 +115,19 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // throws (made/miss), timeouts and subs are remove-only.
   const canEdit = (e: BBEvent) => !!e.playerName && (e.type === 'score' || !!STAT_KEY[e.type]);
   const rosterId = (nm?: string) => (nm ? state.ids?.[nm] : undefined) ?? [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
-  const removeEvent = (e: BBEvent) => {
+  const removal = (e: BBEvent): ScoreAction => {
     // Reverse exactly what the play credited (credits.ts — FG / 3P / misses /
     // OREB-DREB included), so the lines match the log again.
     const pid = rosterId(e.playerName);
     const attribution = pid ? creditAttribution(pid, e.playerName, eventCredits(e, halfCourt, shotsTracked(state)), -1) : undefined;
-    dispatch({ type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution });
+    return { type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution };
   };
+  const removeEvent = (e: BBEvent) => dispatch(removal(e));
   // Edit = remove the old play, then re-enter it stamped at the same moment so
-  // the score and every player tally re-adjust to match.
-  const editEvent = (e: BBEvent) => { removeEvent(e); setShowEdit(false); setEditSel(null); setEdit(e); };
+  // the score and every player tally re-adjust to match. SD-114: the removal is
+  // held until the re-entry commits — Cancel keeps the play.
+  const editEvent = (e: BBEvent) => { holdRemoval([removal(e)]); setShowEdit(false); setEditSel(null); setEdit(e); };
+  const cancelEdit = () => { dropHeldRemoval(); setEdit(null); setEditSel(null); };
   const commitEdit = (p: Player, points?: number) => {
     if (!edit) return;
     if (edit.type === 'score') score(edit.side, points ?? 0, p, shotsTracked(state));
@@ -362,7 +370,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       <View style={ctrl.editPanel}>
         <View style={ctrl.editHead}>
           <Text style={ctrl.label}>✎ Re-enter {BB_META[edit.type].label} — {nm}</Text>
-          <Button label="Cancel" variant="ghost" onPress={() => { setEdit(null); setEditSel(null); }} />
+          <Button label="Cancel" variant="ghost" onPress={cancelEdit} />
         </View>
         <Text style={ctrl.editBanner}>Re-entering the Q{edit.quarter} {edit.minute}&apos; moment — your pick replaces the old one.</Text>
         <Text style={ctrl.meta}>{edit.type === 'score' ? 'Who scored?' : 'Which player?'}</Text>
@@ -383,8 +391,12 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     );
   }
 
+  // SD-114: pinned at the top of the controls while backfilling.
+  const backfillBar = backfillQ != null
+    ? <BackfillBar at={periodLabel(backfillQ, state.regPeriods)} onLive={() => setBackfillQ(null)} /> : null;
+
   // A capture is mid-flow (free throws, foul type, rebound off/def, sub, five).
-  if (flow) return renderFlow();
+  if (flow) return backfillBar ? <View style={{ gap: theme.spacing(3) }}>{backfillBar}{renderFlow()}</View> : renderFlow();
 
   // Timeouts remaining (null = untracked/unlimited).
   const toLeft = (side: 'home' | 'away') => (state.timeouts > 0 ? state.timeouts - timeoutsUsed(state, side) : null);
@@ -434,6 +446,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {backfillBar}
       {otBanner}
       {outNames.length > 0 && (
         <Text style={ctrl.fouledOut}>🚫 Out: {outNames.join(', ')}</Text>
@@ -538,13 +551,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
           </View>
           {showEdit && (
             <View style={{ gap: theme.spacing(1) }}>
-              <Text style={ctrl.meta}>Tap Edit to re-pick the player/points (stamped at the same moment — every tally re-adjusts), or Remove to delete it.</Text>
+              <Text style={ctrl.meta}>Tap ✎ Edit to re-pick the player/points (stamped at the same moment — every tally re-adjusts; Cancel keeps it as it was), or ✕ to remove it (asks first).</Text>
               {[...state.events].sort((a, b) => b.quarter - a.quarter || b.minute - a.minute || b.id - a.id).map((e) => (
                 <View key={e.id} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{periodLabel(e.quarter, state.regPeriods)}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{BB_META[e.type].icon} {BB_META[e.type].label}{e.type === 'score' ? ` +${e.points}` : e.type === 'miss' ? ` ${e.points}` : ''}{e.type === 'freethrow' ? (e.made ? ' ✅' : ' ❌') : ''}{e.playerName ? ` — ${e.playerName}` : ''}{e.type === 'sub' && e.onName ? ` ▸ ${e.onName}` : ''}</Text>
-                  {canEdit(e) && <Text style={ctrl.editEdit} onPress={() => editEvent(e)}>✎ Edit</Text>}
-                  <Text style={ctrl.editRemove} onPress={() => removeEvent(e)}>✕</Text>
+                  {canEdit(e) && <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${BB_META[e.type].label}`} onPress={() => editEvent(e)} />}
+                  <RowAction label="✕" tone="remove" a11y={`Remove ${BB_META[e.type].label}`}
+                    onPress={() => void confirmRemove(`${BB_META[e.type].label}${e.type === 'score' ? ` +${e.points}` : ''}${e.playerName ? ` — ${e.playerName}` : ''} (${periodLabel(e.quarter, state.regPeriods)})`, () => removeEvent(e))} />
                 </View>
               ))}
             </View>
@@ -733,6 +747,4 @@ const ctrl = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   editMin: { color: theme.colors.accent, fontWeight: '800', width: 40, fontSize: theme.font.small },
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
-  editEdit: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
-  editRemove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
 });

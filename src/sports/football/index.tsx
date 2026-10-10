@@ -38,13 +38,15 @@ import { type StatEvent, type StatKind, STAT_META, EVENT_META, GOAL_TYPE_LABEL, 
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { footballTickerDetail, footballTickerFlash } from './ticker';
+import { usePendingEdit } from '../usePendingEdit';
+import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 
 /** How a level result at full time is settled. */
 import {
   type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
   clockLabel, clockTime, possessionPct, cardCount, FOOTBALL_LIVE_SETTINGS,
-  minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, type XiStamp,
+  minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, pairedSecondYellowRed, type XiStamp,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -110,8 +112,8 @@ type Flow =
   | { mode: 'pen'; step: 'outcome'; side: 'home' | 'away'; taker: Player; wonBy?: Player };
 
 const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
-  state,
-  dispatch,
+  state: liveState,
+  dispatch: rawDispatch,
   homeName,
   awayName,
   homeColor,
@@ -121,6 +123,10 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   homeLineup = [],
   awayLineup = [],
 }) => {
+  // SD-114: ✎ Edit holds the removal until the re-entry commits (Cancel keeps
+  // the event). `state` is the view as if it were removed; the first dispatch
+  // sends the held removal first. See usePendingEdit.
+  const { view: state, dispatch, begin: holdRemoval, cancel: dropHeldRemoval } = usePendingEdit(liveState, rawDispatch, reducer);
   // Team kit colours for the home/away controls (fall back to the app's accents).
   const hc = homeColor ?? theme.colors.home;
   const ac = awayColor ?? theme.colors.away;
@@ -168,10 +174,11 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     dispatch({ ...action, payload: { ...action.payload, minute: pastMin ?? currentMinute(state), half } });
   };
 
-  // When a re-entry flow finishes (or is cancelled), stop stamping at the edited minute.
+  // When a re-entry flow finishes (or is cancelled), stop stamping at the edited
+  // minute — and a cancelled one keeps the event (its held removal is dropped).
   useEffect(() => {
-    if (flow === null && editMin != null) { setEditMin(null); setEditHalf(null); }
-  }, [flow]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (flow === null && sub === null && editMin != null) { setEditMin(null); setEditHalf(null); dropHeldRemoval(); }
+  }, [flow, sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = state.track;
   // The player-attributed stat keys being tracked this match — stamped on each
@@ -314,7 +321,9 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // The negative attribution reverses that action's stat line; the reducer reverses
   // its score/subs effect. Both are logged, so the correction replays cleanly.
   const rosterId = (nm?: string) => [...homeRoster, ...awayRoster].find((p) => p.fullName === nm)?.id;
-  const removeEvent = (ev: FootballEvent) => {
+  // SD-114 (F4): removing / editing a yellow also takes the second-yellow red it triggered.
+  const pairedRed = (ev: FootballEvent) => pairedSecondYellowRed(state.events, ev);
+  const removalActions = (ev: FootballEvent, withPair = true): ScoreAction[] => {
     // SD-30: the id on the event (new logs) wins over a name lookup
     const pid = ev.type === 'owngoal' ? undefined : ev.playerId ?? rosterId(ev.playerName);
     let attribution: ScoreAction['attribution'];
@@ -322,25 +331,40 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     else if (ev.type === 'yellow' && pid) attribution = { playerId: pid, stat: 'yellowCards', by: -1, playerName: ev.playerName };
     else if (ev.type === 'red' && pid) attribution = { playerId: pid, stat: 'redCards', by: -1, playerName: ev.playerName };
     else if (ev.type === 'sinbin' && pid) attribution = { playerId: pid, stat: 'sinBins', by: -1, playerName: ev.playerName };
-    dispatch({ type: 'REMOVE_EVENT', payload: { id: ev.id, target: 'event' }, attribution });
+    const out: ScoreAction[] = [{ type: 'REMOVE_EVENT', payload: { id: ev.id, target: 'event' }, attribution }];
     // A goal's assist is a separate log entry keyed to the goal's `secondName` —
     // reverse the assister's tally too so an edit/remove leaves no phantom assist.
     if (ev.type === 'goal' && ev.secondName) {
       const aid = ev.secondId ?? rosterId(ev.secondName);
-      if (aid) dispatch({ type: 'REMOVE_EVENT', payload: { id: -1, target: 'stat' }, attribution: { playerId: aid, stat: 'assists', by: -1, playerName: ev.secondName } });
+      if (aid) out.push({ type: 'REMOVE_EVENT', payload: { id: -1, target: 'stat' }, attribution: { playerId: aid, stat: 'assists', by: -1, playerName: ev.secondName } });
     }
+    const red = withPair ? pairedRed(ev) : undefined;
+    if (red) out.push(...removalActions(red, false));
+    return out;
   };
-  const removeStat = (st: StatEvent) => {
+  const removeEvent = (ev: FootballEvent) => { for (const a of removalActions(ev)) dispatch(a); };
+  const statRemoval = (st: StatEvent): ScoreAction => {
     const key = STAT_KEY[st.kind];
     const extra: Record<string, number> | undefined =
       st.kind === 'shot' && st.onTarget && !st.blocked ? { shotsOnTarget: -1 } : st.kind === 'pass' && st.complete ? { passesComplete: -1 } : undefined;
     const attribution = st.playerId && key ? { playerId: st.playerId, stat: key, by: -1, playerName: st.playerName, extra } : undefined;
-    dispatch({ type: 'REMOVE_EVENT', payload: { id: st.id, target: 'stat' }, attribution });
+    return { type: 'REMOVE_EVENT', payload: { id: st.id, target: 'stat' }, attribution };
+  };
+  const removeStat = (st: StatEvent) => dispatch(statRemoval(st));
+  // What else a ✕ takes with it, for the confirm sheet.
+  const removeDetail = (ev: FootballEvent): string | undefined => {
+    const bits = [
+      ev.type === 'goal' ? `The score goes back to ${ev.side === 'home' ? `${state.home - 1}-${state.away}` : `${state.home}-${state.away - 1}`}` : undefined,
+      ev.type === 'goal' && ev.secondName ? `${ev.secondName}'s assist goes with it` : undefined,
+      pairedRed(ev) ? 'the second-yellow red goes with it (he is back to one yellow)' : undefined,
+    ].filter(Boolean);
+    return bits.length ? `${bits.join('; ')}. Player stats re-adjust.` : undefined;
   };
   // Edit a moment in place = remove the old one, then re-enter it through its normal
   // flow stamped at the SAME minute (so all match/profile stats re-adjust to match).
+  // SD-114: the removal is held until the re-entry commits — Cancel keeps it.
   const editEvent = (ev: FootballEvent) => {
-    removeEvent(ev);
+    holdRemoval(removalActions(ev));
     setEditMin(ev.minute);
     setEditHalf(eventHalf(ev, fmt));
     setShowEdit(false);
@@ -350,7 +374,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     else if (ev.type === 'sub') setSub({ side: ev.side });
   };
   const editStat = (st: StatEvent) => {
-    removeStat(st);
+    holdRemoval([statRemoval(st)]);
     setEditMin(st.minute);
     setEditHalf(eventHalf(st, fmt));
     setShowEdit(false);
@@ -656,12 +680,17 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   }
 
   // ----- Multi-step capture (goal / foul / generic stat) -----
-  const panel = (title: string, hint: string | undefined, body: React.ReactNode) => (
+  const backToLive = () => { setBackfillMin(null); setBackfillHalf(null); setBackfillText(''); };
+  // SD-114: pinned at the top of the controls while backfilling (F5).
+  const backfillBar = backfillMin != null && editMin == null
+    ? <BackfillBar at={minLabel(backfillMin, backfillHalf)} onLive={backToLive} /> : null;
+  const panel = (title: string, hint: string | undefined, body: React.ReactNode, closeLabel = 'Cancel') => (
     <View style={{ gap: theme.spacing(3) }}>
+      {backfillBar}
       <View style={ctrl.flowPanel}>
         <View style={ctrl.extrasHeader}>
           <Text style={ctrl.label}>{title}</Text>
-          <Button label="Cancel" variant="ghost" onPress={() => setFlow(null)} />
+          <Button label={closeLabel} variant="ghost" onPress={() => setFlow(null)} />
         </View>
         {editMin != null ? <Text style={ctrl.editBanner}>✎ Re-entering the {minLabel(editMin, editHalf)} moment — your pick replaces the old one.</Text> : null}
         {hint ? <Text style={ctrl.meta}>{hint}</Text> : null}
@@ -683,7 +712,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
       if (flow.step === 'scorer') {
         return panel(`⚽ Goal — ${sideName}`, 'Who scored?', (
           <>
-            <PlayerTable players={xi(flow.side)} onPick={(p) => setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: p, goalType: 'open', logged: false })} />
+            {/* SD-114 (F2): the goal is on the board on the scorer tap; the assist is attached after (Close keeps the goal). */}
+            <PlayerTable players={xi(flow.side)} onPick={(p) => { recordGoal(flow.side, p, 'open'); setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: p, goalType: 'open', logged: true }); }} />
             <Button label={`⚽ Team goal — no scorer${xi(flow.side).length === 0 ? ' (no players yet)' : ''}`} variant="ghost" onPress={() => recordTeamGoal(flow.side)} />
             <Button label="🥅 Own goal instead" variant="ghost" onPress={() => setFlow({ mode: 'goal', side: flow.side, step: 'og' })} />
           </>
@@ -709,15 +739,16 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           <View style={ctrl.chips}>
             {BODY_PARTS.map((b) => (
               <Button key={b} label={BODY_PART_LABEL[b]} variant="ghost" style={ctrl.actionBtn}
-                onPress={() => { recordGoal(flow.side, flow.scorer, flow.goalType, b); setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer }); }} />
+                onPress={() => { recordGoal(flow.side, flow.scorer, flow.goalType, b); setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer, goalType: flow.goalType, bodyPart: b, logged: true }); }} />
             ))}
           </View>
         ));
       }
       {
         // Consolidated fast panel — the goal is open-play by default; type/header
-        // and assist are optional. `logged` is true only on the voice path (goal
-        // already scored); the button path records it here on finish.
+        // and assist are optional. SD-114: every path now records the goal BEFORE
+        // this step (`logged: true`) — the assist attaches to it, and Close just
+        // closes. (Shot → Goal → type → body recorded it twice before: F1.)
         const gt = flow.goalType ?? 'open';
         const bp = flow.bodyPart;
         const finish = (assister: Player | null) => {
@@ -728,6 +759,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         // path) re-logs it with the corrected type so the score stays right.
         const refine = (nextType: GoalType, nextBody?: BodyPart) => {
           // (SD-30: the undone goal's credits are reversed, as a removal does)
+          if (nextType === gt && nextBody === bp) return;
           if (flow.logged) { dispatch({ type: 'UNDO_GOAL', side: flow.side, attribution: { playerId: flow.scorer.id, stat: 'goals', by: -1, playerName: flow.scorer.fullName, extra: { shots: -1, shotsOnTarget: -1, [GOAL_STAT[flow.goalType ?? 'open']]: -1 } } }); recordGoal(flow.side, flow.scorer, nextType, nextBody); }
           setFlow({ mode: 'goal', side: flow.side, step: 'assist', scorer: flow.scorer, goalType: nextType, bodyPart: nextBody, logged: flow.logged });
         };
@@ -735,7 +767,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           { label: 'Open play', t: 'open' }, { label: 'Header', t: 'open', b: 'head' },
           { label: 'Penalty', t: 'penalty' }, { label: 'Free kick', t: 'freekick' },
         ];
-        return panel(`⚽ Goal — ${flow.scorer.fullName}`, 'Assist? (optional — type below)', (
+        return panel(`⚽ Goal — ${flow.scorer.fullName}`, flow.logged ? `✓ Goal recorded (${state.home}-${state.away}). Assist? (optional — pick one, or Close)` : 'Assist? (optional — type below)', (
           <>
             <PlayerTable players={xi(flow.side).filter((p) => p.id !== flow.scorer.id)} onPick={finish} />
             <Button label="✓ No assist" variant="ghost" onPress={() => finish(null)} />
@@ -748,7 +780,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
               ))}
             </View>
           </>
-        ));
+        ), flow.logged ? 'Close' : 'Cancel');
       }
     }
 
@@ -892,6 +924,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {backfillBar}
       {voiceBar}
       {t.possession && <PossessionBar state={state} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onSwitch={setPossession} />}
 
@@ -960,7 +993,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
             <View style={ctrl.row}>
               <Button label="−1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(Math.max(0, backfillMin - 1))} />
               <Button label="+1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(backfillMin + 1)} />
-              <Button label="▶ Back to live" variant="home" style={ctrl.flex} onPress={() => { setBackfillMin(null); setBackfillHalf(null); setBackfillText(''); }} />
+              <Button label="▶ Back to live" variant="home" style={ctrl.flex} onPress={backToLive} />
             </View>
           </View>
         )}
@@ -975,19 +1008,19 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         </View>
         {showEdit && (() => {
           const items = [
-            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}`, onRemove: () => removeEvent(e), onEdit: () => editEvent(e) })),
-            ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, half: eventHalf(st, fmt), order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), onEdit: () => editStat(st) })),
+            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}`, onRemove: () => removeEvent(e), detail: removeDetail(e), onEdit: () => editEvent(e) })),
+            ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, half: eventHalf(st, fmt), order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), detail: undefined as string | undefined, onEdit: () => editStat(st) })),
           ].sort(byMatchTimeDesc);
           if (items.length === 0) return <Text style={ctrl.meta}>Nothing logged yet.</Text>;
           return (
             <View style={{ gap: theme.spacing(1) }}>
-              <Text style={ctrl.meta}>Tap Edit to re-pick the player/type (stamped at the same minute — every stat re-adjusts), or Remove to delete it. Nothing else is touched.</Text>
+              <Text style={ctrl.meta}>Tap ✎ Edit to re-pick the player/type (stamped at the same minute — every stat re-adjusts; Cancel keeps it as it was), or ✕ to remove it (asks first).</Text>
               {items.map((it) => (
                 <View key={it.key} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{minLabel(it.minute, it.half)}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{it.label}</Text>
-                  <Text style={ctrl.editEdit} onPress={it.onEdit}>✎ Edit</Text>
-                  <Text style={ctrl.editRemove} onPress={it.onRemove}>✕</Text>
+                  <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${it.label}`} onPress={it.onEdit} />
+                  <RowAction label="✕" tone="remove" a11y={`Remove ${it.label}`} onPress={() => void confirmRemove(`${it.label} (${minLabel(it.minute, it.half)})`, it.onRemove, it.detail)} />
                 </View>
               ))}
             </View>
@@ -1298,9 +1331,7 @@ const ctrl = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   editMin: { color: theme.colors.accent, fontWeight: '800', width: 48, fontSize: theme.font.small }, // fits "45+2'" (SD-08)
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
-  editEdit: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
   editBanner: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700', backgroundColor: theme.colors.accent + '22', padding: theme.spacing(2), borderRadius: theme.radius.sm },
-  editRemove: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: theme.font.small },

@@ -479,6 +479,16 @@ export const cardCount = (events: FootballEvent[], type: 'yellow' | 'red', side:
  *  better): per player per match only the worst applies — yellow −1, a red for
  *  a second yellow −3, a direct red −4, a yellow then a direct red −5. A card
  *  without a player is its own entry. */
+/** SD-114 (F4): the auto second-yellow red a yellow triggered. Taking either of
+ *  the player's two yellows away leaves him on one, so that red goes with it
+ *  (removed by its own REMOVE_EVENT — no reducer change, old logs replay as-is). */
+export function pairedSecondYellowRed(events: FootballEvent[], ev: FootballEvent): FootballEvent | undefined {
+  if (ev.type !== 'yellow') return undefined;
+  const same = (e: FootballEvent) => e.side === ev.side && (ev.playerId && e.playerId ? e.playerId === ev.playerId : e.playerName === ev.playerName);
+  if (events.filter((e) => e.type === 'yellow' && same(e)).length !== 2) return undefined;
+  return events.find((e) => e.type === 'red' && e.secondYellow && same(e));
+}
+
 export function fairPlayScore(events: FootballEvent[]): { home: number; away: number } {
   const by = new Map<string, { side: 'home' | 'away'; y: number; secondY: boolean; red: boolean }>();
   for (const e of events ?? []) {

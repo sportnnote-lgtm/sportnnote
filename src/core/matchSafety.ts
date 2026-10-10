@@ -31,7 +31,8 @@ export type MatchAction =
   | 'finishEvent' // athletics / swimming: finish & lock results
   | 'closePhase' // athletics / swimming: close a round and seed the next
   | 'walkover' // 🏳 Walkover to a named side (End panel / Info tab)
-  | 'discardTaps'; // discard this device's unsynced, rejected taps
+  | 'discardTaps' // discard this device's unsynced, rejected taps
+  | 'removeEvent'; // SD-114: ✕ on one "Correct the timeline" row
 
 /** where on screen a control sits */
 export type ControlZone =
@@ -141,6 +142,8 @@ export interface ConfirmContext {
   count?: number;
   /** a sport- or screen-specific one-liner that replaces the default message */
   detail?: string;
+  /** removeEvent: the row being removed ("Goal — Rahul (23′)") */
+  what?: string;
 }
 
 const KEEP = 'No, keep scoring';
@@ -182,6 +185,8 @@ export function confirmCopy(action: MatchAction, ctx: ConfirmContext = {}): Conf
       return { title: 'Finish the round?', message: ctx.detail ?? 'Scores are locked and stats go to each player’s profile.', yesLabel: 'Yes, finish round', noLabel: KEEP, tone: 'danger' };
     case 'finishEvent':
       return { title: 'Finish and lock the results?', message: ctx.detail ?? 'Places, medals and any new record are final.', yesLabel: 'Yes, finish & lock', noLabel: 'No, keep entering', tone: 'danger' };
+    case 'removeEvent':
+      return { title: ctx.what ? `Remove ${ctx.what}?` : 'Remove this from the timeline?', message: ctx.detail ?? 'It comes off the timeline and the score and player stats re-adjust.', yesLabel: 'Yes, remove', noLabel: 'No, keep it', tone: 'danger' };
     case 'closePhase':
       return { title: 'Close this round?', message: ctx.detail ?? 'The qualifiers are seeded into the next round and these results are locked.', yesLabel: 'Yes, close & seed', noLabel: 'No, keep entering', tone: 'caution' };
   }

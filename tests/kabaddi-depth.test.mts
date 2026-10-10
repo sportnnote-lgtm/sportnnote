@@ -67,7 +67,7 @@ function fullMatch(): Scorer {
   m.raid({ side: 'home', raider: H[0] }, 7); // empty
   m.raid({ side: 'home', raider: H[0] }, 8); // empty
   m.raid({ side: 'home', raider: H[0], touches: 1 }, 9); // do-or-die won
-  m.raid({ side: 'home', raider: H[2], touches: 3 }, 10); // super raid
+  m.raid({ side: 'home', raider: H[2], touches: 3 }, 10); // 3 touched, but only 1 defender left: SD-114 caps it at 1 → all-out
   m.push({ type: 'NEXT_HALF' });
   m.raid({ side: 'away', raider: A[0], touches: 2 }, 21, 2);
   m.raid({ side: 'home', touches: 1 }, 22, 2); // nobody named
@@ -101,7 +101,7 @@ describe('SD-33 — statTotals pass the SD-19 contract', () => {
       { raids: 5, successfulRaids: 3, emptyRaids: 2, raidsOut: 0, touchPoints: 7, bonusPoints: 0, superRaids: 1, doOrDieRaids: 1, doOrDiePoints: 1 },
     );
     assert.equal(t.h3.stats.bonusPoints, 1);
-    assert.equal(t.h3.stats.superRaids, 1);
+    assert.equal(t.h3.stats.superRaids, 0); // SD-114: the 3-touch raid on 1 defender scores 1
     // the failed do-or-die: the raider is out, nobody is credited a tackle
     assert.deepEqual([t.a3.stats.raids, t.a3.stats.raidsOut, t.a3.stats.doOrDieRaids, t.a3.stats.raidPoints], [1, 1, 1, 0]);
     // tacklers: Dev's form tackle, Ravi's voice tackle
@@ -241,7 +241,7 @@ describe('SD-41 — PKL match centre', () => {
     assert.equal(c.home.raids, 8);
     assert.equal(c.home.successfulRaids, 6);
     assert.equal(c.home.emptyRaids, 2);
-    assert.equal(c.home.superRaids, 2);
+    assert.equal(c.home.superRaids, 1);
     assert.equal(c.home.raidStrikeRate, 75);
     assert.deepEqual([c.home.doOrDieRaids, c.home.doOrDieWon, c.home.doOrDieRate], [1, 1, 100]);
     assert.deepEqual([c.away.doOrDieRaids, c.away.doOrDieWon, c.away.doOrDieRate], [1, 0, 0]);

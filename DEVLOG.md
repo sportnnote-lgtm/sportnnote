@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-114 live scoring bugs: football goals, safe timeline corrections, backfill bar, kabaddi touch cap
+- **Football:** a goal via Shot → On target → Goal was counted twice — now once. The goal is recorded on the scorer tap; the assist step says "✓ Goal recorded (2-1). Assist? (optional)" and Close keeps it (Cancel used to drop the goal). Removing/editing either yellow of a second-yellow also removes the automatic red (re-entry restores it). No reducer change — old logs replay identically.
+- **Timeline corrections (football, hockey, basketball, kabaddi, volleyball/racket editor):** ✕ asks first and says what goes with it ("X's assist goes with it", kabaddi "Raid +2, Tackle +1, All out +2", hockey "the keeper's save"); ✎ ✕ ＋ are 44 pt. Cancelling an ✎ Edit no longer deletes the event (removal is held until the re-entry commits; the committed log is the same as before). "Insert a missed point" starts with no side picked.
+- **Backfill:** a "⏪ Backfilling at 12′ … ▶ Back to live" bar is pinned first in the controls (football, basketball, kabaddi) so live taps aren't stamped at a past minute.
+- **Kabaddi:** touch chips above the defenders on the mat are disabled ("· N on the mat"); the engine caps touches for v:2 raids only.
+- **Files:** `src/sports/TimelineControls.tsx`, `usePendingEdit.ts`, `src/core/matchSafety.ts` (`removeEvent` copy), football/hockey/basketball/kabaddi index + football/kabaddi engine + kabaddi rules, `RallyPointEditor.tsx`. Guides: score-football, -hockey, -basketball, -kabaddi, -volleyball.
+- **Verified:** `tests/live-corrections.test.mts` (15), kabaddi-depth fixture updated (an impossible 3-touch raid with 1 defender), suite green, tsc clean; demo 8093 football/kabaddi/volleyball at 375 px. Hockey, basketball and the second-yellow case: tests only.
+
+---
+
 ### 2026-10-11 — SD-112 athletics + swimming results-entry safety
 - **Why:** audit P0 — a hand time "1053" saved as 10.53 and an 800 m "2153" saved as 21.53 and was flagged as a meet record; rounds and finals could never be reopened.
 - **What:** plausible range per event and pool length (`src/data/results/safety.ts`; fast end just under the senior world record, generous slow end for U10–U19) — out-of-range marks are never rejected, they open a "Check this mark" sheet; unconfirmed ones lose PB/SB/MR/SR flags and can't set records. Hand mode: last digit = tenth ("1053" → 1:05.3h). Close round / Finish & lock list blank rows, unconfirmed marks and each new meet record ("was 10.88"). Organiser-only ↺ Reopen round (while the next round is empty) and ↺ Reopen final (rolls back records to the previous holder, drops medal points until relocked). Hand chip keeps the typed time; ".000" chip for photo-finish thousandths; 44 pt status pills; field marks range-checked + 5 s Undo for X / – / O; "Next ›" lane advance + "Next heat →". Swimming: manual watches are the only input when on; splits folded behind "＋ Splits".

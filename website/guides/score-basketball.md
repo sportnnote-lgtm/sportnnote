@@ -63,8 +63,8 @@ Level after the last quarter? Tap the "Start Overtime" button. Under FIBA rules,
 
 ## Fix a mistake
 - Tap **Undo** to step back one action. It also takes the stats back off the player.
-- To fix an older play, tap **Edit** next to **🗓 Correct the timeline**, then **✎ Edit** or **✕** to remove it (misses: remove only).
-- Missed a play? Use **⏪ Backfill a missed play**.
+- To fix an older play, tap **Edit** next to **🗓 Correct the timeline**, then **✎ Edit** or **✕** to remove it (misses: remove only). ✕ asks first; Cancel on an edit keeps the play.
+- Missed a play? Use **⏪ Backfill a missed play**. A bar at the top shows the quarter until you tap **Back to live**.
 
 ## Common questions
 ### Can I score by voice?

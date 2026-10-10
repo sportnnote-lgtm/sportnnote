@@ -11,7 +11,7 @@ updated: 2026-10-11
 In kabaddi, one raid can score for both teams. You record each raid once, and the app works out the points, who is out, all outs, do-or-die and a full match centre.
 
 ## Before you start
-- You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
+- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - The organiser picks the **Rule set** when scheduling. **Standard / Pro (7 · 2×20)** turns on do-or-die and super tackles; **Circle style** and **School** leave them off; **Custom** sets each rule.
 - Add both squads first. Only named players appear in the player stats.
 
@@ -19,10 +19,10 @@ In kabaddi, one raid can score for both teams. You record each raid once, and th
 1. Open the match → **Scoring** tab and tap **▶ Start match**. The clock starts.
 2. Tap the raiding team's button, for example "🤼 Red House raiding".
 3. Under **Raider (optional)**, tap the raider.
-4. Under "Defenders touched (they go out)", tap 0 to 5. Each touch is a point, and each touched defender goes out.
+4. Under "Defenders touched (they go out)", tap 0 to 5. Each touch is a point, and each touched defender goes out. You can't pick more than are on the mat.
 5. If the raider crossed the bonus line, tap the chip so it reads **Bonus point: Yes**.
 6. If the raider was caught, tap the chip so it reads **Raider tackled: Yes**, then tap the defender under "Who made the tackle?".
-7. Check the "Scores:" line: it shows exactly what will count.
+7. The "Scores:" line shows what will count.
 8. Tap **✓ Record raid**, or **Cancel** to throw it away.
 
 ## What each raid scores
@@ -57,9 +57,9 @@ When the match ends, each player's line is rebuilt from the raids. Their kabaddi
 ## Fix a mistake
 1. On the **Scoring** tab, under "Correct the timeline", tap **Edit**.
 2. On the wrong raid, tap **✎ Edit**, fix it and tap **✓ Save raid**. The score, outs and stats recalculate.
-3. To delete a raid, tap **✕**. Its raid points, tackle and any all out go with it.
+3. To delete a raid, tap **✕**. The sheet lists what goes with it; tap **Yes, remove**.
 
-Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfill** and record it.
+Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfill** and record it. A bar at the top shows the minute until you tap **Back to live**.
 
 ## End the match
 - At half-time tap **End 1st Half →**, then **▶ Start 2nd half** when play resumes.

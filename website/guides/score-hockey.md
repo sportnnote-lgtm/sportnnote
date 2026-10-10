@@ -49,7 +49,7 @@ The result keeps the level score and adds the shoot-out, for example "2–2" and
 
 ## Fix a mistake
 1. Tap **✎ Correct the timeline** under the buttons.
-2. Tap **✕** to remove a moment, or **Edit** to enter it again. An edited moment keeps its original time.
+2. Tap **✕** to remove a moment (it asks first), or **✎ Edit** to enter it again. It keeps its time; Cancel leaves it as it was.
 3. After the match, use [Correct a finished match](/guides/correct-a-finished-match/).
 
 ## What you get

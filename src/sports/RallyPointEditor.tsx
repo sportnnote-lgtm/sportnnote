@@ -17,6 +17,7 @@ import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 import { pointRows, correctionActions, defaultCredits, type EditRow, type PointCredits, type PointInput, type PointKind } from './rallyEdit';
 import { DETAIL_HOWS, STROKES, howDef, pdText, type DetailSport, type How, type PointDetail } from './pointDetail';
+import { RowAction, confirmRemove } from './TimelineControls';
 
 /** One choosable point type in the editor. `credited: false` = nobody on the
  *  scoring side gets credit (an opponent's error) → no player picker. */
@@ -28,7 +29,9 @@ const ROW_ICON: Partial<Record<PointKind, string>> = { ace: '🎯', block: '🧱
 interface Draft {
   mode: 'edit' | 'insert';
   index: number; // edit → the row; insert → splice AFTER this index (-1 = at start)
-  side: 'home' | 'away';
+  /** who won it — SD-114: an insert starts with NO side, so a missed point is
+   *  never silently given to Home */
+  side?: 'home' | 'away';
   /** 'df' (SD-104, tennis) = the opponent's double fault; the player is the faulting server */
   kind: PointKind | 'df';
   playerId?: string;
@@ -116,15 +119,16 @@ export function RallyPointEditor({
   const remove = (index: number) => commit(list.filter((_, i) => i !== index));
 
   const saveDraft = () => {
-    if (!draft) return;
+    if (!draft || !draft.side) return;
+    const side = draft.side;
     // An uncredited kind (an opponent's error) never carries a player.
     const credited = isCredited(draft.kind);
     const item: PointInput = draft.kind === 'df' ? {
       // the receiver wins the point; the named player is the faulting server
-      side: draft.side, kind: 'point', df: { ...(draft.playerId ? { playerId: draft.playerId } : {}), ...(draft.playerName ? { playerName: draft.playerName } : {}) },
+      side, kind: 'point', df: { ...(draft.playerId ? { playerId: draft.playerId } : {}), ...(draft.playerName ? { playerName: draft.playerName } : {}) },
     } : {
       // no type choice → a plain "won the rally" point (the engine re-derives side-outs)
-      side: draft.side, kind: choices.length && draft.kind !== 'rally' ? draft.kind : 'point',
+      side, kind: choices.length && draft.kind !== 'rally' ? draft.kind : 'point',
       playerName: credited ? draft.playerName : undefined, playerId: credited ? draft.playerId : undefined,
       ...(draft.pd ? { pd: draft.pd } : {}),
     };
@@ -145,7 +149,7 @@ export function RallyPointEditor({
     else setDraft({ mode: 'edit', index, side: p.side, kind: p.kind, playerName: p.playerName, playerId: rosterId(p.playerName), ...(p.pd ? { pd: p.pd } : {}) });
   };
   const beginInsert = (afterIndex: number) =>
-    setDraft({ mode: 'insert', index: afterIndex, side: 'home', kind: defaultKind, playerName: undefined, playerId: undefined });
+    setDraft({ mode: 'insert', index: afterIndex, side: undefined, kind: defaultKind, playerName: undefined, playerId: undefined });
 
   if (rows.length === 0) return null;
 
@@ -183,7 +187,9 @@ export function RallyPointEditor({
                   </View>
                 </>
               )}
-              {isCredited(draft.kind) ? (
+              {!draft.side ? (
+                <Text style={st.meta}>Pick who won the rally first.</Text>
+              ) : isCredited(draft.kind) ? (
                 <>
                   <Text style={st.meta}>{draft.kind === 'df' ? 'Who double-faulted? (the server, optional)' : 'Which player? (optional)'}</Text>
                   <View style={st.chips}>
@@ -197,7 +203,7 @@ export function RallyPointEditor({
               ) : (
                 <Text style={st.meta}>An opponent&apos;s error — no player is credited.</Text>
               )}
-              {detailSport && draft.kind !== 'df' && (() => {
+              {detailSport && draft.side && draft.kind !== 'df' && (() => {
                 // SD-107 — optional point detail (no serve filter here: the scorer knows)
                 const pd = draft.pd;
                 const sel = pd ? howDef(detailSport, pd.how) : undefined;
@@ -234,12 +240,12 @@ export function RallyPointEditor({
                 );
               })()}
               <View style={st.row}>
-                <Button label="Save" variant={draft.side} style={{ flex: 1 }} onPress={saveDraft} />
+                <Button label="Save" variant={draft.side ?? 'ghost'} style={{ flex: 1 }} disabled={!draft.side} onPress={saveDraft} />
                 <Button label="Cancel" variant="ghost" onPress={() => setDraft(null)} />
               </View>
             </View>
           ) : (
-            <Text style={st.insertTop} onPress={() => beginInsert(-1)}>＋ Insert a point at the very start</Text>
+            <Text style={st.insertTop} accessibilityRole="button" onPress={() => beginInsert(-1)}>＋ Insert a point at the very start</Text>
           )}
 
           {rows
@@ -258,11 +264,13 @@ export function RallyPointEditor({
                       : `${ROW_ICON[p.kind] ?? pointIcon} ${side === 'home' ? homeName : awayName}${rally ? ` won rally · ${e.label}` : e.playerName ? ` · ${e.playerName}` : e.kind === 'opperror' || e.kind === 'serveerror' ? ` · ${e.label}` : ''}${p.pd ? ` · ${pdText(p.pd, false)}` : ''}`}
                   </Text>
                   {!draft && (
-                    <>
-                      <Text style={st.insert} onPress={() => beginInsert(i)}>＋</Text>
-                      <Text style={st.edit} onPress={() => beginEdit(i)}>✎</Text>
-                      <Text style={st.remove} onPress={() => remove(i)}>✕</Text>
-                    </>
+                    // SD-114: ≥44pt targets, spaced; ✕ asks first
+                    <View style={st.actions}>
+                      <RowAction label="＋" tone="insert" a11y="Insert a missed point after this one" onPress={() => beginInsert(i)} />
+                      <RowAction label="✎" tone="edit" a11y="Edit this point" onPress={() => beginEdit(i)} />
+                      <RowAction label="✕" tone="remove" a11y="Remove this point"
+                        onPress={() => void confirmRemove(`this point (${periodLabel(e)} · ${side === 'home' ? homeName : awayName})`, () => remove(i), 'The score, sets and player stats re-adjust from the corrected points.')} />
+                    </View>
                   )}
                 </View>
               );
@@ -280,12 +288,10 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), marginTop: theme.spacing(1) },
   draftBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3) },
-  insertTop: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', paddingVertical: theme.spacing(1) },
+  insertTop: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', paddingVertical: theme.spacing(3), minHeight: 44 },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   dot: { width: 8, height: 8, borderRadius: 4 },
   period: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', width: 46 },
   rowLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
-  insert: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800', paddingHorizontal: theme.spacing(1) },
-  edit: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', paddingHorizontal: theme.spacing(1) },
-  remove: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '800', paddingHorizontal: theme.spacing(1) },
+  actions: { flexDirection: 'row', gap: theme.spacing(2) },
 });
