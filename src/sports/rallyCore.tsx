@@ -16,8 +16,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, SelectChip, textStyles } from '../components/ui';
 import { LiveTimeline } from './LiveTimeline';
-import { PointBoxScore } from './PointBoxScore';
+import { MatchBoxScore } from '../components/BoxScore';
+import { rallyBox } from './boxSources';
 import { RallyPointEditor } from './RallyPointEditor';
+import { MatchStatsPanel } from './MatchStatsPanel';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
@@ -178,7 +180,6 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
 
   const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
     const s = state as RallyState;
-    const periods = Array.from({ length: Math.max(1, s.games.length + 1) }, (_, i) => i + 1);
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <Text style={ctrl.label}>Games</Text>
@@ -189,8 +190,10 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
             s.games.map((g, i) => <Text key={i} style={ctrl.gameChip}>G{i + 1}: {g[0]}-{g[1]}</Text>)
           )}
         </View>
+        {/* SD-22: serve / return figures replayed from the point log, per set */}
+        <MatchStatsPanel sport={opts.id} state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
         <Text style={ctrl.label}>Box score</Text>
-        <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Game" onPlayer={onPlayer} />
+        <MatchBoxScore sport={opts.id} source={rallyBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
         <Text style={ctrl.label}>Rally log</Text>
         <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       </View>
@@ -238,8 +241,9 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     retireTerms: true,
     Scoreboard,
     // SD-19: absolute games / points / deciders per player (and the doubles
-    // partner), synced at completion and on correction.
-    statTotals: rallyTotals,
+    // partner), synced at completion and on correction. SD-22: + the replayed
+    // serve / return keys (the sport names the serve rule).
+    statTotals: (s, ctx) => rallyTotals(s, ctx, opts.id),
     statTotalsPartial: true,
     statTotalsNeedsPlayers: true,
     ScoringControls,

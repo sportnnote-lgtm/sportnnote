@@ -8,7 +8,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
-import { KabaddiBoxScore } from './BoxScore';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { kabaddiBox } from '../boxSources';
 import type { LiveEvent } from '../liveEvents';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
@@ -410,15 +411,12 @@ const LiveClock: NonNullable<SportPlugin<KabaddiState>['LiveClock']> = ({ state 
 
 const LiveExtras: NonNullable<SportPlugin<KabaddiState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as KabaddiState;
-  // Halves played so far, for the stats table's per-half toggle.
-  const periodName = (h: number) => (h === 1 ? '1st half' : h === 2 ? '2nd half' : h === 3 ? 'ET 1' : 'ET 2');
-  const periods = Array.from({ length: Math.max(1, s.half) }, (_, i) => ({ value: i + 1, label: periodName(i + 1) }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Timeline</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No raids yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Player stats</Text>
-      <KabaddiBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <MatchBoxScore sport="kabaddi" source={kabaddiBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
     </View>
   );
 };

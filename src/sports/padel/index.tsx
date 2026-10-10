@@ -15,8 +15,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { SelectChip, Button, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
-import { PointBoxScore } from '../PointBoxScore';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { padelBox } from '../boxSources';
 import { RallyPointEditor } from '../RallyPointEditor';
+import { MatchStatsPanel } from '../MatchStatsPanel';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
@@ -82,7 +84,6 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
 
 const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as PadelState;
-  const periods = Array.from({ length: Math.max(1, s.sets.length + 1) }, (_, i) => i + 1);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -93,8 +94,10 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
           (lineScore(s)?.done ?? []).map((c, i) => <Text key={i} style={ctrl.setChip}>S{i + 1}: {cellText(c)}</Text>)
         )}
       </View>
+      {/* SD-22: serve / return figures replayed from the point log, per set */}
+      <MatchStatsPanel sport="padel" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
       <Text style={ctrl.label}>Box score</Text>
-      <PointBoxScore events={s.events} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} periodLabel="Set" onPlayer={onPlayer} />
+      <MatchBoxScore sport="padel" source={padelBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>

@@ -11,6 +11,8 @@ import { Button, SelectChip, textStyles } from '../../components/ui';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { SetLineBoard } from '../SetLineBoard';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { carromBox } from '../boxSources';
 import { init, reducer, result, boardPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side } from './engine';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
@@ -73,7 +75,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   );
 };
 
-const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state, homeName, awayName }) => {
+const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
   const s = state as CarromState;
   return (
     <View style={{ gap: theme.spacing(3) }}>
@@ -82,6 +84,10 @@ const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state
         {s.games.length === 0 ? <Text style={textStyles.muted}>Game 1 in progress…</Text>
           : s.games.map((g, i) => <Text key={i} style={ctrl.chip}>G{i + 1}: {g[0]}-{g[1]}</Text>)}
       </View>
+      {/* SD-23: points / boards / queens per side, per game */}
+      {s.boards.length > 0 && (
+        <MatchBoxScore sport="carrom" source={carromBox(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />
+      )}
       <Text style={ctrl.label}>Boards</Text>
       {s.boards.length === 0 ? <Text style={textStyles.muted}>No boards yet.</Text> : (
         [...s.boards].reverse().map((b, i) => (

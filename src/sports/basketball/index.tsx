@@ -11,8 +11,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, SelectChip } from '../../components/ui';
 import { Timeline } from './Timeline';
-import { BoxScore } from './BoxScore';
-import { basketballTotals, boxFieldByName } from './fieldTime';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { basketballBox } from '../boxSources';
+import { basketballTotals } from './fieldTime';
 import { BB_META, FOUL_LABEL, pointsOf, type BBEvent, type FoulType, type ReboundType } from './events';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
@@ -588,14 +589,12 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
   onPlayer,
 }) => {
   const s = state as BasketballState;
-  // Periods played so far, for the box score's per-quarter toggle (Q1…, then OT).
-  const periods = Array.from({ length: Math.max(1, s.quarter) }, (_, i) => ({ value: i + 1, label: periodLabel(i + 1, s.regPeriods) }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Play-by-play</Text>
       <Timeline events={s.events} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Box score</Text>
-      <BoxScore events={s.events} field={boxFieldByName(s)} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} periods={periods} onPlayer={onPlayer} />
+      <MatchBoxScore sport="basketball" source={basketballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
     </View>
   );
 };

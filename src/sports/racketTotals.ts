@@ -16,6 +16,13 @@
  *   setsWon / Lost    tennis / padel only
  *   decidersPlayed / decidersWon   the deciding set (tennis / padel) or game
  *   tiebreaksPlayed / tiebreaksWon tennis / padel: set + match tiebreaks
+ *   SD-22 serve keys (src/sports/serveStats.ts, replayed from the log):
+ *   srvPts / srvPtsWon  service points the player SERVED / won (doubles: only
+ *                     where the server is named — tennis / padel by slot,
+ *                     pickleball by court; else left out for every player)
+ *   rcvPts / rcvPtsWon  the side's return points played / won
+ *   tennis / padel: svcGames / svcHeld / bpFaced / bpSaved (serving player),
+ *                     rtnGames / breaks / bpOpps / bpWon (the side)
  * Doubles lines also get a derived `partnerId` (not stored: no column).
  * NOT owned: tennis `doubleFaults` (credited through attribution2, which the
  * log keeps but an EDIT_LOG point list can't carry) — it stays on increments,
@@ -27,6 +34,7 @@ import type { RallyState } from './rallyEngine.ts';
 import type { BadmintonState } from './badminton/engine.ts';
 import { type TennisState, setTiebreaks as tennisTiebreaks, standingsUnits as tennisGames } from './tennis/engine.ts';
 import { type PadelState, setTiebreaks as padelTiebreaks, standingsUnits as padelGames } from './padel/engine.ts';
+import { serveStats, serveCareerKeys, type ServeSport } from './serveStats.ts';
 
 type Side = 'home' | 'away';
 type PerSide = { home: number; away: number };
@@ -193,22 +201,43 @@ export function playerTotals(
 
 // ----------------------------------------------- the plugin statTotals --
 
+/** SD-22 — add the replayed serve / return keys to every line. The server is
+ *  named from ctx's roster order (as the live controls do); singles with no ctx
+ *  falls back to the one player credited on the side. */
+function withServe(sport: ServeSport | undefined, s: { events?: LiveEvent[] } | null | undefined, totals: Record<string, StatTotalsEntry>, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> {
+  if (!sport || !s) return totals;
+  const ids = (side: Side) => {
+    const fromCtx = (ctx?.players?.[side] ?? []).map((p) => p.id).filter(Boolean);
+    if (fromCtx.length) return fromCtx;
+    const mine = Object.entries(totals).filter(([, e]) => e.side === side).map(([id]) => id);
+    return mine.length === 1 ? mine : [];
+  };
+  const st = serveStats(sport, s, { home: ids('home'), away: ids('away') });
+  if (!st) return totals;
+  const out: Record<string, StatTotalsEntry> = {};
+  for (const [id, e] of Object.entries(totals)) out[id] = { ...e, stats: { ...e.stats, ...serveCareerKeys(st, e.side, id) } };
+  return out;
+}
+
 export const tennisTotals = (s: TennisState, ctx?: StatTotalsContext) =>
-  playerTotals(s?.events, tennisRecord(s), TENNIS_CREDITS, !!s?.doubles, ctx);
+  withServe('tennis', s, playerTotals(s?.events, tennisRecord(s), TENNIS_CREDITS, !!s?.doubles, ctx), ctx);
 
 export const padelTotals = (s: PadelState, ctx?: StatTotalsContext) =>
-  playerTotals(s?.events, padelRecord(s), POINT_CREDITS, s?.doubles !== false, ctx);
+  withServe('padel', s, playerTotals(s?.events, padelRecord(s), POINT_CREDITS, s?.doubles !== false, ctx), ctx);
 
 export const badmintonTotals = (s: BadmintonState, ctx?: StatTotalsContext) =>
-  playerTotals(s?.events, gamesRecord(s), POINT_CREDITS, !!s?.doubles, ctx);
+  withServe('badminton', s, playerTotals(s?.events, gamesRecord(s), POINT_CREDITS, !!s?.doubles, ctx), ctx);
 
-/** Table tennis, squash, pickleball. A side-out 'rally' event credits nobody. */
-export const rallyTotals = (s: RallyState, ctx?: StatTotalsContext) =>
-  playerTotals(s?.events, gamesRecord(s), POINT_CREDITS, !!s?.doubles, ctx);
+/** Table tennis, squash, pickleball. A side-out 'rally' event credits nobody.
+ *  `sport` names the serve rule (the rally state doesn't know its sport):
+ *  without it the SD-22 serve keys are left out (unknown, not 0). */
+export const rallyTotals = (s: RallyState, ctx?: StatTotalsContext, sport?: 'tabletennis' | 'squash' | 'pickleball') =>
+  withServe(sport, s, playerTotals(s?.events, gamesRecord(s), POINT_CREDITS, !!s?.doubles, ctx), ctx);
 
 /** The keys each sport's totals own (for docs, schema and tests). */
 export const RACKET_RECORD_KEYS = ['ptsWon', 'ptsLost', 'gamesWon', 'gamesLost', 'decidersPlayed', 'decidersWon'] as const;
 export const SET_RECORD_KEYS = ['setsWon', 'setsLost', 'tiebreaksPlayed', 'tiebreaksWon'] as const;
+export { SERVE_KEYS, SERVE_SET_KEYS } from './serveStats.ts';
 
 // ------------------------------------------------ volleyball set record --
 

@@ -23,11 +23,12 @@ import * as cricket from '../src/sports/cricket/engine.ts';
 import { statTotals as cricketTotals } from '../src/sports/cricket/scorecard.ts';
 import * as football from '../src/sports/football/engine.ts';
 import { keeperTotals } from '../src/sports/football/keepers.ts';
-import { tennisTotals, padelTotals, badmintonTotals, rallyTotals, volleyballSetRecord, mergeTotals, RACKET_RECORD_KEYS, SET_RECORD_KEYS } from '../src/sports/racketTotals.ts';
+import { tennisTotals, padelTotals, badmintonTotals, rallyTotals, volleyballSetRecord, mergeTotals, RACKET_RECORD_KEYS, SET_RECORD_KEYS, SERVE_KEYS, SERVE_SET_KEYS } from '../src/sports/racketTotals.ts';
 import { correctionActions, pointInputs, type PointInput } from '../src/sports/rallyEdit.ts';
 
 type Side = 'home' | 'away';
-const RECORD = [...RACKET_RECORD_KEYS, ...SET_RECORD_KEYS];
+// SD-22: the replayed serve / return keys are derived too
+const RECORD = [...RACKET_RECORD_KEYS, ...SET_RECORD_KEYS, ...SERVE_KEYS, ...SERVE_SET_KEYS];
 const SINGLES = { home: ['h1'], away: ['a1'] };
 const DOUBLES = { home: ['h1', 'h2'], away: ['a1', 'a2'] };
 
@@ -49,10 +50,10 @@ const RACKET = [
   racket('tennis doubles', tennis, tennisTotals, { playersPerSide: 2 }, DOUBLES, L.TENNIS_BO3),
   racket('padel (match tiebreak)', padel, padelTotals, { decider: 'match10' }, DOUBLES, [...L.PADEL_TWO_SETS, ...L.tbPts('home', 10), ...L.tbPts('away', 7)]),
   racket('badminton doubles', badminton, badmintonTotals, { playersPerSide: 2 }, DOUBLES, L.BADMINTON_LOG),
-  racket('table tennis', TT, rallyTotals, {}, SINGLES, L.TT_LOG),
-  racket('squash', SQUASH, rallyTotals, {}, SINGLES, L.SQUASH_LOG),
-  racket('pickleball side-out doubles', PICKLE, rallyTotals, { scoring: 'sideout' }, DOUBLES, L.PICKLEBALL_SIDEOUT_LOG),
-  racket('pickleball rally', PICKLE, rallyTotals, {}, DOUBLES, L.PICKLEBALL_RALLY_LOG),
+  racket('table tennis', TT, (s, c) => rallyTotals(s, c, 'tabletennis'), {}, SINGLES, L.TT_LOG),
+  racket('squash', SQUASH, (s, c) => rallyTotals(s, c, 'squash'), {}, SINGLES, L.SQUASH_LOG),
+  racket('pickleball side-out doubles', PICKLE, (s, c) => rallyTotals(s, c, 'pickleball'), { scoring: 'sideout' }, DOUBLES, L.PICKLEBALL_SIDEOUT_LOG),
+  racket('pickleball rally', PICKLE, (s, c) => rallyTotals(s, c, 'pickleball'), {}, DOUBLES, L.PICKLEBALL_RALLY_LOG),
 ];
 
 describe('SD-19 · contract: racket sports (clean log + every undo prefix)', () => {

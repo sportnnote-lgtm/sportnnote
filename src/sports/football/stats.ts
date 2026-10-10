@@ -46,8 +46,11 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'minutes', label: 'Minutes', short: 'mins', group: 'playing', format: { unit: 'minutes' } },
     // SD-29: optional grassroots sin-bin (format `sinBinMinutes`)
     { key: 'sinBins', label: 'Sin-bins', short: 'sin-bins', one: 'sin-bin', group: 'discipline' },
-    // team-level match stat (match stats panel), never on a player line
+    // team-level match stats (the comparison panel), never on a player line
     { key: 'corners', label: 'Corners', short: 'corners', one: 'corner', source: 'team' },
+    { key: 'blockedShots', label: 'Blocked shots', short: 'blocked shots', one: 'blocked shot', source: 'team' },
+    { key: 'possession', label: 'Possession', short: 'possession', source: 'team', format: { unit: 'percent' } },
+    { key: 'passAccuracy', label: 'Pass accuracy', short: 'pass accuracy', source: 'team', format: { unit: 'percent' } },
   ],
   sections: [
     { id: 'attack', title: 'Attack', rows: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'shots', 'shotsOnTarget', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed'].map((stat) => ({ stat })) },
@@ -58,6 +61,25 @@ export const footballStats: SportStatSchema<'football'> = {
     { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }] },
   ],
   careerView: 'totals',
+  // SD-23 (FB-09) — the per-player match table: Opta / FIFA match report order
+  box: [{ columns: [
+    { key: 'minutes', abbr: 'MIN', overallOnly: true },
+    { key: 'goals', abbr: 'G', emphasis: true },
+    { key: 'assists', abbr: 'A' },
+    { key: 'shots', abbr: 'SH' },
+    { key: 'shotsOnTarget', abbr: 'SOT' },
+    { key: 'saves', abbr: 'SV' },
+    { key: 'goalsConceded', abbr: 'GA', overallOnly: true },
+    { key: 'fouls', abbr: 'FC', label: 'Fouls committed' },
+    { key: 'yellowCards', abbr: 'YC', label: 'Yellow cards' },
+    { key: 'redCards', abbr: 'RC', label: 'Red cards' },
+  ] }],
+  // the Stats tab's team comparison (labels as the match report reads them)
+  compare: [
+    'shots', 'shotsOnTarget', 'blockedShots', { key: 'possession', overallOnly: true }, 'passes', 'passAccuracy', 'fouls',
+    { key: 'yellowCards', label: 'Yellow cards' }, { key: 'redCards', label: 'Red cards' }, 'offsides', 'corners', 'tackles',
+    'interceptions', 'saves', 'crosses', 'dribbles', 'handballs', 'attackingContributions', 'defensiveContributions',
+  ],
   leaders: ['goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'assists', 'cleanSheets', 'shots', 'shotsOnTarget', 'tackles', 'interceptions', 'saves', 'passes', 'attackingContributions', 'defensiveContributions'],
   headline: ['goals', 'assists', 'shotsOnTarget', 'tackles', 'saves', 'passes'],
   awards: [

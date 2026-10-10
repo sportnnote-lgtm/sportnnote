@@ -43,7 +43,9 @@ So a player's points always include their aces and blocks, everywhere in the app
 - To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
 ## Reading the board and the stats
-On the **Score** tab, "Player stats" has PTS, ACE and BLK columns for each team. From the second set, tap **Overall**, **Set 1**, **Set 2** and so on to filter. Below that, the point log lists every rally with how it was won, the score after it and the player.
+"Player stats" is on the **Score** and **Summary** tabs. "Team stats" compares points, attack points, blocks, aces, opponent errors and serve errors. Each team's table has PTS, ATK (attack points), ACE and BLK per player and a **Totals** row; opponent errors have their own row. From the second set, tap **Set 1**, **Set 2** … to filter. Older matches without point types have no ATK column.
+
+The point log lists every rally with how it was won, the score after it and the player.
 
 ## Sets played
 When you score the first point, the app notes who is on court: the six in the lineup, or the whole matchday squad if no lineup is set. At the end, each player's stats get **Sets played**: every set they were on court for, plus any set in which they scored. Points, aces and blocks per set divide by this, as the FIVB does. Older matches have no sets played, so they stay out of the per-set figures.

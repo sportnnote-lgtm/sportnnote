@@ -14,6 +14,7 @@ export const carromStats: SportStatSchema<'carrom'> = {
   sections: [{ id: 'scoring', title: 'Scoring', rows: [{ stat: 'points' }, { stat: 'boards' }, { stat: 'queens' }] }],
   careerView: 'totals',
   box: [{ columns: ['points', 'boards', 'queens'] }],
+  compare: ['points', 'boards', 'queens'],
   leaders: ['points', 'queens'],
   headline: ['points', 'boards', 'queens'],
   awards: [

@@ -43,6 +43,16 @@ In side-out scoring, a point is credited to the player who served it. That is wh
 
 On the **Score** tab, "Box score" shows each player's points, and the rally log lists every point, side-out and change to server 2.
 
+## Match stats
+The **Score** tab shows a "Match stats" panel once the first rally is played. It compares the two sides row by row, and the chips on top switch between the whole **Match** and each game (**Game 1**, **Game 2**…).
+
+- Side-out scoring shows: rallies won, points on serve, receive rallies won, side-outs, service turns, points per service turn and, in doubles, how often the serve passed to the 2nd server.
+- Rally scoring shows: total points won, and points won on serve and on receive.
+- Both show the most points in a row, the biggest lead, and game points or match points saved when there were any.
+- In doubles, "Service points won, by server" lists each player's own serves, using the same right-court rule as the serving line.
+
+Nothing extra is tapped for these stats. The app works them out from the rally log, so older matches show them too, and a correction updates them straight away.
+
 ## Games and the end of the match
 - A game ends when a team reaches the target (11, 15 or 21) and leads by two, unless the format is win by 1.
 - The team that won the game serves first in the next game, again starting as server 2.

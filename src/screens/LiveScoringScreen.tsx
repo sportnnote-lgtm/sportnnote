@@ -65,6 +65,8 @@ import { MatchSummary } from '../components/MatchSummary';
 import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
+import { MatchBoxScore } from '../components/BoxScore';
+import { matchBoxSource } from '../sports/boxSources';
 import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchPotm, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
@@ -1338,6 +1340,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   // score. Otherwise a host lands on the match view with Scoring one tap away.
   const defaultTab = canScore && (iAmListedScorer || scorerIds.length === 0) ? 'scoring' : contentViews[0].key;
   const activeTab = TABS.some((tb) => tb.key === tab) ? tab : defaultTab;
+  // SD-23: the shared box score source for the Summary tab (undefined: cricket, chess, golf)
+  const summaryBox = activeTab === 'summary' ? matchBoxSource(sport, state, { homeRoster: homeScoreRoster, awayRoster: awayScoreRoster }) : undefined;
 
   // Scoring lock: read it on focus and every 15 s on the Scoring tab; an allowed
   // scorer opening a match nobody is scoring takes it silently (resume = no dialog).
@@ -2289,6 +2293,18 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 potm={potmProp}
               />
               )}
+              {/* SD-23: the same box score (+ team comparison) on every sport's
+                  Summary — cricket keeps its innings scorecard. */}
+              {started && summaryBox ? (
+                <View style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.h3}>Box score</Text>
+                  <MatchBoxScore
+                    sport={sport} source={summaryBox} homeName={homeName} awayName={awayName}
+                    homeColor={homeColor} awayColor={awayColor}
+                    onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
+                  />
+                </View>
+              ) : null}
               {canChangePotm && (homeRoster.length > 0 || awayRoster.length > 0) ? (
                 <Button variant="ghost" label="Change Player of the Match" onPress={() => setPotmOpen(true)} />
               ) : null}

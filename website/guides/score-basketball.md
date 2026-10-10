@@ -37,12 +37,14 @@ Above the scoring panels you see the team fouls for this quarter, for example "T
 
 > **Note:** Matches set up before this update keep the old count, where the bonus showed from the 6th foul and technicals didn't count. Their scores and stats don't change.
 
+## The box score
+It's on the **Score** and **Summary** tabs. "Team stats" compares rebounds, assists, steals, blocks, turnovers, fouls and free throw %. Each team's table has PTS, REB, AST, STL, BLK, TO and PF per player and a **Totals** row; points logged without a player go on a "Team" row. From the 2nd quarter, tap **Q1**, **Q2** … to see one quarter. On a phone the numbers scroll sideways.
+
 ## Minutes and plus/minus
-Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app then follows the five through every **🔀 Substitute**, and the box score adds **MIN** and **+/-**, with a dot by whoever is on court now.
+Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app then follows the five through every **🔀 Substitute**, and the box score adds **MIN** and **+/-** (Overall only), with a dot by whoever is on court now.
 - +/- is the team's points minus the other team's while that player was on court, as in the FIBA box score.
-- MIN is approximate: each sub is placed at the whole minute the scorer clock showed.
-- A player who fouls out or is ejected stops there.
-- Both go on each player's stats at the end. Without a five set there are neither; a first-to-21 game has +/- only.
+- MIN is approximate (subs are placed at the whole minute shown). A first-to-21 game has +/- only.
+- Both go on each player's stats at the end. Without a five set there are neither.
 
 ## Overtime
 If the scores are level at the end of the last quarter, tap the "Start Overtime" button. The score carries on. Tap **End as a draw** only if your event allows draws.

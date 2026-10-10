@@ -155,3 +155,111 @@ export const ctxOf = (players: { home: string[]; away: string[] }) => ({
     away: players.away.map((id) => ({ id, name: id.toUpperCase() })),
   },
 });
+
+// ------------------------------------- SD-14 real-match logs (shared, SD-22) --
+// The reconstructions replayed in tests/replay-racket.test.mts (sources there),
+// exported so the SD-22 serve-stats tests run on the very same logs.
+
+const opp = (s: Side): Side => (s === 'home' ? 'away' : 'home');
+/** Rally scoring: straight runs through the given in-game scores (home first). */
+export function runs(...checkpoints: Array<[number, number]>): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  let h = 0;
+  let a = 0;
+  for (const [H, A] of checkpoints) {
+    for (; h < H; h++) out.push(P('home'));
+    for (; a < A; a++) out.push(P('away'));
+  }
+  return out;
+}
+/** Side-out singles: points per service turn, alternating from `first`. */
+export function singlesTurns(first: Side, pts: number[]): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  let srv = first;
+  pts.forEach((n, i) => {
+    for (let k = 0; k < n; k++) out.push(P(srv));
+    if (i < pts.length - 1) out.push(P(opp(srv)));
+    srv = opp(srv);
+  });
+  return out;
+}
+/** Side-out doubles: team turns ([n] first, then [server 1, server 2]). */
+export function doublesTurns(first: Side, turns: number[][]): ScoreAction[] {
+  const out: ScoreAction[] = [];
+  let srv = first;
+  turns.forEach((t, i) => {
+    t.forEach((n, j) => {
+      for (let k = 0; k < n; k++) out.push(P(srv));
+      const last = i === turns.length - 1 && j === t.length - 1;
+      if (!last) out.push(P(opp(srv)));
+    });
+    srv = opp(srv);
+  });
+  return out;
+}
+/** Padel games: H/A = a love game; h/a = a golden-point game (3-3, then the decider). */
+export function padelGames(seq: string): ScoreAction[] {
+  return [...seq].flatMap((c) => {
+    const w: Side = c.toLowerCase() === 'h' ? 'home' : 'away';
+    if (c === c.toUpperCase()) return tGame(w);
+    return [P('home'), P('away'), P('home'), P('away'), P('home'), P('away'), P(w)];
+  });
+}
+
+/** Squash PSA — Egyptian Open 2024 final, Asal (home) bt Farag 11-3, 13-11, 5-11, 11-8. */
+export const SQUASH_PSA = {
+  cfg: { scoring: 'par', pointsPerGame: 11, winBy: 2, gamesToWin: 3 },
+  log: [
+    ...runs([2, 0], [2, 1], [6, 1], [6, 3], [11, 3]),
+    ...runs([3, 0], [3, 4], [7, 4], [7, 8], [10, 8], [10, 10], [11, 10], [11, 11], [13, 11]),
+    ...runs([1, 0], [1, 3], [4, 3], [4, 8], [5, 8], [5, 11]),
+    ...runs([2, 0], [2, 3], [6, 3], [6, 6], [9, 6], [9, 8], [11, 8]),
+  ],
+};
+/** Squash English — British Open 1993 final, Jansher (home) bt Dittmar 9-6, 9-5, 6-9, 9-2. */
+export const SQUASH_ENGLISH = {
+  cfg: { scoring: 'english', pointsPerGame: 9, winBy: 1, gamesToWin: 3 },
+  log: [
+    { first: 'home' as Side, pts: [2, 1, 0, 3, 3, 2, 4] },
+    { first: 'home' as Side, pts: [1, 2, 3, 0, 2, 3, 3] },
+    { first: 'home' as Side, pts: [2, 0, 1, 4, 3, 2, 0, 3] },
+    { first: 'away' as Side, pts: [1, 4, 1, 5] },
+  ].flatMap((g) => singlesTurns(g.first, g.pts)),
+};
+/** Pickleball PPA side-out doubles — LA Open 2024, Johns (home) bt McGuffin / Martinez Vich. */
+export const PICKLE_SIDEOUT_DOUBLES = {
+  cfg: { scoring: 'sideout', playersPerSide: 2, pointsPerGame: 11, winBy: 2, gamesToWin: 3 },
+  games: [
+    { first: 'home' as Side, turns: [[1], [2, 0], [0, 2], [3, 1], [2, 0], [0, 2], [1, 1], [2, 1]] },
+    { first: 'away' as Side, turns: [[2], [1, 2], [0, 3], [3, 0], [1, 1], [0, 2], [2, 0], [1, 2]] },
+    { first: 'home' as Side, turns: [[3], [1, 2], [0, 1], [2, 0], [2, 2], [1, 1], [0, 1], [2, 0], [1, 1]] },
+    { first: 'home' as Side, turns: [[2], [3, 0], [1, 2], [0, 2], [2, 0], [2, 2], [0, 1], [1, 1]] },
+    { first: 'away' as Side, turns: [[1], [2, 1], [0, 2], [3, 0], [1, 0], [2, 2], [2, 0], [1]] },
+  ],
+  get log() { return this.games.flatMap((g) => doublesTurns(g.first, g.turns)); },
+};
+/** Pickleball MLP rally to 21 — Dallas (home) 21-15. */
+export const PICKLE_RALLY21 = {
+  cfg: { scoring: 'rally', playersPerSide: 1, pointsPerGame: 21, winBy: 2, gamesToWin: 1 },
+  log: runs([4, 0], [4, 3], [9, 3], [9, 8], [14, 8], [14, 12], [18, 12], [18, 15], [21, 15]),
+};
+/** Pickleball singles side-out — PPA OC Cup 2024, Haworth (home) bt Staksrud 9-11, 11-5, 11-7. */
+export const PICKLE_SIDEOUT_SINGLES = {
+  cfg: { scoring: 'sideout', playersPerSide: 1, pointsPerGame: 11, winBy: 2, gamesToWin: 2 },
+  log: [
+    { first: 'home' as Side, pts: [2, 3, 1, 0, 3, 2, 0, 4, 3, 2] },
+    { first: 'away' as Side, pts: [1, 3, 2, 0, 0, 4, 2, 4] },
+    { first: 'home' as Side, pts: [3, 1, 2, 1, 2, 5, 4] },
+  ].flatMap((g) => singlesTurns(g.first, g.pts)),
+};
+/** Padel Premier — Valencia P1 2026 final, Coello/Tapia (home) bt Chingotto/Galán 6-7(4), 6-1, 7-6(5). */
+export const PADEL_VALENCIA = {
+  cfg: { deuce: 'golden', gamesPerSet: 6, setsToWin: 2, decider: 'set', playersPerSide: 2 },
+  log: [
+    ...padelGames('HAHAhAHaHAHA'),
+    P('home'), ...Array(5).fill(P('away')), P('home'), P('home'), P('home'), P('away'), P('away'),
+    ...padelGames('HHAHHHH'),
+    ...padelGames('HAAHAAAHHhAH'),
+    P('home'), ...Array(5).fill(P('away')), ...Array(6).fill(P('home')),
+  ] as ScoreAction[],
+};

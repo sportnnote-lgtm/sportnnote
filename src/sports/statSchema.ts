@@ -182,11 +182,40 @@ export interface SectionDef {
   rows: { stat: string; label?: string }[];
 }
 
-/** A box-score block: ordered columns, optionally titled ("Batting"). */
+/** SD-23 — a box-score column with more than a plain stat key. */
+export interface BoxColumnSpec {
+  /** the stat key; with `pair` / `sum`, a box-only id */
+  key: string;
+  /** header (default: the stat's `abbr`, else its label) */
+  abbr?: string;
+  /** long name for the column key / screen readers (default: the stat's label) */
+  label?: string;
+  /** made-attempted pair ("3-5"): [made key, attempted key] — FGM-A, FTM-A */
+  pair?: [string, string];
+  /** a box-only total of line keys (kabaddi PTS = raid + tackle points) */
+  sum?: string[];
+  /** show the sign (+3 / −2 / 0) — plus / minus */
+  signed?: boolean;
+  /** false = blank in the team totals row (+/-) — default true */
+  total?: boolean;
+  /** the headline column, drawn bold */
+  emphasis?: boolean;
+  /** only on the Overall view, never per period (MIN, +/-: whole-game figures) */
+  overallOnly?: boolean;
+}
+
+/** A box-score block: ordered columns, optionally titled ("Batting"). A column
+ *  is a stat key or a `BoxColumnSpec` (SD-23 — read by src/sports/boxScore.ts). */
 export interface BoxDef {
   title?: string;
-  columns: string[];
+  columns: (string | BoxColumnSpec)[];
 }
+
+/** SD-23 — one row of the team comparison panel: a stat key (line keys are
+ *  summed over the side's box rows, `source: 'team'` keys come from the
+ *  sport's team figures, derived rates are recomputed), with an optional
+ *  label that overrides the stat's own. */
+export type CompareDef = string | { key: string; label?: string; overallOnly?: boolean };
 
 /** A timed / measured event (athletics, swimming, weightlifting …): the mark
  *  that ranks, its unit and which way is better, and how many attempts count. */
@@ -231,6 +260,8 @@ export interface SportStatSchema<S extends string = SportId> {
   careerView?: 'sections' | 'totals' | 'custom';
   /** box-score blocks (the shared box score reads these — SD-23) */
   box?: BoxDef[];
+  /** SD-23 — the team comparison panel's rows, in order */
+  compare?: CompareDef[];
   /** leaderboard categories, in order; the first is the headline leader */
   leaders: string[];
   /** which stats lead a compact one-line summary, in priority order */
@@ -591,7 +622,15 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
   }
   for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));
   for (const sec of schema.sections ?? []) sec.rows.forEach((r) => need(r.stat, `section ${sec.id}`));
-  for (const b of schema.box ?? []) b.columns.forEach((c) => need(c, `box ${b.title ?? ''}`));
+  for (const b of schema.box ?? []) {
+    for (const c of b.columns) {
+      const where = `box ${b.title ?? ''}`;
+      if (typeof c === 'string') { need(c, where); continue; }
+      if (c.pair || c.sum) [...(c.pair ?? []), ...(c.sum ?? [])].forEach((k) => need(k, where));
+      else need(c.key, where);
+    }
+  }
+  for (const c of schema.compare ?? []) need(typeof c === 'string' ? c : c.key, 'compare');
   schema.leaders.forEach((k) => need(k, 'leaders'));
   schema.headline.forEach((k) => need(k, 'headline'));
   for (const a of schema.awards) {

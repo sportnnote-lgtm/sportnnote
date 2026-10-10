@@ -19,6 +19,10 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     // absolutely by statTotals): FIVB's per-set denominator. A line without it
     // (older matches) stays out of the per-set figures. Display is SD-27 / SD-81.
     { key: 'setsPlayed', label: 'Sets played', short: 'sets', one: 'set', abbr: 'SP', group: 'record' },
+    // SD-23 — team-level (the comparison panel): points the side got from the
+    // opponent's errors, and its own service errors
+    { key: 'oppErrors', label: 'Opp. errors', short: 'opp. errors', one: 'opp. error', source: 'team' },
+    { key: 'serveErrors', label: 'Serve errors', short: 'serve errors', one: 'serve error', source: 'team', format: { unit: 'count', better: 'lower' } },
     { key: 'pointsPerSet', label: 'Points per set', abbr: 'PTS/S', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'points', sets: 'setsPlayed', dp: 2 } },
     { key: 'acesPerSet', label: 'Aces per set', abbr: 'ACE/S', source: 'derived', group: 'serve', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'aces', sets: 'setsPlayed', dp: 2 } },
     { key: 'blocksPerSet', label: 'Blocks per set', abbr: 'BLK/S', source: 'derived', group: 'block', format: { unit: 'decimal', dp: 2 }, agg: { kind: 'perSet', key: 'blocks', sets: 'setsPlayed', dp: 2 } },
@@ -29,7 +33,8 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     { id: 'block', title: 'Block', rows: [{ stat: 'blocks' }] },
   ],
   careerView: 'totals',
-  box: [{ columns: ['points', 'attackPoints', 'aces', 'blocks'] }],
+  box: [{ columns: [{ key: 'points', emphasis: true }, 'attackPoints', 'aces', 'blocks'] }],
+  compare: ['points', 'attackPoints', 'blocks', 'aces', 'oppErrors', 'serveErrors'],
   leaders: ['points', 'aces', 'blocks'],
   headline: ['points', 'aces'],
   awards: [

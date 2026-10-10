@@ -25,6 +25,9 @@ export const basketballStats: SportStatSchema<'basketball'> = {
     { key: 'ppg', label: 'Points per game', abbr: 'PPG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'points', dp: 1 } },
     { key: 'rpg', label: 'Rebounds per game', abbr: 'RPG', source: 'derived', group: 'defence', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'rebounds', dp: 1 } },
     { key: 'apg', label: 'Assists per game', abbr: 'APG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'assists', dp: 1 } },
+    // SD-23 — the team comparison's FT% (a rate recomputed over the side)
+    { key: 'freeThrowPct', label: 'Free throw %', abbr: 'FT%', source: 'derived', group: 'scoring', format: { unit: 'percent', dp: 0 },
+      agg: { kind: 'rate', num: 'freeThrowsMade', den: 'freeThrowsAtt', scale: 100, dp: 0 } },
     { key: 'doubleDoubles', label: 'Double-doubles', short: 'double-doubles', one: 'double-double', abbr: 'DD', source: 'derived', group: 'scoring',
       agg: { kind: 'countIf', keys: ['points', 'rebounds', 'assists', 'steals', 'blocks'], atLeast: 2, gte: 10 } },
   ],
@@ -34,8 +37,15 @@ export const basketballStats: SportStatSchema<'basketball'> = {
     { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'turnovers' }, { stat: 'ejections' }] },
   ],
   careerView: 'totals',
-  // today's BoxScore.tsx columns (FG / 3P / FT splits come with SD-40)
-  box: [{ columns: ['points', 'rebounds', 'assists', 'fouls'] }],
+  // SD-23 — the shared box score's columns (FG / 3P / FT splits, OREB / DREB
+  // and EFF come with SD-40). MIN and +/- only once the five was set (SD-29),
+  // and only on the Overall view.
+  box: [{ columns: [
+    { key: 'minutes', overallOnly: true },
+    'points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls',
+    { key: 'plusMinus', signed: true, total: false, overallOnly: true },
+  ] }],
+  compare: ['rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls', 'freeThrowPct'],
   leaders: ['points', 'rebounds', 'assists', 'steals', 'blocks'],
   headline: ['points', 'rebounds', 'assists'],
   awards: [

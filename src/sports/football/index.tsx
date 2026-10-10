@@ -18,7 +18,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
-import { Button, SelectChip, TextField } from '../../components/ui';
+import { Button, TextField } from '../../components/ui';
 import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
@@ -26,6 +26,8 @@ import { emptyFormation } from './formation';
 import { isGoalkeeper } from './keepers';
 import { footballTotals, footballLiveField, liveClockMinutes } from './fieldTime';
 import { FieldBanner } from '../FieldBanner';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { footballBox } from '../boxSources';
 import { useSpeech } from '../../core/speech';
 import { normalizeCommand as llmNormalize, enabled as llmEnabled } from '../../core/voiceLLM';
 import { parseIntent, parseGoalType, matchPlayer, matchTeam, isNoAssist, isYes, isNo, deburr } from './voiceCommands';
@@ -39,7 +41,7 @@ import { footballTickerDetail, footballTickerFlash } from './ticker';
 import {
   type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
-  clockLabel, clockTime, possessionPct, cardCount, footballStats, FOOTBALL_LIVE_SETTINGS,
+  clockLabel, clockTime, possessionPct, cardCount, FOOTBALL_LIVE_SETTINGS,
   minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, type XiStamp,
 } from "./engine";
 
@@ -1129,127 +1131,6 @@ const LiveClock: NonNullable<SportPlugin<FootballState>['LiveClock']> = ({ state
   );
 };
 
-/** Timeline only — the pitch/lineups are rendered generically by the live
- *  screen from `plugin.Court`, so every sport's layout shows the same way. */
-/** One comparison row: the higher value gets a colored pill (FIFA-style). A stat
- *  the scorer isn't tracking this match is shown muted with a ☁ "not tracked" tag
- *  rather than hidden — so viewers see the same coverage idea as on profiles. */
-function StatRow({ label, home, away, homeColor, awayColor, tracked }: { label: string; home: string; away: string; homeColor: string; awayColor: string; tracked: boolean }) {
-  if (!tracked) {
-    return (
-      <View style={sv.statRow}>
-        <Text style={[sv.statLabel, sv.labelMuted, { textAlign: 'left' }]}>{label}</Text>
-        <Text style={sv.notTracked}>☁ not tracked</Text>
-      </View>
-    );
-  }
-  const hn = parseFloat(home), an = parseFloat(away);
-  const lead = isNaN(hn) || isNaN(an) || hn === an ? null : hn > an ? 'home' : 'away';
-  // Proportional comparison bar: each side's share of the two values, so the
-  // balance of play reads at a glance (5 shots vs 3 → a 5:3 split, 60% vs 40%
-  // possession → 60:40). Neutral when there's nothing yet (0–0).
-  const h = isNaN(hn) ? 0 : hn, a = isNaN(an) ? 0 : an;
-  const total = h + a;
-  const Cell = ({ v, side }: { v: string; side: 'home' | 'away' }) => (
-    <View style={[sv.cell, lead === side && { backgroundColor: side === 'home' ? homeColor : awayColor }]}>
-      <Text style={[sv.cellText, lead === side && sv.cellTextLead]}>{v}</Text>
-    </View>
-  );
-  return (
-    <View style={sv.statBlock}>
-      <View style={sv.statRow}>
-        <Cell v={home} side="home" />
-        <Text style={sv.statLabel}>{label}</Text>
-        <Cell v={away} side="away" />
-      </View>
-      <View style={sv.bar}>
-        {total > 0 ? (
-          <>
-            <View style={{ flex: h, backgroundColor: homeColor }} />
-            <View style={{ flex: a, backgroundColor: awayColor }} />
-          </>
-        ) : (
-          <View style={{ flex: 1, backgroundColor: theme.colors.surfaceAlt }} />
-        )}
-      </View>
-    </View>
-  );
-}
-
-const StatsComparison = ({ s, homeName, awayName, homeColor, awayColor }: { s: FootballState; homeName: string; awayName: string; homeColor: string; awayColor: string }) => {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!s.startedAt) return;
-    const id = setInterval(() => tick((n) => n + 1), 2000);
-    return () => clearInterval(id);
-  }, [s.startedAt]);
-  // Split the table into Overall / 1st half / 2nd half. Events carry their half,
-  // so per-half totals are just the same aggregation over a filtered event set.
-  const [scope, setScope] = useState<'all' | 1 | 2 | 3 | 4>('all');
-  // Only offer the period split once a 2nd period has actually started — while a
-  // match is still in the 1st half, "Overall" and "1st half" are identical, so the
-  // toggle (and a dead all-zeros "2nd half" filter) would just be noise. Each ET
-  // period's chip appears as it's played. Mirrors the basketball/kabaddi toggles.
-  const periods: ('all' | 1 | 2 | 3 | 4)[] = s.half >= 2
-    ? ['all', 1, 2, ...(s.half >= 3 ? [3 as const] : []), ...(s.half >= 4 ? [4 as const] : [])]
-    : [];
-  const scopeLabel = (k: 'all' | 1 | 2 | 3 | 4) =>
-    k === 'all' ? 'Overall' : k === 1 ? '1st half' : k === 2 ? '2nd half' : k === 3 ? 'ET 1' : 'ET 2';
-  const active: 'all' | 1 | 2 | 3 | 4 = periods.includes(scope) ? scope : 'all';
-  const inScope = (h?: 1 | 2 | 3 | 4) => active === 'all' || h === active;
-  const scoped = active === 'all'
-    ? s
-    : { ...s, stats: s.stats.filter((e) => inScope(e.half)), events: s.events.filter((e) => inScope(e.half)) };
-  const { totals, possession, passAcc } = footballStats(scoped, Date.now());
-  const t = s.track;
-  const rows: { label: string; home: string; away: string; tracked: boolean; overallOnly?: boolean }[] = [
-    { label: 'Shots', home: `${totals.home.shots}`, away: `${totals.away.shots}`, tracked: t.shots },
-    { label: 'Shots on target', home: `${totals.home.shotsOnTarget}`, away: `${totals.away.shotsOnTarget}`, tracked: t.shots },
-    { label: 'Blocked shots', home: `${totals.home.blockedShots}`, away: `${totals.away.blockedShots}`, tracked: t.shots },
-    // Possession is time-based (cumulative), so it's only meaningful over the whole match.
-    { label: 'Possession', home: `${possession.home}%`, away: `${possession.away}%`, tracked: t.possession, overallOnly: true },
-    { label: 'Passes', home: `${totals.home.passes}`, away: `${totals.away.passes}`, tracked: t.passes },
-    { label: 'Pass accuracy', home: `${passAcc.home}%`, away: `${passAcc.away}%`, tracked: t.passes },
-    { label: 'Fouls', home: `${totals.home.fouls}`, away: `${totals.away.fouls}`, tracked: t.fouls },
-    { label: 'Yellow cards', home: `${totals.home.yellow}`, away: `${totals.away.yellow}`, tracked: t.cards },
-    { label: 'Red cards', home: `${totals.home.red}`, away: `${totals.away.red}`, tracked: t.cards },
-    { label: 'Offsides', home: `${totals.home.offsides}`, away: `${totals.away.offsides}`, tracked: t.offsides },
-    { label: 'Corners', home: `${totals.home.corners}`, away: `${totals.away.corners}`, tracked: t.corners },
-    { label: 'Tackles', home: `${totals.home.tackles}`, away: `${totals.away.tackles}`, tracked: t.tackles },
-    { label: 'Interceptions', home: `${totals.home.interceptions}`, away: `${totals.away.interceptions}`, tracked: t.interceptions },
-    { label: 'Saves', home: `${totals.home.saves}`, away: `${totals.away.saves}`, tracked: t.saves },
-    { label: 'Crosses', home: `${totals.home.crosses}`, away: `${totals.away.crosses}`, tracked: t.crosses },
-    { label: 'Dribbles', home: `${totals.home.dribbles}`, away: `${totals.away.dribbles}`, tracked: t.dribbles },
-    { label: 'Handballs', home: `${totals.home.handballs}`, away: `${totals.away.handballs}`, tracked: t.handball },
-    { label: 'Attacking plays', home: `${totals.home.attackContributions}`, away: `${totals.away.attackContributions}`, tracked: t.attackContribution },
-    { label: 'Defensive plays', home: `${totals.home.defenceContributions}`, away: `${totals.away.defenceContributions}`, tracked: t.defenceContribution },
-  ];
-  // Show only the stats this match is capturing; list the rest compactly below so
-  // the comparison isn't padded with a stack of "☁ not tracked" rows.
-  const shownRows = rows.filter((r) => (active === 'all' || !r.overallOnly) && r.tracked);
-  const untracked = rows.filter((r) => !r.tracked).map((r) => r.label);
-  return (
-    <View style={{ gap: theme.spacing(2) }}>
-      {periods.length > 0 ? (
-        <View style={sv.scopeRow}>
-          {periods.map((key) => (
-            <SelectChip key={String(key)} label={scopeLabel(key)} active={active === key} onPress={() => setScope(key)} />
-          ))}
-        </View>
-      ) : null}
-      <View style={sv.head}>
-        <Text style={[sv.headTeam, { color: homeColor }]} numberOfLines={1}>{homeName}</Text>
-        <Text style={sv.headTitle}>TEAM STATS</Text>
-        <Text style={[sv.headTeam, { color: awayColor, textAlign: 'right' }]} numberOfLines={1}>{awayName}</Text>
-      </View>
-      {shownRows.map((r) => <StatRow key={r.label} label={r.label} home={r.home} away={r.away} homeColor={homeColor} awayColor={awayColor} tracked />)}
-      {untracked.length ? (
-        <Text style={sv.coverageHint}>☁ Not tracked: {untracked.join(', ')} — turn on in Scoring settings (Info tab).</Text>
-      ) : null}
-    </View>
-  );
-};
-
 /** Football contributes Lineups / Stats / Timeline as their own top-level tabs on
  *  the live screen (the screen calls LiveExtras with each view's key). */
 const FOOTBALL_VIEWS = [
@@ -1285,7 +1166,8 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
     return <Timeline events={s.events} stats={s.stats} halfMinutes={s.halfMinutes} etMinutes={s.etMinutes} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
   }
   if (view === 'stats') {
-    return <StatsComparison s={s} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} />;
+    // SD-23: the team comparison + each side's player box score (FB-09)
+    return <MatchBoxScore sport="football" source={footballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onPlayer={onPlayer} />;
   }
   return (
     <LineupView
@@ -1297,23 +1179,6 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
     />
   );
 };
-
-const sv = StyleSheet.create({
-  scopeRow: { flexDirection: 'row', justifyContent: 'center', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing(2), marginBottom: theme.spacing(1) },
-  headTeam: { flex: 1, fontSize: theme.font.small, fontWeight: '800' },
-  headTitle: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
-  statBlock: { gap: theme.spacing(1), paddingVertical: theme.spacing(1.5) },
-  statRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bar: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt },
-  statLabel: { flex: 1, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
-  cell: { minWidth: 48, paddingVertical: 4, paddingHorizontal: 10, borderRadius: theme.radius.pill, alignItems: 'center' },
-  cellText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
-  cellTextLead: { color: '#06120D', fontWeight: '900' },
-  labelMuted: { color: theme.colors.textMuted },
-  notTracked: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', fontStyle: 'italic' },
-  coverageHint: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontStyle: 'italic', marginTop: theme.spacing(2), textAlign: 'center' },
-});
 
 /** Football's pitch as the generic Court (positions mirrored per side). */
 const Court: NonNullable<SportPlugin<FootballState>['Court']> = ({ homeLineup, awayLineup, homeColor, awayColor }) => (

@@ -12,9 +12,11 @@ import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { courtFormation, makeCourt } from '../courts';
 import { pointVoice } from '../voiceParsers';
-import { BadmintonBoxScore } from './BoxScore';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { badmintonBox } from '../boxSources';
 import { SetLineBoard } from '../SetLineBoard';
 import { RallyPointEditor } from '../RallyPointEditor';
+import { MatchStatsPanel } from '../MatchStatsPanel';
 import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, type BadmintonState } from './engine';
 import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
@@ -71,9 +73,6 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
 
 const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as BadmintonState;
-  // Games played so far (completed + the one in progress) drive the box-score toggle.
-  const currentGame = s.games.length + 1;
-  const periods = Array.from({ length: s.ended ? s.games.length : currentGame }, (_, i) => ({ value: i + 1, label: `Game ${i + 1}` }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Games</Text>
@@ -84,8 +83,10 @@ const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ st
           s.games.map((g, i) => <Text key={i} style={ctrl.gameChip}>G{i + 1}: {g[0]}-{g[1]}</Text>)
         )}
       </View>
+      {/* SD-22: serve / return figures replayed from the point log, per set */}
+      <MatchStatsPanel sport="badminton" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
       <Text style={ctrl.label}>Player stats</Text>
-      <BadmintonBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <MatchBoxScore sport="badminton" source={badmintonBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Rally log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No rallies yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>

@@ -31,6 +31,9 @@ You score a football match on one phone, one tap at a time. The app runs the clo
 - Added time shows as 45+2' or 90+3', never as 47' or 93'.
 - Older matches keep the minutes they were stamped with.
 
+## Team stats and the box score
+On the **Stats** and **Summary** tabs, "Team stats" compares shots, possession, fouls, cards, corners and the rest ("Not tracked" lists what's switched off). Each team's box score lists starters (*) then substitutes: MIN, G, A, SH (goals included), SOT, SV, GA (keepers), FC, YC, RC and a **Totals** row. Stats you don't track are left out. **Show bench** adds unused players. From the 2nd half, tap **1st half** or **2nd half**; MIN and GA are Overall only.
+
 ## Minutes played and sin-bins
 - At full time every player who took the field gets their minutes: starters from kick-off, substitutes from the minute they came on, until they went off or were sent off. Only normal time and extra time count (90, or 120), never added time.
 - Minutes come from the lineup, so set it before kick-off. A team with no lineup gets no minutes.

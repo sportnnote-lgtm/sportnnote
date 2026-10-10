@@ -43,7 +43,7 @@ With Pro rules on, after a team makes two empty raids in a row, its next raid is
 ## Reading the board and the stats
 The scoreboard shows each team's total and a column for each half (H1, H2, then ET1 and ET2 in extra time). Raid, tackle and all-out points sit with the team that scored them, so the halves add up to the total.
 
-On the **Score** tab, the timeline lists every raid by minute. Under "Player stats", each team has RAID, TCKL and PTS columns. From the second half, tap **Overall**, **1st half** or **2nd half** to filter.
+On the **Score** tab, the timeline lists every raid by minute. "Player stats" is below it and on the **Summary** tab: "Team stats" compares raid, tackle and all-out points and raids, then each team has RAID, TKL and PTS per player and a **Totals** row. From the second half, tap **1st half** or **2nd half** to filter.
 
 ## Fix a mistake
 1. On the **Scoring** tab, under "Correct the timeline", tap **Edit**.

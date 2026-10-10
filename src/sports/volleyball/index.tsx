@@ -14,7 +14,8 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import { volleyballVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
-import { VolleyballBoxScore } from './BoxScore';
+import { MatchBoxScore } from '../../components/BoxScore';
+import { volleyballBox } from '../boxSources';
 import { volleyballTotals } from './fieldTime';
 import { mergeTotals, volleyballSetRecord } from '../racketTotals';
 import { SetLineBoard } from '../SetLineBoard';
@@ -123,9 +124,6 @@ const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, tim
 
 const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as VolleyballState;
-  // Sets played so far (completed + the one in progress) drive the box-score toggle.
-  const currentSet = s.setsWon.home + s.setsWon.away + 1;
-  const periods = Array.from({ length: s.ended ? s.sets.length : currentSet }, (_, i) => ({ value: i + 1, label: `Set ${i + 1}` }));
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -137,7 +135,7 @@ const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ s
         )}
       </View>
       <Text style={ctrl.label}>Player stats</Text>
-      <VolleyballBoxScore events={s.events} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} periods={periods} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <MatchBoxScore sport="volleyball" source={volleyballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
