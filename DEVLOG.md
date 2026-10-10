@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-18: each sport's standings columns
+
+- **Per-sport columns:** standings now show each sport's own columns (GD; PF/PA/±; Sets/SR/PR; SD;
+  G±/P±; S±/S%/G%; NRR; SB/Buchholz), with a "Player" header for singles.
+- **On phones:** a fixed name column with scrolling numbers.
+- **Under the table:** a key and the tie-break order in words.
+- **Kabaddi** ties read "T".
+- **Tests:** tsc + 1269.
+
+---
+
 ### 2026-10-10 — Sport depth SD-25: split a player's career by format, singles/doubles, season, opponent…
 
 - **Context per line:** each stat line gets a context derived from its match and tournament: cricket

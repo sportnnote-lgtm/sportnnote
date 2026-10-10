@@ -2,6 +2,21 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-18: standings columns per sport — DONE (a232b7b, 2026-10-10)
+- **Built:** pure `standingsColumns.ts` (`tableColumns`, `columnsConfig`, `tieBreakNote`); PhaseTable rebuilt on it; a "Player" / "Pair" / "Team" header; on phones, a fixed name column with scrolling numbers below 64 px of name width; a column key and tie-break note under the table; the compact LeagueTable gains an extras line.
+- **Columns:**
+  - football / hockey / handball: GD (+ FP);
+  - basketball: PF PA ±;
+  - volleyball: Sets SR PR;
+  - kabaddi: T SD (+ PF);
+  - games sports: G± P±;
+  - tennis / padel: S± G± (+ S% G%);
+  - cricket: NRR (always shown now);
+  - chess: SB (+ registered tie-break columns such as BH).
+- **Kabaddi** tables now say T, not D.
+- No migration. Tests: 25 new · 1269 total · demo 8093.
+- Not verified: a badminton singles event with results (no demo data); cricket for non-managers.
+
 ## SD-25: line context and career splits — DONE (9eaf301, 2026-10-10)
 - **Built:** pure `lineContext` (cricket format from the preset or overs / ball / players, singles / doubles, tournament vs friendly, season, opponent, chess colour and time control, venue, home/away). Schema `splits`. Profile filter chips that recompute career, record and history with no extra network calls.
 - No migration. Tests: 19 new · 1244 total · demo 8093 (cricket by format, badminton singles / doubles, chess by colour).
