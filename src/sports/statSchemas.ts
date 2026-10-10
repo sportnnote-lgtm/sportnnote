@@ -87,7 +87,7 @@ export function mvpWeights(sport: SportId): Record<string, number> {
 
 /** Leaderboard categories in order ({ key, label }). */
 export const leaderCategories = (sport: SportId): { key: string; label: string }[] =>
-  (statSchema(sport)?.leaders ?? []).map((key) => ({ key, label: labelLong(key, sport) }));
+  (statSchema(sport)?.leaders ?? []).map((key) => ({ key, label: statDef(key, sport)?.leaderLabel ?? labelLong(key, sport) }));
 
 /** Award definitions for the per-match summary / the tournament slots. */
 export const matchAwards = (sport: SportId): AwardDef[] => (statSchema(sport)?.awards ?? []).filter((a) => a.match !== false);

@@ -35,7 +35,10 @@ export function StatLeaderRail({
     >
       {categories.map((cat) => (
         <View key={cat.key} style={[st.card, { width: cardW }]}>
-          <Text style={st.cardTitle}>{cat.label}</Text>
+          <View style={st.titleRow}>
+            <Text style={st.cardTitle} numberOfLines={1}>{cat.label}</Text>
+            {cat.qualifier ? <Text style={st.qualifier} numberOfLines={1}>{cat.qualifier}</Text> : null}
+          </View>
           {cat.leaders.slice(0, topN).map((l, i) => (
             <TouchableOpacity accessibilityRole="button"
               key={l.playerId}
@@ -51,7 +54,7 @@ export function StatLeaderRail({
                   <Text style={st.coverage} numberOfLines={1}>☁ {l.trackedGames} of {l.totalGames} games</Text>
                 ) : null}
               </View>
-              <Text style={st.value}>{l.value}</Text>
+              <Text style={st.value}>{l.display ?? l.value}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -70,7 +73,10 @@ const st = StyleSheet.create({
     padding: theme.spacing(4),
     gap: theme.spacing(1),
   },
-  cardTitle: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '800', marginBottom: theme.spacing(2) },
+  titleRow: { marginBottom: theme.spacing(2), gap: 2 },
+  cardTitle: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '800' },
+  // SD-16: the minimum to rank on a rate leaderboard ("min 30 balls")
+  qualifier: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   rankCell: { width: 24, textAlign: 'center', fontSize: theme.font.body, fontWeight: '800', color: theme.colors.textMuted },

@@ -5,7 +5,8 @@
  */
 import type { Match, Player, SportId, StatLine } from '../core/types';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
-import { STAT_SPORTS, leaderCategories, eligibilityOf } from '../sports/statSchemas.ts';
+import { STAT_SPORTS, leaderCategories, eligibilityOf, statSchema } from '../sports/statSchemas.ts';
+import { rankPlayers, statDefIn, qualifierOf, qualifierText, type Qualifier, type StatDef } from '../sports/statSchema.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -593,53 +594,67 @@ export interface StatLeader {
   name: string;
   houseName?: string;
   value: number;
+  /** the figure as shown when it isn't a plain count ("54*", "3/12", "7.25") */
+  display?: string;
   /** games in which this stat was tracked (≤ games played) */
   trackedGames?: number;
   /** total games the player featured in this sport */
   totalGames?: number;
+  /** a single-match figure (highest score, best bowling): the match it came from */
+  matchId?: string;
 }
 
-/** Top-N players by a single stat key in a sport. Also records, per player, how
- *  many of their games actually tracked this stat (so a leaderboard can flag a
- *  total that spans fewer games — see the per-game scoring settings). */
-export function leadersByKey(lines: StatLine[], players: Player[], sport: SportId, key: string, limit = 10): StatLeader[] {
+/** Top-N players by any stat of the sport's schema (SD-16): totals, counts,
+ *  single-match highs, best figures, rates with their qualifier, per-game /
+ *  per-set — via the aggregate engine's `rankPlayers`. Also records, per
+ *  player, how many of their games actually tracked the stat (so a
+ *  leaderboard can flag a total that spans fewer games — see the per-game
+ *  scoring settings). A key the schema doesn't declare ranks as a total. */
+export function leadersByKey(
+  lines: StatLine[], players: Player[], sport: SportId, key: string, limit = 10,
+  opts: { qualifier?: Qualifier | null } = {},
+): StatLeader[] {
   const byId = new Map(players.map((p) => [p.id, p] as const));
-  const totals = new Map<string, number>();
-  const totalGames = new Map<string, number>();
-  const trackedGames = new Map<string, number>();
-  for (const l of lines) {
-    if (l.sport !== sport) continue;
-    totals.set(l.playerId, (totals.get(l.playerId) ?? 0) + (l.stats[key] ?? 0));
-    totalGames.set(l.playerId, (totalGames.get(l.playerId) ?? 0) + 1);
-    if (l.tracked ? l.tracked.includes(key) : true) trackedGames.set(l.playerId, (trackedGames.get(l.playerId) ?? 0) + 1);
-  }
+  const schema = statSchema(sport);
+  const mine = lines.filter((l) => l.sport === sport);
+  const def: StatDef = (schema && statDefIn(schema, key)) || { key, label: key };
   // SD-09: football clean sheets rank goalkeepers only (schema `eligible`) — older clean sheets
   // credited to defenders stay on their lines until the stat backfill.
   const keepers = eligibilityOf(sport, key) === 'goalkeeper'
-    ? new Set(lines.filter((l) => l.sport === sport && (
-        isGoalkeeper(byId.get(l.playerId)?.sportDetails?.football?.position) || (l.stats && 'goalsConceded' in l.stats)
-      )).map((l) => l.playerId))
+    ? new Set(mine.filter((l) =>
+        isGoalkeeper(byId.get(l.playerId)?.sportDetails?.football?.position) || (l.stats && 'goalsConceded' in l.stats),
+      ).map((l) => l.playerId))
     : null;
-  return [...totals.entries()]
-    .filter(([id, v]) => v > 0 && (!keepers || keepers.has(id)))
-    .map(([id, value]) => ({
-      playerId: id, name: byId.get(id)?.fullName ?? 'Player', houseName: byId.get(id)?.houseName, value,
-      trackedGames: trackedGames.get(id) ?? 0, totalGames: totalGames.get(id) ?? 0,
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
+  const ranked = rankPlayers(schema ?? { sport, stats: [def], leaders: [], headline: [], awards: [] }, def, mine, {
+    qualifier: opts.qualifier, limit, eligible: keepers ? (id) => keepers.has(id) : undefined,
+  });
+  const plainCount = (def.agg?.kind ?? 'sum') === 'sum' || def.agg?.kind === 'countIf';
+  return ranked.map((r) => ({
+    playerId: r.playerId, name: byId.get(r.playerId)?.fullName ?? 'Player', houseName: byId.get(r.playerId)?.houseName,
+    value: r.value,
+    display: plainCount && r.text === String(r.value) ? undefined : r.text,
+    trackedGames: r.trackedGames, totalGames: r.totalGames,
+    matchId: r.line?.matchId || undefined,
+  }));
 }
 
 export interface LeaderCategory {
   key: string;
   label: string;
   leaders: StatLeader[];
+  /** the minimum to rank ("min 30 balls faced"), when the stat has one */
+  qualifier?: string;
 }
 
 /** Every leaderboard category for a sport, each with its ranked players. */
 export function categoryLeaders(lines: StatLine[], players: Player[], sport: SportId): LeaderCategory[] {
+  const schema = statSchema(sport);
   return STAT_CATEGORIES[sport]
-    .map((c) => ({ key: c.key, label: c.label, leaders: leadersByKey(lines, players, sport, c.key) }))
+    .map((c) => {
+      const def = schema && statDefIn(schema, c.key);
+      const qualifier = schema && def ? qualifierText(schema, def, qualifierOf(def)) : undefined;
+      return { key: c.key, label: c.label, leaders: leadersByKey(lines, players, sport, c.key), ...(qualifier ? { qualifier } : {}) };
+    })
     .filter((c) => c.leaders.length > 0);
 }
 

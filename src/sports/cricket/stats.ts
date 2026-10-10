@@ -16,6 +16,23 @@ const n = (l: StatLine, k: string) => Number(l.stats?.[k] ?? 0) || 0;
  *  `runs` key was credited at least one ball faced.) */
 export const batted = (l: StatLine): boolean => (hasKey(l, 'innings') ? n(l, 'innings') > 0 : hasKey(l, 'runs'));
 
+/**
+ * SD-16 — minimums before a rate ranks on a tournament leaderboard (careers
+ * always show the figure). Sized for school cricket, where a T20 bowler has 4
+ * overs and a tournament is 3–5 matches:
+ *   - batting average: 3 completed-data innings (and at least one dismissal —
+ *     an average needs outs);
+ *   - strike rate: 30 balls faced (≈ 2–3 innings of a middle-order batter);
+ *   - economy: 10 overs = 60 balls (≈ 3 full T20 spells).
+ * The ICC uses bigger numbers for internationals; an organiser override is
+ * SD-38.
+ */
+export const QUALIFIERS = {
+  avg: { games: 3, note: 'min 3 innings' },
+  sr: { den: 30, note: 'min 30 balls' },
+  econ: { den: 60, note: 'min 10 overs' },
+} as const;
+
 export const cricketStats: SportStatSchema<'cricket'> = {
   sport: 'cricket',
   filters: {
@@ -34,14 +51,14 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { key: 'ballsFaced', label: 'Balls faced', short: 'balls faced', one: 'ball faced', abbr: 'B', group: 'batting' },
     { key: 'fours', label: '4s', abbr: '4s', group: 'batting' },
     { key: 'sixes', label: '6s', abbr: '6s', group: 'batting' },
-    { key: 'highest', label: 'Highest', abbr: 'HS', source: 'derived', group: 'batting', format: { unit: 'figure' },
+    { key: 'highest', label: 'Highest', leaderLabel: 'Highest score', abbr: 'HS', source: 'derived', group: 'batting', format: { unit: 'figure' },
       agg: { kind: 'best', over: 'batted', by: [{ key: 'runs', better: 'higher' }, { key: 'notOut', better: 'higher' }], render: (s) => `${Number(s.runs ?? 0) || 0}${(Number(s.notOut ?? 0) || 0) > 0 ? '*' : ''}` } },
-    { key: 'avg', label: 'Batting average', abbr: 'Avg', source: 'derived', group: 'batting', format: { unit: 'decimal', dp: 2 },
-      agg: { kind: 'rate', num: 'runs', den: ['innings', '-notOut'], over: 'full' } },
-    { key: 'sr', label: 'Strike rate', abbr: 'SR', source: 'derived', group: 'batting', format: { unit: 'decimal', dp: 2 },
-      agg: { kind: 'rate', num: 'runs', den: 'ballsFaced', scale: 100, over: 'full' } },
-    { key: 'fifties', label: '50s', source: 'derived', group: 'batting', agg: { kind: 'countIf', key: 'runs', gte: 50, lt: 100, over: 'batted' } },
-    { key: 'hundreds', label: '100s', source: 'derived', group: 'batting', agg: { kind: 'countIf', key: 'runs', gte: 100, over: 'batted' } },
+    { key: 'avg', label: 'Batting average', leaderLabel: 'Best batting average', abbr: 'Avg', source: 'derived', group: 'batting', format: { unit: 'decimal', dp: 2 },
+      agg: { kind: 'rate', num: 'runs', den: ['innings', '-notOut'], over: 'full', qualifier: QUALIFIERS.avg }, tieBreak: [{ key: 'runs', better: 'higher' }] },
+    { key: 'sr', label: 'Strike rate', leaderLabel: 'Best strike rate', abbr: 'SR', source: 'derived', group: 'batting', format: { unit: 'decimal', dp: 2 },
+      agg: { kind: 'rate', num: 'runs', den: 'ballsFaced', scale: 100, over: 'full', qualifier: QUALIFIERS.sr }, tieBreak: [{ key: 'runs', better: 'higher' }] },
+    { key: 'fifties', label: '50s', leaderLabel: 'Most 50s', source: 'derived', group: 'batting', agg: { kind: 'countIf', key: 'runs', gte: 50, lt: 100, over: 'batted' }, tieBreak: [{ key: 'runs', better: 'higher' }] },
+    { key: 'hundreds', label: '100s', leaderLabel: 'Most 100s', source: 'derived', group: 'batting', agg: { kind: 'countIf', key: 'runs', gte: 100, over: 'batted' }, tieBreak: [{ key: 'runs', better: 'higher' }] },
     // ── bowling
     { key: 'wickets', label: 'Wickets', short: 'wkts', abbr: 'W', group: 'bowling', weight: 18, matchSummary: true },
     { key: 'ballsBowled', label: 'Balls bowled', short: 'balls bowled', one: 'ball bowled', group: 'bowling', agg: { kind: 'sum', over: 'bowled' } },
@@ -51,13 +68,13 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { key: 'dots', label: 'Dots', short: 'dots', one: 'dot', group: 'bowling' },
     { key: 'wides', label: 'Wides', short: 'wides', one: 'wide', group: 'bowling' },
     { key: 'noBalls', label: 'No balls', short: 'no balls', one: 'no ball', group: 'bowling' },
-    { key: 'econ', label: 'Economy', abbr: 'Econ', source: 'derived', group: 'bowling', format: { unit: 'decimal', dp: 2, better: 'lower' },
-      agg: { kind: 'rate', num: 'runsConceded', den: 'ballsBowled', scale: 6, over: 'bowled' } },
+    { key: 'econ', label: 'Economy', leaderLabel: 'Best economy', abbr: 'Econ', source: 'derived', group: 'bowling', format: { unit: 'decimal', dp: 2, better: 'lower' },
+      agg: { kind: 'rate', num: 'runsConceded', den: 'ballsBowled', scale: 6, over: 'bowled', qualifier: QUALIFIERS.econ }, tieBreak: [{ key: 'ballsBowled', better: 'higher' }] },
     { key: 'bowlAvg', label: 'Bowling average', abbr: 'Avg', source: 'derived', group: 'bowling', format: { unit: 'decimal', dp: 2, better: 'lower' },
       agg: { kind: 'rate', num: 'runsConceded', den: 'wickets', over: 'bowled' } },
     { key: 'bowlSr', label: 'Bowling strike rate', abbr: 'SR', source: 'derived', group: 'bowling', format: { unit: 'decimal', dp: 1, better: 'lower' },
       agg: { kind: 'rate', num: 'ballsBowled', den: 'wickets', dp: 1, over: 'bowled' } },
-    { key: 'best', label: 'Best bowling', abbr: 'BBI', source: 'derived', group: 'bowling', format: { unit: 'figure' },
+    { key: 'best', label: 'Best bowling', leaderLabel: 'Best bowling', abbr: 'BBI', source: 'derived', group: 'bowling', format: { unit: 'figure' },
       agg: { kind: 'best', over: 'bowlFigures', by: [{ key: 'wickets', better: 'higher' }, { key: 'runsConceded', better: 'lower' }], render: (s) => `${Number(s.wickets ?? 0) || 0}/${Number(s.runsConceded ?? 0) || 0}` } },
     // ── fielding
     { key: 'catches', label: 'Catches', short: 'catches', one: 'catch', abbr: 'Ct', group: 'fielding', weight: 8, matchSummary: true },
@@ -84,7 +101,9 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { title: 'Batting', columns: ['runs', 'ballsFaced', 'fours', 'sixes', 'sr'] },
     { title: 'Bowling', columns: ['overs', 'maidens', 'runsConceded', 'wickets', 'econ'] },
   ],
-  leaders: ['runs', 'wickets', 'catches'],
+  // SD-16: records leaders after the original three (CK-01; the full set —
+  // 4s / 6s / maidens / dots / ducks, organiser minimums — is SD-38)
+  leaders: ['runs', 'wickets', 'catches', 'highest', 'best', 'avg', 'sr', 'econ', 'fifties', 'hundreds'],
   headline: ['runs', 'wickets'],
   // cricket ships its own richer per-match summary: tournament slots only
   awards: [

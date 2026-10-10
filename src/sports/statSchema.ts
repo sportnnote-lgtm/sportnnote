@@ -18,10 +18,10 @@
  * standings.ts, teamStats.ts, cricketCareer.ts, SportProfileScreen).
  *
  * This file is PURE (no React Native) so the node test runner and the data
- * layer can import it. It implements only the aggregations needed to keep
- * today's behaviour identical (sum, rate, count-if, best figure — cricket's
- * career); max / min / per-game / per-set / qualifiers are DECLARED here and
- * implemented by the aggregate engine (SD-16).
+ * layer can import it. It also holds the aggregate engine (SD-16, GEN-03):
+ * every `StatAgg` kind over a set of lines (`aggregateValue`), the career grid
+ * built from it (`careerFromSchema`) and the leaderboard ranking
+ * (`rankPlayers`: qualifiers, coverage, the schema tie-break chain).
  */
 import type { SportId, StatLine } from '../core/types';
 
@@ -55,12 +55,19 @@ export interface StatFormat {
 /** A sum of signed line keys: 'runs', or ['innings', '-notOut'] (= outs). */
 export type SignedKeys = string | string[];
 
-/** Minimum sample before a rate / average ranks or shows (SD-16 applies it). */
+/** Minimum sample before a rate / average / per-game figure RANKS on a
+ *  leaderboard (careers always show the figure). Applied by `rankPlayers`. */
 export interface Qualifier {
-  /** at least this much of the rate's denominator (e.g. 30 balls faced) */
+  /** at least this much of the rate's denominator (e.g. 30 balls faced; for
+   *  per-set: sets played) */
   den?: number;
-  /** at least this many games with a line in this sport */
+  /** at least this many games — the lines that count toward the stat (after
+   *  its `over` filter and coverage: innings batted for a batting average,
+   *  appearances for a per-game figure) */
   games?: number;
+  /** how the minimum reads on a leaderboard ("min 10 overs"); default built
+   *  from the numbers ("min 30 balls faced", "min 3 games") */
+  note?: string;
 }
 
 /** How a stat aggregates over many stat lines (career, tournament, team). */
@@ -68,7 +75,8 @@ export type StatAgg =
   /** total of `key` (default: the stat's own key) over the lines (`over` = a
    *  named line filter); a line without the key counts `missing` (default 0) */
   | { kind: 'sum'; key?: string; over?: string; missing?: number }
-  /** highest / lowest single-line value of `key` (default: the stat's own key) — SD-16 */
+  /** highest / lowest single-line value of `key` (default: the stat's own key),
+   *  over lines that carry the key; the result keeps the line it came from */
   | { kind: 'max'; key?: string; over?: string }
   | { kind: 'min'; key?: string; over?: string }
   /** best single-line figure: order lines by `by` (first decides, the rest
@@ -77,12 +85,16 @@ export type StatAgg =
   /** Σnum × scale ÷ Σden to `dp` places over the filtered lines; "–" when the
    *  denominator is 0. `qualifier` is applied by SD-16 leaderboards. */
   | { kind: 'rate'; num: SignedKeys; den: SignedKeys; scale?: number; dp?: number; over?: string; qualifier?: Qualifier }
-  /** Σkey ÷ games (appearances) — SD-16 */
+  /** Σkey ÷ games: the distinct matches whose line TRACKED the key (SD-11
+   *  appearance lines count; a match that didn't track it isn't a 0) */
   | { kind: 'perGame'; key: string; dp?: number; qualifier?: Qualifier }
-  /** Σkey ÷ sets played — SD-16 */
-  | { kind: 'perSet'; key: string; dp?: number; qualifier?: Qualifier }
-  /** number of lines where gte ≤ key < lt */
-  | { kind: 'countIf'; key: string; gte?: number; lt?: number; over?: string }
+  /** Σkey ÷ sets played (`sets`, default setsWon + setsLost), over the lines
+   *  that tracked the key AND carry the set keys */
+  | { kind: 'perSet'; key: string; sets?: SignedKeys; dp?: number; qualifier?: Qualifier }
+  /** number of lines where gte ≤ key < lt (centuries: runs ≥ 100). With
+   *  `keys`: lines where at least `atLeast` (default all) of them are in range
+   *  (a double-double: 2 of points / rebounds / assists / steals / blocks ≥ 10) */
+  | { kind: 'countIf'; key?: string; keys?: string[]; atLeast?: number; gte?: number; lt?: number; over?: string }
   /** an appearance key (apps / starts): counted with the record, never listed
    *  as a counting stat */
   | { kind: 'appearance' };
@@ -139,6 +151,13 @@ export interface StatDef extends StatLabels {
   eligible?: 'goalkeeper';
   /** a card / foul that suspends the player for a time (hockey, handball) */
   suspension?: Suspension;
+  /** the leaderboard card title when it differs from `label` ("Highest
+   *  score" for the career row "Highest") */
+  leaderLabel?: string;
+  /** leaderboard tie-breaks after the value (and, for a best figure, its
+   *  `by` chain): other stats of this schema, aggregated the same way. Still
+   *  level = the order the players first appear in (stable) */
+  tieBreak?: { key: string; better: Better }[];
 }
 
 /** A "best in role" award. `match` = shown on the per-match summary;
@@ -217,13 +236,15 @@ export const betterOf = (f?: StatFormat): Better => f?.better ?? (f?.unit === 't
 export const statDefIn = <S extends string>(schema: SportStatSchema<S>, key: string): StatDef | undefined =>
   schema.stats.find((s) => s.key === key);
 
-/* ------------------------- aggregation (SD-15 subset) ------------------------- */
+/* -------------------------- aggregate engine (SD-16) -------------------------- */
 
 const DASH = '–';
 const num = (l: StatLine, k: string) => Number(l.stats?.[k] ?? 0) || 0;
 export const hasKey = (l: StatLine, k: string) => l.stats != null && Object.prototype.hasOwnProperty.call(l.stats, k);
+const keyList = (keys: SignedKeys) => (Array.isArray(keys) ? keys : [keys]);
+const bare = (keys: SignedKeys) => keyList(keys).map((k) => k.replace(/^-/, ''));
 const signed = (l: StatLine, keys: SignedKeys) =>
-  (Array.isArray(keys) ? keys : [keys]).reduce((a, k) => (k.startsWith('-') ? a - num(l, k.slice(1)) : a + num(l, k)), 0);
+  keyList(keys).reduce((a, k) => (k.startsWith('-') ? a - num(l, k.slice(1)) : a + num(l, k)), 0);
 
 /** x / y to `dp` places, or "–" when y is 0. */
 export const rateText = (x: number, y: number, dp = 2): string => (y > 0 ? (x / y).toFixed(dp) : DASH);
@@ -248,6 +269,11 @@ function linesFor<S extends string>(schema: SportStatSchema<S>, lines: StatLine[
   return lines.filter(f);
 }
 
+/** D8 coverage: was `key` being tracked on this line? The line's `tracked`
+ *  list decides when present; a legacy line (no list) counts as tracking
+ *  every stat — the same rule the leaderboard coverage note always used. */
+export const isTracked = (l: StatLine, key: string): boolean => (l.tracked ? l.tracked.includes(key) : true);
+
 /** The line that holds the best figure by `by` (first wins a full tie). */
 export function bestLine(lines: StatLine[], by: { key: string; better: Better }[]): StatLine | undefined {
   let best: StatLine | undefined;
@@ -263,35 +289,135 @@ export function bestLine(lines: StatLine[], by: { key: string; better: Better }[
   return best;
 }
 
-/** One stat's aggregate over the lines, formatted. `undefined` when its agg
- *  kind belongs to the aggregate engine (SD-16) and isn't implemented here. */
-export function aggregateStat<S extends string>(schema: SportStatSchema<S>, def: StatDef, lines: StatLine[]): string | undefined {
+/** Distinct matches among the lines (a field-event line counts by its id). */
+const gamesIn = (ls: StatLine[]) => new Set(ls.map((l) => l.matchId || `line:${l.id}`)).size;
+
+/** One stat aggregated over many lines. */
+export interface AggValue {
+  /** the number that ranks; undefined = no figure (rate with a 0 denominator,
+   *  no qualifying line, nothing tracked) */
+  value?: number;
+  /** as displayed ("54*", "3/12", "128.57", "1.5", "–") */
+  text: string;
+  /** D8: false when no line tracked the stat's inputs — show "not tracked",
+   *  never 0 */
+  tracked: boolean;
+  /** lines that count toward it (after `over` + coverage): innings for a
+   *  batting average, appearances for a per-game figure — `Qualifier.games` */
+  games: number;
+  /** the rate / per-game / per-set denominator — `Qualifier.den` */
+  den?: number;
+  /** max / min / best: the line the figure came from (link to its match) */
+  line?: StatLine;
+  /** best: the winning line's `by` chain, signed so bigger is better —
+   *  compares best figures across players (3/12 beats 3/15) */
+  order?: number[];
+}
+
+/** The input keys an aggregation reads (for coverage). */
+function inputsOf(def: StatDef): string[] {
+  const a: StatAgg = def.agg ?? { kind: 'sum' };
+  switch (a.kind) {
+    case 'sum': case 'max': case 'min': return [a.key ?? def.key];
+    case 'rate': return [...bare(a.num), ...bare(a.den)];
+    case 'perGame': return [a.key];
+    case 'perSet': return [a.key];
+    case 'countIf': return a.keys ?? (a.key ? [a.key] : []);
+    case 'best': return a.by.map((b) => b.key);
+    case 'appearance': return [def.key];
+  }
+}
+
+/** Aggregate one stat over lines (already this sport's) — every `StatAgg`
+ *  kind. Careers show `text`; leaderboards rank `value` (see `rankPlayers`). */
+export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def: StatDef, lines: StatLine[]): AggValue {
   const agg: StatAgg = def.agg ?? { kind: 'sum' };
+  const covered = (ls: StatLine[], keys = inputsOf(def)) => ls.filter((l) => keys.every((k) => isTracked(l, k)));
+  const none = (games = 0): AggValue => ({ text: DASH, tracked: true, games });
+  const untracked: AggValue = { text: DASH, tracked: false, games: 0 };
   switch (agg.kind) {
     case 'sum': {
+      // Totals keep today's behaviour: every line counts (an untracked line
+      // carries no value, so it adds nothing).
       const ls = linesFor(schema, lines, agg.over);
       const k = agg.key ?? def.key;
       const total = ls.reduce((a, l) => a + (agg.missing !== undefined && !hasKey(l, k) ? agg.missing : num(l, k)), 0);
-      return formatValue(total, def.format);
+      return { value: total, text: formatValue(total, def.format), tracked: true, games: ls.length };
+    }
+    case 'appearance': {
+      const total = lines.reduce((a, l) => a + num(l, def.key), 0);
+      return { value: total, text: String(total), tracked: true, games: lines.length };
+    }
+    case 'max': case 'min': {
+      const k = agg.key ?? def.key;
+      const all = linesFor(schema, lines, agg.over);
+      const cov = covered(all);
+      if (all.length && !cov.length) return untracked;
+      let line: StatLine | undefined;
+      for (const l of cov) {
+        if (!hasKey(l, k)) continue;
+        if (!line || (agg.kind === 'max' ? num(l, k) > num(line, k) : num(l, k) < num(line, k))) line = l;
+      }
+      if (!line) return none(cov.length);
+      const v = num(line, k);
+      return { value: v, text: formatValue(v, def.format), tracked: true, games: cov.length, line };
+    }
+    case 'best': {
+      const ls = linesFor(schema, lines, agg.over);
+      const b = bestLine(ls, agg.by);
+      if (!b) return none();
+      return {
+        value: num(b, agg.by[0].key), text: agg.render(b.stats ?? {}), tracked: true, games: ls.length, line: b,
+        order: agg.by.map((c) => (c.better === 'higher' ? 1 : -1) * num(b, c.key)),
+      };
     }
     case 'rate': {
-      const ls = linesFor(schema, lines, agg.over);
-      const n = ls.reduce((a, l) => a + signed(l, agg.num), 0);
+      const all = linesFor(schema, lines, agg.over);
+      const ls = covered(all);
+      if (all.length && !ls.length) return untracked;
+      const n = ls.reduce((a, l) => a + signed(l, agg.num), 0) * (agg.scale ?? 1);
       const d = ls.reduce((a, l) => a + signed(l, agg.den), 0);
-      const t = rateText(n * (agg.scale ?? 1), d, agg.dp ?? def.format?.dp ?? 2);
-      return t !== DASH && def.format?.unit === 'percent' ? `${t}%` : t;
+      const t = rateText(n, d, agg.dp ?? def.format?.dp ?? 2);
+      if (t === DASH) return { ...none(ls.length), den: d };
+      return { value: n / d, text: def.format?.unit === 'percent' ? `${t}%` : t, tracked: true, games: ls.length, den: d };
+    }
+    case 'perGame': {
+      const ls = covered(lines);
+      if (lines.length && !ls.length) return untracked;
+      const g = gamesIn(ls);
+      if (!g) return none();
+      const v = ls.reduce((a, l) => a + num(l, agg.key), 0) / g;
+      return { value: v, text: v.toFixed(agg.dp ?? def.format?.dp ?? 1), tracked: true, games: g, den: g };
+    }
+    case 'perSet': {
+      const sets = agg.sets ?? ['setsWon', 'setsLost'];
+      const tracked = covered(lines);
+      if (lines.length && !tracked.length) return untracked;
+      // a line counts only when it says how many sets were played
+      const ls = tracked.filter((l) => keyList(sets).some((k) => !k.startsWith('-') && hasKey(l, k)));
+      const d = ls.reduce((a, l) => a + signed(l, sets), 0);
+      if (d <= 0) return { ...none(ls.length), den: d };
+      const v = ls.reduce((a, l) => a + num(l, agg.key), 0) / d;
+      return { value: v, text: v.toFixed(agg.dp ?? def.format?.dp ?? 2), tracked: true, games: ls.length, den: d };
     }
     case 'countIf': {
       const ls = linesFor(schema, lines, agg.over);
-      return String(ls.filter((l) => num(l, agg.key) >= (agg.gte ?? -Infinity) && num(l, agg.key) < (agg.lt ?? Infinity)).length);
+      const keys = agg.keys ?? (agg.key ? [agg.key] : []);
+      const need = agg.atLeast ?? keys.length;
+      const inRange = (v: number) => v >= (agg.gte ?? -Infinity) && v < (agg.lt ?? Infinity);
+      const c = ls.filter((l) => keys.filter((k) => inRange(num(l, k))).length >= need).length;
+      return { value: c, text: String(c), tracked: true, games: ls.length };
     }
-    case 'best': {
-      const b = bestLine(linesFor(schema, lines, agg.over), agg.by);
-      return b ? agg.render(b.stats ?? {}) : DASH;
-    }
-    default:
-      return undefined; // max / min / perGame / perSet / appearance — SD-16
   }
+}
+
+/** One stat's aggregate over the lines, formatted. `undefined` for an
+ *  appearance key (counted with the record) and for a stat nobody tracked
+ *  (D8: "not tracked", never a false 0). */
+export function aggregateStat<S extends string>(schema: SportStatSchema<S>, def: StatDef, lines: StatLine[]): string | undefined {
+  if (def.agg?.kind === 'appearance') return undefined;
+  const v = aggregateValue(schema, def, lines);
+  return v.tracked ? v.text : undefined;
 }
 
 export interface CareerStat { key: string; label: string; value: string }
@@ -309,6 +435,108 @@ export function careerFromSchema<S extends string>(schema: SportStatSchema<S>, l
     });
   }
   return out;
+}
+
+/* ----------------------------- leaderboards (SD-16) ----------------------------- */
+
+/** Which way a stat's leaderboard ranks: totals, counts and single-match
+ *  highs "most first"; lows / rates / averages by the stat's own direction. */
+export function rankDirection(def: StatDef): Better {
+  const k = (def.agg ?? { kind: 'sum' }).kind;
+  if (k === 'min') return 'lower';
+  if (k === 'rate' || k === 'perGame' || k === 'perSet') return betterOf(def.format);
+  return 'higher';
+}
+
+/** The qualifier a stat declares (rates / per-game / per-set). */
+export const qualifierOf = (def: StatDef): Qualifier | undefined => {
+  const a = def.agg;
+  return a && (a.kind === 'rate' || a.kind === 'perGame' || a.kind === 'perSet') ? a.qualifier : undefined;
+};
+
+/** "min 30 balls faced" / "min 3 games" — the note a leaderboard shows. */
+export function qualifierText<S extends string>(schema: SportStatSchema<S>, def: StatDef, q?: Qualifier | null): string | undefined {
+  if (!q) return undefined;
+  if (q.note) return q.note;
+  const parts: string[] = [];
+  if (q.games) parts.push(`${q.games} ${q.games === 1 ? 'game' : 'games'}`);
+  if (q.den) {
+    const a = def.agg;
+    const denKey = a?.kind === 'rate' ? bare(a.den)[0] : undefined;
+    const d = denKey ? statDefIn(schema, denKey) : undefined;
+    const unit = a?.kind === 'perSet' ? (q.den === 1 ? 'set' : 'sets') : d ? (q.den === 1 ? oneOf(d) : shortOf(d)) : '';
+    parts.push(`${q.den}${unit ? ` ${unit}` : ''}`);
+  }
+  return parts.length ? `min ${parts.join(', ')}` : undefined;
+}
+
+export interface RankedPlayer {
+  playerId: string;
+  value: number;
+  /** display string ("54*", "3/12", "7.25") */
+  text: string;
+  /** lines that count toward the stat (Qualifier.games) */
+  games: number;
+  den?: number;
+  /** lines that tracked the stat's inputs (≤ totalGames) */
+  trackedGames: number;
+  /** the player's lines in this sport */
+  totalGames: number;
+  /** max / min / best: the line the figure came from */
+  line?: StatLine;
+}
+
+export interface RankOptions {
+  /** override the stat's own qualifier (an organiser's minimum); `null` = none */
+  qualifier?: Qualifier | null;
+  /** who may appear (football clean sheets: keepers only) */
+  eligible?: (playerId: string, lines: StatLine[]) => boolean;
+  limit?: number;
+}
+
+/** Rank players by any stat of the schema. Lines should already be this
+ *  sport's (and this tournament's). Drops players with no figure, below the
+ *  qualifier, or (for totals / counts / highs / best figures) on 0. Orders by
+ *  the value in the stat's direction — a best figure by its `by` chain — then
+ *  the stat's `tieBreak` chain, then first appearance (stable). */
+export function rankPlayers<S extends string>(schema: SportStatSchema<S>, def: StatDef, lines: StatLine[], opts: RankOptions = {}): RankedPlayer[] {
+  const by = new Map<string, StatLine[]>();
+  for (const l of lines) (by.get(l.playerId) ?? by.set(l.playerId, []).get(l.playerId)!).push(l);
+  const kind = (def.agg ?? { kind: 'sum' }).kind;
+  const q = opts.qualifier === undefined ? qualifierOf(def) : opts.qualifier;
+  const dir = rankDirection(def) === 'higher' ? 1 : -1;
+  const mustBePositive = kind === 'sum' || kind === 'countIf' || kind === 'max' || kind === 'appearance'
+    || (def.agg?.kind === 'best' && def.agg.by[0].better === 'higher');
+  const inputs = inputsOf(def);
+  const ties = (def.tieBreak ?? []).map((t) => ({ def: statDefIn(schema, t.key), better: t.better }));
+  const rows: (RankedPlayer & { order: number[] })[] = [];
+  for (const [playerId, ls] of by) {
+    if (opts.eligible && !opts.eligible(playerId, ls)) continue;
+    const v = aggregateValue(schema, def, ls);
+    if (!v.tracked || v.value === undefined || !Number.isFinite(v.value)) continue;
+    if (mustBePositive && !(v.value > 0)) continue;
+    if (q?.games && v.games < q.games) continue;
+    if (q?.den && (v.den ?? 0) < q.den) continue;
+    const order = [...(v.order ?? [dir * v.value]), ...ties.map((t) => {
+      const tv = t.def ? aggregateValue(schema, t.def, ls).value : undefined;
+      return tv === undefined ? -Infinity : (t.better === 'higher' ? 1 : -1) * tv;
+    })];
+    rows.push({
+      playerId, value: v.value, text: v.text, games: v.games, den: v.den, line: v.line, order,
+      trackedGames: ls.filter((l) => inputs.every((k) => isTracked(l, k))).length, totalGames: ls.length,
+    });
+  }
+  const cmp = (a: number[], b: number[]) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (b[i] ?? -Infinity) - (a[i] ?? -Infinity);
+      if (d !== 0 && !Number.isNaN(d)) return d;
+    }
+    return 0;
+  };
+  return rows
+    .sort((a, b) => cmp(a.order, b.order)) // Array.prototype.sort is stable
+    .slice(0, opts.limit ?? rows.length)
+    .map(({ order: _o, ...r }) => r);
 }
 
 /* -------------------------------- validation -------------------------------- */
@@ -333,10 +561,16 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
     if (a.kind === 'sum' && a.key) need(a.key, w);
     if (a.kind === 'sum' || a.kind === 'countIf' || a.kind === 'best' || a.kind === 'rate' || a.kind === 'max' || a.kind === 'min') needFilter(a.over, w);
     if (a.kind === 'rate') [...signedKeys(a.num), ...signedKeys(a.den)].forEach((k) => need(k, w));
-    if (a.kind === 'countIf' || a.kind === 'perGame' || a.kind === 'perSet') need(a.key, w);
+    if (a.kind === 'perGame' || a.kind === 'perSet') need(a.key, w);
+    if (a.kind === 'perSet' && a.sets) signedKeys(a.sets).forEach((k) => need(k, w));
+    if (a.kind === 'countIf') {
+      if (!a.key && !a.keys?.length) errs.push(`${w}: countIf needs key or keys`);
+      [...(a.key ? [a.key] : []), ...(a.keys ?? [])].forEach((k) => need(k, w));
+    }
     if ((a.kind === 'max' || a.kind === 'min') && a.key) need(a.key, w);
     if (a.kind === 'best') a.by.forEach((b) => need(b.key, w));
   }
+  for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));
   for (const sec of schema.sections ?? []) sec.rows.forEach((r) => need(r.stat, `section ${sec.id}`));
   for (const b of schema.box ?? []) b.columns.forEach((c) => need(c, `box ${b.title ?? ''}`));
   schema.leaders.forEach((k) => need(k, 'leaders'));

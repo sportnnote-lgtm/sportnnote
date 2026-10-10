@@ -15,6 +15,13 @@ export const basketballStats: SportStatSchema<'basketball'> = {
     { key: 'freeThrowsMade', label: 'Free throws made', short: 'FT made', abbr: 'FTM', group: 'scoring' },
     { key: 'freeThrowsAtt', label: 'Free throws attempted', short: 'FT att', abbr: 'FTA', group: 'scoring' },
     { key: 'ejections', label: 'Ejections', short: 'ejections', one: 'ejection', group: 'discipline' },
+    // SD-16 — per-game averages and double-doubles (data only: the career /
+    // leaders that show them are SD-44 / SD-27; FIBA's minimum to rank is SD-27)
+    { key: 'ppg', label: 'Points per game', abbr: 'PPG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'points', dp: 1 } },
+    { key: 'rpg', label: 'Rebounds per game', abbr: 'RPG', source: 'derived', group: 'defence', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'rebounds', dp: 1 } },
+    { key: 'apg', label: 'Assists per game', abbr: 'APG', source: 'derived', group: 'scoring', format: { unit: 'decimal', dp: 1 }, agg: { kind: 'perGame', key: 'assists', dp: 1 } },
+    { key: 'doubleDoubles', label: 'Double-doubles', short: 'double-doubles', one: 'double-double', abbr: 'DD', source: 'derived', group: 'scoring',
+      agg: { kind: 'countIf', keys: ['points', 'rebounds', 'assists', 'steals', 'blocks'], atLeast: 2, gte: 10 } },
   ],
   sections: [
     { id: 'scoring', title: 'Scoring', rows: [{ stat: 'points' }, { stat: 'assists' }, { stat: 'freeThrowsMade' }, { stat: 'freeThrowsAtt' }] },

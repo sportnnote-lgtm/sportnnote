@@ -171,7 +171,11 @@ describe('SD-15 — the old maps are derived views, equal to the golden values',
   test('per-match role awards (SPORT_AWARDS)', () => assert.deepEqual(SPORT_AWARDS, golden.SPORT_AWARDS));
   test('tournament award slots', () => assert.deepEqual(TOURNAMENT_AWARD_SLOTS, golden.TOURNAMENT_AWARD_SLOTS));
   test('leaderboard categories + headline leader', () => {
-    assert.deepEqual(STAT_CATEGORIES, golden.STAT_CATEGORIES);
+    // SD-16 appended cricket's records categories after the original three
+    const now = { ...STAT_CATEGORIES, cricket: STAT_CATEGORIES.cricket.slice(0, golden.STAT_CATEGORIES.cricket.length) };
+    assert.deepEqual(now, golden.STAT_CATEGORIES);
+    assert.deepEqual(STAT_CATEGORIES.cricket.slice(golden.STAT_CATEGORIES.cricket.length).map((c) => c.label),
+      ['Highest score', 'Best bowling', 'Best batting average', 'Best strike rate', 'Best economy', 'Most 50s', 'Most 100s']);
     for (const sp of SPORTS) assert.deepEqual(leaderStat(sp as SportId), golden.leaderStat[sp]);
   });
   test('headline order', () => {
@@ -235,7 +239,12 @@ describe('SD-15 — leaders, awards, ratings and summaries render as before', ()
     for (const sp of SPORTS) assert.deepEqual(plain(defaultAwards(lines, players, sp as SportId)), golden.defaultAwards[sp], sp);
   });
   test('tournament leaders (incl. keepers-only clean sheets)', () => {
-    for (const sp of SPORTS) assert.deepEqual(plain(categoryLeaders(lines, players, sp as SportId)), golden.categoryLeaders[sp], sp);
+    for (const sp of SPORTS) {
+      const now = plain(categoryLeaders(lines, players, sp as SportId));
+      // SD-16: cricket's records categories follow the golden ones (tested in aggregate-engine.test.mts)
+      const old = sp === 'cricket' ? now.filter((c) => ['runs', 'wickets', 'catches'].includes(c.key)) : now;
+      assert.deepEqual(old, golden.categoryLeaders[sp], sp);
+    }
   });
   test('per-match ratings, MVP and role awards', () => {
     for (const sp of SPORTS) {
@@ -385,7 +394,7 @@ describe('SD-15 — the schema shape expresses hockey, handball and timed / meas
     for (const s of [hockey, handball, athletics] as SportStatSchema<string>[]) assert.deepEqual(validateSchema(s), [], s.sport);
     assert.ok(!(STAT_SPORTS as string[]).includes('hockey') && !(STAT_SPORTS as string[]).includes('athletics'));
   });
-  test('hockey: PC conversion and GK save % as rates; timed suspensions declared; per-game left to SD-16', () => {
+  test('hockey: PC conversion and GK save % as rates; timed suspensions declared; per-game (SD-16)', () => {
     const c = careerFromSchema(hockey, [
       L({ goals: 2, pcGoals: 1, pcTaken: 4, saves: 0, shotsFaced: 0, greenCards: 1, suspensionMinutes: 2 }),
       L({ goals: 1, pcGoals: 1, pcTaken: 2, saves: 8, shotsFaced: 10, yellowCards: 1, suspensionMinutes: 5 }),
@@ -394,7 +403,7 @@ describe('SD-15 — the schema shape expresses hockey, handball and timed / meas
     assert.equal(v('attack', 'pcConversion'), '33%');
     assert.equal(v('goalkeeping', 'savePct'), '80.0%');
     assert.equal(v('discipline', 'suspensionMinutes'), '7');
-    assert.equal(v('attack', 'goalsPerGame'), undefined); // perGame — the SD-16 aggregate engine
+    assert.equal(v('attack', 'goalsPerGame'), '1.50'); // perGame — the SD-16 aggregate engine (3 goals / 2 games)
     assert.deepEqual(statDefIn(hockey, 'yellowCards')?.suspension, { minutes: 5, maxMinutes: 10 });
     assert.equal(statDefIn(hockey, 'redCards')?.suspension?.permanent, true);
   });
