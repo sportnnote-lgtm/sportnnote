@@ -13,6 +13,26 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Org integrity: no planting teams/clubs in another org; only the invitee accepts an invite (migration 0049)
+
+- **Migration 0049** `20261019122700_org_integrity.sql` (bundle `2026-10-org-integrity-0049.sql`, run
+  **after 0048**) — founder to run:
+  - **Teams:** a new team may carry an `org_id` only if the caller has Owner/Admin/Organizer in
+    that org, or it's created through a club of the same org that the caller manages
+    (`can_place_team_in_org`).
+  - **Clubs:** moving a club into an org needs authority in that org (new `guard_club_org`; this
+    closed a third path, as `clubs_update` accepted any org).
+  - **Invites:** only the invitee can accept or decline. New `org_requests.accepted_by`, stamped by
+    the guard. Invites the invitee accepted themselves now count as joining by choice for 0048's
+    staff rule; historic ones don't.
+- **No app change needed:** admins only cancel invites in the UI; invitees answer their own.
+- **Tests:** PGlite orgintegrity 69/69, plus every existing suite green (orgstaffedit 46/46: two
+  club-path checks no longer apply). Re-run safe.
+- The bundle header has a read-only audit query listing teams/clubs whose creator isn't a member of
+  their org.
+
+---
+
 ### 2026-10-10 — School staff can fix each other's players (migration 0048) + DLS decision
 
 - **Founder decision (#12 follow-up):** same-school staff can edit an unclaimed player that a

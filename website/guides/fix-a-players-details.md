@@ -19,9 +19,9 @@ You also need one of these:
 - You manage a team or club the player is on (captain, vice-captain, team admin or creator), and the player was added by the person who created that team. See [Who can edit a squad](/guides/who-can-edit-a-squad/).
 - You are an **Owner** or **Admin** of the school's community on SportnNote, the player is on one of the school's teams (or in one of its Houses), and a colleague in that community added them.
 
-For the school rule, the colleague who added the player must have joined the community themselves: they created it, or they tapped **Request to join** and an Owner or Admin accepted. Someone who was only put in with **+ Add member**, or who hasn't accepted an invitation yet, doesn't count. The team must also have been made by a member of the community.
+For the school rule, the colleague who added the player must have joined the community themselves: they created it, they tapped **Request to join** and an Owner or Admin accepted, or they were invited and tapped **Accept** under **Organize** → **Invitations** themselves. Someone who was only put in with **+ Add member**, or who hasn't accepted an invitation yet, doesn't count. Only the invited person can accept an invitation; an Owner or Admin can't accept it for them. The team must also have been made by a member of the community.
 
-> **Note:** Example: Ms Rao made the Red House team, Mr Iyer added the students, and Mr Khan is an Admin of the school's community. Mr Khan can fix a misspelt name, as long as Mr Iyer joined the community through **Request to join**.
+> **Note:** Example: Ms Rao made the Red House team, Mr Iyer added the students, and Mr Khan is an Admin of the school's community. Mr Khan can fix a misspelt name, as long as Mr Iyer joined the community through **Request to join**, or accepted an invitation himself.
 
 ## Set your school up as a community
 1. One staff member opens the **Organize** tab and taps **🏛️ New community**. They become its Owner.
