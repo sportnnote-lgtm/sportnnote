@@ -21,7 +21,9 @@ import {
   type Category, type DisciplineDef, type EntryResult, type MarkHistory, type PhaseFormat, type PlannedPhase,
   type RecordMark, type RecordScope, type ResultEntry, type RankedEntry, type PhaseKind, compareKeys, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
   type FieldResultInput, looseLegal, seededRng, phaseDiscipline, swimSeed, timedFinalHeats, laneOrder, type Seeded,
+  rowsForRecords, recordsFor, rollbackRecords, reopenVerdict,
 } from './results';
+import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
 
 const live = () => isSupabaseConfigured && !!supabase;
@@ -303,10 +305,62 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
     await writePhaseLines(phase, f, phaseLines(f, rows, awards));
   }
   const book = await getRecordBook(phase.tournamentId, def.sport);
-  const next = updateRecords(rows, def, categoryKey(f.category), book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  const cat = categoryKey(f.category);
+  // SD-112: an out-of-range mark nobody confirmed never sets a record
+  const next = updateRecords(rowsForRecords(rows, def, f.category?.course), def, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  // SD-112: keep what the book said before, so "Reopen final" can put it back
+  await patchPhaseFormat(phase.id, { recordsBefore: recordsFor(book, def.key, cat) });
   if (next !== book) await saveRecordBook(phase.tournamentId, def.sport, next);
   await setPhaseStatus(phase.id, 'completed');
   return next;
+}
+
+/**
+ * SD-112 — an organiser reopens a locked phase.
+ *  - a round (heats / semis / qualification): only while the next round has no
+ *    results; the next round's start list is removed and re-seeded on the next
+ *    "Close round".
+ *  - the final: back to live; the records it set are rolled back to what stood
+ *    before, and its stat lines (medals, points) are removed — the meet table
+ *    only counts completed finals, so its points drop out until it is locked again.
+ * Returns the removed next-round phase id (a round) or the record book after the rollback (a final).
+ */
+export async function reopenPhase(stale: FieldEvent): Promise<{ removedPhase?: string; records?: RecordMark[] }> {
+  const phase = (await getPhase(stale.id)) ?? stale;
+  const f = phaseOf(phase);
+  const def = f && disciplineOf(f.discipline);
+  if (!f || !def) throw new Error('Not a results event');
+  const isFinal = !f.plan?.[f.phaseNo];
+  const all = await getResultsPhases({ eventKey: f.eventKey });
+  const later = all.filter((p) => p.roundNo > phase.roundNo).sort((a, b) => a.roundNo - b.roundNo);
+  const nextPhase = later[0] ?? null;
+  const nextEntries = nextPhase ? await getFieldEntries([nextPhase.id]) : [];
+  const v = reopenVerdict(phase, nextPhase ? { status: nextPhase.status, results: nextEntries.map((e) => e.result as EntryResult) } : null, isFinal);
+  if (!v.ok) throw new Error(v.reason);
+  const out: { removedPhase?: string; records?: RecordMark[] } = {};
+  if (v.kind === 'round' && nextPhase) {
+    if (later.length > 1) throw new Error('Later rounds already exist — reopen the latest round first.');
+    for (const e of nextEntries) await removeFieldEntry(e.id);
+    await deletePhase(nextPhase.id);
+    out.removedPhase = nextPhase.id;
+  }
+  if (v.kind === 'final') {
+    const cat = categoryKey(f.category);
+    const book = await getRecordBook(phase.tournamentId, def.sport);
+    const next = rollbackRecords(book, def.key, cat, f.eventKey, f.recordsBefore);
+    if (next.length !== book.length || next.some((r, i) => r !== book[i])) await saveRecordBook(phase.tournamentId, def.sport, next);
+    out.records = next;
+  }
+  // the phase's stat lines are rewritten when it is closed / locked again
+  if (isEventSport(def.sport)) await writePhaseLines(phase, f, []);
+  await setPhaseStatus(phase.id, 'live');
+  return out;
+}
+
+async function deletePhase(id: string): Promise<void> {
+  if (!live()) { demo.fieldEvents = demo.fieldEvents.filter((e) => e.id !== id); return; }
+  const { error } = await supabase!.from('field_events').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 /* -------------------------------- history -------------------------------- */

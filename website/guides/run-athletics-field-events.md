@@ -27,9 +27,11 @@ Field events run on trials, not heats. The app tells you who is up next, ranks e
 ## Step by step: long jump, triple jump and throws
 1. Open the event and tap **Enter results**. The card at the top shows who is up, their trial number, where they stand now and the leader.
 2. Type the mark (4.85) and, for the jumps, the wind (+1.2). Tap **✓ Mark**, or tap **X foul** or **– pass**. The next athlete comes up at once.
-3. After round 3 the best 8, plus anyone tied for 8th, are marked ★. They take 3 more trials, in reverse order of the standings, so the leader goes last. Round 6 uses the order after round 5. With 8 athletes or fewer, everyone gets all 6.
-4. To correct a trial, tap **Edit round**, pick the round number and fix it on that athlete's row.
-5. When the card says **All trials taken**, tap **🏁 Finish & lock results**.
+3. Tapped **X foul** or **– pass** by mistake? Tap **Undo** on the bar at the bottom. It stays for 5 seconds. The same works for **O clear**, **X fail** and **– pass** at the bar.
+4. A mark far outside the usual range, such as 512 typed for a 5.12 m long jump, asks **Check this mark** before it is saved. A bar height like 120 for 1.20 m asks too. Nothing is refused, but an unconfirmed mark never shows **PB** or **MR**.
+5. After round 3 the best 8, plus anyone tied for 8th, are marked ★. They take 3 more trials, in reverse order of the standings, so the leader goes last. Round 6 uses the order after round 5. With 8 athletes or fewer, everyone gets all 6.
+6. To correct a trial, tap **Edit round**, pick the round number and fix it on that athlete's row.
+7. When the card says **All trials taken**, tap **🏁 Finish & lock results**. The check lists anyone with no trial and any new meet record. An organiser can tap **↺ Reopen final** afterwards to correct it; any record it set goes back to the previous holder until it is locked again.
 
 > **Tip:** Tap the ⏱ chip on the card to time a trial. Athletes normally have 1 minute; the clock turns red for the last 15 seconds.
 

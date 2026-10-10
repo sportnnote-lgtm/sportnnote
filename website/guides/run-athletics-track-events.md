@@ -34,17 +34,28 @@ Athletics works the way a sports day does: each race is an event (say 100 m U14 
 ## Step by step: enter results
 1. Open the event and tap **Enter results**. Use the **Heat 1**, **Heat 2** chips to switch heats.
 2. Before the start you can tap **✎ Change lanes**, then an athlete, then the new lane. Whoever was in that lane swaps with them.
-3. Type each time with the number keys: 1205 is 12.05. A photo-finish reading to the thousandth can be typed with a point (12.053); it counts as 12.06 and is used to break a tie.
-4. For the 100 m, 200 m and sprint hurdles, enter the race **Wind (m/s)**. Over +2.0 is wind-aided: the time counts for places but not for PBs or records.
-5. Tap **DNS**, **DNF**, **FS** or **DQ** for an athlete who didn't start, didn't finish, false-started or was disqualified. You can add the rule number.
-6. The live ranking shows **Q** (qualified by place) and **q** (qualified as one of the fastest), plus **PB**, **SB** and **MR** as they happen.
-7. When every heat is in, tap **Close heats → seed the final**. The qualifiers are seeded into the final and their lanes are drawn by ranking.
-8. After the final, tap **🏁 Finish & lock results**. Medals, house points, meet records and athlete profiles update.
+3. Type each time with the number keys: 1205 is 12.05. The box shows what it read (= 12.05) before you save. Tap **Next ›** to save it and move to the next lane.
+4. For a photo-finish reading to the thousandth, tap **.000** first: 12053 then reads as 12.053. It counts as 12.06 and is used to break a tie. You can also type it with a point.
+5. For the 100 m, 200 m and sprint hurdles, enter the race **Wind (m/s)**. Over +2.0 is wind-aided: the time counts for places but not for PBs or records.
+6. Tap **DNS**, **DNF**, **FS** or **DQ** for an athlete who didn't start, didn't finish, false-started or was disqualified. You can add the rule number.
+7. When a heat is done, tap **Next heat → Heat 2**.
+8. The live ranking shows **Q** (qualified by place) and **q** (qualified as one of the fastest), plus **PB**, **SB** and **MR** as they happen.
+9. When every heat is in, tap **Close heats → seed the final**. The check tells you how many athletes still have no result. They drop out without a place, so mark them **DNS** if they didn't run.
+10. After the final, tap **🏁 Finish & lock results**. The check lists any athlete with no result and any new meet record, with the old one. Medals, house points, meet records and athlete profiles then update.
+
+## Times that look wrong
+Each event has a usual range, from just under the senior world record to a slow U10 time. A time outside it, such as an 800 m typed as 2153 (21.53), is never refused. Instead you get **Check this mark**: tap **No, re-enter it** to fix the digits, or **Yes, save** if it really happened. A time that is outside the range and not confirmed never shows **PB**, **SB** or **MR** and can't set a record.
+
+## Reopen a round or the final
+- An organiser (the tournament's managers or the event's creator) sees **↺ Reopen heats** on a closed round. It works until the next round has a result. The final's start list is removed and seeded again when you close the heats.
+- **↺ Reopen final** puts a locked final back to live. Any meet record it set goes back to the previous holder, and its medals and points leave the house table until you tap **🏁 Finish & lock results** again.
 
 > **Tip:** Tap **📤 Share** to send the start list before the race, or the results after it, to a WhatsApp group. The message has a link to the live results page.
 
 ## Hand timing
 - Tap **Hand** on a time taken with a stopwatch. Hand times are read to the tenth, so 11.12 becomes 11.2, and they are shown with an "h".
+- With **Hand** on, the last digit you type is the tenth: 108 is 10.8 and 1053 is 1:05.3.
+- Turning **Hand** on or off never loses what you typed. Turn it off and the full time comes back, thousandths included.
 - At a fully timed meet, hand times never count for PBs or records. If your whole meet uses stopwatches, turn on **Hand-timed meet** in **⚙ Points & timing**. Then hand times, and races with no wind reading, count, while a wind reading over +2.0 still doesn't.
 
 ## What everyone sees

@@ -38,13 +38,15 @@ A swim meet is a list of events (say 50 m freestyle U12 Girls), each swum as one
 
 ## Step by step: enter results
 1. Open the event and tap **Enter results**. Use the **Heat 1**, **Heat 2** chips to switch heats.
-2. Type each time with the number keys: 3310 is 33.10. Times are to the hundredth.
-3. For races longer than 50 m, type the 50 m splits under the time (they are cumulative, for example 37.20, then 1:20.10). The results sheet shows each 50 m lap.
-4. With manual timing, type up to three watch times in **Watches** (for example 3245 3251 3248). The official time is the one two watches agree on, else the middle one; with only two watches it is their average.
-5. Tap **DNS** for a swimmer who didn't start. Tap **DQ**, then the reason, such as **SW 7.6 · One-hand or non-simultaneous touch**. For a relay, pick the leg first; an early take-off is **SW 10.13 · Early take-off**. A disqualified swimmer gets no time or place.
-6. Equal times share the place and the points.
-7. With heats and a final, if two swimmers tie for the last place in the final, the app asks for a **Swim-off place**. Enter it after the swim-off, or leave it and both go through.
-8. Close the heats to seed the final, then tap **🏁 Finish & lock results**. Medals, house points, meet records and swimmer profiles update.
+2. Type each time with the number keys: 3310 is 33.10. Times are to the hundredth. Tap **Next ›** to save it and move to the next lane, and **Next heat → Heat 2** when the heat is done.
+3. A time far outside the usual range for the event and pool, such as a 200 m typed as 2153 (21.53), asks **Check this mark** first. Tap **No, re-enter it** to fix it. An unconfirmed time never shows **PB** or **MR**.
+4. For races longer than 50 m, tap **＋ Splits** to open the 50 m split boxes (they are cumulative, for example 37.20, then 1:20.10). The results sheet shows each 50 m lap.
+5. With manual timing, type up to three watch times in **Watches** (for example 3245 3251 3248). The watches are the only input: the **Official time** above them is read-only. It is the time two watches agree on, else the middle one; with only two watches it is their average.
+6. Tap **DNS** for a swimmer who didn't start. Tap **DQ**, then the reason, such as **SW 7.6 · One-hand or non-simultaneous touch**. For a relay, pick the leg first; an early take-off is **SW 10.13 · Early take-off**. A disqualified swimmer gets no time or place.
+7. Equal times share the place and the points.
+8. With heats and a final, if two swimmers tie for the last place in the final, the app asks for a **Swim-off place**. Enter it after the swim-off, or leave it and both go through.
+9. Close the heats to seed the final, then tap **🏁 Finish & lock results**. Each check tells you how many swimmers have no time, and the finish lists any new meet record. Medals, house points, meet records and swimmer profiles then update.
+10. Made a mistake after locking? An organiser can tap **↺ Reopen heats** (until the final has a time) or **↺ Reopen final**. Reopening the final puts any record it set back to the previous holder and takes its points off the house table until you lock it again.
 
 > **Tip:** Tap **📤 Share** to send the start list before the race, or the results after it, to a WhatsApp group. The message has a link to the live results page.
 

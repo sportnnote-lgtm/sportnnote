@@ -5,7 +5,7 @@
  *  Everything is driven by the discipline definition (unit, capture, tie rule,
  *  wind, attempts), so Wave 4 sports only add disciplines. Saves are offline-safe
  *  (the golf outbox). */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -22,7 +22,7 @@ import { getPlayers, getMyPlayerId } from '../data/repos';
 import type { FieldEntry, FieldEvent } from '../core/types';
 import {
   getPhase, getResultsPhases, getPhaseEntries, saveEntryResult, patchPhaseFormat, setPhaseStatus, advancePhase,
-  completeFinal, getMarkHistory, getRecordBook, getOrgRecordBook, moveEntry,
+  completeFinal, getMarkHistory, getRecordBook, getOrgRecordBook, moveEntry, reopenPhase,
 } from '../data/resultsStore';
 import {
   disciplineOf, phaseOf, phaseLabel, toResultEntry, rankByHeat, qualify, withQualification, withRecordFlags,
@@ -34,12 +34,15 @@ import {
   type ResultEntry, type JumpOff, type VerticalState, type Attempt,
   phaseDiscipline, laneNumbers, rankEntries, dqCodesFor, dqReason, officialManualTime, splitDistances, splitsError, swimMeetSettings,
   courseLabel, swimEventOf,
+  rangeCheck, readDigits, toggleHand, stripUnconfirmedFlags, unconfirmedOutOfRange, rowsForRecords, blankEntries, newRecords,
+  closeRoundDetail, finishDetail, reopenVerdict, updateRecords, type KeypadMode, type RangeIssue, type Category,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
 import { useAuth } from '../core/auth';
 import { canOrganize } from '../core/roles';
 import { canManageTournament } from '../core/org';
 import { useTournamentById, useOrganizations } from '../data/hooks';
+import type { TextInput as TextInputT } from 'react-native';
 import { shareMessage } from '../core/share';
 import { resultsLink } from '../core/shareText';
 
@@ -54,6 +57,18 @@ const ruleHint = (def: DisciplineDef) => (def.sport === 'swimming' ? 'SW 7.6' : 
 /** The meet's points settings for an event sport (athletics / swimming). */
 const pointsFor = (sport: string, fmt?: Record<string, unknown>) => (sport === 'swimming' ? swimMeetSettings(fmt) : meetSettings(fmt));
 const num = (t: string) => { const v = Number(t.trim().replace(',', '.').replace('−', '-')); return t.trim() && Number.isFinite(v) ? v : undefined; };
+type Course = Category['course'];
+/** SD-112: a mark outside the event's usual range is never rejected — it asks first. */
+const confirmRange = (issue: RangeIssue, shown: string) => askConfirm({
+  title: 'Check this mark', message: issue.message, yesLabel: `Yes, save ${shown}`, noLabel: 'No, re-enter it', tone: 'caution',
+});
+/** Ask about an out-of-range mark; resolves { ok, rangeOk } (rangeOk = confirmed out of range). */
+async function checkRange(def: DisciplineDef, mark: number, course: Course): Promise<{ ok: boolean; rangeOk?: true }> {
+  const issue = rangeCheck(def, mark, course);
+  if (!issue) return { ok: true };
+  const ok = await confirmRange(issue, `${formatMark(mark, def)}${def.unit === 'time' ? '' : ' m'}`);
+  return ok ? { ok: true, rangeOk: true } : { ok: false };
+}
 
 export default function ResultsEventScreen() {
   const nav = useNavigation<Nav>();
@@ -80,6 +95,14 @@ export default function ResultsEventScreen() {
   const [pending, setPending] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  // SD-112: the next round's state (may this round be reopened?), splits opened per entry,
+  // the 5 s Undo after a one-tap foul / pass, the time boxes for "Next ›"
+  const [nextResults, setNextResults] = useState<{ status: string; results: EntryResult[] } | null>(null);
+  const [openSplits, setOpenSplits] = useState<Set<string>>(new Set());
+  const [undo, setUndo] = useState<{ label: string; entryId: string; prev: EntryResult } | null>(null);
+  useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 5000); return () => clearTimeout(t); }, [undo]);
+  const inputs = useRef(new Map<string, TextInputT | null>());
+  const scroller = useRef<ScrollView>(null);
 
   const f = phase ? phaseOf(phase) : null;
   // SD-94: as raced at this venue (a 6- / 10-lane pool)
@@ -94,6 +117,8 @@ export default function ResultsEventScreen() {
   const canEdit = !!phase && (canOrganize(profile?.role) || phase.createdBy === profile?.id || (!!me && (phase.hostIds ?? []).includes(me))
     || (!!tournament && canManageTournament(tournament, orgs, me)));
   const view = canEdit ? tab : 'sheet';
+  // SD-112: reopening a locked round / final is the organiser's call (not a scorer's)
+  const canManage = !!phase && (canOrganize(profile?.role) || phase.createdBy === profile?.id || (!!tournament && canManageTournament(tournament, orgs, me)));
 
   const load = useCallback(async () => {
     const ev = await getPhase(params.phaseId);
@@ -106,6 +131,8 @@ export default function ResultsEventScreen() {
     const nm = new Map(ps.map((p) => [p.id, p.fullName]));
     setNames(nm);
     setPhases(all.sort((a, b) => a.roundNo - b.roundNo));
+    const nx = all.find((p) => p.roundNo === ev.roundNo + 1);
+    setNextResults(nx ? { status: nx.status, results: (await getPhaseEntries([nx.id])).map((e) => (e.result ?? {}) as EntryResult) } : null);
     // SD-90: + the school record (SR) — the best at the host organisation's other meets.
     setRecords(recs);
     setLocal(new Map());
@@ -133,13 +160,14 @@ export default function ResultsEventScreen() {
     const ctx = { history, records: [...records, ...srBook], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
     if (timedFinal) {
       // every heat ranked together; each heat's rows keep their overall place
-      const all = withRecordFlags(rankEntries(resEntries, def, { handLegal: looseLegal(f) }), def, ctx);
+      const all = stripUnconfirmedFlags(withRecordFlags(rankEntries(resEntries, def, { handLegal: looseLegal(f) }), def, ctx), def, f.category?.course);
       const hs = [...new Set(resEntries.map((e) => e.heat))].sort((a, b) => a - b);
       return new Map(hs.map((h) => [h, all.filter((r) => r.entry.heat === h)]));
     }
     const byHeat = rankByHeat(resEntries, def, { handLegal: looseLegal(f) });
     const q = f.progression ? qualify(byHeat, def, f.progression) : null;
-    return new Map([...byHeat].map(([h, rows]) => [h, withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx)]));
+    // SD-112: an out-of-range mark nobody confirmed shows no PB / SB / MR
+    return new Map([...byHeat].map(([h, rows]) => [h, stripUnconfirmedFlags(withRecordFlags(q ? withQualification(rows, q) : rows, def, ctx), def, f.category?.course)]));
   }, [def, f, phase, resEntries, history, records, srBook, timedFinal]);
   // SD-94: the overall order of a timed final (the sheet / share), and the
   // swim-off a tie at the qualifying line needs (SW 3.2.3)
@@ -186,9 +214,12 @@ export default function ResultsEventScreen() {
     return [...list].sort((a, b) => key(a) - key(b));
   };
 
+  const course = f.category?.course;
   const advance = async () => {
     if (!next) return;
-    const ok = await askConfirm({ ...confirmCopy('closePhase'), title: `Close ${phaseLabel(f.phase).toLowerCase()}?`, message: `The qualifiers (Q / q) are seeded into the ${phaseLabel(next.phase).toLowerCase()} and these results are locked.` });
+    // SD-112: say who has no result — they drop out without a place
+    const detail = closeRoundDetail(blankEntries(resEntries, def), def, phaseLabel(next.phase).toLowerCase());
+    const ok = await askConfirm({ ...confirmCopy('closePhase', { detail }), title: `Close ${phaseLabel(f.phase).toLowerCase()}?` });
     if (!ok) return;
     setBusy(true);
     try {
@@ -198,7 +229,14 @@ export default function ResultsEventScreen() {
   };
   const finish = async () => {
     const jo = [...ranked.values()].flat().some((r) => r.needsDecider && r.flags.includes('JO'));
-    const ok = await confirmMatchAction('finishEvent', { detail: `${jo ? 'The tie for 1st has no jump-off result — the athletes will share 1st. ' : ''}Places, medals and any new record are final. You can still view the sheet.` });
+    // SD-112: blank rows, unconfirmed out-of-range marks and any new meet record, in the confirm
+    const rows = rankEntries(resEntries, def, { handLegal: looseLegal(f) });
+    const after = updateRecords(rowsForRecords(rows, def, course), def, categoryKey(f.category), records, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    const detail = finishDetail({
+      blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
+      unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
+    });
+    const ok = await confirmMatchAction('finishEvent', { detail });
     if (!ok) return;
     setBusy(true);
     try {
@@ -209,6 +247,41 @@ export default function ResultsEventScreen() {
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
+  // SD-112: an organiser reopens a locked round (while the next round has no
+  // results) or the final (records and medal points rolled back).
+  const isFinal = !next;
+  const reopen = phase.status === 'completed' ? reopenVerdict(phase, nextResults, isFinal) : null;
+  const doReopen = async () => {
+    const nextLabel = next ? phaseLabel(next.phase).toLowerCase() : '';
+    const ok = await askConfirm(isFinal
+      ? { title: 'Reopen the final?', message: 'It goes back to live so you can correct it. Any record it set goes back to the previous holder, and its medals and points leave the meet table until you finish & lock again.', yesLabel: 'Yes, reopen final', noLabel: 'No, keep it locked', tone: 'danger' }
+      : { title: `Reopen ${phaseLabel(f.phase).toLowerCase()}?`, message: `It goes back to live so you can correct it. The ${nextLabel} start list is removed and seeded again when you close this round.`, yesLabel: 'Yes, reopen round', noLabel: 'No, keep it locked', tone: 'caution' });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await reopenPhase(phase);
+      setInfo(isFinal ? 'Final reopened — records and points are rolled back until you finish & lock again.' : `${phaseLabel(f.phase)} reopened.`);
+      setTab('enter');
+      await load();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  /** SD-112: one-tap X / – (and O / X / – at the bar) can be undone for 5 s. */
+  const offerUndo = (entryId: string, prev: EntryResult, label: string) => setUndo({ entryId, prev, label });
+  const doUndo = () => {
+    if (!undo) return;
+    const e = merged.find((x) => x.id === undo.entryId);
+    setUndo(null);
+    if (e) void save(e, undo.prev);
+  };
+  /** SD-112 "Next ›": the next lane's time box (skipping DNS / DQ rows). */
+  const focusAfter = (id: string) => {
+    const list = orderFor(heatEntries).filter((e) => (resultOf(e).status ?? 'ok') === 'ok');
+    const i = list.findIndex((e) => e.id === id);
+    const nx = list[i + 1];
+    if (nx) inputs.current.get(nx.id)?.focus();
+  };
+  const heatIdx = heats.indexOf(activeHeat);
+  const nextHeat = heatIdx >= 0 && heatIdx < heats.length - 1 ? heats[heatIdx + 1] : null;
 
   const heatRows = ranked.get(activeHeat) ?? [];
   const meet = isEventSport(def.sport) ? pointsFor(def.sport, tournament?.formats?.[def.sport] as Record<string, unknown> | undefined) : undefined;
@@ -221,13 +294,21 @@ export default function ResultsEventScreen() {
   // SD-91: the field event's set-up line (implement, board, wind gauge)
   const fieldNote = [f.implement ? `Implement ${f.implement}` : '', f.board ? `Take-off board ${f.board} m` : '', f.noWindGauge ? 'No wind gauge — jumps without a reading count for records' : ''].filter(Boolean).join(' · ');
   const curBar = def.capture === 'heights' ? (bar != null && (f.bar ?? []).includes(bar) ? bar : vState?.height ?? bar) : null;
-  const saveAttempt = (id: string, round: number, a: Attempt) => {
+  const saveAttempt = async (id: string, round: number, a: Attempt) => {
     const e = merged.find((x) => x.id === id);
     if (!e) return;
     const r = resultOf(e);
     const list = [...(r.attempts ?? [])];
     if (list.length < round - 1) return;
-    list[round - 1] = a;
+    // SD-112: a mark outside the event's usual range asks first ("512" in long jump)
+    let att = a;
+    if (a.mark != null) {
+      const c = await checkRange(def, a.mark, course);
+      if (!c.ok) return;
+      if (c.rangeOk) att = { ...a, rangeOk: true };
+    }
+    list[round - 1] = att;
+    if (a.foul || a.pass) offerUndo(id, r, `${a.foul ? 'X foul' : '– pass'} · ${toResultEntry(e, nameOf).name.split(' ')[0]} R${round}`);
     void save(e, { ...r, attempts: list });
   };
   const saveTry = (id: string, height: number, t: 'O' | 'X' | '-') => {
@@ -238,9 +319,12 @@ export default function ResultsEventScreen() {
     const cur = list.find((h) => Math.abs(h.height - height) < 1e-9)?.tries ?? '';
     const next = addTry(cur, t);
     if (next === cur) return;
+    offerUndo(id, r, `${t === 'O' ? 'O clear' : t === 'X' ? 'X fail' : '– pass'} · ${toResultEntry(e, nameOf).name.split(' ')[0]} ${formatMark(height, def)}`);
     void save(e, { ...r, heights: [...list.filter((h) => Math.abs(h.height - height) >= 1e-9), { height, tries: next }].sort((a, b) => a.height - b.height) });
   };
   const addBar = async (h: number) => {
+    // SD-112: a bar height outside the usual range ("120" for 1.20 m) asks first
+    if (!(await checkRange(def, h, course)).ok) return;
     const list = [...new Set([...(f.bar ?? []), h])].sort((a, b) => a - b);
     await patchPhaseFormat(phase.id, { bar: list });
     setPhase({ ...phase, format: { ...phase.format, results: { ...f, bar: list } } });
@@ -286,7 +370,7 @@ export default function ResultsEventScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroller} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <View>
           <Text style={textStyles.h2}>{f.eventTitle ?? def.label}</Text>
           <Text style={textStyles.muted}>
@@ -396,20 +480,27 @@ export default function ResultsEventScreen() {
                   </View>
                   {def.capture === 'single' || def.capture === 'target' ? (
                     def.unit === 'time'
-                      ? <TimeField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}:${r.hand ? 'h' : ''}`} def={def} r={r} handMeet={!!f.handTimed} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />
+                      ? <TimeField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}:${r.hand ? 'h' : ''}`} def={def} r={r} handMeet={!!f.handTimed} course={course}
+                          editable={editable && (r.status ?? 'ok') === 'ok'} watchesOnly={swim && !!f.handTimed}
+                          register={(x) => { inputs.current.set(e.id, x); }} onNext={() => focusAfter(e.id)} onChange={(n) => void save(e, n)} />
                       : <MarkField key={`${e.id}:${r.mark ?? ''}:${r.thousandths ?? ''}`} def={def} r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />
                   ) : null}
                   {def.capture === 'attempts' && (
-                    <AttemptCells def={def} r={r} round={round} editable={editable && (r.status ?? 'ok') === 'ok'}
-                      extraAllowed={extraOpen && finalists.has(e.id)} onChange={(n) => void save(e, n)} />
+                    <AttemptCells def={def} r={r} round={round} editable={editable && (r.status ?? 'ok') === 'ok'} course={course}
+                      extraAllowed={extraOpen && finalists.has(e.id)} onChange={(n) => void save(e, n)}
+                      onUndoable={(label) => offerUndo(e.id, r, `${label} · ${re.name.split(' ')[0]} R${round}`)} />
                   )}
                   {def.capture === 'heights' && <HeightRow def={def} r={r} bar={curBar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
                   {def.capture === 'lifts' && <LiftCells r={r} editable={editable && (r.status ?? 'ok') === 'ok'} nextSeq={1 + Math.max(0, ...merged.flatMap((x) => [...((x.result as EntryResult)?.lifts?.snatch ?? []), ...((x.result as EntryResult)?.lifts?.cj ?? [])].map((l) => l.seq ?? 0)))} onChange={(n) => void save(e, n)} />}
                   {swim && editable && f.handTimed && (r.status ?? 'ok') === 'ok' && (
-                    <WatchesField key={`${e.id}:w:${(r.watches ?? []).join(',')}`} def={def} r={r} onChange={(n) => void save(e, n)} />
+                    <WatchesField key={`${e.id}:w:${(r.watches ?? []).join(',')}`} def={def} r={r} course={course}
+                      register={(x) => { inputs.current.set(e.id, x); }} onNext={() => focusAfter(e.id)} onChange={(n) => void save(e, n)} />
                   )}
-                  {swim && editable && (f.splits ?? true) && splitDistances(def.key).length > 0 && (
-                    <SplitsField key={`${e.id}:s:${(r.splits ?? []).join(',')}`} def={def} r={r} onChange={(n) => void save(e, n)} />
+                  {/* SD-112: splits stay folded behind "＋ Splits" (a 1500 m card would show 29 boxes) */}
+                  {swim && editable && (f.splits ?? true) && splitDistances(def.key).length > 0 && (r.status ?? 'ok') === 'ok' && (
+                    openSplits.has(e.id) || r.splits?.length
+                      ? <SplitsField key={`${e.id}:s:${(r.splits ?? []).join(',')}`} def={def} r={r} onChange={(n) => void save(e, n)} />
+                      : <SelectChip label="＋ Splits" active={false} onPress={() => setOpenSplits((cur) => new Set(cur).add(e.id))} />
                   )}
                   {f.reaction && def.unit === 'time' && editable && (
                     <ReactionField value={r.reaction} swim={swim} onSave={(v) => void save(e, { ...r, reaction: v })} />
@@ -427,6 +518,10 @@ export default function ResultsEventScreen() {
                 </Card>
               );
             })}
+
+            {nextHeat != null && (
+              <Button label={`Next heat → Heat ${nextHeat}`} variant="ghost" onPress={() => { setHeat(nextHeat); scroller.current?.scrollTo({ y: 0, animated: true }); }} />
+            )}
 
             <ResultsSheet def={def} title="Live ranking" subtitle={heats.length > 1 ? `Heat ${activeHeat}` : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} />
 
@@ -452,7 +547,19 @@ export default function ResultsEventScreen() {
             )}
           </>
         )}
+
+        {canManage && reopen && (
+          reopen.ok
+            ? <Button label={busy ? 'Reopening…' : isFinal ? '↺ Reopen final' : `↺ Reopen ${phaseLabel(f.phase).toLowerCase()}`} variant="ghost" onPress={() => void doReopen()} disabled={busy} />
+            : <Text style={textStyles.muted}>Locked. {reopen.reason}</Text>
+        )}
       </ScrollView>
+      {undo ? (
+        <View style={st.snack} accessibilityLiveRegion="polite">
+          <Text style={st.snackTxt} numberOfLines={1}>{undo.label} saved</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Undo" onPress={doUndo} style={st.snackBtn}><Text style={st.snackBtnTxt}>Undo</Text></TouchableOpacity>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -503,41 +610,116 @@ function MarkField({ def, r, editable, onChange }: { def: DisciplineDef; r: Entr
 
 /** SD-90: the stopwatch keypad — type the digits only ("1085" → 10.85,
  *  "15234" → 1:52.34); a typed "10.85" / "1:52.34" / "10.853" (photo-finish
- *  thousandths) still works. Hand times go to the next tenth (TR 19.21). */
-function TimeField({ def, r, editable, handMeet, onChange }: { def: DisciplineDef; r: EntryResult; editable: boolean; handMeet: boolean; onChange: Change }) {
-  const [t, setT] = useState(r.thousandths != null ? r.thousandths.toFixed(3) : formatMark(r.mark, def));
-  const [bad, setBad] = useState(false);
-  const hand = r.hand ?? (handMeet && r.mark == null ? true : false);
-  // SD-94: a swimming manual time stays at 1/100 (SW 11.3) — no rounding to the tenth.
+ *  thousandths) still works. Hand times go to the next tenth (TR 19.21).
+ *  SD-112: in Hand mode the last digit is the tenth ("1053" → 1:05.3); the
+ *  ".000" chip reads the last three digits as thousandths ("10853" → 10.853);
+ *  a time outside the event's usual range asks first; "Next ›" saves and moves
+ *  to the next lane; the Hand chip keeps the typed time (`raw`); with manual
+ *  swim timing the watches are the only input (the official time is read-only). */
+function TimeField({ def, r, editable, handMeet, course, watchesOnly, register, onNext, onChange }: {
+  def: DisciplineDef; r: EntryResult; editable: boolean; handMeet: boolean; course: Course; watchesOnly?: boolean;
+  register?: (x: TextInputT | null) => void; onNext?: () => void; onChange: Change;
+}) {
+  const initial = r.thousandths != null ? r.thousandths.toFixed(3) : formatMark(r.mark, def);
+  const [t, setT] = useState(initial);
+  const [bad, setBad] = useState<string | null>(null);
   const swim = def.sport === 'swimming';
+  const hand = r.hand ?? (handMeet && r.mark == null ? true : false);
+  // photo-finish thousandths: athletics, automatic timing only
+  const photoOk = !swim && def.tie === 'photo' && !hand;
+  const [photo, setPhoto] = useState(r.thousandths != null);
+  // SD-94: a swimming manual time stays at 1/100 (SW 11.3) — no rounding to the tenth, no tenths keypad.
+  const modeFor = (h: boolean, ph: boolean): KeypadMode => (h && !swim ? 'hand' : ph && !swim && def.tie === 'photo' && !h ? 'photo' : 'auto');
+  const mode = modeFor(hand, photo);
   const handTime = (v: number) => (swim ? v : handTimeTenth(v));
-  const read = (text: string): { mark: number; thousandths?: number } | null => {
-    if (/[.:,]/.test(text)) return parseMark(text, def);
-    const v = digitsToTime(text);
-    return v == null ? null : { mark: v };
-  };
+  const read = (text: string, m: KeypadMode = mode): { mark: number; thousandths?: number } | null => (/[.:,]/.test(text) ? parseMark(text, def) : readDigits(text, m));
+  // a tap on Hand / .000 must not save the typed digits in the OLD mode first (the
+  // box blurs before the chip's press): the chip's press-in skips that blur.
+  const skipBlur = useRef(false);
+  const box = useRef<TextInputT | null>(null);
   const preview = t.trim() && !/[.:,]/.test(t) ? read(t) : null;
-  const commit = (h = hand) => {
-    if (!t.trim()) { setBad(false); if (r.mark != null) onChange({ ...r, mark: undefined, thousandths: undefined }); return; }
-    const p = read(t);
-    setBad(!p);
-    if (!p) return;
-    const mark = h ? handTime(p.mark) : p.mark;
-    const next = { ...r, mark, thousandths: h ? undefined : p.thousandths, hand: h };
-    if (next.mark !== r.mark || next.thousandths !== r.thousandths || !!next.hand !== !!r.hand) onChange(next);
+  // one commit at a time (blur + "Next ›" + Enter all commit); the same text is never asked about twice
+  const busy = useRef<Promise<boolean> | null>(null);
+  const done = useRef(initial);
+  const commit = (opt: { hand?: boolean; photo?: boolean } = {}): Promise<boolean> => {
+    if (busy.current) return busy.current;
+    if (t === done.current && opt.hand == null && opt.photo == null) return Promise.resolve(!bad);
+    const h = opt.hand ?? hand;
+    const run = async (): Promise<boolean> => {
+      const text = t;
+      if (!text.trim()) {
+        done.current = text; setBad(null);
+        if (r.mark != null) onChange({ ...r, mark: undefined, thousandths: undefined, raw: undefined, rangeOk: undefined });
+        return true;
+      }
+      const p = read(text, modeFor(h, opt.photo ?? photo));
+      if (!p) { done.current = text; setBad("Can't read that"); return false; }
+      const mark = h ? handTime(p.mark) : p.mark;
+      const thousandths = h ? undefined : p.thousandths;
+      const c = await checkRange(def, mark, course);
+      done.current = text;
+      if (!c.ok) { setBad('Not saved — check the time'); return false; }
+      setBad(null);
+      const next: EntryResult = { ...r, mark, thousandths, hand: h, raw: { mark: p.mark, ...(p.thousandths != null ? { thousandths: p.thousandths } : {}) }, rangeOk: c.rangeOk };
+      if (next.mark !== r.mark || next.thousandths !== r.thousandths || !!next.hand !== !!r.hand || !!next.rangeOk !== !!r.rangeOk) onChange(next);
+      return true;
+    };
+    busy.current = run().finally(() => { busy.current = null; });
+    return busy.current;
   };
+  const next = () => { void commit().then((ok) => { if (ok) onNext?.(); }); };
+  const pending = !!t.trim() && t !== done.current;
+  const onHand = () => {
+    skipBlur.current = false;
+    // typed but not saved yet: save it read in the new mode; else re-derive the saved time
+    if (pending) void commit({ hand: !hand });
+    else onChange(toggleHand(r, !hand, swim));
+  };
+  const onPhoto = () => {
+    skipBlur.current = false;
+    setPhoto(!photo);
+    // the same digits read differently now: let them be saved (and checked) again
+    done.current = '\u0000'; setBad(null);
+    box.current?.focus();
+  };
+  if (watchesOnly) {
+    return (
+      <View style={st.inline}>
+        <Text style={st.label}>Official time</Text>
+        <Text style={[st.preview, { fontSize: theme.font.h3 }]} accessibilityLabel="Official time from the watches">{r.mark != null ? formatMark(r.mark, def) : '—'}</Text>
+        <Text style={textStyles.muted}>from the watches below</Text>
+      </View>
+    );
+  }
+  const shown = preview ? `${formatMark(hand ? handTime(preview.mark) : preview.mark, hand && !swim ? { ...def, dp: 1 } : def)}${hand && !swim ? 'h' : ''}${preview.thousandths != null && mode === 'photo' ? ` (${preview.thousandths.toFixed(3)})` : ''}` : '';
   return (
     <View style={{ gap: theme.spacing(1) }}>
       <View style={st.inline}>
-        <TextInput style={[st.input, st.markInput, bad && st.bad]} value={t} onChangeText={setT} editable={editable} placeholder="1085 = 10.85"
-          placeholderTextColor={theme.colors.textMuted} keyboardType="number-pad" accessibilityLabel="Time" selectTextOnFocus
-          onBlur={() => commit()} onSubmitEditing={() => commit()} />
-        <SelectChip label={swim ? 'Manual' : 'Hand'} active={hand} disabled={!editable} onPress={() => { onChange({ ...r, hand: !hand, ...(r.mark != null && !hand ? { mark: handTime(r.mark), thousandths: undefined } : {}) }); }} />
-        {preview ? <Text style={st.preview}>= {formatMark(hand ? handTime(preview.mark) : preview.mark, def)}{hand ? 'h' : ''}</Text> : null}
-        {bad && <Text style={st.badTxt}>Can't read that</Text>}
+        <TextInput ref={(x) => { box.current = x; register?.(x); }} style={[st.input, st.markInput, !!bad && st.bad]} value={t} onChangeText={(x) => { setT(x); setBad(null); }} editable={editable}
+          placeholder={mode === 'hand' ? '108 = 10.8' : mode === 'photo' ? '10853 = 10.853' : '1085 = 10.85'}
+          placeholderTextColor={theme.colors.textMuted} keyboardType="number-pad" returnKeyType="next" accessibilityLabel="Time" selectTextOnFocus
+          onBlur={() => { if (skipBlur.current) { skipBlur.current = false; return; } void commit(); }} onSubmitEditing={next} blurOnSubmit={false} />
+        {editable && onNext ? <SelectChip label="Next ›" active={false} onPress={next} /> : null}
+        {!swim || !handMeet ? (
+          <ModeChip label={swim ? 'Manual' : 'Hand'} active={hand} disabled={!editable} onPressIn={() => { skipBlur.current = true; }} onPress={onHand} />
+        ) : null}
+        {photoOk && editable ? <ModeChip label=".000" active={photo} onPressIn={() => { skipBlur.current = true; }} onPress={onPhoto} /> : null}
       </View>
-      {hand ? <Text style={textStyles.muted}>{swim ? 'Manual time to 1/100 (SW 11.3).' : handNote(def, r.mark)}{handMeet ? '' : ' Not record-eligible.'}</Text> : null}
+      {shown ? <Text style={st.preview}>= {shown}</Text> : null}
+      {bad ? <Text style={st.badTxt}>{bad}</Text> : null}
+      {hand ? <Text style={textStyles.muted}>{swim ? 'Manual time to 1/100 (SW 11.3).' : `${handNote(def, r.mark)} Type the tenth last: 108 = 10.8, 1053 = 1:05.3.`}{handMeet ? '' : ' Not record-eligible.'}{r.raw && r.raw.mark !== r.mark ? ` Typed ${formatMark(r.raw.thousandths ?? r.raw.mark, { ...def, dp: r.raw.thousandths != null ? 3 : def.dp })} is kept.` : ''}</Text> : null}
+      {photo && photoOk && editable ? <Text style={textStyles.muted}>Photo finish: the last three digits are thousandths; the official time rounds up to the hundredth (TR 19.24).</Text> : null}
     </View>
+  );
+}
+
+/** A SelectChip-looking toggle that reports press-in (before the time box blurs on web). */
+function ModeChip({ label, active, disabled, onPressIn, onPress }: { label: string; active: boolean; disabled?: boolean; onPressIn: () => void; onPress: () => void }) {
+  return (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active, disabled }} disabled={disabled}
+      delayPressIn={0} onPressIn={onPressIn} onPress={onPress} activeOpacity={0.8} style={[st.mode, active && st.modeOn, disabled && { opacity: 0.4 }]}>
+      <Text style={[st.modeTxt, active && st.modeTxtOn]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -555,23 +737,49 @@ function ReactionField({ value, swim, onSave }: { value?: number; swim?: boolean
 }
 
 /** SD-94: the lane's watches (SW 11.3) — type up to three times; the official
- *  time is two-of-three, else the middle one, or the average of two (thousandth dropped). */
-function WatchesField({ def, r, onChange }: { def: DisciplineDef; r: EntryResult; onChange: Change }) {
-  const [t, setT] = useState((r.watches ?? []).map((w) => formatMark(w, def)).join(' '));
+ *  time is two-of-three, else the middle one, or the average of two (thousandth dropped).
+ *  SD-112: with manual timing on these are the only input; an official time
+ *  outside the usual range asks first. */
+function WatchesField({ def, r, course, register, onNext, onChange }: {
+  def: DisciplineDef; r: EntryResult; course: Course; register?: (x: TextInputT | null) => void; onNext?: () => void; onChange: Change;
+}) {
+  const initial = (r.watches ?? []).map((w) => formatMark(w, def)).join(' ');
+  const [t, setT] = useState(initial);
+  const [bad, setBad] = useState<string | null>(null);
   const read = (x: string) => (/[.:,]/.test(x) ? parseMark(x, def)?.mark : digitsToTime(x)) ?? undefined;
   const vals = t.trim() ? t.trim().split(/\s+/).slice(0, 3).map(read) : [];
   const official = officialManualTime(vals);
-  const commit = () => {
-    const w = vals.filter((x): x is number => x != null);
-    if (!w.length || official == null) return;
-    onChange({ ...r, watches: w, mark: official, hand: true, thousandths: undefined });
+  const busy = useRef<Promise<boolean> | null>(null);
+  const done = useRef(initial);
+  const commit = (): Promise<boolean> => {
+    if (busy.current) return busy.current;
+    if (t === done.current) return Promise.resolve(!bad);
+    const run = async () => {
+      const text = t;
+      const w = vals.filter((x): x is number => x != null);
+      if (!w.length || official == null) { done.current = text; if (text.trim()) setBad("Can't read the watches"); return !text.trim(); }
+      const c = await checkRange(def, official, course);
+      done.current = text;
+      if (!c.ok) { setBad('Not saved — check the watches'); return false; }
+      setBad(null);
+      onChange({ ...r, watches: w, mark: official, hand: true, thousandths: undefined, raw: undefined, rangeOk: c.rangeOk });
+      return true;
+    };
+    busy.current = run().finally(() => { busy.current = null; });
+    return busy.current;
   };
+  const next = () => { void commit().then((ok) => { if (ok) onNext?.(); }); };
   return (
-    <View style={st.inline}>
-      <Text style={st.label}>Watches</Text>
-      <TextInput style={[st.input, { flex: 1, minWidth: 120 }]} value={t} onChangeText={setT} placeholder="3245 3251 3248" placeholderTextColor={theme.colors.textMuted}
-        keyboardType="numbers-and-punctuation" accessibilityLabel="Times from the lane's watches" onBlur={commit} onSubmitEditing={commit} />
-      {official != null ? <Text style={st.preview}>→ {formatMark(official, def)}</Text> : null}
+    <View style={{ gap: theme.spacing(1) }}>
+      <View style={st.inline}>
+        <Text style={st.label}>Watches</Text>
+        <TextInput ref={register} style={[st.input, { flex: 1, minWidth: 120 }, !!bad && st.bad]} value={t} onChangeText={(x) => { setT(x); setBad(null); }}
+          placeholder="3245 3251 3248" placeholderTextColor={theme.colors.textMuted} returnKeyType="next" blurOnSubmit={false}
+          keyboardType="numbers-and-punctuation" accessibilityLabel="Times from the lane's watches" onBlur={() => void commit()} onSubmitEditing={next} />
+        {onNext ? <SelectChip label="Next ›" active={false} onPress={next} /> : null}
+      </View>
+      {official != null ? <Text style={st.preview}>→ official {formatMark(official, def)}</Text> : null}
+      {bad ? <Text style={st.badTxt}>{bad}</Text> : null}
     </View>
   );
 }
@@ -692,7 +900,9 @@ function RuleRef({ value, hint, onSave }: { value?: string; hint: string; onSave
 }
 
 /** Field events: one cell per attempt; the selected round's cell is the input. */
-function AttemptCells({ def, r, round, editable, extraAllowed, onChange }: { def: DisciplineDef; r: EntryResult; round: number; editable: boolean; extraAllowed: boolean; onChange: Change }) {
+function AttemptCells({ def, r, round, editable, extraAllowed, course, onChange, onUndoable }: {
+  def: DisciplineDef; r: EntryResult; round: number; editable: boolean; extraAllowed: boolean; course: Course; onChange: Change; onUndoable?: (label: string) => void;
+}) {
   const count = def.attempts?.count ?? 3;
   const slots = count + (def.attempts?.extra ?? 0);
   const list = r.attempts ?? [];
@@ -706,9 +916,13 @@ function AttemptCells({ def, r, round, editable, extraAllowed, onChange }: { def
     onChange({ ...r, attempts: next });
     setT(''); setW('');
   };
-  const commit = () => {
+  const commit = async () => {
     const p = parseMark(t, def);
-    if (p) put({ mark: p.mark, ...(def.wind === 'attempt' && num(w) != null ? { wind: num(w) } : {}) });
+    if (!p) return;
+    // SD-112: out-of-range field marks ask first
+    const c = await checkRange(def, p.mark, course);
+    if (!c.ok) return;
+    put({ mark: p.mark, ...(def.wind === 'attempt' && num(w) != null ? { wind: num(w) } : {}), ...(c.rangeOk ? { rangeOk: true } : {}) });
   };
   return (
     <View style={{ gap: theme.spacing(2) }}>
@@ -723,14 +937,14 @@ function AttemptCells({ def, r, round, editable, extraAllowed, onChange }: { def
       {allowed && (
         <View style={st.inline}>
           <TextInput style={[st.input, { width: 80 }]} value={t} onChangeText={setT} placeholder={`R${round}`} placeholderTextColor={theme.colors.textMuted}
-            keyboardType="decimal-pad" accessibilityLabel={`Attempt ${round} mark`} onSubmitEditing={commit} />
+            keyboardType="decimal-pad" accessibilityLabel={`Attempt ${round} mark`} onSubmitEditing={() => void commit()} />
           {def.wind === 'attempt' && (
             <TextInput style={[st.input, { width: 64 }]} value={w} onChangeText={setW} placeholder="wind" placeholderTextColor={theme.colors.textMuted}
-              keyboardType="numbers-and-punctuation" accessibilityLabel={`Attempt ${round} wind`} onSubmitEditing={commit} />
+              keyboardType="numbers-and-punctuation" accessibilityLabel={`Attempt ${round} wind`} onSubmitEditing={() => void commit()} />
           )}
-          <SelectChip label="✓" active={false} onPress={commit} />
-          <SelectChip label="X" active={list[i]?.foul === true} onPress={() => put({ foul: true })} />
-          <SelectChip label="–" active={list[i]?.pass === true} onPress={() => put({ pass: true })} />
+          <SelectChip label="✓" active={false} onPress={() => void commit()} />
+          <SelectChip label="X" active={list[i]?.foul === true} onPress={() => { onUndoable?.('X foul'); put({ foul: true }); }} />
+          <SelectChip label="–" active={list[i]?.pass === true} onPress={() => { onUndoable?.('– pass'); put({ pass: true }); }} />
         </View>
       )}
     </View>
@@ -1046,9 +1260,10 @@ const st = StyleSheet.create({
   bad: { borderColor: theme.colors.danger },
   preview: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '800', fontVariant: ['tabular-nums'] },
   badTxt: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
-  status: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
+  // SD-112: 44 pt targets, set apart from the time box above
+  status: { minHeight: 44, minWidth: 56, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
   statusOn: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },
-  statusTxt: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
+  statusTxt: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800' },
   statusTxtOn: { color: '#fff' },
   cells: { flexDirection: 'row', gap: 4 },
   cell: { flex: 1, minHeight: 40, borderRadius: theme.radius.sm, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
@@ -1072,4 +1287,15 @@ const st = StyleSheet.create({
   gridCell: { width: 44, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small, fontWeight: '800' },
   gridHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   gridCur: { backgroundColor: theme.colors.primary + '22' },
+  mode: { paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(3.5), justifyContent: 'center', borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+  modeOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  modeTxt: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
+  modeTxtOn: { color: '#06120D' },
+  snack: {
+    position: 'absolute', left: theme.spacing(4), right: theme.spacing(4), bottom: theme.spacing(4), flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),
+    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingLeft: theme.spacing(4), maxWidth: 560, alignSelf: 'center',
+  },
+  snackTxt: { flex: 1, color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  snackBtn: { minHeight: 48, minWidth: 72, paddingHorizontal: theme.spacing(4), alignItems: 'center', justifyContent: 'center' },
+  snackBtnTxt: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900' },
 });

@@ -15,6 +15,8 @@
  * presets — the entry screen, ranking, Q/q, records and medals are generic.
  */
 
+import type { RecordMark } from './records.ts';
+
 export type Better = 'higher' | 'lower';
 
 /** What a mark measures. Times are seconds, distance / height metres, mass kg. */
@@ -147,6 +149,9 @@ export interface PhaseFormat {
   lanes?: number;
   /** SD-94: 50 m split times are recorded at this meet */
   splits?: boolean;
+  /** SD-112: the record book's entries for this discipline + category as they
+   *  stood before "Finish & lock" — what "Reopen final" puts back */
+  recordsBefore?: RecordMark[];
 }
 
 /** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
@@ -169,6 +174,8 @@ export interface Attempt {
   foul?: boolean;
   pass?: boolean;
   wind?: number;
+  /** SD-112: the official confirmed a mark outside the event's usual range */
+  rangeOk?: boolean;
 }
 
 /** One bar height and the tries at it: 'O', 'XO', 'XXO', 'XXX', '-', 'X-', 'XX-'. */
@@ -224,6 +231,12 @@ export interface EntryResult {
   reason?: string;
   /** SD-94: the manual times from the lane's watches (SW 11.3) the official time came from */
   watches?: number[];
+  /** SD-112: the time as typed (before hand-time rounding, with any photo-finish
+   *  thousandths) — toggling Hand off restores it, no thousandths are lost */
+  raw?: { mark: number; thousandths?: number };
+  /** SD-112: the official confirmed a mark outside the event's usual range —
+   *  without it an out-of-range mark never shows PB / SB / MR or sets a record */
+  rangeOk?: boolean;
 }
 
 /** One entry in one phase, as the engine sees it. */

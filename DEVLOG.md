@@ -13,6 +13,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-112 athletics + swimming results-entry safety
+- **Why:** audit P0 — a hand time "1053" saved as 10.53 and an 800 m "2153" saved as 21.53 and was flagged as a meet record; rounds and finals could never be reopened.
+- **What:** plausible range per event and pool length (`src/data/results/safety.ts`; fast end just under the senior world record, generous slow end for U10–U19) — out-of-range marks are never rejected, they open a "Check this mark" sheet; unconfirmed ones lose PB/SB/MR/SR flags and can't set records. Hand mode: last digit = tenth ("1053" → 1:05.3h). Close round / Finish & lock list blank rows, unconfirmed marks and each new meet record ("was 10.88"). Organiser-only ↺ Reopen round (while the next round is empty) and ↺ Reopen final (rolls back records to the previous holder, drops medal points until relocked). Hand chip keeps the typed time; ".000" chip for photo-finish thousandths; 44 pt status pills; field marks range-checked + 5 s Undo for X / – / O; "Next ›" lane advance + "Next heat →". Swimming: manual watches are the only input when on; splits folded behind "＋ Splits".
+- **Files:** `src/data/results/{safety,model,index}.ts`, `src/data/resultsStore.ts` (`reopenPhase`, `recordsBefore`), `src/screens/ResultsEventScreen.tsx`. No migration (JSON fields). Guides: run-athletics-track-events, run-athletics-field-events, run-a-swim-meet.
+- **Verified:** `tests/results-safety.test.mts` (18), tsc clean, suite green; demo 8093 375 px — 100 m and long jump flows incl. reopen + record rollback. Not done: finish-order entry mode; swimming watches/splits checked in code only.
+
+---
+
 ### 2026-10-11 — SD-107 optional "How was the point won?" for racket sports (+ tennis 1st/2nd serve)
 - **Why:** founder — tennis scoring only knew who won the point, ace and double fault; scorers should be able to say *how* (forehand winner, backhand unforced error…), optionally.
 - **What:** tennis, badminton, table tennis, squash, padel, pickleball. Off by default (one tap stays the default); turn on via "🔎 Point detail (optional)" under the scoring buttons or ⚙️ Scoring settings (`SET_DETAIL`, applies from the next point). After each point a "How was it won?" box annotates it (`POINT_DETAIL {pd, serve}`, no score effect; tap again to replace, Skip, Undo removes). Per-sport chips: winner ▸ stroke, forced error, unforced error ▸ type, service winner/fault, ace where it fits, squash Stroke/No let, padel smash out ×3/×4. Errors credit the erring opponent (auto in singles, optional "By:" in doubles). Tennis 1st/2nd serve toggle (TN-05). Timeline editor shows the same chips.

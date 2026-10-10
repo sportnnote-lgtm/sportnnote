@@ -10,3 +10,4 @@ export * from './plan.ts';
 export * from './athletics.ts';
 export * from './field.ts';
 export * from './swimming.ts';
+export * from './safety.ts';
