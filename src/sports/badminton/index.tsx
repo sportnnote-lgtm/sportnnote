@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
-import { Button, SelectChip, textStyles } from '../../components/ui';
+import { textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
@@ -19,22 +19,11 @@ import { RallyPointEditor } from '../RallyPointEditor';
 import { MatchStatsPanel } from '../MatchStatsPanel';
 import { PointDetailRow } from '../PointDetailRow';
 import { detailLiveSettings } from '../pointDetailSettings';
+import { PointButtons, ServeFirstPicker } from '../PointButtons';
+import { pointPressure, pressureText } from '../pointStatus';
 import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, type BadmintonState } from './engine';
 import { badmintonTotals } from '../racketTotals';
 export { serve, type BadmintonState } from './engine';
-
-const PointRow = ({ label, roster, side, name, onPoint }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string; onPoint: (side: 'home' | 'away', p?: Player) => void }) => (
-  <View style={{ gap: theme.spacing(2) }}>
-    <Text style={ctrl.label}>{label}</Text>
-    {roster.length > 0 ? (
-      <View style={ctrl.chips}>
-        {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => onPoint(side, p)} />)}
-      </View>
-    ) : (
-      <Button label={`+1 ${name}`} variant={side} onPress={() => onPoint(side)} />
-    )}
-  </View>
-);
 
 const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as BadmintonState;
@@ -48,22 +37,25 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
   // singles has one player, so name them.
   const serverName = s.doubles ? serverSideName : serverRoster[0]?.fullName ?? serverSideName;
   const noPlayYet = s.current.home === 0 && s.current.away === 0 && s.games.length === 0;
-  const setFirstServer = (side: 'home' | 'away') => dispatch({ type: 'SET_FIRST_SERVER', payload: { side } });
+  // SD-115: no silent default — the point buttons wait for the toss.
+  const needsServer = noPlayYet && !s.serverPicked;
   return (
     <View style={{ gap: theme.spacing(4) }}>
-      {noPlayYet ? (
-        <View style={{ gap: theme.spacing(2) }}>
-          <Text style={ctrl.label}>🏸 Who serves first?</Text>
-          <View style={ctrl.chips}>
-            <SelectChip label={homeName} active={s.firstServer === 'home'} onPress={() => setFirstServer('home')} />
-            <SelectChip label={awayName} active={s.firstServer === 'away'} onPress={() => setFirstServer('away')} />
-          </View>
-        </View>
-      ) : (
-        <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>
-      )}
-      <PointRow label={`🏸 Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} onPoint={point} />
-      <PointRow label={`🏸 Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} onPoint={point} />
+      {!noPlayYet && <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>}
+      <ServeFirstPicker
+        icon="🏸" homeName={homeName} awayName={awayName} started={!noPlayYet}
+        picked={s.serverPicked || !noPlayYet ? s.firstServer : null}
+        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side } })}
+      />
+      {/* SD-115 (extends SD-61) — two big team-coloured buttons; singles
+          auto-credits, doubles credit is optional (long-press / "credit a player") */}
+      <PointButtons
+        homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} icon="🏸"
+        serving={needsServer ? null : sv.side}
+        disabled={needsServer} disabledHint="Pick who serves first to start scoring."
+        onPoint={point}
+      />
       {/* SD-107 — optional "how was it won?" for the last rally */}
       <PointDetailRow sport="badminton" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       <RallyPointEditor
@@ -106,7 +98,9 @@ const BadmintonScoreboard: NonNullable<SportPlugin<BadmintonState>['Scoreboard']
       ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
       status={`Game ${s.games.length + 1}`} bestOf={`best of ${s.gamesToWin * 2 - 1}`}
       // SD-104: serve dot on the serving side (the last rally winner / first server), while live.
-      serving={s.ended ? null : serve(s).side} serveIcon="🏸"
+      serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serve(s).side} serveIcon="🏸"
+      // SD-115 — GAME / MATCH POINT, derived by playing the next rally.
+      alerts={pressureText(pointPressure(reducer, s, { unit: 'game' }), { home: homeName, away: awayName })}
     />
   );
 };

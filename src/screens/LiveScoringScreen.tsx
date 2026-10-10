@@ -36,6 +36,7 @@ import { VoiceScorer } from '../sports/VoiceScorer';
 import { Scoreboard } from '../components/Scoreboard';
 import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
+import { undoLabel } from '../sports/undoLabel';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
 import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt, getMatchPotm, setMatchPotm, AWARDS_DB_MESSAGE } from '../data/repos';
@@ -229,7 +230,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setLock(l);
   }, [matchId]);
 
-  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -868,10 +869,15 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     </View>
   );
 
+  // SD-115 — name what Undo removes ("point to Federer (30-15)"), from the newest
+  // logged step and the timeline events it added. Cricket keeps its own wording.
+  const undoWhat = sport === 'cricket' ? null : undoLabel(lastStep, { home: homeName, away: awayName }, (s) => {
+    try { const m = plugin.summary(s as never); return m.homeScore != null && m.awayScore != null ? `${m.homeScore}-${m.awayScore}` : null; } catch { return null; }
+  });
   const undoBar = canScore && eventCount > 0 ? (
-    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo last ${sport === 'cricket' ? 'ball' : 'update'}`} accessibilityHint="Tap repeatedly to rewind to any earlier point" onPress={undo}>
-      <Text style={st.undoText}>↶  Undo</Text>
-      <Text style={st.undoHint}>rewind step-by-step</Text>
+    <TouchableOpacity style={st.undoBtn} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Undo${undoWhat ? `: ${undoWhat}` : ` last ${sport === 'cricket' ? 'ball' : 'update'}`}`} accessibilityHint="Tap repeatedly to rewind to any earlier point" onPress={undo}>
+      <Text style={[st.undoText, { flexShrink: 1 }]} numberOfLines={1}>↶  Undo{undoWhat ? `: ${undoWhat}` : ''}</Text>
+      {undoWhat ? null : <Text style={st.undoHint}>rewind step-by-step</Text>}
     </TouchableOpacity>
   ) : null;
 

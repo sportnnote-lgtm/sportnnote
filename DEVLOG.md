@@ -13,6 +13,13 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-115 racket point-entry safety: big team-coloured buttons, no default server, pressure chip, named Undo, Fast4
+- **Why:** audit P0 — racket point buttons were small identical grey pills stacked one above the other, the main wrong-side risk; "who serves first" silently defaulted to Home.
+- **What:** `PointButtons.tsx` — every racket sport (tennis, badminton, table tennis, squash, padel, pickleball; all scoring systems) gets two side-by-side ≥64 pt buttons in team colours with a SERVING tag. Singles auto-credits; doubles scores the side, player credit optional (long-press / "credit a player"); SD-107 point detail still works. Point buttons stay disabled until "Who serves first?" (and pickleball "Who starts on the right?") is picked; "Fix who served first" mid-match (v:2 only; refused where the server decides scoring — squash English, pickleball side-out). Table tennis's duplicate toss field removed. MATCH / SET / BREAK / GAME POINT chip on the board (`pointStatus.ts`). The Undo bar names what it undoes — "↶ Undo: point to X (30-15)" — for every sport except cricket, falling back to plain "Undo" (`undoLabel.ts`, `useLiveMatch.lastStep`). Tennis Ace / Double fault are smaller outline buttons below. Fast4 set tiebreaks are sudden death at 4-4 (`tbSuddenDeathAt`; old Fast4 matches unchanged).
+- **Verified:** `tests/racket-entry.test.mts` (13), fingerprints unchanged, suite green, tsc clean; demo 8093 375 px — badminton, tennis Fast4 + multi-player rosters, pickleball side-out doubles, squash English. Padel / TT: tests only. Guides: all six score-<racket> pages.
+
+---
+
 ### 2026-10-11 — SD-114 live scoring bugs: football goals, safe timeline corrections, backfill bar, kabaddi touch cap
 - **Football:** a goal via Shot → On target → Goal was counted twice — now once. The goal is recorded on the scorer tap; the assist step says "✓ Goal recorded (2-1). Assist? (optional)" and Close keeps it (Cancel used to drop the goal). Removing/editing either yellow of a second-yellow also removes the automatic red (re-entry restores it). No reducer change — old logs replay identically.
 - **Timeline corrections (football, hockey, basketball, kabaddi, volleyball/racket editor):** ✕ asks first and says what goes with it ("X's assist goes with it", kabaddi "Raid +2, Tackle +1, All out +2", hockey "the keeper's save"); ✎ ✕ ＋ are 44 pt. Cancelling an ✎ Edit no longer deletes the event (removal is held until the re-entry commits; the committed log is the same as before). "Insert a missed point" starts with no side picked.

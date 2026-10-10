@@ -8,7 +8,7 @@ order: 61
 updated: 2026-10-11
 ---
 
-Padel uses tennis scoring, and most tours settle 40-40 with one golden point. You tap who won each point; the app does the rest.
+Padel uses tennis scoring, often with a golden point at 40-40. You tap who won each point.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -19,11 +19,12 @@ Padel uses tennis scoring, and most tours settle 40-40 with one golden point. Yo
 
 ## Step by step: score a point
 1. Open the match → **Scoring** tab.
-2. Under "Who serves first?", tap the pair serving first (changeable until the first point).
-3. Under "Serving order — set 1", tap who serves first in each pair. You pick again every set.
-4. The serving line names the server and pair, e.g. "Serving: Asha Rao · Red House".
-5. After each point, tap the winner under "Point — Red House" (or the other row).
-6. At 40-40 with golden point, the app shows "Golden point — next point wins the game."
+2. Under **Who serves first?**, tap the pair serving first. Nothing is picked at the start; the point buttons stay grey with "Pick who serves first to start scoring." until you choose.
+3. Under "Serving order — set 1", tap who serves first in each pair (again every set).
+4. The serving line names the server and pair, e.g. "Serving: Asha Rao · Red House". That pair's button shows a **SERVING** tag.
+5. After each point, tap the big team-coloured button of the pair that won it.
+6. The tap scores for the pair. To credit one player (optional), tap **credit a player** or long-press a side, then pick the name (**Cancel** closes it). In singles the player is credited automatically.
+7. At 40-40 with golden point, the app shows "Golden point — next point wins the game."
 
 ## Sets, tiebreaks and the match tiebreak
 - Sets are won at 6 games by two. At 6-6 a tiebreak to 7 (win by two) makes it 7-6. Short sets work the same at 4, with the tiebreak at 4-4.
@@ -32,47 +33,45 @@ Padel uses tennis scoring, and most tours settle 40-40 with one golden point. Yo
 ## How the app follows the serve
 - Serve changes every game; partners alternate their pair's service games.
 - In a tiebreak the first server serves one point, then it changes every two; a pair's second turn goes to the partner (FIP rule).
+- Wrong first server? After the first point, tap **Fix who served first** under the serving line and pick the right pair. Only the serve changes; the score stays, and holds, breaks and serve points re-work themselves.
 
 ## Reading the board
-POINTS shows the current game, with a games column per set and a 🟡 dot by the serving pair. A tiebreak set shows the loser's points small (7 and 6⁴); the match tiebreak has a "TB" column. The result reads like "6-4, 3-6, [10-7]".
+POINTS shows the current game, with a games column per set and a 🟡 dot by the serving pair. The match tiebreak has a "TB" column. The result reads like "6-4, 3-6, [10-7]".
+
+A chip under the board shows **MATCH POINT**, **SET POINT** or **BREAK POINT** with the pair's name. Both pairs can show one at once, e.g. at a golden point.
 
 ## Match stats
-The **Score** tab's "Match stats" (chips: **Match** or each set) show:
-- Service, return and total points won.
-- Holds and breaks; break points saved and converted (never in tiebreaks).
-- Golden points won; set and match points saved.
-- Most points in a row; biggest games lead in a set.
-
-"Service points won, by server" gives each player's own serve, e.g. "18/26 (69%) · 4/5 held".
+The **Score** tab's "Match stats" (per match or set) show service and return points won, holds, breaks, break points, golden points won and streaks, plus each player's own serve.
 
 ## Point detail (optional)
-Off by default, so a point stays one tap. Turn it on with **On** in the "🔎 Point detail (optional)" row under the scoring buttons, or the **Point detail** toggle under "Stats captured" in "⚙️ Scoring settings" (Info tab or ☰ Quick options; mid-match, **Apply** starts it from the next point).
+Off by default. Turn it on with **On** in the "🔎 Point detail (optional)" row under the buttons, or the **Point detail** toggle in "⚙️ Scoring settings".
 
-After each point, "How was it won? · Asha Rao" appears. Tap a chip (again to clear) or **Skip**; nothing is required.
+After each point, "How was it won? · Asha Rao" appears. Tap a chip or **Skip**; nothing is required.
 - **Ace** or **Service winner** (server won).
 - **Winner** + **Smash**, **Smash out ×3/×4**, **Volley**, **Bandeja**, **Víbora**, **Drop**, **Lob**.
 - **Forced error**, or **Unforced error** + **Net**, **Out**.
 
-Winners count for the point winner, errors against the opponent (pick who under "By:"). Match stats add a "Point detail" block (winners, errors, Winners / UE, by stroke); the box score adds **W**, **UE**, **FE**. Older matches are unchanged.
+Winners count for the point winner, errors against the opponent (pick who under **By:**).
 
 ## Fix a mistake
-- Wrong tap just now? Tap **Undo**.
-- Older point: tap **Edit** next to "Correct the timeline" on the **Scoring** tab.
-1. Tap ✎ to change the winner, player (or **Team (no player)**) or "How was it won? (optional)". Tap **Save**.
-2. Tap ✕ to delete, or ＋ on the point before a missed one (or **＋ Insert a point at the very start**).
-3. Tap **Done**.
+- Wrong tap just now? The Undo bar names what it removes, e.g. "↶ Undo: point to Red House (30-15)", "Undo: point to Red House · game" or "Undo: first-server pick". Each tap undoes one step.
+- Older point: tap **Edit** next to **Correct the timeline** on the **Scoring** tab.
+1. Tap ✎ to change the winner, player or detail. Tap **Save**.
+2. Tap ✕ to remove a point; the app asks you to confirm first.
+3. To add a missed point, tap ＋ on the point before it. **Insert a missed point** starts with no side picked, and **Save** stays off until you choose one.
+4. Tap **Done**.
 
 The app replays the match, so games, server and stats follow. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself when a pair wins enough sets. If a pair can't go on, tap **🏁 End match…** → **Retired**; if the referee puts a pair out, **Default**. The result keeps the games played, e.g. "6-4, 3-2 ret.". See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a pair wins enough sets. Otherwise tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
 
 ## What goes on the player's profile
-The player's padel page adds **Apps**, **W-L** and **Win %**. **Match play** has sets, games (a match tiebreak counts as one), points, deciders and tiebreaks. **Serve & return** has service and return points, holds, breaks and break points (each player's own serve). **Shot making** has winners, errors and Winners / UE from point-detail matches (☁ when only some tracked it). **Scoring** has points. Players with both formats get **Singles / doubles**; doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
+The player's padel page adds **W-L**, **Win %**, **Match play**, **Serve & return** (each player's own serve) and **Shot making** (from point-detail matches). Doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).
 
 ## Common questions
 ### Who of the pair serves first?
-The player picked under "Serving order" for that set (else the player added first). The partner serves the pair's next service game.
+The player picked under "Serving order" for that set. The partner serves the pair's next service game.
 
 ### Can I score padel singles?
 Yes. Pick **Singles** under **Players**. The serve alternates every game.

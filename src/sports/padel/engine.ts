@@ -33,6 +33,9 @@ export interface PadelState {
   doubles: boolean;
   /** which side served game 1; serve alternates every game after that */
   firstServer: 'home' | 'away';
+  /** SD-115 — the scorer has picked who serves first (SET_FIRST_SERVER); the
+   *  point buttons stay disabled until then (no silent "home" default). */
+  serverPicked?: boolean;
   /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
    *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
   serveOrder?: ServeOrder;
@@ -155,11 +158,14 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
   // (ITF / FIP: each pair chooses at the start of every set). Pre-first-point of
   // the set only; no score effect and no timeline event.
   if (a.type === 'SET_SERVE_ORDER') return withServeOrder(s, a.payload as Record<string, unknown> | undefined);
+  // SD-115: a `v:2` payload may fix the first server mid-match (serve is only
+  // derived, so the score never changes; serve figures re-derive).
   if (a.type === 'SET_FIRST_SERVER') {
     const played = s.games.home || s.games.away || s.pts.home || s.pts.away || s.sets.length;
     const side = a.payload?.side as 'home' | 'away' | undefined;
-    if (played || (side !== 'home' && side !== 'away')) return s;
-    return { ...s, firstServer: side };
+    if (side !== 'home' && side !== 'away') return s;
+    if (played && (a.payload?.v !== 2 || s.ended)) return s;
+    return { ...s, firstServer: side, serverPicked: true };
   }
   // SD-107 — capture setting (from the next point) and a point's detail
   // (annotates the last point; allowed after the match point too).

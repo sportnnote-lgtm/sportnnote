@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
-import { SelectChip, Button, textStyles } from '../../components/ui';
+import { textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
 import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
@@ -20,21 +20,12 @@ import { MatchStatsPanel } from '../MatchStatsPanel';
 import { ServeOrderPicker } from '../ServeOrderPicker';
 import { PointDetailRow } from '../PointDetailRow';
 import { detailLiveSettings } from '../pointDetailSettings';
+import { PointButtons, SecondaryAction, ServeFirstPicker } from '../PointButtons';
+import { pointPressure, pressureText } from '../pointStatus';
 import { init, reducer, disp, inTiebreak, other, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, type TennisState } from './engine';
 import { tennisTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
 
-
-const Row = ({ label, roster, onPick, fallback }: { label: string; roster: Player[]; onPick: (p?: Player) => void; fallback?: string }) => (
-  <View style={{ gap: theme.spacing(2) }}>
-    <Text style={ctrl.label}>{label}</Text>
-    {roster.length > 0 ? (
-      <View style={ctrl.chips}>{roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => onPick(p)} />)}</View>
-    ) : (
-      <Button label={fallback ?? '+1'} variant="ghost" onPress={() => onPick()} />
-    )}
-  </View>
-);
 
 const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as TennisState;
@@ -57,33 +48,37 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
   const serverP: Player | undefined = s.doubles ? serverRoster[serve.slot] : serverRoster[0];
   const serverName = serverP?.fullName ?? (s.doubles ? `Server ${serve.slot + 1}` : serverSideName);
   const noPlayYet = gamesPlayed(s) === 0 && s.pts.home === 0 && s.pts.away === 0;
-  const setFirstServer = (side: 'home' | 'away') => dispatch({ type: 'SET_FIRST_SERVER', payload: { side } });
+  // SD-115: no silent default — the point buttons wait for the toss.
+  const needsServer = noPlayYet && !s.serverPicked;
   // SD-104: only the server can hit an ace or double-fault — offer both for the
   // serving side only, credited to the serving player.
   const by = serverP ? serverP.fullName : serverSideName;
+  const serverColor = serve.side === 'home' ? homeColor : awayColor;
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
-      {noPlayYet ? (
-        <View style={{ gap: theme.spacing(2) }}>
-          <Text style={ctrl.label}>🎾 Who serves first?</Text>
-          <View style={ctrl.chips}>
-            <SelectChip label={homeName} active={s.firstServer === 'home'} onPress={() => setFirstServer('home')} />
-            <SelectChip label={awayName} active={s.firstServer === 'away'} onPress={() => setFirstServer('away')} />
-          </View>
-        </View>
-      ) : (
-        <Text style={ctrl.serveBanner}>🎾 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>
-      )}
+      {!noPlayYet && <Text style={ctrl.serveBanner}>🎾 Serving: {serverName}{s.doubles ? `  ·  ${serverSideName}` : ''}</Text>}
+      <ServeFirstPicker
+        icon="🎾" homeName={homeName} awayName={awayName} started={!noPlayYet}
+        picked={s.serverPicked || !noPlayYet ? s.firstServer : null}
+        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side } })}
+      />
       {s.doubles && (
         <ServeOrderPicker state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} dispatch={dispatch} icon="🎾" />
       )}
-      <Row label={`🎾 Point — ${homeName}`} roster={homeRoster} onPick={(p) => act('POINT', 'home', 'points', p)} fallback={`Point ${homeName}`} />
-      <Row label={`🎾 Point — ${awayName}`} roster={awayRoster} onPick={(p) => act('POINT', 'away', 'points', p)} fallback={`Point ${awayName}`} />
-      <View style={ctrl.row}>
-        <Button label={`🎯 Ace by ${by}`} variant={serve.side} style={ctrl.flex} onPress={() => act('ACE', serve.side, 'aces', serverP)} />
-        <Button label={`⚠️ Double fault by ${by} → point ${receiverSideName}`} variant="ghost" style={ctrl.flex} onPress={() => doubleFault(serve.side, serverP)} />
-      </View>
+      {/* SD-115 — two big team-coloured point buttons; singles auto-credits */}
+      <PointButtons
+        homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+        homeRoster={homeRoster} awayRoster={awayRoster} icon="🎾"
+        serving={noPlayYet && !s.serverPicked ? null : serve.side}
+        disabled={needsServer} disabledHint="Pick who serves first to start scoring."
+        onPoint={(side, p) => act('POINT', side, 'points', p)}
+      />
+      {/* Ace / Double fault: secondary (outline, smaller), below the point buttons */}
+      {!needsServer && <View style={ctrl.row}>
+        <SecondaryAction label={`🎯 Ace · ${by}`} color={serverColor} onPress={() => act('ACE', serve.side, 'aces', serverP)} />
+        <SecondaryAction label={`⚠️ Double fault · ${by} → point ${receiverSideName}`} onPress={() => doubleFault(serve.side, serverP)} />
+      </View>}
       {/* SD-107 — optional "how was it won?" for the last point */}
       <PointDetailRow sport="tennis" state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} />
       <RallyPointEditor
@@ -132,7 +127,9 @@ const TennisScoreboard: NonNullable<SportPlugin<TennisState>['Scoreboard']> = ({
       // headline becomes SETS won — the result a fan reads off a final board.
       leadLabel="POINTS" lead={{ home: disp(s, 'home'), away: disp(s, 'away') }}
       // Serve dot next to the serving side's name (broadcast standard), while live.
-      serving={s.ended ? null : serveInfo(s).side} serveIcon="🎾"
+      serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serveInfo(s).side} serveIcon="🎾"
+      // SD-115 — MATCH / SET / BREAK POINT, derived by playing the next point.
+      alerts={pressureText(pointPressure(reducer, s, { unit: 'set', server: serveInfo(s).side }), { home: homeName, away: awayName })}
     />
   );
 };
@@ -172,15 +169,15 @@ export const tennisPlugin: SportPlugin<TennisState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'bo3',
       options: [
-        { value: 'bo3', label: 'Best of 3 sets', set: { setsToWin: 2, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
-        { value: 'bo5', label: 'Best of 5 sets', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
+        { value: 'bo3', label: 'Best of 3 sets', set: { setsToWin: 2, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
+        { value: 'bo5', label: 'Best of 5 sets', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
         // SD-02: a Slam plays the 5th set in games and a 10-point tiebreak at 6-6
         // (since 2022). Matches already created with the old gs5 stored
         // finalSetTiebreak: 10 in their own format, so they keep their rules.
-        { value: 'gs5', label: 'Grand Slam (Bo5, 10-pt TB at 6-6 in set 5)', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 6 } },
-        { value: 'fast4', label: 'Fast4', set: { setsToWin: 2, gamesPerSet: 4, setWinByTwo: false, tiebreakAt: 3, setTiebreak: true, tiebreakPoints: 5, noAd: true, finalSetTiebreak: 0, finalSetTBAt: 0 } },
-        { value: 'proset', label: 'Pro set (to 8)', set: { setsToWin: 1, gamesPerSet: 8, setWinByTwo: true, tiebreakAt: 8, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0 } },
-        { value: 'match_tb', label: 'Match tiebreak (to 10)', set: { setsToWin: 1, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10, finalSetTBAt: 0 } },
+        { value: 'gs5', label: 'Grand Slam (Bo5, 10-pt TB at 6-6 in set 5)', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 6, tbSuddenDeathAt: 0 } },
+        { value: 'fast4', label: 'Fast4', set: { setsToWin: 2, gamesPerSet: 4, setWinByTwo: false, tiebreakAt: 3, setTiebreak: true, tiebreakPoints: 5, noAd: true, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 4 } },
+        { value: 'proset', label: 'Pro set (to 8)', set: { setsToWin: 1, gamesPerSet: 8, setWinByTwo: true, tiebreakAt: 8, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
+        { value: 'match_tb', label: 'Match tiebreak (to 10)', set: { setsToWin: 1, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -215,6 +212,14 @@ export const tennisPlugin: SportPlugin<TennisState> = {
       ],
     },
     { key: 'setTiebreak', label: 'Set tiebreak at N-N', type: 'toggle', default: true, advanced: true, hint: 'off = advantage set (win by 2)' },
+    {
+      // SD-115 — ITF Fast4: the tiebreak (to 5) is sudden death at 4-4.
+      key: 'tbSuddenDeathAt', label: 'Set tiebreak at the end', type: 'choice', default: 0, advanced: true,
+      options: [
+        { value: 0, label: 'Win by 2' },
+        { value: 4, label: 'Sudden death at 4-4 (Fast4)' },
+      ],
+    },
     {
       key: 'finalSetTiebreak', label: 'Deciding set', type: 'choice', default: 0, advanced: true,
       options: [

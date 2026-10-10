@@ -28,6 +28,8 @@ export const pickleballPlugin = makeRallyPlugin({
   defaults: { playersPerSide: 2, target: 11, winBy: 2, gamesToWin: 2 },
   hasCourt: true,
   courtPositions: true,
+  // SD-115 — "Who serves first?" on the scoring screen too (no default).
+  firstServePicker: true,
   formatFields: [
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'rec', tournamentDefault: 'traditional',

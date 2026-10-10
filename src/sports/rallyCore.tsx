@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
-import { Button, SelectChip, textStyles } from '../components/ui';
+import { SelectChip, textStyles } from '../components/ui';
 import { LiveTimeline } from './LiveTimeline';
 import { MatchBoxScore } from '../components/BoxScore';
 import { rallyBox } from './boxSources';
@@ -22,6 +22,8 @@ import { RallyPointEditor } from './RallyPointEditor';
 import { MatchStatsPanel } from './MatchStatsPanel';
 import { PointDetailRow } from './PointDetailRow';
 import { detailLiveSettings } from './pointDetailSettings';
+import { PointButtons, ServeFirstPicker } from './PointButtons';
+import { pointPressure, pressureText } from './pointStatus';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
 import type { FormatField, ScoreAction, SportPlugin } from './types';
@@ -94,41 +96,61 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const spot = opts.courtPositions ? serveSpot(s) : null;
     const positionedServer = spot ? byId(serverId(s, ids)) : undefined;
     // "Who starts on the right?" — doubles, before the first point of a game.
-    const startPicker = opts.courtPositions && s.doubles && !s.ended && s.current.home === 0 && s.current.away === 0
-      ? (
+    // SD-115: nothing selected until picked (no silent roster-order default),
+    // the point buttons wait for both picks at 0-0 of game 1, and a wrong pick
+    // can be fixed mid-game (`v:2`) — the server is only derived, the score stays.
+    const atGameStart = s.current.home === 0 && s.current.away === 0;
+    const startTeams = (['home', 'away'] as const).filter((t) => rosterOf(t).length >= 2);
+    const needsStart = !!opts.courtPositions && s.doubles && !s.ended && atGameStart && s.games.length === 0
+      && startTeams.some((t) => !s.startRight?.[t]);
+    const [fixStart, setFixStart] = React.useState(false);
+    const startChips = (fix: boolean) => startTeams.map((t) => {
+      const roster = rosterOf(t).slice(0, 2);
+      const cur = s.startRight?.[t] && roster.some((p) => p.id === s.startRight?.[t]) ? s.startRight[t]
+        : !needsStart ? startPair(s, t, ids[t]).starter : undefined;
+      return (
+        <View key={t} style={ctrl.chips}>
+          <Text style={[ctrl.meta, { alignSelf: 'center' }]}>{t === 'home' ? homeName : awayName}:</Text>
+          {roster.map((p) => (
+            <SelectChip key={p.id} label={p.fullName} active={cur === p.id}
+              onPress={() => dispatch({ type: 'SET_START_RIGHT', payload: { side: t, playerId: p.id, playerName: p.fullName, ...(fix ? { v: 2 } : {}) } })} />
+          ))}
+        </View>
+      );
+    });
+    const startPicker = !opts.courtPositions || !s.doubles || s.ended || startTeams.length === 0 ? null
+      : atGameStart ? (
         <View style={{ gap: theme.spacing(2) }}>
           <Text style={ctrl.label}>Who starts on the right?</Text>
           <Text style={ctrl.meta}>Each team's player in the right-hand court at 0-0 of this game. The first server serves from the right.</Text>
-          {(['home', 'away'] as const).map((t) => {
-            const roster = rosterOf(t).slice(0, 2);
-            if (roster.length < 2) return null;
-            const cur = startPair(s, t, ids[t]).starter;
-            return (
-              <View key={t} style={ctrl.chips}>
-                <Text style={[ctrl.meta, { alignSelf: 'center' }]}>{t === 'home' ? homeName : awayName}:</Text>
-                {roster.map((p) => (
-                  <SelectChip key={p.id} label={p.fullName} active={cur === p.id}
-                    onPress={() => dispatch({ type: 'SET_START_RIGHT', payload: { side: t, playerId: p.id, playerName: p.fullName } })} />
-                ))}
-              </View>
-            );
-          })}
+          {startChips(false)}
         </View>
-      ) : null;
-
-    // SD-104 — "Who serves first?" before the match's first rally (the toss).
-    const firstPicker = opts.firstServePicker && !s.ended && s.events.length === 0 && s.games.length === 0
-      ? (
+      ) : fixStart ? (
         <View style={{ gap: theme.spacing(2) }}>
-          <Text style={ctrl.label}>{opts.icon} Who serves first?</Text>
-          <View style={ctrl.chips}>
-            {(['home', 'away'] as const).map((t) => (
-              <SelectChip key={t} label={t === 'home' ? homeName : awayName} active={(s.opening ?? 'home') === t}
-                onPress={() => dispatch({ type: 'SET_FIRST_SERVER', payload: { side: t } })} />
-            ))}
-          </View>
+          <Text style={ctrl.label}>Who started this game on the right?</Text>
+          <Text style={ctrl.meta}>Only who serves changes — the score stays. Serve stats re-derive.</Text>
+          {startChips(true)}
+          <Text style={ctrl.link} onPress={() => setFixStart(false)} accessibilityRole="button">Done</Text>
         </View>
-      ) : null;
+      ) : (
+        <Text style={ctrl.link} onPress={() => setFixStart(true)} accessibilityRole="button">Fix who started on the right</Text>
+      );
+
+    // SD-104 / SD-115 — "Who serves first?" (the toss): nothing selected until
+    // picked, then a "Fix who served first" link (rally scoring only — in
+    // side-out scoring the server decides who can score).
+    const noPlayYet = s.events.length === 0 && s.games.length === 0;
+    const needsServer = !!opts.firstServePicker && noPlayYet && !s.serverPicked && !s.ended;
+    const firstPicker = opts.firstServePicker && !s.ended ? (
+      <ServeFirstPicker
+        icon={opts.icon} homeName={homeName} awayName={awayName} started={!noPlayYet} canFix={!s.sideOut}
+        picked={s.serverPicked || !noPlayYet ? s.opening ?? 'home' : null}
+        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side } })}
+      />
+    ) : null;
+    const blocked = needsServer || needsStart;
+    const blockedHint = needsServer && needsStart ? 'Pick who serves first and who starts on the right to start scoring.'
+      : needsServer ? 'Pick who serves first to start scoring.' : 'Pick who starts on the right to start scoring.';
 
     if (s.sideOut) {
       // The current server's player (for credit + display). With court positions
@@ -143,7 +165,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         <View style={{ gap: theme.spacing(4) }}>
           <View style={ctrl.serveBox}>
             <Text style={ctrl.label}>{opts.serveSystemLabel}</Text>
-            {spot ? (
+            {blocked ? null : spot ? (
               <>
                 <Text style={ctrl.headline}>
                   {opts.icon} Serving: {serverP?.fullName ?? servingTeam} ({spot.court}) · {spot.call}
@@ -159,10 +181,14 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
           </View>
           {firstPicker}
           {startPicker}
-          <View style={ctrl.row}>
-            <Button label={`Rally won — ${homeName}`} variant="home" style={ctrl.flex} onPress={() => rallyWon('home')} />
-            <Button label={`Rally won — ${awayName}`} variant="away" style={ctrl.flex} onPress={() => rallyWon('away')} />
-          </View>
+          {/* SD-115 — the same two big team-coloured buttons as rally scoring; the
+              serving player is credited automatically when the server wins. */}
+          <PointButtons
+            homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+            homeRoster={homeRoster} awayRoster={awayRoster} icon={opts.icon} verb="Rally won" credit={false}
+            serving={blocked ? null : s.serving} disabled={blocked} disabledHint={blockedHint}
+            onPoint={(t) => rallyWon(t)}
+          />
           {detailRow}
           {editor}
         </View>
@@ -180,25 +206,19 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const serverName = spot
       ? `${positionedServer?.fullName ?? serverSideName} (${spot.court}) · ${spot.call}`
       : s.doubles ? serverSideName : rosterOf(serverSide)[0]?.fullName ?? serverSideName;
-    const Row = ({ label, roster, side, name }: { label: string; roster: Player[]; side: 'home' | 'away'; name: string }) => (
-      <View style={{ gap: theme.spacing(2) }}>
-        <Text style={ctrl.label}>{label}</Text>
-        {roster.length > 0 ? (
-          <View style={ctrl.chips}>
-            {roster.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} onPress={() => point(side, p)} />)}
-          </View>
-        ) : (
-          <Button label={`+1 ${name}`} variant={side} onPress={() => point(side)} />
-        )}
-      </View>
-    );
     return (
       <View style={{ gap: theme.spacing(4) }}>
         {firstPicker}
-        <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>
+        {!blocked && <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>}
         {startPicker}
-        <Row label={`${opts.icon} Point — ${homeName}`} roster={homeRoster} side="home" name={homeName} />
-        <Row label={`${opts.icon} Point — ${awayName}`} roster={awayRoster} side="away" name={awayName} />
+        {/* SD-115 — two big team-coloured point buttons, one layout for every
+            scoring system; singles auto-credits, doubles credit is optional. */}
+        <PointButtons
+          homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
+          homeRoster={homeRoster} awayRoster={awayRoster} icon={opts.icon}
+          serving={blocked ? null : serverSide} disabled={blocked} disabledHint={blockedHint}
+          onPoint={point}
+        />
         {detailRow}
         {editor}
       </View>
@@ -240,7 +260,10 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         ls={rallyLineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
         status={rallySummary(s, opts.serveTag).statusLine ?? `Game ${s.games.length + 1}`}
         bestOf={s.gamesToWin === 1 ? 'single game' : `best of ${s.gamesToWin * 2 - 1}`}
-        serving={s.ended ? null : serving} serveIcon={opts.icon}
+        serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serving} serveIcon={opts.icon}
+        // SD-115 — GAME / MATCH POINT, derived by playing the next rally (side-out:
+        // only the server can score, so only the server can have one).
+        alerts={pressureText(pointPressure(reducer, s, { unit: 'game' }), { home: homeName, away: awayName })}
       />
     );
   };
@@ -290,6 +313,7 @@ const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   serve: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   headline: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   serveBox: { gap: theme.spacing(1), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3) },

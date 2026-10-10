@@ -29,6 +29,9 @@ export interface BadmintonState {
   doubles: boolean;
   /** who serves the very first rally; after that the rally winner serves */
   firstServer: 'home' | 'away';
+  /** SD-115 — the scorer has picked who serves first (SET_FIRST_SERVER); the
+   *  point buttons stay disabled until then (no silent "home" default). */
+  serverPicked?: boolean;
   /** SD-107 — optional point detail (how each point was won) is being
    *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
   pointDetail?: boolean;
@@ -91,11 +94,14 @@ export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
   if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
   // Who serves the first rally — settable only before any point; after that the
   // rally winner serves. No `side` on this action.
+  // SD-115: a `v:2` payload may fix it mid-match — it only names who served the
+  // first rally (the rally winner serves after that), so the score never changes.
   if (a.type === 'SET_FIRST_SERVER') {
     const played = s.current.home || s.current.away || s.games.length;
     const side = a.payload?.side as 'home' | 'away' | undefined;
-    if (played || (side !== 'home' && side !== 'away')) return s;
-    return { ...s, firstServer: side };
+    if (side !== 'home' && side !== 'away') return s;
+    if (played && (a.payload?.v !== 2 || s.ended)) return s;
+    return { ...s, firstServer: side, serverPicked: true };
   }
   // SD-107 — capture setting (from the next point) and a point's detail
   // (annotates the last point; allowed after the match point too).

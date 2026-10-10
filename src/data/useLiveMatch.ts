@@ -61,7 +61,12 @@ export interface UseLiveMatch {
   /** live correction of past events (cricket "Edit a past ball", #06): one AMEND
    *  row through the outbox, its stat changes written; only the active scorer. */
   amend: (ops: AmendOp[], lines: string[], byName: string) => Promise<void>;
+  /** SD-115 — the newest logged event (what Undo removes) with the state just
+   *  before and after it, so the Undo bar can name it. Null when unknown. */
+  lastStep: LastStep | null;
 }
+
+export interface LastStep { type: string; prev: unknown; next: unknown }
 
 export function useLiveMatch(params: {
   matchId?: string;
@@ -97,6 +102,7 @@ export function useLiveMatch(params: {
   const [state, setState] = useState<unknown>(() => plugin.createInitialState(config));
   const [syncing, setSyncing] = useState(!!matchId);
   const [eventCount, setEventCount] = useState(0);
+  const [lastStep, setLastStep] = useState<LastStep | null>(null);
 
   // Refs avoid stale closures inside the realtime callback and dispatch.
   const stateRef = useRef(state);
@@ -149,7 +155,9 @@ export function useLiveMatch(params: {
     let s = plugin.createInitialState(config);
     const applied = new Set<string>();
     let maxSeq = 0;
+    let before: unknown = s;
     for (const e of events) {
+      before = s;
       s = plugin.reducer(s, toAction(e));
       applied.add(eventKey(e));
       maxSeq = Math.max(maxSeq, e.seq);
@@ -159,6 +167,11 @@ export function useLiveMatch(params: {
     seqRef.current = maxSeq;
     setBoth(s);
     setEventCount(raw.length);
+    // The newest raw row is what Undo pops; an AMEND row isn't in `events` itself.
+    const tail = raw.reduce<(typeof raw)[number] | undefined>((m, e) => (!m || e.seq >= m.seq ? e : m), undefined);
+    setLastStep(!tail ? null : tail.type === AMEND_TYPE || events[events.length - 1] !== tail
+      ? { type: tail.type, prev: s, next: s }
+      : { type: tail.type, prev: before, next: s });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, plugin, config]);
 
@@ -202,6 +215,7 @@ export function useLiveMatch(params: {
             const prev = stateRef.current;
             const next = plugin.reducer(prev, toAction(e));
             setBoth(next);
+            setLastStep({ type: e.type, prev, next });
             setEventCount((c) => c + 1); // a viewer's count follows the log too (#25's pre → live)
             try { onRemoteRef.current?.(prev, next); } catch { /* a viewer's callback never breaks sync */ }
           } else {
@@ -227,10 +241,12 @@ export function useLiveMatch(params: {
   const dispatch = useCallback(
     (action: ScoreAction) => {
       // Optimistic local apply — instant feedback for the scorer.
-      const next = plugin.reducer(stateRef.current, action);
+      const prevState = stateRef.current;
+      const next = plugin.reducer(prevState, action);
       setBoth(next);
 
       if (!matchId || !canWrite) return;
+      setLastStep({ type: action.type, prev: prevState, next });
 
       // Player attribution → stat line + notify followers (scorer side only,
       // so replay/realtime on viewers never double-counts).
@@ -381,5 +397,5 @@ export function useLiveMatch(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, canWrite, sport, config, plugin, rebuildFromLog, homeTeamName, awayTeamName]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend };
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend, lastStep };
 }

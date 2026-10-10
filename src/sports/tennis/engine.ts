@@ -31,6 +31,11 @@ export interface TennisState {
   setTiebreak: boolean;
   /** points to win the set tiebreak (7 std · 5 Fast4) */
   tiebreakPoints: number;
+  /** SD-115 — ITF Fast4: the set tiebreak goes to sudden death at N-N (4 →
+   *  first to 5, the next point at 4-4 wins). Absent / 0 = win by 2 (every
+   *  match created before SD-115, so old logs replay unchanged). Not applied to
+   *  a match tiebreak or a Grand Slam deciding-set tiebreak. */
+  tbSuddenDeathAt?: number;
   /** no-advantage scoring — a single deciding point at deuce */
   noAd: boolean;
   /** if > 0, the deciding set is replaced by a first-to-N match tiebreak
@@ -48,6 +53,10 @@ export interface TennisState {
   doubles: boolean;
   /** which side served game 1; serve alternates every game after that */
   firstServer: 'home' | 'away';
+  /** SD-115 — the scorer has picked who serves first (SET_FIRST_SERVER). Until
+   *  then the point buttons stay disabled, so there's no silent "home" default.
+   *  Absent on older matches (they already have points, so it never blocks). */
+  serverPicked?: boolean;
   /** SD-104 — doubles serving order picked per set (SET_SERVE_ORDER); absent →
    *  roster order. Kept across an EDIT_LOG replay. See serve.ts. */
   serveOrder?: ServeOrder;
@@ -75,6 +84,7 @@ export const init = (config?: Record<string, unknown>): TennisState => {
     tiebreakAt: Number(config?.tiebreakAt ?? gamesPerSet),
     setTiebreak: config?.setTiebreak !== false, // default true
     tiebreakPoints: Number(config?.tiebreakPoints ?? 7),
+    ...(Number(config?.tbSuddenDeathAt) > 0 ? { tbSuddenDeathAt: Number(config?.tbSuddenDeathAt) } : {}),
     noAd: Boolean(config?.noAd ?? false),
     finalSetTiebreak: Number(config?.finalSetTiebreak ?? 0),
     finalSetTBAt: Number(config?.finalSetTBAt ?? 0),
@@ -154,7 +164,9 @@ function scorePoint(s: TennisState, side: 'home' | 'away', who: string | undefin
   if (tb) {
     // First to the tiebreak target, win by 2. A match tiebreak records its own
     // score as the set (e.g. 10-8); a set tiebreak makes the games tiebreakAt+1.
-    const tbWon = pts[side] >= tbTarget(s) && pts[side] - pts[o] >= 2;
+    // SD-115: a set tiebreak with sudden death (Fast4: at 4-4 the next point wins).
+    const sd = !isMatchTB(s) && !isSlamDecider(s) ? s.tbSuddenDeathAt ?? 0 : 0;
+    const tbWon = pts[side] >= tbTarget(s) && (pts[side] - pts[o] >= 2 || (sd > 0 && pts[o] >= sd));
     if (!tbWon) return { ...s, pts, events, seq };
     const games = isMatchTB(s) ? { home: pts.home, away: pts.away } : { ...s.games, [side]: (tbAtFor(s) ?? s.tiebreakAt) + 1 };
     return winSet(s, side, games, events, seq, [pts.home, pts.away]);
@@ -202,11 +214,15 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   // (ITF / FIP: each pair chooses at the start of every set). Pre-first-point of
   // the set only; no score effect and no timeline event.
   if (a.type === 'SET_SERVE_ORDER') return withServeOrder(s, a.payload as Record<string, unknown> | undefined);
+  // SD-115: a `v:2` payload may FIX the first server mid-match — serve is only
+  // derived (first server + games played), so the score never changes; the
+  // serve / hold / break figures re-derive from the corrected opener.
   if (a.type === 'SET_FIRST_SERVER') {
     const played = s.games.home || s.games.away || s.pts.home || s.pts.away || s.sets.length;
     const side = a.payload?.side as 'home' | 'away' | undefined;
-    if (played || (side !== 'home' && side !== 'away')) return s;
-    return { ...s, firstServer: side };
+    if (side !== 'home' && side !== 'away') return s;
+    if (played && (a.payload?.v !== 2 || s.ended)) return s;
+    return { ...s, firstServer: side, serverPicked: true };
   }
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).

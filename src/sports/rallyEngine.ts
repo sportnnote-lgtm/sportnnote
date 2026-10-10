@@ -30,6 +30,9 @@ export interface RallyState {
   /** who served first in game 1 — decided by the toss (table tennis, ITTF
    *  2.13.1). Absent on older matches → home. */
   opening?: 'home' | 'away';
+  /** SD-115 — the scorer has picked who serves first (SET_FIRST_SERVER); the
+   *  point buttons stay disabled until then (no silent "home" default). */
+  serverPicked?: boolean;
   /** SD-06 — per team, the player who starts the current game in the RIGHT-hand
    *  court (doubles), set pre-serve by `SET_START_RIGHT`. Absent → roster order
    *  (the first listed player). Carries over to the next game until changed. */
@@ -104,7 +107,9 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
       const side = a.payload?.side;
       const playerId = a.payload?.playerId;
       if (s.ended || (side !== 'home' && side !== 'away') || typeof playerId !== 'string' || !playerId) return s;
-      if (s.current.home !== 0 || s.current.away !== 0) return s;
+      // SD-115: a `v:2` payload may fix the pick mid-game — the server is only
+      // derived from it (court positions), so the score never changes.
+      if ((s.current.home !== 0 || s.current.away !== 0) && a.payload?.v !== 2) return s;
       return { ...s, startRight: { ...s.startRight, [side]: playerId } };
     }
     // SD-104 — who serves first (the toss), chosen on the scoring screen before
@@ -114,8 +119,16 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     if (a.type === 'SET_FIRST_SERVER') {
       const side = a.payload?.side;
       if (s.ended || (side !== 'home' && side !== 'away')) return s;
-      if (s.events.length || s.games.length || s.current.home || s.current.away) return s;
-      return { ...s, opening: side, serving: side };
+      if (s.events.length || s.games.length || s.current.home || s.current.away) {
+        // SD-115: a `v:2` payload may fix the opener mid-match under RALLY scoring
+        // only — serve is derived there (TT rotation / the rally winner serves),
+        // so the score never changes. In side-out scoring the server decides who
+        // can score, so a wrong opener is fixed by correcting the timeline.
+        if (a.payload?.v !== 2 || s.sideOut) return s;
+        const anyPoint = s.events.some((e) => e.kind === 'point');
+        return { ...s, opening: side, serving: anyPoint ? s.serving : side, serverPicked: true };
+      }
+      return { ...s, opening: side, serving: side, serverPicked: true };
     }
     // SD-107 — capture setting (from the next point) and a point's detail
     // (annotates the last point; allowed after the match point too).
