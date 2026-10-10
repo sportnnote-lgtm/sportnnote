@@ -2,6 +2,15 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-24 + SD-104: career framework; racket rule/UX fixes — DONE (b3fbe7e, 2026-10-10)
+- **SD-24:**
+  - Built: `career.ts` with schema-driven sections for all sports but golf; best run, titles / finals (stage-tagged finals), singles / doubles split, partner records; history key stats; Win % tile fix.
+  - Not shown yet: kabaddi raid strike % (needs SD-33 attempts), carrom slams (SD-86), basketball FG / 3P (SD-40), comebacks.
+  - Titles need finals tagged `stage: 'final'`.
+- **SD-104:** TT serve rule by target; tennis ace / DF only for the server; DF corrections via a `df` marker; first-server picker (squash / TT); squash icon; badminton serve dot; the doubles serving-order picker (tennis / padel).
+- **Limits:** long double-fault rows are truncated at 375 px in the timeline editor; pickleball accepts `SET_FIRST_SERVER` but has no picker.
+- No migration. Tests: 45 new · 1497 total · fingerprints unchanged · demo 8093.
+
 ## SD-22 + SD-23: serve/return stats; shared box score — DONE (ba10433, 2026-10-10)
 - **SD-22:**
   - Built: pure `serveStats.ts`, which replays the point list through each reducer. It gives service and return points; game, set and match points converted / saved; longest run and biggest lead; holds / breaks / BP and golden points (tennis, padel); side-outs / hand-outs; and per serving player where the server is named.
