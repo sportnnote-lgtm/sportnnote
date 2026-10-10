@@ -2,6 +2,15 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-21: point editor for TT, squash, pickleball, padel — DONE (2dc58ff, 2026-10-10)
+- **Built:** a `rally` kind with `wonBy` for side-out sports; rallyEngine and padel engine handle EDIT_LOG and STAT_ADJUST; `RallyPointEditor` gains `rowsOf`/`normalize`; `correctionActions`; the editor is mounted for table tennis, squash, pickleball and padel. Old side-out logs are inferred from their 🔁 events.
+- No migration. Tests: 21 new · an edited match equals the same match scored live · pinned fingerprints unchanged · demo 8093 (pickleball side-out flip, TT change and delete).
+- **Limits:**
+  - player names on later points aren't re-attributed when an edit changes the server (noted in the guide);
+  - after an edit moves play into an earlier game, the server display uses the latest start-right pick;
+  - squash and padel are tested by unit tests only;
+  - the pickleball guide is ~1100 words.
+
 ## SD-15: per-sport stat schema — DONE (a5086ef, 2026-10-10)
 - **Built:** `statSchema.ts` (types), `statSchemas.ts` (an RN-free registry and lookups), one `<sport>/stats.ts` per sport, `rallyStats.ts` and `sharedStats.ts`. Every plugin now carries `statSchema`.
 - **What it replaces:** the old maps (`STAT_WEIGHTS`, `STAT_LABELS`, `SPORT_AWARDS`, `TOURNAMENT_AWARD_SLOTS`, `STAT_CATEGORIES`, the headline order, profile labels, the team unit). Their exports and signatures are kept. Cricket's career is computed from the schema (`careerFromSchema`) and renders identically.

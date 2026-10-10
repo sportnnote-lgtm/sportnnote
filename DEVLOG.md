@@ -13,6 +13,18 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-21: fix a past point in table tennis, squash, pickleball and padel
+
+- **What's new:** these sports can edit, delete or insert a past point through the same
+  "Correct the timeline" editor as tennis, badminton and volleyball. Score, server, side-outs,
+  games and sets, the final scoreline and player credits all re-derive.
+- **How:** side-out sports get a `rally` kind (`wonBy`, who won the rally). The engine decides
+  whether that's a point or a side-out, and old logs infer it from their 🔁 events.
+- **Tests:** tsc + 1126; edited match = the same match scored live; fingerprints unchanged.
+- **Guide:** the pickleball guide gains "Fix a mistake".
+
+---
+
 ### 2026-10-10 — Sport depth SD-15: one stat schema per sport (the shared foundation)
 
 - **What it is:** each sport now has a single declarative stat schema in `src/sports/<sport>/stats.ts`,
