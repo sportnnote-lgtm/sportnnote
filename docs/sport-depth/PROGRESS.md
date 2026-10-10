@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## 2026-10-10: migrations 0050 + 0051 run live (founder); Wave 0 + Wave 1 so far pushed
+- Verified read-only: `stat_lines.result` + check exist (live has 0 stat lines, so the backfill had nothing to do); `field_entries.team_id` exists, `player_id` is nullable, and the marker rule is golf-only.
+- Pushed to GitHub and `main` (the website redeploys). The app publish (web + OTA) waits until SD-19 and SD-29 are committed, since builds use the working tree.
+
 ## SD-18: standings columns per sport — DONE (a232b7b, 2026-10-10)
 - **Built:** pure `standingsColumns.ts` (`tableColumns`, `columnsConfig`, `tieBreakNote`); PhaseTable rebuilt on it; a "Player" / "Pair" / "Team" header; on phones, a fixed name column with scrolling numbers below 64 px of name width; a column key and tie-break note under the table; the compact LeagueTable gains an extras line.
 - **Columns:**
