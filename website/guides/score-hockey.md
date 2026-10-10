@@ -19,10 +19,10 @@ You score a hockey match on one phone. You start and stop the game clock, tap wh
 1. Open the match → **Scoring** and tap **▶ Push back**. The clock counts down the quarter.
 2. Tap **⏸ Stop** when the umpires stop time and **▶ Resume** when play restarts.
 3. With the FIH format, the clock stops by itself after a goal and when you award a penalty corner. Tap **▶ Resume** to restart it.
-4. When the hooter goes, tap **⏭ End Q1**, then **▶ Start Q2** after the break. After the last period, tap **🏁 Full time**.
+4. When the hooter goes, tap **⏭ End Q1**, then **▶ Start Q2** after the break. **🏁 Full time**, at the bottom of the controls, stays off until the last period has started, so a slip at half-time can't end the match.
 5. Clock wrong, or you joined late? Tap **⏱ Set clock**, type the time left (for example `8:30`) and tap **Set**.
 
-> **Tip:** Minutes are shown the way FIH match reports show them. A goal 14 minutes 20 seconds into the first quarter is 15', and the second quarter always runs from 16' to 30'.
+> **Tip:** Minutes follow FIH match reports: a goal at 14:20 of the first quarter is 15', and the second quarter runs 16' to 30'.
 
 ## Step by step: log the play
 1. **🏑 Goal**: choose **Field goal**, **From PC** or **Stroke**, then tap the scorer, then the assist or **No assist**. If you don't know who scored, tap **Team goal (no scorer)**.
@@ -34,16 +34,16 @@ You score a hockey match on one phone. You start and stop the game clock, tap wh
 ## Cards and suspensions
 1. Tap **🟨 Card**, then **🟩 Green 2′**, **🟨 Yellow 5′**, **🟨 Yellow 10′** or **🟥 Red**, then the player.
 2. Green and yellow cards are timed suspensions. Under the clock you see "⏱️ Suspended: Name (1:24 left)" and how many each team has on the field, for example "10 v 11 on the field".
-3. The countdown runs on playing time, so it pauses whenever the clock is stopped. When the time is up, the player is back on by himself. You don't need to tap anything.
+3. The countdown runs on playing time and pauses when the clock stops. When it ends, the player is back on by himself.
 4. A red card is permanent. The team plays a player short for the rest of the match.
 
-A suspended or sent-off player doesn't appear in the player lists until he is allowed back.
+A suspended or sent-off player is left out of the player lists until he is allowed back.
 
 ## Shoot-out
 If the match is level at full time and the decider is a shoot-out, you see "Level — the match goes to a shoot-out".
 1. Tap which team shoots first.
-2. For each attempt (an 8-second one-against-one with the keeper), you can tap the taker, then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
-3. After five each, if it is still level, sudden death starts and the other team shoots first. It ends when one team is ahead after the same number of attempts.
+2. For each attempt, tap the taker (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
+3. Still level after five each? Sudden death starts, with the other team shooting first, until one team leads after equal attempts.
 
 The result keeps the level score and adds the shoot-out, for example "2–2" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
 
@@ -53,7 +53,7 @@ The result keeps the level score and adds the shoot-out, for example "2–2" and
 3. After the match, use [Correct a finished match](/guides/correct-a-finished-match/).
 
 ## What you get
-- **Score** tab: the timeline with minutes, then team stats (shots, shots on goal, penalty corners, PC conversion, strokes, saves, cards) and each player's minutes, goals, assists, shots, PC goals, saves, goals conceded and cards. Tap a quarter to filter.
+- **Score** tab: the timeline with minutes, team stats (shots, penalty corners, PC conversion, strokes, saves, cards) and each player's line. Tap a quarter to filter.
 - Player profiles: goals per game, field, PC and stroke goals, keeper save %, clean sheets and minutes suspended.
 - Tournament tables use **FIH 3-1-0** (ties: wins, goal difference, goals scored, head-to-head), or **FIH + shoot-out bonus**, where a drawn match goes to a shoot-out and the winner gets 2 points and the loser 1. See [Points table and adjustments](/guides/points-table-and-adjustments/).
 
@@ -63,4 +63,4 @@ The result keeps the level score and adds the shoot-out, for example "2–2" and
 No. If the umpire shows a yellow instead, record a yellow.
 
 ### Can I score without running the clock?
-Yes, but every moment is then stamped at the start of the quarter, and minutes played and suspensions can't be timed.
+Mostly. Every moment is then stamped at the start of the quarter and suspensions can't be timed. Tap **▶ Push back** (or **▶ Start**) once per period anyway: **⏭ End** and **🏁 Full time** only unlock once the period has started.

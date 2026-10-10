@@ -117,6 +117,19 @@ export default function GolfRoundScreen() {
     catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); }
   };
 
+  // SD-116: in stroke play a pick-up makes the whole card a no return (NR), so
+  // it asks first (Stableford: a pick-up is just 0 points on the hole).
+  const pickUp = async (e: FieldEntry, v: HoleScore) => {
+    if (v === 'P') { await setStroke(e, null); return; }
+    if (fmt.scoring !== 'stableford' && !(await confirmMatchAction('pickUp', { what: `${nameOf(e.playerId)} on hole ${h.n}` }))) return;
+    await setStroke(e, 'P');
+  };
+  // SD-116: Clear wipes the hole (the round screen has no undo) — it asks first.
+  const clearHole = async (e: FieldEntry) => {
+    if (!(await confirmMatchAction('clearHole', { what: `hole ${h.n} for ${nameOf(e.playerId)}` }))) return;
+    await setStroke(e, null);
+  };
+
   const start = async () => {
     setBusy(true);
     try { await setFieldEventStatus(ev.id, 'live'); await reload(); }
@@ -230,8 +243,8 @@ export default function GolfRoundScreen() {
                   </View>
                   <View style={st.tabs}>
                     <SelectChip label="Par" active={v === par} onPress={() => canMark && set(par)} />
-                    <SelectChip label="Pick up" active={v === 'P'} onPress={() => canMark && set(v === 'P' ? null : 'P')} />
-                    {v != null && <SelectChip label="Clear" active={false} onPress={() => canMark && set(null)} />}
+                    <SelectChip label={fmt.scoring === 'stableford' ? 'Pick up' : 'Pick up (NR)'} active={v === 'P'} onPress={() => canMark && void pickUp(e, v)} />
+                    {v != null && <SelectChip label="Clear…" active={false} onPress={() => canMark && void clearHole(e)} />}
                   </View>
                   {trackPutts && typeof v === 'number' && (
                     <View style={st.tabs}>

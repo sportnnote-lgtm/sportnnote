@@ -13,7 +13,7 @@ import type { SportPlugin } from '../types';
 import { SetLineBoard } from '../SetLineBoard';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { carromBox } from '../boxSources';
-import { init, reducer, result, boardPoints, creditPoints, creditedPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side, type Slam } from './engine';
+import { init, reducer, result, boardPoints, boardCloses, creditPoints, creditedPoints, summary, scoreLine, lineScore, standingsUnits, type CarromState, type Side, type Slam } from './engine';
 import { carromStatTotals, creditedPlayers } from './totals';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
@@ -25,7 +25,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
     return r.length === 1 ? r[0].fullName : side === 'home' ? homeName : awayName;
   };
   const [winner, setWinner] = useState<Side | null>(null);
-  const [coins, setCoins] = useState(0);
+  const [coins, setCoins] = useState<number | null>(null); // SD-116: no default — the scorer picks
   const [queen, setQueen] = useState(false);
   const [slam, setSlam] = useState<Slam | null>(null);
   // "Played by" (a roster bigger than the side) — kept from board to board
@@ -35,8 +35,10 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   const roster = winner ? (winner === 'home' ? homeRoster : awayRoster) : [];
   const players = winner ? creditedPlayers(roster, perSide, picked[winner]) : [];
   // SD-37: the game score counts at most to 25, and so do the players' points
-  const value = winner ? boardPoints(coins, queen, s.current[winner], s) : 0;
-  const credit = winner ? creditPoints(coins, queen, s.current[winner], s) : 0;
+  const value = winner && coins != null ? boardPoints(coins, queen, s.current[winner], s) : 0;
+  const credit = winner && coins != null ? creditPoints(coins, queen, s.current[winner], s) : 0;
+  // SD-116: say on the button when this board closes the game / the match
+  const closes = winner && coins != null ? boardCloses(s, winner, coins, queen) : null;
   const queenCounts = winner ? s.current[winner] < s.queenCutoff : true;
   const togglePick = (side: Side, id: string) => setPicked((cur) => {
     const now = creditedPlayers(roster, perSide, cur[side]).map((p) => p.id);
@@ -44,7 +46,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
     return { ...cur, [side]: next.length ? next : now };
   });
   const record = () => {
-    if (!winner) return;
+    if (!winner || coins == null) return;
     const attr = (p: Player) => ({ playerId: p.id, playerName: p.fullName, stat: 'points', by: credit, extra: { boards: 1, ...(queen ? { queens: 1 } : {}) } });
     dispatch({
       type: 'BOARD', side: winner, payload: { coins, queen, ...(slam ? { slam } : {}) },
@@ -52,7 +54,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
       attribution: players[0] ? attr(players[0]) : undefined,
       attribution2: players[1] ? attr(players[1]) : undefined,
     });
-    setWinner(null); setCoins(0); setQueen(false); setSlam(null);
+    setWinner(null); setCoins(null); setQueen(false); setSlam(null);
   };
 
   return (
@@ -76,7 +78,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
             </View>
           )}
           <View style={{ gap: theme.spacing(2) }}>
-            <Text style={ctrl.label}>Opponent's coins left</Text>
+            <Text style={ctrl.label}>Opponent's coins left{coins == null ? <Text style={ctrl.meta}> · tap one</Text> : null}</Text>
             <View style={ctrl.chips}>
               {Array.from({ length: 10 }, (_, n) => <SelectChip key={n} label={String(n)} active={coins === n} onPress={() => setCoins(n)} />)}
             </View>
@@ -89,7 +91,10 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
               <SelectChip label="⚫ Black slam · didn't break" active={slam === 'black'} onPress={() => setSlam(slam === 'black' ? null : 'black')} />
             </View>
           </View>
-          <Button label={`✓ Record board · +${credit}${credit < value ? ` (game at ${s.target})` : ''}`} variant={winner} onPress={record} />
+          <Button
+            label={coins == null ? '✓ Record board — pick the coins left'
+              : `✓ Record board · +${credit}${closes ? ` · ${closes.winner === winner ? '' : `${nameOf(closes.winner)} `}wins ${closes.kind === 'match' ? 'the match' : `Game ${closes.game}`}` : credit < value ? ` (game at ${s.target})` : ''}`}
+            variant={closes ? 'primary' : winner} onPress={record} disabled={coins == null} />
         </>
       )}
     </View>

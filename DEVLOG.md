@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-116 one-tap match-deciders now confirm (chess, golf, carrom, hockey, basketball)
+- **Chess:** result tiles read arbiter-style (1-0 White wins / ½-½ / 0-1 Black wins, "X beat Y" under); "✓ Record 1-0…" opens "Record 0-1: {winner} beat {loser} by Resignation?". White pieces locked ("Colours wrong? Change…") — the change is only sent with the result.
+- **Golf:** one "🏳 Concede match…" at the bottom of match play (asks who, confirms with the hole state); stroke-play "Pick up (NR)" confirms it voids the card (Stableford pick-up unchanged); "Clear…" confirms.
+- **Carrom:** coins left has no default — Record stays off until picked; the button says when the board wins a game or the match.
+- **Hockey:** 🏁 Full time locked until the last period has started.
+- **Basketball:** Eject set apart and confirmed; the picked scorer clears after every basket ("Tap the scorer first — or the basket goes to the team").
+- **Files:** `src/core/matchSafety.ts` (recordResult, concede, pickUp, clearHole, eject copy), chess/carrom engine + index, golf index, `GolfRoundScreen.tsx`, hockey/basketball index. No reducer change. Guides: new score-chess, run-a-chess-tournament, golf-scoring-and-leaderboard, score-carrom, score-hockey, score-basketball; athletics/swim guides trimmed back under 900 words.
+- **Verified:** `tests/one-tap-deciders.test.mts` (16), suite green, tsc clean; demo 8093 375 px on all five sports.
+
+---
+
 ### 2026-10-11 — SD-115 racket point-entry safety: big team-coloured buttons, no default server, pressure chip, named Undo, Fast4
 - **Why:** audit P0 — racket point buttons were small identical grey pills stacked one above the other, the main wrong-side risk; "who serves first" silently defaulted to Home.
 - **What:** `PointButtons.tsx` — every racket sport (tennis, badminton, table tennis, squash, padel, pickleball; all scoring systems) gets two side-by-side ≥64 pt buttons in team colours with a SERVING tag. Singles auto-credits; doubles scores the side, player credit optional (long-press / "credit a player"); SD-107 point detail still works. Point buttons stay disabled until "Who serves first?" (and pickleball "Who starts on the right?") is picked; "Fix who served first" mid-match (v:2 only; refused where the server decides scoring — squash English, pickleball side-out). Table tennis's duplicate toss field removed. MATCH / SET / BREAK / GAME POINT chip on the board (`pointStatus.ts`). The Undo bar names what it undoes — "↶ Undo: point to X (30-15)" — for every sport except cricket, falling back to plain "Undo" (`undoLabel.ts`, `useLiveMatch.lastStep`). Tennis Ace / Double fault are smaller outline buttons below. Fast4 set tiebreaks are sudden death at 4-4 (`tbSuddenDeathAt`; old Fast4 matches unchanged).

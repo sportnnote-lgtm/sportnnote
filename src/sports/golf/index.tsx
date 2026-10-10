@@ -7,10 +7,12 @@
  *     on the Golf round screens (field events), not through LiveScoring.
  * The format fields below cover both; `competition` decides which flow is used.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, textStyles } from '../../components/ui';
+import { askConfirm } from '../../components/ConfirmSheet';
+import { confirmCopy } from '../../core/matchSafety';
 import type { SportPlugin } from '../types';
 import { matchState, type HoleWinner } from './engine';
 
@@ -54,8 +56,16 @@ const stateOf = (s: GolfMatchState) => matchState(s.holes, s.regulation, s.extra
 const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as GolfMatchState;
   const m = stateOf(s);
+  const [conceding, setConceding] = useState(false);
   const nm = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster)[0]?.fullName ?? (side === 'home' ? homeName : awayName);
   if (s.ended) return <Text style={textStyles.muted}>Match over.</Text>;
+  const concede = async (side: 'home' | 'away') => {
+    const other = side === 'home' ? 'away' : 'home';
+    const where = m.played ? ` (${m.status === 'AS' ? 'all square' : `${leaderName} ${m.status}`} thru ${m.played})` : '';
+    const ok = await askConfirm(confirmCopy('concede', { what: nm(side), winner: nm(other), detail: `${nm(other)} wins the match${where} and it closes.` }));
+    setConceding(false);
+    if (ok) dispatch({ type: 'CONCEDE', side });
+  };
   const holeNo = m.played + 1;
   const leaderName = m.leader ? nm(m.leader) : null;
   const hole = (winner: HoleWinner) => {
@@ -74,9 +84,22 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
       <Button label={`${nm('home')} wins hole ${holeNo}`} variant="home" onPress={() => hole('home')} />
       <Button label={`Hole ${holeNo} halved`} variant="ghost" onPress={() => hole('halved')} />
       <Button label={`${nm('away')} wins hole ${holeNo}`} variant="away" onPress={() => hole('away')} />
-      <View style={st.row}>
-        <Button label={`${nm('home')} concedes`} variant="ghost" style={st.flex} onPress={() => dispatch({ type: 'CONCEDE', side: 'home' })} />
-        <Button label={`${nm('away')} concedes`} variant="ghost" style={st.flex} onPress={() => dispatch({ type: 'CONCEDE', side: 'away' })} />
+      {/* SD-116: conceding the MATCH (not a hole) — at the very end of the
+          controls, behind a "who?" step and the confirm sheet. */}
+      <View style={st.concede}>
+        {!conceding ? (
+          <Button label="🏳 Concede match…" variant="ghost" onPress={() => setConceding(true)} />
+        ) : (
+          <>
+            <Text style={st.label}>Who concedes the match?</Text>
+            <View style={st.row}>
+              {(['home', 'away'] as const).map((side) => (
+                <Button key={side} label={nm(side)} variant="ghost" style={st.flex} onPress={() => void concede(side)} />
+              ))}
+            </View>
+            <Button label="Cancel" variant="ghost" onPress={() => setConceding(false)} />
+          </>
+        )}
       </View>
     </View>
   );
@@ -183,6 +206,7 @@ export const golfPlugin: SportPlugin<GolfMatchState> = {
 const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   flex: { flex: 1 },
+  concede: { gap: theme.spacing(2), marginTop: theme.spacing(4), paddingTop: theme.spacing(3), borderTopWidth: 1, borderTopColor: theme.colors.border },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   box: { gap: theme.spacing(1), alignItems: 'center', padding: theme.spacing(4), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md },
   big: { color: theme.colors.text, fontSize: 24, fontWeight: '800' },

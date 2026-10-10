@@ -5,7 +5,7 @@ category: Tournaments
 audience: Organisers, Players, Parents & fans
 sports: chess
 order: 70
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 Most school and open chess events are Swiss: everyone plays every round, nobody is knocked out, and each round pairs players on similar scores. Small events often play a round-robin, where everyone meets everyone. SportnNote runs both, scores 1, ½ and 0, and ranks the table with FIDE tie-breaks.
@@ -50,11 +50,11 @@ With an odd number of players, one player sits out each Swiss round: the lowest-
 
 ## Step by step: record a result
 1. Open the game from the tournament's **Matches** tab.
-2. Check **♔ White pieces**. Tap the other player if colours were swapped at the board.
-3. Under **Result**, tap who won, or **Draw**, and optionally **How (optional)**.
-4. Tap **✓ Record result**.
+2. Check **♔ White pieces**. It is locked; tap **Colours wrong? Change…** only if the players swapped.
+3. Under **Result (White first)**, tap **1-0**, **½-½** or **0-1**, and optionally **How (optional)**.
+4. Tap **✓ Record 1-0…**, check the sentence and tap **Yes, record result**. See [How to record a chess game result](/guides/score-chess/).
 
-If a player doesn't turn up, a host can tap **🏳 Award a walkover**, or record the result with the **Forfeit** method. A forfeit scores the full point but is not a game played. In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops. In a round-robin it counts as a normal game.
+No-show? A host can tap **🏳 Award a walkover**, or record it with the **Forfeit** method: the full point, but not a game played. In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops; in a round-robin it is a normal game.
 
 ## Tie-breaks
 Players level on points are split by the **FIDE Swiss** order, one tie-break after another:
@@ -66,7 +66,7 @@ Players level on points are split by the **FIDE Swiss** order, one tie-break aft
 6. **Number of wins**, including forfeit wins and a full-point bye.
 7. **Wins with Black (BWG)**.
 
-This is FIDE's recommended order for a Swiss where not every player has a rating, as in most school events. If a player withdraws, the rounds they missed count as draws in their past opponents' Buchholz. A round-robin keeps Sonneborn-Berger, wins, then direct encounter. **Median Buchholz** and **games with Black** are also under **Tie-break order (advanced)**.
+This is FIDE's order for a Swiss where not everyone is rated, as in most school events. If a player withdraws, the rounds they missed count as draws in their past opponents' Buchholz. A round-robin keeps Sonneborn-Berger, wins, then direct encounter. **Median Buchholz** and **games with Black** are also under **Tie-break order (advanced)**.
 
 ## Read the standings
 Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss shows one table called **Swiss**, with a column for each tie-break in use, such as **BH-C1**, **BH** and **SB**. "Not games played (the points count)" lists every bye and forfeit. See [Read the points table and adjust points](/guides/points-table-and-adjustments/).

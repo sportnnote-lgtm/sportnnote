@@ -5,10 +5,10 @@ category: Tournaments
 audience: Organisers, Scorers, Players
 sports: golf
 order: 80
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-A golf event is one leaderboard across one or more rounds. Each group marks its own card on a phone, the leaderboard updates as holes are entered, and after a round the organiser can keep only the leaders for the next round, the way a 72-hole open keeps the top players after 36 holes. This guide covers stroke play and Stableford. Match play uses the normal bracket.
+A golf event is one leaderboard across one or more rounds. Each group marks its own card on a phone, the leaderboard updates as holes are entered, and after a round the organiser can keep only the leaders for the next round, the way a 72-hole open keeps the top players after 36 holes. This guide covers stroke play and Stableford. Match play uses the normal bracket: tap the "wins hole" button for the winner of each hole, or "Hole 3 halved" (the number follows the hole). If a player gives up the match, tap **🏳 Concede match…** at the bottom, pick who concedes, and confirm.
 
 ## Before you start
 - You need to be a host of the tournament to set up and finish rounds.
@@ -20,9 +20,10 @@ A golf event is one leaderboard across one or more rounds. Each group marks its 
 2. Tap **⛳ Set up round 1**. Pick the course and tees, the format, the players and, if you use handicaps, each player's Handicap Index.
 3. Choose the group size and tee interval, then tap **⛳ Create round**. The app makes the groups and tee times.
 4. On the day, tap **▶ Start the round**.
-5. On the **📝 Scorecard** tab, use − and + for each player's strokes on the hole, or tap **Par**. Tap **Pick up** if a player picks up. Then tap the "Next: hole 2 ▶" button and carry on.
-6. To record putts, tap **Track putts**. A row of putt counts appears under each score.
-7. When every group is in, tap **🏁 Finish the round**. Scores are locked and each player's round goes to their profile.
+5. On the **📝 Scorecard** tab, use − and + for each player's strokes on the hole, or tap **Par**. Then tap the "Next: hole 2 ▶" button and carry on.
+6. If a player picks up in stroke play, tap **Pick up (NR)**. It asks first, because one pick-up makes the whole card a no return. In Stableford **Pick up** just scores 0 points on the hole. **Clear…** wipes a hole and also asks first.
+7. To record putts, tap **Track putts**. A row of putt counts appears under each score.
+8. When every group is in, tap **🏁 Finish the round**. Scores are locked and each player's round goes to their profile.
 
 > **Tip:** No signal on the course? Keep scoring. Cards are saved on the phone and sync when you are back online.
 

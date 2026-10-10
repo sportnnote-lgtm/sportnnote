@@ -173,3 +173,15 @@ export function standingsUnits(s: CarromState): { points: { home: number; away: 
   const points = s.games.reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: s.current?.home ?? 0, away: s.current?.away ?? 0 });
   return { points };
 }
+
+/** SD-116 — what recording this board would close, for the Record button
+ *  ("✓ Record board · wins Game 2"). Pure: replays the board on a copy.
+ *  `winner` is the side that takes the game — after the board limit that can
+ *  be the side that LOST this board. null = the game goes on. */
+export function boardCloses(s: CarromState, side: Side, coins: number, queen: boolean): { kind: 'game' | 'match'; game: number; winner: Side } | null {
+  if (s.ended) return null;
+  const next = reducer(s, { type: 'BOARD', side, payload: { coins, queen } });
+  if (next.games.length === s.games.length) return null;
+  const winner: Side = next.gamesWon.home > s.gamesWon.home ? 'home' : 'away';
+  return { kind: next.ended ? 'match' : 'game', game: next.games.length, winner };
+}

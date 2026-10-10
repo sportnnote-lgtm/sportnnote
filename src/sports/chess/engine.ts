@@ -72,3 +72,21 @@ export function resultString(s: ChessState): string {
   const whiteWon = s.winner === s.white;
   return whiteWon ? '1-0' : '0-1';
 }
+
+/** SD-116 — the arbiter's result written White-first for a pending result:
+ *  "1-0", "½-½" or "0-1" for `winner` when `white` has the white pieces. */
+export function scoreFor(white: Side, winner: Side | 'draw'): '1-0' | '½-½' | '0-1' {
+  if (winner === 'draw') return '½-½';
+  return winner === white ? '1-0' : '0-1';
+}
+
+/** SD-116 — the one-line result the confirm sheet asks about:
+ *  "1-0: Anand beat Carlsen by Resignation", "½-½: Anand drew with Carlsen (Stalemate)".
+ *  Names are White first (whiteName has the white pieces). */
+export function resultSentence(white: Side, winner: Side | 'draw', whiteName: string, blackName: string, method?: ChessMethod): string {
+  const sc = scoreFor(white, winner);
+  if (winner === 'draw') return `${sc}: ${whiteName} drew with ${blackName}${method ? ` (${METHOD_LABEL[method]})` : ''}`;
+  const [w, l] = winner === white ? [whiteName, blackName] : [blackName, whiteName];
+  const how = method ? (method === 'time' ? ' on time' : method === 'forfeit' ? ' by forfeit' : ` by ${METHOD_LABEL[method]}`) : '';
+  return `${sc}: ${w} beat ${l}${how}`;
+}

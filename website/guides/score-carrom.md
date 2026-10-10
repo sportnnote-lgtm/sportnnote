@@ -26,17 +26,17 @@ Carrom is scored one board at a time. The player who pockets all their coins win
 ## Step by step
 1. Open the match → **Scoring** tab. The line at the top shows the game, the board and the target, for example "Game 1 · board 3 of 8 · to 25".
 2. Under **Board won by**, tap the winner.
-3. Under **Opponent's coins left**, tap the number of the loser's coins still on the board.
+3. Under **Opponent's coins left**, tap the number of the loser's coins still on the board. Nothing is picked for you: **✓ Record board** stays off until you tap a number, even 0.
 4. If the winner covered the Queen, tap **👑 Winner covered the Queen**. The chip says whether it is worth +3 or no points at 22 and above.
 5. If the board was finished in the first turn, tap **⚪ White slam · broke** (the player who broke finished it) or **⚫ Black slam · didn't break** (the other player finished it in their first turn). This is optional and doesn't change the score.
-6. Tap **✓ Record board**. The button shows what the board adds to the game, and says "game at 25" when it is capped.
+6. Tap **✓ Record board**. The button shows what the board adds to the game. If this board wins a game or the match, it says so, for example "✓ Record board · +4 · wins Game 2", so check it before you tap.
 
 In doubles the board is won by the pair, so both partners get the board, its points and the Queen. If the team list has more players than the side, a **Played by** row appears: tap the players who played. Your choice is kept for the next boards.
 
 ## Reading the board
 The scoreboard shows GAMES won and a column of points for each game, with the game in play highlighted. Under it, **Games** shows each finished game, and **Boards** lists every board, newest first, with the coins, the Queen and any slam. When the match ends, the result reads like "2–1 · 25-18, 12-25, 25-20".
 
-The **Box score** compares the two sides on points, boards and Queens, for the match or for each game. Points there match the game scores.
+The **Box score** compares the two sides on points, boards and Queens, per match or per game.
 
 ## Fix a mistake
 - Tapped the wrong winner or coins just now? Tap **↶ Undo**. Tap it again to go back further.

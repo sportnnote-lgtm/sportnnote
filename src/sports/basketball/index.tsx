@@ -96,7 +96,11 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const tracking = state.trackMisses === true;
   // SD-40: the credited player's id rides in `pid` so statTotals keys by id.
   const pidOf = (p?: Player) => (p ? { pid: p.id } : {});
+  // SD-116 (B1): the picked scorer is for ONE shot — cleared after each make /
+  // miss, so the next basket isn't silently credited to the previous player.
+  const clearSel = (side: 'home' | 'away') => setSel((cur) => (cur[side] ? { ...cur, [side]: undefined } : cur));
   const score = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side], fga = tracking) => {
+    clearSel(side);
     fire({
       type: 'SCORE',
       side,
@@ -104,8 +108,10 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       attribution: p ? creditAttribution(p.id, p.fullName, makeCredits(pts, halfCourt, fga)) : undefined,
     });
   };
-  const miss = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side]) =>
+  const miss = (side: 'home' | 'away', pts: number, p: Player | undefined = sel[side]) => {
+    clearSel(side);
     fire({ type: 'MISS', side, payload: { points: pts, ...pidOf(p) }, attribution: p ? creditAttribution(p.id, p.fullName, missCredits(pts)) : undefined });
+  };
   const stat = (side: 'home' | 'away', type: string, key: string, p: Player) =>
     fire({ type, side, payload: pidOf(p), attribution: { playerId: p.id, stat: key, playerName: p.fullName } });
 
@@ -148,6 +154,13 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       type: 'FREE_THROW', side, payload: { made, ...pidOf(shooter) },
       attribution: shooter ? creditAttribution(shooter.id, shooter.fullName, ftCredits(made)) : undefined,
     });
+
+  // SD-116 (B2): ejection asks first (ConfirmSheet), then logs EJECT.
+  const eject = async (side: 'home' | 'away', p: Player) => {
+    if (!(await confirmMatchAction('eject', { what: p.fullName }))) return;
+    fire({ type: 'EJECT', side, payload: pidOf(p), attribution: { playerId: p.id, stat: 'ejections', playerName: p.fullName } });
+    setFlow(null);
+  };
 
   // Foul — logged with its type; a shooting/technical/flagrant foul flows straight
   // into the opponent's free throws.
@@ -261,8 +274,13 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
                 ))}
               </View>
               <Text style={ctrl.meta}>Shooting, technical & flagrant fouls go to the free-throw line next.</Text>
-              <Button label={`🟥 Eject ${flow.fouler.fullName}`} variant="danger"
-                onPress={() => { fire({ type: 'EJECT', side: flow.side, payload: pidOf(flow.fouler), attribution: { playerId: flow.fouler!.id, stat: 'ejections', playerName: flow.fouler!.fullName } }); setFlow(null); }} />
+              {/* SD-116 (B2): ejecting is a separate, confirmed step — set well
+                  apart from the foul-type chips so a slip can't disqualify. */}
+              <View style={ctrl.ejectZone}>
+                <Text style={ctrl.meta}>Not a foul to log — sending the player off?</Text>
+                <Button label={`🟥 Eject ${flow.fouler.fullName}…`} variant="ghost"
+                  onPress={() => void eject(flow.side, flow.fouler!)} />
+              </View>
             </>
           )}
         </View>
@@ -411,7 +429,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     const selected = sel[side];
     return (
       <View style={{ gap: theme.spacing(2) }}>
-        <Text style={ctrl.label}>🏀 Basket — {name}{selected ? ` · ${selected.fullName}` : ''}</Text>
+        <Text style={ctrl.label}>🏀 Basket — {name}{selected ? ` · for ${selected.fullName}` : ''}</Text>
+        {roster.length > 0 && !selected ? <Text style={ctrl.meta}>Tap the scorer first — or the basket goes to the team.</Text> : null}
         {roster.length > 0 && (
           <View style={ctrl.chips}>
             {roster.map((p) => (
@@ -425,7 +444,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
               "+1 FT" logs a made free throw (FTM/FTA counted), not a 1-pt basket. */}
           {pointValues.map((n) => (
             !halfCourt && n === 1
-              ? <Button key={n} label="+1 FT" variant={variant} style={ctrl.flex} onPress={() => freeThrow(side, true, selected)} />
+              ? <Button key={n} label="+1 FT" variant={variant} style={ctrl.flex} onPress={() => { clearSel(side); freeThrow(side, true, selected); }} />
               : <Button key={n} label={`+${n}`} variant={variant} style={ctrl.flex} onPress={() => score(side, n)} />
           ))}
         </View>
@@ -740,6 +759,7 @@ const ctrl = StyleSheet.create({
   otBanner: { backgroundColor: theme.colors.primary + '1A', borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.primary, padding: theme.spacing(3), gap: theme.spacing(1) },
   otTitle: { color: theme.colors.primary, fontSize: theme.font.body, fontWeight: '900', letterSpacing: 0.5 },
   otMeta: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  ejectZone: { gap: theme.spacing(2), marginTop: theme.spacing(5), paddingTop: theme.spacing(3), borderTopWidth: 1, borderTopColor: theme.colors.border },
   editPanel: { gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(4) },
   editHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   editBanner: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700', backgroundColor: theme.colors.accent + '22', padding: theme.spacing(2), borderRadius: theme.radius.sm },

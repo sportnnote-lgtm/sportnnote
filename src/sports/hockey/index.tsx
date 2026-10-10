@@ -221,6 +221,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
   const last = s.period >= s.periods;
   // SD-106: ending a quarter / full time asks first (ConfirmSheet).
   const endPeriod = async () => {
+    if (!periodStarted(s)) return; // SD-116 (H1): a period that hasn't started can't end
     const score = `${s.home}-${s.away}`;
     const ok = last ? await confirmMatchAction('fullTime', { score }) : await confirmMatchAction('endPeriod', { period: periodName(s, s.period), score });
     if (!ok) return;
@@ -468,7 +469,10 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
       )}
 
       <EditList s={s} show={showEdit} setShow={setShowEdit} onRemove={remove} onEdit={edit} homeName={homeName} awayName={awayName} />
-      {last ? <Button label="🏁 Full time" variant="danger" onPress={() => void endPeriod()} /> : null}
+      {/* SD-116 (H1): not live during the break before the last period — it
+          would credit a whole unplayed half / quarter */}
+      {last ? <Button label="🏁 Full time" variant="danger" disabled={!periodStarted(s)} onPress={() => void endPeriod()} /> : null}
+      {last && !periodStarted(s) ? <Text style={c.gk}>Start {periodName(s, s.period)} first — Full time unlocks once it’s under way.</Text> : null}
     </View>
   );
 };

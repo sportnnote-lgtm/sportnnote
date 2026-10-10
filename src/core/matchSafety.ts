@@ -32,7 +32,12 @@ export type MatchAction =
   | 'closePhase' // athletics / swimming: close a round and seed the next
   | 'walkover' // 🏳 Walkover to a named side (End panel / Info tab)
   | 'discardTaps' // discard this device's unsynced, rejected taps
-  | 'removeEvent'; // SD-114: ✕ on one "Correct the timeline" row
+  | 'removeEvent' // SD-114: ✕ on one "Correct the timeline" row
+  | 'recordResult' // SD-116: chess ✓ Record result (the game closes)
+  | 'concede' // SD-116: golf match play — one side concedes the match
+  | 'pickUp' // SD-116: golf stroke play — a pick-up is a no return (NR)
+  | 'clearHole' // SD-116: golf — wipe one hole's score
+  | 'eject'; // SD-116: basketball 🟥 Eject a player
 
 /** where on screen a control sits */
 export type ControlZone =
@@ -142,7 +147,9 @@ export interface ConfirmContext {
   count?: number;
   /** a sport- or screen-specific one-liner that replaces the default message */
   detail?: string;
-  /** removeEvent: the row being removed ("Goal — Rahul (23′)") */
+  /** removeEvent: the row being removed ("Goal — Rahul (23′)");
+   *  recordResult: the result line ("1-0: Anand beat Carlsen by Resignation");
+   *  concede / pickUp / clearHole / eject: the player or side */
   what?: string;
 }
 
@@ -187,6 +194,18 @@ export function confirmCopy(action: MatchAction, ctx: ConfirmContext = {}): Conf
       return { title: 'Finish and lock the results?', message: ctx.detail ?? 'Places, medals and any new record are final.', yesLabel: 'Yes, finish & lock', noLabel: 'No, keep entering', tone: 'danger' };
     case 'removeEvent':
       return { title: ctx.what ? `Remove ${ctx.what}?` : 'Remove this from the timeline?', message: ctx.detail ?? 'It comes off the timeline and the score and player stats re-adjust.', yesLabel: 'Yes, remove', noLabel: 'No, keep it', tone: 'danger' };
+    case 'recordResult':
+      return { title: ctx.what ? `Record ${ctx.what}?` : 'Record this result?', message: ctx.detail ?? 'The game closes, the result goes to the standings and followers are told. Only a host can correct it after.', yesLabel: 'Yes, record result', noLabel: 'No, go back', tone: 'danger' };
+    case 'concede': {
+      const w = ctx.what ?? 'This side';
+      return { title: `${w} concedes the match?`, message: ctx.detail ?? (ctx.winner ? `${ctx.winner} wins the match and it closes.` : 'The other side wins the match and it closes.'), yesLabel: 'Yes, concede match', noLabel: KEEP, tone: 'danger' };
+    }
+    case 'pickUp':
+      return { title: ctx.what ? `Pick up for ${ctx.what}?` : 'Pick up on this hole?', message: ctx.detail ?? 'Pick up = no return (NR) for the round in stroke play: the card won’t get a total or a place.', yesLabel: 'Yes, pick up (NR)', noLabel: KEEP, tone: 'danger' };
+    case 'clearHole':
+      return { title: ctx.what ? `Clear ${ctx.what}?` : 'Clear this hole?', message: ctx.detail ?? 'The hole goes back to no score.', yesLabel: 'Yes, clear hole', noLabel: 'No, keep it', tone: 'caution' };
+    case 'eject':
+      return { title: ctx.what ? `Eject ${ctx.what}?` : 'Eject this player?', message: ctx.detail ?? 'The player is disqualified and can’t come back on. Undo can bring it back.', yesLabel: 'Yes, eject', noLabel: 'No, go back', tone: 'danger' };
     case 'closePhase':
       return { title: 'Close this round?', message: ctx.detail ?? 'The qualifiers are seeded into the next round and these results are locked.', yesLabel: 'Yes, close & seed', noLabel: 'No, keep entering', tone: 'caution' };
   }
