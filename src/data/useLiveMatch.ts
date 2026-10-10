@@ -122,8 +122,10 @@ export function useLiveMatch(params: {
   // match complete) write the ABSOLUTE figures, then the snapshot — so `won`
   // covers any line the sync inserted. Otherwise just the snapshot.
   const syncThenPersist = async (s: unknown) => {
+    // SD-11: the completion snapshot also writes appearance lines — let the
+    // in-flight stat increments land first so neither insert clashes.
+    if (matchId && plugin.isComplete(s as never)) await Promise.all([...statWritesRef.current]);
     if (matchId && plugin.statTotals && plugin.isComplete(s as never)) {
-      await Promise.all([...statWritesRef.current]);
       await syncMatchStatLines(matchId, sport, plugin.statTotals(s as never), { home: homeTeamName, away: awayTeamName }).catch(() => 0);
     }
     await persist(s);

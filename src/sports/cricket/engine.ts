@@ -487,12 +487,60 @@ export function wicketAttribution(o: {
 // Overs bowled, e.g. 6 balls → "1.0" (used for over counts: totals, RR, figures).
 export const oversStr = (balls: number, bpo = 6) => `${Math.floor(balls / bpo)}.${balls % bpo}`;
 
-/** Overs faced by each side for Net Run Rate. A side bowled out is charged its
- *  full quota (the standard NRR rule), not the fraction it actually batted. */
+/** SD-13 — a side has no batter left to come in: all out, or its wickets plus
+ *  the retired-hurt batters who never resumed use up the order (ICC: a side
+ *  that can't continue its innings counts as all out for NRR). */
+export function noBatterLeft(s: CricketState, side: 'home' | 'away'): boolean {
+  const inn = s.scores[side];
+  if (inn.wickets >= s.wicketsLimit) return true;
+  const retired = Object.values(s.batting ?? {}).filter((c) => c.side === side && c.retired && !c.out).length;
+  return retired > 0 && inn.wickets + retired >= s.wicketsLimit;
+}
+
+/** SD-13 — the chase was played to a revised target (ICC NRR: DLS or a target
+ *  set by hand). v2 matches only (REVIEW Decision 8): a legacy (no `dlsV`)
+ *  match keeps its stored maths. */
+const revisedChase = (s: CricketState): boolean =>
+  s.dlsV === 2 && s.innings === 2 && s.target !== undefined && (s.revision === 'dls' || s.revision === 'manual');
+
+/** Overs faced by each side for Net Run Rate (ICC playing conditions, SD-13):
+ *  • a side all out — or with no batter left to come in — is charged its full
+ *    quota, not the fraction it actually batted;
+ *  • v2 matches (`dlsV`): the side batting first keeps its OWN quota (the
+ *    overs it was scheduled when its innings ran), not a later cut that only
+ *    hit the chase; and in a chase to a revised target, the side batting first
+ *    is credited with the overs the chasing side was allotted (with
+ *    `nrrRuns`' target − 1).
+ *  Legacy matches (no `dlsV`) compute exactly as before, except that the
+ *  "no batter left" innings now counts as all out (the bug fix). */
 export function nrrOvers(s: CricketState): { home: number; away: number } {
-  const facedOvers = (inn: Innings) =>
-    inn.wickets >= s.wicketsLimit ? s.oversLimit : inn.balls / s.ballsPerOver;
-  return { home: facedOvers(s.scores.home), away: facedOvers(s.scores.away) };
+  const facedOvers = (side: 'home' | 'away', quota: number) =>
+    noBatterLeft(s, side) ? quota : s.scores[side].balls / s.ballsPerOver;
+  if (s.dlsV !== 2 || s.innings !== 2) {
+    return { home: facedOvers('home', s.oversLimit), away: facedOvers('away', s.oversLimit) };
+  }
+  const t2 = s.battingSide;
+  const t1 = other(t2);
+  // The chase's allotment is the final length (a rain cut / agreed change in
+  // innings 2 moves `oversLimit`).
+  const t2Overs = facedOvers(t2, s.oversLimit);
+  // Team 1's own quota: its scheduled length (`inn1Overs`, which an agreed
+  // SET_OVERS in innings 1 updates) unless rain cut innings 1 — then the
+  // reduced length it finished on, i.e. what the chase started with.
+  const t1Quota = s.r1Lost === 0 ? (s.inn1Overs ?? s.oversLimit) : s.oversLimit;
+  const t1Overs = revisedChase(s) ? s.oversLimit : facedOvers(t1, t1Quota);
+  return t1 === 'home' ? { home: t1Overs, away: t2Overs } : { home: t2Overs, away: t1Overs };
+}
+
+/** Runs each side is credited with for NRR (SD-13), or null when they are
+ *  just the scores. ICC: in a chase to a revised target, the side batting
+ *  first is credited with target − 1 (off the chase's allotted overs — see
+ *  `nrrOvers`); the chasing side keeps its actual runs. v2 matches only. */
+export function nrrRuns(s: CricketState): { home: number; away: number } | null {
+  if (!revisedChase(s)) return null;
+  const t2 = s.battingSide;
+  const credited = s.target! - 1;
+  return t2 === 'home' ? { home: s.scores.home.runs, away: credited } : { home: credited, away: s.scores.away.runs };
 }
 /** NRR overs for a match ended by hand with "Count in NRR (all overs)": each
  *  side is charged its full quota, however far the match got (parity #04). */

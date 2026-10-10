@@ -20,7 +20,7 @@ import { getRoster, getMatchStatLines, getMatchSquads } from '../data/repos';
 import { computeTeamStats, resultFor, type Result } from '../data/teamStats';
 import { SPORT_AWARDS, statLabel } from '../data/ratings';
 import type { Player, SportId, StatLine } from '../core/types';
-import { teamStandings } from '../data/standings';
+import { teamStandings, tableLabels } from '../data/standings';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 
@@ -127,6 +127,11 @@ export default function TeamProfileScreen() {
   const records = team.sports
     .map((sp) => ({ sport: sp, row: teamStandings(matches, sp).find((t) => t.teamId === team.id) }))
     .filter((r) => r.row);
+  // Cricket ties read "T", a no result "NR"; cricket shows season NRR, not a
+  // run difference (SD-12 / CK-02).
+  const labels = tableLabels(sport);
+  const nrr = sport === 'cricket' ? records.find((r) => r.sport === 'cricket')?.row?.nrr : undefined;
+  const decided = stats.played - stats.nr;
   // Aggregate record across every sport, for the at-a-glance headline (mirrors
   // the player profile's Matches / Wins / Win-rate tiles).
   const totalPlayed = records.reduce((n, r) => n + r.row!.played, 0);
@@ -183,14 +188,14 @@ export default function TeamProfileScreen() {
               <View style={st.statGrid}>
                 <Stat value={String(stats.played)} label="Played" />
                 <Stat value={String(stats.won)} label="Won" />
-                <Stat value={`${Math.round((stats.won / stats.played) * 100)}%`} label="Win rate" />
+                <Stat value={decided ? `${Math.round((stats.won / decided) * 100)}%` : '—'} label="Win rate" />
               </View>
               <Card style={{ gap: theme.spacing(2) }}>
-                <Text style={textStyles.muted}>Form · latest first  ·  {stats.won}W {stats.drawn}D {stats.lost}L</Text>
+                <Text style={textStyles.muted}>Form · latest first  ·  {recordText(stats.won, stats.drawn, stats.lost, stats.nr, labels)}</Text>
                 <View style={st.formRow}>
                   {stats.form.map((f) => (
-                    <TouchableOpacity key={f.matchId} accessibilityRole="button" accessibilityLabel={`${f.result === 'W' ? 'Won' : f.result === 'D' ? 'Drew' : 'Lost'} vs ${f.opponentName}`} onPress={() => { const m = matches.find((x) => x.id === f.matchId); if (m) openMatch(m); }}>
-                      <View style={[st.formChip, { backgroundColor: FORM_COLOR[f.result] }]}><Text style={st.formText}>{f.result}</Text></View>
+                    <TouchableOpacity key={f.matchId} accessibilityRole="button" accessibilityLabel={`${RESULT_WORD[f.result]} vs ${f.opponentName}`} onPress={() => { const m = matches.find((x) => x.id === f.matchId); if (m) openMatch(m); }}>
+                      <View style={[st.formChip, { backgroundColor: FORM_COLOR[f.result] }]}><Text style={[st.formText, f.result === 'NR' && { fontSize: theme.font.small }]}>{f.result}</Text></View>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -198,7 +203,9 @@ export default function TeamProfileScreen() {
               <View style={st.statGrid}>
                 <Stat value={String(stats.scored)} label={stats.unit ? `${cap(stats.unit)} for` : 'Scored'} />
                 <Stat value={String(stats.conceded)} label={stats.unit ? `${cap(stats.unit)} against` : 'Conceded'} />
-                <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label="Difference" />
+                {labels.showDiff
+                  ? <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label="Difference" />
+                  : <Stat value={nrr === undefined ? '—' : `${nrr >= 0 ? '+' : ''}${nrr.toFixed(2)}`} label="Net run rate" />}
               </View>
               {(stats.leaders.length > 0 || stats.appearances.length > 0) && (
                 <Card style={{ gap: theme.spacing(2) }}>
@@ -227,7 +234,7 @@ export default function TeamProfileScreen() {
                   {stats.headToHead.map((h) => (
                     <TouchableOpacity key={h.opponentId} accessibilityRole="button" style={st.leaderRow} onPress={() => nav.push('Team', { teamId: h.opponentId })}>
                       <Text style={st.leaderName} numberOfLines={1}>vs {h.opponentName}</Text>
-                      <Text style={textStyles.muted}>{h.played}P · {h.won}W {h.drawn}D {h.lost}L</Text>
+                      <Text style={textStyles.muted}>{h.played}P · {recordText(h.won, h.drawn, h.lost, h.nr, labels)}</Text>
                       <Text style={st.leaderVal}>{h.for}–{h.against}</Text>
                     </TouchableOpacity>
                   ))}
@@ -244,7 +251,7 @@ export default function TeamProfileScreen() {
               <Card key={sport} style={st.recordRow}>
                 <Text style={st.recordIcon}>{getSport(sport).icon}</Text>
                 <Text style={[textStyles.body, { flex: 1 }]}>{getSport(sport).name}</Text>
-                <Text style={textStyles.muted}>{row!.won}W {row!.lost}L {row!.drawn}D</Text>
+                <Text style={textStyles.muted}>{recordText(row!.won, row!.drawn, row!.lost, row!.nr, tableLabels(sport))}</Text>
                 <Text style={st.recordPts}>{row!.points} pts</Text>
               </Card>
             ))}
@@ -311,7 +318,12 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-const FORM_COLOR: Record<Result, string> = { W: theme.colors.primary, D: theme.colors.textMuted, L: theme.colors.danger };
+const FORM_COLOR: Record<Result, string> = { W: theme.colors.primary, D: theme.colors.textMuted, T: theme.colors.textMuted, NR: theme.colors.textMuted, L: theme.colors.danger };
+const RESULT_WORD: Record<Result, string> = { W: 'Won', D: 'Drew', T: 'Tied', NR: 'No result', L: 'Lost' };
+/** "3W 1T 2L 1NR" — the sport's level-result letter; NR when the sport always
+ *  shows it (cricket) or there is one. */
+const recordText = (won: number, drawn: number, lost: number, nr: number, l: ReturnType<typeof tableLabels>) =>
+  `${won}W ${drawn}${l.draw} ${lost}L${nr || l.alwaysNr ? ` ${nr}NR` : ''}`;
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 const st = StyleSheet.create({

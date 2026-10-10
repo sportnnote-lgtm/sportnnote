@@ -26,7 +26,7 @@ import { Tile } from '../../components/QuickOptionsSheet';
 import { cricketVoice } from '../voiceParsers';
 import {
   init, reducer, other, resultLine, outcome, superOverWinner, WICKET_LABEL, DISMISSAL_NAME, NO_BOWLER, composeDismissal,
-  oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, involvedPlayerIds,
+  oversStr, runRate, inPowerplay, nrrOvers, manualNrrOvers, nrrRuns, involvedPlayerIds,
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
   canBowl, midOver, oversUsed, snapshotState, lastBall,
@@ -1906,6 +1906,7 @@ export const cricketPlugin: SportPlugin<CricketState> = {
   },
   standingsRate: (s) => (s.ended ? nrrOvers(s) : null),
   manualRate: (s) => manualNrrOvers(s),
+  standingsScore: (s) => (s.ended ? nrrRuns(s) : null),
   manualEnd: { drawLabel: 'Tie', nrrToggle: true },
   // Its own correction editor (parity #06): ball chips → Edit ball, bowler, batters.
   correctable: true,

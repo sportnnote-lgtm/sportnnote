@@ -4,19 +4,30 @@
  * breakdowns and summed counters. Pure functions — easy to unit test and reuse
  * on client or server.
  */
-import type { SportId, StatLine } from '../core/types';
+import type { LineResult, SportId, StatLine } from '../core/types';
 
-export interface SportBreakdown {
-  sport: SportId;
+export interface Record5 {
+  /** appearances: every line is one match the player took part in */
   matches: number;
   wins: number;
+  draws: number;
+  losses: number;
+  ties: number;
+  noResults: number;
+  /** starts (sum of the `starts` key) and how many lines recorded it — Starts is
+   *  only shown where a lineup was known (SD-11) */
+  starts: number;
+  startsKnown: number;
+}
+
+export interface SportBreakdown extends Record5 {
+  sport: SportId;
   totals: Record<string, number>;
 }
 
-export interface PlayerStats {
-  matches: number;
-  wins: number;
-  winRate: number; // 0..1
+export interface PlayerStats extends Record5 {
+  /** wins over matches with a result (W + D + L + T), 0..1 */
+  winRate: number;
   sports: SportId[];
   /** every counter summed across all sports, e.g. {goals: 3, points: 56} */
   totals: Record<string, number>;
@@ -25,34 +36,68 @@ export interface PlayerStats {
   recent: StatLine[];
 }
 
+/** Line keys that describe the appearance, not a performance — summed into
+ *  their own figures, never listed with the counting stats. */
+export const APPEARANCE_KEYS = new Set(['starts', 'apps']);
+
 function addInto(target: Record<string, number>, src: Record<string, number>) {
-  for (const [k, v] of Object.entries(src)) target[k] = (target[k] ?? 0) + v;
+  for (const [k, v] of Object.entries(src)) if (!APPEARANCE_KEYS.has(k)) target[k] = (target[k] ?? 0) + v;
 }
+
+/** A line's result for the record: the stored / derived `result` (set by
+ *  `lineResult` before aggregating), else the legacy `won` flag. A golf round
+ *  without a win counts as played only. */
+function effectiveResult(l: StatLine): LineResult | undefined {
+  if (l.pending) return undefined;
+  return l.result ?? (l.won ? 'W' : l.eventId ? undefined : 'L');
+}
+
+const blank = (): Record5 => ({ matches: 0, wins: 0, draws: 0, losses: 0, ties: 0, noResults: 0, starts: 0, startsKnown: 0 });
+
+function count(r: Record5, l: StatLine) {
+  r.matches += 1;
+  const res = effectiveResult(l);
+  if (res === 'W') r.wins += 1;
+  else if (res === 'D') r.draws += 1;
+  else if (res === 'L') r.losses += 1;
+  else if (res === 'T') r.ties += 1;
+  else if (res === 'NR') r.noResults += 1;
+  if (typeof l.stats?.starts === 'number') { r.startsKnown += 1; r.starts += l.stats.starts; }
+}
+
+/** "3W 1D 1L" (+ " 1T" / " 1NR" only when there are any) — the record line. */
+export const recordText = (r: Record5): string =>
+  [`${r.wins}W`, `${r.draws}D`, `${r.losses}L`, r.ties ? `${r.ties}T` : '', r.noResults ? `${r.noResults}NR` : ''].filter(Boolean).join(' ');
+
+/** Win % over matches with a result (W + D + L + T): no-results — and lines
+ *  with no result at all (a golf round that wasn't won) — don't count. */
+export const winRateOf = (r: Record5): number => {
+  const decided = r.wins + r.draws + r.losses + r.ties;
+  return decided > 0 ? r.wins / decided : 0;
+};
 
 export function aggregate(lines: StatLine[]): PlayerStats {
   const totals: Record<string, number> = {};
   const bySportMap = new Map<SportId, SportBreakdown>();
-  let wins = 0;
+  const all = blank();
 
   for (const l of lines) {
     addInto(totals, l.stats);
-    if (l.won) wins += 1;
+    count(all, l);
     let b = bySportMap.get(l.sport);
     if (!b) {
-      b = { sport: l.sport, matches: 0, wins: 0, totals: {} };
+      b = { sport: l.sport, ...blank(), totals: {} };
       bySportMap.set(l.sport, b);
     }
-    b.matches += 1;
-    if (l.won) b.wins += 1;
+    count(b, l);
     addInto(b.totals, l.stats);
   }
 
   const recent = [...lines].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
   return {
-    matches: lines.length,
-    wins,
-    winRate: lines.length ? wins / lines.length : 0,
+    ...all,
+    winRate: winRateOf(all),
     sports: [...bySportMap.keys()],
     totals,
     bySport: [...bySportMap.values()].sort((a, b) => b.matches - a.matches),

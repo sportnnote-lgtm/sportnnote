@@ -5,7 +5,7 @@ category: Tournaments
 audience: Organisers, Captains, Parents & fans
 sports: all
 order: 60
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 When a meet runs Group A and Group B and then semi-finals, one long table mixing everyone is confusing. SportnNote shows a separate table for each group or league stage, and keeps knockout matches out of the tables. Organisers can also give a team bonus or penalty points, such as −2 for arriving late. They must give a reason, and the reason is shown to everyone.
@@ -28,10 +28,15 @@ You'll see one table for each stage that has fixtures:
 Knockout matches (quarter-finals, semi-finals, the final, play-offs) never appear in a table. The bracket shows those.
 
 The columns are:
-- **P** played, **W** won, **L** lost, **Pts** points
+- **P** played, **W** won, **L** lost, **Pts** points. Played includes no-result matches.
 - **D** drawn, only when some team has a draw
 - **NR** no result, only when some team has one (see [End a match early](/guides/end-a-match-early/))
 - **NRR** net run rate, for cricket
+
+Cricket tables are a little different, as in international cricket:
+- A tied match shows as **T**, not D.
+- The **NR** column is always there.
+- Teams are compared on **NRR**, so the table doesn't show a run difference. Rain-shortened matches count by the ICC rules; see [Rain, fewer overs and DLS targets](/guides/cricket-rain-and-dls/).
 
 A star after the points, like `12*`, means the team's points were adjusted by hand. The reason is listed under the table, for example "* Red House −2 · late arrival · by Priya, 12 Oct".
 
@@ -63,6 +68,8 @@ The team's points and position update straight away, and the reason appears unde
 - Head-to-head tie-breaks ignore adjustments. When two teams are level and the rules compare their own match against each other, only that real result counts.
 - Every change is recorded in the tournament's activity history, including removals.
 - Win, draw and no-result points are set per sport under **⚙ Manage** → the sport's **format & points** row. Changing them there updates the whole table.
+- In a multi-sport meet, **Overall standings** on the tournament page adds up each sport's table, using that sport's points and adjustments. So a house's overall total always matches its sport tables.
+- When the best-placed teams from different groups go through (for example the best third-placed teams), they are compared on points, then the same tie-breaks as the group tables. Head-to-head is skipped, because those teams never played each other. In table tennis the games and points ratios are taken over all their matches, and in chess Sonneborn-Berger and wins are used as usual.
 
 ## Common questions
 

@@ -13,6 +13,40 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-10 — Sport depth SD-11 to SD-13: every player gets a W/D/L/T/NR line; standings bugs; cricket NRR per ICC — Wave 0 complete
+
+- **Results and appearances (SD-11):**
+  - **Who gets a line:** every player who took part gets a stat line at completion — starters and
+    subs who came on (from squads/lineups), cricket involved players, and chess/carrom/racket
+    entrants via a capped roster fallback.
+  - **What it holds:** a `result` W/D/L/T/NR from the player's side, and `starts` where a lineup
+    exists.
+  - **Code:** pure `src/data/appearances.ts` (`planAppearances`, `sideResults`); repos
+    `syncMatchAppearances` after `updateMatchSnapshot` and `endMatchManually`. It is idempotent,
+    dispute-mapped and writes only changes.
+  - **Profiles:** Apps, W-D-L, Win % (W / decided) and Starts; no more LOST for draws, ties or NR;
+    sport rows read "3W 1D 1L".
+  - **Migration 0050** `20261019122800_stat_line_result.sql` (bundle `2026-10-stat-line-result-0050.sql`,
+    founder to run): `stat_lines.result` + check. A conservative backfill sets NR/T/D for level
+    outcomes and W/L only when the side is certain; it inserts no rows.
+  - **Before 0050 runs:** tolerant reads and writes, with the result derived at read time.
+- **Standings (SD-12):**
+  - the overall house table uses each sport's organiser points (X1);
+  - cross-group seeding walks the sport's full tie-break chain (X2; TT ratios, chess SB);
+  - NR counts in Played (X4);
+  - cricket tables show T and an NR column, with NRR instead of run difference, on the table and
+    the team page.
+- **Cricket NRR (SD-13):**
+  - a revised-target (DLS / manual) match credits the side batting first with target − 1 off the
+    chase's overs (v2 only);
+  - a side with no batter left counts as all out (legacy matches too — the bug fix);
+  - Team 1's original quota;
+  - credited runs come via a new `standingsScore` plugin hook.
+- **Tests:** tsc + 1032 (24 appearances, 14 standings-sd12, 16 cricket-nrr); PGlite statlineresult 39/39.
+- **Guides updated:** points-table-and-adjustments, cricket-rain-and-dls, cricket-scorecard-and-stats.
+
+---
+
 ### 2026-10-10 — Sport depth SD-07 to SD-10: golf missed cut; football 45+2' and blocked shots; keeper clean sheets; chess Swiss bye
 
 - **Golf (SD-07):**

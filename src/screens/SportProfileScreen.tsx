@@ -13,7 +13,8 @@ import { getSport } from '../sports/registry';
 import { formatDay } from '../core/dates';
 import { useAuth } from '../core/auth';
 import { usePlayerProfile, useMatches } from '../data/hooks';
-import { statCoverage } from '../data/stats';
+import { statCoverage, winRateOf, APPEARANCE_KEYS } from '../data/stats';
+import { lineResult, RESULT_PILL } from '../data/appearances';
 import { cricketCareer, cricketMatchLine } from '../data/cricketCareer';
 import { golfProfileSummary } from '../sports/golf/engine';
 import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
@@ -177,11 +178,20 @@ export default function SportProfileScreen() {
             })() : (
             <>
             {/* Headline record — accent-coloured so the eye lands here first. */}
+            {/* SD-11: appearances, the W-D-L record (draws / ties / no results
+                are no longer losses) and win % over matches with a result. */}
             <View style={st.statGrid}>
-              <Stat value={String(bySport.matches)} label="Matches" />
-              <Stat value={String(bySport.wins)} label="Wins" />
-              <Stat value={`${Math.round((bySport.wins / Math.max(1, bySport.matches)) * 100)}%`} label="Win rate" />
+              <Stat value={String(bySport.matches)} label="Apps" />
+              <Stat value={`${bySport.wins}-${bySport.draws}-${bySport.losses}`} label="W-D-L" />
+              <Stat value={`${Math.round(winRateOf(bySport) * 100)}%`} label="Win %" />
             </View>
+            {(bySport.startsKnown > 0 || bySport.ties > 0 || bySport.noResults > 0) && (
+              <View style={st.statGrid}>
+                {bySport.startsKnown > 0 && <Stat value={String(bySport.starts)} label="Starts" tone="neutral" />}
+                {bySport.ties > 0 && <Stat value={String(bySport.ties)} label="Ties" tone="neutral" />}
+                {bySport.noResults > 0 && <Stat value={String(bySport.noResults)} label="No result" tone="neutral" />}
+              </View>
+            )}
             {/* Counting stats — a second, quieter tier so they read as detail,
                 not as more headline numbers. */}
             {sport === 'cricket' ? (() => {
@@ -285,24 +295,27 @@ export default function SportProfileScreen() {
               // SD-01: set/game sports lead with the match's set line, read from
               // this player's side ("6-4, 3-6, 7-6(4)").
               const hm = matchById.get(l.matchId);
+              // SD-11: W / D / L / T / NR from this player's side (stored, else
+              // derived from the match); undefined while the match is in play.
+              const res = golfRound ? undefined : lineResult(l, hm);
               const persp: 'home' | 'away' = hm && l.opponent && l.opponent === hm.homeTeam.name ? 'away' : 'home';
               let setLine = '';
               try { setLine = !golfRound && hm?.status === 'completed' && hm.state ? plugin.scoreLine?.(hm.state as never, persp) ?? '' : ''; } catch { setLine = ''; }
               const row = (
-                <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
+                <Card style={[st.histRow, { borderLeftWidth: 3, borderLeftColor: (golfRound ? l.won : res === 'W') ? theme.colors.primary : theme.colors.border }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>
                       {golfRound ? `⛳ ${l.opponent ?? 'Round'}` : `vs ${l.opponent ?? 'TBD'}`}
                       {l.date ? <Text style={st.histDate}>  ·  {formatDay(l.date)}</Text> : null}
                     </Text>
                     <Text style={textStyles.muted}>
-                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).map(([k, v]) => `${v} ${label(k).toLowerCase()}`)].filter(Boolean).join(' · ')}
+                      {golfRound ? golfLine : sport === 'cricket' ? cricketMatchLine(l.stats) : [setLine, ...Object.entries(l.stats).filter(([k]) => !APPEARANCE_KEYS.has(k)).map(([k, v]) => `${v} ${label(k).toLowerCase()}`)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pill
-                    label={golfRound ? (l.won ? '1ST' : 'PLAYED') : l.won ? 'WON' : 'LOST'}
-                    color={l.won ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
-                    textColor={l.won ? theme.colors.primary : theme.colors.textMuted}
+                    label={golfRound ? (l.won ? '1ST' : 'PLAYED') : res ? RESULT_PILL[res] : 'LIVE'}
+                    color={(golfRound ? l.won : res === 'W') ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
+                    textColor={(golfRound ? l.won : res === 'W') ? theme.colors.primary : theme.colors.textMuted}
                   />
                   {openable && <Text style={st.chevron}>›</Text>}
                 </Card>
@@ -330,7 +343,7 @@ function Stat({
   const inner = (
     <Card style={st.statCardInner}>
       {coverage ? <Text style={st.cloud}>☁</Text> : null}
-      <Text style={[st.statValue, tone === 'neutral' && st.statValueNeutral]}>{value}</Text>
+      <Text style={[st.statValue, tone === 'neutral' && st.statValueNeutral, value.length > 4 && st.statValueLong]} numberOfLines={1}>{value}</Text>
       <Text style={textStyles.muted}>{label}</Text>
       {coverage && open ? (
         <Text style={st.coverageNote}>tracked in {coverage.tracked} of {coverage.total} games</Text>
@@ -353,6 +366,8 @@ const st = StyleSheet.create({
   statCardInner: { width: '100%', alignItems: 'center', gap: theme.spacing(1) },
   statCardWrap: { width: '30%', flexGrow: 1 },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
+  /** a W-D-L record ("12-3-10") fits one line on a 375 px phone */
+  statValueLong: { fontSize: theme.font.h3, lineHeight: theme.font.h1 + 6 },
   statValueNeutral: { color: theme.colors.text },
   totalsLabel: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(1) },
   cloud: { position: 'absolute', top: theme.spacing(2), right: theme.spacing(2), fontSize: 12, color: theme.colors.accent },

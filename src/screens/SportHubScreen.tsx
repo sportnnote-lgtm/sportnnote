@@ -111,6 +111,7 @@ export default function SportHubScreen() {
           />
         </View>
         <LeagueTable
+          sport={sport}
           teams={table}
           onTeam={(teamId) => nav.navigate('Team', { teamId })}
           emptyLabel={`No completed ${plugin.name.toLowerCase()} matches yet.`}

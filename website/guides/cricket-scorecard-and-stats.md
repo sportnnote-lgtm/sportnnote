@@ -5,7 +5,7 @@ category: Cricket scoring
 audience: Players, Parents & fans, Captains, Scorers
 sports: cricket
 order: 80
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 The scorecard holds much more than the total. It shows when each wicket fell, which pair added the most runs, how the extras were given away, and which over turned the match. After the match, each player's figures are added to their cricket profile. This guide explains what each part means.
@@ -41,7 +41,9 @@ The scorecard holds much more than the total. It shows when each wicket fell, wh
 ## Career stats on a profile
 1. Open a player's profile.
 2. Under **By sport**, tap **Cricket**.
-3. You'll see Matches, Wins and Win rate, then three sections: **Batting**, **Bowling** and **Fielding**.
+3. You'll see **Apps**, the **W-D-L** record and **Win %**, then three sections: **Batting**, **Bowling** and **Fielding**.
+
+**Apps** counts every match the player was in the playing XI for, even one where they didn't bat or bowl. A tied match shows **TIE** in the match history and is counted under **Ties**. A no result or abandoned match shows **NO RESULT**, is counted under **No result**, and isn't part of Win %. Win % is wins out of the matches that had a result.
 
 What the short names mean:
 - **Avg** under Batting: runs divided by the number of times out. Not-outs don't count as an out, so a batter with 120 runs and 3 dismissals averages 40.00.

@@ -16,7 +16,7 @@ import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canManageTournament } from '../core/org';
 import { useTournament, useTournamentById, useStandings, useDivisions, useOrganizations } from '../data/hooks';
-import { leaderStat, teamStandings, standingsConfigFromFormat, type PointsAdjustment, type TeamStanding } from '../data/standings';
+import { leaderStat, teamStandings, standingsConfigFromFormat, tableLabels, type PointsAdjustment, type TeamStanding } from '../data/standings';
 import { unplayed } from '../components/LeagueTable';
 import { matchesInDivision, standingsPhases } from '../data/groups';
 import { structureFromFormat } from '../data/structureConfig';
@@ -201,7 +201,7 @@ export default function StandingsScreen() {
           </>
         ) : phases.map((ph) => (
           <PhaseTable key={ph.key} title={phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} Team standings` : ph.title}
-            phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
+            sport={activeSport} phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
             expanded={showTeams} onToggle={() => setShowTeams((v) => !v)}
             onTeam={(id) => nav.navigate('Team', { teamId: id })}
             onSave={(list, detail) => saveAdjustments(list, detail)} />
@@ -247,7 +247,8 @@ export default function StandingsScreen() {
 
 /** One phase's table (league / Group A / Super Four / Swiss). Managers get a ±
  *  per row: a signed points adjustment with a public reason (parity #07). */
-function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave }: {
+function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave, sport }: {
+  sport: SportId;
   title: string; phaseKey: string; rows: TeamStanding[]; adjustments: PointsAdjustment[]; canManage: boolean;
   expanded: boolean; onToggle: () => void; onTeam: (teamId: string) => void;
   onSave: (list: PointsAdjustment[], detail: string) => Promise<void>;
@@ -255,8 +256,15 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [delta, setDelta] = useState(0);
   const [reason, setReason] = useState('');
+  // Cricket: ties read "T" and the NR column is always there (SD-12).
+  const labels = tableLabels(sport);
   const hasDraws = rows.some((t) => t.drawn > 0);
-  const hasNr = rows.some((t) => (t.nr ?? 0) > 0);
+  const hasNr = labels.alwaysNr || rows.some((t) => (t.nr ?? 0) > 0);
+  // Narrower number columns once the table carries several optional ones
+  // (cricket: T / NR / NRR), so team names stay readable at phone width.
+  const dense = [hasDraws, hasNr, rows.some((t) => t.nrr !== undefined), canManage].filter(Boolean).length >= 2;
+  const num = dense ? [st.num, st.numDense] : st.num;
+  const nrrW = dense ? 42 : 48;
   const hasNrr = rows.some((t) => t.nrr !== undefined);
   const phaseLabel = phaseKey === 'league' ? '' : ` (${title})`;
   const inPhase = (a: PointsAdjustment) => !a.phase || a.phase === phaseKey;
@@ -271,13 +279,13 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
         <View style={[st.row, st.head]}>
           <View style={st.posCell}><Text style={st.headText}>#</Text></View>
           <Text style={[st.teamCol, st.headText]}>Team</Text>
-          <Text style={[st.num, st.headText]}>P</Text>
-          <Text style={[st.num, st.headText]}>W</Text>
-          {hasDraws && <Text style={[st.num, st.headText]}>D</Text>}
-          <Text style={[st.num, st.headText]}>L</Text>
-          {hasNr && <Text style={[st.num, st.headText]}>NR</Text>}
-          {hasNrr && <Text style={[st.num, st.headText, { width: 48 }]}>NRR</Text>}
-          <Text style={[st.num, st.headText]}>Pts</Text>
+          <Text style={[num, st.headText]}>P</Text>
+          <Text style={[num, st.headText]}>W</Text>
+          {hasDraws && <Text style={[num, st.headText]}>{labels.draw}</Text>}
+          <Text style={[num, st.headText]}>L</Text>
+          {hasNr && <Text style={[num, st.headText]}>NR</Text>}
+          {hasNrr && <Text style={[num, st.headText, { width: nrrW }]}>NRR</Text>}
+          <Text style={[num, st.headText]}>Pts</Text>
           {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
         </View>
         {shown.map((t, i) => {
@@ -293,13 +301,13 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
                     <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
                     <Text style={[textStyles.body, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
                   </View>
-                  <Text style={st.num}>{t.played}</Text>
-                  <Text style={st.num}>{t.won}</Text>
-                  {hasDraws && <Text style={st.num}>{t.drawn}</Text>}
-                  <Text style={st.num}>{t.lost}</Text>
-                  {hasNr && <Text style={st.num}>{t.nr ?? 0}</Text>}
-                  {hasNrr && <Text style={[st.num, { width: 48 }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
-                  <Text style={[st.num, st.pts]}>{t.points}{t.adjust ? '*' : ''}</Text>
+                  <Text style={num}>{t.played}</Text>
+                  <Text style={num}>{t.won}</Text>
+                  {hasDraws && <Text style={num}>{t.drawn}</Text>}
+                  <Text style={num}>{t.lost}</Text>
+                  {hasNr && <Text style={num}>{t.nr ?? 0}</Text>}
+                  {hasNrr && <Text style={[num, { width: nrrW }]}>{t.nrr === undefined ? '—' : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`}</Text>}
+                  <Text style={[num, st.pts]}>{t.points}{t.adjust ? '*' : ''}</Text>
                   {canManage && (
                     <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
                       accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
@@ -380,6 +388,7 @@ const st = StyleSheet.create({
   teamCell: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dot: { width: 12, height: 12, borderRadius: 6 },
   num: { width: 32, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small },
+  numDense: { width: 26 },
   pts: { fontWeight: '900', color: theme.colors.primary },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },

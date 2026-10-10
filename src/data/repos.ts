@@ -18,6 +18,7 @@ import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
 import { planStatSync, applyStatWrites, type MatchTotals } from './statSync';
+import { planAppearances, sideResults, subsCameOn, type AppearanceWrite } from './appearances';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
 import {
@@ -95,6 +96,7 @@ import type {
   SportFormat,
   SportId,
   StatLine,
+  LineResult,
   Team,
   TeamInvite,
   TeamLeadership,
@@ -720,19 +722,13 @@ interface StatLineRow {
   sport: string;
   stats: Record<string, number> | null;
   won: boolean | null;
+  /** SD-11 — migration 0050; absent before it */
+  result?: LineResult | null;
   opponent: string | null;
   recorded_at: string | null;
 }
-export async function getPlayerStatLines(playerId: string): Promise<StatLine[]> {
-  if (!isSupabaseConfigured || !supabase) {
-    return demo.statLines.filter((l) => l.playerId === playerId);
-  }
-  const { data, error } = await supabase
-    .from('stat_lines')
-    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
-    .eq('player_id', playerId);
-  if (error || !data) return [];
-  return (data as StatLineRow[]).map((r) => ({
+function rowToStatLine(r: StatLineRow): StatLine {
+  return {
     id: r.id,
     matchId: r.match_id ?? '',
     eventId: r.event_id ?? undefined,
@@ -740,9 +736,36 @@ export async function getPlayerStatLines(playerId: string): Promise<StatLine[]> 
     sport: r.sport as SportId,
     stats: r.stats ?? {},
     won: r.won ?? false,
+    ...(r.result ? { result: r.result } : {}),
     opponent: r.opponent ?? undefined,
     date: r.recorded_at ?? undefined,
-  }));
+  };
+}
+const STAT_LINE_COLS = 'id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at';
+/** SD-11: false once the database says `stat_lines.result` doesn't exist yet
+ *  (before migration 0050) — reads and writes then leave it out. */
+let statLineResultColumn = true;
+/** Read stat lines with `result` when the column exists; before migration 0050
+ *  the same query runs without it (the result is then derived at read time). */
+async function selectStatLines(
+  run: (cols: string) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>,
+): Promise<{ data: StatLineRow[] | null; error: { code?: string; message?: string } | null }> {
+  if (statLineResultColumn) {
+    const res = await run(`${STAT_LINE_COLS}, result`);
+    if (!isMissingResultColumn(res.error)) return res as { data: StatLineRow[] | null; error: null };
+    statLineResultColumn = false;
+  }
+  return (await run(STAT_LINE_COLS)) as { data: StatLineRow[] | null; error: null };
+}
+const isMissingResultColumn = (err: { code?: string; message?: string } | null | undefined): boolean =>
+  !!err && (['42703', 'PGRST204'].includes(err.code ?? '') || /column .*result/i.test(err.message ?? ''));
+export async function getPlayerStatLines(playerId: string): Promise<StatLine[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    return demo.statLines.filter((l) => l.playerId === playerId);
+  }
+  const { data, error } = await selectStatLines((cols) => supabase!.from('stat_lines').select(cols).eq('player_id', playerId));
+  if (error || !data) return [];
+  return (data as StatLineRow[]).map(rowToStatLine);
 }
 
 /** All stat lines recorded for one match — powers the match Summary ratings. */
@@ -750,22 +773,9 @@ export async function getMatchStatLines(matchId: string): Promise<StatLine[]> {
   if (!isSupabaseConfigured || !supabase) {
     return demo.statLines.filter((l) => l.matchId === matchId);
   }
-  const { data, error } = await supabase
-    .from('stat_lines')
-    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
-    .eq('match_id', matchId);
+  const { data, error } = await selectStatLines((cols) => supabase!.from('stat_lines').select(cols).eq('match_id', matchId));
   if (error || !data) return [];
-  return (data as StatLineRow[]).map((r) => ({
-    id: r.id,
-    matchId: r.match_id ?? '',
-    eventId: r.event_id ?? undefined,
-    playerId: r.player_id,
-    sport: r.sport as SportId,
-    stats: r.stats ?? {},
-    won: r.won ?? false,
-    opponent: r.opponent ?? undefined,
-    date: r.recorded_at ?? undefined,
-  }));
+  return (data as StatLineRow[]).map(rowToStatLine);
 }
 
 /** Server-side player search: filtering happens in the DB (or the demo store),
@@ -978,22 +988,9 @@ export async function getStatLinesForPlayers(playerIds: string[]): Promise<StatL
     const set = new Set(playerIds);
     return demo.statLines.filter((l) => set.has(l.playerId));
   }
-  const { data, error } = await supabase
-    .from('stat_lines')
-    .select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at')
-    .in('player_id', playerIds);
+  const { data, error } = await selectStatLines((cols) => supabase!.from('stat_lines').select(cols).in('player_id', playerIds));
   if (error || !data) return [];
-  return (data as StatLineRow[]).map((r) => ({
-    id: r.id,
-    matchId: r.match_id ?? '',
-    eventId: r.event_id ?? undefined,
-    playerId: r.player_id,
-    sport: r.sport as SportId,
-    stats: r.stats ?? {},
-    won: r.won ?? false,
-    opponent: r.opponent ?? undefined,
-    date: r.recorded_at ?? undefined,
-  }));
+  return (data as StatLineRow[]).map(rowToStatLine);
 }
 
 export async function getAllStatLines(): Promise<StatLine[]> {
@@ -1008,22 +1005,12 @@ export async function getAllStatLines(): Promise<StatLine[]> {
     return heldOut(demo.statLines, openKeys);
   }
   const [{ data, error }, dis] = await Promise.all([
-    supabase.from('stat_lines').select('id, match_id, event_id, player_id, sport, stats, won, opponent, recorded_at'),
+    selectStatLines((cols) => supabase!.from('stat_lines').select(cols)),
     supabase.from('match_disputes').select('match_id, player_id').eq('status', 'open'),
   ]);
   if (error || !data) return [];
   const openKeys = new Set((dis.data ?? []).map((r: { match_id: string; player_id: string }) => `${r.match_id}:${r.player_id}`));
-  const lines = (data as StatLineRow[]).map((r) => ({
-    id: r.id,
-    matchId: r.match_id ?? '',
-    eventId: r.event_id ?? undefined,
-    playerId: r.player_id,
-    sport: r.sport as SportId,
-    stats: r.stats ?? {},
-    won: r.won ?? false,
-    opponent: r.opponent ?? undefined,
-    date: r.recorded_at ?? undefined,
-  }));
+  const lines = (data as StatLineRow[]).map(rowToStatLine);
   return heldOut(lines, openKeys);
 }
 
@@ -1238,6 +1225,11 @@ export async function resetMatch(matchId: string): Promise<void> {
   }
   await supabase.from('match_events').delete().eq('match_id', matchId);
   await supabase.from('stat_lines').update({ stats: {}, won: false }).eq('match_id', matchId);
+  // SD-11: the line's result goes too (no-op before migration 0050 — no column).
+  if (statLineResultColumn) {
+    const { error } = await supabase.from('stat_lines').update({ result: null }).eq('match_id', matchId);
+    if (isMissingResultColumn(error)) statLineResultColumn = false;
+  }
 }
 
 /** When this match last saw scoring activity: its latest event, else the match
@@ -1712,6 +1704,107 @@ export async function syncMatchStatLines(
   return writes.length;
 }
 
+/** SD-11 (GEN-01) — at completion: an appearance line for every player who
+ *  took part (squad starters + subs who came on, or a 1–2 player entry's
+ *  roster) and each line's `result` (W/D/L/T/NR) + `won` from that player's
+ *  side. Ids go through resolved disputes; idempotent (only changed rows are
+ *  written). Before migration 0050 `result` is left out of the writes and
+ *  profiles derive it from the match. Never throws — returns rows written. */
+export async function syncMatchAppearances(matchId: string, stateArg?: unknown): Promise<number> {
+  try {
+    const m = await getMatch(matchId);
+    if (!m) return 0;
+    const outcome = sideResults({ sport: m.sport, status: m.status, winner: m.winner ?? null, result: m.result ?? null });
+    if (!outcome) return 0;
+    const state = stateArg ?? m.state;
+    const plugin = getSport(m.sport);
+    const [squads, lineup, rosters, lines, mapId] = await Promise.all([
+      getMatchSquads(matchId),
+      getLineup(matchId, m.sport).catch(() => undefined),
+      getTeamRosters([m.homeTeam.id, m.awayTeam.id]),
+      getMatchStatLines(matchId),
+      disputeMapper(matchId),
+    ]);
+    const cameOn = subsCameOn(state);
+    let involved: string[] = [];
+    try { involved = state && plugin.involvedPlayerIds ? plugin.involvedPlayerIds(state as never) : []; } catch { involved = []; }
+    // Name-only sub events (basketball / kabaddi) → match them to bench players.
+    const benchIds = [...squads.home.subs, ...squads.away.subs];
+    const playerNames: Record<string, string> = {};
+    if (cameOn.names.length && benchIds.length) {
+      for (const p of await getPlayersByIds(benchIds)) playerNames[p.id] = p.fullName;
+    }
+    const perSide = Number((m.format as Record<string, unknown> | undefined)?.playersPerSide) || undefined;
+    const writes = planAppearances({
+      sport: m.sport, outcome,
+      names: { home: m.homeTeam.name, away: m.awayTeam.name },
+      squads, lineup,
+      rosters: { home: rosters.get(m.homeTeam.id) ?? [], away: rosters.get(m.awayTeam.id) ?? [] },
+      perSide, cameOn, playerNames, involved,
+      existing: lines.filter((l) => l.sport === m.sport && !l.eventId),
+      mapId,
+    });
+    if (!writes.length) return 0;
+    await applyAppearanceWrites(matchId, m.sport, writes);
+    return writes.length;
+  } catch {
+    return 0;
+  }
+}
+
+async function getPlayersByIds(ids: string[]): Promise<{ id: string; fullName: string }[]> {
+  if (!ids.length) return [];
+  if (!isSupabaseConfigured || !supabase) return demo.players.filter((p) => ids.includes(p.id));
+  const { data } = await supabase.from(PLAYERS_READ).select('id, full_name').in('id', ids);
+  return ((data ?? []) as { id: string; full_name: string }[]).map((r) => ({ id: r.id, fullName: r.full_name }));
+}
+
+async function applyAppearanceWrites(matchId: string, sport: SportId, writes: AppearanceWrite[]): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const now = new Date().toISOString();
+    for (const w of writes) {
+      if (w.kind === 'insert') {
+        demo.statLines.push({ ...newDemoStatLine({ matchId, playerId: w.playerId, sport, stats: w.stats, opponent: w.opponent }), won: w.won, result: w.result, date: now });
+      } else {
+        const l = demo.statLines.find((x) => x.id === w.id);
+        if (!l) continue;
+        if (w.patch.stats) l.stats = { ...w.patch.stats };
+        if (w.patch.result) l.result = w.patch.result;
+        if (w.patch.won !== undefined) l.won = w.patch.won;
+      }
+    }
+    return;
+  }
+  const sb = supabase;
+  // Write with `result`; if the column isn't there yet (pre-0050), again without.
+  const tolerant = async (write: (withResult: boolean) => PromiseLike<{ error: { code?: string; message?: string } | null }>) => {
+    if (statLineResultColumn) {
+      const r = await write(true);
+      if (!isMissingResultColumn(r.error)) return r.error;
+      statLineResultColumn = false;
+    }
+    return (await write(false)).error;
+  };
+  const inserts = writes.filter((w): w is Extract<AppearanceWrite, { kind: 'insert' }> => w.kind === 'insert');
+  const rowOf = (w: Extract<AppearanceWrite, { kind: 'insert' }>, withResult: boolean) => ({
+    match_id: matchId, player_id: w.playerId, sport, stats: w.stats, won: w.won, opponent: w.opponent ?? null,
+    ...(withResult ? { result: w.result } : {}),
+  });
+  if (inserts.length) {
+    const err = await tolerant((wr) => sb.from('stat_lines').insert(inserts.map((w) => rowOf(w, wr))));
+    // One row clashed (a live stat landed first — one line per match+player+sport):
+    // insert one by one, skipping the duplicates; the next sync labels them.
+    if (err) for (const w of inserts) await tolerant((wr) => sb.from('stat_lines').insert(rowOf(w, wr)));
+  }
+  for (const w of writes) {
+    if (w.kind !== 'update') continue;
+    const { result, ...rest } = w.patch;
+    const base: Record<string, unknown> = { ...rest };
+    if (!Object.keys(base).length && result && !statLineResultColumn) continue;
+    await tolerant((wr) => sb.from('stat_lines').update({ ...base, ...(wr && result ? { result } : {}) }).eq('id', w.id));
+  }
+}
+
 /** The public "Score edits" log of a match (parity #05): every published
  *  correction, newest first. */
 export async function getScoreEdits(matchId: string): Promise<{ at: string; byName: string; lines: string[] }[]> {
@@ -2172,6 +2265,9 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
         : [];
       for (const l of demo.statLines) if (l.matchId === matchId) l.won = !!winTeam && winRoster.includes(l.playerId);
     }
+    // SD-11: appearance lines + W/D/L/T/NR (a manual result too — a correction
+    // may have changed who came on).
+    if (completed || m.result) await syncMatchAppearances(matchId, state);
     return;
   }
 
@@ -2184,6 +2280,7 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
   const manualResult = manualErr ? null : (manual as { result?: MatchResult | null } | null)?.result;
   if (manualResult) {
     await supabase.from('matches').update({ state, status: snapshotOutcome(manualResult, completed).status, updated_at: new Date().toISOString() }).eq('id', matchId);
+    await syncMatchAppearances(matchId, state);
     return;
   }
   let winner: 'home' | 'away' | 'draw' | null = null;
@@ -2206,6 +2303,8 @@ export async function updateMatchSnapshot(matchId: string, state: object, comple
       const winners = (await getTeamRosters([winTeamId])).get(winTeamId) ?? [];
       if (winners.length) await supabase.from('stat_lines').update({ won: true }).eq('match_id', matchId).in('player_id', winners);
     }
+    // SD-11: appearance lines + each line's W/D/L/T/NR (and `won` from the squad).
+    await syncMatchAppearances(matchId, state);
   }
 }
 
@@ -2253,6 +2352,7 @@ export async function endMatchManually(matchId: string, r: MatchResult): Promise
     m.winner = winner ?? undefined;
     if (r.score) m.score = r.score;
     await flagWinners(matchId, winner);
+    await syncMatchAppearances(matchId);
     return 'full';
   }
   const now = new Date().toISOString();
@@ -2271,11 +2371,13 @@ export async function endMatchManually(matchId: string, r: MatchResult): Promise
       if (c.error) throw new Error(c.error.message);
     }
     await flagWinners(matchId, winner);
+    await syncMatchAppearances(matchId);
     return 'legacy';
   }
   if (res.error) throw new Error(res.error.message);
   if (!res.data?.length) throw new Error('You can’t end this match.');
   await flagWinners(matchId, winner);
+  await syncMatchAppearances(matchId);
   return 'full';
 }
 

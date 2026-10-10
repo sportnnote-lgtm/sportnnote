@@ -5,7 +5,7 @@ category: Cricket scoring
 audience: Scorers, Organisers, Parents & fans
 sports: cricket
 order: 50
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 A school T20 starts late, or rain stops play in the middle of the chase. The umpires agree a shorter match, and someone has to work out the new target. The app does this for you. You can change the overs at any time, let the app work out a fair rain-revised target using the DLS method, or type in a target the officials give you.
@@ -53,6 +53,14 @@ When the app has revised the target, you'll see "(DLS)" next to it, so everyone 
 - The result reads, for example, "Won by 16 runs (DLS)".
 
 A target you typed in shows "(revised target)", both on the score and in the result.
+
+## How rain changes net run rate
+Net run rate (NRR) in the points table follows the ICC rules:
+- After a revised target, the team that batted first counts as scoring the target minus one, in the overs the chasing team was given. Team A made 160 in 20 overs, the chase was cut to 10 overs with a target of 91: for NRR, Team A scored 90 in 10 overs.
+- A team all out counts its full overs. So does a team with no batter left, such as 9 out and the last batter retired hurt.
+- If **Change overs** only shortened the chase, the team that batted first keeps its own full overs.
+
+> **Note:** Matches whose overs or target changed before this update keep their NRR, apart from the "no batter left" rule.
 
 ## Common questions
 ### The bowling limit changed after rain. Why?

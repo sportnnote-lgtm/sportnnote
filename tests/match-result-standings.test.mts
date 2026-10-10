@@ -120,12 +120,14 @@ describe('head-to-head with a no result', () => {
 });
 
 describe('team stats', () => {
-  test('NR / abandoned are left out', () => {
+  // SD-12 (cross-sport X4): a no result counts as played — like the table —
+  // but adds no W/D/L and no runs.
+  test('NR / abandoned count as played (NR), with no score', () => {
     const matches = [m('cricket', 'a', 'b', 120, 100), m('cricket', 'a', 'b', 50, 10, nr()), m('cricket', 'b', 'a', 5, 5, nr('abandoned'))];
-    assert.equal(resultFor(matches[1], 'a'), null);
+    assert.equal(resultFor(matches[1], 'a'), 'NR');
     // even when an old snapshot left a winner on the row
-    assert.equal(resultFor({ ...matches[1], winner: 'draw' } as Match, 'a'), null);
+    assert.equal(resultFor({ ...matches[1], winner: 'draw' } as Match, 'a'), 'NR');
     const s = computeTeamStats('a', matches);
-    assert.deepEqual([s.played, s.won, s.scored, s.conceded, s.form.length], [1, 1, 120, 100, 1]);
+    assert.deepEqual([s.played, s.won, s.nr, s.scored, s.conceded, s.form.length], [3, 1, 2, 120, 100, 3]);
   });
 });

@@ -321,6 +321,9 @@ export interface AcademicYear {
  * counters (e.g. {goals:2, assists:1} or {points:18}). Rolling these up across
  * matches produces a player's profile totals — see src/data/stats.ts.
  */
+/** SD-11 — a player's result in one match, from their side. */
+export type LineResult = 'W' | 'D' | 'L' | 'T' | 'NR';
+
 export interface StatLine {
   id: UUID;
   /** the match this line came from ('' for a field-event line — see eventId) */
@@ -330,7 +333,15 @@ export interface StatLine {
   playerId: UUID;
   sport: SportId;
   stats: Record<string, number>;
+  /** kept for back-compat: true only for a win (`result === 'W'`) */
   won: boolean;
+  /** SD-11 — this player's result from their side: Win / Draw / Loss / Tie /
+   *  No result. `stat_lines.result` (migration 0050); absent on older lines —
+   *  read it through `lineResult` (appearances.ts), which derives it from the match. */
+  result?: LineResult;
+  /** client-only (never stored): the line's match is still in play, so it has
+   *  no result yet — counted as an appearance, not in W-D-L / win % */
+  pending?: boolean;
   /** opponent label for the history list, e.g. "Blue House" */
   opponent?: string;
   date?: string;

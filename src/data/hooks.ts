@@ -35,6 +35,7 @@ import {
   getMyPlayerId,
 } from './repos';
 import { aggregate, type PlayerStats } from './stats';
+import { lineResult } from './appearances';
 import { isSearchable, rankByName, type SearchResults, type SearchKind } from './search';
 import { teamStandings, statLeaders, standingsConfigFromFormat, type TeamStanding, type StatLeader } from './standings';
 import { standingsPhases, type StandingsPhase } from './groups';
@@ -566,7 +567,8 @@ export function usePlayerProfile(playerId: string | null) {
         setScoped(null);
         return;
       }
-      Promise.all([getPlayer(playerId), getPlayerStatLines(playerId), getMatches(), getFieldEvents()]).then(([p, lines, matches, events]) => {
+      Promise.all([getPlayer(playerId), getPlayerStatLines(playerId), getMatches(), getFieldEvents()]).then(([p, rawLines, matches, events]) => {
+        let lines = rawLines;
         if (!on) return;
         setPlayer(p);
         // Friendly = no tournament: a friendly match, or a casual golf round.
@@ -575,6 +577,14 @@ export function usePlayerProfile(playerId: string | null) {
           ...events.filter((e) => !e.tournamentId).map((e) => e.id),
         ]);
         const isFriendly = (l: { matchId: string; eventId?: string }) => friendlyIds.has(l.eventId ?? l.matchId);
+        // SD-11: each line's W/D/L/T/NR — stored, else derived from its match.
+        const byId = new Map(matches.map((m) => [m.id, m]));
+        lines = lines.map((l) => {
+          const m = byId.get(l.matchId);
+          const result = lineResult(l, m);
+          if (!result && m && !l.eventId) return { ...l, result: undefined, pending: true };
+          return result === l.result ? l : { ...l, result };
+        });
         setScoped({
           all: aggregate(lines),
           official: aggregate(lines.filter((l) => !isFriendly(l))),

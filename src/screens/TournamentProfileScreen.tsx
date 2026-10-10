@@ -303,7 +303,8 @@ export default function TournamentProfileScreen() {
   }, [tournament, hostOrg, allPlayers]);
 
   const stCfg = useMemo(() => (activeSport ? standingsConfigFromFormat(activeSport, tournament?.formats?.[activeSport]) : undefined), [activeSport, tournament]);
-  const overall = useMemo(() => overallStandings(matches, sports), [matches, sports]);
+  // SD-12: each sport scored by the organiser's points config (and adjustments).
+  const overall = useMemo(() => overallStandings(matches, sports, tournament?.formats), [matches, sports, tournament?.formats]);
   // A medal meet ranks the overall table by position points, not match points.
   const isMedal = tournament?.scoring?.mode === 'position';
   const medal = useMemo(
@@ -922,7 +923,7 @@ export default function TournamentProfileScreen() {
               phases.map((ph) => (
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>
                   {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
-                  <LeagueTable teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+                  <LeagueTable sport={activeSport} teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
                 </View>
               ))
             ) : activeSport ? (

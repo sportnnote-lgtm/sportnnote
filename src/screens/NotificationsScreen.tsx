@@ -14,7 +14,8 @@ import { useNotifications, useFollow, usePlayerSummaries } from '../data/hooks';
 import { notifyStore } from '../data/notifyStore';
 import { getMatch } from '../data/repos';
 import { getSport } from '../sports/registry';
-import { statLabelShort } from '../data/stats';
+import { statLabelShort, APPEARANCE_KEYS } from '../data/stats';
+import { lineResult, RESULT_PILL } from '../data/appearances';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -150,18 +151,18 @@ export default function NotificationsScreen() {
               >
                 {/* Same results-board language as the SportProfile match history:
                     green left-edge + WON/LOST pill so form is scannable. */}
-                <Card style={[st.row, { borderLeftWidth: 3, borderLeftColor: l.won ? theme.colors.primary : theme.colors.border }]}>
+                <Card style={[st.row, { borderLeftWidth: 3, borderLeftColor: lineResult(l) === 'W' ? theme.colors.primary : theme.colors.border }]}>
                   <IconBadge icon={getSport(l.sport).icon} />
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body} numberOfLines={1}>{player.fullName} vs {l.opponent ?? 'TBD'}</Text>
                     <Text style={textStyles.muted} numberOfLines={1}>
-                      {Object.entries(l.stats).filter(([, v]) => v !== 0).map(([k, v]) => `${v} ${statLabelShort(k, v)}`).join(' · ')}
+                      {Object.entries(l.stats).filter(([k, v]) => v !== 0 && !APPEARANCE_KEYS.has(k)).map(([k, v]) => `${v} ${statLabelShort(k, v)}`).join(' · ')}
                     </Text>
                   </View>
                   <Pill
-                    label={l.won ? 'WON' : 'LOST'}
-                    color={l.won ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
-                    textColor={l.won ? theme.colors.primary : theme.colors.textMuted}
+                    label={RESULT_PILL[lineResult(l) ?? 'L']}
+                    color={lineResult(l) === 'W' ? theme.colors.primary + '22' : theme.colors.surfaceAlt}
+                    textColor={lineResult(l) === 'W' ? theme.colors.primary : theme.colors.textMuted}
                   />
                   <Text style={st.chevron}>›</Text>
                 </Card>

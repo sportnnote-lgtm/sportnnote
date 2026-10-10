@@ -6,11 +6,23 @@
  */
 import type { Match, SportId, StatLine } from '../core/types';
 
-export type Result = 'W' | 'D' | 'L';
-export interface HeadToHead { opponentId: string; opponentName: string; played: number; won: number; drawn: number; lost: number; for: number; against: number }
+/** W / D / L, plus a cricket tie ('T') and a no result / abandoned match
+ *  ('NR'), which counts as played (SD-12) — the same Played as the table. */
+export type Result = 'W' | 'D' | 'L' | 'T' | 'NR';
+export interface HeadToHead {
+  opponentId: string; opponentName: string; played: number; won: number;
+  /** level results — draws, or cricket ties */
+  drawn: number; lost: number; for: number; against: number;
+  /** no results / abandoned (SD-12) */
+  nr: number;
+}
 export interface Leader { icon: string; label: string; stat: string; playerId: string; total: number }
 export interface TeamStats {
-  played: number; won: number; drawn: number; lost: number;
+  played: number; won: number;
+  /** level results — draws, or cricket ties ('T') */
+  drawn: number; lost: number;
+  /** no results / abandoned — included in `played` (SD-12) */
+  nr: number;
   /** most recent first, up to 5 */
   form: { matchId: string; result: Result; opponentName: string }[];
   scored: number; conceded: number;
@@ -25,12 +37,14 @@ export interface TeamStats {
 const UNIT: Partial<Record<SportId, string>> = { football: 'goals', cricket: 'runs', basketball: 'points', kabaddi: 'points', volleyball: 'sets' };
 
 export function resultFor(m: Match, teamId: string): Result | null {
-  if (m.status !== 'completed' || !m.winner) return null;
-  // A no result / abandoned match (parity #04) isn't a W/D/L — leave it out.
-  if (m.result?.kind === 'no_result' || m.result?.kind === 'abandoned') return null;
-  if (m.winner === 'draw') return 'D';
+  if (m.status !== 'completed') return null;
   const side = m.homeTeam.id === teamId ? 'home' : m.awayTeam.id === teamId ? 'away' : null;
   if (!side) return null;
+  // A no result / abandoned match (parity #04) is played, like the table counts it (SD-12).
+  if (m.result?.kind === 'no_result' || m.result?.kind === 'abandoned') return 'NR';
+  if (!m.winner) return null;
+  // A level cricket match is a tie, not a draw (CK-02).
+  if (m.winner === 'draw') return m.sport === 'cricket' ? 'T' : 'D';
   return m.winner === side ? 'W' : 'L';
 }
 
@@ -46,7 +60,7 @@ export function computeTeamStats(
   const done = matches
     .filter((m) => (m.homeTeam.id === teamId || m.awayTeam.id === teamId) && resultFor(m, teamId))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
-  const out: TeamStats = { played: 0, won: 0, drawn: 0, lost: 0, form: [], scored: 0, conceded: 0, headToHead: [], leaders: [], appearances: [] };
+  const out: TeamStats = { played: 0, won: 0, drawn: 0, lost: 0, nr: 0, form: [], scored: 0, conceded: 0, headToHead: [], leaders: [], appearances: [] };
   const h2h = new Map<string, HeadToHead>();
   const sports = new Set<SportId>();
   for (const m of done) {
@@ -55,14 +69,19 @@ export function computeTeamStats(
     const r = resultFor(m, teamId)!;
     sports.add(m.sport);
     out.played++;
-    if (r === 'W') out.won++; else if (r === 'D') out.drawn++; else out.lost++;
+    const tally = (t: { won: number; drawn: number; lost: number; nr: number }) => {
+      if (r === 'W') t.won++; else if (r === 'D' || r === 'T') t.drawn++; else if (r === 'NR') t.nr++; else t.lost++;
+    };
+    tally(out);
     if (out.form.length < 5) out.form.push({ matchId: m.id, result: r, opponentName: opp.name });
-    const f = m.walkover || !m.score ? 0 : home ? m.score.home : m.score.away;
-    const a = m.walkover || !m.score ? 0 : home ? m.score.away : m.score.home;
+    // A no result has no score to count (the table leaves it out of for/against too).
+    const noScore = m.walkover || !m.score || r === 'NR';
+    const f = noScore ? 0 : home ? m.score!.home : m.score!.away;
+    const a = noScore ? 0 : home ? m.score!.away : m.score!.home;
     out.scored += f; out.conceded += a;
-    const row = h2h.get(opp.id) ?? { opponentId: opp.id, opponentName: opp.name, played: 0, won: 0, drawn: 0, lost: 0, for: 0, against: 0 };
+    const row = h2h.get(opp.id) ?? { opponentId: opp.id, opponentName: opp.name, played: 0, won: 0, drawn: 0, lost: 0, for: 0, against: 0, nr: 0 };
     row.played++; row.for += f; row.against += a;
-    if (r === 'W') row.won++; else if (r === 'D') row.drawn++; else row.lost++;
+    tally(row);
     h2h.set(opp.id, row);
   }
   out.unit = sports.size === 1 ? UNIT[[...sports][0]] : undefined;

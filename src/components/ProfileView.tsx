@@ -22,7 +22,7 @@ import { TextField } from './ui';
 import { activeOrgsForPlayer, pastOrgsForPlayer, roleInOrg, memberEntry, membershipPeriod, isAcademicCommunity, currentStandard } from '../core/org';
 import { teamsByRecency, teamPeriod, type TeamAffiliation } from '../core/teams';
 import { getSport } from '../sports/registry';
-import { sportSummary, hasPartialCoverage } from '../data/stats';
+import { sportSummary, hasPartialCoverage, recordText } from '../data/stats';
 import type { Player, SportId } from '../core/types';
 import { displayableImage } from '../core/imageUrl';
 import { notice } from '../core/confirm';
@@ -250,9 +250,9 @@ export function ProfileView({
         <Card><Text style={textStyles.muted}>{emptyScope}</Text></Card>
       ) : (
         <View style={st.statGrid}>
-          <Stat value={String(stats.matches)} label="Matches" />
-          <Stat value={String(stats.wins)} label="Wins" />
-          <Stat value={`${Math.round(stats.winRate * 100)}%`} label="Win rate" />
+          <Stat value={String(stats.matches)} label="Apps" />
+          <Stat value={`${stats.wins}-${stats.draws}-${stats.losses}`} label="W-D-L" />
+          <Stat value={`${Math.round(stats.winRate * 100)}%`} label="Win %" />
         </View>
       )}
 
@@ -334,7 +334,7 @@ export function ProfileView({
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body}>{getSport(b.sport as SportId).name}</Text>
                 <Text style={textStyles.muted}>
-                  {plural(b.matches, 'match', 'matches')} · {plural(b.wins, 'win')}
+                  {plural(b.matches, 'match', 'matches')} · {recordText(b)}
                 </Text>
                 {summary ? (
                   <Text style={st.summaryLine}>{summary}{partial ? '  ☁' : ''}</Text>
@@ -420,7 +420,7 @@ export function ProfileView({
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <Card style={st.statCard}>
-      <Text style={st.statValue}>{value}</Text>
+      <Text style={[st.statValue, value.length > 4 && st.statValueLong]} numberOfLines={1}>{value}</Text>
       <Text style={textStyles.muted}>{label}</Text>
     </Card>
   );
@@ -626,6 +626,8 @@ const st = StyleSheet.create({
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
   statCard: { width: '30%', alignItems: 'center', gap: theme.spacing(1), flexGrow: 1 },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
+  /** a W-D-L record ("12-3-10") fits one line on a 375 px phone */
+  statValueLong: { fontSize: theme.font.h3, lineHeight: theme.font.h1 + 6 },
   section: { marginTop: theme.spacing(2) },
   sportRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   detailLine: { color: theme.colors.accent, fontSize: theme.font.tiny, fontWeight: '700', marginTop: 1 },

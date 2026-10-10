@@ -285,6 +285,11 @@ export interface SportPlugin<S = unknown> {
    *  all overs"): cricket charges BOTH sides their full `oversLimit`. Same shape
    *  as `standingsRate`; the standings use it instead when `match.result` is set. */
   manualRate?: (state: S) => { home: number; away: number } | null;
+  /** Runs each side is credited with in the table's for / against and the rate
+   *  (SD-13), when they differ from `result`'s score — cricket's ICC NRR rule
+   *  for a chase to a revised target (side batting first = target − 1). Null =
+   *  use the score. Not used for a match ended by hand. */
+  standingsScore?: (state: S) => { home: number; away: number } | null;
   /** End-match-by-hand dialog (parity #04): what the level result is called
    *  ("Draw" by default, cricket "Tie") and whether to offer the NRR toggle. */
   manualEnd?: { drawLabel: string; nrrToggle?: boolean };

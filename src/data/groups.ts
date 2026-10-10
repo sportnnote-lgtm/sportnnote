@@ -5,11 +5,12 @@
  *   • "top N + the best (N+1)-placed teams across all groups" to fill an
  *     awkward bracket (e.g. 5 groups → top 3 = 15, + the best 4th-placed = 16
  *     for a Round of 16 — the classic 24/25-team format), ranked by the same
- *     tie-breakers the league table uses (points → goal difference → goals for).
+ *     tie-breakers the league table uses (points → the sport's chain, e.g. goal
+ *     difference → goals for; SD-12).
  * No I/O — the screen feeds it match results and gets back the bracket to create.
  */
 import type { Match, SportId, TournamentEntry } from '../core/types.ts';
-import { teamStandings, defaultStandingsConfig, type TeamStanding, type StandingsConfig } from './standings.ts';
+import { teamStandings, defaultStandingsConfig, seedKey, type TeamStanding, type StandingsConfig } from './standings.ts';
 import type { GeneratedPairing } from './fixtures.ts';
 import { isEliminationStage } from './bracket.ts';
 
@@ -27,16 +28,20 @@ export interface Qualifier {
   via: 'direct' | 'best';
 }
 
-/** Cross-group seed comparison: points, then the config's numeric tie-breakers
- *  (NRR / goal difference / goals for — head-to-head is meaningless between teams
- *  from different groups), then name. */
+/** Cross-group seed comparison (best-placed teams, seeding within a rank):
+ *  points, then the SAME tie-break chain the sport's group table uses (SD-12) —
+ *  with "among the tied" criteria swapped for their overall equivalents, since
+ *  teams from different groups never met (`seedKey`: h2h skipped, ITTF games /
+ *  points ratio → overall ratios; chess Sonneborn-Berger and wins as they are)
+ *  — then name. */
 function seedCmp(cfg: StandingsConfig) {
-  const numeric = cfg.order.filter((t): t is 'nrr' | 'diff' | 'for' => t !== 'h2h');
   return (x: TeamStanding, y: TeamStanding): number => {
     if (y.points !== x.points) return y.points - x.points;
-    for (const t of numeric) {
-      const d = t === 'nrr' ? (y.nrr ?? 0) - (x.nrr ?? 0) : t === 'diff' ? y.diff - x.diff : y.for - x.for;
-      if (d) return d;
+    for (const t of cfg.order) {
+      const kx = seedKey(x, t);
+      const ky = seedKey(y, t);
+      if (kx === null || ky === null || kx === ky) continue;
+      return ky > kx ? 1 : -1;
     }
     return x.name.localeCompare(y.name);
   };

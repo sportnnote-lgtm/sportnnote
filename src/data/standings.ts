@@ -44,6 +44,11 @@ export interface TeamStanding {
    *  point): one entry per game or bye, with `unplayed` set for a bye or a
    *  forfeit. The data Buchholz / Swiss tie-breaks read (Wave 1). */
   games?: GameRecord[];
+  /** rally points won / lost over the team's matches (table tennis: every
+   *  game's points) — the overall analog of the ITTF "points ratio", used to
+   *  seed across groups (SD-12). Present only when the order uses `h2hPoints`. */
+  rallyFor?: number;
+  rallyAgainst?: number;
 }
 
 /** One round of a team's record (SD-10). `points` are the game points it took
@@ -259,6 +264,13 @@ type PointsProvider = (sport: SportId, state: unknown) => { home: number; away: 
 let pointsProvider: PointsProvider | null = null;
 export function setStandingsPointsProvider(fn: PointsProvider | null): void { pointsProvider = fn; }
 
+/** Runs (score) each side is credited with in the table, when the sport says
+ *  they differ from the result score — cricket's ICC NRR crediting in a chase
+ *  to a revised target (SD-13). Same DI pattern; null = use the score. */
+type ScoreProvider = (sport: SportId, state: unknown) => { home: number; away: number } | null;
+let scoreProvider: ScoreProvider | null = null;
+export function setStandingsScoreProvider(fn: ScoreProvider | null): void { scoreProvider = fn; }
+
 /** A match closed by hand as no result / abandoned (parity #04) — no winner,
  *  counts as played, each side takes `noResult` points. */
 export const isNoResultMatch = (m: Match): boolean =>
@@ -292,6 +304,7 @@ export function teamStandings(
   // Per-round records (C.07 tie-break data) for chess, or wherever a bye scores.
   const keepGames = sport === 'chess' || byePts !== undefined;
   const log = (t: TeamStanding, g: GameRecord) => { if (keepGames) (t.games ??= []).push(g); };
+  const wantRally = cfg.order.includes('h2hPoints');
   const resultOf = (pts: number): GameRecord['result'] => (pts >= cfg.win ? 'win' : pts > cfg.loss ? 'draw' : 'loss');
   const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
   for (const m of played) {
@@ -318,7 +331,9 @@ export function teamStandings(
     // A manual cricket result with "Count in NRR" off still takes its points,
     // but its runs and overs stay out of the table.
     const counts = m.result?.countNrr !== false;
-    const score = m.result?.score ?? m.score;
+    // SD-13: a scored (not hand-ended) match may credit different runs for the
+    // table (cricket: target − 1 for the side batting first after a revision).
+    const score = m.result?.score ?? (m.result ? null : scoreProvider?.(sport, m.state)) ?? m.score;
     if (score && counts) {
       h.for += score.home; h.against += score.away;
       a.for += score.away; a.against += score.home;
@@ -327,6 +342,14 @@ export function teamStandings(
     if (rate) {
       h.forUnits += rate.home; h.againstUnits += rate.away;
       a.forUnits += rate.away; a.againstUnits += rate.home;
+    }
+    // Rally points for cross-group seeding (SD-12) — only when the order asks.
+    if (wantRally && !forfeit) {
+      const rp = pointsProvider?.(sport, m.state) ?? null;
+      if (rp) {
+        h.rallyFor = (h.rallyFor ?? 0) + rp.home; h.rallyAgainst = (h.rallyAgainst ?? 0) + rp.away;
+        a.rallyFor = (a.rallyFor ?? 0) + rp.away; a.rallyAgainst = (a.rallyAgainst ?? 0) + rp.home;
+      }
     }
     const kind: GameRecord['kind'] = forfeit ? 'forfeit' : 'played';
     if (m.winner === 'draw') {
@@ -428,6 +451,18 @@ function numericKey(t: TeamStanding, tb: 'nrr' | 'diff' | 'for' | 'wins' | 'sb')
   }
 }
 
+/** A tie-breaker's value for ranking teams from DIFFERENT groups (SD-12): the
+ *  sport's own chain, with the "among the tied" criteria swapped for their
+ *  overall equivalents — h2h itself is skipped (they never met), the ITTF
+ *  games ratio becomes the team's overall score ratio, the points ratio its
+ *  overall rally-point ratio. Higher is better. */
+export function seedKey(t: TeamStanding, tb: TieBreaker): number | null {
+  if (tb === 'h2h') return null;
+  if (tb === 'h2hRatio') return ratio(t.for, t.against);
+  if (tb === 'h2hPoints') return t.rallyFor === undefined ? null : ratio(t.rallyFor, t.rallyAgainst ?? 0);
+  return numericKey(t, tb);
+}
+
 /** won ÷ lost, with nothing lost ranking above any finite ratio. */
 const ratio = (won: number, lost: number) => (lost === 0 ? (won > 0 ? Number.POSITIVE_INFINITY : 0) : won / lost);
 
@@ -505,15 +540,20 @@ export interface OverallStanding {
   points: number;
 }
 
-/** Aggregate points across every sport in the meet — the headline house table. */
-export function overallStandings(matches: Match[], sports: SportId[]): OverallStanding[] {
+/** Aggregate points across every sport in the meet — the headline house table.
+ *  Each sport's points come from the organiser's config for it (SD-12: its
+ *  win/draw/loss/NR points and adjustments, `formats[sport]`), so the overall
+ *  total is exactly the sum of the per-sport tables. */
+export function overallStandings(
+  matches: Match[], sports: SportId[], formats?: Partial<Record<SportId, Record<string, unknown> | null | undefined>> | null,
+): OverallStanding[] {
   // A house/school fields a SEPARATE team row per sport (each row is single-sport),
   // so the cross-sport "overall" table must merge by NAME — the app's cross-sport
   // identity convention (e.g. "Red House" football + "Red House" cricket = one
   // house). Keying by teamId would show a multi-sport house as several rows.
   const totals = new Map<string, OverallStanding>();
   for (const sport of sports) {
-    for (const t of teamStandings(matches, sport)) {
+    for (const t of teamStandings(matches, sport, standingsConfigFromFormat(sport, formats?.[sport] ?? null))) {
       const key = t.name.trim().toLowerCase();
       const o = totals.get(key) ?? { teamId: t.teamId, name: t.name, colorHex: t.colorHex, played: 0, points: 0 };
       o.played += t.played;
@@ -522,6 +562,16 @@ export function overallStandings(matches: Match[], sports: SportId[]): OverallSt
     }
   }
   return [...totals.values()].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+}
+
+/** How a sport's league table labels its columns (SD-12, cricket CK-02):
+ *  cricket calls a level result a Tie ("T"), always shows the NR column (a
+ *  washout is part of the format) and ranks by NRR, so it shows no run
+ *  difference. Other sports: "D", NR only once a match was abandoned, and the
+ *  score difference. */
+export function tableLabels(sport: SportId | undefined): { draw: 'T' | 'D'; alwaysNr: boolean; showDiff: boolean } {
+  if (sport === 'cricket') return { draw: 'T', alwaysNr: true, showDiff: false };
+  return { draw: 'D', alwaysNr: false, showDiff: true };
 }
 
 /** Per-sport leaderboard categories — the stats we rank players by. The first

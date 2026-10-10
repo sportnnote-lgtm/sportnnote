@@ -311,8 +311,18 @@ batch to Expo's Push API.
 
 `stat_lines` records one player's numeric contribution per match (e.g.
 `{goals:2, assists:1}`). `src/data/stats.ts` rolls these up — pure functions —
-into totals, per-sport breakdowns and win rate that drive the Profile and
-Discover screens.
+into totals, per-sport breakdowns, the W-D-L record and win % that drive the
+Profile and Discover screens.
+
+**Appearances and results (SD-11).** At completion `repos.syncMatchAppearances`
+(planner: `src/data/appearances.ts`) gives every player who took part a line —
+squad starters plus subs who came on, or a 1–2 player entry's roster; unused
+subs get none — and sets each line's `result` (`'W' | 'D' | 'L' | 'T' | 'NR'`,
+from that player's side; migration 0050) and `won` (= W). Starters carry
+`starts: 1`, subs who came on `starts: 0` (not cricket). Ids go through resolved
+disputes; it is idempotent. A line's result is read through `lineResult`: the
+stored value, else derived from its match (before 0050), else `won`. Apps =
+lines; Win % = W / (W + D + L + T), so no-results don't count.
 
 **Live attribution.** A scoring action may carry `attribution: {playerId, stat,
 by}`. When the scorer taps a player (e.g. the goal-scorer), `useLiveMatch`
