@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-92 athletics road / walks / cross-country — DONE (69b1678, 2026-10-11)
+- See DEVLOG. Check (from memory): XC is TR 56 (not 55); TR 19.24/19.25 timing; TR 54.7.x walk cards + Penalty Zone times; default "displace" team rule (NFHS/NCAA practice) vs World XC "overall places"; last-scorer tie-break (NFHS uses the 6th runner — not offered); XC distances/ranges are house choices.
+- Not done: historic road records, chip + gun per runner, relays/ekiden/trail, heats for huge fields, yellow paddles, different-judges check, "＋ All house" not capped at team size. run-athletics-track-events guide is over 900 words (pre-existing).
+
 ## SD-119 wrong opponent on stat lines — DONE (a92ef1e, 2026-10-11)
 - See DEVLOG. **Founder action:** in the live web app console run `await __sportnnoteAdmin.repairOpponents({ dryRun: true })`, check the per-sport counts and samples, then run without dryRun. Lines flagged `resultSuspect` (W/L backfilled from a wrong label) are reported only — review separately. Helper sees the first 1000 matches (getMatches doesn't page).
 
