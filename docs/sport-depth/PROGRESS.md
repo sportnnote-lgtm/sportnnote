@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## International I-0 + I-1 — SD-148 / SD-149 / SD-150 / SD-151 / SD-152 — DONE (cce4686, 2026-10-12)
+- See DEVLOG. **Founder live steps, in order:** (1) `20261020115900_signup_role_guard.sql` (urgent) then check staff roles; (2) `20261019124600_protect_minors.sql`; (3) `20261020120000_privacy_rights.sql`; (4) `20261020120100_phone_e164.sql` then `select * from phone_review`; (5) `20261020150000_tournament_time_zone.sql`; then I deploy functions: phone-login, verify-phone-firebase, send-contact-otp, verify-contact-otp, notify-followers, notify-upcoming, send-invite, support-assistant, delete-account, guardian-consent (new), privacy-retention (new), join + report-invite (--no-verify-jwt); then schedule the privacy-retention cron; Firebase SMS region policy → IN, AE, QA, GB, SG, MY, AU, US + budget alert; confirm Cloudflare Web Analytics is off.
+- **Decide:** India stats seasons stay calendar-year (April–March would change splits); bump LEGAL_VERSION?; pending child accounts never auto-deleted (lawyer); minors' names inside match data (scoreboards) still public — follow-up proposed.
+- **Not done / next:** I-2 (SD-153 market presets, SD-154 units + structures) incl. results timetable/print in the tournament zone, default kickoff times, live-screen time edit zone; phone-login client US under-13 message; players_view hiding limited (pending-consent) accounts; country synced to the profile; expo-localization (needs a build).
+
 ## SD-137b team events — DONE (2026-10-12)
 - See DEVLOG. Check (from memory): World Archery team match play, ISSF mixed team format + team-of-3 ties, UCI team pursuit timing/caught + junior distance, UCI women's team sprint, mixed relay order. Not done: UCI first round, madison/omnium, weightlifting team classification, team-event late entries untested.
 
