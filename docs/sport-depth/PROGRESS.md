@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## International I-2 — SD-153 / SD-154 — DONE (9fa0d9c, 2026-10-12)
+- See DEVLOG. **Founder:** run `20261021120000_team_levels_feeders.sql` (market presets already run).
+- **Verify (general knowledge, organiser-editable):** BSME/ESAA 31 Aug, NSG A/B/C ages, ESAA Junior/Inter/Senior ages, US 1 Sep, SCY fast-end ranges, NFHS feet-and-inches rounding (app rounds to nearest ¼", NFHS measures down).
+- **Not done:** market band chips on road/combined/cycling setup; bulk-paste age groups know U-labels only; hurdle/implement specs for non-U bands; feet/inches + yards labels outside the results screens (careers/PB lists); miles on road results; feeders for results-engine meets; per-group match days in weekly scheduling; club home lists one team per sport; US role aliases; Indian sample placeholders.
+
 ## International I-0 + I-1 — SD-148 / SD-149 / SD-150 / SD-151 / SD-152 — DONE (cce4686, 2026-10-12)
 - See DEVLOG. **Founder live steps, in order:** (1) `20261020115900_signup_role_guard.sql` (urgent) then check staff roles; (2) `20261019124600_protect_minors.sql`; (3) `20261020120000_privacy_rights.sql`; (4) `20261020120100_phone_e164.sql` then `select * from phone_review`; (5) `20261020150000_tournament_time_zone.sql`; then I deploy functions: phone-login, verify-phone-firebase, send-contact-otp, verify-contact-otp, notify-followers, notify-upcoming, send-invite, support-assistant, delete-account, guardian-consent (new), privacy-retention (new), join + report-invite (--no-verify-jwt); then schedule the privacy-retention cron; Firebase SMS region policy → IN, AE, QA, GB, SG, MY, AU, US + budget alert; confirm Cloudflare Web Analytics is off.
 - **Decide:** India stats seasons stay calendar-year (April–March would change splits); bump LEGAL_VERSION?; pending child accounts never auto-deleted (lawyer); minors' names inside match data (scoreboards) still public — follow-up proposed.
