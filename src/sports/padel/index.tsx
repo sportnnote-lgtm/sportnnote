@@ -33,11 +33,15 @@ import { courtFormation, makeCourt } from '../courts';
 import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, padelCue, other, type PadelState } from './engine';
 import { padelTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
+import { durationLine, stampDispatch, withDuration } from '../conduct';
+import { makeRacketQuickOptions } from '../RacketQuickOptions';
 import { SetLineBoard } from '../SetLineBoard';
 export type { PadelState } from './engine';
 
-const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as PadelState;
+  // SD-54 — scoring steps carry the scorer's clock (match / set durations)
+  const dispatch = stampDispatch(rawDispatch);
   const act = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
   const deucePoint = s.goldenPoint && !inTiebreak(s) && s.pts.home >= 3 && s.pts.away >= 3;
@@ -116,6 +120,8 @@ const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state,
       </View>
       {/* SD-22: serve / return figures replayed from the point log, per set */}
       <MatchStatsPanel sport="padel" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+      {/* SD-54 — match and set durations (from the scorer's tap times) */}
+      {durationLine(s.events, 'S') ? <Text style={textStyles.muted}>{durationLine(s.events, 'S')}</Text> : null}
       <Text style={ctrl.label}>Box score</Text>
       <MatchBoxScore sport="padel" source={padelBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
@@ -162,8 +168,11 @@ export const padelPlugin: SportPlugin<PadelState> = {
   statTotalsPartial: true,
   statTotalsNeedsPlayers: true,
   // SD-01: once ended → sets won + "6-4, 3-6, [10-7]" (never the reset 0–0).
-  summary,
+  // SD-54: + the match duration once it's over (stamped matches only)
+  summary: (s) => withDuration(summary(s), s.events, s.ended),
   scoreLine,
+  // SD-53 — FIP code violations (Quick options)
+  QuickOptions: makeRacketQuickOptions('padel'),
   // SD-20: the line score (board grid, "6-4, 3-2 ret.", [10-7]) + FIP/ITF result marks.
   lineScore,
   retireTerms: true,

@@ -6,8 +6,9 @@
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction, ScoreSummary } from './types';
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from './scoreline.ts';
-import { pointRows, replayPoints, type EditRow, type PointInput } from './rallyEdit.ts';
+import { pointRows, type EditRow, type PointInput } from './rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from './pointDetail.ts';
+import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from './conduct.ts';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -60,6 +61,8 @@ export function gameWinner(h: number, a: number, target: number, winBy: number):
 
 /** What the engine needs from a sport's options. */
 export interface RallyEngineOpts {
+  /** SD-53 — the sport (conduct schedule, timeouts, lets) */
+  id?: 'pickleball' | 'squash' | 'tabletennis';
   icon: string;
   sideOutValue: string;
   sideOutLabel: string;
@@ -95,12 +98,46 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     events: [], seq: 0, ended: false,
   });
 
-  const reducer = (s: RallyState, a: ScoreAction): RallyState => {
+  /** After a point: game / match won → the next game (the winner serves). */
+  const finish = (s: RallyState, current: { home: number; away: number }, events: LiveEvent[], seq: number, gameNo: number): RallyState => {
+    const winner = gameWinner(current.home, current.away, s.target, s.winBy);
+    if (!winner) return { ...s, current, events, seq };
+
+    const games = [...s.games, [current.home, current.away] as [number, number]];
+    const gamesWon = { ...s.gamesWon, [winner]: s.gamesWon[winner] + 1 };
+    const ended = gamesWon[winner] >= s.gamesToWin;
+    events.push({ id: ++seq, stamp: 'Game', icon: '🎉', label: `Game ${gameNo} won`, detail: `${current.home}-${current.away}`, side: winner });
+    if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${gamesWon.home}-${gamesWon.away} games`, side: winner });
+    // New game: the winner serves first, again under the start-of-game exception.
+    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: winner, serverNo: 2, srvStarter: true, events, seq, ended };
+  };
+
+  // SD-53 — a penalty point goes straight onto `side`'s score (also in side-out
+  // scoring: it isn't a rally, so serve doesn't change hands mid-game).
+  const conductOps: ConductOps<RallyState> = {
+    sport: opts.id ?? 'squash',
+    point: (s, side) => {
+      const gameNo = s.games.length + 1;
+      const current = { ...s.current, [side]: s.current[side] + 1 };
+      let seq = s.seq;
+      const events = [...s.events];
+      events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}`, side, kind: 'point', game: gameNo, points: 1 });
+      return finish(s, current, events, seq, gameNo);
+    },
+    gameKey: (s) => `${s.games.length}${s.ended ? 'E' : ''}`,
+    where: (s) => ({ stamp: `Game ${s.games.length + 1}`, game: s.games.length + 1 }),
+    target: (s) => s.target,
+  };
+
+  const core = (s: RallyState, a: ScoreAction): RallyState => {
     // SD-21 — timeline correction. STAT_ADJUST only reconciles player profiles (no
     // match effect); EDIT_LOG replays the corrected rally list (each entry = who
     // won the rally), so score, games, server and side-outs all re-derive.
     if (a.type === 'STAT_ADJUST') return s;
-    if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+    // SD-53: conduct / timeout / let records are put back after the replay.
+    if (a.type === 'EDIT_LOG') return replayKeepingMarks(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? [], s.events);
+    // SD-53 / SD-54 / SD-63 — conduct penalties, timeouts, squash lets
+    { const x = applyRacketExtras(s, a, conductOps); if (x) return x; }
     // SD-06 — who starts this game in the right-hand court, per team. Pre-serve
     // only (the game is still 0-0); no score effect and no timeline event.
     if (a.type === 'SET_START_RIGHT') {
@@ -162,18 +199,10 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     let seq = s.seq;
     const events = [...s.events];
     events.push({ id: ++seq, stamp: `Game ${gameNo}`, icon: opts.icon, label: 'Point', detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}`, side: scorer, kind: 'point', playerName: who, ...pid, game: gameNo, points: 1 });
-
-    const winner = gameWinner(current.home, current.away, s.target, s.winBy);
-    if (!winner) return { ...s, current, events, seq };
-
-    const games = [...s.games, [current.home, current.away] as [number, number]];
-    const gamesWon = { ...s.gamesWon, [winner]: s.gamesWon[winner] + 1 };
-    const ended = gamesWon[winner] >= s.gamesToWin;
-    events.push({ id: ++seq, stamp: 'Game', icon: '🎉', label: `Game ${gameNo} won`, detail: `${current.home}-${current.away}`, side: winner });
-    if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${gamesWon.home}-${gamesWon.away} games`, side: winner });
-    // New game: the winner serves first, again under the start-of-game exception.
-    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: winner, serverNo: 2, srvStarter: true, events, seq, ended };
+    return finish(s, current, events, seq, gameNo);
   };
+  // SD-54 — every new event carries the step's `payload.at` (durations)
+  const reducer = withStamps(core);
 
   return { init, reducer };
 }

@@ -67,7 +67,7 @@ Winners count for the rally winner; errors and service faults against the oppone
 The app replays the match, so score, games, server and stats follow, even if a game changes hands. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/). Misconduct cards and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## What goes on the player's profile
 The player's badminton page adds **W-L**, **Win %**, **Match play**, **Serve & return** (singles only) and **Shot making** (from point-detail matches). Doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).

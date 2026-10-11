@@ -375,6 +375,13 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
   let lastTurn: Side | null = null;
 
   for (const p of inputs) {
+    // SD-53 — a conduct penalty point is no rally: replay it (the score moves)
+    // but leave it out of every serve / return figure.
+    if (p.pen) {
+      cur = ad.reduce({ ...cur, events: [] } as AnyState, { type: 'PENALTY_POINT', side: p.side, payload: { pen: p.pen } });
+      lastWinner = p.side;
+      continue;
+    }
     const base = { ...cur, events: [] } as AnyState;
     const per = ad.period(base);
     if (per !== lastPeriod) { run.pSide = null; run.pn = 0; lastTurn = null; lastPeriod = per; }

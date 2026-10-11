@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — SD-53 / SD-54 racket conduct, timeouts, durations; squash Let
+- **Conduct (`src/sports/conduct.ts`, ☰ Quick options):** one CONDUCT action run through each sport's own reducer — warning/fault records, penalty point(s) to the opponent through the normal point path, game penalty (points until the game ends), default/disqualification with a red/green confirm that ends the match like End match → Default. Suggested escalation per sport: tennis warning → point → game (+ separate time-violation track: warning, then fault if serving / point if receiving); padel warning → point → game (+ DQ); table tennis yellow → yellow+red 1 pt → 2 pts → referee; badminton warning → fault → black card; squash warning / stroke / game / match; pickleball technical warning → technical foul (point) → forfeit.
+- **Timeouts:** TT 1 per match per side; pickleball 2 per game (3 to 21) + 1 medical; tennis medical timeout / toilet break markers; badminton note (none). Over-allowance timeouts are ignored.
+- **Squash:** "🔁 Let — replay the rally (no point)".
+- **Durations:** points/conduct/timeouts/lets stamp the scorer's clock; Score tab "⏱ 1 h 05 min · G1 21 min · G2 18 min" and the finished summary line (matches scored from now on).
+- **Corrections:** penalty points replay as penalties (no pickleball side-out); serve/return stats and point detail skip them; undo labels name them. No reducer change for old logs; fingerprints unchanged. Guide: new racket-conduct-and-timeouts (+ links from the six score guides).
+- **Verified:** `tests/sd53-54-racket-conduct.test.mts` (17); demo 8093 — TT timeout + yellow → yellow+red point, tennis code violation → point penalty with reason, squash let. Not clicked: default sheet, padel, badminton, pickleball, tennis time violation.
+
+---
+
 ### 2026-10-11 — Archery (SD-95) as a live sport
 - **Rounds:** recurve 70/60 m, compound 50 m, barebow 50 m outdoor (72 arrows, ends of 6) and indoor 18 m (60, ends of 3); school/club presets (house). Records/PBs per bow + distance.
 - **Ranking round:** keypad X, 10…1, M (or typed "X 10 9 9 8 7 = 53", checked); a full end saves itself with a 5 s Undo and moves to the next archer; E1…E12 chips to correct. Ties: total → 10s (X incl.) → X; a tie across the last bracket place needs a shoot-off place, other seeding ties a coin toss.

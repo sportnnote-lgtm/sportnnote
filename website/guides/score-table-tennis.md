@@ -8,10 +8,10 @@ order: 59
 updated: 2026-10-11
 ---
 
-The hard part of table tennis umpiring is the serve. You tap who won each point; the app keeps the score and shows who serves next.
+You tap who won each point; the app keeps the score and shows who serves next.
 
 ## Before you start
-- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
+- You must be a scorer or host. See [Scorers and officials](/guides/scorers-and-officials/).
 - **Format**: **Best of 5 (to 11)**, **Best of 7 (to 11)**, **Best of 3 (to 11)**, **Legacy (to 21 · best of 3)** or **Custom**.
 - A game is won at 11 by two, so 10-all goes on to 12-10, 13-11 and so on.
 - Under **Players**, pick **Singles** or **Doubles**. **⚙ Customize this format** sets **Points to win** and **Win by**.
@@ -68,7 +68,7 @@ Winners and aces count for the point winner; errors against the opponent (double
 The app replays the match, so score, games, serve order and stats follow. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a side wins enough games. If a player can't go on, tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/). Yellow / red cards, the 1-minute timeout and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## What goes on the player's profile
 The player's table tennis page adds **W-L**, **Win %**, **Match play**, **Serve & return** (singles only) and **Shot making** (from point-detail matches). Doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).

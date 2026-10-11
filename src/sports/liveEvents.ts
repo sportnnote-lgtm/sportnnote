@@ -42,6 +42,15 @@ export interface LiveEvent {
   oe?: { type?: string; playerId?: string; playerName?: string };
   /** SD-117b — kabaddi: how the raider was tackled (optional chip). */
   tackleType?: string;
+  /** SD-53 — racket conduct: on a `kind: 'conduct'` record (warning, game
+   *  penalty header, default…) and on a penalty POINT (`kind: 'point'`, `side` =
+   *  who it was awarded to). See conduct.ts. Absent on every older event. */
+  pen?: import('./conduct').PenMark;
+  /** SD-54 — racket timeouts (`kind: 'timeout'`): which one. */
+  tmo?: 'timeout' | 'medical' | 'toilet';
+  /** SD-54 — when the step was logged (ms, from the action's `payload.at`);
+   *  match / game durations are derived from it. Absent on older events. */
+  at?: number;
   /** Optional outcome accent for the timeline node/label — e.g. cricket colours a
    *  boundary green, a wicket red, an extra amber. Absent → node uses the side colour. */
   tone?: 'boundary' | 'wicket' | 'extra';

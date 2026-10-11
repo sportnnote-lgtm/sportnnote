@@ -57,6 +57,7 @@ Errors count against the opponent (doubles: pick who under **By:**).
 - A game ends at the target (11, 15 or 21) with a two-point lead, unless the format is win by 1.
 - The game's winner serves first next game, as server 2.
 - To stop early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
+- Technical warnings and fouls, timeouts (2 per game, 3 to 21) and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## Fix a mistake
 - Wrong tap just now? The Undo bar names what it removes, e.g. "↶ Undo: point to Red House (4-2)", "Undo: rally to Blue House · side-out" or "Undo: first-server pick". Each tap undoes one step; score, server and call go back too.

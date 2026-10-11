@@ -6,12 +6,13 @@
  */
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
-import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import type { PointInput } from '../rallyEdit.ts';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
 import type { ScoreSummary } from '../types';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 import { setSportCue, type Cue } from '../courtCues.ts';
+import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from '../conduct.ts';
 
 export const SETS_TO_WIN = 2;
 
@@ -193,7 +194,16 @@ const clearMatch = (s: TennisState): TennisState => ({
   ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, tb: [], events: [], seq: 0, ended: false,
 });
 
-export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
+/** SD-53 — what the generic conduct step needs: a plain point (no serve
+ *  detail, no player), the game in play, and where a marker sits. */
+const conductOps: ConductOps<TennisState> = {
+  sport: 'tennis',
+  point: (s, side) => scorePoint(s, side, undefined, false),
+  gameKey: (s) => `${s.sets.length}:${s.games.home + s.games.away}${s.ended ? 'E' : ''}`,
+  where: (s) => { const setNo = s.setsWon.home + s.setsWon.away + 1; return { stamp: `Set ${setNo}`, set: setNo }; },
+};
+
+const core = (s: TennisState, a: ScoreAction): TennisState => {
   // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
   // effect); EDIT_LOG replays a corrected point list so games/sets re-derive.
   if (a.type === 'STAT_ADJUST') return s;
@@ -201,7 +211,8 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
     // SD-107: each corrected point carries its own 1st / 2nd serve, so replay
     // with serve tracking off (a point from before it was switched on stays
     // untracked), then restore the setting.
-    const r = replayPoints(reducer, clearMatch({ ...s, serveDetail: undefined }), (a.payload?.points as PointInput[]) ?? []);
+    // SD-53: conduct / timeout records are put back after the replay.
+    const r = replayKeepingMarks(reducer, clearMatch({ ...s, serveDetail: undefined }), (a.payload?.points as PointInput[]) ?? [], s.events);
     const { serveDetail: _drop, ...rest } = r;
     return s.serveDetail === undefined ? rest : { ...rest, serveDetail: s.serveDetail };
   }
@@ -225,6 +236,9 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
     if (played && (a.payload?.v !== 2 || s.ended)) return s;
     return { ...s, firstServer: side, serverPicked: true };
   }
+  // SD-53 / SD-54 — code & time violations, medical / toilet markers
+  const extra = applyRacketExtras(s, a, conductOps);
+  if (extra) return extra;
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).
   // SD-104: a double fault dispatched with `payload.df` (new UI / voice) marks the
@@ -243,6 +257,8 @@ export const reducer = (s: TennisState, a: ScoreAction): TennisState => {
   if (a.type === 'ACE') return scorePoint(s, a.side, a.attribution?.playerName, true, a.attribution?.playerId || undefined, undefined, serve);
   return s;
 };
+// SD-54 — every new event carries the step's `payload.at` (durations)
+export const reducer = withStamps(core);
 
 // ------------------------------------------------------------ scoreline ----
 

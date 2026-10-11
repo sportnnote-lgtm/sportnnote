@@ -25,10 +25,14 @@ import { init, reducer, serve, summary, scoreLine, lineScore, standingsUnits, ba
 import { CueBanner, useCueTimeline } from '../CueBanner';
 import { pointInputs } from '../rallyEdit';
 import { badmintonTotals } from '../racketTotals';
+import { durationLine, stampDispatch, withDuration } from '../conduct';
+import { makeRacketQuickOptions } from '../RacketQuickOptions';
 export { serve, type BadmintonState } from './engine';
 
-const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as BadmintonState;
+  // SD-54 — scoring steps carry the scorer's clock (match / game durations)
+  const dispatch = stampDispatch(rawDispatch);
   const point = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
   // Serve: chosen first server before any point, then the rally winner serves.
@@ -87,6 +91,8 @@ const LiveExtras: NonNullable<SportPlugin<BadmintonState>['LiveExtras']> = ({ st
       </View>
       {/* SD-22: serve / return figures replayed from the point log, per set */}
       <MatchStatsPanel sport="badminton" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+      {/* SD-54 — match and game durations (from the scorer's tap times) */}
+      {durationLine(s.events, 'G') ? <Text style={textStyles.muted}>{durationLine(s.events, 'G')}</Text> : null}
       <Text style={ctrl.label}>Player stats</Text>
       <MatchBoxScore sport="badminton" source={badmintonBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Rally log</Text>
@@ -131,7 +137,10 @@ export const badmintonPlugin: SportPlugin<BadmintonState> = {
   statTotalsNeedsPlayers: true,
   Scoreboard: BadmintonScoreboard,
   // SD-01: once ended → games won + "21-18, 19-21, 21-15" (never the reset 0–0).
-  summary,
+  // SD-54: + the match duration once it's over (stamped matches only)
+  summary: (s) => withDuration(summary(s), s.events, s.ended),
+  // SD-53 — BWF Law 16 misconduct (Quick options); badminton has no timeouts
+  QuickOptions: makeRacketQuickOptions('badminton'),
   scoreLine,
   // SD-20: the line score + BWF result marks ("21-15, 8-3 ret.").
   lineScore,

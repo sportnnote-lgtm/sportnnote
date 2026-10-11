@@ -58,7 +58,7 @@ export function PointDetailRow({
       )}
     </View>
   );
-  if (!last || (!on && !serveOn) || last.e.df || skipped === last.e.id) return toggle;
+  if (!last || (!on && !serveOn) || last.e.df || last.e.pen || skipped === last.e.id) return toggle;
 
   const e = last.e;
   const W = winnerSide(e) as Side | undefined;

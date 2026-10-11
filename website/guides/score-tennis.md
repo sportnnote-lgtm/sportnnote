@@ -37,7 +37,6 @@ The app works out from the score when players change ends.
 - After a set with an even number of games, it shows "⏸ Set break (120 s) · ends change after game 1".
 - In a tiebreak, ends change every 6 points, and a banner gives the rule, for example "Tiebreak to 7, win by 2 (10 in the deciding set) · first server 1 point, then 2 each", "Match tiebreak to 10", or in Fast4 "Tiebreak to 5, sudden death at 4-4".
 
-The same cues appear as markers in the point log.
 
 ## Reading the board
 POINTS shows the current game, with a games column per set and a 🎾 dot by the server. A tiebreak set shows the loser's points small (7 and 6⁴). The result reads like "6-4, 3-6, 7-6(4)".
@@ -67,7 +66,7 @@ Winners count for the point winner, errors against the opponent (doubles: pick w
 The app replays the match. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself. For an injury or default, tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
+The match ends itself. For an injury, tap **🏁 End match…** → **Retired**. See [End a match early](/guides/end-a-match-early/). Code and time violations, medical timeouts and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## What goes on the player's profile
 The player's tennis page adds **W-L**, **Win %**, **Match play**, **Serve & return** and **Shot making** (from point-detail matches). See [Filter a player's career stats](/guides/filter-career-stats/).

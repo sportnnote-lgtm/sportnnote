@@ -472,4 +472,8 @@ export interface QuickOptionsProps {
   homeName: string;
   awayName: string;
   onDone: (message?: string) => void;
+  /** SD-53 — end the match by hand through the screen's Match controls path
+   *  (a manual result, e.g. a racket default: kind 'awarded' = "Default").
+   *  The caller asks first (askConfirm). Absent → the tile can't end it. */
+  onEndMatch?: (r: { kind: 'awarded'; winner: 'home' | 'away'; reason: string }) => void;
 }

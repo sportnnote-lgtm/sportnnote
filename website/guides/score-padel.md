@@ -11,7 +11,7 @@ updated: 2026-10-11
 Padel uses tennis scoring, often with a golden point at 40-40. You tap who won each point.
 
 ## Before you start
-- You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
+- You must be a scorer or host. See [Scorers and officials](/guides/scorers-and-officials/).
 - **Format**: **Premier Padel / WPT (golden pt)**, **Classic (advantage)**, **Short (to 4, match TB)** or **Custom**.
 - **At deuce**: **Advantage (classic)** or **Golden point**.
 - **⚙ Customize this format** sets **Games per set**, **Match length** and **Deciding set**: **Full set** or **Match tiebreak (to 10)**.
@@ -73,7 +73,7 @@ Winners count for the point winner, errors against the opponent (pick who under 
 The app replays the match. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself when a pair wins enough sets. Otherwise tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a pair wins enough sets. Otherwise tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/). Code violations and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## What goes on the player's profile
 The player's padel page adds **W-L**, **Win %**, **Match play**, **Serve & return** (each player's own serve) and **Shot making** (from point-detail matches). Doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).

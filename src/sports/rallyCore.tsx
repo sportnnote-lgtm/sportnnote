@@ -22,7 +22,7 @@ import { RallyPointEditor } from './RallyPointEditor';
 import { MatchStatsPanel } from './MatchStatsPanel';
 import { PointDetailRow } from './PointDetailRow';
 import { detailLiveSettings } from './pointDetailSettings';
-import { PointButtons, ServeFirstPicker } from './PointButtons';
+import { PointButtons, SecondaryAction, ServeFirstPicker } from './PointButtons';
 import { pointPressure, pressureText } from './pointStatus';
 import type { LiveEvent } from './liveEvents';
 import type { Player } from '../core/types';
@@ -34,6 +34,8 @@ import { tableTennisCue } from './courtCues';
 import { CueBanner, useCueTimeline } from './CueBanner';
 import { rallyTotals } from './racketTotals';
 import { SetLineBoard } from './SetLineBoard';
+import { durationLine, stampDispatch, withDuration } from './conduct';
+import { makeRacketQuickOptions } from './RacketQuickOptions';
 import { makeRallyEngine, rallySummary, rallyScoreLine, rallyLineScore, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
@@ -69,8 +71,10 @@ export interface RallyOpts {
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
   const { init, reducer } = makeRallyEngine(opts);
 
-  const ScoringControls: SportPlugin<RallyState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+  const ScoringControls: SportPlugin<RallyState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
     const s = state as RallyState;
+    // SD-54 — scoring steps carry the scorer's clock (match / game durations)
+    const dispatch = stampDispatch(rawDispatch);
     // SD-21 — "Correct the timeline": edit / delete / insert a past rally. The
     // corrected rally list replays through this engine (EDIT_LOG), so score,
     // games, server and side-outs re-derive; credits follow the replay.
@@ -87,6 +91,11 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const detailRow = (
       <PointDetailRow sport={opts.id} state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} rowsOf={rallyRows} />
     );
+    // SD-63 — squash: a plain Let (WSF Rule 8) — the rally is replayed, no point;
+    // sits with the Stroke / No let decisions of the point detail below.
+    const letRow = opts.id === 'squash' && !s.ended && (s.serverPicked || s.events.length > 0) ? (
+      <SecondaryAction label="🔁 Let — replay the rally (no point)" onPress={() => dispatch({ type: 'LET' })} />
+    ) : null;
     const rosterOf = (t: 'home' | 'away') => (t === 'home' ? homeRoster : awayRoster);
     const point = (side: 'home' | 'away', p?: Player) =>
       dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
@@ -191,6 +200,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
             serving={blocked ? null : s.serving} disabled={blocked} disabledHint={blockedHint}
             onPoint={(t) => rallyWon(t)}
           />
+          {letRow}
           {detailRow}
           {editor}
         </View>
@@ -226,6 +236,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
           serving={blocked ? null : serverSide} disabled={blocked} disabledHint={blockedHint}
           onPoint={point}
         />
+        {letRow}
         {detailRow}
         {editor}
       </View>
@@ -248,6 +259,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         </View>
         {/* SD-22: serve / return figures replayed from the point log, per set */}
         <MatchStatsPanel sport={opts.id} state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+        {/* SD-54 — match and game durations (from the scorer's tap times) */}
+        {durationLine(s.events, 'G') ? <Text style={textStyles.muted}>{durationLine(s.events, 'G')}</Text> : null}
         <Text style={ctrl.label}>Box score</Text>
         <MatchBoxScore sport={opts.id} source={rallyBox(s, { homeRoster, awayRoster }, opts.id)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
         <Text style={ctrl.label}>Rally log</Text>
@@ -295,7 +308,10 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     ),
     // SD-01: once ended → games won + "11-7, 9-11, 11-5" (never the reset 0–0).
     // SD-117c — pickleball rally scoring shows the "Serving 4-2" call too
-    summary: (s) => rallySummary(s, opts.serveTag, { rallyCall: opts.courtPositions }),
+    // SD-54 — + the match duration once it's over (stamped matches only)
+    summary: (s) => withDuration(rallySummary(s, opts.serveTag, { rallyCall: opts.courtPositions }), s.events, s.ended),
+    // SD-53 / SD-54 — conduct / cards / technicals, timeouts (Quick options)
+    QuickOptions: makeRacketQuickOptions(opts.id, { gameOf: (st) => { const x = st as RallyState; return { game: x.games.length + 1, target: x.target }; } }),
     scoreLine: rallyScoreLine,
     // SD-20: the line score (LineScoreboard, "11-7, 5-3 ret.") + ITTF/WSF result marks.
     lineScore: rallyLineScore,

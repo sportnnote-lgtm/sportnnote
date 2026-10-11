@@ -27,10 +27,14 @@ import { CueBanner, useCueTimeline } from '../CueBanner';
 import { pointInputs } from '../rallyEdit';
 import { tennisTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
+import { durationLine, stampDispatch, withDuration } from '../conduct';
+import { makeRacketQuickOptions } from '../RacketQuickOptions';
 
 
-const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
+const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
   const s = state as TennisState;
+  // SD-54 — scoring steps carry the scorer's clock (match / set durations)
+  const dispatch = stampDispatch(rawDispatch);
   const act = (type: string, side: 'home' | 'away', stat: string, p?: Player) =>
     dispatch({ type, side, attribution: p ? { playerId: p.id, stat, playerName: p.fullName } : undefined });
   // A double fault: the OPPONENT wins the point (a normal POINT, so the score &
@@ -111,6 +115,8 @@ const LiveExtras: NonNullable<SportPlugin<TennisState>['LiveExtras']> = ({ state
       </View>
       {/* SD-22: serve / return figures replayed from the point log, per set */}
       <MatchStatsPanel sport="tennis" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+      {/* SD-54 — match and set durations (from the scorer's tap times) */}
+      {durationLine(s.events, 'S') ? <Text style={textStyles.muted}>{durationLine(s.events, 'S')}</Text> : null}
       <Text style={ctrl.label}>Player stats</Text>
       <MatchBoxScore sport="tennis" source={tennisBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Point log</Text>
@@ -161,8 +167,11 @@ export const tennisPlugin: SportPlugin<TennisState> = {
   statTotalsNeedsPlayers: true,
   Scoreboard: TennisScoreboard,
   // SD-01: once ended → sets won + "6-4, 3-6, 7-6(4)" (never the reset 0–0).
-  summary,
+  // SD-54: + the match duration once it's over (stamped matches only)
+  summary: (s) => withDuration(summary(s), s.events, s.ended),
   scoreLine,
+  // SD-53 / SD-54 — code & time violations, medical / toilet (Quick options)
+  QuickOptions: makeRacketQuickOptions('tennis', { serverOf: (st) => serveInfo(st as TennisState).side }),
   // SD-20: the line score (board grid, "6-4, 3-2 ret.") + ITF result marks.
   lineScore,
   retireTerms: true,

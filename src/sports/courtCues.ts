@@ -21,6 +21,7 @@
 import type { LiveEvent } from './liveEvents';
 import type { ScoreAction } from './types';
 import { replayPoints, type PointInput } from './rallyEdit.ts';
+import { isMark } from './conduct.ts';
 
 type Side = 'home' | 'away';
 type PerSide = { home: number; away: number };
@@ -139,12 +140,14 @@ export function cueMarkers<S extends { events: LiveEvent[] }>(
   events: LiveEvent[],
 ): LiveEvent[] {
   const out: LiveEvent[] = [];
+  // SD-53 — conduct / timeout / let records aren't replayed: align on the rest
+  const core = events.some(isMark) ? events.filter((e) => !isMark(e)) : events;
   let s = cleared;
   for (const p of inputs) {
     s = replayPoints(reducer, s, [p]);
     const c = cueOf(s);
     if (!c) continue;
-    const at = events[s.events.length - 1];
+    const at = core[(core === events ? s.events.length : s.events.filter((e) => !isMark(e)).length) - 1];
     if (!at) continue;
     out.push({ id: at.id + 0.5, stamp: c.kind === 'ends' ? 'Ends' : 'Break', icon: c.kind === 'ends' ? '↔️' : '⏸', label: c.text.replace(/^(↔|⏸)\s*/, '') });
   }

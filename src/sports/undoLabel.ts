@@ -45,7 +45,12 @@ export function undoLabel(
   const p = added[0];
   const name = (s?: Side) => (s === 'home' ? names.home : s === 'away' ? names.away : '');
   let head: string;
-  if (p.kind === 'rally') head = `rally to ${name(p.wonBy)}${p.label ? ` · ${p.label.toLowerCase()}` : ''}`;
+  // SD-53 / SD-54 / SD-63 — "code violation · point penalty · Nadal", "timeout · Home", "let"
+  if (p.pen || p.kind === 'conduct' || p.kind === 'timeout' || p.kind === 'let') {
+    const what = (p.label ?? '').trim().replace(/^./, (c) => c.toLowerCase());
+    const who = p.pen ? p.pen.playerName ?? name(p.pen.by) : p.playerName ?? (p.detail && p.kind === 'timeout' ? p.detail : name(p.side));
+    head = who && p.kind !== 'let' ? `${what} · ${who}` : what;
+  } else if (p.kind === 'rally') head = `rally to ${name(p.wonBy)}${p.label ? ` · ${p.label.toLowerCase()}` : ''}`;
   else if (p.df) head = `double fault → point to ${name(p.side)}`;
   else if (p.kind === 'ace' || (p.kind === 'point' && p.pd?.how === 'ace')) head = `ace · ${p.playerName ?? name(p.side)}`;
   else if (p.kind === 'point') head = `point to ${p.playerName ?? name(p.side)}`;

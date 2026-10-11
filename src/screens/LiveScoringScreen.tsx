@@ -943,6 +943,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const closeEnd = () => { setRetireOpen(false); setEndKind(null); setEndWinner(null); setEndReason(''); setEndNrr(true); setEndWo(false); };
   const endMatch = async () => {
     if (!draftResult || !endReady) return;
+    await endMatchWith(draftResult);
+  };
+  // SD-53 — also reached from a sport's Quick options (a racket default),
+  // which has already asked (askConfirm); the same save as "End match".
+  const endMatchWith = async (draftResult: MatchResult) => {
     const sm = plugin.summary(state);
     // SD-20: a set/game sport records the sets/games won (not the live "40"/"Ad").
     const won = plugin.lineScore?.(state)?.won;
@@ -2357,6 +2362,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               state={state} dispatch={dispatch} homeRoster={homeScoreRoster} awayRoster={awayScoreRoster}
               homeName={fullHome} awayName={fullAway}
               onDone={(msg) => { setQuickOpen(false); if (msg) setToast(msg); }}
+              onEndMatch={showEndEarly ? (r) => { setQuickOpen(false); void endMatchWith({ ...r, at: new Date().toISOString() }); } : undefined}
             />
           ) : undefined}
         />

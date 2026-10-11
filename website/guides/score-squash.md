@@ -64,7 +64,7 @@ Winners and strokes count for the rally winner; errors and no lets against the o
 The app replays the match; in English scoring a fix can turn a point into a hand-out, and later serves follow. After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match
-The match ends itself when a player wins enough games. Otherwise tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/).
+The match ends itself when a player wins enough games. Otherwise tap **🏁 End match…** → **Retired** or **Default**. See [End a match early](/guides/end-a-match-early/). Conduct penalties, the **🔁 Let** button and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## What goes on the player's profile
 The player's squash page adds **W-L**, **Win %**, **Match play**, **Serve & return** (singles only) and **Shot making** (from point-detail matches). Doubles players get **Partners**. See [Filter a player's career stats](/guides/filter-career-stats/).

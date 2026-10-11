@@ -51,6 +51,11 @@ export interface PointInput {
   /** SD-117b — volleyball: an "Opp. fault" point's optional detail (error
    *  type + the erring opponent). Replayed with the fault; charges `errors`. */
   oe?: { type?: string; playerId?: string; playerName?: string };
+  /** SD-53 — a racket penalty point (conduct): replays as PENALTY_POINT, so a
+   *  correction keeps it a penalty (no rally, no serve change in side-out). */
+  pen?: import('./conduct').PenMark;
+  /** SD-54 — when the point was logged (ms); replayed so durations survive. */
+  at?: number;
 }
 
 /** SD-117b — the stat an erring volleyball opponent is charged with. */
@@ -74,10 +79,10 @@ export const pointRows = (events: LiveEvent[]): EditRow[] =>
     .map((e) => ({
       e,
       p: e.kind === 'rally'
-        ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const, ...(e.pd ? { pd: { ...e.pd } } : {}) }
+        ? { side: e.wonBy as 'home' | 'away', kind: 'rally' as const, ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.at ? { at: e.at } : {}) }
         // SD-19: the credited player's id rides along when the event has one,
         // so an EDIT_LOG keeps ids (absolute statTotals) instead of names only.
-        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}), ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.serve ? { serve: e.serve } : {}), ...(e.oe ? { oe: { ...e.oe } } : {}) },
+        : { side: e.side as 'home' | 'away', kind: e.kind as PointKind, playerName: e.playerName, ...(e.playerId ? { playerId: e.playerId } : {}), ...(e.df ? { df: { ...e.df } } : {}), ...(e.pd ? { pd: { ...e.pd } } : {}), ...(e.serve ? { serve: e.serve } : {}), ...(e.oe ? { oe: { ...e.oe } } : {}), ...(e.pen ? { pen: { ...e.pen } } : {}), ...(e.at ? { at: e.at } : {}) },
     }));
 
 /** Reconstruct the ordered scoring inputs from a sport's point log, so replaying
@@ -108,8 +113,15 @@ export function replayPoints<S>(reducer: (s: S, a: ScoreAction) => S, cleared: S
   }, cleared);
 }
 
-/** The action one corrected point replays as. */
+/** The action one corrected point replays as (SD-54: with its stamp). */
 function replayAction(p: PointInput): ScoreAction {
+  const a = replayActionOf(p);
+  return p.at ? { ...a, payload: { ...(a.payload ?? {}), at: p.at } } : a;
+}
+
+function replayActionOf(p: PointInput): ScoreAction {
+  // SD-53 — a penalty point replays as one (never a rally / serve change)
+  if (p.pen) return { type: 'PENALTY_POINT', side: p.side, payload: { pen: p.pen } };
   // SD-104 — a double-fault point replays as one (point to the receiver, the
   // fault marked on the server); the reducer re-records the marker.
   if (p.df) {
