@@ -64,7 +64,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-31 | Basketball missed FG capture (Miss 2 / Miss 3), FG/3P extras, "Track missed shots" coverage toggle | basketball | BK-03 | DONE | 665c38f · Wave 2 R1 · M · new MISS action · D8 |
 | SD-32 | Volleyball statTotals, remaining keys: points, attack / block points, aces, serve errors, errors | volleyball | VB-03 | DONE | 8a9462b · Wave 2 R1 · M · heals SD-04 history (D2) · PARTIAL: rest delivered by SD-29 (3ad046a) setsPlayed, SD-19 (3ad046a) setsWon / setsLost |
 | SD-33 | Kabaddi statTotals from raids[] (raid/touch/bonus/tackle points, raids, successful/empty/out, super raids/tackles, do-or-die) | kabaddi | KB-02 | DONE | 665c38f · Wave 2 R1 · M · heals SD-03 history (D2) |
-| SD-34 | Tennis double faults scored before SD-104 (plain POINT + attribution2 / `_attr2` doubleFaults, no `df` flag) re-labelled as double faults on replay, so the timeline, DF column and point editor see them; score unchanged | tennis | TN-01, TN-02 | READY | Wave 2 R1 · S · replay test for relabelled DFs · PARTIAL: rest delivered by SD-104 (b3fbe7e): `df` point marker, timeline label, DF box column, editor kind, correction reconcile, server-only one-tap Ace / DF |
+| SD-34 | Tennis double faults scored before SD-104 (plain POINT + attribution2 / `_attr2` doubleFaults, no `df` flag) re-labelled as double faults on replay, so the timeline, DF column and point editor see them; score unchanged | tennis | TN-01, TN-02 | DONE | 60531e0 · Wave 2 R1 · S · replay test for relabelled DFs · PARTIAL: rest delivered by SD-104 (b3fbe7e): `df` point marker, timeline label, DF box column, editor kind, correction reconcile, server-only one-tap Ace / DF |
 | SD-35 | Golf entry admin: WD / DQ / DNS, edit handicap, remove | golf | GF-04 | DONE | fc9f370 · Wave 2 R1 · S · no migration |
 | SD-36 | Chess career remainder: wins by method (checkmate / resignation / time / forfeit…) and unbeaten streak; needs a `method` key on the line | chess | CH-05 | READY | Wave 2 R1 · S–M · PARTIAL: rest delivered by SD-24 (b3fbe7e) score / score %, SD-25 (9eaf301) W/D/L by colour and time control (split chips) |
 | SD-37 | Carrom statTotals: games W/L, boards won/played, capped points, Queens, written absolute at completion | carrom | CR-02 | DONE | 68dd087 · Wave 2 R1 · M · needs SD-19 · PARTIAL: lines for the loser and both doubles partners delivered by SD-11 (4994c8d) |
@@ -82,7 +82,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-49 | Golf (field results) in tournament leaders and award slots; medal-table loader wiring for field events | golf (+ future field sports) | GEN-18; GF-08 | READY | Wave 3a · M · needs SD-42 · PARTIAL: medal table accepts field results, golf positions / cut on the engine — delivered by SD-28 (ff88a73) |
 | SD-50 | Game-flow stats: biggest lead, lead changes, times tied, largest run, bench points | basketball, football, kabaddi | GEN-20; BK-09 | DONE | 72950ce · Wave 3a · S |
 | SD-51 | Match-records hook persisted in the snapshot (partnerships, team totals, team highs) → tournament Records card | generic | GEN-21; CK-07 | READY | Wave 3a · M · one-off backfill replay |
-| SD-52 | Optional point-outcome tag (winner / forced / unforced / fault / kitchen / smash) with coverage | racket sports | GEN-22; PD-05, PB-05 (P1); TN-12, BD-06, TT-11, SQ-10 (P2) | READY | Wave 3a · M · D8 · optional `how` payload |
+| SD-52 | Optional point-outcome tag (winner / forced / unforced / fault / kitchen / smash) with coverage | racket sports | GEN-22; PD-05, PB-05 (P1); TN-12, BD-06, TT-11, SQ-10 (P2) | DONE | 60531e0 · Wave 3a · M · D8 · optional `how` payload |
 | SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | DONE | 133422a · Wave 3a · M · additive actions |
 | SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | DONE | 133422a · Wave 3a · S · new TIMEOUT action |
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
@@ -90,12 +90,12 @@ P2 items are parked (PLAN.md §6.2).
 | SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | DONE | 72950ce · Wave 3b R1 · S |
 | SD-58 | Volleyball serve tracking (first server, rotation) → pre-fills Ace / Serve error, feeds SD-22 | volleyball | VB-05 | DONE | a4b28ee · Wave 3b R1 · M · new SET_SERVE / SET_ROTATION |
 | SD-59 | Kabaddi technical points and line-outs | kabaddi | KB-05 | DONE | 3e2bc8d · Wave 3b R1 · S · new TECH_POINT |
-| SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | READY | Wave 3b R1 · M · new FAULT · D8 |
-| SD-61 | Badminton fast doubles scoring (two "Rally won" buttons; credit optional) | badminton | BD-08 | READY | Wave 3b R1 · S |
-| SD-62 | Table tennis doubles service/receive order by name; change-ends cue | table tennis | TT-07 | READY | Wave 3b R1 · M |
+| SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | DONE | 60531e0 · Wave 3b R1 · M · new FAULT · D8 |
+| SD-61 | Badminton fast doubles scoring (two "Rally won" buttons; credit optional) | badminton | BD-08 | DONE | 60531e0 · Wave 3b R1 · S |
+| SD-62 | Table tennis doubles service/receive order by name; change-ends cue | table tennis | TT-07 | DONE | 60531e0 · Wave 3b R1 · M |
 | SD-63 | Squash Let / Stroke / No Let decisions | squash | SQ-03 | DONE | 133422a · Wave 3b R1 · M |
-| SD-64 | Padel Star Point deuce option | padel | PD-07 | READY | Wave 3b R1 · S · D5 (verify FIP 2026 text) |
-| SD-65 | Pickleball "Serves first" picker (the engine already accepts SET_FIRST_SERVER); verify pickleball's game-2 first server | squash, pickleball | SQ-06, PB-11 | READY | Wave 3b R1 · S · PARTIAL: squash (and TT) first-server picker delivered by SD-104 (b3fbe7e) |
+| SD-64 | Padel Star Point deuce option | padel | PD-07 | DONE | 60531e0 · Wave 3b R1 · S · D5 (verify FIP 2026 text) |
+| SD-65 | Pickleball "Serves first" picker (the engine already accepts SET_FIRST_SERVER); verify pickleball's game-2 first server | squash, pickleball | SQ-06, PB-11 | DONE | 60531e0 · Wave 3b R1 · S · PARTIAL: squash (and TT) first-server picker delivered by SD-104 (b3fbe7e) |
 | SD-66 | Golf gross and net boards side by side (Best Gross / Best Net) | golf | GF-06 | DONE | fc9f370 · Wave 3b R1 · S |
 | SD-67 | Chess more results (double forfeit, dead position, adjudication, arbiter decision); name in "has White"; exact time control | chess | CH-08 | READY | Wave 3b R1 · S |
 | SD-68 | Carrom ICF score sheet (breaker, running total, penalty boards) | carrom | CR-03 | READY | Wave 3b R1 · S |
@@ -104,8 +104,8 @@ P2 items are parked (PLAN.md §6.2).
 | SD-71 | Volleyball substitutions + libero → sets played | volleyball | VB-06 | DONE | a4b28ee · Wave 3b R2 · M · needs SD-29 · new SUB |
 | SD-72 | Kabaddi cards (green / yellow 2-min suspension / red) | kabaddi | KB-06 | DONE | 3e2bc8d · Wave 3b R2 · M · needs SD-59 |
 | SD-73 | Doubles serving order chosen per set (tennis ITF Rule 14; padel server naming) | tennis, padel | TN-09, PD-08 | DONE | delivered by SD-104 (b3fbe7e): per-set SET_SERVE_ORDER picker for tennis / padel; tiebreak rotation and serve stats follow it |
-| SD-74 | Badminton doubles server and receiver by name (Law 11) | badminton | BD-05 | READY | Wave 3b R2 · M |
-| SD-75 | Padel timeline labels: Game / Break / Hold with team names | padel | PD-09 | READY | Wave 3b R2 · S |
+| SD-74 | Badminton doubles server and receiver by name (Law 11) | badminton | BD-05 | DONE | 60531e0 · Wave 3b R2 · M |
+| SD-75 | Padel timeline labels: Game / Break / Hold with team names | padel | PD-09 | DONE | 60531e0 · Wave 3b R2 · S |
 | SD-76 | Golf team stroke play, best N of M | golf | GF-07 | READY | Wave 3b R2 · M · uses SD-28's `field_entries.team_id` (no separate migration) |
 | SD-77 | Chess wall chart / crosstable | chess | CH-06 | READY | Wave 3b R2 · M · needs SD-26 |
 | SD-78 | Carrom break and White/Black Slams | carrom | CR-04 | READY | Wave 3b R2 · S |

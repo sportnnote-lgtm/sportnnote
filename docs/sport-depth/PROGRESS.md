@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-62 / SD-74 / SD-64 / SD-75 + close-out SD-34 / SD-52 / SD-60 / SD-61 / SD-65 — DONE (60531e0, 2026-10-11)
+- See DEVLOG. Check: ITTF 2.13.x numbers from memory; default picks when none are made (house choice); FIP Star Point text and USA Pickleball 5.B.1 read from secondary sources. Not done: squash doubles names; tennis game rows still "Game home" (SD-75 was padel only).
+
 ## SD-38 / SD-43 / SD-69 / SD-79 cricket stats — DONE (67849fa, 2026-10-11)
 - See DEVLOG. Founder action (optional): run `await __sportnnoteAdmin.backfillCricketCaptainKeeper({ dryRun: true })` in the live web console, then without dryRun, to flag captains/keepers on past matches. Visual check of chips / Captaincy / keeper rows still needed on a real cricket match with captains set. Keeper flag = final keeper only after a mid-match change.
 
