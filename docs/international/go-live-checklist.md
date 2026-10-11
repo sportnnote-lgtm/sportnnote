@@ -30,7 +30,7 @@ Everything the founder does by hand before or at go-live, in one place. Code wor
   - screen stays on while scoring, scoring buzz;
   - QR image arrives in WhatsApp.
 - [ ] **Fix the 2 phone numbers** listed by `select * from phone_review;`.
-- [ ] **Turn on Cloudflare Web Analytics** (cookie-free; the privacy policy says so from 2026-10-13).
+- [x] **Turn on Cloudflare Web Analytics** (cookie-free; the privacy policy says so from 2026-10-13). Done: automatic setup, confirmed loading on the live site 2026-10-13. Cloudflare adds the script only for browsers, so a plain `curl` won't show it.
   1. Log in at dash.cloudflare.com and pick your account.
   2. Open **Workers & Pages** → the website project → **Metrics** tab → under **Web Analytics**, click **Enable**. Cloudflare adds its script to every page itself; no code change.
   3. Data shows under **Analytics & Logs → Web Analytics** within a few minutes.
