@@ -20,9 +20,9 @@ A team fixture is five singles. Badminton team events are three singles and two 
 SportnNote now runs a team fixture as one tie:
 
 • Pick the federation's format, or build your own. Table tennis World Team Champs (ABC v XYZ), Corbillon and Olympic. Badminton Thomas / Uber and Sudirman Cup. Tennis Davis Cup. Squash by order of merit. Chess on four or six boards, with half points.
-• Both lineups are entered before play, and only hosts see them until both are in. Once a rubber starts, they lock.
+• Each captain enters their own lineup on their phone. It stays sealed until both are in, so nobody sets their order after seeing the other side's. Once a rubber starts, they lock.
 • Each rubber is scored like any match. The tie score updates as rubbers finish.
-• A tie stops at the majority (3 of 5, 2½ of 4), or plays the dead rubbers if your rules count them.
+• The tie settles itself the moment a team has the majority (3 of 5, 2½ of 4), whoever scored that rubber. Knockout ties stop there; group ties play every rubber, because tie-breaks count them. You can change it.
 • The table counts each tie once, with the federation's own tie-breakers: rubbers, then games, then points.
 • Parents and followers get one alert for the tie, not five.
 
@@ -51,6 +51,7 @@ Read the team-ties guide.
 - A small "Demo data" label on both screenshots.
 
 ## Pre-post checks
+- **SD-127 (batch 6 update):** captain lineups, sealed lineups, dead rubbers by stage and automatic settling need migration `20261019123500_team_tie_ops.sql` run on the live project. If it isn't, revert those two bullets to host-entered lineups and "stops at the majority, or plays the dead rubbers".
 - **Build:** recheck in the frozen launch build: the preset names, **Not played**, the **R** column, the tie-break order for table tennis (guide: tie points 2/1, then results among the teams level, then rubbers, games and points ratios).
 - **One tie alert:** needs the redeployed `notify-followers` edge function. If it isn't live, cut the "one alert for the tie" bullet.
 - **"Students' profiles":** every rubber counts on players' profiles (guide). Minors appear only as demo data; real school use needs the usual consents.

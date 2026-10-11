@@ -50,6 +50,7 @@ Read the football discipline guide.
 - A small "Demo data" label on all three screenshots. No photos of people, no school names.
 
 ## Pre-post checks
+- **Batch 6 option (SD-126, live 11 Oct 2026):** hockey, handball and basketball now have the same discipline table and suspension warnings as football, and walkovers count the federation score. The founder may add one bullet after the football one: "• Hockey, handball, basketball and kabaddi: the same discipline table and ban warnings, with each sport's own cards. A walkover now counts the federation's score in the table (3-0 FIFA, 20-0 FIBA)." The 3 Feb Instagram carousel already covers it, so this is optional.
 - **Build:** recheck in the frozen launch build: **⚙ Manage** → **Football — format & points** → **Discipline & suspensions**, **🟥 Discipline**, "Suspended for next match", "One more yellow = ban", **🟥 Suspended for this match**, **No, leave out** / **Yes, pick anyway**; kabaddi **🟨 Card**, **🟩 Green — warning**, **🟨 Yellow — 2 min off**, **🟥 Red — sent off**, **⚖️ Technical point**, the "Suspended: … left" line; racket **☰ Quick options**, **Code violation**, the suggestion line, **Apply: Point penalty**.
 - **Football rule wording:** "2 yellows = 1 match out" is the app's default and is set by the host. Keep "the referee's report and your rules have the final say" (the guide's wording).
 - **Kabaddi wording:** "2 minutes of playing time" (the clock stops when paused). Don't say "2 minutes" alone.

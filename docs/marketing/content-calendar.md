@@ -77,7 +77,7 @@ Every launch-week post carries the full pricing line: "Free while we're new; a s
 | Tue 12 Jan | 12:30 | Instagram | Image post | National Youth Day | Moment | Draft – outline | — |
 | Tue 12 Jan | 10:00 | YouTube | Long video, ~9 min (How-to #4) | Run an athletics sports day | How-to | Draft – copy ready | [file](posts/2027-01-12-youtube-howto-04-athletics.md) |
 | Tue 12 Jan | 18:00 | YouTube | Short | A high jump, settled by the O/X grid | How-to | Draft – copy ready | [file](posts/2027-01-12-youtube-howto-04-athletics.md#youtube-short) |
-| Wed 13 Jan | 09:30 | LinkedIn | Text + document post, 6 slides | Built for schools: run your sports day on it | Pilot and community | Draft – outline | — |
+| Wed 13 Jan | 09:30 | LinkedIn | Text + document post, 7 slides | The sports day toolkit: entries, timetable, printed sheets, record board, champions (for PE heads; upgrades "Built for schools: run your sports day on it") | Pilot and community + New feature | Draft – copy ready | [file](posts/2027-01-13-linkedin-sports-day-toolkit.md) |
 | Wed 13 Jan | 19:00 | Instagram | Reel, 25 s | Day 3: racket sports, every point and how it was won | Sport spotlight + New feature | Draft – outline | — |
 | Wed 13 Jan | 18:00 | YouTube | Short | Tennis tiebreak, scored for you | Sport spotlight | Draft – outline | — |
 | Thu 14 Jan | 12:30 | Instagram | Image post | Makar Sankranti / Pongal / Lohri | Moment | Draft – outline | — |
@@ -110,6 +110,8 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Wed 20 Jan | 10:00 | YouTube | Long video, ~5 min (#7) | Add scorers and officials | How-to | Draft – outline | — |
 | Wed 20 Jan | 18:00 | YouTube | Short | Hand over scoring in two taps | How-to | Draft – outline | — |
 | Thu 21 Jan | 09:30 | LinkedIn | Text post + 2 screenshots | Match-day mistakes happen. Losing the goal shouldn't. (football, hockey, basketball, kabaddi corrections) | New feature | Draft – copy ready | [file](posts/2027-01-21-linkedin-match-day-mistakes.md) |
+| Thu 21 Jan | 10:00 | YouTube | Long video, ~10 min (how-to) | Run your sports day from entries to champions | How-to + New feature | Draft – copy ready | [file](posts/2027-01-21-youtube-howto-sports-day-entries-to-champions.md) |
+| Thu 21 Jan | 18:00 | YouTube | Short | Sports day running late? Move the whole session | How-to | Draft – copy ready | [file](posts/2027-01-21-youtube-howto-sports-day-entries-to-champions.md#youtube-short) |
 | Thu 21 Jan | 19:00 | Instagram | Reel, 15 s | Every "End" asks first (scoring safety) | New feature | Draft – copy ready | [file](posts/2027-01-21-instagram-every-end-asks-first.md) |
 | Fri 22 Jan | 19:00 | Instagram | Reel, 25 s | Update #1: what shipped since launch | New feature | Draft – needs data | — |
 | Sat 23 Jan | 10:00 | YouTube | Long video, ~5 min (#8) | Import a schedule from Excel or Google Sheets | How-to | Draft – outline | — |
@@ -132,16 +134,17 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Sat 30 Jan | 19:00 | Instagram | Reel, 20 s | The newest four, 1 of 4: archery | Sport spotlight + New feature | Draft – copy ready | [file](posts/2027-01-30-instagram-spotlight-archery.md) |
 | Sun 31 Jan | 12:30 | Instagram | Story + post | Community shout-out: tag your house | Pilot and community | Draft – outline | — |
 | **1–7 Feb** | | | | **Theme: run a tournament** | | | |
-| Mon 1 Feb | 19:00 | Instagram | Reel, 15 s | Generate a round-robin in 20 seconds | How-to | Draft – outline | — |
+| Mon 1 Feb | 19:00 | Instagram | Reel, 20 s | Level after full time? Someone still goes through (knockouts always produce a winner; replaces the round-robin outline) | New feature | Draft – copy ready | [file](posts/2027-02-01-instagram-knockouts-always-a-winner.md) |
 | Mon 1 Feb | 10:00 | YouTube | Long video, ~7 min (sport how-to) | How to score a handball match | How-to | Draft – copy ready | [file](posts/2027-02-01-youtube-howto-handball.md) |
 | Mon 1 Feb | 18:00 | YouTube | Short | Handball: goals by type, 7 m saves, a 2-minute timer | Sport spotlight | Draft – copy ready | [file](posts/2027-02-01-youtube-howto-handball.md#youtube-short) |
 | Tue 2 Feb | 09:30 | LinkedIn | Text post | Case study: how a pilot school ran its sports day | Proof | Draft – if consented | — |
 | Tue 2 Feb | 18:00 | YouTube | Short | Run out in a few taps, and a pad that never jumps | New feature | Draft – copy ready | [file](posts/2027-02-02-instagram-cricket-match-day.md#youtube-short) |
 | Tue 2 Feb | 19:00 | Instagram | Reel, 20 s | Cricket, without the panic (run outs, innings closed, penalties, subs) | New feature | Draft – copy ready | [file](posts/2027-02-02-instagram-cricket-match-day.md) |
-| Wed 3 Feb | 12:30 | Instagram | Carousel, 8 slides | Points-table rules per sport: FIFA, FIBA, FIVB, PKL, BWF, ITTF, ICC | Sport spotlight | Draft – outline | — |
+| Wed 3 Feb | 12:30 | Instagram | Carousel, 8 slides | Fair play, sport by sport: cards, bans and walkover scores (discipline + walkovers for every team sport; replaces the points-table outline) | New feature | Draft – copy ready | [file](posts/2027-02-03-instagram-fair-play-every-team-sport.md) |
 | Wed 3 Feb | 10:00 | YouTube | Long video, ~6 min (#11) | How to score a badminton match | How-to | Draft – outline | — |
 | Wed 3 Feb | 18:00 | YouTube | Short | Badminton: who serves from which court | Sport spotlight | Draft – outline | — |
 | Thu 4 Feb | 09:30 | LinkedIn | Text post + 2 screenshots | Who serves first? The app stopped guessing (racket point buttons) | New feature | Draft – copy ready | [file](posts/2027-02-04-linkedin-racket-who-serves-first.md) |
+| Thu 4 Feb | 18:00 | YouTube | Short (standalone) | Lose once, still in: double elimination | New feature | Draft – copy ready | [file](posts/2027-02-04-youtube-short-double-elimination.md) |
 | Thu 4 Feb | 19:00 | Instagram | Reel, 20 s | Pickleball, scored right: side-outs and the right-court server | Sport spotlight | Draft – outline | — |
 | Fri 5 Feb | 19:00 | Instagram | Reel, 25 s | Swimming: heats, splits, relays, records per pool | Sport spotlight | Draft – outline | — |
 | Sat 6 Feb | 10:00 | YouTube | Long video, ~5 min (#12) | Read and filter career stats | How-to | Draft – outline | — |
@@ -171,7 +174,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Mon 15 Feb | 18:00 | YouTube | Short | Heats to Final A, worked out for you | Sport spotlight | Draft – copy ready | [file](posts/2027-02-15-youtube-howto-regatta-canoe-sprint.md#youtube-short) |
 | Tue 16 Feb | 09:30 | LinkedIn | Text post | A career page for every student | Founder | Draft – outline | — |
 | Tue 16 Feb | 12:30 | Instagram | Carousel, 8 slides | 📜 Records: the best moments of your tournament, sport by sport | New feature | Draft – copy ready | [file](posts/2027-02-16-instagram-tournament-records.md) |
-| Wed 17 Feb | 12:30 | Instagram | Carousel, 6 slides | PB, SB, MR, SR: personal bests and records explained | How-to | Draft – outline | — |
+| Wed 17 Feb | 12:30 | Instagram | Carousel, 8 slides + Stories poll | Your school's records, safe (record board; keeps the PB/SB/MR/SR explainer as slide 2) | New feature | Draft – copy ready | [file](posts/2027-02-17-instagram-your-schools-records-safe.md) |
 | Wed 17 Feb | 10:00 | YouTube | Long video, ~7 min (#15) | How to score a kabaddi match | How-to | Draft – outline | — |
 | Wed 17 Feb | 18:00 | YouTube | Short | Super tackle: worth 2 | Sport spotlight | Draft – outline | — |
 | Thu 18 Feb | 09:30 | LinkedIn | Text post + 2 screenshots | A typo shouldn't become a meet record (athletics and swimming) | New feature | Draft – copy ready | [file](posts/2027-02-18-linkedin-a-typo-isnt-a-record.md) |
@@ -187,7 +190,7 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
 | Mon 22 Feb | 10:00 | YouTube | Long video, ~7 min (sport how-to) | Run a weightlifting meet | How-to | Draft – copy ready | [file](posts/2027-02-22-youtube-howto-weightlifting.md) |
 | Mon 22 Feb | 18:00 | YouTube | Short | The lifting order, worked out for you | Sport spotlight | Draft – copy ready | [file](posts/2027-02-22-youtube-howto-weightlifting.md#youtube-short) |
 | Tue 23 Feb | 09:30 | LinkedIn | Text post | What 10 school sports days taught us | Proof | Draft – needs data | — |
-| Wed 24 Feb | 12:30 | Instagram | Carousel, 7 slides | Your athletics day, step by step | How-to | Draft – outline | — |
+| Wed 24 Feb | 12:30 | Instagram | Carousel, 7 slides + Stories | Sports day from the stands: medal alerts, champions and your house's page (replaces "Your athletics day, step by step") | New feature | Draft – copy ready | [file](posts/2027-02-24-instagram-sports-day-from-the-stands.md) |
 | Wed 24 Feb | 10:00 | YouTube | Long video, ~7 min (#17) | How to score a volleyball match (rotation, subs, libero, detailed stats) | How-to | Draft – copy ready | [file](posts/2027-02-24-youtube-howto-17-volleyball.md) |
 | Wed 24 Feb | 18:00 | YouTube | Short | Attack, block, ace: one tap each | Sport spotlight | Draft – copy ready | [file](posts/2027-02-24-youtube-howto-17-volleyball.md#youtube-short) |
 | Thu 25 Feb | 09:30 | LinkedIn | Text post + 2 screenshots | Sports day essentials: cross-country where every runner counts for the house (bib entry, team scores, road races, race walks) | New feature | Draft – copy ready | [file](posts/2027-02-25-linkedin-sports-day-cross-country-team-scores.md) |
@@ -294,4 +297,30 @@ Weekly theme across all three platforms. YouTube how-to numbers follow the roadm
   - **Golf in leaders, awards and the medal table** (SD-49): no post of its own. It belongs in the outlined golf Reel (4 Mar) and YT #20 (6 Mar), and in #13 "Tournament awards" (10 Feb), which should also show Best attacker and the golf award slots.
   - **Cadence:** at most one new Instagram post per week (26 Jan, 6 Feb, 9 Feb, 16 Feb and 2 Mar each sit in a different week), no platform gets two posts on one day, and YouTube long videos stay at three or four a week (the two Mondays used were the only free ones).
 - **Feature status:** SD-106, SD-107 and SD-108 are live since 11 Oct 2026, so their posts are no longer gated. APK 37 (on sportnnote.in since 11 Oct 2026) adds screen-on, tap buzz and the in-app QR image share, so the 19 Jan match-day post and the 28 Jan QR posts have no APK caveat left.
-- **Totals:** 189 rows: 32 LinkedIn, 82 Instagram and 75 YouTube (32 long videos and 43 Shorts), plus daily Stories. 98 rows are copy-ready, in 74 post files (fifth batch, 11 Oct 2026: +11 rows, +10 files, 3 outline rows written: the 18 Feb carrom Reel and YT #17 + its Short); each Short sits in the file of the video or Reel it is cut from.
+- **Sixth batch (live 11 Oct 2026): Waves A, B and C, "built for real school and inter-school competitions":**
+  - **Organiser-facing (PE teachers and sports coordinators):** the sports day toolkit (entries matrix, bulk paste, late entries and scratches, timetable, A4 printing, record board, champions, event officials) on LinkedIn Wed 13 Jan 09:30 (upgrades the launch-week outline "Built for schools") and the YouTube how-to "Run your sports day from entries to champions" with full transcript, Thu 21 Jan 10:00 + Short 18:00 (a new Thursday long-video slot; that week has four long videos, inside the 3–4 rule). Both land before Republic Day meets. The outlined LinkedIn post "Run your Republic Day inter-house meet" (Tue 26 Jan) should point to the 21 Jan video when it's written.
+  - **Families and students (Instagram):** "Your school's records, safe" carousel Wed 17 Feb (record board, atomic records, reopen gives the record back; upgrades the PB/SB/MR/SR outline and keeps it as slide 2); "Sports day from the stands" carousel Wed 24 Feb (final and record alerts, champions by category, house event results, athlete profile header; upgrades "Your athletics day, step by step").
+  - **Tournament formats:** knockouts always produce a winner (football, hockey, handball, cricket Super Over, chess Armageddon, the organiser's "Advances" pick) as the Mon 1 Feb Reel (replaces the round-robin outline); double elimination + grand-final reset + plates as a standalone YouTube Short Thu 4 Feb 18:00 (the free Thursday Shorts slot, same day as the pickleball Reel); fair play (discipline tables for hockey, handball, basketball, kabaddi and football, suspension warnings, federation walkover scores) as the Wed 3 Feb carousel (replaces the points-table outline; YT #9 still covers tie-breakers).
+  - **Cadence:** no new Instagram posts: all four Instagram items upgrade outlined rows. The only new rows are YouTube (Thu 21 Jan long + Short, Thu 4 Feb Short). No platform gets two posts in one slot; LinkedIn stays at the existing rows.
+  - **No post of their own; belong in outlined content when it's written:** golf course editor + tees (SD-122) in YT #20 (6 Mar) and the 4 Mar golf Reel; medal table from brackets, shared bronze and **🥇 Medals first** (SD-123) in the 3 Mar "college fest, one medal table" carousel and the 25 Jan "inter-house meet with a medal table" Reel; seeded draws and best-placed teams for unequal groups (SD-124) in YT #9 (27 Jan); cricket DLS par on "☔ No more play" (SD-121) as a line in a later cricket post (YT #3 is copy-ready and unchanged); basketball foul-outs per side (SD-122) in YT #18 (27 Feb); team-tie sealed captain lineups and automatic settling (SD-127) are now written into the 8, 9 and 10 Feb team-tie files (label update, see README).
+  - **Gated:** final and record alerts need `20261019124310_event_result_alerts.sql` + the `notify-followers` redeploy; the two-finals-at-once record claims need `20261019124330_field_record_book.sql`; captain lineups and dead rubbers by stage need `20261019123500_team_tie_ops.sql`. Printing from the Android app needs APK 38; every post says "from a computer" until then.
+- **Totals:** 192 rows: 32 LinkedIn, 82 Instagram and 78 YouTube (33 long videos and 45 Shorts), plus daily Stories. 106 rows are copy-ready, in 81 post files (sixth batch, 11 Oct 2026: +3 rows, +7 files, 5 outline rows written: 13 Jan LinkedIn, 1 Feb, 3 Feb, 17 Feb and 24 Feb Instagram); each Short sits in the file of the video or Reel it is cut from, except the standalone 4 Feb double-elimination Short.
+
+## Next season backlog (after 14 Mar 2027)
+
+Wave A–C items with no free slot before 14 Mar, plus the two outline ideas the sixth batch replaced. Proposed dates follow the same slots and cadence; all `Draft – idea` until the founder confirms a second-season calendar. March–April is board-exam season, so the organiser posts lead and student posts are light.
+
+| Date | IST | Platform | Format | Title | Pillar | Status |
+|---|---|---|---|---|---|---|
+| Tue 16 Mar | 09:30 | LinkedIn | Text post + 2 screenshots | Seeded draws: so the best meet last (cross-over from groups, byes for top seeds, fair best-placed teams for unequal groups) | New feature | Draft – idea |
+| Thu 18 Mar | 09:30 | LinkedIn | Document post, 8 slides | Fair play, sport by sport (the 3 Feb Instagram carousel reused for PE heads) | New feature | Draft – idea |
+| Sat 20 Mar | 10:00 | YouTube | Long video, ~8 min (how-to) + Short 18:00 | Knockouts done right: seeding, double elimination, plates and who goes through | How-to | Draft – idea |
+| Mon 22 Mar | 19:00 | Instagram | Reel, 20 s | Rain stopped play? The DLS par decides (cricket "☔ No more play") | New feature | Draft – idea |
+| Wed 24 Mar | 12:30 | Instagram | Carousel, 6 slides | Medals first: an Olympic-style medal table for your inter-house (bracket places, shared bronze) | New feature | Draft – idea |
+| Fri 26 Mar | 19:00 | Instagram | Reel, 15 s | Generate a round-robin in 20 seconds (moved from 1 Feb) | How-to | Draft – idea |
+| Sat 27 Mar | 18:00 | YouTube | Short | Chess knockout level? Rapid, blitz, Armageddon | Sport spotlight | Draft – idea |
+| Tue 30 Mar | 09:30 | LinkedIn | Text post | One event, one teacher: event officials and age cut-off dates for your meet | New feature | Draft – idea |
+| Wed 31 Mar | 12:30 | Instagram | Carousel, 8 slides | Points-table rules per sport: FIFA, FIBA, FIVB, PKL, BWF, ITTF, ICC (moved from 3 Feb) | Sport spotlight | Draft – idea |
+| Sat 3 Apr | 19:00 | Instagram | Reel, 20 s | Your course, your tees: golf course editor, ratings and slope | New feature | Draft – idea |
+| When APK 38 is out | 19:00 | Instagram | Reel, 15 s + YT Short | Print the start lists from your phone | New feature | Draft – idea (gated on APK 38) |
+| Next team-event season | 18:00 | YouTube | Short | Sealed lineups: captains pick blind, the tie settles itself | New feature | Draft – idea |

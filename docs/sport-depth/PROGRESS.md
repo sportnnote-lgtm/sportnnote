@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Live ops — 2026-10-11 (after Wave C)
+- Founder ran all four migrations: 20261019123220_golf_course_edit, 20261019123500_team_tie_ops, 20261019124330_field_record_book, 20261019124310_event_result_alerts (verified read-only on live). notify-followers redeployed after the alerts migration (deno check passed). APK 38 not built yet (needed for phone PDF printing).
+
 ## Wave C — SD-128 / SD-129 / SD-130 / SD-131 — DONE (0ea0b11, 2026-10-11)
 - See DEVLOG. **Founder actions:** (1) run `20261019124330_field_record_book.sql`; (2) run `20261019124310_event_result_alerts.sql`; (3) then I redeploy `notify-followers` (needs the alerts migration first — deploying before it makes the function return 500 without sending).
 - **Check / decide:** late-entry lane = outside free lane; a new late heat gets its own top-N; entries document is last-write-wins per meet; record in a non-winner's event in the winner's alert body; board cut-off dates (SGFI/CBSE) unverified — organisers told to check their circular.
