@@ -14,11 +14,12 @@ import type { Attribution, SportPlugin } from '../types';
 import { Scoreboard } from '../../components/Scoreboard';
 import {
   init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL, isForfeit, isDoubleForfeit, clockText, parseClock,
-  type ChessMethod, type ChessState, type Side,
+  DEFAULT_KO_PLAN, koPhases, koPoints, koStatus, koPhaseText, KO_PHASE_LABEL,
+  type ChessMethod, type ChessState, type Side, type KoState,
 } from './engine';
 import { chessResultCredit } from './stats';
 
-const half = (n: number) => (n === 0.5 ? '½' : String(n));
+const half = (n: number) => String(n).replace('.5', '½').replace(/^0½$/, '½');
 
 const TIME_CONTROL_LABEL: Record<string, string> = {
   classical: 'Classical', rapid: 'Rapid', blitz: 'Blitz', bullet: 'Bullet', untimed: 'Untimed',
@@ -26,7 +27,25 @@ const TIME_CONTROL_LABEL: Record<string, string> = {
 
 type Pick = 'white' | 'draw' | 'black' | 'dff';
 
-const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
+/** SD-121 — the games of a knockout match so far: "Match: ½-½ · Rapid 1: 1-0 …" (home first). */
+function KoGames({ ko, nameOf }: { ko: KoState; nameOf: (s: Side) => string }) {
+  const phases = koPhases(ko.plan);
+  const used = [...new Set(ko.games.map((g) => g.phase))];
+  if (!used.length) return null;
+  const h = (n: number) => String(n).replace('.5', '½').replace(/^0½$/, '½');
+  return (
+    <View style={{ gap: 2, alignItems: 'center' }}>
+      {used.map((i) => {
+        const p = koPoints(ko, i);
+        const ph = phases[i];
+        const label = ph.kind === 'main' ? (ph.games > 1 ? 'Mini-match' : 'Game') : ph.kind === 'armageddon' ? 'Armageddon' : `${KO_PHASE_LABEL[ph.kind]}${ph.n && ph.n > 1 ? ` ${ph.n}` : ''}`;
+        return <Text key={i} style={textStyles.muted}>{label}: {nameOf('home')} {h(p.home)}-{h(p.away)} {nameOf('away')}</Text>;
+      })}
+    </View>
+  );
+}
+
+const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [], knockout }) => {
   const s = state as ChessState;
   // SD-116: the result is picked the arbiter's way (1-0 / ½-½ / 0-1, White
   // first) and the colours are a draft until Record — a stray tap on the White
@@ -43,6 +62,17 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
   // A person's full name reads better than a team code ("AM") in a 1-v-1 game.
   const nameOf = (side: Side) => (side === 'home' ? homeRoster : awayRoster)[0]?.fullName ?? (side === 'home' ? homeName : awayName);
 
+  if (s.ended && s.ko && s.ko.games.length > 1) {
+    const st = koStatus(s.ko);
+    const ph = koPhases(s.ko.plan)[st.phase];
+    return (
+      <View style={ctrl.box}>
+        <Text style={ctrl.big}>{resultString(s)}</Text>
+        <Text style={textStyles.body}>{nameOf(s.winner as Side)} goes through{ph && ph.kind !== 'main' ? ` · ${ph.kind === 'armageddon' ? 'Armageddon' : KO_PHASE_LABEL[ph.kind].toLowerCase()}` : ''}</Text>
+        <KoGames ko={s.ko} nameOf={nameOf} />
+      </View>
+    );
+  }
   if (s.ended) {
     return (
       <View style={ctrl.box}>
@@ -58,17 +88,22 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
     );
   }
 
+  // SD-121 — a knockout: each result is one game of the match until it is decided.
+  const koOn = !!s.ko || !!knockout;
+  const koNow = s.ko ?? { plan: s.koPlan ?? DEFAULT_KO_PLAN, games: [] };
+  const koAt = koOn ? koStatus(koNow) : null;
+  const armageddon = !!koAt && koPhases(koNow.plan)[koAt.phase]?.kind === 'armageddon';
   const white: Side = whiteDraft ?? s.white;
   const black: Side = white === 'home' ? 'away' : 'home';
   const dff = pick === 'dff';
   const winner: Side | 'draw' | null = pick === 'draw' || dff ? 'draw' : pick === 'white' ? white : pick === 'black' ? black : null;
-  const colourLocked = !unlockColour;
+  const colourLocked = !unlockColour && !armageddon;
   const methods = dff ? [] : winner === 'draw' ? DRAWN : winner ? DECISIVE : [];
   // SD-67: a double forfeit carries its own method
   const sentMethod: ChessMethod | undefined = dff ? 'double-forfeit' : method ?? undefined;
   const record = async () => {
     if (!winner || busy) return;
-    const what = resultSentence(white, winner, nameOf(white), nameOf(black), sentMethod);
+    const what = `${resultSentence(white, winner, nameOf(white), nameOf(black), sentMethod)}${koAt ? ` — ${koPhaseText(koNow, koAt.phase, koAt.game)}${armageddon && winner === 'draw' ? `: ${nameOf(black)} (Black) goes through` : ''}` : ''}`;
     setBusy(true);
     const ok = await askConfirm(confirmCopy('recordResult', { what }));
     setBusy(false);
@@ -86,10 +121,14 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
     dispatch({
       type: 'RESULT',
       side: winner === 'draw' ? undefined : winner,
-      payload: { winner, method: sentMethod, moves: dff ? undefined : Number(moves) || undefined, ...(clock ? { clock } : {}) },
+      payload: { winner, method: sentMethod, moves: dff ? undefined : Number(moves) || undefined, ...(clock ? { clock } : {}),
+        // SD-121 — the first game of a knockout match carries the plan
+        ...(knockout && !s.ko ? { ko: koNow.plan } : {}) },
       attribution: credit('home'),
       attribution2: credit('away'),
     });
+    // SD-121 — a knockout goes on to its next game: a clean form
+    setPick(null); setMethod(null); setMoves(''); setClockW(''); setClockB(''); setWhiteDraft(null); setUnlockColour(false);
   };
   const choose = (p: Pick | null) => { setPick(p); setMethod(null); };
   const tile = (p: Pick, score: string, caption: string, names: string) => (
@@ -104,6 +143,17 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
 
   return (
     <View style={{ gap: theme.spacing(4) }}>
+      {koAt ? (
+        <View style={ctrl.koBox}>
+          <Text style={ctrl.label}>🏆 Knockout · {koPhaseText(koNow, koAt.phase, koAt.game)}</Text>
+          <KoGames ko={koNow} nameOf={nameOf} />
+          <Text style={ctrl.meta}>
+            {armageddon
+              ? 'One game. Colours by the arbiter or a draw of lots — set White below. A draw sends Black through.'
+              : `A draw can’t end a knockout: if level after this stage, ${koAt.phase + 1 < koPhases(koNow.plan).length - 1 ? 'tie-break games follow' : 'an Armageddon game follows'}.`}
+          </Text>
+        </View>
+      ) : null}
       <View style={{ gap: theme.spacing(2) }}>
         <Text style={ctrl.label}>♔ White pieces: {nameOf(white)}</Text>
         {colourLocked ? (
@@ -124,13 +174,15 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
         <Text style={ctrl.label}>Result <Text style={ctrl.meta}>(White first)</Text></Text>
         <View style={ctrl.tiles}>
           {tile('white', '1-0', 'White wins', `${nameOf(white)} beat ${nameOf(black)}`)}
-          {tile('draw', '½-½', 'Draw', `${nameOf(white)} · ${nameOf(black)}`)}
+          {tile('draw', '½-½', 'Draw', armageddon ? `Black (${nameOf(black)}) goes through` : `${nameOf(white)} · ${nameOf(black)}`)}
           {tile('black', '0-1', 'Black wins', `${nameOf(black)} beat ${nameOf(white)}`)}
         </View>
         {/* SD-67 — neither player turned up (FIDE: 0-0, two unplayed losses) */}
-        <View style={ctrl.chips}>
-          <SelectChip label="0-0 Double forfeit" active={dff} onPress={() => choose(dff ? null : 'dff')} />
-        </View>
+        {!koOn ? (
+          <View style={ctrl.chips}>
+            <SelectChip label="0-0 Double forfeit" active={dff} onPress={() => choose(dff ? null : 'dff')} />
+          </View>
+        ) : null}
         {dff && <Text style={ctrl.meta}>Neither player played: 0 points each, no game credited. Both count as losses.</Text>}
       </View>
       {methods.length > 0 && (
@@ -187,9 +239,13 @@ export const chessPlugin: SportPlugin<ChessState> = {
   summary: (s) => {
     const p = points(s);
     return {
-      homeScore: s.ended ? half(p.home) : '',
-      awayScore: s.ended ? half(p.away) : '',
-      statusLine: s.ended
+      homeScore: s.ended || s.ko?.games.length ? half(p.home) : '',
+      awayScore: s.ended || s.ko?.games.length ? half(p.away) : '',
+      statusLine: s.ko && (s.ko.games.length > 1 || !s.ended)
+        ? s.ended
+          ? `${resultString(s)} · ${s.winner === 'home' ? 'Home' : 'Away'} through${(() => { const k = koPhases(s.ko!.plan)[koStatus(s.ko!).phase]?.kind; return k && k !== 'main' ? ` (${k === 'armageddon' ? 'Armageddon' : KO_PHASE_LABEL[k].toLowerCase()})` : ''; })()}`
+          : `${s.ko.games.length ? `${resultString(s)} · ` : ''}${(() => { const at = koStatus(s.ko!); return koPhaseText(s.ko!, at.phase, at.game); })()}`
+        : s.ended
         ? `${resultString(s)}${s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}`
         : `${TIME_CONTROL_LABEL[s.timeControl] ?? s.timeControl}${s.tcExact ? ` ${s.tcExact}` : ''} · in play`,
       // SD-117c — the clock times left, when recorded
@@ -216,6 +272,14 @@ export const chessPlugin: SportPlugin<ChessState> = {
       hint: 'optional — e.g. 90 for 90+30; 0 = not set' },
     { key: 'tcInc', label: 'Clock: seconds added per move', type: 'number', default: 0, min: 0, max: 600, advanced: true,
       hint: 'the increment — e.g. 30 for 90+30' },
+    // SD-121 — knockout tie-breaks (FIDE World Cup style): used only in knockout
+    // matches; a level match goes on to rapid, then blitz pairs, then Armageddon.
+    { key: 'koGames', label: 'Knockout: games per match', type: 'number', default: 1, min: 1, max: 12, advanced: true,
+      hint: 'e.g. 2 for a 2-game mini-match; level after these → tie-breaks' },
+    { key: 'koRapidPairs', label: 'Knockout: rapid tie-break pairs', type: 'number', default: 1, min: 0, max: 4, advanced: true,
+      hint: '2 games each, then blitz' },
+    { key: 'koBlitzPairs', label: 'Knockout: blitz tie-break pairs', type: 'number', default: 1, min: 0, max: 4, advanced: true,
+      hint: '2 games each; still level → one Armageddon game (a draw = Black goes through)' },
   ],
 };
 
@@ -229,7 +293,7 @@ function ChessScoreboard({ state, homeName, awayName, homeColor, awayColor, live
   const sum = chessPlugin.summary(s);
   const rest = (sum.detailLine ?? '').replace(/^(Home|Away) has White/, '');
   return (
-    <Scoreboard summary={{ ...sum, detailLine: `${whiteLine(s, homeName, awayName)}${rest}` }}
+    <Scoreboard summary={{ ...sum, statusLine: sum.statusLine.replace(/ · (Home|Away) through/, (_m, w) => ` · ${w === 'Home' ? homeName : awayName} through`), detailLine: `${whiteLine(s, homeName, awayName)}${rest}` }}
       homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} />
   );
 }
@@ -249,6 +313,7 @@ const ctrl = StyleSheet.create({
   tileCaption: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
   tileNames: { color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' },
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
+  koBox: { gap: theme.spacing(1), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt },
   box: { gap: theme.spacing(1), alignItems: 'center', padding: theme.spacing(4), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md },
   big: { color: theme.colors.text, fontSize: 32, fontWeight: '800' },
   bad: { borderColor: theme.colors.danger },

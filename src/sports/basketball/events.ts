@@ -47,6 +47,10 @@ export interface BBEvent {
   onName?: string;
   /** SD-117 (B12): an ejection the foul rules forced (absent: the scorer's own call) */
   reason?: DqReason;
+  /** SD-122: the credited player's id, on plays logged by a `v: 2` action —
+   *  keeps two same-named players apart for foul-out / ejection. Absent on
+   *  older logs. */
+  pid?: string;
 }
 
 export const BB_META: Record<BBEventType, { icon: string; label: string }> = {

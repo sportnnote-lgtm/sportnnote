@@ -21,6 +21,7 @@ import { BB_META, DQ_LABEL, FOUL_LABEL, pointsOf, type BBEvent, type DqReason, t
 import type { Player } from '../../core/types';
 import type { LiveSettings, ScoreAction, SportPlugin } from '../types';
 import { basketballVoice } from '../voiceParsers';
+import { aggregateText, levelForDecider } from '../aggregate';
 import { courtFormation, makeCourt } from '../courts';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { usePendingEdit } from '../usePendingEdit';
@@ -100,7 +101,8 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // Any other play closes the "Assist?" prompt (a make re-opens it after).
   const fire = (action: ScoreAction) => {
     setAssistFor(null);
-    dispatch({ ...action, payload: { ...action.payload, ...stampFor() } });
+    // SD-122: `v: 2` = foul-out / ejection are checked for this side (and id).
+    dispatch({ ...action, payload: { ...action.payload, ...stampFor(), v: 2 } });
   };
 
   // SD-31: "Track missed shots" (live settings) — Miss buttons, and every make
@@ -138,7 +140,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const removal = (e: BBEvent): ScoreAction => {
     // Reverse exactly what the play credited (credits.ts — FG / 3P / misses /
     // OREB-DREB included), so the lines match the log again.
-    const pid = rosterId(e.playerName);
+    const pid = e.pid ?? rosterId(e.playerName);
     const attribution = pid ? creditAttribution(pid, e.playerName, eventCredits(e, halfCourt, shotsTracked(state)), -1) : undefined;
     return { type: 'REMOVE_EVENT', side: e.side, payload: { id: e.id }, attribution };
   };
@@ -193,7 +195,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // team-foul limit opens the bonus 2 (B8). A D foul, or a 2nd T / 2nd U / T + U,
   // disqualifies (B12): asked first in the ConfirmSheet, then logged + ejected.
   const recordFoul = async (side: 'home' | 'away', fouler: Player, type: FoulType) => {
-    const dq = disqualifyingFoul(state, fouler.fullName, type);
+    const dq = disqualifyingFoul(state, fouler.fullName, type, { side, pid: fouler.id });
     if (dq && !(await confirmMatchAction('eject', {
       what: fouler.fullName,
       detail: `${FOUL_LABEL[type]} — that's ${DQ_LABEL[dq]}, so the rules disqualify ${fouler.fullName}. The foul is logged and the player is ejected. Undo can bring it back.`,
@@ -416,9 +418,11 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   // Foul-out enforcement (format: foulsToFoulOut). A disqualified player is
   // greyed out everywhere and can't be credited further actions.
   // "Out" = fouled out OR ejected — both grey the player out and block credit.
-  const fouledOut = (p: Player) => isPlayerOut(state, p.fullName);
+  // SD-122: checked per side (and id), so a same-named opponent isn't greyed out.
+  const whoOf = (p: Player) => ({ side: (homeRoster.some((h) => h.id === p.id) ? 'home' : 'away') as 'home' | 'away', pid: p.id });
+  const fouledOut = (p: Player) => isPlayerOut(state, p.fullName, whoOf(p));
   const outNames = [...homeRoster, ...awayRoster].filter(fouledOut)
-    .map((p) => `${p.fullName}${isEjected(state, p.fullName) ? ' (ejected)' : ''}`);
+    .map((p) => `${p.fullName}${isEjected(state, p.fullName, whoOf(p)) ? ' (ejected)' : ''}`);
   // Team-foul bonus (format: foulsForBonus): once a side has committed that many
   // team fouls in a period, the opponent shoots free throws on every further foul
   // (FIBA: from the 5th). Under FIBA, overtime fouls count with the last quarter.
@@ -697,14 +701,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       {state.quarter < state.regPeriods ? (
         <Button label={`End ${periodLabel(state.quarter, state.regPeriods)} →`}
           onPress={async () => { if (await confirmMatchAction('endPeriod', { period: periodLabel(state.quarter, state.regPeriods), score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_QUARTER' }); }} />
-      ) : state.home === state.away ? (
+      ) : levelForDecider(state) ? (
         // Level at the end of Q4 or an OT period → play (another) overtime.
         // SD-57: a draw only where the format allows one (league / friendly
         // option); otherwise ending level asks first and offers overtime.
         <View style={{ gap: theme.spacing(2) }}>
-          <Text style={ctrl.meta}>Scores level ({state.home}–{state.away}) at the end of {periodLabel(state.quarter, state.regPeriods)}{state.allowDraw ? ' — this format allows a draw.' : ' — basketball plays overtime until there is a winner.'}</Text>
+          <Text style={ctrl.meta}>{state.agg ? `Level on aggregate (${aggregateText(state)}) at the end of ${periodLabel(state.quarter, state.regPeriods)} — overtime decides the tie.` : `Scores level (${state.home}–${state.away}) at the end of ${periodLabel(state.quarter, state.regPeriods)}${state.allowDraw ? ' — this format allows a draw.' : ' — basketball plays overtime until there is a winner.'}`}</Text>
           <Button label={`🏀 Start Overtime (${periodLabel(state.quarter + 1, state.regPeriods)})`} onPress={() => dispatch({ type: 'START_OVERTIME' })} />
-          {state.allowDraw ? (
+          {state.agg ? null : state.allowDraw ? (
             <Button label="End as a draw" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Draw', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
           ) : (
             <Button label="End level, no overtime…" variant="ghost" onPress={async () => {
@@ -717,7 +721,10 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
           )}
         </View>
       ) : (
+        <>
+        {state.agg && <Text style={ctrl.meta}>{aggregateText(state)} — {state.home === state.away ? 'the game is level but the tie is not, so no overtime.' : 'the tie is decided.'}</Text>}
         <Button label="🏁 End Match" variant="danger" onPress={async () => { if (await confirmMatchAction('fullTime', { score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
+        </>
       )}
     </View>
   );
@@ -822,7 +829,7 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
   summary: (s) => ({
     homeScore: String(s.home),
     awayScore: String(s.away),
-    statusLine: s.ended ? (s.quarter > s.regPeriods ? `Final · ${periodLabel(s.quarter, s.regPeriods)}` : 'Final') : periodLabel(s.quarter, s.regPeriods),
+    statusLine: `${s.ended ? (s.quarter > s.regPeriods ? `Final · ${periodLabel(s.quarter, s.regPeriods)}` : 'Final') : periodLabel(s.quarter, s.regPeriods)}${s.agg ? ` · ${aggregateText(s)}` : ''}`,
   }),
   ScoringControls,
   LiveClock,

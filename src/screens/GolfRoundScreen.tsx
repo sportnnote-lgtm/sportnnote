@@ -28,8 +28,9 @@ import { useGolfRounds } from '../data/useGolf';
 import {
   golfFormatOf, roundContext, cardOf, saveCard, buildLeaderboard, completeRound, setFieldEventStatus, pendingCardCount,
   setEntryAdmin, updateFieldEntry, removeFieldEntry, updateFieldEventFormat, entryStatusOf, entryAdminOf, adminLabel, withAdmin, prizeBoards,
-  getFieldEntries,
+  getFieldEntries, canEditCourse,
 } from '../data/golf';
+import { isSupabaseConfigured } from '../core/supabase';
 import {
   summarize, toParLabel, cardSigned, clampPutts, cardHasDetail, derivedGir, MAX_HOLE_STROKES,
   type GolfCard, type HoleScore, type EntryAdmin, type FairwayDir,
@@ -472,6 +473,9 @@ export default function GolfRoundScreen() {
             )}
             {hole < holes.length - 1 && <Button label={`Next: hole ${holes[hole + 1].n} ▶`} onPress={() => setHole(hole + 1)} />}
             {ev.status === 'live' && isHost && <Button label={busy ? 'Finishing…' : '🏁 Finish the round'} variant="ghost" onPress={() => void finish()} disabled={busy} />}
+            {isHost && ev.status !== 'completed' && canEditCourse(course, profile?.id, !isSupabaseConfigured) && (
+              <Text style={st.courseLink} accessibilityRole="button" onPress={() => nav.navigate('GolfCourseEdit', { courseId: course.id })}>✏️ Wrong par, stroke index or tee rating? Edit the course</Text>
+            )}
           </>
         )}
 
@@ -556,6 +560,7 @@ export default function GolfRoundScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   pad: { padding: theme.spacing(4) },
+  courseLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', paddingVertical: theme.spacing(1), textAlign: 'center' },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), alignItems: 'center' },

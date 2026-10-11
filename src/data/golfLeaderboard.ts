@@ -9,6 +9,7 @@ import {
   holesFor, courseHandicap, playingHandicap, strokesReceived, rankLeaderboard, emptyCard, summarize,
   type GolfCard, type GolfFormat, type HoleSet, type RankRow, type Hole, type EntryStatus, type EntryAdmin,
 } from '../sports/golf/engine.ts';
+import { courseAsPlayed, teeFor, mixedTeeExtra } from './golfCourses.ts';
 
 /* -------------------------------- format -------------------------------- */
 
@@ -92,13 +93,19 @@ export const adminLabel = (a: EntryAdmin): string =>
 /* ----------------------------- computations ----------------------------- */
 
 /** The holes and strokes received for one entry in one round. */
-export function roundContext(ev: FieldEvent, course: GolfCourse, entry: Pick<FieldEntry, 'handicapIndex'>) {
+export function roundContext(ev: FieldEvent, courseNow: GolfCourse, entry: Pick<FieldEntry, 'handicapIndex'> & { playerId?: string }) {
   const fmt = golfFormatOf(ev);
+  // SD-122 — a finished round keeps the course it was played on; an open
+  // round uses the course as it is now (so a course edit recomputes it).
+  const course = courseAsPlayed(ev, courseNow);
   const holes = holesFor(course, fmt.holes);
-  const tee = course.tees.find((t) => t.name === fmt.tee) ?? course.tees[0];
+  // SD-122 — the player's own tee (format.entryTees), else the round's tee
+  const tee = teeFor(ev, course, entry.playerId);
   const idx = entry.handicapIndex;
   const ch = idx == null ? 0 : courseHandicap(idx, tee, holes);
-  const ph = idx == null ? 0 : playingHandicap(ch, fmt.allowance);
+  // WHS 6.2b — on mixed tees with different par, the higher-par tee's
+  // players get the difference (only changes rounds with entryTees)
+  const ph = idx == null ? 0 : playingHandicap(ch, fmt.allowance) + mixedTeeExtra(ev, course, tee, holes);
   return { fmt, holes, tee, courseHandicap: ch, playingHandicap: ph, received: strokesReceived(ph, holes) };
 }
 

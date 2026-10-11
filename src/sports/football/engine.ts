@@ -5,6 +5,7 @@
 import type { ScoreAction, LiveSettings, FormatField } from "../types";
 import type { FootballEvent, GoalType, BodyPart, StatEvent, StatKind } from "./events";
 import { isPlayerCard } from "./events.ts";
+import { aggPriorFromConfig, aggregateText, levelForDecider, type AggPrior } from "../aggregate.ts";
 import type { Player } from "../../core/types";
 export type Decider = 'none' | 'extra_time' | 'penalties';
 
@@ -36,6 +37,9 @@ export interface FootballState {
   shootout: { home: boolean[]; away: boolean[]; first?: 'home' | 'away'; kicks?: ShootoutKick[] } | null;
   /** who won the shootout, once decided */
   shootoutWinner?: 'home' | 'away';
+  /** SD-120: leg 2 of a new two-legged tie — the leg-1 score; "level" then
+   *  means level on aggregate (absent on every other match). */
+  agg?: AggPrior;
   /** minutes per half (format: halfMinutes) — editable last-minute */
   halfMinutes: number;
   /** minutes per extra-time half (knockout) — scorer can adjust when starting ET */
@@ -171,7 +175,8 @@ export const init = (config?: Record<string, unknown>): FootballState => ({
     // New matches carry `decider`; older ones only had the `knockout` boolean
     // (true = extra time then penalties). Map both to the decider + knockout flag.
     const decider: Decider = (config?.decider as Decider) ?? (config?.knockout ? 'extra_time' : 'none');
-    return { decider, knockout: decider !== 'none' };
+    const agg = aggPriorFromConfig(config);
+    return { decider, knockout: decider !== 'none', ...(agg ? { agg } : {}) };
   })(),
   shootout: null,
   halfMinutes: Number(config?.halfMinutes ?? 45),
@@ -236,7 +241,7 @@ export function halfTimeText(s: FootballState): string {
 /** The scoreboard's detail line: half-time (SD-56) and the shootout. */
 export function footballDetailLine(s: FootballState): string | undefined {
   const pens = penScore(s);
-  const parts = [halfTimeText(s), s.shootout ? `Shootout · ${pens.home}–${pens.away}` : ''].filter(Boolean);
+  const parts = [halfTimeText(s), aggregateText(s) ?? '', s.shootout ? `Shootout · ${pens.home}–${pens.away}` : ''].filter(Boolean);
   return parts.length ? parts.join(' · ') : undefined;
 }
 
@@ -525,11 +530,12 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
     case 'START_EXTRA_TIME':
       // A level tie at full time of the 2nd half, when the decider is extra time →
       // extra time (un-ends the match, moves to ET1, grants the extra ET sub).
-      if (!s.ended || s.home !== s.away || s.decider !== 'extra_time' || s.half !== 2 || s.shootout) return s;
+      if (!s.ended || !levelForDecider(s) || s.decider !== 'extra_time' || s.half !== 2 || s.shootout) return s;
       return { ...s, ended: false, half: 3, startedAt: undefined, maxSubs: s.maxSubs + s.etExtraSubs, etMinutes: Number(a.payload?.etMinutes ?? s.etMinutes) };
     case 'START_SHOOTOUT':
-      // only from a level result at full time of a knockout tie
-      if (!s.ended || s.home !== s.away || s.shootout) return s;
+      // only from a level result at full time of a knockout tie (SD-120: level
+      // on aggregate in leg 2 of a new two-legged tie)
+      if (!s.ended || !levelForDecider(s) || s.shootout) return s;
       // SD-117 (F12): the toss winner's choice of who kicks first (Law 10).
       return { ...s, shootout: { home: [], away: [], ...(a.payload?.first === 'home' || a.payload?.first === 'away' ? { first: a.payload.first } : {}) } };
     case 'PEN': {
@@ -650,4 +656,21 @@ export function footballStats(s: FootballState, nowMs: number) {
     passAcc: { home: passAcc(totals.home), away: passAcc(totals.away) },
     players: [...players.values()],
   };
+}
+
+/** SD-120 — a knockout that still needs its decider at full time: level on the
+ *  day, or (leg 2 of a new two-legged tie) level on aggregate. */
+export const needsDecision = (s: FootballState): boolean => s.knockout && levelForDecider(s);
+
+/** The match is complete: full time, and any decider it needs has a winner. */
+export const footballComplete = (s: FootballState): boolean =>
+  s.ended && (!needsDecision(s) || s.shootoutWinner != null);
+
+/** Result of a complete match. Unchanged for every match without `agg`; on a
+ *  new leg 2 a shoot-out winner takes it even when the leg wasn't drawn. */
+export function footballResult(s: FootballState): { winner: 'home' | 'away' | 'draw'; home: number; away: number } | null {
+  if (!footballComplete(s)) return null;
+  const byGoals = s.home > s.away ? 'home' : s.away > s.home ? 'away' : undefined;
+  const winner = s.agg ? (s.shootoutWinner ?? byGoals ?? 'draw') : (byGoals ?? s.shootoutWinner ?? 'draw');
+  return { winner, home: s.home, away: s.away };
 }

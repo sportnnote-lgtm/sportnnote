@@ -8,6 +8,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
 import { getSport } from '../sports/registry';
+import { isEventSport } from '../sports/eventSports';
 import type { SportId, TournamentScoring } from '../core/types';
 
 const ordinal = (n: number): string => {
@@ -29,14 +30,21 @@ export function MedalScoringEditor({ sports, value, onChange }: {
 
   const setMode = (m: 'match' | 'position') => {
     if (m === 'match') { onChange({ ...value, mode: 'match' }); return; }
-    onChange({ mode: 'position', positionPoints: points.length ? points : defaultPoints(sports.length >= 2 ? 8 : 8), sportWeights: weights });
+    onChange({ ...value, mode: 'position', positionPoints: points.length ? points : defaultPoints(sports.length >= 2 ? 8 : 8), sportWeights: weights });
   };
-  const setPoints = (next: number[]) => onChange({ mode: 'position', positionPoints: next, sportWeights: weights });
+  const setPoints = (next: number[]) => onChange({ ...value, mode: 'position', positionPoints: next, sportWeights: weights });
   const setPosCount = (n: number) => {
     const next = Array.from({ length: n }, (_, i) => points[i] ?? (n - i));
     setPoints(next);
   };
-  const setWeight = (sport: SportId, w: number) => onChange({ mode: 'position', positionPoints: points, sportWeights: { ...weights, [sport]: w } });
+  const setWeight = (sport: SportId, w: number) => onChange({ ...value, mode: 'position', positionPoints: points, sportWeights: { ...weights, [sport]: w } });
+  // SD-123: medals-first order, and shared bronze per match sport.
+  const rankBy = value?.rankBy ?? 'points';
+  const setRankBy = (r: 'points' | 'medals') => onChange({ ...value, mode: 'position', positionPoints: points, sportWeights: weights, rankBy: r });
+  const shared = value?.sharedBronze ?? {};
+  const setShared = (sport: SportId, on: boolean) =>
+    onChange({ ...value, mode: 'position', positionPoints: points, sportWeights: weights, sharedBronze: { ...shared, [sport]: on } });
+  const matchSports = sports.filter((s) => !isEventSport(s) && s !== 'golf');
 
   return (
     <View style={st.wrap}>
@@ -72,6 +80,29 @@ export function MedalScoringEditor({ sports, value, onChange }: {
               </View>
             ))}
           </View>
+
+          <FieldLabel>Rank the medal table by</FieldLabel>
+          <View style={st.chips}>
+            <SelectChip label="🔢 Points" active={rankBy === 'points'} onPress={() => setRankBy('points')} />
+            <SelectChip label="🥇 Medals first" active={rankBy === 'medals'} onPress={() => setRankBy('medals')} />
+          </View>
+          <Text style={textStyles.muted}>
+            {rankBy === 'medals'
+              ? 'Most golds first, then silvers, then bronzes (Olympic style). Points break a tie.'
+              : 'Most points first. Golds, then silvers, then bronzes break a tie.'}
+          </Text>
+
+          {matchSports.length > 0 && (
+            <>
+              <FieldLabel>Bronze in knockouts</FieldLabel>
+              <Text style={textStyles.muted}>Places come from the bracket: final winner 1st, loser 2nd. A 3rd-place match decides 3rd; with none, both semi-final losers share 3rd. Tap a sport to always give both semi-final losers bronze.</Text>
+              <View style={st.chips}>
+                {matchSports.map((s) => (
+                  <SelectChip key={s} label={`${getSport(s).icon} ${getSport(s).name}: ${shared[s] ? 'two bronzes' : '3rd-place match'}`} active={!!shared[s]} onPress={() => setShared(s, !shared[s])} />
+                ))}
+              </View>
+            </>
+          )}
 
           {sports.length > 1 && (
             <>

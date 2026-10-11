@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
+import { CHESS_TEAM_KO_BREAKS, koBreakOf } from '../sports/chess/teamKo';
 import {
   tiePresetsFor, specFromPreset, customSpec, rubberLabel,
   type TieSpec, type RubberKind, type DeadRubbers,
@@ -108,6 +109,18 @@ export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDra
         </>
       )}
       {value && chess && <Text style={textStyles.muted}>Every board is played (all at once); a draw is ½ each. More than half the board points wins the match.</Text>}
+      {/* SD-121 — a level knockout team match still needs a winner */}
+      {value && chess && (
+        <>
+          <FieldLabel hint="Knockouts only: the event's regulations decide a level match">If a knockout match is level</FieldLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {CHESS_TEAM_KO_BREAKS.map((r) => (
+              <SelectChip key={r.id} label={r.label} active={koBreakOf(value) === r.id} onPress={() => onChange({ ...value, koBreak: r.id })} />
+            ))}
+          </View>
+          <Text style={textStyles.muted}>{CHESS_TEAM_KO_BREAKS.find((r) => r.id === koBreakOf(value))?.note}</Text>
+        </>
+      )}
 
       {value && hasLetters && showDraw && (
         <>

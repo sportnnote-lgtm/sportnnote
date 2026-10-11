@@ -5,6 +5,7 @@
  * and imports from here. Mirrors cricket's engine.ts / kabaddi's rules.ts.
  */
 import type { ScoreAction } from '../types';
+import { aggPriorFromConfig, levelForDecider, type AggPrior } from '../aggregate.ts';
 import { pointsOf, type BBEvent, type DqReason, type FoulType, type ReboundType } from './events.ts';
 
 export interface BasketballState {
@@ -67,6 +68,10 @@ export interface BasketballState {
   /** SD-57: the format lets a level game end as a draw (league / friendly
    *  option, format key `allowDraw`). Absent / false = level ⇒ overtime. */
   allowDraw?: boolean;
+  /** SD-120/122: leg 2 of a two-legged tie (format `aggregateLeg: 2` + leg 1's
+   *  score) — overtime follows a level AGGREGATE (FIBA two-game total), not a
+   *  level game. Only on the state for such a leg; absent = per-game rule. */
+  agg?: AggPrior;
 }
 
 /** SD-29: merge name → id pairs into the state (only when a payload has any,
@@ -95,25 +100,40 @@ export const init = (config?: Record<string, unknown>): BasketballState => ({
   // SD-57 — present only when the stored config carries the key.
   ...(config?.timeoutRule === 'fiba' || config?.timeoutRule === 'nba' ? { toRule: config.timeoutRule } : {}),
   ...(config?.allowDraw != null ? { allowDraw: config.allowDraw === true } : {}),
+  ...((() => { const agg = aggPriorFromConfig(config); return agg ? { agg } : {}; })()),
 });
 
 /** Q1..Qn (or H1/H2 for a two-half game), then OT, OT2… for overtime periods. */
 export const periodLabel = (q: number, regPeriods = 4): string =>
   q <= regPeriods ? `${regPeriods === 2 ? 'H' : 'Q'}${q}` : q === regPeriods + 1 ? 'OT' : `OT${q - regPeriods}`;
 
-/** Fouls a player (by name) has committed so far — drives the foul-out rule. */
-export const foulCount = (s: BasketballState, name?: string): number =>
-  name ? s.events.filter((e) => e.type === 'foul' && e.playerName === name).length : 0;
+/** SD-122 — who a foul-out / ejection check is about. With a `side` the check
+ *  is side-aware: only that team's events count, and when both the event and
+ *  the query carry a player id (`pid`) the id decides (two same-named players
+ *  on one team stay apart). Without one it is the legacy name match across both
+ *  teams — what the reducer still uses for actions logged before `v: 2`, so old
+ *  logs replay to exactly the same state. */
+export interface PlayerRef { side?: 'home' | 'away'; pid?: string }
+const isPlayersEvent = (e: BBEvent, name: string, who?: PlayerRef): boolean => {
+  if (!who?.side) return e.playerName === name;
+  if (e.side !== who.side) return false;
+  return e.pid && who.pid ? e.pid === who.pid : e.playerName === name;
+};
+
+/** Fouls a player has committed so far — drives the foul-out rule. Pass `who`
+ *  (side, and id where known) so a same-named opponent's fouls don't count. */
+export const foulCount = (s: BasketballState, name?: string, who?: PlayerRef): number =>
+  name ? s.events.filter((e) => e.type === 'foul' && isPlayersEvent(e, name, who)).length : 0;
 /** A player is fouled out once they reach the limit. */
-export const isFouledOut = (s: BasketballState, name?: string): boolean =>
-  s.foulOutLimit > 0 && foulCount(s, name) >= s.foulOutLimit;
+export const isFouledOut = (s: BasketballState, name?: string, who?: PlayerRef): boolean =>
+  s.foulOutLimit > 0 && foulCount(s, name, who) >= s.foulOutLimit;
 /** A player was ejected (removed for the rest of the game — e.g. 2 technicals or
  *  a flagrant-2), independent of the personal-foul limit. */
-export const isEjected = (s: BasketballState, name?: string): boolean =>
-  !!name && s.events.some((e) => e.type === 'eject' && e.playerName === name);
+export const isEjected = (s: BasketballState, name?: string, who?: PlayerRef): boolean =>
+  !!name && s.events.some((e) => e.type === 'eject' && isPlayersEvent(e, name, who));
 /** A player takes no further part — fouled out OR ejected. */
-export const isPlayerOut = (s: BasketballState, name?: string): boolean =>
-  isFouledOut(s, name) || isEjected(s, name);
+export const isPlayerOut = (s: BasketballState, name?: string, who?: PlayerRef): boolean =>
+  isFouledOut(s, name, who) || isEjected(s, name, who);
 /** Does this foul count as a team foul? Every foul does, except a technical
  *  when the format says technicals aren't team fouls (NBA, and legacy configs). */
 const isTeamFoul = (s: BasketballState, e: BBEvent): boolean =>
@@ -214,11 +234,11 @@ const isDqReason = (r: unknown): r is DqReason => r === 'D' || r === '2T' || r =
  *  37, 38)? A disqualifying foul does; so does a 2nd technical, a 2nd
  *  unsportsmanlike, or a technical + an unsportsmanlike. Counts the player's
  *  fouls already logged plus this one. */
-export function disqualifyingFoul(s: BasketballState, name: string | undefined, type: FoulType): DqReason | undefined {
+export function disqualifyingFoul(s: BasketballState, name: string | undefined, type: FoulType, who?: PlayerRef): DqReason | undefined {
   if (!name) return undefined;
   if (type === 'disqualifying') return 'D';
   if (type !== 'technical' && type !== 'unsportsmanlike') return undefined;
-  const mine = s.events.filter((e) => e.type === 'foul' && e.playerName === name);
+  const mine = s.events.filter((e) => e.type === 'foul' && isPlayersEvent(e, name, who));
   const t = mine.filter((e) => e.foulType === 'technical').length + (type === 'technical' ? 1 : 0);
   const u = mine.filter((e) => e.foulType === 'unsportsmanlike').length + (type === 'unsportsmanlike' ? 1 : 0);
   if (type === 'technical' && t >= 2) return '2T';
@@ -251,7 +271,7 @@ export function currentMinute(s: BasketballState): number {
   return Math.min(Math.floor((Date.now() - s.startedAt) / 60000), cap);
 }
 
-const push = (s: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, quarter: number): BasketballState => ({
+const pushEv = (s: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, quarter: number): BasketballState => ({
   ...s,
   seq: s.seq + 1,
   events: [...s.events, { ...e, id: s.seq + 1, quarter }],
@@ -272,6 +292,14 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
   const minute = Number(a.payload?.minute ?? currentMinute(s));
   const quarter = Number(a.payload?.quarter ?? s.quarter);
   const name = a.attribution?.playerName;
+  // SD-122: a `v: 2` action (the live UI since SD-122) checks foul-out /
+  // ejection for ITS side (and id) only, and its event keeps the player id in
+  // `pid`. Older actions keep the legacy name match, so old logs replay alike.
+  const v2 = a.payload?.v === 2 && !!a.side;
+  const pidIn = typeof a.payload?.pid === 'string' && a.payload.pid ? a.payload.pid : undefined;
+  const who: PlayerRef | undefined = v2 ? { side: a.side as 'home' | 'away', ...(pidIn ? { pid: pidIn } : {}) } : undefined;
+  const push = (st: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, q: number) =>
+    pushEv(st, v2 && pidIn && e.playerName ? { ...e, pid: pidIn } : e, q);
   // Put points on the board + log the play; ends a first-to-N game on the clincher.
   const scorePoints = (side: 'home' | 'away', pts: number, ev: Omit<BBEvent, 'id' | 'quarter'>): BasketballState => {
     const scored = { ...s, [side]: s[side] + pts } as BasketballState;
@@ -288,7 +316,7 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
     case 'SCORE': {
       if (!a.side) return s;
       // a disqualified player takes no further part
-      if (isPlayerOut(s, name)) return s;
+      if (isPlayerOut(s, name, who)) return s;
       const pts = Number(a.payload?.points ?? 0);
       // First-to-N games (3×3 to 21, streetball) end the moment the target is
       // reached with the required margin.
@@ -297,32 +325,32 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
     case 'MISS': {
       // SD-31: a missed field goal (2 or 3; 3×3: 1 or 2) — logged for FGA /
       // FG% / EFF only; the score doesn't move.
-      if (!a.side || isPlayerOut(s, name)) return s;
+      if (!a.side || isPlayerOut(s, name, who)) return s;
       const pts = Number(a.payload?.points ?? 2);
       return push(s, { minute, type: 'miss', side: a.side, playerName: name, points: pts }, quarter);
     }
     case 'FREE_THROW': {
       // One free-throw attempt. A make adds a point; a miss is logged for the
       // attempt count. A shooting/technical foul awards these to the OTHER team.
-      if (!a.side || isPlayerOut(s, name)) return s;
+      if (!a.side || isPlayerOut(s, name, who)) return s;
       const made = a.payload?.made === true;
       return scorePoints(a.side, made ? 1 : 0, { minute, type: 'freethrow', side: a.side, playerName: name, made, points: made ? 1 : 0 });
     }
     case 'REBOUND':
-      return a.side && !isPlayerOut(s, name)
+      return a.side && !isPlayerOut(s, name, who)
         ? push(s, { minute, type: 'rebound', side: a.side, playerName: name, reboundType: a.payload?.reboundType as ReboundType | undefined }, quarter)
         : s;
     case 'ASSIST':
-      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'assist', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name, who) ? push(s, { minute, type: 'assist', side: a.side, playerName: name }, quarter) : s;
     case 'STEAL':
-      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'steal', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name, who) ? push(s, { minute, type: 'steal', side: a.side, playerName: name }, quarter) : s;
     case 'BLOCK':
-      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'block', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name, who) ? push(s, { minute, type: 'block', side: a.side, playerName: name }, quarter) : s;
     case 'TURNOVER':
-      return a.side && !isPlayerOut(s, name) ? push(s, { minute, type: 'turnover', side: a.side, playerName: name }, quarter) : s;
+      return a.side && !isPlayerOut(s, name, who) ? push(s, { minute, type: 'turnover', side: a.side, playerName: name }, quarter) : s;
     case 'FOUL':
       // count the foul, but never beyond the limit (already fouled out)
-      return a.side && !isPlayerOut(s, name)
+      return a.side && !isPlayerOut(s, name, who)
         ? push(s, { minute, type: 'foul', side: a.side, playerName: name, foulType: (a.payload?.foulType as FoulType | undefined) ?? 'personal' }, quarter)
         : s;
     case 'TIMEOUT':
@@ -331,7 +359,7 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
       // Remove a player for the rest of the game (2 technicals / flagrant-2 /
       // fighting) — independent of the personal-foul limit. Blocks further credit.
       // SD-117 (B12): a rule-forced ejection carries its reason (new logs only).
-      return a.side && name && !isEjected(s, name)
+      return a.side && name && !isEjected(s, name, who)
         ? push(s, { minute, type: 'eject', side: a.side, playerName: name, ...(isDqReason(a.payload?.reason) ? { reason: a.payload.reason } : {}) }, quarter)
         : s;
     case 'SET_LINEUP': {
@@ -363,7 +391,8 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
     case 'START_OVERTIME':
       // A game level at the end of regulation (or an OT period) plays another
       // overtime period; the running score carries over. Repeats until decided.
-      return s.home === s.away ? { ...s, quarter: s.quarter + 1, startedAt: undefined } : s;
+      // SD-122: on leg 2 of a two-legged tie, "level" = level on aggregate.
+      return levelForDecider(s) ? { ...s, quarter: s.quarter + 1, startedAt: undefined } : s;
     case 'END':
       return { ...s, ended: true, startedAt: undefined };
     default:

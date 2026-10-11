@@ -48,7 +48,9 @@ import {
   clockLabel, clockTime, possessionPct, cardCount, FOOTBALL_LIVE_SETTINGS,
   minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, pairedSecondYellowRed, type XiStamp,
   footballDetailLine, halfTimeText, kickText,
+  needsDecision, footballComplete, footballResult,
 } from "./engine";
+import { aggregateText } from "../aggregate";
 
 /* ------------------------------- Controls ---------------------------------- */
 
@@ -699,8 +701,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <View style={ctrl.addedBox}>
-          <Text style={ctrl.label}>⏱ {atFullTime ? 'Full time — level' : 'Extra time over — still level'}</Text>
-          <Text style={ctrl.meta}>{homeName} {state.home}–{state.away} {awayName}. {canET ? 'Play extra time, or go straight to penalties.' : 'Decide it on penalties.'}</Text>
+          <Text style={ctrl.label}>⏱ {atFullTime ? (state.agg ? 'Full time — level on aggregate' : 'Full time — level') : (state.agg ? 'Extra time over — still level on aggregate' : 'Extra time over — still level')}</Text>
+          <Text style={ctrl.meta}>{homeName} {state.home}–{state.away} {awayName}{state.agg ? ` (${aggregateText(state)})` : ''}. {canET ? 'Play extra time, or go straight to penalties.' : 'Decide it on penalties.'}</Text>
           {canET && (
             <>
               <View style={ctrl.row}>
@@ -1158,7 +1160,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         if (state.half === 3) return <Button label="End ET 1st half →" onPress={nextHalf} />;
         // End of 2nd half (or 2nd ET half): a level knockout tie goes to the ET/penalty
         // decision (END without awarding clean sheets yet); otherwise it's full time.
-        const toDecision = state.knockout && state.home === state.away;
+        const toDecision = needsDecision(state);
         const label = toDecision ? (state.half === 2 ? 'End 2nd Half →' : 'End extra time →') : 'End Match';
         // SD-09: a level knockout stamps the XIs here too — its clean sheets are
         // decided by the open-play score once the shootout completes it.
@@ -1239,14 +1241,14 @@ function ShootoutControls({
   const kicksSoFar = (state.shootout?.home.length ?? 0) + (state.shootout?.away.length ?? 0);
   // a new kick starts with nobody picked
   useEffect(() => { setTaker(null); setKeeper(null); setPickKeeper(false); }, [kicksSoFar]);
-  if (!state.knockout || state.home !== state.away) {
+  if (!needsDecision(state)) {
     return <Text style={ctrl.meta}>✅ Full time — final score saved.</Text>;
   }
   const pens = penScore(state);
   if (!state.shootout) {
     return (
       <View style={{ gap: theme.spacing(3) }}>
-        <Text style={ctrl.label}>⚖️ Level {state.home}–{state.away} at full time</Text>
+        <Text style={ctrl.label}>⚖️ {state.agg ? `Level on aggregate · ${aggregateText(state)}` : `Level ${state.home}–${state.away} at full time`}</Text>
         <Text style={ctrl.meta}>Extra time settled nothing — it goes to a penalty shootout.</Text>
         <FirstKicker homeName={homeName} awayName={awayName} onPick={(first) => dispatch({ type: 'START_SHOOTOUT', payload: { first } })} />
       </View>
@@ -1425,12 +1427,9 @@ export const footballPlugin: SportPlugin<FootballState> = {
   standingsUnits: (s) => ({ fairPlay: fairPlayScore(s.events ?? []) }),
   statTotalsPartial: true,
   // A level knockout tie isn't complete until the shootout produces a winner.
-  isComplete: (s) => s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null),
-  result: (s) => {
-    if (!(s.ended && (s.home !== s.away || !s.knockout || s.shootoutWinner != null))) return null;
-    const winner = s.home > s.away ? 'home' : s.away > s.home ? 'away' : (s.shootoutWinner ?? 'draw');
-    return { winner, home: s.home, away: s.away };
-  },
+  // SD-120: on leg 2 of a new two-legged tie, "level" means level on aggregate.
+  isComplete: footballComplete,
+  result: footballResult,
   summary: (s) => {
     const pens = penScore(s);
     // Cards are no longer a lumped tally on the scorecard — reds show as badges by

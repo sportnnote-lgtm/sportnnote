@@ -43,18 +43,15 @@ Generate the next Swiss round once the current round has every result.
 The screen says **In-app Swiss pairing — not FIDE-certified**: it follows the main ideas of FIDE's Dutch system, not every rule. For a rated event, use FIDE-endorsed software such as Swiss-Manager.
 
 ## Byes
-With an odd number of players, one player sits out each Swiss round: the lowest-ranked player who has not had a bye (or a forfeit win) yet. The preview names them.
+With an odd number of players, one player sits out each Swiss round: the lowest-ranked player who has not had a bye (or a forfeit win) yet.
 - The bye points count as soon as the round is drawn.
 - It is not a game played (not in **P**, **W**, **D** or **L**).
-- For your own tie-breaks, it counts as a game against an imaginary opponent who finished on your score (FIDE 2023 rules). For your opponents' tie-breaks, your bye points count like any others.
+- In tie-breaks it counts as a game against an imaginary opponent on your own score (FIDE 2023).
 
-## Step by step: record a result
-1. Open the game from the tournament's **Matches** tab.
-2. Check **♔ White pieces**. It is locked; tap **Colours wrong? Change…** only if the players swapped.
-3. Under **Result (White first)**, tap **1-0**, **½-½** or **0-1**, and optionally **How (optional)**.
-4. Tap **✓ Record 1-0…**, check the sentence and tap **Yes, record result**. See [How to record a chess game result](/guides/score-chess/).
+## Record results
+Open each game from the **Matches** tab and record it White first. See [How to record a chess game result](/guides/score-chess/).
 
-No-show? A host can tap **🏳 Award a walkover**, or record it with the **Forfeit** method: the full point, but not a game played (profiles show a forfeit win or loss). In a Swiss it counts in tie-breaks like a bye, and a forfeit loss is the first score Buchholz Cut-1 drops; in a round-robin it is a normal game.
+No-show? A host can tap **🏳 Award a walkover**, or record it with the **Forfeit** method: the full point, but not a game played. In a Swiss it counts in tie-breaks like a bye.
 
 ## Tie-breaks
 Players level on points are split by the **FIDE Swiss** order, one tie-break after another:
@@ -75,6 +72,12 @@ Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss 
 
 ### Our rules give only half a point for a bye.
 Set the **Swiss bye** to **½** in **Chess — format & points**.
+
+### We run a knockout. What happens to a drawn game?
+It carries on until there's a winner. In **Chess — format & points**, set **Knockout: games per match** (2 for a mini-match) and the rapid and blitz tie-break pairs. Still level: one Armageddon game, where a draw sends Black through.
+
+### A team knockout match ended 2-2.
+In the team match setup, pick **If a knockout match is level**: **Board count** (board 1 counts most) or **Drop the lowest board**. Still level: play a deciding game; the organiser records who goes through.
 
 ### Neither player turned up.
 Record **0-0 Double forfeit**: 0 points each, a forfeit loss for both.

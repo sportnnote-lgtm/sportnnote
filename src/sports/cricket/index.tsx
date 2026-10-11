@@ -31,6 +31,7 @@ import {
   clampRuns, ballRuns, symbolTone, penalty,
   NO_DELIVERY, RUNS_KINDS, WIDE_WICKETS, NOBALL_WICKETS, creaseAfterWicket, wicketAttribution,
   canBowl, midOver, oversUsed, snapshotState, lastBall,
+  minOversOf, rainStopPar, chaseHasMinOvers,
 } from './engine';
 import {
   hasLog, extrasBreakdown, extrasText, fallOfWickets, fowText, partnerships, overHistory, bowlerSplits, statTotals,
@@ -49,10 +50,13 @@ import {
 /** Shown when a match ends level (or a Super Over round ties): start the (next)
  *  Super Over, or accept the tie and end the match. */
 function SuperOverDecision({
-  rootState, dispatch, homeName, awayName, homeColor, awayColor,
+  rootState, dispatch, homeName, awayName, homeColor, awayColor, knockout,
 }: {
   rootState: CricketState; dispatch: (a: ScoreAction) => void; homeName: string; awayName: string;
   homeColor?: string; awayColor?: string;
+  /** SD-121 — a knockout must produce a winner: Super Overs until one is won
+   *  (ICC PC Super Over appendix), never "accept the tie". */
+  knockout?: boolean;
 }) {
   const so = rootState.superOver;
   const nm = (sd: 'home' | 'away') => (sd === 'home' ? homeName : awayName);
@@ -74,6 +78,9 @@ function SuperOverDecision({
           <Text style={[ctrl.tieName, { color: col('away') }]} numberOfLines={1}>{awayName}</Text>
         </View>
       </View>
+      {rootState.rainStop ? (
+        <Text style={ctrl.meta}>☔ Rain stopped play: {nm(rootState.battingSide)} level with the DLS par score ({rootState.rainStop.par}).</Text>
+      ) : null}
       {!!so && so.history.map((h) => (
         <Text key={h.round} style={ctrl.meta}>Super Over {h.round}: {homeName} {h.home} · {awayName} {h.away} — tied</Text>
       ))}
@@ -82,14 +89,18 @@ function SuperOverDecision({
       )}
       {/* A Super Over is offered unless the tie-break is "shared/tie stands" (and
           a Super Over that itself tied always continues to another one). */}
-      {(rootState.tieBreak !== 'shared' || tiedRound) && (
+      {(rootState.tieBreak !== 'shared' || tiedRound || knockout) && (
         <>
           <Text style={ctrl.hint}>{nm(nextFirst)} bat first in Super Over {nextRound} · 1 over · 2 wickets.</Text>
           <Button label={`🔥 Start Super Over${so ? ` ${nextRound}` : ''}`} variant="primary" onPress={() => dispatch({ type: 'START_SUPER_OVER' })} />
         </>
       )}
-      <Button label={rootState.tieBreak === 'shared' && !tiedRound ? 'End the match — tie stands' : 'Accept the tie & end the match'} variant="ghost"
-        onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie' })) dispatch({ type: 'END' }); }} />
+      {knockout ? (
+        <Text style={ctrl.meta}>Knockout: a tie can’t stand. Play Super Overs until one is won. If no more play is possible, the organiser picks who goes through (🏁 End match… → Awarded, with the reason).</Text>
+      ) : (
+        <Button label={rootState.tieBreak === 'shared' && !tiedRound ? 'End the match — tie stands' : 'Accept the tie & end the match'} variant="ghost"
+          onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Tie' })) dispatch({ type: 'END' }); }} />
+      )}
     </View>
   );
 }
@@ -245,12 +256,15 @@ function RunsInput({ onAdd, min = 0, placeholder, addLabel }: {
  *  same words as the result line (engine resultLine). */
 const targetTag = (s: CricketState) => (s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised target)' : '');
 
-type OversMode = 'overs' | 'rain' | 'target';
+type OversMode = 'overs' | 'rain' | 'target' | 'stop';
 /** Parity #18 — "⏱ Overs & target": change the overs (any innings, up or down,
  *  DLS or not), a rain interruption (DLS cut), or a target typed in by hand.
  *  Every preview is the reducer's own result for the action it would send, so
  *  there is no second copy of the DLS maths here. Always sends `v: 2`. */
-function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispatch: (a: ScoreAction) => void; battingName: string }) {
+function OversTargetCard({ s, dispatch, battingName, bowlingName, knockout, onEndMatch }: {
+  s: CricketState; dispatch: (a: ScoreAction) => void; battingName: string; bowlingName: string;
+  knockout?: boolean; onEndMatch?: (r: { kind: 'no_result' | 'abandoned'; reason: string }) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<OversMode>('overs');
   const [ov, setOv] = useState('');
@@ -267,6 +281,10 @@ function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispat
     setTRuns(md === 'target' && s.target ? String(s.target) : '');
   };
   const close = () => { setOpen(false); setOv(''); setTRuns(''); setMode('overs'); };
+  if (open && m === 'stop') {
+    return <RainStopPanel s={s} dispatch={dispatch} battingName={battingName} bowlingName={bowlingName}
+      knockout={knockout} onEndMatch={onEndMatch} onBack={() => pick('overs')} onDone={close} />;
+  }
   if (!open) {
     return (
       <Button label="⏱ Overs & target" variant="ghost" style={ctrl.ovOpenBtn}
@@ -326,6 +344,7 @@ function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispat
         <SelectChip label="Change overs" active={m === 'overs'} onPress={() => pick('overs')} />
         {canRain ? <SelectChip label="☔ Rain (DLS)" active={m === 'rain'} onPress={() => pick('rain')} /> : null}
         {chase ? <SelectChip label="Set target" active={m === 'target'} onPress={() => pick('target')} /> : null}
+        <SelectChip label="☔ No more play" active={false} onPress={() => pick('stop')} />
       </View>
       {m === 'target' ? (
         <View style={ctrl.row}>
@@ -349,6 +368,93 @@ function OversTargetCard({ s, dispatch, battingName }: { s: CricketState; dispat
       {m === 'target' ? <Text style={ctrl.ovWarn}>⚠️ Built-in DLS will be switched off for this match.</Text> : null}
       {error ? <Text style={ctrl.rainErr}>{error}</Text> : preview ? <Text style={ctrl.rainPreview}>→ {preview}</Text> : null}
       <Button label="Apply" disabled={!ok} onPress={() => { if (action && ok) { dispatch(action); close(); } }} />
+    </View>
+  );
+}
+
+/**
+ * SD-121 — "Rain — no more play". In the chase, once the side batting second
+ * has faced the minimum overs (ICC Men's T20I PC 13.8: 5; ODI: 20), the result
+ * is decided on the DLS par score at the ball play stopped; level with par is
+ * a tie (Super Over call). Short of the minimum (or in innings 1) there is no
+ * result — recorded through the screen's End match path. Preview = the
+ * reducer's own result for the action it sends.
+ */
+function RainStopPanel({ s, dispatch, battingName, bowlingName, knockout, onEndMatch, onBack, onDone }: {
+  s: CricketState; dispatch: (a: ScoreAction) => void; battingName: string; bowlingName: string;
+  knockout?: boolean; onEndMatch?: (r: { kind: 'no_result' | 'abandoned'; reason: string }) => void;
+  onBack: () => void; onDone: () => void;
+}) {
+  const [mo, setMo] = useState(String(minOversOf(s)));
+  const [parTyped, setParTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cur = s.scores[s.battingSide];
+  const minN = parseInt(mo, 10);
+  const minOk = Number.isFinite(minN) && minN >= 1;
+  const chase = s.innings === 2 && s.target !== undefined;
+  const reached = chase && minOk && chaseHasMinOvers(s, minN);
+  const autoPar = rainStopPar(s);
+  const parN = s.dlsLocked ? parseInt(parTyped, 10) : autoPar;
+  const action: ScoreAction | null = reached && parN != null && Number.isFinite(parN)
+    ? { type: 'RAIN_STOP', payload: { v: 2, minOvers: minN, ...(s.dlsLocked ? { par: parN } : {}) } } : null;
+  const next = action ? reducer(s, action) : null;
+  const ok = !!next && next !== s;
+  const bpo = s.ballsPerOver;
+  const verdict = !ok || !next ? null
+    : next.pendingTie ? `Level with par — a tie${knockout ? ': a Super Over decides it' : ': Super Over or the tie stands'}`
+    : `${outcome(next).winner === s.battingSide ? battingName : bowlingName} ${outcome(next).text.replace(/^Won/, 'won')}`;
+  const why = !chase ? 'Rain before the chase began — no result.'
+    : !minOk ? 'Enter the minimum overs.'
+    : !reached ? `${battingName} faced ${oversStr(cur.balls, bpo)} of the ${minN} overs needed — no result.`
+    : null;
+  const digits = (t: string) => t.replace(/[^0-9]/g, '').slice(0, 3);
+  const record = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (ok && action && next) {
+        const yes = await askConfirm({
+          title: 'Rain — no more play?', tone: 'danger', yesLabel: 'Yes, end on par', noLabel: 'No, keep scoring',
+          message: `${battingName} ${cur.runs}/${cur.wickets} (${oversStr(cur.balls, bpo)} ov) · DLS par ${parN}. ${verdict}.`,
+        });
+        if (yes) { dispatch(action); onDone(); }
+      } else if (why && onEndMatch) {
+        const yes = await askConfirm({
+          title: 'Rain — no result?', tone: 'danger', yesLabel: 'Yes, no result', noLabel: 'No, keep scoring',
+          message: `${why} The match ends with no result.`,
+        });
+        if (yes) { onEndMatch({ kind: 'no_result', reason: chase ? `Rain — no more play (${oversStr(cur.balls, bpo)} of ${minN} minimum overs)` : 'Rain — no more play' }); onDone(); }
+      }
+    } finally { setBusy(false); }
+  };
+  return (
+    <View style={ctrl.rainBox}>
+      <View style={ctrl.creaseHead}>
+        <Text style={ctrl.label}>☔ Rain — no more play</Text>
+        <Button label="Back" variant="ghost" style={ctrl.swapBtn} onPress={onBack} />
+      </View>
+      <Text style={ctrl.meta}>For a match that can’t restart. After the minimum overs in the chase, the result goes to the DLS par score now. Before it, there is no result.</Text>
+      {chase ? (
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}>
+            <TextField label="Minimum overs (chase)" value={mo} onChange={(t) => setMo(digits(t))} placeholder={String(minOversOf(s))} autoCapitalize="none" />
+          </View>
+          {s.dlsLocked ? (
+            <View style={ctrl.flex}>
+              <TextField label="Par score (official sheet)" value={parTyped} onChange={(t) => setParTyped(digits(t))} placeholder="Runs to tie" autoCapitalize="none" />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {chase && reached && !s.dlsLocked && autoPar != null ? (
+        <Text style={ctrl.meta}>{battingName} {cur.runs}/{cur.wickets} in {oversStr(cur.balls, bpo)} ov · DLS par {autoPar}</Text>
+      ) : null}
+      {verdict ? <Text style={ctrl.rainPreview}>→ {verdict}</Text> : why ? (
+        <Text style={ctrl.rainErr}>{why}{knockout ? ' A knockout needs a winner: the organiser picks who goes through (🏁 End match… → Awarded).' : onEndMatch ? '' : ' Use 🏁 End match… → No result.'}</Text>
+      ) : s.dlsLocked && reached ? <Text style={ctrl.rainErr}>Type the par score from the official sheet.</Text> : null}
+      {ok || !knockout || !why ? (
+        <Button label={ok ? 'Record result on par…' : 'Record no result…'} disabled={busy || (!ok && !(why && onEndMatch && !knockout))} onPress={() => void record()} />
+      ) : null}
     </View>
   );
 }
@@ -549,6 +655,7 @@ function MoreRunsPanel({
 
 const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
   state: rootState, dispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeKeeperId, awayKeeperId,
+  knockout, onEndMatch,
 }) => {
   const [wf, setWf] = useState<{
     kind?: DismissalKind; fielder?: Player; batterOut?: 'striker' | 'nonstriker'; runs?: number;
@@ -596,7 +703,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
   // Regulation ended level (or a Super Over just tied) — offer the tie-breaker.
   if (rootState.pendingTie && !soActive) {
-    return <SuperOverDecision rootState={rootState} dispatch={dispatch} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />;
+    return <SuperOverDecision rootState={rootState} dispatch={dispatch} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} knockout={knockout} />;
   }
 
   const battingName = state.battingSide === 'home' ? homeName : awayName;
@@ -982,7 +1089,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       {/* Overs & target (parity #18): change overs, a rain cut (DLS) or a typed
           target — one card. Not during a Super Over / the tie call, nor a Test. */}
       {!soActive && !rootState.ended && !rootState.pendingTie && rootState.oversLimit < 100 && (
-        <OversTargetCard s={rootState} dispatch={dispatch} battingName={battingName} />
+        <OversTargetCard s={rootState} dispatch={dispatch} battingName={battingName} bowlingName={bowlingName}
+          knockout={knockout} onEndMatch={onEndMatch} />
       )}
 
       {rulesNote ? (
@@ -2089,6 +2197,9 @@ export const cricketPlugin: SportPlugin<CricketState> = {
     { key: 'bowlerMaxOvers', label: 'Max overs per bowler', type: 'number', default: 0, min: 0, max: 999, advanced: true, hint: '0 = auto (overs ÷ 5, rounded up; none for Test)' },
     { key: 'powerplayOvers', label: 'Powerplay overs', type: 'number', default: 0, min: 0, max: 10, advanced: true, hint: '0 = none' },
     { key: 'dls', label: 'DLS (rain-revised targets)', type: 'toggle', default: false, advanced: true, hint: 'reduce overs on a rain break; the chase target auto-revises' },
+    // SD-121 — the overs the chase must face for a rain-stopped match to have a result
+    { key: 'minOvers', label: 'Minimum overs for a result', type: 'number', default: 0, min: 0, max: 50, advanced: true,
+      hint: '0 = auto (T20 5, ODI 20 — ICC; shorter games ¼ of the overs). The chase must face this many before rain can decide it on DLS par' },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 0, min: 0, max: 5, advanced: true, hint: '12th man, etc.' },
     { key: 'impactPlayer', label: 'Impact Player (IPL-style)', type: 'toggle', default: false, hint: 'one named sub can come in to bat or bowl mid-match' },
     // Local rules (parity #14) — also editable mid-match via liveSettings.

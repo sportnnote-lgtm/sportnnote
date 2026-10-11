@@ -6,8 +6,10 @@
  *                 dead rubbers.
  *    • aggregate — two legs, combined score decides it (a UCL/Libertadores
  *                 two-legged knockout). Level on aggregate → optional away-goals,
- *                 else the 2nd leg's own result (which captures extra time /
- *                 penalties) breaks it.
+ *                 else the 2nd leg's DECIDER (extra time / penalties / 7 m played
+ *                 on aggregate — SD-120), else the organiser picks who advances.
+ *                 A leg 2 that was simply won on the day never settles a level
+ *                 aggregate on its own.
  *    • rubbers  — a fixed set of sub-matches, most wins takes the tie (Davis Cup,
  *                 Thomas/Uber/Sudirman, a team squash/padel match).
  *
@@ -18,6 +20,7 @@
  *  one pairing just by grouping. This module is pure + dependency-free so it runs
  *  the same everywhere and is unit-testable under `node --test`. */
 import type { Match, SportId, SportFormat } from '../core/types';
+import { chessTeamKoWinner, koBreakOf } from '../sports/chess/teamKo.ts';
 
 export type SeriesFormat = 'best_of' | 'aggregate' | 'rubbers';
 
@@ -32,6 +35,50 @@ export const SERIES_KEYS = {
   name: '__seriesName',
   awayGoals: '__seriesAwayGoals',
 } as const;
+
+/** SD-120 — the organiser's "Advances: X" pick for a knockout match or tie that
+ *  scoring can't settle (abandoned, a level result under a rule with no
+ *  decider, a chess / cricket edge case). Stamped on the match's `format` (a
+ *  tie: its last leg) so it needs no migration; the bracket reads it only when
+ *  the result itself has no winner. */
+export const ADVANCE_KEYS = {
+  teamId: '__advances',
+  reason: '__advancesReason',
+  by: '__advancesBy',
+  at: '__advancesAt',
+} as const;
+
+/** The format patch that records an organiser's advance pick. */
+export function advancePatch(teamId: string, reason: string, byName?: string, at: string = new Date().toISOString()): Record<string, string> {
+  return {
+    [ADVANCE_KEYS.teamId]: teamId,
+    [ADVANCE_KEYS.reason]: reason.trim(),
+    [ADVANCE_KEYS.at]: at,
+    ...(byName ? { [ADVANCE_KEYS.by]: byName } : {}),
+  };
+}
+
+/** The organiser's advance pick stamped on a match — only a team that is
+ *  actually one of its two sides counts. */
+export function advanceOverride(m: Match): { teamId: string; reason?: string; by?: string; at?: string } | undefined {
+  const f = m.format as Record<string, unknown> | undefined;
+  const id = f?.[ADVANCE_KEYS.teamId];
+  if (typeof id !== 'string' || (id !== m.homeTeam?.id && id !== m.awayTeam?.id)) return undefined;
+  const str = (k: string) => (typeof f?.[k] === 'string' ? (f[k] as string) : undefined);
+  return { teamId: id, reason: str(ADVANCE_KEYS.reason), by: str(ADVANCE_KEYS.by), at: str(ADVANCE_KEYS.at) };
+}
+
+/** SD-120 — the leg-1 score as seen from leg 2's home / away sides, once leg 1
+ *  is complete (null otherwise). Feeds `aggPriorHome` / `aggPriorAway`. */
+export function aggregatePriorFor(leg2: Match, legs: Match[]): { home: number; away: number } | null {
+  const meta = readSeriesMeta(leg2);
+  if (!meta || meta.format !== 'aggregate' || meta.leg !== 2) return null;
+  const leg1 = legs.find((m) => m.id !== leg2.id && readSeriesMeta(m)?.id === meta.id && readSeriesMeta(m)?.leg === 1);
+  if (!leg1 || leg1.status !== 'completed' || !leg1.score) return null;
+  const forTeam = (teamId: string) =>
+    leg1.homeTeam?.id === teamId ? leg1.score!.home : leg1.awayTeam?.id === teamId ? leg1.score!.away : 0;
+  return { home: forTeam(leg2.homeTeam.id), away: forTeam(leg2.awayTeam.id) };
+}
 
 /** The series fields stamped onto a leg's `format`. Merge into the sport format. */
 export function seriesLegFormat(cfg: {
@@ -160,6 +207,8 @@ export interface SeriesStanding {
   gamesLeft: number;
   /** short human line, e.g. "IND lead 2–1" / "AUS win the series 3–1" */
   summary: string;
+  /** SD-120: the winner came from the organiser's advance pick */
+  byOrganiser?: boolean;
 }
 
 const shortName = (t?: { shortName?: string; name?: string }) => t?.shortName || t?.name || '';
@@ -217,9 +266,14 @@ export function resolveSeries(s: Series): SeriesStanding {
           else if (awayB > awayA) winnerId = s.teamB?.id;
         }
         if (!winnerId) {
-          const decider = [...s.legs].reverse().find((m) => m.status === 'completed' && m.winner && m.winner !== 'draw');
-          if (decider) winnerId = decider.winner === 'home' ? decider.homeTeam?.id : decider.awayTeam?.id;
-          else drawn = true;
+          // SD-120: only the last leg's DECIDER breaks a level aggregate (its
+          // shoot-out / 7 m, a leg level on the day then settled, or a result
+          // awarded by hand). A leg 2 simply won on goals doesn't — that used to
+          // hand the tie to the leg-2 winner (2-1, 0-1 → the 0-1 side went through).
+          const last = [...s.legs].reverse().find((m) => m.status === 'completed');
+          if (last && last.winner && last.winner !== 'draw' && settledByDecider(last)) {
+            winnerId = last.winner === 'home' ? last.homeTeam?.id : last.awayTeam?.id;
+          } else drawn = true;
         }
       }
     }
@@ -235,14 +289,34 @@ export function resolveSeries(s: Series): SeriesStanding {
     }
   }
 
+  // SD-120: the organiser's advance pick settles a tie scoring couldn't — only
+  // once nothing is left to play.
+  let byOrganiser = false;
+  if (!winnerId && scheduledLeft === 0) {
+    const pick = [...s.legs].reverse().map(advanceOverride).find((o) => o && (o.teamId === s.teamAId || o.teamId === s.teamB?.id));
+    if (pick) { winnerId = pick.teamId; drawn = false; byOrganiser = true; }
+  }
+
   const decided = !!winnerId || drawn;
   const status: SeriesStanding['status'] = decided ? 'decided' : anyLive || played > 0 ? 'live' : 'scheduled';
 
   return {
     winsA, winsB, aggA, aggB, played, clinchAt, decided, drawn, winnerId, status,
     gamesLeft: scheduledLeft,
-    summary: summarize({ s, nameA, nameB, winsA, winsB, aggA, aggB, winnerId, drawn }),
+    summary: summarize({ s, nameA, nameB, winsA, winsB, aggA, aggB, winnerId, drawn }) + (byOrganiser ? ' (organiser decision)' : ''),
+    ...(byOrganiser ? { byOrganiser } : {}),
   };
+}
+
+/** SD-120 — did this completed leg's winner come from a decider rather than
+ *  the run of play? A shoot-out / 7 m winner on the state, a leg level on goals
+ *  but still given a winner (ET + pens under the old per-leg rule), a walkover,
+ *  or a result awarded / conceded by hand. */
+function settledByDecider(m: Match): boolean {
+  if (m.walkover) return true;
+  if (m.result && (m.result.kind === 'awarded' || m.result.kind === 'conceded')) return true;
+  if ((m.state as { shootoutWinner?: unknown } | null | undefined)?.shootoutWinner) return true;
+  return !!m.score && m.score.home === m.score.away;
 }
 
 /** SD-48 — a rubber whose draw is worth ½ to each side (chess team match:
@@ -272,7 +346,15 @@ export function seriesWinnerId(s: Series): string | undefined {
   // SD-48: a knockout chess team match level on board points goes to the
   // board count; a group-stage draw stays a draw (1 match point each).
   const ko = !!s.stage && s.stage !== 'group' && s.stage !== 'super' && !s.stage.startsWith('swiss');
-  return ko && s.format === 'rubbers' && s.legs.some(halfPointLeg) ? boardCountWinner(s) : undefined;
+  if (!(ko && s.format === 'rubbers' && s.legs.some(halfPointLeg))) return undefined;
+  // SD-121: the organiser's knockout rule from the tie spec ('board-count'
+  // Berger weighting, or 'lowest-board'); read raw to avoid a teamTie import cycle.
+  let spec: { koBreak?: unknown } | null = null;
+  try {
+    const raw = (s.legs[0]?.format as Record<string, unknown> | undefined)?.__tie;
+    spec = typeof raw === 'string' ? JSON.parse(raw) : null;
+  } catch { spec = null; }
+  return chessTeamKoWinner({ teamAId: s.teamAId, teamBId: s.teamB?.id, legs: s.legs }, koBreakOf(spec));
 }
 
 /** SD-48 — knockout only: a chess team match level on board points is decided

@@ -70,7 +70,8 @@ import { getSport } from '../sports/registry';
 import { replayLog } from '../sports/amend';
 import type { StatTotalsContext } from '../sports/types';
 import { mergeMatchConfig } from '../core/matchConfig';
-import { seriesLegFormat, readSeriesMeta, deriveSeries, type SeriesFormat } from './series';
+import { seriesLegFormat, readSeriesMeta, deriveSeries, aggregatePriorFor, type SeriesFormat } from './series';
+import { aggregateLegFormat } from './matchFormat';
 import {
   rubberFormat, rubberPlayers, rubberLabel, lineupOf, lineupKey, rubbersToStop, rubbersToRestore, decidedBy, tieResultText, tieSpecOf,
   TIE_KEYS, type TieSpec, type TieLineup,
@@ -1651,6 +1652,26 @@ export async function setMatchFormat(matchId: string, patch: Record<string, numb
   const { data } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
   const merged = { ...((data?.format as object) ?? {}), ...patch };
   await supabase.from('matches').update({ format: merged }).eq('id', matchId);
+}
+
+/** SD-120 — leg 2 of a NEW two-legged tie (`aggregateLeg: 2` on its format)
+ *  needs the leg-1 score so its decider plays on aggregate. Stamped on leg 2's
+ *  format (`aggPriorHome` / `aggPriorAway`) once leg 1 is complete and before
+ *  leg 2 starts, so every device replays leg 2 from the same rules. Returns the
+ *  match as stored afterwards (unchanged when nothing applies or the write is
+ *  refused — a viewer can't write, and then nothing local changes either). */
+export async function stampAggregatePrior(m: Match): Promise<Match> {
+  const f = m.format as Record<string, unknown> | undefined;
+  if (!f || Number(f.aggregateLeg) !== 2 || f.aggPriorHome != null || m.status !== 'scheduled') return m;
+  const meta = readSeriesMeta(m);
+  if (!meta) return m;
+  const siblings = (await getMatches(m.sport)).filter((x) => readSeriesMeta(x)?.id === meta.id);
+  const prior = aggregatePriorFor(m, siblings);
+  if (!prior) return m;
+  try {
+    await setMatchFormat(m.id, { aggPriorHome: prior.home, aggPriorAway: prior.away });
+  } catch { return m; }
+  return (await getMatch(m.id)) ?? m;
 }
 
 /** Set (or clear, with null) the optional live-stream link for a match. The
@@ -5270,7 +5291,9 @@ export async function createSeries(input: NewSeries): Promise<{ seriesId: string
       hostIds: input.hostIds,
       venueName: input.venueName,
       venueMapsUrl: input.venueMapsUrl,
-      format: { ...(input.matchFormat ?? {}), ...seriesFmt },
+      // SD-120: a two-legged tie's leg 1 lets a draw stand; leg 2 plays the
+      // sport's decider on AGGREGATE (football ET + pens, handball 7 m, hockey SO).
+      format: { ...(input.format === 'aggregate' ? aggregateLegFormat(input.matchFormat ?? {}, input.sport, i + 1, !!input.awayGoals) : (input.matchFormat ?? {})), ...seriesFmt },
     });
     matches.push(m);
   }

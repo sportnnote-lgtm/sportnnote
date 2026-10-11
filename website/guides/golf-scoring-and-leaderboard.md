@@ -13,7 +13,7 @@ A golf event is one leaderboard across one or more rounds. Each group marks its 
 ## Before you start
 - You need to be a host of the tournament to set up and finish rounds.
 - Players can mark the card for their own group. Everyone else sees it view only.
-- Add the course once (pars and stroke indexes). After that, every round can pick it.
+- Add the course once (pars, stroke indexes and tees); every round can then pick it. To fix it or add tees, see [Golf courses and tees](/guides/golf-courses-and-tees/).
 
 ## Step by step: set up and score a round
 1. Open the tournament and tap the golf card (⛳ Golf).
@@ -31,7 +31,7 @@ A golf event is one leaderboard across one or more rounds. Each group marks its 
 ## Reading the leaderboard
 The **🏆 Leaderboard** tab shows the position, the total (to par, or points for Stableford), **Thru** and **Strk** (total strokes). Thru shows **F** when the player has finished the round, the number of holes while they play, and – before they tee off. Tap a player to see their scorecard: Out, In and Tot, par and stroke index rows, a circle for a birdie and a square for a bogey, a Net row when they get shots, and putts when entered. **Share card** sends it as text. On the **📝 Scorecard** tab, **📋 Full card** shows your whole group's card.
 
-In a tournament, the leaderboard on the golf page adds up every round. It also shows **Today** and a column per round (**R1**, **R2**, …): a finished round shows its strokes, a round in play shows its score to par. On a phone, swipe the table sideways to see every column. To see a player's card from an earlier round, tap the round under **Cards:** (for example **R2**), then tap the player.
+In a tournament, the leaderboard on the golf page adds up every round. It also shows **Today** and a column per round (**R1**, **R2**, …): a finished round shows its strokes, a round in play shows its score to par. To see a player's card from an earlier round, tap the round under **Cards:** (for example **R2**), then tap the player.
 
 - Ties: Players on the same total share the place, shown with a T, for example T3.
 - Countback: If the format uses countback, ties on finished cards are split on the last 9, 6, 3 and then the last hole of the final round. While any of them is still on the course, they stay tied (T).

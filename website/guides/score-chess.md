@@ -39,6 +39,16 @@ A host can tap **🏳 Award a walkover**, or record the result with the **Forfei
 
 If neither player came, tap **0-0 Double forfeit** under the result boxes. Both get 0 points and a forfeit loss, and no game is credited. The wall chart shows it as `−` for both.
 
+## Knockout games: tie-breaks until there's a winner
+A knockout match can't end in a draw, so it carries on, game after game, the way the big knockout events do:
+1. The **match** itself: one game, or a mini-match of several (the organiser's **Knockout: games per match**).
+2. If level, **rapid tie-break** pairs (2 games each), then **blitz tie-break** pairs.
+3. Still level: one **Armageddon** game. Black has draw odds: a draw sends Black through.
+
+The panel at the top says where you are, for example "🏆 Knockout · Rapid tie-break · game 1 of 2", with the score of each stage so far. Record each game exactly as above. After each game the colours swap. For the Armageddon game the colour chips open: set White as the arbiter or the draw of lots decided. The **½-½** box then says who goes through.
+
+When a player is ahead and can't be caught, the match ends and the bracket moves the winner on. The result shows the total, for example "3-3 · Away through (Armageddon)".
+
 ## Fix a mistake
 - Just recorded the wrong result? Tap **↶ Undo** on the Scoring tab.
 - Later, use [Correct a match after full time](/guides/correct-a-finished-match/).
@@ -46,9 +56,6 @@ If neither player came, tap **0-0 Double forfeit** under the result boxes. Both 
 ## Common questions
 ### Why does it ask before saving?
 Recording a result closes the game, updates the table and tells followers at once. One tap on the wrong box would do all of that, so the app shows the result in words first.
-
-### Can I record a tie-break game, like Armageddon?
-Not yet. Mini-match and Armageddon tie-break games are not available.
 
 ### Can I record the exact time control, like 90+30?
 Yes. In the event's format, set **Clock: minutes each** (90) and **Clock: seconds added per move** (30). The scoreboard then reads, for example, "Classical 90+30 · in play".

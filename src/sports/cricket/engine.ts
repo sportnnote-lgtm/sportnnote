@@ -159,6 +159,15 @@ export interface CricketState {
    *  `wicketsLimit`. Set only by a `v: 2` wicket with `noBatterLeft: true`;
    *  absent on older states (REVIEW Decision 8). Counts as all out (NRR too). */
   closedNoBatter?: Partial<Record<'home' | 'away', true>>;
+  /** SD-121 — the minimum overs the side batting second must face for a
+   *  rain-stopped match to have a result (ICC Men's T20I PC 13.8: 5; ODI: 20).
+   *  From the format's `minOvers` (0 / absent = auto: `defaultMinOvers`). */
+  minOvers?: number;
+  /** SD-121 — "Rain — no more play" in the chase after the minimum overs: the
+   *  result is decided on the DLS par score at the ball play stopped (ICC PC
+   *  DLS appendix). Set only by a `v: 2` RAIN_STOP (new action — no older log
+   *  has it, REVIEW Decision 8). `par` = the score that ties; above it wins. */
+  rainStop?: { par: number; balls: number; wickets: number; minOvers: number; byHand?: true };
 }
 
 /** A bonus (+) or deduction (−) to one side's total (parity #20). */
@@ -298,6 +307,8 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   r1Lost: 0,
   r2Lost: 0,
   inn1Overs: Number(config?.overs ?? 20),
+  // SD-121 — only when the organiser set one (older states stay byte-identical)
+  ...(Number(config?.minOvers) > 0 ? { minOvers: Math.floor(Number(config?.minOvers)) } : {}),
   log: [],
   adj: [],
   fieldNotes: [],
@@ -529,6 +540,13 @@ const revisedChase = (s: CricketState): boolean =>
 export function nrrOvers(s: CricketState): { home: number; away: number } {
   const facedOvers = (side: 'home' | 'away', quota: number) =>
     noBatterLeft(s, side) ? quota : s.scores[side].balls / s.ballsPerOver;
+  // SD-121 — a result on DLS par when rain stopped the chase (ICC NRR
+  // appendix): team 1 is credited with team 2's par score off the SAME overs
+  // team 2 faced; team 2 keeps its own runs and overs.
+  if (s.rainStop && !s.superOver) {
+    const t2Overs = s.scores[s.battingSide].balls / s.ballsPerOver;
+    return { home: t2Overs, away: t2Overs };
+  }
   if (s.dlsV !== 2 || s.innings !== 2) {
     return { home: facedOvers('home', s.oversLimit), away: facedOvers('away', s.oversLimit) };
   }
@@ -550,6 +568,11 @@ export function nrrOvers(s: CricketState): { home: number; away: number } {
  *  first is credited with target − 1 (off the chase's allotted overs — see
  *  `nrrOvers`); the chasing side keeps its actual runs. v2 matches only. */
 export function nrrRuns(s: CricketState): { home: number; away: number } | null {
+  if (s.rainStop && !s.superOver) {
+    const t2 = s.battingSide;
+    const runs2 = s.scores[t2].runs;
+    return t2 === 'home' ? { home: runs2, away: s.rainStop.par } : { home: s.rainStop.par, away: runs2 };
+  }
   if (!revisedChase(s)) return null;
   const t2 = s.battingSide;
   const credited = s.target! - 1;
@@ -559,6 +582,49 @@ export function nrrRuns(s: CricketState): { home: number; away: number } | null 
  *  side is charged its full quota, however far the match got (parity #04). */
 export const manualNrrOvers = (s: CricketState): { home: number; away: number } =>
   ({ home: s.oversLimit, away: s.oversLimit });
+
+/** SD-121 — the minimum overs that make a match when no format value is set:
+ *  ICC — ODI 20 (50-over game), T20I 5 (Men's T20I PC 13.8: "a minimum of 5
+ *  overs have to be bowled to the team batting second"). Shorter local formats
+ *  (T10, sixes, box) have no ICC figure: a quarter of the overs, at least 1
+ *  (local practice — organisers set `minOvers` in the format to override). */
+export function defaultMinOvers(overs: number): number {
+  if (overs >= 50) return 20;
+  if (overs >= 20) return 5;
+  return Math.max(1, Math.ceil(overs / 4));
+}
+/** The minimum overs in force (format value, else the default for the
+ *  scheduled length of the match — not a rain-cut one). */
+export const minOversOf = (s: CricketState): number =>
+  s.minOvers ?? defaultMinOvers(s.inn1Overs ?? s.oversLimit);
+
+/**
+ * SD-121 — the DLS par score if play stopped now in the chase (ICC: the score
+ * that ties; one more wins), from the same resource table as the rain cuts:
+ * the chase's resources are reduced by all it had left at the stopping ball
+ * (R2 used = R2 − resource(u left, w)), and par = target − 1 off that R2.
+ * A legacy (pre-v2) rain-cut match keeps its own resource units. null =
+ * not a chase, a Super Over / tie call, or a target typed by hand (DLS off —
+ * the scorer types the official par then).
+ */
+export function rainStopPar(s: CricketState): number | null {
+  if (s.innings !== 2 || s.target === undefined || s.ended || tieInPlay(s) || s.dlsLocked) return null;
+  const bpo = s.ballsPerOver;
+  const inn = s.scores[s.battingSide];
+  const team1 = s.scores[other(s.battingSide)].runs;
+  if (legacyRainBooked(s)) {
+    const r1 = 100 - s.r1Lost;
+    const r2 = 100 - s.r2Lost - Math.max(0, resourcePctV1(s.oversLimit - inn.balls / bpo, inn.wickets));
+    return revisedTarget(team1, r1, r2) - 1;
+  }
+  const { r1, r2 } = dlsResources(s);
+  const left = resourcePct(uLeft(s.oversLimit, inn.balls, bpo), inn.wickets);
+  return revisedTarget(team1, r1, r6(Math.max(0, r2 - left))) - 1;
+}
+
+/** SD-121 — has the chase faced the minimum overs (so a rain stop has a result)? */
+export const chaseHasMinOvers = (s: CricketState, minOvers = minOversOf(s)): boolean =>
+  s.innings === 2 && s.scores[s.battingSide].balls >= minOvers * s.ballsPerOver;
 // Delivery notation for ball-by-ball: the Nth ball reads over.ball with ball 1–bpo,
 // so the last ball of an over is "0.6" (not "1.0"). `balls` includes this delivery.
 export const ballStamp = (balls: number, bpo = 6) =>
@@ -807,6 +873,28 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       ...next, seq: s.seq + 1,
       events: [...s.events, { id: s.seq + 1, stamp: oversStr(inn.balls, s.ballsPerOver), icon: '🎯', label: `Target set to ${runs} in ${n} ov`, detail: 'Revised target entered by hand — DLS off', side: s.battingSide }],
     };
+  }
+
+  // ── Rain — no more play (SD-121) ─────────────────────────────────────────
+  // The chase is stopped for good after the minimum overs: the result goes to
+  // the DLS par score at this ball (ICC). A new action, sent with `v: 2` only.
+  // Before the minimum it is refused (the match is a no result — the screen's
+  // End match path records that). Level with par = a tie (Super Over call).
+  if (a.type === 'RAIN_STOP') {
+    if (a.payload?.v !== 2 || s.innings !== 2 || s.target === undefined || s.ended || tieInPlay(s)) return s;
+    const mo = Math.floor(Number(a.payload?.minOvers ?? minOversOf(s)));
+    if (!Number.isFinite(mo) || mo < 1 || !chaseHasMinOvers(s, mo)) return s;
+    const typed = Math.floor(Number(a.payload?.par));
+    const par = s.dlsLocked ? (Number.isFinite(typed) && typed >= 0 ? typed : null) : rainStopPar(s);
+    if (par === null) return s;
+    const inn = s.scores[s.battingSide];
+    const next: CricketState = {
+      ...s, rainStop: { par, balls: inn.balls, wickets: inn.wickets, minOvers: mo, ...(s.dlsLocked ? { byHand: true as const } : {}) },
+      seq: s.seq + 1,
+      events: [...s.events, { id: s.seq + 1, stamp: '☔', icon: '☔', label: `Rain — no more play at ${oversStr(inn.balls, s.ballsPerOver)} ov`, detail: `DLS par ${par} · ${inn.runs}/${inn.wickets}`, side: s.battingSide }],
+    };
+    // Level with par: the tie call (Super Over, or the tie stands outside a knockout).
+    return inn.runs === par ? { ...next, pendingTie: true } : { ...next, ended: true };
   }
 
   // ── Rain (DLS) ────────────────────────────────────────────────────────────
@@ -1696,9 +1784,17 @@ export function outcome(s: CricketState): { winner: 'home' | 'away' | null; text
     const roundTag = s.superOver.round > 1 ? ` (Super Over ${s.superOver.round})` : '';
     return { winner: so, text: `Won the Super Over by ${margin} run${margin === 1 ? '' : 's'}${roundTag}` };
   }
+  const chaseSide = s.battingSide;
+  // SD-121 — rain stopped the chase after the minimum overs: decided on par.
+  if (s.rainStop) {
+    const m = s.scores[chaseSide].runs - s.rainStop.par;
+    const tg = s.rainStop.byHand ? ' (par score)' : ' (DLS)';
+    if (m === 0) return { winner: null, text: `Match tied${tg}` };
+    const n = Math.abs(m);
+    return { winner: s.superOver ? null : m > 0 ? chaseSide : other(chaseSide), text: `Won by ${n} run${n === 1 ? '' : 's'}${tg}` };
+  }
   const v2 = s.dlsV === 2;
   const tag = !v2 ? '' : s.revision === 'dls' ? ' (DLS)' : s.revision === 'manual' ? ' (revised target)' : '';
-  const chaseSide = s.battingSide;
   const chase = s.scores[chaseSide];
   const defend = s.scores[other(chaseSide)];
   if (chase.runs >= (s.target ?? Infinity)) {

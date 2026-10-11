@@ -76,6 +76,8 @@ export type RootStackParamList = {
   GolfRound: { eventId: string };
   /** competition/holes are primitives so the web URL round-trips (no objects). */
   GolfRoundSetup: { tournamentId?: string; nextOf?: string; competition?: string; holes?: string } | undefined;
+  /** SD-122 — edit a golf course (pars, stroke indexes, tees). */
+  GolfCourseEdit: { courseId: string };
   /** Results engine (SD-28): one phase of a timed / measured event — entry + sheet. */
   ResultsEvent: { phaseId: string; tab?: 'enter' | 'sheet' };
   /** SD-90 / SD-91: add a track or field event (category, entrants, rounds, lanes / order, bar heights) to a meet. */

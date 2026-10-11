@@ -28,7 +28,7 @@ import { LiveTimeline } from '../LiveTimeline';
 import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import {
-  init, reducer, isComplete, result, matchSec, periodSec, periodLen, clockFace, clockText, periodName, periodLong, periodStarted, running,
+  init, reducer, isComplete, result, levelAtEnd, aggLine, matchSec, periodSec, periodLen, clockFace, clockText, periodName, periodLong, periodStarted, running,
   eventCredits, creditAttribution, currentKeeper, soScore, nextThrower, handballScoreLine, timeoutCheck, suspensionsOf, hasYellow, teamYellows,
   totalPeriods, maxEtRounds, HANDBALL_PRESETS, HANDBALL_LIVE_SETTINGS, SHOT_LABEL, SHOT_TYPES, LIVE_KEYS,
   type HandballEvent, type HandballState, type MissResult, type Sanction, type ShotType, type Side,
@@ -231,7 +231,7 @@ const ScoringControls: SportPlugin<HandballState>['ScoringControls'] = ({
     if (s.period === 1 && !periodStarted(s)) stampXi();
     dispatch({ type: 'CLOCK', payload: { run: true, at } });
   };
-  const level = s.home === s.away;
+  const level = levelAtEnd(s); // SD-120: on aggregate in a new leg 2
   const lastOfTotal = s.period >= totalPeriods(s);
   // the end of regular time / an extra time while level, with extra time left,
   // goes on to extra time — so it's a period end, not full time (IHF 2:2)
@@ -309,7 +309,7 @@ const ScoringControls: SportPlugin<HandballState>['ScoringControls'] = ({
               </View>
             </>
           ) : (
-            <Text style={c.meta}>{level ? 'Draw.' : `${name(s.home > s.away ? 'home' : 'away')} win.`} Use “Correct the timeline” below to fix a moment.</Text>
+            <Text style={c.meta}>{s.agg ? `${aggLine(s)}${level ? '.' : ` — ${name(s.home + s.agg.home > s.away + s.agg.away ? 'home' : 'away')} go through.`}` : level ? 'Draw.' : `${name(s.home > s.away ? 'home' : 'away')} win.`} Use “Correct the timeline” below to fix a moment.</Text>
           )}
         </View>
         <EditList s={s} show={showEdit} setShow={setShowEdit} onRemove={remove} homeName={homeName} awayName={awayName} />
@@ -671,7 +671,7 @@ export const handballPlugin: SportPlugin<HandballState> = {
         : s.ended ? (s.etRounds ? 'Full Time (after extra time)' : 'Full Time')
         : !periodStarted(s) && s.period > 1 ? (s.period === 2 ? 'Half-time' : `End of ${periodName(s, s.period - 1)}`)
         : periodLong(s, s.period)[0].toUpperCase() + periodLong(s, s.period).slice(1),
-      detailLine: s.shootout ? `7-metre throws · ${so.home}–${so.away}` : undefined,
+      detailLine: [aggLine(s), s.shootout ? `7-metre throws · ${so.home}–${so.away}` : ''].filter(Boolean).join(' · ') || undefined,
       homeReds: s.events.filter((e) => e.type === 'card' && !e.official && (e.card === 'red' || e.third) && e.side === 'home').length,
       awayReds: s.events.filter((e) => e.type === 'card' && !e.official && (e.card === 'red' || e.third) && e.side === 'away').length,
     };

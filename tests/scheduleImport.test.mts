@@ -318,14 +318,23 @@ describe('matchFormatFor (extracted from GenerateFixtures)', () => {
     { formats: { football: { halfMinutes: 30 } }, knockoutFormat: { decider: 'extra_time', extraTimeMinutes: 15, extraTimeSubs: 1 } },
     { knockoutFormat: { decider: 'penalties' } },
   ];
-  test('unchanged output for every sport / knockout / tournament combination', () => {
-    for (const t of tournaments) for (const sport of ['football', 'cricket']) for (const ko of [true, false]) {
-      assert.deepEqual(matchFormatFor(t as never, sport as never, ko, defaults), legacy(t, sport, ko, defaults), JSON.stringify({ t, sport, ko }));
+  test('unchanged output for sports without a decider (cricket)', () => {
+    for (const t of tournaments) for (const ko of [true, false]) {
+      assert.deepEqual(matchFormatFor(t as never, 'cricket', ko, defaults), legacy(t, 'cricket', ko, defaults), JSON.stringify({ t, ko }));
     }
   });
-  test('knockout football gets the decider; league football has it stripped', () => {
+  test('football knockout with a decider set: unchanged from the legacy rule', () => {
+    for (const t of [tournaments[2], tournaments[3], tournaments[4]]) {
+      assert.deepEqual(matchFormatFor(t as never, 'football', true, defaults), legacy(t, 'football', true, defaults), JSON.stringify(t));
+    }
+  });
+  test('knockout football gets the decider; league football says "none" explicitly (SD-120)', () => {
     const t = tournaments[3] as never;
     assert.deepEqual(matchFormatFor(t, 'football', true), { halfMinutes: 30, decider: 'extra_time', extraTimeMinutes: 15, extraTimeSubs: 1 });
-    assert.deepEqual(matchFormatFor(tournaments[2] as never, 'football', false), { halfMinutes: 30 });
+    // explicit, so the tournament-wide decider can't leak back in when the
+    // scoring screen merges the tournament's format underneath
+    assert.deepEqual(matchFormatFor(tournaments[2] as never, 'football', false), { halfMinutes: 30, decider: 'none' });
+    // SD-120: a knockout with no decider anywhere gets the IFAB default
+    assert.equal(matchFormatFor(null, 'football', true, defaults).decider, 'extra_time');
   });
 });

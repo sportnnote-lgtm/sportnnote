@@ -8,7 +8,7 @@ order: 50
 updated: 2026-10-11
 ---
 
-Score a football match on one phone. The app runs the clock, stamps each moment with the minute and keeps team and player stats.
+Score a football match on one phone. The app runs the clock, stamps each moment's minute and keeps the stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -47,10 +47,10 @@ Minutes count the FIFA way: 10 minutes 30 seconds in is 11', and added time is 4
 3. Started late? Under **Backfill an earlier moment**, type a minute such as `12` or `45+2`, tap **Backfill**, then **Back to live** when done.
 
 ## Level knockout: penalties
-1. If a knockout is level, the end button reads **End 2nd Half →** instead of **End Match**.
+1. If a knockout is level (in leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/): level on aggregate), the end button reads **End 2nd Half →**; group games never do.
 2. Choose extra time if offered, or tap **Penalty shootout →**.
 3. The referee tosses a coin and the winning captain chooses. Tap **Red House first** or the other team's button.
-4. For each kick, optionally tap who takes it. Players who have already kicked are marked "kicked" and listed last. The keeper facing it is filled in; tap **Change** if another player went in goal.
+4. For each kick, optionally tap who takes it. Players who already kicked are listed last. The keeper facing it is filled in; tap **Change** if another player went in goal.
 5. Tap **✓ Scored**, **🧤 Saved** or **✗ Missed**. The kick list under each team grows ("Arjun ✓ · Kabir ✗ saved (Rohan)") and the app stops once it is decided.
 
 ## Clean sheets and the Golden Glove

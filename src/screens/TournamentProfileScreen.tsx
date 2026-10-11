@@ -21,7 +21,7 @@ import { PersonPicker } from '../components/PersonPicker';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
-import { getSport } from '../sports/registry';
+import { getSport, participantMode } from '../sports/registry';
 import { shareMessage } from '../core/share';
 import { tournamentShareText, tournamentLink } from '../core/shareText';
 import { fixturesPrintHtml, fixturesShareText, type FixtureRow } from '../core/fixturesText';
@@ -31,7 +31,7 @@ import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
 import { LeaderMinimums } from '../components/LeaderMinimums';
 import { readLeaderMins, leaderMinsPatch, type LeaderMins } from '../data/leaderMinimums';
-import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
+import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards, getTeamRosters } from '../data/repos';
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
 import { LeaderSplitChips, useLeaderSplits } from '../components/LeaderSplitChips';
 import { DisciplineTable } from '../components/DisciplineTable';
@@ -43,7 +43,7 @@ import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole, Tourna
 import { notify } from '../core/notifications';
 import { overallStandings, teamStandings, categoryLeaders, standingsConfigFromFormat, pointsSystemLabel } from '../data/standings';
 import { structureFromFormat, describeStructure } from '../data/structureConfig';
-import { medalStandings } from '../data/medalStandings';
+import { medalStandings, houseContingent } from '../data/medalStandings';
 import { useMeet } from '../data/useAthletics';
 import { meetFieldResults, meetSettings, swimMeetSettings, courseShort, eventMeetSettings, pointsLabel } from '../data/results';
 import { isEventSport, eventWords, eventPrefix } from '../sports/eventSports';
@@ -360,9 +360,30 @@ export default function TournamentProfileScreen() {
     }), ...golfResults];
   }, [hasAthletics, meet.events, tournament?.formats, tournament?.scoring, sports, golfMedals, golf.events, golf.entries, golf.courses, golf.teams, golf.players, golfFmt]);
   const showMedal = (isMedal && sports.length > 1) || fieldResults.length > 0;
+  // SD-123: singles / doubles entrants score for their house — their entry
+  // rosters (player ids) are read once for the medal table.
+  const soloSports = useMemo(
+    () => new Set(sports.filter((s) => !isEventSport(s) && participantMode(s, tournament?.formats?.[s] as Record<string, unknown> | undefined) !== 'team')),
+    [sports, tournament?.formats],
+  );
+  const soloEntrantKey = useMemo(
+    () => (isMedal ? [...new Set(matches.filter((m) => soloSports.has(m.sport)).flatMap((m) => [m.homeTeam.id, m.awayTeam.id]))].sort().join(',') : ''),
+    [isMedal, matches, soloSports],
+  );
+  const [soloRosters, setSoloRosters] = useState<Map<string, string[]>>(new Map());
+  useEffect(() => {
+    if (!soloEntrantKey) return;
+    let on = true;
+    getTeamRosters(soloEntrantKey.split(',')).then((r) => { if (on) setSoloRosters(r); }).catch(() => {});
+    return () => { on = false; };
+  }, [soloEntrantKey]);
+  const contingentOf = useMemo(
+    () => (soloSports.size ? houseContingent(soloSports, soloRosters, allPlayers.length ? allPlayers : players) : undefined),
+    [soloSports, soloRosters, allPlayers, players],
+  );
   const medal = useMemo(
-    () => (showMedal ? medalStandings(matches, isMedal ? sports : [], isMedal ? tournament?.scoring : { mode: 'position' }, tournament?.formats, fieldResults) : []),
-    [showMedal, isMedal, matches, sports, tournament?.scoring, tournament?.formats, fieldResults],
+    () => (showMedal ? medalStandings(matches, isMedal ? sports : [], isMedal ? tournament?.scoring : { mode: 'position' }, tournament?.formats, fieldResults, contingentOf) : []),
+    [showMedal, isMedal, matches, sports, tournament?.scoring, tournament?.formats, fieldResults, contingentOf],
   );
   const table = useMemo(() => (activeSport ? teamStandings(matches, activeSport, stCfg, undefined, participants) : []), [matches, activeSport, stCfg, participants]);
   // Grouped tournaments show a table per group instead of one flat league table.
@@ -962,8 +983,8 @@ export default function TournamentProfileScreen() {
             {showMedal && (
               <>
                 <SectionHeader title="🏅 Medal table" count={medal.length} />
-                <Text style={textStyles.muted}>{isMedal ? 'Position points from every sport, added up.' : 'Position points from every athletics final, added up by house / team.'}</Text>
-                <MedalTable rows={medal} emptyLabel="No sport has a final table yet." />
+                <Text style={textStyles.muted}>{isMedal ? (tournament.scoring?.rankBy === 'medals' ? 'Ranked by golds, then silvers, then bronzes. Knockout places come from the final, the 3rd-place match and the round each team went out in.' : 'Position points from every sport, added up. Knockout places come from the final, the 3rd-place match and the round each team went out in.') : 'Position points from every athletics final, added up by house / team.'}</Text>
+                <MedalTable rows={medal} emptyLabel="No places decided yet. Knockout places count once each round is played." />
               </>
             )}
 

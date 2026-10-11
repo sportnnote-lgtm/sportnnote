@@ -12,7 +12,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { SelectChip, Button, ScreenTitle, FormError, textStyles } from '../components/ui';
+import { SelectChip, Button, ScreenTitle, FormError, TextField, textStyles } from '../components/ui';
+import { askConfirm } from '../components/ConfirmSheet';
+import { defaultsFor } from '../components/FormatEditor';
 import { PODIUM } from '../components/Rank';
 import { getSport } from '../sports/registry';
 import { matchLine } from '../sports/matchLine';
@@ -21,16 +23,18 @@ import { useAuth } from '../core/auth';
 import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams, useDivisions } from '../data/hooks';
 import { matchesInDivision } from '../data/groups';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { getMyPlayerId, createMatch, createTeamTie } from '../data/repos';
+import { getMyPlayerId, createMatch, createTeamTie, setMatchFormat, logActivity } from '../data/repos';
+import { matchFormatFor } from '../data/matchFormat';
 import { tournamentTieSpec } from '../data/teamTie';
 import { canManageTournament } from '../core/org';
 import {
   knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn,
   knockoutStageRounds, nextRoundPairs, matchWinnerId, stageChampionId, KO_STAGE_LABEL,
-  thirdPlacePair, THIRD_PLACE_STAGE, pairingWinnerId, type KnockoutPairing,
+  thirdPlacePair, THIRD_PLACE_STAGE, pairingWinnerId, type KnockoutPairing, isEliminationStage,
+  pairingNeedsOrganiser, advanceTargetMatch, pairingAdvanceOverride,
   isDoubleChanceStage, doubleChanceNext, doubleChanceChampion, DC_STAGE_LABEL, DOUBLE_CHANCE_STAGES, type DoubleChanceStage,
 } from '../data/bracket';
-import { resolveSeries, type SeriesFormat } from '../data/series';
+import { resolveSeries, advancePatch, type SeriesFormat } from '../data/series';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -143,10 +147,13 @@ export default function BracketScreen() {
     if (!tournamentId) return;
     setError(null); setBusy(true);
     try {
-      const format = tournament?.formats?.[activeSport] ?? {};
+      const rawFormat = tournament?.formats?.[activeSport] ?? {};
       // SD-48: a sport run as team ties gets its next round as ties too.
-      const tieSpec = tournamentTieSpec(format as Record<string, unknown>);
+      const tieSpec = tournamentTieSpec(rawFormat as Record<string, unknown>);
+      const sportDefaults = defaultsFor(getSport(activeSport).formatFields ?? [], 'tournament');
       for (let i = 0; i < pairs.length; i++) {
+        // SD-120: a knockout round always resolves — the sport's decider is set.
+        const format = tieSpec ? rawFormat : matchFormatFor(tournament, activeSport, isEliminationStage(pairs[i].stage), sportDefaults);
         if (tieSpec) {
           await createTeamTie({
             tournamentId, sport: activeSport, stage: pairs[i].stage, spec: tieSpec,
@@ -168,6 +175,40 @@ export default function BracketScreen() {
       setError(e instanceof Error ? e.message : 'Could not create the matches');
     } finally { setBusy(false); }
   }
+
+  // SD-120 — the organiser's "Advances: X" pick for a tie scoring can't settle.
+  const recordAdvance = async (p: KnockoutPairing, teamId: string, reason: string): Promise<boolean> => {
+    const target = advanceTargetMatch(p);
+    if (!target || !tournamentId) return false;
+    const winner = nameColor.get(teamId)?.name ?? 'This side';
+    const loserId = teamId === p.homeId ? p.awayId : p.homeId;
+    const loser = nameColor.get(loserId)?.name ?? 'the other side';
+    const ok = await askConfirm({
+      title: `${winner} advance?`,
+      message: `${winner} go through and ${loser} are out. Your reason is saved on the match and in the tournament's activity log.`,
+      yesLabel: `Yes, ${winner} advance`, noLabel: 'No, go back', tone: 'danger',
+    });
+    if (!ok) return false;
+    setError(null); setBusy(true);
+    try {
+      await setMatchFormat(target.id, advancePatch(teamId, reason, profile?.fullName ?? undefined));
+      await logActivity({
+        scope: 'tournament', refId: tournamentId, action: 'knockout_advance',
+        detail: `${winner} advance past ${loser} (${KO_STAGE_LABEL[p.stage as keyof typeof KO_STAGE_LABEL] ?? p.stage}) — organiser decision: ${reason.trim()}`,
+        byPlayerId: myId ?? undefined, byName: profile?.fullName ?? undefined,
+      });
+      setNonce((n) => n + 1);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the decision');
+      return false;
+    } finally { setBusy(false); }
+  };
+  const nameOf = (id: string) => nameColor.get(id)?.name ?? id;
+  const asPairing = (m: Match): KnockoutPairing => ({ key: m.id, stage: (m.stage ?? 'final') as KnockoutPairing['stage'], homeId: m.homeTeam.id, awayId: m.awayTeam.id, match: m });
+  const pickerFor = (p: KnockoutPairing) => (
+    <AdvanceNote p={p} canManage={canManage} busy={busy} nameOf={nameOf} onPick={(teamId, reason) => recordAdvance(p, teamId, reason)} />
+  );
 
   const createNextRound = () => {
     if (!pendingNext || !lastRound) return;
@@ -242,6 +283,7 @@ export default function BracketScreen() {
               <View key={stage} style={{ gap: theme.spacing(2) }}>
                 <Text style={textStyles.h3}>{DC_STAGE_LABEL[stage]}</Text>
                 {m ? <StagedMatchCard m={m} /> : <Text style={textStyles.muted}>Awaiting the earlier results…</Text>}
+                {m ? pickerFor(asPairing(m)) : null}
               </View>
             ))}
             {canManage && dcNext && (
@@ -260,7 +302,12 @@ export default function BracketScreen() {
               return (
                 <View key={round.stage} style={{ gap: theme.spacing(2) }}>
                   <Text style={textStyles.h3}>{round.label}</Text>
-                  {round.pairings.map((p) => <PairingCard key={p.key} p={p} />)}
+                  {round.pairings.map((p) => (
+                    <View key={p.key} style={{ gap: theme.spacing(2) }}>
+                      <PairingCard p={p} />
+                      {pickerFor(p)}
+                    </View>
+                  ))}
                   {roundByes.length > 0 && (
                     <Text style={textStyles.muted}>
                       ⏭️ Byes to the next round: {roundByes.map((id) => nameColor.get(id)?.name ?? id).join(', ')}
@@ -273,6 +320,7 @@ export default function BracketScreen() {
               <View style={{ gap: theme.spacing(2) }}>
                 <Text style={textStyles.h3}>🥉 Third-place playoff</Text>
                 <StagedMatchCard m={thirdMatch} />
+                {pickerFor(asPairing(thirdMatch))}
               </View>
             )}
             {canManage && pendingNext && pendingNext.length > 0 && (
@@ -319,6 +367,45 @@ export default function BracketScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** SD-120 — under a knockout pairing: the organiser's recorded decision, or
+ *  (hosts only) the "Advances: X / Y" pick when every match is finished and
+ *  scoring left no winner, so the bracket never stalls. */
+function AdvanceNote({ p, canManage, busy, nameOf, onPick }: {
+  p: KnockoutPairing; canManage: boolean; busy: boolean; nameOf: (id: string) => string;
+  onPick: (teamId: string, reason: string) => Promise<boolean>;
+}) {
+  const [pick, setPick] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const done = pairingAdvanceOverride(p);
+  if (done) {
+    return (
+      <Text style={st.decision}>
+        🧑‍⚖️ Organiser decision: {nameOf(done.teamId)} advance{done.reason ? ` — ${done.reason}` : ''}{done.by ? ` (${done.by})` : ''}
+      </Text>
+    );
+  }
+  if (!pairingNeedsOrganiser(p)) return null;
+  if (!canManage) return <Text style={st.decision}>⏳ No winner from the scoring yet — the organiser will decide who advances.</Text>;
+  return (
+    <View style={st.pickBox}>
+      <Text style={st.pickHead}>⚖️ No winner from the scoring</Text>
+      <Text style={textStyles.muted}>Every match here is finished but nobody won it (drawn with no decider, abandoned or called off). Pick who goes through.</Text>
+      <View style={st.pickRow}>
+        {[p.homeId, p.awayId].map((id) => (
+          <SelectChip key={id} label={`Advances: ${nameOf(id)}`} active={pick === id} onPress={() => setPick(id)} />
+        ))}
+      </View>
+      <TextField label="Reason (shown with the result)" value={reason} onChange={setReason} placeholder="e.g. Won the toss after the floodlights failed" />
+      <Button
+        label={busy ? 'Saving…' : pick ? `Confirm: ${nameOf(pick)} advance` : 'Pick who advances'}
+        variant="danger"
+        disabled={busy || !pick || reason.trim().length < 3}
+        onPress={() => { if (pick) void onPick(pick, reason).then((ok) => { if (ok) { setPick(null); setReason(''); } }); }}
+      />
+    </View>
   );
 }
 
@@ -418,4 +505,11 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: PODIUM[0] + '66',
   },
   champText: { color: PODIUM[0], fontSize: theme.font.body, fontWeight: '800' },
+  decision: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '600' },
+  pickBox: {
+    gap: theme.spacing(2), padding: theme.spacing(3), borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.accent + '99', backgroundColor: theme.colors.surface,
+  },
+  pickHead: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
+  pickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
 });

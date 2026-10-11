@@ -1,76 +1,78 @@
 ---
 title: Rain, fewer overs and DLS targets
-description: Cut or add overs, get a fair rain-revised target with DLS, or type in a target from the officials. What "(DLS)" means on the score.
+description: Cut or add overs, get a fair rain-revised target with DLS, type in an official target, or decide a rained-off chase on the DLS par score.
 category: Cricket scoring
 audience: Scorers, Organisers, Parents & fans
 sports: cricket
 order: 50
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
-A school T20 starts late, or rain stops play in the middle of the chase. The umpires agree a shorter match, and someone has to work out the new target. The app does this for you. You can change the overs at any time, let the app work out a fair rain-revised target using the DLS method, or type in a target the officials give you.
+A school T20 starts late, or rain stops the chase. The app works out the new target, or the result if play never restarts.
 
 ## Before you start
 - You can score the match (a listed scorer, or a host of the match or its tournament), on the **Scoring** tab.
-- For rain-revised targets, the match needs DLS switched on. It's on by default for the T20, ODI, T10 and The Hundred formats, and off for Sixes, Box cricket and Test. To switch it on, tap **⚙ Customize this format** before the match goes live and set **DLS (rain-revised targets)** to **On**.
-- Changing overs or typing a target works whether DLS is on or off.
-- These tools aren't available in a Test or timeless match, or during a Super Over.
+- Rain-revised targets need DLS on. It's on by default for T20, ODI, T10 and The Hundred, and off for Sixes, Box cricket and Test. To switch it on, tap **⚙ Customize this format** before the match goes live.
+- Changing overs, typing a target and **☔ No more play** work with DLS on or off.
+- None of these are available in a Test or timeless match, or during a Super Over.
 
 ## Step by step
 1. On the **Scoring** tab, tap **⏱ Overs & target**.
-2. Check the line at the top, for example "Now 20 ov · 7.3 bowled · target 151".
-3. Pick what happened: **Change overs** for an agreed new length, **☔ Rain (DLS)** for an interruption that cuts overs, or **Set target** for a target from the officials' sheet (second innings only).
-4. Enter the new total overs with **−** and **＋**, or type it. For **Set target**, fill in **Target runs** and **In overs**.
-5. Read the preview line. It shows what will happen before you commit.
-6. Tap **Apply**.
+2. Check the top line, for example "Now 20 ov · 7.3 bowled · target 151".
+3. Pick what happened: **Change overs** (an agreed new length), **☔ Rain (DLS)** (an interruption that cuts overs), **Set target** (from the officials' sheet, chase only) or **☔ No more play** (the match can't restart, see below).
+4. Enter the new total overs with **−** and **＋**, or type it.
+5. Read the preview line, then tap **Apply**.
 
-You can do this again for each new interruption. **↶ Undo** takes back a change if it was the last thing entered.
+Repeat for each interruption. **↶ Undo** takes back the last change.
 
 ## Change overs or rain: which one?
-- **Change overs** just changes the length. In the first innings both sides get the new number of overs ("Both innings now 15 overs"). In the chase the target doesn't change ("Target stays 151 — need 90 off 45"). Use it for a late start or a length both captains agreed, with no rain maths.
-- **☔ Rain (DLS)** only cuts overs, and it recalculates the target. In the first innings the preview says "the chase target is revised when it starts". In the chase you'll see the new target straight away, for example "Overs lost 5 · revised target 113 in 15 ov — need 61 off 30".
-
-If the revised target is already lower than the chasing side's score, the preview says the chase is won, and applying it ends the match.
+**Change overs** only changes the length; in the chase the target stays. **☔ Rain (DLS)** cuts overs and recalculates the target ("Overs lost 5 · revised target 113 in 15 ov — need 61 off 30").
 
 ## How DLS works, in plain words
-Every team has two resources: overs left and wickets left. Losing overs to rain takes away some of those resources. DLS uses a standard table to decide how much each side lost, then scales the target to match.
+A team's resources are its overs and wickets left. DLS measures what rain took from each side with a standard table and scales the target.
 
-It's fairer than just cutting the target in half. Say Team A score 160 in 20 overs, and rain cuts the chase to 10 overs. Half of 160 would be 80. But Team B now have all 10 wickets for only 10 overs, so they can attack every ball. The table says 10 overs with 10 wickets left is worth about 57% of a full 20 overs. That gives a par score of 90, so Team B need 91 to win.
+Say Riverside score 160 in 20 overs, and rain cuts Hilltop's chase to 10 overs. Half of 160 is 80, but Hilltop have all 10 wickets for only 10 overs. The table says that is worth about 57% of 20 overs: par 90, so Hilltop need 91.
 
-> **Note:** The par score is the target minus one. If the chase ends exactly on par, the match is tied.
+> **Note:** The par score is the target minus one. Finishing exactly on par is a tie.
 
 ## Typing a target from the officials
-1. Tap **⏱ Overs & target**, then **Set target**.
-2. Enter **Target runs** (more than the current score) and **In overs**.
-3. You'll see the warning "Built-in DLS will be switched off for this match." Any later rain cuts won't recalculate the target, so use **Set target** again if needed.
-4. Tap **Apply**.
+Tap **Set target**, enter **Target runs** and **In overs**, then **Apply**. Built-in DLS switches off for the rest of the match.
+
+## Rain — no more play
+When the umpires call the match off during the chase, the ICC rule is:
+- If the chasing side has faced the **minimum overs** (ICC: 5 in a T20, 20 in an ODI), the result goes to the **DLS par score** when play stopped. Above par wins, below par loses, on par is a tie.
+- If not, or if rain ends the first innings, it's a **no result**.
+
+1. Tap **⏱ Overs & target**, then **☔ No more play**.
+2. Check **Minimum overs (chase)**. It comes from the format's **Minimum overs for a result** (0 = the ICC numbers, or a quarter of the overs in shorter games). Some events ask for more in a final, such as 10.
+3. Read the line, for example "Hilltop 60/2 in 10.0 ov · DLS par 72 → Riverside won by 12 runs (DLS)".
+4. Tap **Record result on par…** and confirm. Short of the minimum, the button reads **Record no result…**.
+
+If the target was typed with **Set target**, type the **Par score** from the official sheet. On par, you get the Super Over choice, as at the end of a match.
 
 ## What "(DLS)" means
-When the app has revised the target, you'll see "(DLS)" next to it, so everyone knows the target isn't simply the first innings score plus one:
-- The **Summary** tab shows "Target 91 (DLS)" with the runs needed.
-- The overs at the top of the scoring screen show "DLS".
-- The timeline shows, for example, "Rain — overs cut to 10 · target 91 (DLS)".
-- The result reads, for example, "Won by 16 runs (DLS)".
+"(DLS)" shows the target isn't simply the first innings plus one:
+- **Summary** tab: "Target 91 (DLS)".
+- Timeline: "Rain — overs cut to 10 · target 91 (DLS)".
+- Result: "Won by 16 runs (DLS)", including a result on par.
 
-A target you typed in shows "(revised target)", both on the score and in the result.
+A typed target shows "(revised target)", and a typed par "(par score)".
 
 ## How rain changes net run rate
-Net run rate (NRR) in the points table follows the ICC rules:
-- After a revised target, the team that batted first counts as scoring the target minus one, in the overs the chasing team was given. Team A made 160 in 20 overs, the chase was cut to 10 overs with a target of 91: for NRR, Team A scored 90 in 10 overs.
-- A team all out counts its full overs. So does a team with no batter left, such as 9 out and the last batter retired hurt.
-- If **Change overs** only shortened the chase, the team that batted first keeps its own full overs.
+NRR follows the ICC rules:
+- After a revised target, the team batting first counts as scoring the target minus one in the overs the chase was given (Riverside: 90 in 10 overs).
+- A result on par: the team batting first counts as scoring the par score in the overs the chase faced (Hilltop 60/2 in 10 overs, par 72: Riverside 72 in 10 overs).
+- A team all out, or with no batter left, counts its full overs.
+- A no result doesn't count.
 
 > **Note:** Matches whose overs or target changed before this update keep their NRR, apart from the "no batter left" rule.
 
 ## Common questions
 ### The bowling limit changed after rain. Why?
-The automatic overs-per-bowler limit follows the match length. A 20-over match has a limit of 4. Cut it to 10 overs and the limit becomes 2. A limit you set yourself doesn't change. See [Bowling limits](/guides/cricket-bowling-rules/).
-
-### Can I give the overs back if the rain stops quickly?
-Use **Change overs** to add overs. **☔ Rain (DLS)** only cuts overs.
+The automatic overs-per-bowler limit follows the match length: 4 in 20 overs, 2 in 10. A limit you set yourself doesn't change. See [Bowling limits](/guides/cricket-bowling-rules/).
 
 ### Why don't I see Rain (DLS)?
-Either DLS is off for this match, or a target was typed in with **Set target**, which switches DLS off.
+DLS is off for this match, or a target was typed with **Set target**.
 
-### The rain won't stop. How do I end the match?
-Record a no result or an abandoned match instead. See [End a match early](/guides/end-a-match-early/).
+### What if rain ends a knockout match?
+A knockout needs a winner, so a no result or a tie can't stand. On par, play a Super Over if there's time. If not, the organiser records who goes through (**🏁 End match…** → **Awarded**, with the event's rule as the reason). See [End a match early](/guides/end-a-match-early/).

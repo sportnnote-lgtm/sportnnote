@@ -34,6 +34,15 @@ export interface Tee {
   /** 9-hole ratings, when the scorecard lists them */
   rating9F?: number; slope9F?: number;
   rating9B?: number; slope9B?: number;
+  /** SD-122 — this tee's 18-hole par when it differs from the holes' par
+   *  (e.g. a par-5 that is a par-4 from the forward tee). Used in the course
+   *  handicap's (CR − Par) and the WHS mixed-tee adjustment. Absent = the
+   *  holes' par. */
+  par?: number;
+  /** SD-122 — the scorecard's tee colour ("White", "Red"…), for the picker */
+  colour?: string;
+  /** SD-122 — who the tee is rated for: M (men), F (women); absent = anyone */
+  gender?: 'M' | 'F';
 }
 
 export interface Course {
@@ -82,7 +91,8 @@ const whsRound = (x: number) => Math.floor(x + 0.5);
 export function courseHandicap(index: number, tee: Tee | undefined, holes: Hole[]): number {
   const nine = holes.length <= 9;
   const front = nine && holes.every((h) => h.n <= 9);
-  const par = parOf(holes);
+  // SD-122 — an 18-hole round on a tee with its own par uses that par
+  const par = !nine && tee?.par != null ? tee.par : parOf(holes);
   const idx = nine ? index / 2 : index;
   let rating: number | undefined;
   let slope: number | undefined;

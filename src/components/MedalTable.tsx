@@ -35,9 +35,11 @@ export function MedalTable({ rows, emptyLabel = 'No results yet.' }: { rows: Med
               </View>
             </View>
             <View style={st.sportRow}>
-              {r.perSport.map((p) => (
-                <Text key={p.sport} style={st.chip} numberOfLines={1}>
-                  {getSport(p.sport as SportId).icon} {ord(p.position)} · {p.points}
+              {/* SD-123: "=3rd" for a shared place; a singles player's name when
+                  they scored for this house. */}
+              {r.perSport.map((p, k) => (
+                <Text key={`${p.sport}-${k}`} style={st.chip} numberOfLines={1}>
+                  {getSport(p.sport as SportId).icon} {p.shared ? '=' : ''}{ord(p.position)}{p.entrant ? ` ${p.entrant}` : ''} · {p.points}
                 </Text>
               ))}
               {/* SD-90: timed / measured events — placings and points per sport. */}

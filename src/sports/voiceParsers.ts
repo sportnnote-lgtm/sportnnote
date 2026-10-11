@@ -34,7 +34,8 @@ export function basketballVoice(text: string, ctx: VoiceContext): ScoreAction[] 
   const st = ctx.state as { targetPoints?: number; trackMisses?: boolean } | null;
   const fullCourt = Number(st?.targetPoints ?? 0) === 0;
   const tracking = st?.trackMisses === true;
-  const pid = player ? { pid: player.id } : {};
+  // SD-122: `v: 2` = foul-out / ejection checked for this side (and id).
+  const pid = player ? { pid: player.id, v: 2 } : { v: 2 };
   const credit = (c: Record<string, number>) => (player ? creditAttribution(player.id, player.fullName, c) : undefined);
   const simple = (type: string, stat: string): ScoreAction[] => [{ type, side, payload: pid, attribution: attribution(player, stat) }];
   const ftWords = /\bfree ?throw\b|foul shot/.test(q);

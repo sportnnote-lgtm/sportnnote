@@ -62,6 +62,9 @@ export interface TieSpec {
   boards?: boolean;
   /** minutes between rubber start times (0 = all at once, chess boards) */
   gap?: number;
+  /** SD-121 — chess knockout: how a level team match is decided after board
+   *  points (src/sports/chess/teamKo.ts). Absent = board count, as before. */
+  koBreak?: 'board-count' | 'lowest-board';
 }
 
 export interface TiePreset {

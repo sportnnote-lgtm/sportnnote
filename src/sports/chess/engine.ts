@@ -70,6 +70,102 @@ export function parseClock(v: string): number | null {
   return parts.reduce((acc, n) => acc * 60 + n, 0);
 }
 
+/* ── SD-121: knockout tie-breaks ─────────────────────────────────────────────
+ * A knockout "match" must produce a winner (FIDE World Cup regulations): a
+ * mini-match of N games at the event's time control, then — while level —
+ * pairs of rapid games, then pairs of blitz games, then one Armageddon game
+ * (Black has draw odds: a draw sends Black through; colours by the arbiter /
+ * lot). The match holds every game; the bracket sees only the winner. */
+
+/** How a knockout pairing is played: games in the main mini-match, then the
+ *  number of rapid and blitz PAIRS before the Armageddon. */
+export interface KoPlan { games: number; rapid: number; blitz: number }
+export const DEFAULT_KO_PLAN: KoPlan = { games: 1, rapid: 1, blitz: 1 };
+export type KoPhaseKind = 'main' | 'rapid' | 'blitz' | 'armageddon';
+export interface KoPhase { kind: KoPhaseKind; games: number; /** 1-based pair number for rapid / blitz */ n?: number }
+/** One game of a knockout match. */
+export interface KoGame {
+  phase: number;
+  white: Side;
+  winner: Side | 'draw';
+  method?: ChessMethod;
+  moves?: number;
+  clock?: { white?: number; black?: number };
+}
+export interface KoState { plan: KoPlan; games: KoGame[] }
+
+const clampInt = (v: unknown, lo: number, hi: number, dv: number): number => {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dv;
+};
+/** A plan from the format / a payload (out-of-range values clamped). */
+export function koPlanFrom(v: unknown): KoPlan {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return {
+    games: clampInt(o.games ?? o.koGames, 1, 12, DEFAULT_KO_PLAN.games),
+    rapid: clampInt(o.rapid ?? o.koRapidPairs, 0, 4, DEFAULT_KO_PLAN.rapid),
+    blitz: clampInt(o.blitz ?? o.koBlitzPairs, 0, 4, DEFAULT_KO_PLAN.blitz),
+  };
+}
+/** The phases in order: main mini-match, rapid pairs, blitz pairs, Armageddon. */
+export function koPhases(plan: KoPlan): KoPhase[] {
+  return [
+    { kind: 'main', games: plan.games },
+    ...Array.from({ length: plan.rapid }, (_, i) => ({ kind: 'rapid' as const, games: 2, n: i + 1 })),
+    ...Array.from({ length: plan.blitz }, (_, i) => ({ kind: 'blitz' as const, games: 2, n: i + 1 })),
+    { kind: 'armageddon', games: 1 },
+  ];
+}
+const gamePts = (g: KoGame, side: Side): number =>
+  isDoubleForfeit(g.method) ? 0 : g.winner === 'draw' ? 0.5 : g.winner === side ? 1 : 0;
+/** Points each side scored in one phase (or every game when `phase` is omitted). */
+export function koPoints(ko: KoState, phase?: number): { home: number; away: number } {
+  const gs = phase == null ? ko.games : ko.games.filter((g) => g.phase === phase);
+  return gs.reduce((a, g) => ({ home: a.home + gamePts(g, 'home'), away: a.away + gamePts(g, 'away') }), { home: 0, away: 0 });
+}
+/** The winner of a phase once it can't be caught (lead > games left), or
+ *  after its last game; Armageddon: a draw goes to Black. null = level / open. */
+export function koPhaseWinner(ko: KoState, phase: number): Side | null {
+  const ph = koPhases(ko.plan)[phase];
+  if (!ph) return null;
+  const gs = ko.games.filter((g) => g.phase === phase);
+  if (ph.kind === 'armageddon') {
+    const g = gs[0];
+    if (!g) return null;
+    if (g.winner !== 'draw') return g.winner;
+    return isDoubleForfeit(g.method) ? null : g.white === 'home' ? 'away' : 'home';
+  }
+  const p = koPoints(ko, phase);
+  const left = ph.games - gs.length;
+  if (Math.abs(p.home - p.away) > left) return p.home > p.away ? 'home' : 'away';
+  return null;
+}
+/** Where a knockout match stands: the phase now being played (its index and
+ *  game number in it), and the winner once decided. */
+export function koStatus(ko: KoState): { phase: number; game: number; winner: Side | null } {
+  const phases = koPhases(ko.plan);
+  for (let i = 0; i < phases.length; i++) {
+    const w = koPhaseWinner(ko, i);
+    if (w) return { phase: i, game: ko.games.filter((g) => g.phase === i).length, winner: w };
+    const played = ko.games.filter((g) => g.phase === i).length;
+    if (played < phases[i].games) return { phase: i, game: played + 1, winner: null };
+  }
+  // A drawn Armageddon after a double forfeit — nothing can decide it here.
+  const last = phases.length - 1;
+  return { phase: last, game: 1, winner: null };
+}
+export const KO_PHASE_LABEL: Record<KoPhaseKind, string> = {
+  main: 'Match', rapid: 'Rapid tie-break', blitz: 'Blitz tie-break', armageddon: 'Armageddon',
+};
+/** "Rapid tie-break 1 · game 2", "Armageddon", "Match · game 1 of 2". */
+export function koPhaseText(ko: KoState, phase: number, game: number): string {
+  const ph = koPhases(ko.plan)[phase];
+  if (!ph) return '';
+  if (ph.kind === 'armageddon') return 'Armageddon (draw = Black goes through)';
+  if (ph.kind === 'main') return ph.games > 1 ? `Mini-match · game ${game} of ${ph.games}` : 'Match game';
+  return `${KO_PHASE_LABEL[ph.kind]}${(ph.kind === 'rapid' ? ko.plan.rapid : ko.plan.blitz) > 1 ? ` ${ph.n}` : ''} · game ${game} of 2`;
+}
+
 export interface ChessState {
   /** which side has the white pieces */
   white: Side;
@@ -87,6 +183,14 @@ export interface ChessState {
   clock?: { white?: number; black?: number };
   ended: boolean;
   seq: number;
+  /** SD-121 — the organiser's knockout plan (format `koGames` / `koRapidPairs`
+   *  / `koBlitzPairs`); only set when the format carries one. */
+  koPlan?: KoPlan;
+  /** SD-121 — a knockout match: every game so far (set by the first RESULT
+   *  that carries `ko` — a new payload key, so no older log has it). While it
+   *  is undecided the top-level winner / method are empty; once decided,
+   *  `winner` is the side that goes through. */
+  ko?: KoState;
 }
 
 /** `config.white` (SD-26) is the fixture's colour from the Swiss pairing;
@@ -96,7 +200,10 @@ export function init(config?: Record<string, unknown>): ChessState {
   const white: Side = config?.white === 'away' ? 'away' : 'home';
   // SD-67 — only when the organiser set one (old fixtures' state is unchanged)
   const tcExact = exactTimeControl(config?.tcBase, config?.tcInc);
-  return { white, timeControl: String(config?.timeControl ?? 'rapid'), ...(tcExact ? { tcExact } : {}), ended: false, seq: 0 };
+  // SD-121 — only when the format has a knockout plan (older fixtures unchanged)
+  const hasKo = config && ['koGames', 'koRapidPairs', 'koBlitzPairs'].some((k) => config[k] != null);
+  return { white, timeControl: String(config?.timeControl ?? 'rapid'), ...(tcExact ? { tcExact } : {}), ended: false, seq: 0,
+    ...(hasKo ? { koPlan: koPlanFrom(config) } : {}) };
 }
 
 /** Actions: SET_WHITE {side}, RESULT {winner, method, moves?}. PLAYED is a no-op
@@ -119,6 +226,21 @@ export function reducer(s: ChessState, a: { type: string; side?: Side; payload?:
     const c = a.payload?.clock as { white?: unknown; black?: unknown } | undefined;
     const secs = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : undefined);
     const clock = c && typeof c === 'object' ? { ...(secs(c.white) != null ? { white: secs(c.white) } : {}), ...(secs(c.black) != null ? { black: secs(c.black) } : {}) } : undefined;
+    // SD-121 — a knockout match: this result is ONE game of it.
+    const ko: KoState | undefined = s.ko ?? (a.payload?.ko ? { plan: koPlanFrom(a.payload.ko), games: [] } : undefined);
+    if (ko) {
+      const at = koStatus(ko);
+      const game: KoGame = { phase: at.phase, white: s.white, winner, ...(method ? { method } : {}), ...(moves ? { moves } : {}), ...(clock && Object.keys(clock).length ? { clock } : {}) };
+      const next: KoState = { ...ko, games: [...ko.games, game] };
+      const st = koStatus(next);
+      if (st.winner) {
+        return { ...s, ko: next, winner: st.winner, method, moves, ...(clock && Object.keys(clock).length ? { clock } : {}), ended: true, seq: s.seq + 1 };
+      }
+      // Undecided: the next game. Colours alternate (the arbiter can still
+      // switch them with SET_WHITE — e.g. the Armageddon draw of lots).
+      const { winner: _w, method: _m, moves: _mv, clock: _c, ...rest } = s;
+      return { ...rest, ko: next, white: s.white === 'home' ? 'away' : 'home', seq: s.seq + 1 };
+    }
     return { ...s, winner, method, moves, ...(clock && Object.keys(clock).length ? { clock } : {}), ended: true, seq: s.seq + 1 };
   }
   return s;
@@ -126,6 +248,8 @@ export function reducer(s: ChessState, a: { type: string; side?: Side; payload?:
 
 /** Game points: 1 / ½ / 0. */
 export function points(s: ChessState): { home: number; away: number } {
+  // SD-121 — a knockout match: every game's points (live too)
+  if (s.ko) return koPoints(s.ko);
   if (!s.ended || !s.winner) return { home: 0, away: 0 };
   if (isDoubleForfeit(s.method)) return { home: 0, away: 0 };
   if (s.winner === 'draw') return { home: 0.5, away: 0.5 };
@@ -134,6 +258,13 @@ export function points(s: ChessState): { home: number; away: number } {
 
 /** "1-0", "0-1" or "½-½" (the chess way of writing a result). */
 export function resultString(s: ChessState): string {
+  // SD-121 — a knockout match reads home-first over all its games: "2½-1½"
+  if (s.ko && (s.ko.games.length > 1 || !s.ended)) {
+    if (!s.ko.games.length) return '–';
+    const p = koPoints(s.ko);
+    const h = (n: number) => String(n).replace('.5', '½').replace(/^0½$/, '½');
+    return `${h(p.home)}-${h(p.away)}`;
+  }
   if (!s.ended || !s.winner) return '–';
   if (isDoubleForfeit(s.method)) return '0-0';
   if (s.winner === 'draw') return '½-½';

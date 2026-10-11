@@ -23,6 +23,7 @@ import { createMatch, createTeam, createReplacementPlayer, getMyPlayerId, setMat
 import { cloneDraft } from '../data/matchHousekeeping';
 import { useAuth } from '../core/auth';
 import { KO_STAGES, KO_STAGE_LABEL, isKoStage, type KoStage } from '../data/bracket';
+import { stageAwareFormat } from '../data/matchFormat';
 import type { Player, SportId, Team } from '../core/types';
 
 // What phase of the tournament a match belongs to. 'league' = a plain
@@ -285,7 +286,9 @@ export default function ScheduleMatchScreen() {
         venueName: venue.trim() || undefined,
         venueMapsUrl: venueUrl.trim() || undefined,
         hostIds: myId ? [myId] : [],
-        format,
+        // SD-120: a tournament match's decider is stage-aware (league / group:
+        // the draw stands; knockout: always settled).
+        format: !isFriendly && tournamentId ? stageAwareFormat(format, sport, isKoStage(phase)) : format,
         streamUrl: stream.trim() || undefined,
       });
       // For a friendly, the creator is the scorer by default — whether they score

@@ -55,7 +55,7 @@ If nobody is left to bat, for example in a short squad, tap **Confirm wicket —
 3. Pick the openers and the bowler for the chase, as before. The scoreboard shows the target and what's needed.
 4. The match ends by itself when the target is reached or the chase runs out of overs or wickets.
 
-If the scores finish level, the app offers a Super Over (or ends it as a tie if the format says so). To stop a match early, use **End match**.
+If the scores finish level, the app offers a Super Over (or ends it as a tie if the format says so). In a knockout a tie can't stand: the app offers Super Overs, one after another, until one is won. Rain ended the chase for good? Use **⏱ Overs & target** → **☔ No more play** to decide it on the DLS par score. To stop a match early for any other reason, use **End match**.
 
 ## After the match
 The result, the scorecard (with fall of wickets, partnerships and extras) and every player's figures are saved. Players' career stats update. See [Read the scorecard and career stats](/guides/cricket-scorecard-and-stats/).

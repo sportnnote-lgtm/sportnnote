@@ -27,7 +27,7 @@ import { chessRatingsOf, ratingListFor, ratingOn, ratingSeedOrder } from '../dat
 import { entrantPlayers } from '../data/chessCrosstable';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat, byePointsFor, FIDE_SWISS_ORDER } from '../data/standings';
-import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
+import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners, isEliminationStage } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -334,10 +334,11 @@ export default function GenerateFixturesScreen() {
     setError(null); setBusy(true);
     try {
       const myId = await getMyPlayerId(profile?.id);
-      // Football's knockout decider applies only when every draft is a knockout tie.
-      const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super' && !String(d.stage).startsWith('swiss'));
-      const format = matchFormatFor(tournament, sport, koLike, defaultsFor(getSport(sport).formatFields ?? [], 'tournament'));
+      // SD-120: the decider is stage-aware per draft, for every sport — a
+      // knockout tie always resolves, a league / group / Swiss game's draw stands.
+      const sportDefaults = defaultsFor(getSport(sport).formatFields ?? [], 'tournament');
       for (const d of drafts) {
+        const format = matchFormatFor(tournament, sport, isEliminationStage(d.stage), sportDefaults);
         if (tiesOn && effTie) {
           // SD-48: the pairing becomes one tie (its rubbers share the slot's time)
           await createTeamTie({

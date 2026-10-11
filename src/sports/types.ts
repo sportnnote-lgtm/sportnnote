@@ -105,6 +105,14 @@ export interface ScoringControlsProps<S> {
    *  editor) — pre-fills the live match setup so the scorer doesn't re-pick it. */
   homeKeeperId?: string;
   awayKeeperId?: string;
+  /** SD-121 — the match is a knockout tie (an elimination stage): it must
+   *  produce a winner, so a sport hides "accept the draw / tie" options and
+   *  offers its tie-break instead (cricket's Super Over, chess's play-off). */
+  knockout?: boolean;
+  /** SD-121 — end the match by hand through the screen's Match controls path
+   *  (e.g. cricket's rain stop before the minimum overs → no result). The
+   *  caller asks first (askConfirm). Absent → the sport points to End match. */
+  onEndMatch?: (r: { kind: 'no_result' | 'abandoned'; reason: string }) => void;
 }
 
 /**

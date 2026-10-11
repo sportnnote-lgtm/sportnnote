@@ -8,11 +8,11 @@ order: 51
 updated: 2026-10-11
 ---
 
-You score a handball match on one phone. You run the clock and tap what happens; the app keeps the score per half, times suspensions, counts time-outs and builds the box score and player stats.
+Score a handball match on one phone. You run the clock and tap what happens; the app times suspensions, counts time-outs and builds the box score and player stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
-- The organiser picks the **Format** (**Senior 2 × 30**, **Youth 2 × 25 (12–16)**, **Youth 2 × 20 (8–12)** or **Custom**) and **If level at full time**: **Draw stands (league)**, or one of the extra-time / 7 m throw options a knockout needs.
+- The organiser picks the **Format** (**Senior 2 × 30**, **Youth 2 × 25 (12–16)**, **Youth 2 × 20 (8–12)** or **Custom**) and **If level at full time**: **Draw stands (league)**, or an extra-time / 7 m throw option.
 - Place each team's players on the court on the **Info** tab, keeper in the GK spot, so everyone gets minutes played and the keeper gets saves. No line-up? Use **🧤 Set keeper**.
 
 ## Step by step: run the clock
@@ -31,7 +31,7 @@ You score a handball match on one phone. You run the clock and tap what happens;
 5. **🔁 Sub**: tap who comes off, then who comes on. If the keeper comes off, the player coming on goes in goal.
 
 ## Time-outs
-Tap **⏸ Time-out** for the team that asks. The clock stops and the button shows how many are left. The IHF limits apply: 3 a match, at most 2 a half, only 1 in the last 5 minutes, none in extra time. When a team can't take one, the button is off and a line says why.
+Tap **⏸ Time-out** for the team that asks. The clock stops. The IHF limits apply: 3 a match, at most 2 a half, only 1 in the last 5 minutes, none in extra time. When a team can't take one, the button is off and a line says why.
 
 ## Sanctions
 1. Tap **🟨 Card**, then **🟨 Warning**, **⏱ 2 minutes**, **🟥 Disqualify** or **🟥🟦 + report** (a disqualification with a written report, the blue card), then the player. Bench players can be sanctioned too.
@@ -41,7 +41,7 @@ Tap **⏸ Time-out** for the team that asks. The clock stops and the button show
 5. For a team official, type the name under **Or a team official** (optional) and tap **Record**. An official's 2 minutes or disqualification also leaves the team short for 2 minutes.
 
 ## Extra time and 7-metre throws
-When it is still level and there is no more extra time, you see "Level — the match goes to 7-metre throws".
+When it is still level and there is no more extra time, you see "Level — the match goes to 7-metre throws". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
 1. Tap which team throws first.
 2. For each throw, tap the thrower (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
 3. Still level after five each? The teams keep taking one throw each until one team leads.

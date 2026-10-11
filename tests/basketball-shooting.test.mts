@@ -293,7 +293,7 @@ describe('SD-31 · voice', () => {
   test('"miss three Arjun" → MISS 3 with the miss credits and pid', () => {
     const [a] = basketballVoice('miss three Arjun', ctx(init(TRACK)))!;
     assert.equal(a.type, 'MISS');
-    assert.deepEqual(a.payload, { points: 3, pid: 'p-arjun' });
+    assert.deepEqual(a.payload, { points: 3, pid: 'p-arjun', v: 2 });
     assert.deepEqual(a.attribution, { playerId: 'p-arjun', stat: 'fgMissed', by: 1, playerName: 'Arjun', extra: { fgAtt: 1, threesAtt: 1 } });
     assert.equal(basketballVoice('missed two Xavi', ctx(init(TRACK)))![0].payload?.points, 2);
   });
@@ -304,7 +304,7 @@ describe('SD-31 · voice', () => {
   });
   test('a spoken make while tracking counts the attempt', () => {
     const [a] = basketballVoice('three Arjun', ctx(init(TRACK)))!;
-    assert.deepEqual(a.payload, { points: 3, fga: true, pid: 'p-arjun' });
+    assert.deepEqual(a.payload, { points: 3, fga: true, pid: 'p-arjun', v: 2 });
     assert.deepEqual(a.attribution?.extra, { fgMade: 1, fgAtt: 1, threesMade: 1, threesAtt: 1 });
   });
 });

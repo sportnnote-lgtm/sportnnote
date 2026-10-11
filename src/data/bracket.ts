@@ -9,7 +9,7 @@
  *     shows, and `nextRoundPairs` feeds its round-to-round progression.
  */
 import type { Match } from '../core/types';
-import { deriveSeries, readSeriesMeta, seriesWinnerId, type Series } from './series.ts';
+import { advanceOverride, deriveSeries, readSeriesMeta, resolveSeries, seriesWinnerId, type Series } from './series.ts';
 
 /** Knockout stages, biggest field → final. `stage` on a Match is one of these
  *  (or 'group' for a group-stage match, or absent for league/friendly). */
@@ -280,16 +280,57 @@ export function knockoutStageRounds(matches: Match[]): KnockoutRound[] {
     }));
 }
 
-/** The winning team's id for a completed, decided match (else undefined). */
+/** The winning team's id for a completed, decided match (else undefined).
+ *  SD-120: a finished match with no winner (drawn, abandoned, cancelled) goes
+ *  to the organiser's "Advances" pick when one was recorded. */
 export function matchWinnerId(m: Match): string | undefined {
-  if (m.status !== 'completed' || !m.winner || m.winner === 'draw') return undefined;
-  return m.winner === 'home' ? m.homeTeam.id : m.awayTeam.id;
+  if (m.status === 'completed' && m.winner && m.winner !== 'draw') return m.winner === 'home' ? m.homeTeam.id : m.awayTeam.id;
+  return isFinished(m) ? advanceOverride(m)?.teamId : undefined;
 }
 
 /** The losing team's id for a completed, decided match (else undefined). */
 export function matchLoserId(m: Match): string | undefined {
-  if (m.status !== 'completed' || !m.winner || m.winner === 'draw') return undefined;
-  return m.winner === 'home' ? m.awayTeam.id : m.homeTeam.id;
+  const w = matchWinnerId(m);
+  if (!w) return undefined;
+  return w === m.homeTeam.id ? m.awayTeam.id : m.homeTeam.id;
+}
+
+/* ------------------- SD-120: a knockout never stalls ----------------------- */
+
+/** Nothing more will be played in this match (completed, or called off). */
+const isFinished = (m: Match): boolean => m.status === 'completed' || m.status === 'cancelled';
+
+/** The matches behind a pairing (a tie's legs, or the one match). */
+export const pairingMatches = (p: KnockoutPairing): Match[] => (p.series ? p.series.legs : p.match ? [p.match] : []);
+
+/** SD-120 — the pairing can't be settled by scoring any more: every match is
+ *  finished (or called off) and there is still no winner (a level result with
+ *  no decider, an abandoned / cancelled match, a level aggregate whose leg 2
+ *  wasn't decided on aggregate, a drawn chess game, a tied cricket match…).
+ *  The bracket then offers the organiser an "Advances: X / Y" pick. Generic
+ *  for every sport — the sport engines should make this rare, never needed. */
+export function pairingNeedsOrganiser(p: KnockoutPairing): boolean {
+  const ms = pairingMatches(p);
+  if (!ms.length || !ms.every(isFinished)) return false;
+  return !pairingWinnerId(p);
+}
+
+/** Which match an organiser's advance pick is stamped on: the single match, or
+ *  the last leg of a tie (by leg order). */
+export function advanceTargetMatch(p: KnockoutPairing): Match | undefined {
+  const ms = pairingMatches(p);
+  return ms[ms.length - 1];
+}
+
+/** The organiser's recorded pick for a pairing, if its winner came from one. */
+export function pairingAdvanceOverride(p: KnockoutPairing): { teamId: string; reason?: string; by?: string; at?: string } | undefined {
+  if (p.series) {
+    if (!resolveSeries(p.series).byOrganiser) return undefined;
+    return [...p.series.legs].reverse().map(advanceOverride).find(Boolean);
+  }
+  const m = p.match;
+  if (!m || (m.status === 'completed' && m.winner && m.winner !== 'draw') || !isFinished(m)) return undefined;
+  return advanceOverride(m);
 }
 
 /** Stage tag for the 3rd-place playoff (the two semi-final losers). Not a

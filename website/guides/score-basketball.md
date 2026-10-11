@@ -41,7 +41,7 @@ With tracking on, the box score shows field goals and 3-pointers made-attempted 
 2. Pick **Personal**, **Shooting**, **Offensive**, **Technical**, **Unsportsmanlike (U)**, **Disqualifying (D)** or **Flagrant**.
 3. Free throws open with the count filled in: technical 1; shooting, U, D and flagrant 2. Change it under "Shots" before the first shot (3 for a fouled three).
 
-Above the scoring panels you see this quarter's team fouls. Under FIBA rules, from a team's 5th foul in a quarter every foul gives free throws: a personal foul then opens 2 shots by itself. A player at the foul limit is greyed out.
+Above the scoring panels you see this quarter's team fouls. Under FIBA rules, from a team's 5th foul in a quarter every foul gives free throws: a personal foul then opens 2 shots by itself. A player at the foul limit is greyed out. Fouls count per team, so if both teams have a player with the same name, one fouling out never blocks the other.
 
 A D foul disqualifies the player, and so do 2 technicals, 2 unsportsmanlike fouls, or one of each (FIBA). The app asks first, then logs the foul and the ejection. To send a player off for anything else, use **🟥 Eject** at the bottom of the foul panel.
 
@@ -49,16 +49,16 @@ A D foul disqualifies the player, and so do 2 technicals, 2 unsportsmanlike foul
 It's on the **Score** and **Summary** tabs, in FIBA order: PTS, FGM-A, FG%, 3PM-A, 3P%, FTM-A, FT%, OREB, DREB, REB, AST, STL, BLK, TO, PF and EFF.
 - OREB and DREB come from the **Offensive** / **Defensive** choice after you tap a rebounder.
 - Under the tables, "Team fouls" lists each team's fouls per quarter.
-- Plays logged without a player go on a "Team" row.
+- Plays without a player go on a "Team" row.
 
 ## Minutes and plus/minus
 Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. The app follows every **🔀 Substitute**, adds **MIN** and **+/-**, and the player rows then list only the five on court.
 
 ## Player profiles
-At the end, every figure is recounted from the play-by-play, so edits can't leave stats wrong. A profile shows FG and 3P made-attempted, FG% and 3P% over games with misses tracked (a ☁ shows how many), efficiency per game and career highs. Tournament leaders and Player of the Tournament rank by efficiency per game.
+At the end, every figure is recounted from the play-by-play. A profile shows FG and 3P made-attempted, FG% and 3P% over games with misses tracked (a ☁ shows how many), efficiency per game and career highs. Tournament leaders and Player of the Tournament rank by efficiency per game.
 
 ## Timeouts, overtime and game flow
-Each team's "Timeouts left" shows above the timeout buttons. Level after the last quarter? Tap "Start Overtime". When a team is ahead at the end, tap **🏁 End Match**. See [Basketball timeouts, overtime and game flow](/guides/basketball-timeouts-overtime-and-game-flow/).
+Level after the last quarter? Tap "Start Overtime". In leg 2 of a two-legged tie, overtime follows the aggregate ("Aggregate 150–150"). When a team is ahead at the end, tap **🏁 End Match**. See [Basketball timeouts, overtime and game flow](/guides/basketball-timeouts-overtime-and-game-flow/).
 
 ## Fix a mistake
 - Tap **Undo** to step back one action, stats included.

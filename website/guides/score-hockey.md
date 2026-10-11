@@ -8,7 +8,7 @@ order: 50
 updated: 2026-10-11
 ---
 
-You score a hockey match on one phone. You start and stop the game clock, tap what happens, and the app keeps the score per quarter, times every suspension and builds the box score and player stats.
+Score a hockey match on one phone. You run the game clock and tap what happens; the app times every suspension and builds the box score and player stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -40,7 +40,7 @@ You score a hockey match on one phone. You start and stop the game clock, tap wh
 A suspended or sent-off player is left out of the player lists until he is allowed back.
 
 ## Shoot-out
-If the match is level at full time and the decider is a shoot-out, you see "Level — the match goes to a shoot-out".
+If the match is level at full time and the decider is a shoot-out, you see "Level — the match goes to a shoot-out". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
 1. Tap which team shoots first.
 2. For each attempt, tap the taker (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
 3. Still level after five each? Sudden death starts, with the other team shooting first, until one team leads after equal attempts.

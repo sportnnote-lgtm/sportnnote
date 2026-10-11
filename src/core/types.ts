@@ -737,6 +737,13 @@ export interface TournamentScoring {
   positionPoints?: number[];
   /** optional per-sport multiplier on the position points (default 1 each). */
   sportWeights?: Partial<Record<SportId, number>>;
+  /** SD-123: how the medal table is ordered — 'points' (default: total position
+   *  points, then golds …) or 'medals' (golds → silvers → bronzes, Olympic style). */
+  rankBy?: 'points' | 'medals';
+  /** SD-123: sports where BOTH semi-final losers take bronze even if a 3rd-place
+   *  match is scheduled. Otherwise a 3rd-place match decides 3rd/4th, and with
+   *  none both semi-final losers share 3rd. */
+  sharedBronze?: Partial<Record<SportId, boolean>>;
 }
 
 export interface AppNotification {
@@ -960,6 +967,6 @@ export interface GolfCourse {
   name: string;
   city?: string;
   holes: { n: number; par: number; si: number }[];
-  tees: { name: string; courseRating?: number; slope?: number; rating9F?: number; slope9F?: number; rating9B?: number; slope9B?: number }[];
+  tees: { name: string; courseRating?: number; slope?: number; rating9F?: number; slope9F?: number; rating9B?: number; slope9B?: number; /** SD-122 */ par?: number; colour?: string; gender?: 'M' | 'F' }[];
   createdBy?: UUID;
 }

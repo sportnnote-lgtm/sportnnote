@@ -2,10 +2,10 @@
  *  from the scorecard), format, players + their Handicap Index, and automatic
  *  groups/tee times. With `nextOf`, sets up the NEXT round of a tournament —
  *  same course/format, players carried over through an optional cut. */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
@@ -17,16 +17,18 @@ import { usePlayers } from '../data/hooks';
 import { getMyPlayerId, createReplacementPlayer, getTeams, createTeam } from '../data/repos';
 import {
   getGolfCourses, createGolfCourse, createFieldEvent, addFieldEntries, autoGroups, getFieldEvent, getFieldEvents,
-  getFieldEntries, buildLeaderboard, golfFormatOf, parseIndex, showIndex,
+  getFieldEntries, buildLeaderboard, golfFormatOf, parseIndex, showIndex, canEditCourse, entryTeesOf,
 } from '../data/golf';
+import { GolfCourseEditor, type CourseDraft } from '../components/golf/GolfCourseEditor';
+import { isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
-import { standardPar72, holesFor, makesCut, type CutRule, type Hole } from '../sports/golf/engine';
+import { holesFor, makesCut, type CutRule } from '../sports/golf/engine';
 import type { GolfCourse, Team } from '../core/types';
 import { golfTeamFormatOf, type GolfTeamFormat } from '../data/golfTeams';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-interface Pick { playerId: string; name: string; index: string; /** SD-76 */ teamId?: string }
+interface Pick { playerId: string; name: string; index: string; /** SD-76 */ teamId?: string; /** SD-122 — own tee (else the round's) */ tee?: string }
 
 // parseIndex / showIndex moved to data/golfLeaderboard (SD-35: the entry-admin
 // sheet edits a handicap too); re-exported for older imports.
@@ -70,16 +72,12 @@ export default function GolfRoundSetupScreen() {
   const [newTeam, setNewTeam] = useState('');
   useEffect(() => { getTeams().then((ts) => setAllTeams([...ts])).catch(() => {}); }, []);
 
-  // Quick-create course
+  // Quick-create course (SD-122: the same editor as "Edit course")
   const [newCourse, setNewCourse] = useState(false);
-  const [cName, setCName] = useState('');
-  const [cCity, setCCity] = useState('');
-  const [cHoles, setCHoles] = useState<Hole[]>(() => standardPar72());
-  const [cNine, setCNine] = useState(false);
-  const [cRating, setCRating] = useState('');
-  const [cSlope, setCSlope] = useState('');
 
   useEffect(() => { getGolfCourses().then((cs) => { setCourses(cs); if (cs.length && !courseId) setCourseId(cs[0].id); }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // SD-122 — back from "Edit course": pick up new tees / pars
+  useFocusEffect(useCallback(() => { getGolfCourses().then(setCourses).catch(() => {}); }, []));
 
   // Next round of a tournament: carry course/format/players (through the cut).
   useEffect(() => {
@@ -104,7 +102,8 @@ export default function GolfRoundSetupScreen() {
       const order = rows.filter((r) => r.position != null).map((r) => r.id).reverse();
       setPicks(order.map((pid) => {
         const en = lastEntries.find((e) => e.playerId === pid);
-        return { playerId: pid, name: allPlayers.find((p) => p.id === pid)?.fullName ?? 'Player', index: showIndex(en?.handicapIndex), ...(en?.teamId ? { teamId: en.teamId } : {}) };
+        const ownTee = entryTeesOf(last)[pid];
+        return { playerId: pid, name: allPlayers.find((p) => p.id === pid)?.fullName ?? 'Player', index: showIndex(en?.handicapIndex), ...(en?.teamId ? { teamId: en.teamId } : {}), ...(ownTee && ownTee !== f.tee ? { tee: ownTee } : {}) };
       }));
       // SD-76 — the team rule and teams carry over
       const tr = golfTeamFormatOf(last);
@@ -158,20 +157,24 @@ export default function GolfRoundSetupScreen() {
     } catch { setError('Could not add that player.'); }
   };
 
-  const saveCourse = async () => {
+  const saveCourse = async (d: CourseDraft) => {
     setError(null);
-    try {
-      const holes = cNine ? cHoles.slice(0, 9).map((h, i) => ({ ...h, n: i + 1 })) : cHoles;
-      const rating = Number(cRating), slope = Number(cSlope);
-      const tees = [{ name: 'Default', ...(rating > 0 && slope > 0 ? { courseRating: rating, slope } : {}) }];
-      const c = await createGolfCourse({ name: cName.trim() || 'My course', city: cCity.trim() || undefined, holes, tees });
-      setCourses((cs) => [...cs, c]);
-      setCourseId(c.id);
-      setNewCourse(false);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the course'); }
+    const c = await createGolfCourse({ name: d.name, city: d.city, holes: d.holes, tees: d.tees });
+    setCourses((cs) => [...cs, c]);
+    setCourseId(c.id);
+    setTee(undefined);
+    setNewCourse(false);
   };
-  const cyclePar = (i: number) => setCHoles((hs) => hs.map((h, j) => (j === i ? { ...h, par: h.par >= 5 ? 3 : h.par + 1 } : h)));
-  const setSi = (i: number, v: string) => setCHoles((hs) => hs.map((h, j) => (j === i ? { ...h, si: Number(v.replace(/[^0-9]/g, '')) || 0 } : h)));
+  // SD-122 — each player's tee (only when the course has 2+ tees)
+  const roundTee = course ? (tee ?? course.tees[0]?.name) : undefined;
+  const cycleTee = (playerId: string) => setPicks((ps) => ps.map((p) => {
+    if (p.playerId !== playerId || !course) return p;
+    const names = course.tees.map((t) => t.name);
+    const cur = p.tee ?? roundTee;
+    const next = names[(names.indexOf(cur ?? '') + 1) % names.length];
+    return { ...p, tee: next === roundTee ? undefined : next };
+  }));
+  const mayEditCourse = !!course && canEditCourse(course, profile?.id, !isSupabaseConfigured);
 
   const cutPreview = useMemo(() => {
     if (!prev || !cutN.trim()) return null;
@@ -212,9 +215,19 @@ export default function GolfRoundSetupScreen() {
       }
       const me = await getMyPlayerId(profile?.id);
       const holes = holesFor(course, String(format.holes ?? '18') as '18' | 'front9' | 'back9');
+      // SD-122 — mixed tees: every player's tee is stored, and the round's tee
+      // is the one most of them play (WHS 6.2b compares the tees in use)
+      const { entryTees: _et, ...restFormat } = baseFormat;
+      const valid = new Set(course.tees.map((t) => t.name));
+      const teeOf = (p: Pick) => (p.tee && valid.has(p.tee) ? p.tee : roundTee);
+      const mixed = course.tees.length > 1 && chosen.some((p) => teeOf(p) !== roundTee);
+      const counts = new Map<string, number>();
+      for (const p of chosen) { const t = teeOf(p); if (t) counts.set(t, (counts.get(t) ?? 0) + 1); }
+      const mainTee = mixed ? [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? roundTee : roundTee;
+      const teeKeys = mixed ? { entryTees: Object.fromEntries(chosen.map((p) => [p.playerId, teeOf(p)])) } : {};
       const ev = await createFieldEvent({
         tournamentId, sport: 'golf', title: title.trim() || `Round ${roundNo}`, roundNo, startsAt: when.toISOString(),
-        format: { ...baseFormat, ...cutKeys, courseId: course.id, tee: tee ?? course.tees[0]?.name, net: format.netScoring === 'net', ...(teamOn ? { team: teamRule } : {}) },
+        format: { ...restFormat, ...cutKeys, courseId: course.id, tee: mainTee, ...teeKeys, net: format.netScoring === 'net', ...(teamOn ? { team: teamRule } : {}) },
         hostIds: me ? [me] : [],
       });
       const groups = autoGroups(chosen.map((p) => p.playerId), groupSize, when, interval);
@@ -239,36 +252,15 @@ export default function GolfRoundSetupScreen() {
           {courses.map((c) => <SelectChip key={c.id} label={`${c.name}${c.city ? ` · ${c.city}` : ''}`} active={c.id === courseId} onPress={() => { setCourseId(c.id); setTee(undefined); }} />)}
           <SelectChip label="＋ New course" active={newCourse} onPress={() => setNewCourse(!newCourse)} />
         </View>
-        {newCourse && (
-          <Card style={{ gap: theme.spacing(2) }}>
-            <Text style={textStyles.muted}>Copy pars and stroke indexes (SI) from the scorecard. Tap a par to change it. Starts from a standard par-72 layout.</Text>
-            <TextField label="Course name" value={cName} onChange={setCName} placeholder="e.g. Boulder Hills Golf Club" />
-            <TextField label="City (optional)" value={cCity} onChange={setCCity} placeholder="Hyderabad" />
-            <View style={st.chips}>
-              <SelectChip label="18 holes" active={!cNine} onPress={() => { setCNine(false); setCHoles(standardPar72()); }} />
-              <SelectChip label="9 holes" active={cNine} onPress={() => { setCNine(true); setCHoles((hs) => hs.slice(0, 9).map((h, i) => ({ ...h, si: i + 1 }))); }} />
-            </View>
-            <View style={st.grid}>
-              {(cNine ? cHoles.slice(0, 9) : cHoles).map((h, i) => (
-                <View key={i} style={st.holeCell}>
-                  <Text style={st.holeLbl}>{i + 1}</Text>
-                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Hole ${i + 1} par ${h.par}, tap to change`} onPress={() => cyclePar(i)} style={st.parBtn}>
-                    <Text style={st.parTxt}>P{h.par}</Text>
-                  </TouchableOpacity>
-                  <TextInput style={st.siInput} value={h.si ? String(h.si) : ''} onChangeText={(v) => setSi(i, v)} keyboardType="number-pad" maxLength={2} accessibilityLabel={`Hole ${i + 1} stroke index`} placeholder="SI" placeholderTextColor={theme.colors.textMuted} />
-                </View>
-              ))}
-            </View>
-            <View style={st.row}>
-              <View style={st.flex}><TextField label="Course rating (optional)" value={cRating} onChange={setCRating} placeholder="71.5" autoCapitalize="none" /></View>
-              <View style={st.flex}><TextField label="Slope (optional)" value={cSlope} onChange={setCSlope} placeholder="128" autoCapitalize="none" /></View>
-            </View>
-            <Button label="Save course" onPress={saveCourse} />
-          </Card>
+        {newCourse && <GolfCourseEditor onSave={saveCourse} onCancel={() => setNewCourse(false)} />}
+        {course && !newCourse && mayEditCourse && (
+          <Text style={st.link} accessibilityRole="button" onPress={() => nav.navigate('GolfCourseEdit', { courseId: course.id })}>
+            ✏️ Edit {course.name} — pars, stroke indexes, tees{course.tees.length < 2 ? ' (add tees here)' : ''}
+          </Text>
         )}
         {course && course.tees.length > 1 && (
           <View style={st.chips}>
-            {course.tees.map((t) => <SelectChip key={t.name} label={`${t.name} tees`} active={(tee ?? course.tees[0].name) === t.name} onPress={() => setTee(t.name)} />)}
+            {course.tees.map((t) => <SelectChip key={t.name} label={`${t.name} tees${t.gender === 'F' ? ' (women)' : t.gender === 'M' ? ' (men)' : ''}`} active={(tee ?? course.tees[0].name) === t.name} onPress={() => setTee(t.name)} />)}
           </View>
         )}
 
@@ -290,6 +282,11 @@ export default function GolfRoundSetupScreen() {
               accessibilityLabel={`${p.name} handicap index`}
               autoCapitalize="none"
             />
+            {course && course.tees.length > 1 && (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${p.name}'s tee: ${p.tee ?? roundTee}. Tap to change`} onPress={() => cycleTee(p.playerId)} style={[st.teamChip, !p.tee && st.teamChipOff]}>
+                <Text style={st.teamChipTxt} numberOfLines={1}>{p.tee ?? roundTee}</Text>
+              </TouchableOpacity>
+            )}
             {teamOn && (
               <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${p.name}'s team: ${teamLabel(p.teamId)}. Tap to change`} onPress={() => cycleTeam(p.playerId)} style={[st.teamChip, !p.teamId && st.teamChipOff]}>
                 <Text style={st.teamChipTxt} numberOfLines={1}>{teamLabel(p.teamId)}</Text>
@@ -375,12 +372,6 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
   flex: { flex: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  holeCell: { width: 52, alignItems: 'center', gap: 2, padding: 4, borderRadius: 8, backgroundColor: theme.colors.surfaceAlt },
-  holeLbl: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
-  parBtn: { paddingVertical: 2, paddingHorizontal: 6, borderRadius: 6, backgroundColor: theme.colors.surface },
-  parTxt: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.small },
-  siInput: { width: 40, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small, borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingVertical: 2 },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   idxInput: { width: 64, textAlign: 'center', color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: 8, paddingVertical: 6, fontSize: theme.font.body },
   teamChip: { maxWidth: 96, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, backgroundColor: theme.colors.primary },

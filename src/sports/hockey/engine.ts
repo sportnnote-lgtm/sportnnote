@@ -25,6 +25,7 @@
  * the state), so the absolute statTotals equal the live increments (SD-19).
  */
 import type { ScoreAction, LiveSettings, FormatField, Attribution } from '../types';
+import { aggPriorFromConfig, aggregateText, levelForDecider, type AggPrior } from '../aggregate.ts';
 
 export type Side = 'home' | 'away';
 export type GoalType = 'field' | 'pc' | 'stroke';
@@ -103,6 +104,9 @@ export interface HockeyState {
   penaltyCorners: boolean;
   shootout: { home: SoKick[]; away: SoKick[]; first: Side } | null;
   shootoutWinner?: Side;
+  /** SD-120: leg 2 of a new two-legged tie — the leg-1 score; "level" then
+   *  means level on aggregate (absent on every other match). */
+  agg?: AggPrior;
   /** who started (from the line-up), stamped at the first push-back / full time */
   xi?: { home?: XiStamp; away?: XiStamp };
   /** SD-117 (H7): circle entries, once the scorer logs the first one (absent
@@ -138,6 +142,7 @@ export const init = (config?: Record<string, unknown>): HockeyState => {
     stopClock: bool(config?.stopClock, true),
     penaltyCorners: bool(config?.penaltyCorners, true),
     shootout: null,
+    ...(aggPriorFromConfig(config) ? { agg: aggPriorFromConfig(config) } : {}),
   };
 };
 
@@ -403,7 +408,7 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
       // full time called early (or confirmed); the clock stops
       return s.ended ? s : { ...s, ended: true, clock: stopAt(s, at) };
     case 'START_SHOOTOUT': {
-      if (!s.ended || s.home !== s.away || s.shootout) return s;
+      if (!s.ended || !levelForDecider(s) || s.shootout) return s;
       return { ...s, shootout: { home: [], away: [], first: a.payload?.first === 'away' ? 'away' : 'home' } };
     }
     case 'SO': {
@@ -438,12 +443,20 @@ export function openPc(s: HockeyState, side: Side): HockeyEvent | undefined {
 
 /* ----------------------------- derived figures ----------------------------- */
 
+/** SD-120: level for the decider — on the day, or (leg 2 of a new two-legged
+ *  tie) on aggregate. Identical to \`home === away\` on every other match. */
+export const levelAtEnd = (s: HockeyState): boolean => levelForDecider(s);
+/** "Aggregate 2–2" on a new leg 2 (undefined otherwise). */
+export const aggLine = (s: HockeyState): string | undefined => aggregateText(s);
+
 export const isComplete = (s: HockeyState): boolean =>
-  s.ended && (s.home !== s.away || s.decider === 'none' || s.shootoutWinner != null);
+  s.ended && (!levelForDecider(s) || s.decider === 'none' || s.shootoutWinner != null);
 
 export function result(s: HockeyState): { winner: Side | 'draw'; home: number; away: number } | null {
   if (!isComplete(s)) return null;
-  const winner = s.home > s.away ? 'home' : s.away > s.home ? 'away' : (s.shootoutWinner ?? 'draw');
+  const byGoals = s.home > s.away ? 'home' : s.away > s.home ? 'away' : undefined;
+  // a new leg 2: the shoot-out / 7 m winner takes it even when the leg wasn't drawn
+  const winner = s.agg ? (s.shootoutWinner ?? byGoals ?? 'draw') : (byGoals ?? s.shootoutWinner ?? 'draw');
   return { winner, home: s.home, away: s.away };
 }
 

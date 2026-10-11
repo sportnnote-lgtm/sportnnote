@@ -13,7 +13,7 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
-import { useTeams } from '../data/hooks';
+import { useTeams, useTournamentById } from '../data/hooks';
 import { createSeries, createTeamTie, getMyPlayerId } from '../data/repos';
 import { TieSetup } from '../components/TieSetup';
 import { TIE_SPORTS, type TieSpec } from '../data/teamTie';
@@ -26,7 +26,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const FORMATS: { id: SeriesFormat; label: string; hint: string }[] = [
   { id: 'best_of', label: '🏆 Best of X', hint: 'First to a majority of wins takes the series (cricket series, NBA playoff).' },
-  { id: 'aggregate', label: '🔁 Two legs (aggregate)', hint: 'Home & away; combined score decides it (a UCL knockout tie).' },
+  { id: 'aggregate', label: '🔁 Two legs (aggregate)', hint: 'Home & away; combined score decides it (a UCL knockout tie). Level on aggregate after leg 2 → leg 2 goes to extra time and penalties (football), 7 m throws (handball) or a shoot-out (hockey).' },
   { id: 'rubbers', label: '👥 Team tie (rubbers)', hint: 'A fixed set of sub-matches; most wins takes the tie (Davis Cup, Thomas Cup).' },
 ];
 const ODD_LEGS = [3, 5, 7];
@@ -36,6 +36,9 @@ export default function CreateSeriesScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'CreateSeries'>>();
   const { profile } = useAuth();
   const tournamentId = route.params?.tournamentId;
+  // SD-120: a two-legged tie's legs carry the tournament's rules for the sport,
+  // with leg 1 "draw stands" and leg 2's decider on aggregate (createSeries).
+  const tournament = useTournamentById(tournamentId);
 
   const [sport, setSport] = useState<SportId | null>(route.params?.sport ?? null);
   const teams = useTeams(sport ?? undefined);
@@ -79,6 +82,7 @@ export default function CreateSeriesScreen() {
         tournamentId, sport, teamAId: teamA, teamBId: teamB,
         format, legs: legsCount, name: name.trim() || undefined,
         awayGoals: format === 'aggregate' ? awayGoals : undefined,
+        ...(format === 'aggregate' && tournament?.formats?.[sport] ? { matchFormat: tournament.formats[sport] } : {}),
         startsAt: when.toISOString(), hostIds: myId ? [myId] : [],
       });
       nav.replace('Series', { seriesId });

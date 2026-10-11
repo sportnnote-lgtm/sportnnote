@@ -9,8 +9,11 @@
  *  `overallStandings` uses. Pure + dependency-free over the standings engine, so
  *  it's unit-testable and works in demo and live alike. */
 import type { Match, SportId, TournamentScoring, SportFormat } from '../core/types';
-import { teamStandings, standingsConfigFromFormat } from './standings.ts';
+import { standingsConfigFromFormat } from './standings.ts';
 import type { FieldResultInput } from './results/medals.ts';
+import { sportPlaces, type BronzeRule } from './bracketPlaces.ts';
+import { structureFromFormat } from './structureConfig.ts';
+import { isEventSport } from '../sports/eventSports.ts';
 
 /** A contingent's result in one sport. */
 export interface SportPlacement {
@@ -22,6 +25,11 @@ export interface SportPlacement {
   played: number;
   /** weighted position points earned in this sport */
   points: number;
+  /** SD-123: entrants sharing this place (2 = joint bronze, 4 = "=5th" …) */
+  shared?: number;
+  /** SD-123: the entrant that placed, when it isn't the contingent itself
+   *  (a singles player scoring for their house) */
+  entrant?: string;
 }
 
 /** One row of the overall medal table. */
@@ -59,12 +67,33 @@ function positionPoints(cfg: TournamentScoring | undefined, position: number, fi
   return Math.max(0, fieldSize - position + 1);
 }
 
-/**
- * The overall medal table plus, on each row, the contingent's placement in every
- * sport. `formats` supplies each sport's tie-break rules so positions match its
- * own league table. Sorted by total points, then most golds / silvers / bronzes,
- * then name.
- */
+/** SD-123: a place shared by `shared` entrants splits the points of the
+ *  places they cover (joint 3rd of 2 = average of 3rd + 4th points). */
+function sharedPoints(cfg: TournamentScoring | undefined, position: number, shared: number, fieldSize: number): number {
+  if (shared <= 1) return positionPoints(cfg, position, fieldSize);
+  let sum = 0;
+  for (let i = 0; i < shared; i++) sum += positionPoints(cfg, position + i, fieldSize);
+  return Math.round((sum / shared) * 100) / 100;
+}
+
+/** SD-123: the bronze rule for a sport ('playoff' unless the organiser chose
+ *  shared bronze for it). */
+export const bronzeRuleFor = (cfg: TournamentScoring | undefined, sport: SportId): BronzeRule =>
+  cfg?.sharedBronze?.[sport] ? 'shared' : 'playoff';
+
+/** SD-123: medals first (gold → silver → bronze, Olympic order), else points. */
+export function compareMedalRows(rankBy: TournamentScoring['rankBy']) {
+  return (a: MedalRow, b: MedalRow): number =>
+    rankBy === 'medals'
+      ? b.golds - a.golds || b.silvers - a.silvers || b.bronzes - a.bronzes || b.total - a.total || a.name.localeCompare(b.name)
+      : b.total - a.total || b.golds - a.golds || b.silvers - a.silvers || b.bronzes - a.bronzes || a.name.localeCompare(b.name);
+}
+
+/** Who an entrant scores for. A team entrant is its own contingent; a singles
+ *  player / pair returns their house (SD-123). undefined ⇒ the entrant itself. */
+export type ContingentOf = (entrant: { id: string; name: string; colorHex?: string }, sport: SportId) =>
+  { id?: string; name: string; colorHex?: string } | undefined;
+
 export function medalStandings(
   matches: Match[],
   sports: SportId[],
@@ -74,6 +103,8 @@ export function medalStandings(
    *  position points go to the athlete's / relay's contingent (matched by name,
    *  like the sports above). Entries without a team don't score. */
   fieldResults?: FieldResultInput[],
+  /** SD-123: credit singles players / pairs to their house or contingent */
+  contingentOf?: ContingentOf,
 ): MedalRow[] {
   const rows = new Map<string, MedalRow>();
   const ensure = (name: string, teamId: string, colorHex?: string): MedalRow => {
@@ -84,19 +115,26 @@ export function medalStandings(
   };
 
   for (const sport of sports) {
+    // Timed / measured sports score through fieldResults (and golf stroke play
+    // through its leaderboard) — never as a match table.
+    if (isEventSport(sport)) continue;
     const weight = scoring?.sportWeights?.[sport] ?? 1;
-    const table = teamStandings(matches, sport, standingsConfigFromFormat(sport, formats?.[sport]));
-    const fieldSize = table.length;
-    table.forEach((t, i) => {
-      const position = i + 1;
-      const points = positionPoints(scoring, position, fieldSize) * weight;
-      const row = ensure(t.name, t.teamId, t.colorHex);
+    const fmt = formats?.[sport] as Record<string, unknown> | undefined;
+    const { places, fieldSize } = sportPlaces(matches, sport, standingsConfigFromFormat(sport, fmt), {
+      bronze: bronzeRuleFor(scoring, sport),
+      shape: structureFromFormat(fmt)?.shape ?? null,
+    });
+    for (const t of places) {
+      const { position, shared } = t;
+      const points = sharedPoints(scoring, position, shared, fieldSize) * weight;
+      const c = contingentOf?.({ id: t.teamId, name: t.name, colorHex: t.colorHex }, sport);
+      const row = c ? ensure(c.name, c.id ?? c.name, c.colorHex) : ensure(t.name, t.teamId, t.colorHex);
       row.total += points;
       if (position === 1) row.golds += 1;
       else if (position === 2) row.silvers += 1;
       else if (position === 3) row.bronzes += 1;
-      row.perSport.push({ sport, position, fieldSize, played: t.played, points });
-    });
+      row.perSport.push({ sport, position, fieldSize, played: t.played, points, ...(shared > 1 ? { shared } : {}), ...(c ? { entrant: t.name } : {}) });
+    }
   }
 
   for (const ev of fieldResults ?? []) {
@@ -113,7 +151,38 @@ export function medalStandings(
     }
   }
 
-  return [...rows.values()].sort(
-    (a, b) => b.total - a.total || b.golds - a.golds || b.silvers - a.silvers || b.bronzes - a.bronzes || a.name.localeCompare(b.name),
-  );
+  for (const r of rows.values()) r.total = Math.round(r.total * 100) / 100;
+  return [...rows.values()].sort(compareMedalRows(scoring?.rankBy));
+}
+
+/**
+ * SD-123: in a house / contingent meet a singles player (or a doubles pair)
+ * scores for their house, not as a contingent of their own. An individual
+ * entrant is an entry "team" named after the player; its house comes from its
+ * roster's players (all on one house), else from the one player whose name
+ * matches the entry. A pair from two different houses, or a player with no
+ * house, stays its own entrant. Team sports are untouched.
+ */
+export function houseContingent(
+  individualSports: ReadonlySet<SportId>,
+  rosters: ReadonlyMap<string, readonly string[]>,
+  players: readonly { id: string; fullName: string; houseName?: string; houseColor?: string }[],
+): ContingentOf {
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const byName = new Map<string, typeof players[number][]>();
+  for (const p of players) {
+    const k = p.fullName.trim().toLowerCase();
+    byName.set(k, [...(byName.get(k) ?? []), p]);
+  }
+  return (entrant, sport) => {
+    if (!individualSports.has(sport)) return undefined;
+    let ps = (rosters.get(entrant.id) ?? []).map((id) => byId.get(id)).filter((p): p is typeof players[number] => !!p);
+    if (!ps.length) {
+      const named = byName.get(entrant.name.trim().toLowerCase()) ?? [];
+      if (named.length === 1) ps = named;
+    }
+    const houses = new Set(ps.map((p) => p.houseName?.trim().toLowerCase()));
+    if (!ps.length || houses.size !== 1 || !ps[0].houseName) return undefined;
+    return { name: ps[0].houseName.trim(), colorHex: ps[0].houseColor };
+  };
 }

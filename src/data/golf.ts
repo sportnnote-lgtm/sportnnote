@@ -9,8 +9,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { demo, genId } from './demoStore';
 import type { FieldEntry, FieldEntryStatus, FieldEvent, FieldEventStatus, GolfCourse } from '../core/types';
-import { roundStats, emptyCard, type GolfCard, type Hole } from '../sports/golf/engine';
-import { buildLeaderboard, roundContext, cardOf, entryStatusOf, withAdmin } from './golfLeaderboard';
+import { validateHoles, validateTees, snapOf, hasCourseSnap, renameTeesInFormat } from './golfCourses';
+import { roundStats, emptyCard, type GolfCard, type Hole, type Tee } from '../sports/golf/engine';
+import { buildLeaderboard, roundContext, cardOf, entryStatusOf, withAdmin, golfFormatOf } from './golfLeaderboard';
 import type { EntryAdmin } from '../sports/golf/engine';
 import { roundDifferential } from '../sports/golf/handicap';
 
@@ -43,6 +44,7 @@ export async function getGolfCourse(id: string): Promise<GolfCourse | null> {
 
 export async function createGolfCourse(input: Omit<GolfCourse, 'id' | 'createdBy'>): Promise<GolfCourse> {
   validateHoles(input.holes);
+  validateTees(input.tees, input.holes.length);
   if (!live()) {
     const c: GolfCourse = { ...input, id: genId('course') };
     demo.golfCourses.push(c);
@@ -55,12 +57,75 @@ export async function createGolfCourse(input: Omit<GolfCourse, 'id' | 'createdBy
   return toCourse(data);
 }
 
-/** Pars 3–6 and each stroke index used exactly once (1..9 or 1..18). */
-export function validateHoles(holes: Hole[]): void {
-  if (holes.length !== 9 && holes.length !== 18) throw new Error('A course has 9 or 18 holes.');
-  if (holes.some((h) => h.par < 3 || h.par > 6)) throw new Error('Each hole needs a par between 3 and 6.');
-  const sis = [...holes.map((h) => h.si)].sort((a, b) => a - b);
-  if (sis.some((si, i) => si !== i + 1)) throw new Error(`Stroke indexes must be 1–${holes.length}, each used once.`);
+export { validateHoles, validateTees, courseAsPlayed, canEditCourse, entryTeesOf, teeFor } from './golfCourses';
+
+/** SD-122 — the course's edit, as the editor sends it. `renames` maps a tee's
+ *  old name to its new one so open rounds keep their tee. */
+export interface CourseEdit { name: string; city?: string; holes: Hole[]; tees: Tee[]; renames?: Record<string, string> }
+
+/** Golf rounds played on a course (any status). */
+export async function roundsOnCourse(courseId: string): Promise<FieldEvent[]> {
+  const evs = await getFieldEvents({ sport: 'golf' });
+  return evs.filter((e) => golfFormatOf(e).courseId === courseId);
+}
+
+/**
+ * SD-122 — save an edited course (creator only — RLS golf_courses_update).
+ * Finished rounds keep the course they were played on: any without their own
+ * copy get one first (here, for the rounds this user manages; the server
+ * trigger from migration 20261019123220 does it for every round). Open rounds
+ * read the new course, so their to-par / net / Stableford recompute at once;
+ * renamed tees are carried into their formats.
+ */
+export async function updateGolfCourse(id: string, edit: CourseEdit): Promise<GolfCourse> {
+  validateHoles(edit.holes);
+  const tees = edit.tees.map((t) => ({ ...t, name: t.name.trim() }));
+  validateTees(tees, edit.holes.length);
+  const before = await getGolfCourse(id);
+  if (!before) throw new Error('Course not found');
+  const rounds = await roundsOnCourse(id);
+  for (const ev of rounds) {
+    try {
+      if (ev.status === 'completed' && !hasCourseSnap(ev)) await updateFieldEventFormat(ev.id, { courseSnap: snapOf(before) });
+      else if (ev.status !== 'completed' && edit.renames) {
+        const next = renameTeesInFormat(ev.format, edit.renames);
+        if (next) await updateFieldEventFormat(ev.id, next);
+      }
+    } catch { /* not a round this user manages — the server trigger covers finished ones */ }
+  }
+  const row = { name: edit.name.trim() || before.name, city: edit.city?.trim() || null, holes_data: edit.holes, tees };
+  if (!live()) {
+    const c = demo.golfCourses.find((x) => x.id === id);
+    if (c) Object.assign(c, { name: row.name, city: row.city ?? undefined, holes: edit.holes, tees });
+    return { ...before, name: row.name, city: row.city ?? undefined, holes: edit.holes, tees };
+  }
+  const { data, error } = await supabase!.from('golf_courses').update(row).eq('id', id).select('*').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Only the person who added this course can edit it.');
+  return toCourse(data);
+}
+
+/**
+ * SD-122 — "Recompute finished rounds": the organiser applies the edited
+ * course to rounds already finished on it — their copy of the course is
+ * replaced and the players' stat lines (score, differential…) are rewritten.
+ * Only rounds this user manages; returns how many were and weren't redone.
+ */
+export async function recomputeFinishedRounds(courseId: string): Promise<{ done: number; skipped: number }> {
+  const course = await getGolfCourse(courseId);
+  if (!course) throw new Error('Course not found');
+  const finished = (await roundsOnCourse(courseId)).filter((e) => e.status === 'completed');
+  let done = 0, skipped = 0;
+  for (const ev of finished) {
+    try {
+      const snap = snapOf(course);
+      await updateFieldEventFormat(ev.id, { courseSnap: snap });
+      const entries = await getFieldEntries([ev.id]);
+      await completeRound({ ...ev, format: { ...ev.format, courseSnap: snap } }, entries, course);
+      done++;
+    } catch { skipped++; }
+  }
+  return { done, skipped };
 }
 
 /* ----------------------------- events/entries --------------------------- */
@@ -284,6 +349,9 @@ export async function completeRound(ev: FieldEvent, entries: FieldEntry[], cours
     return { playerId: en.playerId, stats, won: winners.has(en.playerId) };
   });
   const label = course.name;
+  // SD-122 — a finished round keeps the course it was played on, so a later
+  // course edit doesn't change it (unless the organiser recomputes it).
+  if (!hasCourseSnap(ev)) await updateFieldEventFormat(ev.id, { courseSnap: snapOf(course) });
   if (!live()) {
     demo.statLines = demo.statLines.filter((l) => l.eventId !== ev.id);
     for (const l of lines) {
