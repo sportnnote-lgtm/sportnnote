@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 28 Jan 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 15 s, 9:16 |
-| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, except the Android in-app QR image share, which needs a new APK) |
+| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, including the Android in-app QR image share from APK 37) |
 | Guide | https://sportnnote.in/guides/teams-join-a-tournament/ (already has the QR steps) |
-| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat:** in the Android app, Share QR + message sends the QR image only from the next APK; until then it shares text only. Record the organiser phone on the web app (app.sportnnote.in) or the new APK. |
+| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat lifted:** APK 37 (on sportnnote.in since 11 Oct 2026) shares the QR image from the Android app. Record on APK 37 or the web app. |
 | AI | None. Real screen recordings on two phones, text and music. |
 
 ## Caption (post exactly)
@@ -50,4 +50,4 @@ Engagement (save and share with your organiser). The bio link stays.
 ## Pre-post checks
 - **Build:** SD-108 is live (11 Oct 2026); recheck the button label "📤 Share QR + message" and the Android "Open in the SportnNote app" banner.
 - **On iPhone** the join page continues on the web (no app hand-off). Don't show an iPhone handing off to an app.
-- **Android app QR image:** the organiser's "📤 Share QR + message" sends the QR picture from the Android app only once the new APK (with react-native-share) is out. If it isn't by recording day, record the organiser phone on the web app, where the QR image already goes with the message.
+- **Android app QR image:** APK 37 (with react-native-share) sends the QR picture with the message from the Android app. Record the organiser phone on APK 37 or later, or on the web app.

@@ -123,3 +123,4 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - Confirm a 12-runner 100 m still suggests 2 heats → final of 8 (first 3 + 2 fastest) in the frozen build.
 - Confirm "Open" with "Boys"/"Girls" is how the build labels the open category.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.
+- **Combined events (live since 11 Oct 2026, SD-93):** decathlon, heptathlon and the school pentathlon/tetrathlon now have their own how-to on Mon 18 Jan (`2027-01-18-youtube-howto-combined-events.md`). Optional: add its video card to the end screen and one line to the closing VO: "Running a pentathlon? That's next Monday's video." Don't add a chapter here.

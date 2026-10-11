@@ -6,7 +6,7 @@
 | Platform / format | Instagram Reel, 20 s, 9:16 + a YouTube Short cut |
 | Pillar | New feature (SD-110 screen awake + tap buzz, SD-111 60-second result hold; live since 11 Oct 2026) |
 | Guide | https://sportnnote.in/guides/scoring-phone-and-result-hold/ |
-| Status | Draft – copy ready (awaiting founder approval). The screen-on and buzz parts in the Android app need the APK after 11 Oct 2026 (see checks). |
+| Status | Draft – copy ready (awaiting founder approval). APK prerequisite met: APK 37 (on sportnnote.in since 11 Oct 2026) has screen-on and buzz. |
 | AI | Instagram: none (real screen recording, text and music). YouTube Short: AI voice, disclosed. |
 
 "Fix anything" week. Pairs with how-to #6 (16 Jan) and the 21 Jan posts on corrections and confirms.
@@ -52,7 +52,7 @@ Send it to your scorer (share).
 ## Shot list and demo data
 - **Account:** the marketing demo account, tournament **SportnNote Demo Meet 2026**.
 - **Match:** badminton singles, Asha Rao (Red House) v Priya (Blue House), fictional adults, pre-scored to 20-19 in game 3 on a second match for 0:07–0:17.
-- **Phone:** an Android phone on the APK that includes SD-110 (screen on and buzz), so the clip is honest about the phone app. Do Not Disturb on; a small "Demo data" label for the whole clip.
+- **Phone:** an Android phone on APK 37 or later (it includes SD-110: screen on and buzz), so the clip is honest about the phone app. Do Not Disturb on; a small "Demo data" label for the whole clip.
 - **0:00 shot:** hands and phone only; no players or students in the frame.
 
 ## YouTube Short
@@ -63,7 +63,7 @@ Send it to your scorer (share).
 - **Disclosure:** "Altered or synthetic content" = Yes.
 
 ## Pre-post checks
-- **APK gate:** in the Android app, the screen-on and buzz features need the APK built after 11 Oct 2026 (expo-keep-awake and expo-haptics). The web app has them already. Only post once that APK is the one on sportnnote.in; until then, cut the 0:00–0:07 shots and the first two caption lines and keep the 60-second part (it works on every version).
+- **APK (met):** the Android screen-on and buzz need APK 37 or later (expo-keep-awake and expo-haptics). APK 37 is the "Get the app" download on sportnnote.in since 11 Oct 2026, so the full cut and caption stand. On the day, check that the site still links APK 37 or newer; the web app has both features too.
 - **iPhone:** iPhone browsers can't buzz (the guide says so). The caption doesn't claim it; don't add "every phone".
 - **Build:** recheck in the frozen launch build: the note text "Result sent to followers in 0:58 · Undo · Send now", **↶ Undo**, **Send now**, and **Profile → Settings → Buzz on scoring taps**.
 - **Claim check:** the hold is "about 60 seconds" in the guide. "60 seconds" in the caption is fine; don't promise an exact second count.

@@ -114,5 +114,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Elimination timing:** the guide says the 10 m final with 8 finalists eliminates from shot 12 (later with fewer finalists). Match the on-screen text and VO ("starts eliminating at shot twelve, then every two shots") to what the screen shows.
 - **Limits:** keep the closing line about 25 m, trap and skeet (no final yet) and mixed teams ranking on the team total; it's in the guide's Common questions.
 - **Platform policy:** YouTube is sensitive to firearm content. The video shows only app screens and icons, which is fine; don't add range or gun B-roll.
-- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Don't mention combined events (heptathlon/decathlon): they're still being built.
+- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93): they don't change the count, and the list says "athletics" for them.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

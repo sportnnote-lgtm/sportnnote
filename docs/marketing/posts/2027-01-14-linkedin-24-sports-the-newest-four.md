@@ -42,7 +42,7 @@ A 2 × 2 grid of the four newest sport icons in brand colours (🏹 Archery, �
 Open the app (app.sportnnote.in).
 
 ## Pre-post checks
-- **Count and list:** check the live sport list on sportnnote.in (`scripts/build-website.mjs`) on the day: 24 as of 11 Oct 2026. Combined events (heptathlon/decathlon) are being built: don't mention them until they're live and the founder approves.
+- **Count and list:** check the live sport list on sportnnote.in (`scripts/build-website.mjs`) on the day: 24 as of 11 Oct 2026. Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93), not a new sport: the count stays 24. The founder may add "and combined events" after athletics if the line has room.
 - **Facts against the guides:** archery keypad and set system (run-an-archery-competition), rowing seats and progressions (run-a-rowing-regatta), canoe lanes 9 and centre-out lanes (run-a-canoe-sprint), cycling events and "s.t." (run-a-cycling-event). Not covered, don't imply them: archery team events, canoe slalom, team pursuit, team sprint, madison and omnium.
 - **Federation names:** plain text only, no logos.
 - **Launch status:** post only if the app actually opened to everyone on 11 Jan. If launch slipped, hold it.

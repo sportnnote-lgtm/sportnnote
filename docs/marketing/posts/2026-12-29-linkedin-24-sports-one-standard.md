@@ -45,7 +45,7 @@ A 6 × 4 grid of the 24 sport icons in brand colours, each with its name, on the
 Follow the page for the last three reveals.
 
 ## Pre-post checks
-- **Count:** check the live sport list on sportnnote.in (the site's sport grid, `scripts/build-website.mjs`) on the day. 24 as of 11 Oct 2026. Combined events (heptathlon/decathlon) are being built: don't mention them until they're live and the founder approves.
+- **Count:** check the live sport list on sportnnote.in (the site's sport grid, `scripts/build-website.mjs`) on the day. 24 as of 11 Oct 2026. Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93), not a new sport: the count stays 24. The founder may add "and combined events" after athletics if the line has room.
 - **Federation names:** keep the bodies as listed (no competitor or app names). "ITF" here is the International Tennis Federation; padel and pickleball are covered by the racket line without naming their bodies, on purpose.
 - **Cricket line:** the founder decides whether to keep "Cricket isn't the lead" in their own words; the principle itself (every sport equal) stays.
 - If any of the newest sports isn't in the frozen launch build (freeze 23 Nov–6 Dec), change the count and the list, and drop that sport from the third paragraph and the federation line.

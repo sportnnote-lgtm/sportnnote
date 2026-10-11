@@ -4,9 +4,9 @@
 |---|---|
 | Publish | Thu 28 Jan 2027, 09:30 IST |
 | Platform / format | LinkedIn text post + 2 screenshots, company page |
-| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, except the Android in-app QR image share, which needs a new APK) |
+| Pillar | New feature (SD-108 invite QR sharing; live since 11 Oct 2026, including the Android in-app QR image share from APK 37) |
 | Guide | https://sportnnote.in/guides/teams-join-a-tournament/ |
-| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat:** the Android app shares the QR image only from the next APK; take screenshot 1 on the web app or the new APK. |
+| Status | Draft – copy ready (SD-108 is live; awaiting founder approval). **APK caveat lifted:** APK 37 (on sportnnote.in since 11 Oct 2026) shares the QR image from the Android app; take screenshot 1 on APK 37 or the web app. |
 | AI | None |
 
 ## Post text (post exactly)
@@ -41,5 +41,5 @@ Read the guide.
 
 ## Pre-post checks
 - **Guide:** teams-join-a-tournament already has the QR steps (11 Oct 2026); recheck them against the frozen build.
-- **Android APK:** if the new APK with in-app QR image sharing is not out by posting day, the post is still accurate (web shares the QR image; the Android app shares the text and link).
+- **Android APK:** met. APK 37 shares the QR image in the Android app, so the post is accurate on web and Android. Check that sportnnote.in still links APK 37 or newer.
 - **Club line:** keep "same QR works for club squads" only if the ClubHomeScreen QR shipped in the same release.
