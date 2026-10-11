@@ -42,7 +42,7 @@ const ScoringControls: SportPlugin<TennisState>['ScoringControls'] = ({ state, d
   // 2nd-attribution channel (reversed on undo). SD-104: `payload.df` marks the
   // point in the log, so a later correction moves the doubleFaults with it.
   const doubleFault = (server: 'home' | 'away', p?: Player) =>
-    dispatch({ type: 'POINT', side: other(server), payload: { df: true }, attribution2: p ? { playerId: p.id, stat: 'doubleFaults', playerName: p.fullName } : undefined });
+    dispatch({ type: 'POINT', side: other(server), payload: { df: true }, attribution2: p ? { playerId: p.id, stat: 'doubleFaults', playerName: p.fullName, side: server } : undefined });
 
   // Serve tracking. Who serves first is set before the first point; from there
   // serve alternates each game (and, in doubles, rotates through the pair in the

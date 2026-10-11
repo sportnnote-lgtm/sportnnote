@@ -63,3 +63,7 @@ export function resolveSide(text: string, ctx: VoiceContext): { side?: 'home' | 
 /** Build a stat-line attribution for a matched player (or none). */
 export const attribution = (player: Player | undefined, stat: string, by?: number) =>
   player ? { playerId: player.id, stat, playerName: player.fullName, ...(by ? { by } : {}) } : undefined;
+
+/** SD-119 — stamp the credited player's own side (when it isn't the action's). */
+export const sided = <A extends object>(a: A | undefined, side: 'home' | 'away'): (A & { side: 'home' | 'away' }) | undefined =>
+  a ? { ...a, side } : undefined;

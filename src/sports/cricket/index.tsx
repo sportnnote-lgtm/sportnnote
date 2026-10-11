@@ -694,6 +694,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
       keeper,
       striker: { id: strikerId, name: strikerName },
       runs: runsN, runsAs, wide: onExtra === 'wide',
+      battingSide: state.battingSide,
     });
     if (onExtra) {
       // A wicket ON a wide / no-ball — routed through EXTRA so the over doesn't

@@ -76,7 +76,8 @@ describe('SD-03 — tackle point on the defending side, credited to the tackler'
   test('a tackled raider: raider 0, tackle +1 to the defence and the tackler', () => {
     const { s, outcome } = raid(fresh(), { side: 'home', raider: RAIDER, tackled: true, tackler: DEF });
     assert.equal(outcome.attribution, undefined);
-    assert.deepEqual(outcome.attribution2, { playerId: DEF.id, stat: 'tacklePoints', by: 1, playerName: DEF.fullName });
+    // SD-119: the tackler's own (defending) side rides on the credit
+    assert.deepEqual(outcome.attribution2, { playerId: DEF.id, stat: 'tacklePoints', by: 1, playerName: DEF.fullName, side: 'away' });
     assert.equal(s.home, 0);
     assert.equal(s.away, 1);
     const tackle = s.events.find((e) => e.kind === 'tackle')!;

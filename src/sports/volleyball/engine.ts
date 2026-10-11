@@ -199,9 +199,11 @@ export const outcomeAction = (
   const def = VB_OUTCOMES.find((o) => o.kind === kind)!;
   const a: ScoreAction = { type: def.type, side, attribution: def.credited ? outcomeAttribution(kind, player) : undefined };
   if (kind === 'opperror' && fault?.err) a.payload = { err: fault.err };
-  if (kind === 'opperror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_ERROR_STAT, playerName: fault.by.fullName };
+  // SD-119: the erring player is on the OTHER side from the point's winner
+  const errSide = side === 'home' ? 'away' : 'home';
+  if (kind === 'opperror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_ERROR_STAT, playerName: fault.by.fullName, side: errSide };
   // SD-58 / SD-81: the opponent's server who missed (pre-filled from the rotation)
-  if (kind === 'serveerror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_SERVE_ERROR_STAT, playerName: fault.by.fullName };
+  if (kind === 'serveerror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_SERVE_ERROR_STAT, playerName: fault.by.fullName, side: errSide };
   return a;
 };
 

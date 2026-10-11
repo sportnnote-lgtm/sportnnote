@@ -69,7 +69,7 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
   const by = serverP ? serverP.fullName : serverSideName;
   const receiverSideName = serve.side === 'home' ? awayName : homeName;
   const ace = () => dispatch({ type: 'POINT', side: serve.side, payload: { pd: { how: 'ace' } }, attribution: serverP ? { playerId: serverP.id, stat: 'points', playerName: serverP.fullName } : undefined });
-  const doubleFault = () => dispatch({ type: 'POINT', side: other(serve.side), payload: { df: true }, attribution2: serverP ? { playerId: serverP.id, stat: 'doubleFaults', playerName: serverP.fullName } : undefined });
+  const doubleFault = () => dispatch({ type: 'POINT', side: other(serve.side), payload: { df: true }, attribution2: serverP ? { playerId: serverP.id, stat: 'doubleFaults', playerName: serverP.fullName, side: serve.side } : undefined });
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {/* SD-117c — derived "Change ends" cue (FIP, as tennis) */}

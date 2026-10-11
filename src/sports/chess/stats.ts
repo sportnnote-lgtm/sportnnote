@@ -17,6 +17,28 @@ export function winMethodKey(method?: string | null): typeof WIN_METHOD_KEYS[num
     default: return undefined;
   }
 }
+
+/** The profile credit for ONE player when a result is recorded (both players
+ *  get one): a game + the outcome (+ how it was won on the winner's line);
+ *  SD-117c a forfeit is no game — a forfeit win / loss instead; SD-67 a double
+ *  forfeit is a forfeit loss for each. SD-119: carries the player's own `side`,
+ *  so their line's opponent is the OTHER player whoever won (a draw included). */
+export function chessResultCredit(
+  side: 'home' | 'away',
+  p: { id: string; fullName: string } | undefined,
+  winner: 'home' | 'away' | 'draw',
+  method: string | null | undefined,
+  dff: boolean,
+): { playerId: string; playerName: string; stat: string; by: number; extra?: Record<string, number>; side: 'home' | 'away' } | undefined {
+  if (!p) return undefined;
+  const base = { playerId: p.id, playerName: p.fullName, by: 1, side };
+  if (dff) return { ...base, stat: 'forfeitLosses' };
+  if (method === 'forfeit' && winner !== 'draw') return { ...base, stat: winner === side ? 'forfeitWins' : 'forfeitLosses' };
+  const outcome = winner === 'draw' ? 'draws' : winner === side ? 'wins' : 'losses';
+  const how = winner === side ? winMethodKey(method) : undefined;
+  return { ...base, stat: 'games', extra: { [outcome]: 1, ...(how ? { [how]: 1 } : {}) } };
+}
+
 const n = (l: StatLine, k: string) => Number(l.stats?.[k] ?? 0) || 0;
 /** a won game whose method was recorded */
 const winHow = (l: StatLine) => WIN_METHOD_KEYS.some((k) => n(l, k) > 0);

@@ -19,6 +19,7 @@ import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
 import { planStatSync, applyStatWrites, onlyKeys, changedKeys, type MatchTotals } from './statSync';
 import { planAppearances, sideResults, subsCameOn, type AppearanceWrite } from './appearances';
+import { matchSideOf, planOpponentRepair } from './lineOpponent';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
 import {
@@ -1834,11 +1835,102 @@ export function backfillCricketCaptainKeeper(opts: { dryRun?: boolean; matchIds?
   return resyncSportLines('cricket', opts.matchIds, { dryRun: opts.dryRun, keys: CRICKET_SD69_KEYS });
 }
 
+/** SD-119 — the one-off REPAIR of `opponent` on past stat lines. Before the
+ *  fix the live layer labelled a credited player's line from the ACTION's side
+ *  (the winner / the side that scored), so a chess or golf result named the
+ *  player themself as the opponent on one line (both, after a draw), and a
+ *  double fault, a volleyball opponent's error, a kabaddi tackle or a cricket
+ *  bowler's wicket did the same. This recomputes each match line's opponent
+ *  from the side its player played for (replayed totals → matchday squad /
+ *  lineup → team roster; ids through resolved disputes) and writes ONLY the
+ *  `opponent` column — never stats, result, won or anything else. Lines whose
+ *  side can't be told for sure, field-event / golf stroke-play lines (no
+ *  match) and matches whose teams share a name are left alone.
+ *  Not run automatically — in the signed-in web console:
+ *    await __sportnnoteAdmin.repairOpponents({ dryRun: true })
+ *  (optionally `sports: ['chess']` / `matchIds: [...]`), then without `dryRun`.
+ *  The report counts, per sport, the lines checked / to change / unknown, and
+ *  `resultSuspect` — lines whose stored `result` disagrees with their side's
+ *  (migration 0050's backfill read the old label; reported, never written). */
+export async function repairOpponents(opts: { dryRun?: boolean; sports?: SportId[]; matchIds?: string[]; samples?: number } = {}): Promise<{
+  dryRun: boolean;
+  matches: number;
+  linesChecked: number;
+  linesToChange: number;
+  linesWritten: number;
+  perSport: Record<string, { matches: number; lines: number; change: number; unknown: number; resultSuspect: number }>;
+  samples: { matchId: string; sport: string; lineId: string; playerId: string; from: string | null; to: string }[];
+}> {
+  const dryRun = !!opts.dryRun;
+  const maxSamples = opts.samples ?? 25;
+  const out = { dryRun, matches: 0, linesChecked: 0, linesToChange: 0, linesWritten: 0,
+    perSport: {} as Record<string, { matches: number; lines: number; change: number; unknown: number; resultSuspect: number }>,
+    samples: [] as { matchId: string; sport: string; lineId: string; playerId: string; from: string | null; to: string }[] };
+  const all = opts.matchIds?.length
+    ? (await Promise.all(opts.matchIds.map((id) => getMatch(id)))).filter((m): m is Match => !!m)
+    : await getMatches();
+  const want = opts.sports?.length ? new Set<string>(opts.sports) : null;
+  const matches = all.filter((m) => !want || want.has(m.sport));
+  const tours = matches.some((m) => m.tournamentId) ? await getTournaments({ includeDeleted: true }) : [];
+  for (const m of matches) {
+    const lines = (await getMatchStatLines(m.id)).filter((l) => l.sport === m.sport && !l.eventId);
+    if (!lines.length) continue;
+    const names = { home: m.homeTeam.name, away: m.awayTeam.name };
+    const [squads, lineup, rosters, mapId] = await Promise.all([
+      getMatchSquads(m.id).catch(() => null),
+      getLineup(m.id, m.sport).catch(() => null),
+      getTeamRosters([m.homeTeam.id, m.awayTeam.id]).catch(() => new Map<string, string[]>()),
+      disputeMapper(m.id),
+    ]);
+    // The side the scoring state itself put each player on (best source).
+    let totals: MatchTotals | null = null;
+    const plugin = getSport(m.sport);
+    if (plugin.statTotals) {
+      try {
+        const tour = tours.find((t) => t.id === m.tournamentId);
+        const config = mergeMatchConfig(tour?.formats?.[m.sport] as Record<string, unknown> | undefined, m.format as Record<string, unknown> | undefined);
+        const raw = await getMatchEvents(m.id);
+        const state = raw.length ? replayLog(plugin, config, raw) : m.state;
+        if (state) totals = await matchStatTotals(m.id, m.sport, state, m);
+      } catch { totals = null; }
+    }
+    const sideOf = matchSideOf({
+      totals, squads, lineup,
+      rosters: { home: rosters.get(m.homeTeam.id) ?? [], away: rosters.get(m.awayTeam.id) ?? [] },
+      mapId,
+    });
+    const { writes, unknown } = planOpponentRepair(lines, sideOf, names);
+    const outcome = sideResults({ sport: m.sport, status: m.status, winner: m.winner ?? null, result: m.result ?? null, state: m.state });
+    let resultSuspect = 0;
+    if (outcome) for (const l of lines) {
+      const side = sideOf(l.playerId);
+      if (side && l.result && l.result !== outcome[side]) resultSuspect += 1;
+    }
+    const row = (out.perSport[m.sport] ??= { matches: 0, lines: 0, change: 0, unknown: 0, resultSuspect: 0 });
+    row.matches += 1; row.lines += lines.length; row.change += writes.length; row.unknown += unknown; row.resultSuspect += resultSuspect;
+    out.matches += 1; out.linesChecked += lines.length; out.linesToChange += writes.length;
+    for (const w of writes) {
+      if (out.samples.length < maxSamples) out.samples.push({ matchId: m.id, sport: m.sport, lineId: w.id, playerId: w.playerId, from: w.from, to: w.to });
+      if (dryRun) continue;
+      // keys-only: the opponent label, nothing else on the row
+      if (!isSupabaseConfigured || !supabase) {
+        const l = demo.statLines.find((x) => x.id === w.id);
+        if (l) { l.opponent = w.to; out.linesWritten += 1; }
+      } else {
+        const { error } = await supabase.from('stat_lines').update({ opponent: w.to }).eq('id', w.id);
+        if (!error) out.linesWritten += 1;
+      }
+    }
+  }
+  return out;
+}
+
 // SD-19: the founder's console handle for the D2 backfill (web: devtools).
 (globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin = {
   ...(((globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin as object | undefined) ?? {}),
   resyncSportLines,
   backfillCricketCaptainKeeper,
+  repairOpponents,
 };
 
 /** SD-11 (GEN-01) — at completion: an appearance line for every player who

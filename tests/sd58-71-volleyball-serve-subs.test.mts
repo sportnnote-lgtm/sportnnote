@@ -114,7 +114,7 @@ describe('SD-58 / SD-81 — ace and serve error credited to the server', () => {
     const opp = trackCourt(s).server!;
     assert.equal(opp.name, 'Arjun');
     const a = vb.outcomeAction('serveerror', 'home', undefined, { by: fp(opp) });
-    assert.deepEqual(a.attribution2, { playerId: 'a2', stat: 'serveErrors', playerName: 'Arjun' });
+    assert.deepEqual(a.attribution2, { playerId: 'a2', stat: 'serveErrors', playerName: 'Arjun', side: 'away' }); // SD-119: the server's side
     s = vb.reducer(s, a);
     const e = s.events[s.events.length - 1];
     assert.equal(e.kind, 'serveerror');

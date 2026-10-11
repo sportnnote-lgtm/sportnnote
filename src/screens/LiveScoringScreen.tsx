@@ -233,6 +233,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     setLock(l);
   }, [matchId]);
 
+  // Both sides' rosters (declared before useLiveMatch: SD-119 labels each
+  // credited player's line with the side they are on).
+  const [homeFull, setHomeFull] = useState<Player[]>([]);
+  const [awayFull, setAwayFull] = useState<Player[]>([]);
+  const sideRosters = useMemo(() => ({ home: homeFull.map((p) => p.id), away: awayFull.map((p) => p.id) }), [homeFull, awayFull]);
   const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep, resultSendsAt, sendResultNow } = useLiveMatch({
     matchId,
     sport,
@@ -240,6 +245,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     lockStatus: lockStat,
     homeTeamName,
     awayTeamName,
+    rosters: sideRosters,
     homeTeamId: meta.homeTeamId,
     awayTeamId: meta.awayTeamId,
     tournamentId: meta.tournamentId,
@@ -247,8 +253,6 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   });
 
   const viewerTz = useUserTimeZone(); // show every time on this screen in the viewer's own zone
-  const [homeFull, setHomeFull] = useState<Player[]>([]);
-  const [awayFull, setAwayFull] = useState<Player[]>([]);
   // All players, only for resolving names of people outside the two rosters —
   // hosts, the scorer or a manager can be an organizer/referee who isn't a
   // squad member (otherwise their card would read a bare "Host").

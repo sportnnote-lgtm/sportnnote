@@ -4,7 +4,7 @@
  *  score. Football ships its own richer, stateful grammar separately. */
 import type { ScoreAction } from './types';
 import type { VoiceContext } from './types';
-import { deburr, resolveSide, attribution, numberFromText } from './voiceMatch.ts';
+import { deburr, resolveSide, attribution, sided, numberFromText } from './voiceMatch.ts';
 import { previewRaid, type KabaddiState } from './kabaddi/engine.ts';
 import { outcomeAction } from './volleyball/engine.ts';
 import { creditAttribution, ftCredits, makeCredits, missCredits } from './basketball/credits.ts';
@@ -70,7 +70,7 @@ export function tennisVoice(text: string, ctx: VoiceContext): ScoreAction[] | nu
   const { side, player } = resolveSide(text, ctx);
   if (!side) return null;
   // Double fault: the opponent wins the point; the faulting server gets the DF stat.
-  if (/double ?fault|\bdf\b/.test(q)) return [{ type: 'POINT', side: side === 'home' ? 'away' : 'home', payload: { df: true }, attribution2: attribution(player, 'doubleFaults') }];
+  if (/double ?fault|\bdf\b/.test(q)) return [{ type: 'POINT', side: side === 'home' ? 'away' : 'home', payload: { df: true }, attribution2: sided(attribution(player, 'doubleFaults'), side) }];
   if (/\bace\b/.test(q)) return [{ type: 'ACE', side, attribution: attribution(player, 'aces') }];
   return pointVoice(text, ctx);
 }
@@ -102,7 +102,7 @@ export function kabaddiVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
   if (/\btackle\b/.test(q)) {
     const outcome = { side: opp, touches: 0, bonus: false, raiderOut: true } as const;
     const pts = preview(outcome)?.tacklePts ?? 1;
-    return [{ type: 'RAID_OUTCOME', side: opp, payload: { ...outcome, ...(player ? { tacklerId: player.id, tacklerName: player.fullName } : null) }, attribution2: attribution(player, 'tacklePoints', pts) }];
+    return [{ type: 'RAID_OUTCOME', side: opp, payload: { ...outcome, ...(player ? { tacklerId: player.id, tacklerName: player.fullName } : null) }, attribution2: sided(attribution(player, 'tacklePoints', pts), side) }];
   }
   if (/\braid\b/.test(q)) {
     const outcome = { side, touches: 1, bonus: false, raiderOut: false } as const;
@@ -147,7 +147,7 @@ export function cricketVoice(text: string, ctx: VoiceContext): ScoreAction[] | n
       : 'bowled';
     // Credit the bowler for a bowler's wicket (not a run out) — parity with the
     // plugin's tap flow, so voice-scored wickets count toward player stats too.
-    return [{ ...wrap('WICKET', { kind }), attribution: s.bowlerId && kind !== 'runout' ? { playerId: s.bowlerId, stat: 'wickets', by: 1, playerName: s.bowlerName } : undefined }];
+    return [{ ...wrap('WICKET', { kind }), attribution: s.bowlerId && kind !== 'runout' ? { playerId: s.bowlerId, stat: 'wickets', by: 1, playerName: s.bowlerName, side: s.battingSide === 'home' ? 'away' : 'home' } : undefined }];
   }
 
   // Runs — a run word or a bare 0-7 (parity #15: "five", "seven"; "all run" /

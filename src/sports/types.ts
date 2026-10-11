@@ -38,6 +38,11 @@ export interface Attribution {
   /** stat keys being tracked this match (scorer's per-game settings) — stamped
    *  on the player's stat line so profiles can show per-stat game coverage. */
   tracked?: string[];
+  /** SD-119 — the side this player played for, when it differs from (or isn't
+   *  given by) the action's `side`: a chess / golf result credited to both
+   *  players, a double fault, an opponent's error, a tackle, a bowler's wicket.
+   *  Labels the stat line's `opponent`; the reducers ignore it. */
+  side?: 'home' | 'away';
 }
 
 /** A scoring event. `type` is sport-defined; payload is open. */

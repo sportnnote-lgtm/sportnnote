@@ -53,7 +53,7 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
     const side = winner === 'halved' ? undefined : winner;
     const p = side ? (side === 'home' ? homeRoster : awayRoster)[0] : undefined;
     if (!strokes || !here) {
-      dispatch({ type: 'HOLE', side, payload: { winner }, attribution: p ? { playerId: p.id, playerName: p.fullName, stat: 'holesWon', by: 1 } : undefined });
+      dispatch({ type: 'HOLE', side, payload: { winner }, attribution: p ? { playerId: p.id, playerName: p.fullName, stat: 'holesWon', by: 1, side } : undefined });
       return;
     }
     // SD-87 — strokes entered: each player's score on the hole (birdie, par …)
@@ -62,9 +62,10 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
       const pl = (who === 'home' ? homeRoster : awayRoster)[0];
       if (!pl) return undefined;
       const key = scoreStatKey(strokes[who], here.hole.par);
+      // SD-119: `side` — each player's line names the OTHER player
       return winner === who
-        ? { playerId: pl.id, playerName: pl.fullName, stat: 'holesWon', by: 1, extra: { [key]: 1 } }
-        : { playerId: pl.id, playerName: pl.fullName, stat: key, by: 1 };
+        ? { playerId: pl.id, playerName: pl.fullName, stat: 'holesWon', by: 1, extra: { [key]: 1 }, side: who }
+        : { playerId: pl.id, playerName: pl.fullName, stat: key, by: 1, side: who };
     };
     dispatch({ type: 'HOLE', side, payload: { winner, home: strokes.home, away: strokes.away }, attribution: credit('home'), attribution2: credit('away') });
   };

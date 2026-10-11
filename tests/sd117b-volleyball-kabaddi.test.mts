@@ -75,7 +75,7 @@ describe('SD-117b volleyball — "Opp. fault" detail', () => {
   test('type + erring opponent ride on the event; the opponent is charged one error', () => {
     const a = vb.outcomeAction('opperror', 'home', undefined, { err: 'net', by: B });
     assert.deepEqual(a.payload, { err: 'net' });
-    assert.deepEqual(a.attribution2, { playerId: 'a1', stat: 'errors', playerName: 'Bela' });
+    assert.deepEqual(a.attribution2, { playerId: 'a1', stat: 'errors', playerName: 'Bela', side: 'away' }); // SD-119: the erring player's side
     assert.equal(a.attribution, undefined);
     const s = vplay([a]);
     const e = s.events[0];

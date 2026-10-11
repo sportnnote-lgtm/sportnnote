@@ -39,6 +39,7 @@ import { eventCredits } from '../src/sports/basketball/credits.ts';
 import { defaultCredits } from '../src/sports/rallyEdit.ts';
 import { roundStats } from '../src/sports/golf/engine.ts';
 import { FIELD_NOTE_STAT } from '../src/sports/cricket/scorecard.ts';
+import { chessResultCredit } from '../src/sports/chess/stats.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const golden = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/stat-schema.golden.json'), 'utf8'));
@@ -149,6 +150,11 @@ describe('SD-15 — every stat key a plugin writes is declared', () => {
   add('golf', Object.keys(roundStats({ strokes: [3, 4, 5, 6, 2], putts: [1, 2, 2, 1, 1], gir: [true, false, true, true, true], fir: [true, false, null, true, null], penalties: [0, 1, 0, 0, 0] } as never,
     [3, 4, 4, 5, 4].map((par, i) => ({ number: i + 1, par, strokeIndex: i + 1 })) as never, [0, 0, 0, 0, 0])));
   add('cricket', Object.values(FIELD_NOTE_STAT));
+  // SD-119: chess's result credit lives in chess/stats.ts — run it for every outcome
+  for (const winner of ['home', 'away', 'draw'] as const) for (const method of ['checkmate', 'resignation', 'time', 'arbiter', 'forfeit', undefined]) for (const dff of [false, true]) {
+    const c = chessResultCredit('home', { id: 'p', fullName: 'P' }, winner, method, dff)!;
+    add('chess', [c.stat, ...Object.keys(c.extra ?? {})]);
+  }
 
   test('the scan finds what the plugins write (sanity)', () => {
     assert.ok((found.get('football')?.size ?? 0) >= 20, `football: ${[...(found.get('football') ?? [])]}`);

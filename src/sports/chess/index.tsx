@@ -16,7 +16,7 @@ import {
   init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL, isForfeit, isDoubleForfeit, clockText, parseClock,
   type ChessMethod, type ChessState, type Side,
 } from './engine';
-import { winMethodKey } from './stats';
+import { chessResultCredit } from './stats';
 
 const half = (n: number) => (n === 0.5 ? '½' : String(n));
 
@@ -76,19 +76,9 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
     // Credit both players a game (+ the outcome) so it shows on their profiles.
     // SD-117c: a forfeit is no game played — it credits a forfeit win / loss
     // instead of `games` + `wins` / `losses` (FIDE: excluded from played games).
-    const credit = (side: Side): Attribution | undefined => {
-      const p = (side === 'home' ? homeRoster : awayRoster)[0];
-      if (!p) return undefined;
-      // SD-67: a double forfeit — no game, a forfeit loss for each
-      if (dff) return { playerId: p.id, playerName: p.fullName, stat: 'forfeitLosses', by: 1 };
-      if (isForfeit(method) && winner !== 'draw') {
-        return { playerId: p.id, playerName: p.fullName, stat: winner === side ? 'forfeitWins' : 'forfeitLosses', by: 1 };
-      }
-      const outcome = winner === 'draw' ? 'draws' : winner === side ? 'wins' : 'losses';
-      // SD-36: how the game was won, on the winner's line (a new optional key)
-      const how = winner === side ? winMethodKey(method) : undefined;
-      return { playerId: p.id, playerName: p.fullName, stat: 'games', by: 1, extra: { [outcome]: 1, ...(how ? { [how]: 1 } : {}) } };
-    };
+    // SD-119: each credit carries its player's side (the line's opponent is the other player).
+    const credit = (side: Side): Attribution | undefined =>
+      chessResultCredit(side, (side === 'home' ? homeRoster : awayRoster)[0], winner, method, dff);
     const w = dff ? null : parseClock(clockW); const b = dff ? null : parseClock(clockB);
     const clock = w != null || b != null ? { ...(w != null ? { white: w } : {}), ...(b != null ? { black: b } : {}) } : undefined;
     // the colour is committed only now, and only if it really changed

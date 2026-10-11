@@ -416,7 +416,8 @@ export function raidActions(s: KabaddiState, f: RaidForm, idOf?: (name?: string)
   out.push({
     type: 'RAID_OUTCOME', side: f.side,
     attribution: f.raider && raidPts ? { playerId: f.raider.id, stat: 'raidPoints', by: raidPts, playerName: f.raider.fullName } : undefined,
-    attribution2: tackler && tacklePts ? { playerId: tackler.id, stat: 'tacklePoints', by: tacklePts, playerName: tackler.fullName } : undefined,
+    // SD-119: the tackler defends — the side that is NOT raiding
+    attribution2: tackler && tacklePts ? { playerId: tackler.id, stat: 'tacklePoints', by: tacklePts, playerName: tackler.fullName, side: f.side === 'home' ? 'away' : 'home' } : undefined,
     payload: {
       ...outcome,
       ...(f.raider ? { raiderId: f.raider.id, raiderName: f.raider.fullName } : null),

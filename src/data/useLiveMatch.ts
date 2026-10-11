@@ -21,6 +21,7 @@ import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getSport } from '../sports/registry';
 import { recordStatLine as writeStatLine, getMatchEvents, popMatchEvent, updateMatchSnapshot, resetMatch, syncMatchStatLines, matchStatTotals } from './repos';
 import { deltasBesideTotals } from './statSync';
+import { actionLineCredits, creditOpponent, type SideRosters } from './lineOpponent';
 import { matchOutbox } from './matchOutbox';
 import { followStore } from './followStore';
 import { notify } from '../core/notifications';
@@ -84,6 +85,9 @@ export function useLiveMatch(params: {
   /** full team names — used to label the opponent on attributed stat lines */
   homeTeamName?: string;
   awayTeamName?: string;
+  /** SD-119 — player ids on each side (roster / squad): which side a credited
+   *  player is on, so their line's `opponent` names the OTHER team */
+  rosters?: SideRosters;
   /** ids for team/tournament-follow notifications */
   homeTeamId?: string;
   awayTeamId?: string;
@@ -102,6 +106,13 @@ export function useLiveMatch(params: {
   const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config, lockStatus = 'unsupported', readOnly = false } = params;
   const onRemoteRef = useRef(params.onRemoteEvent);
   onRemoteRef.current = params.onRemoteEvent;
+  // SD-119: latest rosters, read at credit time (they load after the screen mounts)
+  const rostersRef = useRef(params.rosters);
+  rostersRef.current = params.rosters;
+  /** The opponent label for a credited player: the side they played for — the
+   *  credit's own `side`, else roster membership, else the action's side. */
+  const opponentFor = (credit: { playerId: string; side?: 'home' | 'away' }, actionSide?: 'home' | 'away') =>
+    creditOpponent(credit, actionSide, { home: homeTeamName, away: awayTeamName }, rostersRef.current);
   // Allowed to score AND (holding the lock, or nobody holds it, or no lock yet).
   const canWrite = canScore && canWriteWith(lockStatus);
   const plugin = getSport(sport);
@@ -290,17 +301,14 @@ export function useLiveMatch(params: {
 
       // Player attribution → stat line + notify followers (scorer side only,
       // so replay/realtime on viewers never double-counts).
+      // SD-119: each credited player's line names the side THEY did not play
+      // for — a chess / golf result credits both players, a cricket catch is
+      // on the bowler's (fielding) side, a double fault / tackle on the other.
+      const credits = actionLineCredits(action, { home: homeTeamName, away: awayTeamName }, rostersRef.current);
+      for (const c of credits) void recordStatLine({ matchId, playerId: c.playerId, sport, stat: c.stat, by: c.by, opponent: c.opponent, tracked: c.tracked });
       if (action.attribution) {
-        const { playerId, stat, by = 1, playerName, extra, tracked } = action.attribution;
-        const opponent = action.side === 'home' ? awayTeamName : homeTeamName;
-        void recordStatLine({ matchId, playerId, sport, stat, by, opponent, tracked });
-        // extra increments credited by the same action (e.g. a shot on target also
-        // bumps shotsOnTarget) — same line, no extra notification.
-        if (extra) {
-          for (const [k, v] of Object.entries(extra)) {
-            void recordStatLine({ matchId, playerId, sport, stat: k, by: v, opponent, tracked });
-          }
-        }
+        const { playerId, stat, by = 1, playerName } = action.attribution;
+        const opponent = credits.find((c) => c.primary)?.opponent;
         // Only if the follower still wants score alerts for this player (#23).
         if (followStore.wants('player', playerId, 'scores')) {
           const verb = stat === 'goals' ? `scored${by > 1 ? ` ${by}` : ''}` : `+${by} ${stat}`;
@@ -313,14 +321,6 @@ export function useLiveMatch(params: {
             matchId,
           });
         }
-      }
-      // A second player credited by the same action (e.g. a fielder's catch on a
-      // bowler's wicket). Stat line only — no separate follower notification.
-      if (action.attribution2) {
-        const { playerId, stat, by = 1, extra, tracked } = action.attribution2;
-        const opponent = action.side === 'home' ? awayTeamName : homeTeamName;
-        void recordStatLine({ matchId, playerId, sport, stat, by, opponent, tracked });
-        if (extra) for (const [k, v] of Object.entries(extra)) void recordStatLine({ matchId, playerId, sport, stat: k, by: v, opponent, tracked });
       }
 
       // Persist to the event log (demo store or Supabase) so the timeline is
@@ -395,7 +395,7 @@ export function useLiveMatch(params: {
     // A correction undoes exactly the stat changes it stored; anything else
     // reverses the stats its own attribution credited.
     const reversals = removed.type === AMEND_TYPE ? undoAmendDeltas(removed) : statReversals(removed);
-    for (const r of reversals) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
+    for (const r of reversals) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by, opponent: opponentFor(r) });
     // Re-derive from the truncated log. In live mode this DELETE also reaches
     // viewers' realtime subscriptions, which rebuild the same way.
     await rebuildFromLog();
@@ -420,7 +420,7 @@ export function useLiveMatch(params: {
   const discardRejected = useCallback(async () => {
     if (!matchId) return;
     for (const rec of matchOutbox.discard(matchId)) {
-      for (const r of statReversals(rec)) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by });
+      for (const r of statReversals(rec)) void recordStatLine({ matchId, playerId: r.playerId, sport, stat: r.stat, by: r.by, opponent: opponentFor(r) });
     }
     await rebuildFromLog();
   }, [matchId, sport, rebuildFromLog]);
@@ -439,7 +439,7 @@ export function useLiveMatch(params: {
     const deltas = !absolute ? plan.deltas
       : plugin.statTotalsPartial ? deltasBesideTotals(plan.deltas, (await matchStatTotals(matchId, sport, plan.afterState).catch(() => null)) ?? {})
       : [];
-    for (const d of deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
+    for (const d of deltas) void recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by, opponent: opponentFor(d) });
     await rebuildFromLog();
     void syncThenPersist(stateRef.current).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps

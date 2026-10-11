@@ -472,10 +472,16 @@ export function wicketAttribution(o: {
   runsAs?: RunsAs;
   /** on a wide, completed runs are wides — never the batter's */
   wide?: boolean;
+  /** SD-119 — when given, each credit carries its player's side: the bowler /
+   *  fielder / keeper FIELD (their line's opponent is the batting side), the
+   *  striker bats. The live UI passes it; the ball editor needn't. */
+  battingSide?: 'home' | 'away';
 }): { attribution?: Attr; attribution2?: Attr } {
-  const { kind, bowler, fielder, keeper, striker } = o;
+  const { kind, bowler, fielder, keeper, striker, battingSide } = o;
+  const fieldingSide = battingSide ? (battingSide === 'home' ? 'away' : 'home') : undefined;
   const credit = (p: { id?: string; name?: string } | undefined, stat: string, by?: number): Attr | undefined =>
-    p?.id ? { playerId: p.id, stat, ...(by !== undefined ? { by } : {}), playerName: p.name } : undefined;
+    p?.id ? { playerId: p.id, stat, ...(by !== undefined ? { by } : {}), playerName: p.name,
+      ...(battingSide ? { side: p === striker ? battingSide : fieldingSide } : {}) } : undefined;
   const runs = o.runs ?? 0;
   const strikerRuns = RUNS_KINDS.includes(kind) && !o.wide && (o.runsAs ?? 'bat') === 'bat' && runs > 0
     ? credit(striker, 'runs', runs) : undefined;
