@@ -41,6 +41,8 @@ import { isGuestSession, promptSignIn } from '../core/guest';
 import { ageOf } from '../core/age';
 import { playerForm } from '../data/headToHead';
 import { FormStrip } from '../components/FormStrip';
+import { WagonWheelView } from '../sports/cricket/WagonWheel';
+import { careerZones } from '../sports/cricket/wagon';
 
 
 
@@ -407,6 +409,19 @@ export default function SportProfileScreen() {
                       </View>
                     </React.Fragment>
                   ))}
+                  {/* SD-133 (CK-11) — career wagon wheel from the tagged shots (wz1…wz8). */}
+                  {sport === 'cricket' && (() => {
+                    const ww = careerZones(history);
+                    if (!ww.shots) return null;
+                    const shots = ww.runs.flatMap((r, i) => (r > 0 ? [{ zone: i + 1, runs: r, deep: true }] : []));
+                    return (
+                      <>
+                        <Text style={st.totalsLabel}>Wagon wheel</Text>
+                        <WagonWheelView shots={shots} career lh={detail?.sides?.bat === 'Left-handed'}
+                          note={`Runs by area from ${ww.shots} tagged scoring shot${ww.shots === 1 ? '' : 's'} (matches scored with the wagon wheel on)`} />
+                      </>
+                    );
+                  })()}
                   {capt && (
                     <>
                       <Text style={st.totalsLabel}>Captaincy</Text>

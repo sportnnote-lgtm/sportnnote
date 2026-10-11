@@ -51,6 +51,9 @@ export interface BBEvent {
    *  keeps two same-named players apart for foul-out / ejection. Absent on
    *  older logs. */
   pid?: string;
+  /** SD-132: the game-clock second (played in its period) on plays logged
+   *  with the stoppable clock. Absent on older logs. */
+  sec?: number;
 }
 
 export const BB_META: Record<BBEventType, { icon: string; label: string }> = {

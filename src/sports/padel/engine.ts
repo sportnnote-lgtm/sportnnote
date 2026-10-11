@@ -48,6 +48,10 @@ export interface PadelState {
   /** SD-107 — optional point detail (how each point was won) is being
    *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
   pointDetail?: boolean;
+  /** SD-135 (PD-b) — 1st / 2nd serve tracking, as tennis SD-107: points
+   *  served while on carry `serve` (1, or 2 after a 1st-serve fault / a double
+   *  fault). Absent on older matches (D8). */
+  serveDetail?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -107,7 +111,8 @@ function winSet(s: PadelState, side: 'home' | 'away', games: { home: number; awa
   return { ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets, setsWon, tb, events, seq, ended };
 }
 
-function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined, whoId?: string, df?: { playerId?: string; playerName?: string }): PadelState {
+function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefined, whoId?: string, df?: { playerId?: string; playerName?: string }, serve?: 1 | 2): PadelState {
+  const sv = serve ? { serve } : {};
   let seq = s.seq;
   const events = [...s.events];
   const o = other(side);
@@ -118,7 +123,7 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
   const stamp = matchTb ? 'Match TB' : `Set ${setNo}${tb ? ' · TB' : ''}`;
   // SD-117c — a double fault (as tennis SD-104): a plain point for the receiver
   // carrying a `df` marker naming the faulting server (no player credited).
-  if (df) events.push({ id: ++seq, stamp, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1 });
+  if (df) events.push({ id: ++seq, stamp, icon: '⚠️', label: tb ? `Double fault · ${pts.home}-${pts.away}` : 'Double fault', detail: df.playerName, side, kind: 'point', df, set: setNo, points: 1, ...sv });
   else events.push({
     id: ++seq,
     stamp,
@@ -126,7 +131,7 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
     label: tb ? `${matchTb ? 'Match tiebreak' : 'Tiebreak'} ${pts.home}-${pts.away}` : 'Point',
     detail: who,
     side,
-    kind: 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1,
+    kind: 'point', playerName: who, ...(whoId ? { playerId: whoId } : {}), set: setNo, points: 1, ...sv,
   });
 
   if (tb) {
@@ -171,7 +176,13 @@ const core = (s: PadelState, a: ScoreAction): PadelState => {
   // SD-21 — timeline correction (as tennis): STAT_ADJUST only reconciles player
   // profiles; EDIT_LOG replays a corrected point list so games/sets/serve re-derive.
   if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayKeepingMarks(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? [], s.events);
+  if (a.type === 'EDIT_LOG') {
+    // SD-135: each corrected point carries its own 1st / 2nd serve (as tennis):
+    // replay with serve tracking off, then restore the setting.
+    const r = replayKeepingMarks(reducer, clearMatch({ ...s, serveDetail: undefined }), (a.payload?.points as PointInput[]) ?? [], s.events);
+    const { serveDetail: _drop, ...rest } = r;
+    return s.serveDetail === undefined ? rest : { ...rest, serveDetail: s.serveDetail };
+  }
   // Who serves first — settable only before the first point; serve alternates
   // from there. No `side` on this action.
   // SD-104 — doubles: which player of a pair serves its first game of this set
@@ -200,12 +211,17 @@ const core = (s: PadelState, a: ScoreAction): PadelState => {
   // replay unchanged): `df: true` marks the receiver's point with the faulting
   // server (attribution2 live, `_attr2` on replay); `pd` (an Ace) annotates the
   // server's point exactly as a POINT_DETAIL right after it would.
-  if (a.type === 'POINT' && a.payload?.df === true) {
+  // SD-135: the 1st / 2nd serve — given on a replayed point, else 1 (2 for a
+  // double fault) while tracking is on; untracked points carry none.
+  const given = a.payload?.serve === 1 || a.payload?.serve === 2 ? a.payload.serve : undefined;
+  const isDf = a.type === 'POINT' && a.payload?.df === true;
+  const serve: 1 | 2 | undefined = given ?? (s.serveDetail ? (isDf ? 2 : 1) : undefined);
+  if (isDf) {
     const f = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);
-    return scorePoint(s, a.side, undefined, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) });
+    return scorePoint(s, a.side, undefined, undefined, { ...(f?.playerId ? { playerId: f.playerId } : {}), ...(f?.playerName ? { playerName: f.playerName } : {}) }, serve);
   }
   if (a.type === 'POINT') {
-    const next = scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined);
+    const next = scorePoint(s, a.side, a.attribution?.playerName, a.attribution?.playerId || undefined, undefined, serve);
     if (a.payload?.pd == null) return next;
     const ev = applyPointDetail(next.events, { pd: a.payload.pd });
     return ev ? { ...next, events: ev } : next;

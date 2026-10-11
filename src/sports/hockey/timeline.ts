@@ -1,6 +1,7 @@
 /** SD-101 — hockey events as timeline rows (the shared LiveTimeline) and the
  *  scorer's correction list. PURE. */
 import type { LiveEvent } from '../liveEvents';
+import { shootoutOrderRows } from '../shootoutOrder.ts';
 import { minuteText, periodName, PC_RESULT_LABEL, type HockeyEvent, type HockeyState } from './engine.ts';
 
 export const GOAL_LABEL = { field: 'Field goal', pc: 'Penalty-corner goal', stroke: 'Penalty-stroke goal' } as const;
@@ -48,8 +49,8 @@ export function timelineEvents(s: HockeyState): { e: HockeyEvent; saver?: string
 }
 
 /** The viewer timeline: newest first by game time (LiveTimeline sorts by id). */
-export function hockeyTimeline(s: HockeyState): LiveEvent[] {
-  return timelineEvents(s).map(({ e, saver }, i) => {
+export function hockeyTimeline(s: HockeyState, names?: { home?: string; away?: string }): LiveEvent[] {
+  return [...timelineEvents(s).map(({ e, saver }, i) => {
     const d = describeEvent(e, saver);
     const name = e.type === 'sub' ? e.secondName : e.playerName;
     return {
@@ -65,7 +66,7 @@ export function hockeyTimeline(s: HockeyState): LiveEvent[] {
       half: e.period,
       ...(e.type === 'goal' ? { tone: 'boundary' as const } : e.type === 'card' && e.card === 'red' ? { tone: 'wicket' as const } : {}),
     };
-  });
+  }), ...shootoutOrderRows(s.shootout, names, { what: 'Shoot-out', verb: 'shoot' })];
 }
 
 /** "Q2 · 23'" — where a row sits, for the correction list. */

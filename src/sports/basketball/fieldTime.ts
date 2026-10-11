@@ -5,12 +5,14 @@
  * Only when the scorer set the starting five (`state.onCourt`): the five, every
  * SUB, and a player fouling out or ejected (replaced at once — the side never
  * plays short). +/- = the team's points minus the opponent's while the player
- * was on court (FIBA box score). MIN is approximate: events carry the scorer
- * clock's whole minute within the period (`minute`), so a sub is placed at
- * that minute; a first-to-N game (3×3 to 21) has no clock, so it gets +/- only.
+ * was on court (FIBA box score). MIN is approximate on older logs: events
+ * carry the scorer clock's whole minute within the period (`minute`), so a sub
+ * is placed at that minute. SD-132: plays logged on the stoppable game clock
+ * carry the clock second (`sec`), so MIN and +/- follow the real clock. A
+ * first-to-N game (3×3 to 21) gets +/- only.
  */
 import { trackField, type FieldEvent, type FieldLog, type FieldResult, type Side } from '../onField.ts';
-import { currentMinute, type BasketballState } from './engine.ts';
+import { currentMinute, gameSec, type BasketballState } from './engine.ts';
 import { pointsOf } from './events.ts';
 
 /** Minutes before period `q` starts (regulation periods, then overtime). */
@@ -26,7 +28,8 @@ export function basketballFieldLog(s: BasketballState, live = false): FieldLog |
   if (!s.onCourt || (!fiveSet(s, 'home') && !fiveSet(s, 'away'))) return null;
   const ids = s.ids ?? {};
   const who = (name?: string) => ({ ...(name && ids[name] ? { id: ids[name] } : {}), ...(name ? { name } : {}) });
-  const at = (q: number, minute: number) => periodStart(s, q) + Math.min(Math.max(0, minute ?? 0), periodLen(s, q));
+  const at = (q: number, minute: number, sec?: number) =>
+    periodStart(s, q) + Math.min(Math.max(0, typeof sec === 'number' ? sec / 60 : minute ?? 0), periodLen(s, q));
   const starters = {
     home: fiveSet(s, 'home') ? s.onCourt.home.map(who) : [],
     away: fiveSet(s, 'away') ? s.onCourt.away.map(who) : [],
@@ -36,7 +39,7 @@ export function basketballFieldLog(s: BasketballState, live = false): FieldLog |
   let q = 1;
   for (const e of s.events) {
     while (e.quarter > q) { q += 1; events.push({ kind: 'period', t: periodStart(s, q), period: q }); }
-    const t = at(e.quarter, e.minute);
+    const t = at(e.quarter, e.minute, e.sec);
     const pts = pointsOf(e);
     if (pts > 0) events.push({ kind: 'score', t, side: e.side, points: pts });
     if (!fiveSet(s, e.side)) continue;
@@ -48,7 +51,9 @@ export function basketballFieldLog(s: BasketballState, live = false): FieldLog |
       if (s.foulOutLimit > 0 && n === s.foulOutLimit) events.push({ kind: 'off', t, side: e.side, who: who(e.playerName), shortFor: 0 });
     }
   }
-  const now = live && !s.ended ? at(s.quarter, currentMinute(s)) : periodStart(s, s.quarter) + periodLen(s, s.quarter);
+  const now = live && !s.ended
+    ? (s.gc ? at(s.quarter, 0, gameSec(s, Date.now())) : at(s.quarter, currentMinute(s)))
+    : periodStart(s, s.quarter) + periodLen(s, s.quarter);
   const last = events.reduce((m, e) => Math.max(m, e.t), 0);
   return { starters, events, end: Math.max(now, last), people: Object.entries(ids).map(([name, id]) => ({ id, name })) };
 }

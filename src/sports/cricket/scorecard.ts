@@ -196,6 +196,9 @@ export const CRICKET_TOTAL_KEYS = [
   'dropped', 'runsSaved', 'runsMissed',
   // SD-69 — only on the captains / keepers (from SET_CAPTAIN / SET_KEEPER)
   'capt', 'wk', 'wkCatches',
+  // SD-133 (CK-11) — wagon wheel: runs per zone + tagged shots; only in a match
+  // that tagged any shot (every batter then carries them, 0 when none)
+  'wz1', 'wz2', 'wz3', 'wz4', 'wz5', 'wz6', 'wz7', 'wz8', 'wwShots',
 ] as const;
 
 /** FIELD_NOTE kind → the fielder stat it credits (parity #20). */
@@ -243,6 +246,20 @@ export function statTotals(s: CricketState): Record<string, { side: Side; stats:
     Object.assign(entry(id, c.side).stats, {
       runs: c.runs, ballsFaced: c.balls, fours: c.fours, sixes: c.sixes, innings: 1, notOut: c.out ? 0 : 1,
     });
+  }
+  // SD-133 (CK-11) — the wagon wheel per batter, absolute like everything else.
+  if (s.shots?.length) {
+    for (const id of Object.keys(s.batting)) {
+      const st = out[id].stats;
+      for (let z = 1; z <= 8; z++) st[`wz${z}`] = 0;
+      st.wwShots = 0;
+    }
+    for (const x of s.shots) {
+      const st = out[x.batterId]?.stats;
+      if (!st || !x.zone) continue;
+      st[`wz${x.zone}`] += x.runs;
+      st.wwShots += 1;
+    }
   }
   const log = hasLog(s);
   const splits = { ...bowlerSplits(s, 'home'), ...bowlerSplits(s, 'away') };

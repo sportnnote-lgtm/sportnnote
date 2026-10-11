@@ -8,7 +8,7 @@ order: 50
 updated: 2026-10-11
 ---
 
-Score a hockey match on one phone. You run the game clock and tap what happens; the app times every suspension and builds the box score and player stats.
+Score a hockey match on one phone. You run the game clock and tap what happens; the app times suspensions and builds the stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -40,10 +40,10 @@ Score a hockey match on one phone. You run the game clock and tap what happens; 
 A suspended or sent-off player is left out of the player lists until he is allowed back.
 
 ## Shoot-out
-If the match is level at full time and the decider is a shoot-out, you see "Level — the match goes to a shoot-out". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
-1. Tap which team shoots first.
+Level at full time with a shoot-out decider? You see "Level — the match goes to a shoot-out". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
+1. Under "Who shoots first?", tap the team the umpires' toss gives first ([shoot-out order](/guides/choose-shoot-out-order/)).
 2. For each attempt, tap the taker (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
-3. Still level after five each? Sudden death starts, with the other team shooting first, until one team leads after equal attempts.
+3. Still level after five each? Tap who shoots first in sudden death (FIH: the team that went second). It runs until one team leads after equal attempts.
 
 The result keeps the level score and adds the shoot-out, for example "2–2" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
 

@@ -40,7 +40,7 @@
  */
 import type { ScoreAction } from './types';
 import { pointInputs, type PointInput } from './rallyEdit.ts';
-import { makeRallyEngine, rallyInputs, startPair, type RallyState } from './rallyEngine.ts';
+import { makeRallyEngine, rallyDoublesStarter, rallyInputs, startPair, type RallyState } from './rallyEngine.ts';
 import { ttServer } from './tabletennis/serve.ts';
 import * as tennis from './tennis/engine.ts';
 import * as padel from './padel/engine.ts';
@@ -283,7 +283,7 @@ function rallyAdapter(sport: 'tabletennis' | 'squash' | 'pickleball'): Adapter {
         // SD-06 court positions (USA Pickleball): side-out → the derived starter
         // flag; rally scoring → the right-court player (starter on an even score).
         const { starter, partner } = startPair(x, side, roster);
-        const isStarter = x.sideOut ? (x.srvStarter ?? true) : x.current[side] % 2 === 0;
+        const isStarter = x.sideOut ? (x.srvStarter ?? true) : rallyDoublesStarter(x, side, gamePts); // SD-135 (rallyPos)
         id = isStarter ? starter : partner;
       }
       // SD-62 — TT doubles: named from the ITTF order on matches where the

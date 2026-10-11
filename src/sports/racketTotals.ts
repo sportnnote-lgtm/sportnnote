@@ -41,7 +41,7 @@ import type { BadmintonState } from './badminton/engine.ts';
 import { type TennisState, setTiebreaks as tennisTiebreaks, standingsUnits as tennisGames } from './tennis/engine.ts';
 import { type PadelState, setTiebreaks as padelTiebreaks, standingsUnits as padelGames } from './padel/engine.ts';
 import { serveStats, serveCareerKeys, type ServeSport } from './serveStats.ts';
-import { detailKeys, detailPlayerCredits, detailTracked, type DetailSport } from './pointDetail.ts';
+import { detailCoverage, detailKeys, detailPlayerCredits, type DetailSport } from './pointDetail.ts';
 
 type Side = 'home' | 'away';
 type PerSide = { home: number; away: number };
@@ -231,8 +231,12 @@ function withServe(sport: ServeSport | undefined, s: { events?: LiveEvent[] } | 
  *  point's player / the named erring player, else the side's only player
  *  (singles); an unresolved doubles credit stays side-level (panel only). */
 function withDetail(sport: DetailSport | undefined, s: { events?: LiveEvent[]; pointDetail?: boolean } | null | undefined, totals: Record<string, StatTotalsEntry>, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> {
-  if (!sport || !s || !detailTracked(s)) return totals;
-  const keys = detailKeys(sport);
+  // SD-135 (PD-a) — a match with only one-tap detail (padel Ace, squash
+  // Stroke / No let) writes just those keys: winners / errors stay "not
+  // tracked" rather than a false 0.
+  const cov = sport && s ? detailCoverage(sport, s) : null;
+  if (!sport || !s || !cov) return totals;
+  const keys = detailKeys(sport, cov === 'quick');
   const bySide = (side: Side) => Object.entries(totals).filter(([, e]) => e.side === side).map(([id]) => id);
   const names = new Map<string, string>();
   for (const side of SIDES) for (const p of ctx?.players?.[side] ?? []) if (p?.id && p.name) names.set(`${side}|${p.name}`, p.id);

@@ -46,6 +46,10 @@ export interface LiveEvent {
    *  penalty header, default…) and on a penalty POINT (`kind: 'point'`, `side` =
    *  who it was awarded to). See conduct.ts. Absent on every older event. */
   pen?: import('./conduct').PenMark;
+  /** SD-136 — a volleyball sanction record (`kind: 'conduct'`: warning,
+   *  expulsion, disqualification, delay warning). A penalty point carries `pen`
+   *  instead. See volleyball/sanctions.ts. Absent on every older event. */
+  vs?: import('./volleyball/sanctions').VbSanction;
   /** SD-54 — racket timeouts (`kind: 'timeout'`): which one. */
   tmo?: 'timeout' | 'medical' | 'toilet';
   /** SD-54 — when the step was logged (ms, from the action's `payload.at`);

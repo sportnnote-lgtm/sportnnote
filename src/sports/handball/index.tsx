@@ -29,7 +29,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import {
   init, reducer, isComplete, result, levelAtEnd, aggLine, matchSec, periodSec, periodLen, clockFace, clockText, periodName, periodLong, periodStarted, running,
-  eventCredits, creditAttribution, currentKeeper, soScore, nextThrower, handballScoreLine, timeoutCheck, suspensionsOf, hasYellow, teamYellows,
+  eventCredits, creditAttribution, currentKeeper, soScore, nextThrower, needsSdPick, handballScoreLine, timeoutCheck, suspensionsOf, hasYellow, teamYellows,
   totalPeriods, maxEtRounds, HANDBALL_PRESETS, HANDBALL_LIVE_SETTINGS, SHOT_LABEL, SHOT_TYPES, LIVE_KEYS,
   type HandballEvent, type HandballState, type MissResult, type Sanction, type ShotType, type Side,
 } from './engine';
@@ -274,6 +274,16 @@ const ScoringControls: SportPlugin<HandballState>['ScoringControls'] = ({
             ))}
             {s.shootoutWinner ? (
               <Text style={c.done}>{name(s.shootoutWinner)} win on 7-metre throws {sc.home}–{sc.away}</Text>
+            ) : needsSdPick(s) ? (
+              // SD-139: the scorer picks who throws first in sudden death
+              <>
+                <Text style={c.meta}>5 each and still level — one throw each until decided. Who throws first?</Text>
+                <Text style={c.meta}>Pick the order the referees give (it can stay the same or change).</Text>
+                <View style={c.row}>
+                  <Button label={`${homeName} first`} color={color('home')} style={c.flex} onPress={() => dispatch({ type: 'SO_ORDER', payload: { first: 'home' } })} />
+                  <Button label={`${awayName} first`} color={color('away')} style={c.flex} onPress={() => dispatch({ type: 'SO_ORDER', payload: { first: 'away' } })} />
+                </View>
+              </>
             ) : (
               <>
                 <Text style={c.meta}>Next: {name(nextSide)} · throw {n}{n > 5 ? ' (one each until decided)' : ''}</Text>
@@ -302,7 +312,9 @@ const ScoringControls: SportPlugin<HandballState>['ScoringControls'] = ({
           <Text style={c.h}>Full time · {s.home}–{s.away}{s.etRounds ? ' (after extra time)' : ''}</Text>
           {level && s.decider !== 'none' ? (
             <>
-              <Text style={c.meta}>Level — the match goes to 7-metre throws (5 each, then one each until decided). Who throws first?</Text>
+              <Text style={c.meta}>Level — the match goes to 7-metre throws (5 each, then one each until decided).</Text>
+              <Text style={c.h}>🪙 Who throws first?</Text>
+              <Text style={c.meta}>After the referees’ toss (or however they decide) — pick the team going first.</Text>
               <View style={c.row}>
                 <Button label={`${homeName} first`} color={color('home')} style={c.flex} onPress={() => dispatch({ type: 'START_SHOOTOUT', payload: { first: 'home' } })} />
                 <Button label={`${awayName} first`} color={color('away')} style={c.flex} onPress={() => dispatch({ type: 'START_SHOOTOUT', payload: { first: 'away' } })} />
@@ -642,7 +654,7 @@ const LiveExtras: NonNullable<SportPlugin<HandballState>['LiveExtras']> = ({ sta
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={c.h}>Timeline</Text>
-      <LiveTimeline events={handballTimeline(s)} homeColor={homeColor} awayColor={awayColor} emptyText="No goals or sanctions yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <LiveTimeline events={handballTimeline(s, { home: homeName, away: awayName })} homeColor={homeColor} awayColor={awayColor} emptyText="No goals or sanctions yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={c.h}>Match stats</Text>
       <MatchBoxScore sport="handball" source={handballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
     </View>

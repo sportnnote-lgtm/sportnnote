@@ -22,6 +22,8 @@ interface Item {
   side: 'home' | 'away';
   /** outcome accent: goals green, red cards red, yellows amber */
   tone?: 'boundary' | 'wicket' | 'extra';
+  /** SD-139: a fixed left-column stamp ("SO") instead of the minute */
+  stamp?: string;
   /** the row's lead player (scorer / carded / fouler / sub coming on) — tapping
    *  the detail opens their profile; events store names, so resolved via rosters */
   playerId?: string;
@@ -101,6 +103,7 @@ export function Timeline({
   homeRoster,
   awayRoster,
   onPlayer,
+  shootout,
 }: {
   events: FootballEvent[];
   stats?: StatEvent[];
@@ -116,6 +119,8 @@ export function Timeline({
   awayRoster?: Player[];
   /** tap a row's player → their profile */
   onPlayer?: (playerId: string) => void;
+  /** SD-139: the shoot-out order (who kicks first) — shown as a row on top */
+  shootout?: { first?: 'home' | 'away' } | null;
 }) {
   const mask = useMask();
   const rosters = [homeRoster, awayRoster];
@@ -125,6 +130,8 @@ export function Timeline({
   const all: Item[] = [
     ...events.map((e) => eventItem(e, homeName, awayName, rosters, f)),
     ...stats.filter((st) => STAT_IN_TIMELINE.has(st.kind)).map((st) => statItem(st, homeName, awayName, rosters, f)),
+    // SD-139: who kicked first in the shoot-out (the scorer's pick after the toss)
+    ...(shootout?.first ? [{ key: 'so-first', minute: 9999, half: 4 as const, order: 0, stamp: 'SO', icon: '🪙', label: `Penalty shoot-out — ${shootout.first === 'home' ? homeName : awayName} kick first`, detail: 'Order picked by the scorer (same order in sudden death, Law 10)', side: shootout.first }] : []),
   ].sort(byMatchTimeDesc);
   const items = all.slice(0, max);
   const hidden = all.length - items.length;
@@ -149,7 +156,7 @@ export function Timeline({
               {latest ? <View style={[st.nodeHalo, { borderColor: nodeColor }]} /> : null}
               <View style={[st.node, { backgroundColor: nodeColor }]} />
             </View>
-            <Text style={[st.minute, { color: sideColor }]}>{minuteText(it.minute, it.half, f)}</Text>
+            <Text style={[st.minute, { color: sideColor }]}>{it.stamp ?? minuteText(it.minute, it.half, f)}</Text>
             <Text style={st.icon}>{it.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[st.label, (it.tone === 'boundary' || it.tone === 'wicket') && { color: toneColor! }]}>{it.label}</Text>

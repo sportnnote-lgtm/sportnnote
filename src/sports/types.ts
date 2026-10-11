@@ -337,6 +337,10 @@ export interface SportPlugin<S = unknown> {
   /** End-match-by-hand dialog (parity #04): what the level result is called
    *  ("Draw" by default, cricket "Tie") and whether to offer the NRR toggle. */
   manualEnd?: { drawLabel: string; nrrToggle?: boolean };
+  /** SD-133 — the sport's own name for what Undo removes (cricket: "FOUR —
+   *  Rohit (4.3)"), from useLiveMatch's `lastStep`. Absent = the shared
+   *  `undoLabel` (SD-115). Null = plain "Undo". */
+  undoLabel?: (step: { type: string; prev: unknown; next: unknown } | null | undefined) => string | null;
   /** Can a finished match be corrected with the generic list (parity #05)? false
    *  hides "Correct this match" — cricket until #06 ships its own editor, since
    *  re-crediting `attribution` alone would split its scorecard from its stats. */

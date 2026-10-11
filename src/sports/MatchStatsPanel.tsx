@@ -13,7 +13,7 @@ import { theme } from '../core/theme';
 import { SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
 import { serveStats, serveRows, playerServeLine, type ServeSport } from './serveStats';
-import { detailRows } from './pointDetail';
+import { detailCoverage, detailRows } from './pointDetail';
 import type { LiveEvent } from './liveEvents';
 
 export function MatchStatsPanel({
@@ -44,7 +44,8 @@ export function MatchStatsPanel({
   const rows = serveRows(st, block);
   // SD-107 — point detail (winners / errors / by stroke), when the match tracked it
   const events = (state as { events?: LiveEvent[] } | null)?.events;
-  const dRows = sport === 'volleyball' ? [] : detailRows(sport, events, active === 'all' ? undefined : active);
+  // SD-135 — a match with only one-tap detail (padel Ace, squash Stroke / No let) shows just those rows
+  const dRows = sport === 'volleyball' ? [] : detailRows(sport, events, active === 'all' ? undefined : active, detailCoverage(sport, state as { pointDetail?: boolean; events?: LiveEvent[] }) !== 'quick');
   const vb = sport === 'volleyball';
   const word = st.unit === 'set' || vb ? 'Set' : 'Game';
   const nameOf = (id: string) => [...homeRoster, ...awayRoster].find((p) => p.id === id)?.fullName ?? id;

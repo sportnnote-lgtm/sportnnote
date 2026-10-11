@@ -74,6 +74,8 @@ export interface UseLiveMatch {
   resultSendsAt: number | null;
   /** SD-111 — send the held result now (skip the rest of the wait). */
   sendResultNow: () => void;
+  /** SD-133 — resolves once the in-flight live stat increments have landed. */
+  settleStatWrites: () => Promise<void>;
 }
 
 export interface LastStep { type: string; prev: unknown; next: unknown }
@@ -502,5 +504,8 @@ export function useLiveMatch(params: {
     };
   }, [matchId, hold]);
 
-  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend, lastStep, resultSendsAt, sendResultNow };
+  // SD-133 — let the in-flight live stat increments land (End match by hand
+  // then writes the absolute totals over them, as completion does).
+  const settleStatWrites = useCallback(async () => { await Promise.all([...statWritesRef.current]); }, []);
+  return { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh: rebuildFromLog, amend, lastStep, resultSendsAt, sendResultNow, settleStatWrites };
 }

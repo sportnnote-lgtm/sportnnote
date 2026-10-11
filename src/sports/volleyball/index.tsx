@@ -28,6 +28,8 @@ import { trackCourt, liberoCue, setNoOf, type VbTrack } from './rotation';
 import { ServePanel, asPlayer } from './ServePanel';
 import { VolleyballDetailRow } from './DetailRow';
 import { MatchStatsPanel } from '../MatchStatsPanel';
+import { VolleyballQuickOptions } from './SanctionOptions';
+import { barredPlayers } from './sanctions';
 
 export { isDecider, setTarget } from './engine';
 export type { VolleyballState } from './engine';
@@ -169,6 +171,13 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
     const srvPlayer = track.server && track.serving ? asPlayer(track.server, track.serving === 'home' ? homeRoster : awayRoster) : null;
     const serverOf = (side: 'home' | 'away') => (srvPlayer && track.serving === side ? srvPlayer : null);
     const libCues = (['home', 'away'] as const).map((sd) => liberoCue(s, sd, track)).filter((x): x is string => !!x);
+    // SD-136: an expelled / disqualified player still on court must be substituted (FIVB 15.8)
+    for (const [sd, c] of [['home', home.court], ['away', away.court]] as const) {
+      const on = new Set(c.map((p) => p.id));
+      for (const b of barredPlayers(s.events, sd, setNoOf(s))) {
+        if (on.has(b.id) && c.length < (sd === 'home' ? homeRoster : awayRoster).length) libCues.push(`${b.name} was ${b.why === 'expulsion' ? 'expelled for this set' : 'disqualified'} — substitute them (FIVB 15.8)`);
+      }
+    }
     const perSet = s.timeoutsPerSet ?? opts.timeoutsPerSet ?? timeoutsPerSet(s);
     const switchCue = switchSidesDue(s);
     const tto = technicalTimeoutDue(s);
@@ -338,6 +347,8 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
   }),
   ScoringControls,
   LiveExtras,
+  // SD-136 — FIVB sanctions (misconduct 21, delays 16.2) in Quick options
+  QuickOptions: VolleyballQuickOptions,
   formation: () => courtFormation('volleyball'),
   Court: makeCourt('volleyball'),
   voice: { hints: ['attack {name}', 'ace {name}', 'block {name}', 'point home'], parse: volleyballVoice },
@@ -347,13 +358,15 @@ export const volleyballPlugin: SportPlugin<VolleyballState> = {
       options: [
         { value: 'indoor', label: 'Indoor (25 · dec 15)', set: { playersPerSide: 6, substitutes: 6, setsToWin: 3, pointsPerSet: 25, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 2 } },
         { value: 'beach', label: 'Beach (21 · dec 15)', set: { playersPerSide: 2, substitutes: 0, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 1 } },
+        // SD-136: 9-a-side — a serving order of 9 (no I–VI positions / libero) and 3 subs a set (verify: national 9-a-side rules vary)
         { value: 'nineaside', label: '9-a-side (21 · best of 3)', set: { playersPerSide: 9, substitutes: 3, setsToWin: 2, pointsPerSet: 21, deciderPoints: 15, winByTwo: true, timeoutsPerSet: 2 } },
         { value: 'single', label: 'Single set to 25', set: { playersPerSide: 6, substitutes: 6, setsToWin: 1, pointsPerSet: 25, deciderPoints: 25, winByTwo: true, timeoutsPerSet: 2 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
-    { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 6, min: 1, max: 11, hint: '6 indoor · 2 beach' },
-    { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 6, min: 0, max: 11, advanced: true },
+    { key: 'playersPerSide', label: 'Players per side', type: 'count', default: 6, min: 1, max: 11, hint: '6 indoor · 2 beach · 9 nine-a-side — the rotation / serving order is this long' },
+    // SD-136: read by the scorer — the sub counter, its warning and the 🔁 Sub button (0 = no subs, beach)
+    { key: 'substitutes', label: 'Substitutions per team per set', type: 'count', default: 6, min: 0, max: 12, advanced: true, hint: '6 indoor (FIVB 15.6) · 0 beach · 3 nine-a-side' },
     {
       key: 'setsToWin', label: 'Match length', type: 'choice', default: 3,
       options: [

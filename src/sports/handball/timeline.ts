@@ -1,6 +1,7 @@
 /** SD-102 — handball events as timeline rows (the shared LiveTimeline) and the
  *  scorer's correction list. PURE. */
 import type { LiveEvent } from '../liveEvents';
+import { shootoutOrderRows } from '../shootoutOrder.ts';
 import { clockText, periodName, SHOT_LABEL, type HandballEvent, type HandballState } from './engine.ts';
 
 const CARD_ICON = { yellow: '🟨', twoMin: '⏱', red: '🟥' } as const;
@@ -59,8 +60,8 @@ export function timelineEvents(s: HandballState): { e: HandballEvent; answer?: s
 }
 
 /** The viewer timeline (LiveTimeline sorts by id: game time). */
-export function handballTimeline(s: HandballState): LiveEvent[] {
-  return timelineEvents(s).map(({ e, answer }, i) => {
+export function handballTimeline(s: HandballState, names?: { home?: string; away?: string }): LiveEvent[] {
+  return [...timelineEvents(s).map(({ e, answer }, i) => {
     const d = describeEvent(e, answer);
     const name = e.type === 'sub' ? e.secondName : e.official ? undefined : e.playerName;
     return {
@@ -76,7 +77,7 @@ export function handballTimeline(s: HandballState): LiveEvent[] {
       half: e.period,
       ...(e.type === 'goal' ? { tone: 'boundary' as const } : e.type === 'card' && (e.card === 'red' || e.third) ? { tone: 'wicket' as const } : {}),
     };
-  });
+  }), ...shootoutOrderRows(s.shootout, names, { what: '7-metre throws', verb: 'throw' })];
 }
 
 /** "H2 · 41:20" — where a row sits, for the correction list. */

@@ -69,6 +69,15 @@ export interface FootballState {
   /** SD-29: a grassroots sin-bin of this many minutes (format `sinBinMinutes`;
    *  absent = no sin-bin — older matches and the default). */
   sinBinMinutes?: number;
+  /** SD-132: a stopped (stoppable) clock — futsal Law 7 (format key
+   *  `stoppedClock`): ms played in the current half (`since` = running since).
+   *  Minutes come from it instead of the wall clock. Absent = the running
+   *  clock (every older match and 11-a-side). */
+  gc?: { ms: number; since?: number };
+  /** SD-132: futsal rules (format key `futsal`): 1 team time-out per half
+   *  (none in extra time) and accumulated fouls — from the 6th in a half, a
+   *  direct free kick from the 10 m mark (Futsal Laws 7, 12, 13). */
+  futsal?: true;
 }
 
 /** SD-80 (FB-14): one shootout kick with who took it, how it went and the
@@ -188,7 +197,50 @@ export const init = (config?: Record<string, unknown>): FootballState => ({
   track: readTrack(config),
   // SD-29: only on the state when the format sets one (old states keep their shape)
   ...(Number(config?.sinBinMinutes) > 0 ? { sinBinMinutes: Number(config?.sinBinMinutes) } : {}),
+  // SD-132: only on the state when the format sets the key
+  ...(config?.stoppedClock === true ? { gc: { ms: 0 } } : {}),
+  ...(config?.futsal === true ? { futsal: true as const } : {}),
 });
+
+/* --------------------------- SD-132 stopped clock -------------------------- */
+
+/** Length of the current half in seconds (regulation or extra time). */
+export const halfLenSec = (s: Pick<FootballState, 'half' | 'halfMinutes' | 'etMinutes'>): number =>
+  (s.half <= 2 ? s.halfMinutes : s.etMinutes) * 60;
+/** Seconds played in the current half on the stopped clock at `now` (held at
+ *  the half's end — futsal has no added time). */
+export function gcSec(s: FootballState, now = 0): number {
+  if (!s.gc) return 0;
+  const ms = s.gc.ms + (s.gc.since && now ? Math.max(0, now - s.gc.since) : 0);
+  return Math.min(halfLenSec(s), Math.floor(ms / 1000));
+}
+/** The stopped clock is running. */
+export const gcRunning = (s: FootballState): boolean => !!s.gc?.since && !s.ended;
+/** The half's time is up on the stopped clock. */
+export const gcTimeUp = (s: FootballState, now = 0): boolean => !!s.gc && !!s.startedAt && gcSec(s, now) >= halfLenSec(s);
+const stopGc = (s: FootballState, at: number): FootballState['gc'] =>
+  s.gc?.since ? { ms: s.gc.ms + Math.max(0, (at || s.gc.since) - s.gc.since) } : s.gc;
+
+/** SD-132 (Futsal Law 7): a side's team time-out — 1 per half, none in
+ *  extra time. */
+export function futsalTimeout(s: FootballState, side: 'home' | 'away'): { ok: boolean; left: number; reason?: string } {
+  if (s.half > 2) return { ok: false, left: 0, reason: 'No time-outs in extra time.' };
+  const used = s.events.filter((e) => e.type === 'timeout' && e.side === side && (e.half ?? 1) === s.half).length;
+  const left = Math.max(0, 1 - used);
+  return left > 0 ? { ok: true, left } : { ok: false, left, reason: 'Already used this half’s time-out.' };
+}
+
+/** SD-132 (Futsal Law 13): a side's accumulated fouls in the current half;
+ *  2nd-half fouls carry into extra time. Every logged foul counts (the scorer
+ *  logs direct-free-kick fouls). */
+export function accumulatedFouls(s: FootballState, side: 'home' | 'away'): number {
+  const f: MinuteFormat = { halfMinutes: s.halfMinutes, etMinutes: s.etMinutes };
+  const inScope = (h: number) => (s.half <= 2 ? h === s.half : h >= 2);
+  return s.stats.filter((st) => st.kind === 'foul' && st.side === side && inScope(eventHalf(st, f))).length;
+}
+/** From the 6th accumulated foul in a half: a direct free kick from the 10 m
+ *  mark, no wall (Futsal Law 13). */
+export const FUTSAL_FOUL_LIMIT = 5;
 
 /** Decide a penalty shootout: best-of-five (clinched early when a lead can't be
  *  caught), then sudden death once both have taken five. */
@@ -277,6 +329,8 @@ export function currentMinute(s: FootballState): number {
   // SD-08: ordinal minutes (FIFA) — the minute being played, so 0:30 is 1' and a
   // half-time substitution is 46'. Older matches keep completed minutes.
   const ord = s.minuteOrdinal ? 1 : 0;
+  // SD-132: the stopped clock (futsal) — minutes from the time played
+  if (s.gc && s.startedAt) return Math.min(base + Math.floor(gcSec(s, Date.now()) / 60) + ord, halfBase(s));
   if (!s.startedAt) return base + ord;
   const raw = base + Math.floor((Date.now() - s.startedAt) / 60000) + ord;
   return Math.min(raw, halfBase(s) + (s.stoppage[s.half] ?? 0));
@@ -329,7 +383,7 @@ export function clockLabel(s: FootballState): string {
  *  `currentMinute`); this is only for the ticking on-screen clock. */
 export function clockTime(s: FootballState): string {
   const base = startOffset(s);
-  const elapsedSec = s.startedAt ? Math.max(0, Math.floor((Date.now() - s.startedAt) / 1000)) : 0;
+  const elapsedSec = s.gc ? gcSec(s, Date.now()) : s.startedAt ? Math.max(0, Math.floor((Date.now() - s.startedAt) / 1000)) : 0;
   const bMin = halfBase(s);
   // Cap at the half's regulation end + signalled added time (see currentMinute).
   const totalSec = Math.min(base * 60 + elapsedSec, (bMin + s.stoppage[s.half]) * 60);
@@ -381,7 +435,30 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       // SD-08: the opening kickoff of a match scored on this version switches on
       // ordinal minutes (only before anything is logged, so a match never mixes).
       const ord = a.payload?.ord === true && s.half === 1 && !s.events.length && !s.stats.length;
-      return { ...s, ...(ord ? { minuteOrdinal: true as const } : {}), startedAt: at, possession: { ...s.possession, side, sinceAt: at } };
+      return { ...s, ...(ord ? { minuteOrdinal: true as const } : {}), startedAt: at, possession: { ...s.possession, side, sinceAt: at },
+        // SD-132: kick-off starts the stopped clock
+        ...(s.gc ? { gc: { ms: s.gc.ms, since: at || 1 } } : {}) };
+    }
+    case 'CLOCK': {
+      // SD-132: stop / restart the stopped clock (futsal); ignored otherwise
+      if (!s.gc || !s.startedAt) return s;
+      const at = Number(a.payload?.at ?? 0);
+      if (a.payload?.run) return s.gc.since ? s : { ...s, gc: { ms: s.gc.ms, since: at || 1 } };
+      return { ...s, gc: stopGc(s, at) };
+    }
+    case 'SET_CLOCK': {
+      // SD-132: set the time played in this half (`sec`)
+      if (!s.gc) return s;
+      const at = Number(a.payload?.at ?? 0);
+      const v = Math.max(0, Math.min(halfLenSec(s), Math.round(Number(a.payload?.sec ?? 0))));
+      return { ...s, gc: { ms: v * 1000, ...(s.gc.since ? { since: at || s.gc.since } : {}) } };
+    }
+    case 'TIMEOUT': {
+      // SD-132 (Futsal Law 7): a team time-out — the clock stops
+      if (!s.futsal || (a.side !== 'home' && a.side !== 'away')) return s;
+      const at = Number(a.payload?.at ?? 0);
+      const next = push(s, { minute, half: evHalf, type: 'timeout', side: a.side });
+      return next.gc?.since && at ? { ...next, gc: stopGc(next, at) } : next;
     }
     case 'XI': {
       // SD-09: a side's starters / keeper, stamped from the lineup. The latest
@@ -523,15 +600,15 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       // 1→2 (regulation) and 3→4 (extra time). Other transitions are explicit.
       const nextHalf = s.half === 1 ? 2 : s.half === 3 ? 4 : null;
       if (nextHalf == null) return s;
-      return { ...s, half: nextHalf, startedAt: undefined, possession: { side: s.possession.side, sinceAt: undefined, acc: accrue(s, Number(a.payload?.at ?? 0)) } };
+      return { ...s, half: nextHalf, startedAt: undefined, possession: { side: s.possession.side, sinceAt: undefined, acc: accrue(s, Number(a.payload?.at ?? 0)) }, ...(s.gc ? { gc: { ms: 0 } } : {}) };
     }
     case 'END':
-      return { ...s, ended: true, startedAt: undefined, possession: { side: s.possession.side, sinceAt: undefined, acc: accrue(s, Number(a.payload?.at ?? 0)) } };
+      return { ...s, ended: true, startedAt: undefined, possession: { side: s.possession.side, sinceAt: undefined, acc: accrue(s, Number(a.payload?.at ?? 0)) }, ...(s.gc ? { gc: stopGc(s, Number(a.payload?.at ?? 0)) } : {}) };
     case 'START_EXTRA_TIME':
       // A level tie at full time of the 2nd half, when the decider is extra time →
       // extra time (un-ends the match, moves to ET1, grants the extra ET sub).
       if (!s.ended || !levelForDecider(s) || s.decider !== 'extra_time' || s.half !== 2 || s.shootout) return s;
-      return { ...s, ended: false, half: 3, startedAt: undefined, maxSubs: s.maxSubs + s.etExtraSubs, etMinutes: Number(a.payload?.etMinutes ?? s.etMinutes) };
+      return { ...s, ended: false, half: 3, startedAt: undefined, maxSubs: s.maxSubs + s.etExtraSubs, etMinutes: Number(a.payload?.etMinutes ?? s.etMinutes), ...(s.gc ? { gc: { ms: 0 } } : {}) };
     case 'START_SHOOTOUT':
       // only from a level result at full time of a knockout tie (SD-120: level
       // on aggregate in leg 2 of a new two-legged tie)

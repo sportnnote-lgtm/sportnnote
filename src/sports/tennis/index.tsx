@@ -194,6 +194,10 @@ export const tennisPlugin: SportPlugin<TennisState> = {
         { value: 'gs5', label: 'Grand Slam (Bo5, 10-pt TB at 6-6 in set 5)', set: { setsToWin: 3, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 6, tbSuddenDeathAt: 0 } },
         { value: 'fast4', label: 'Fast4', set: { setsToWin: 2, gamesPerSet: 4, setWinByTwo: false, tiebreakAt: 3, setTiebreak: true, tiebreakPoints: 5, noAd: true, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 4 } },
         { value: 'proset', label: 'Pro set (to 8)', set: { setsToWin: 1, gamesPerSet: 8, setWinByTwo: true, tiebreakAt: 8, setTiebreak: true, tiebreakPoints: 7, noAd: false, finalSetTiebreak: 0, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
+        // SD-135 (TN-a) — the ITF / ATP / WTA doubles format (ITF Rules of
+        // Tennis, Appendix V): no-ad games, two tiebreak sets, and a 10-point
+        // match tiebreak in place of the 3rd set.
+        { value: 'itf_dbl', label: 'Doubles (no-ad · match TB to 10 for the 3rd set)', set: { setsToWin: 2, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
         { value: 'match_tb', label: 'Match tiebreak (to 10)', set: { setsToWin: 1, gamesPerSet: 6, setWinByTwo: true, tiebreakAt: 6, setTiebreak: true, tiebreakPoints: 7, noAd: true, finalSetTiebreak: 10, finalSetTBAt: 0, tbSuddenDeathAt: 0 } },
         { value: 'custom', label: 'Custom' },
       ],

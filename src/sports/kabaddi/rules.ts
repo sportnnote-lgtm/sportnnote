@@ -12,7 +12,7 @@
  *     or all-out apply).
  *   • gaminee    — no revival; an all-out ends the match.
  *
- * Pro rules (when enabled): super tackle (+2 when ≤3 defenders remain) and
+ * Pro rules (when enabled; SD-136: the superTackle / doOrDie keys override each): super tackle (+2 when ≤3 defenders remain) and
  * do-or-die (a 3rd consecutive empty raid that scores nothing puts the raider out).
  */
 export type KabaddiStyle = 'sanjeevani' | 'amar' | 'gaminee';
@@ -90,7 +90,16 @@ export interface KabaddiCfg {
    *  and the touched defenders stay in (AKFI / IKF, PKL alike). Applies to v2
    *  raids only, so older logs replay exactly as they scored. */
   caughtVoid?: boolean;
+  /** SD-136: super tackle on / off (format `superTackle`). Absent = `proRules`
+   *  (every older match). Super tackles are an AKFI / IKF rule, not PKL-only. */
+  superTackle?: boolean;
+  /** SD-136: do-or-die raid on / off (format `doOrDie`). Absent = `proRules`. */
+  doOrDie?: boolean;
 }
+
+/** SD-136 — the effective switches (the new keys win; else the legacy `proRules`). */
+export const superTackleOn = (cfg: Pick<KabaddiCfg, 'proRules' | 'superTackle'>) => cfg.superTackle ?? cfg.proRules;
+export const doOrDieOn = (cfg: Pick<KabaddiCfg, 'proRules' | 'doOrDie'>) => cfg.doOrDie ?? cfg.proRules;
 
 export interface KabaddiDerived {
   home: number;
@@ -286,7 +295,7 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg, extras: Extra
     const raidPts = touches + (bonusCounts ? 1 : 0);
 
     // Do-or-die: a 3rd straight empty raid that fails ⇒ the raider is out.
-    const isDoOrDie = cfg.proRules && emptyRaids[r.side] >= 2;
+    const isDoOrDie = doOrDieOn(cfg) && emptyRaids[r.side] >= 2;
     let raiderOut = r.raiderOut || lineOut;
     const dodFail = isDoOrDie && raidPts === 0 && defOut === 0 && !raiderOut;
     if (dodFail) raiderOut = true;
@@ -305,7 +314,7 @@ export function replayRaids(raids: RaidOutcome[], cfg: KabaddiCfg, extras: Extra
     let superTackle = false;
     if (raiderOut) {
       const defendersOnMat = amar ? cfg.teamSize : onMat(opp);
-      superTackle = !lineOut && cfg.proRules && !amar && defendersOnMat <= 3;
+      superTackle = !lineOut && superTackleOn(cfg) && !amar && defendersOnMat <= 3;
       tacklePts = lineOut ? 0 : superTackle ? 2 : 1;
       score[opp] += lineOut ? 1 : tacklePts;
       if (!amar) {

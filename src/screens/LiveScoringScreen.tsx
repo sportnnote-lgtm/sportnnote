@@ -253,7 +253,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     if (!tieSpecFromFormat(rawFormat)) return undefined;
     return { first: Number(rawFormat?.__seriesLeg) === 1 };
   }, [rawFormat]);
-  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep, resultSendsAt, sendResultNow } = useLiveMatch({
+  const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep, resultSendsAt, sendResultNow, settleStatWrites } = useLiveMatch({
     matchId,
     sport,
     canScore,
@@ -897,8 +897,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   );
 
   // SD-115 — name what Undo removes ("point to Federer (30-15)"), from the newest
-  // logged step and the timeline events it added. Cricket keeps its own wording.
-  const undoWhat = sport === 'cricket' ? null : undoLabel(lastStep, { home: homeName, away: awayName }, (s) => {
+  // logged step and the timeline events it added. A sport may name it its own
+  // way (SD-133: cricket "FOUR — Rohit (4.3)").
+  const undoWhat = plugin.undoLabel ? plugin.undoLabel(lastStep) : undoLabel(lastStep, { home: homeName, away: awayName }, (s) => {
     try { const m = plugin.summary(s as never); return m.homeScore != null && m.awayScore != null ? `${m.homeScore}-${m.awayScore}` : null; } catch { return null; }
   });
   // SD-110 — keep the phone awake while this scorer is on a match in progress.
@@ -996,7 +997,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     if (!matchId) { setMeta((m) => ({ ...m, status: 'completed', result: r })); closeEnd(); return; }
     setEndBusy(true);
     try {
-      const how = await endMatchManually(matchId, r);
+      // SD-133 — the hand-ended match gets the full stat sync from this state.
+      await settleStatWrites().catch(() => undefined);
+      const how = await endMatchManually(matchId, r, { state });
       setMeta((m) => ({ ...m, status: 'completed', result: how === 'full' ? r : undefined, winner: r.winner ?? (r.kind === 'draw' || r.kind === 'tie' ? 'draw' : undefined) }));
       if (how === 'legacy') notice('Match ended', 'Saved without the reason until the database update runs.');
       closeEnd();

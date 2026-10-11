@@ -21,10 +21,10 @@ Timeouts, a level score at the final buzzer and "who led when" are easy to lose 
 
 Under FIBA rules each team gets 2 timeouts in the first half, 3 in the second half and 1 in each overtime. Unused timeouts don't carry over. Once the 4th quarter clock shows 2:00 or less, a team can take at most 2 of its second-half timeouts; the line then adds "last-minutes limit". NBA format: 7 a game, at most 4 in the 4th quarter and 2 in its last 3 minutes, and 2 in each overtime.
 
-> **Note:** The app's clock counts up from each tip-off, so the "last 2 minutes" is read from it. That's why going over asks you instead of blocking.
+> **Note:** With the stoppable game clock, the "last 2 minutes" is read from the game time (see [Run the basketball game clock](/guides/basketball-game-clock-and-3x3/)). Older matches count up from each tip-off. Going over asks you instead of blocking.
 
 ## Overtime or a draw
-Basketball has no draws: a level game plays overtime periods (5 minutes under FIBA) until someone wins.
+Basketball has no draws: a level game plays overtime periods (5 minutes under FIBA) until someone wins. In 3×3, overtime is won by the first team to score 2 points.
 
 1. Level at the end of the 4th quarter (or an overtime)? The panel says the score is level and shows "Start Overtime".
 2. Tap it, then "▶ Start OT" at the restart. The score carries over.

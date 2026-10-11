@@ -1,19 +1,19 @@
 ---
 title: Set local rules for wides, no-balls and byes
-description: Make a wide worth 2, count a no-ball as a ball, switch off byes or free hits, and go back to normal rules in the last overs. Set before or during play.
+description: Make a wide worth 2, count a no-ball as a ball, switch off byes or free hits, or make batters retire at 25. Set before or during play.
 category: Cricket scoring
 audience: Scorers, Organisers
 sports: cricket
 order: 10
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
-School and gully matches often use their own rules. A wide is worth 2 runs, a no-ball counts as one of the six balls, or there are no byes on a short pitch. You can set these rules for one match before the first ball, or change them during play when the umpires agree. A change during play applies from the next ball, and balls already bowled keep the rules they were bowled under.
+School and gully matches often use their own rules: a wide worth 2 runs, a no-ball that counts as one of the six balls, no byes, or batters who retire at 25. Set them for one match before the first ball, or change them during play. A change applies from the next ball; balls already bowled keep their rules.
 
 ## Before you start
 - Before ball 1, the match scorer or a match host can set the rules.
-- Once play has started, only the match's scorers and hosts can change them. Everyone else sees the rules but can't edit them, with the note "Only scorers and hosts can change rules during play."
-- The rules are for this match only. They don't change the format for the rest of a tournament.
+- Once play has started, only the match's scorers and hosts can change them.
+- The rules are for this match only, not the rest of a tournament.
 
 ## The rules you can set
 
@@ -24,6 +24,11 @@ School and gully matches often use their own rules. A wide is worth 2 runs, a no
 - **Free hit after a no-ball**: the next ball is a free hit. Standard is on.
 - **Normal wide/no-ball rules in the last N overs**: the four wide and no-ball settings go back to standard for the last N overs of each innings. Standard is 0, which means never.
 - **Byes allowed** and **Leg byes allowed**: show or hide the **Bye** and **Leg bye** buttons. Standard is on.
+- **Batters retire at (runs)**: 0 is off. With 25, a batter who reaches 25 is asked to retire.
+- **Retired batters may bat again**: on means they can come back once everyone else has batted.
+
+## Retire at N runs
+When a batter reaches the number, a card asks: "Asha Rao has 26 — retire at 25 (local rule)". Tap the next batter, then **Retire — Meera Iyer in**. The scorecard shows "retired not out", which isn't a wicket. **Not now** keeps them batting, for example when nobody else is left. A retired batter who comes back carries on from their score.
 
 ## Step by step: before the match
 1. Open the match and go to the **Info** tab.
@@ -39,9 +44,9 @@ You can also set the same rules when you create the match: tap **⚙ Customize t
 3. Change the settings you need.
 4. Tap **Apply from next ball**. You'll see "New rules apply from the next ball".
 
-A **RULES** line appears in the ball-by-ball timeline for everyone following the match, for example "Wide 2 runs · counts as a ball".
+A **RULES** line appears in the timeline, for example "Wide 2 runs · counts as a ball".
 
-> **Tip:** Changed something by mistake? Tap **Reset to standard** to fill the card with the standard values, then tap **Apply from next ball** again. Nothing changes until you tap Apply.
+> **Tip:** **Reset to standard** fills the card with the standard values. Nothing changes until you tap Apply.
 
 ## How you know local rules are on
 - A chip above the run pad shows the rules in force, for example "Local rules: Wd 2 · NB = ball · no byes".
@@ -52,7 +57,7 @@ A **RULES** line appears in the ball-by-ball timeline for everyone following the
 
 ## Common questions
 ### Will changing the wide value rewrite the wides already bowled?
-No. Every ball keeps the rule it was bowled under. Only balls from now on use the new value. That's why a change during play is saved as its own entry in the match, not as an edit to the format.
+No. Every ball keeps the rule it was bowled under.
 
 ### Can I undo a rules change?
 Yes. A rules change is one entry like a ball, so **↶ Undo** takes it back if it was the last thing you entered.

@@ -19,7 +19,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, TextField, SelectChip } from '../../components/ui';
-import { confirmMatchAction } from '../../components/ConfirmSheet';
+import { askConfirm, confirmMatchAction } from '../../components/ConfirmSheet';
 import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
 import { Timeline } from './Timeline';
@@ -49,6 +49,7 @@ import {
   minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, pairedSecondYellowRed, type XiStamp,
   footballDetailLine, halfTimeText, kickText,
   needsDecision, footballComplete, footballResult,
+  gcSec, gcRunning, gcTimeUp, halfLenSec, futsalTimeout, accumulatedFouls, FUTSAL_FOUL_LIMIT,
 } from "./engine";
 import { aggregateText } from "../aggregate";
 
@@ -165,6 +166,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const [changeAdded, setChangeAdded] = useState(false);
   // SD-117 (F13): the carded team official's name (optional).
   const [officialName, setOfficialName] = useState('');
+  // SD-132 (futsal): the 6th-accumulated-foul alert
+  const [afAlert, setAfAlert] = useState<{ side: 'home' | 'away'; n: number; half: number } | null>(null);
   const opp = (side: 'home' | 'away') => (side === 'home' ? 'away' : 'home');
   // Re-render every few seconds so time-based prompts (added time) keep up.
   const [, tick] = useState(0);
@@ -410,6 +413,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // SD-117 (F10): the victim is optional ("Skip victim"), and when cards are
   // tracked the foul flows straight into "🟨 / 🟥 for {fouler}?".
   const recordFoul = (side: 'home' | 'away', fouler: Player, victim: Player | null) => {
+    // SD-132 (Futsal Law 13): from the 6th accumulated foul of a half, the
+    // other side gets a direct free kick from the 10 m mark (no wall).
+    if (state.futsal && pastMin == null) {
+      const n = accumulatedFouls(state, side) + 1;
+      setAfAlert(n > FUTSAL_FOUL_LIMIT ? { side, n, half: state.half } : null);
+    }
     fire({
       type: 'STAT', side,
       payload: { kind: 'foul', possSide: opp(side), at: Date.now(), playerName: fouler.fullName, ...(victim ? { secondName: victim.fullName } : {}) },
@@ -1008,10 +1017,30 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   const startAction = (kind: StatKind | 'card') =>
     setFlow(kind === 'foul' ? { mode: 'foul', step: 'team' } : { mode: 'stat', kind, step: 'team' });
 
+  // SD-132: the stopped clock (futsal Law 7), the futsal time-outs and the
+  // accumulated fouls — its own component, so only the clock ticks each second.
+  const nameOf = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName);
+  const callTimeout = async (side: 'home' | 'away') => {
+    const t = futsalTimeout(state, side);
+    if (!t.ok && !(await askConfirm({ title: 'No time-out left', message: `${t.reason} Log one for ${nameOf(side)} anyway?`, yesLabel: 'Log anyway', noLabel: 'No, keep scoring', tone: 'caution' }))) return;
+    fire({ type: 'TIMEOUT', side, payload: { at: Date.now() } });
+  };
+  const clockPanel = state.gc && backfillMin == null
+    ? <StoppedClockPanel state={state} dispatch={dispatch} nameOf={nameOf} onTimeout={(side) => void callTimeout(side)} /> : null;
+  const afBanner = afAlert && state.futsal && afAlert.half === state.half && !state.ended ? (
+    <View style={ctrl.addedBox} accessibilityRole="alert">
+      <Text style={ctrl.label}>⚠️ {nameOf(afAlert.side)} — accumulated foul {afAlert.n} this half</Text>
+      <Text style={ctrl.meta}>{nameOf(opp(afAlert.side))} get a direct free kick from the 10 m mark, no wall (or from where the foul was, if nearer goal). A goal from it: log it with Goal → Free kick.</Text>
+      <Button label="Got it" variant="ghost" onPress={() => setAfAlert(null)} />
+    </View>
+  ) : null;
+
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {backfillBar}
       {voiceBar}
+      {clockPanel}
+      {afBanner}
       {t.possession && <PossessionBar state={state} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onSwitch={setPossession} />}
 
       {/* In-play stoppage marker (injury / cooling break / VAR check) — a timeline
@@ -1094,7 +1123,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
         </View>
         {showEdit && (() => {
           const items = [
-            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.playerName ? ` — ${e.playerName}` : ''}${e.official ? ' (team official)' : ''}`, onRemove: () => removeEvent(e), detail: removeDetail(e), onEdit: () => editEvent(e) })),
+            ...state.events.map((e) => ({ key: `e${e.id}`, minute: e.minute, half: eventHalf(e, fmt), order: e.id, label: `${EVENT_META[e.type].icon} ${EVENT_META[e.type].label}${e.type === 'sub' ? ` — ${e.secondName ?? ''} for ${e.playerName ?? ''}` : e.type === 'timeout' ? ` — ${nameOf(e.side)}` : e.playerName ? ` — ${e.playerName}` : ''}${e.official ? ' (team official)' : ''}`, onRemove: () => removeEvent(e), detail: removeDetail(e), onEdit: e.type === 'timeout' ? undefined : () => editEvent(e) })),
             ...state.stats.map((st) => ({ key: `s${st.id}`, minute: st.minute, half: eventHalf(st, fmt), order: st.id, label: `${STAT_META[st.kind].icon} ${STAT_META[st.kind].label}${st.playerName ? ` — ${st.playerName}` : ''}`, onRemove: () => removeStat(st), detail: undefined as string | undefined, onEdit: () => editStat(st) })),
           ].sort(byMatchTimeDesc);
           if (items.length === 0) return <Text style={ctrl.meta}>Nothing logged yet.</Text>;
@@ -1105,7 +1134,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
                 <View key={it.key} style={ctrl.editRow}>
                   <Text style={ctrl.editMin}>{minLabel(it.minute, it.half)}</Text>
                   <Text style={ctrl.editLabel} numberOfLines={1}>{it.label}</Text>
-                  <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${it.label}`} onPress={it.onEdit} />
+                  {it.onEdit ? <RowAction label="✎ Edit" tone="edit" a11y={`Edit ${it.label}`} onPress={it.onEdit} /> : null}
                   <RowAction label="✕" tone="remove" a11y={`Remove ${it.label}`} onPress={() => void confirmRemove(`${it.label} (${minLabel(it.minute, it.half)})`, it.onRemove, it.detail)} />
                 </View>
               ))}
@@ -1116,7 +1145,7 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
 
       {/* Added (injury) time: near the half's end, prompt for the minutes; then
           count up as 45+x / 90+x; once they're up, nudge to end. */}
-      {(() => {
+      {!state.gc && (() => {
         const base = halfBase(state);
         const min = currentMinute(state);
         // `?? 0` covers matches saved before ET halves were keyed here.
@@ -1207,6 +1236,64 @@ function PossessionBar({
   );
 }
 
+/** SD-132 — the stopped clock (Futsal Law 7): the match clock, ⏸ Stop clock /
+ *  ▶ Start clock, ⏱ Set clock, the "time is up" line, and with futsal rules
+ *  the accumulated fouls (Law 13) and each team's time-out (1 a half). Ticks
+ *  on its own each second. */
+function StoppedClockPanel({ state, dispatch, nameOf, onTimeout }: {
+  state: FootballState; dispatch: (a: ScoreAction) => void; nameOf: (side: 'home' | 'away') => string; onTimeout: (side: 'home' | 'away') => void;
+}) {
+  const [, tick] = useState(0);
+  const run = gcRunning(state);
+  useEffect(() => {
+    if (!run) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [run]);
+  const [setting, setSetting] = useState(false);
+  const [clockInput, setClockInput] = useState('');
+  const applyClock = () => {
+    const m = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(clockInput.trim());
+    if (!m) return;
+    // the match clock (count-up) the scorer reads, within this half
+    const want = Number(m[1]) * 60 + Number(m[2] ?? 0) - startOffset(state) * 60;
+    dispatch({ type: 'SET_CLOCK', payload: { sec: Math.max(0, Math.min(halfLenSec(state), want)), at: Date.now() } });
+    setSetting(false); setClockInput('');
+  };
+  const nowMs = Date.now();
+  const up = gcTimeUp(state, nowMs);
+  const halfName = state.half <= 2 ? HALF_NAME[state.half] : 'extra time (with the 2nd half)';
+  return (
+    <View style={ctrl.addedBox}>
+      <View style={ctrl.addedRow}>
+        <Text style={[ctrl.clockTime, ctrl.flex]} accessibilityLabel="Match clock">{clockTime(state)}</Text>
+        <Button label={run && !up ? '⏸ Stop clock' : '▶ Start clock'} variant={run && !up ? 'ghost' : 'primary'} disabled={up}
+          onPress={() => dispatch({ type: 'CLOCK', payload: { run: !run, at: Date.now() } })} />
+      </View>
+      {!run && !up && gcSec(state, nowMs) > 0
+        ? <Text style={ctrl.endNudge} accessibilityRole="alert">⏸ Clock stopped — tap ▶ Start clock when play restarts.</Text> : null}
+      {up ? <Text style={ctrl.endNudge} accessibilityRole="alert">⏱ {state.half <= 2 ? state.halfMinutes : state.etMinutes}:00 played — time is up. Finish any kick, then end the {HALF_NAME[state.half]} below.</Text> : null}
+      <Text style={ctrl.editLink} accessibilityRole="button" onPress={() => setSetting((v) => !v)}>{setting ? 'Cancel' : '⏱ Set clock'}</Text>
+      {setting ? (
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}><TextField label="Match clock (mm:ss)" value={clockInput} onChange={setClockInput} placeholder={clockTime(state)} /></View>
+          <Button label="Set" onPress={applyClock} />
+        </View>
+      ) : null}
+      {state.futsal ? (
+        <>
+          <Text style={ctrl.meta}>Accumulated fouls · {halfName}: {nameOf('home')} {accumulatedFouls(state, 'home')} · {nameOf('away')} {accumulatedFouls(state, 'away')} — from the 6th, a direct free kick from the 10 m mark (no wall).</Text>
+          <View style={ctrl.row}>
+            {(['home', 'away'] as const).map((side) => (
+              <Button key={side} label={`⏸️ Time-out — ${nameOf(side)} (${futsalTimeout(state, side).left})`} variant="ghost" style={ctrl.flex} onPress={() => onTimeout(side)} />
+            ))}
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 /** SD-117 (F12, Law 10): "Who kicks first?" — the referee tosses a coin and the
  *  winning captain chooses; the shootout then alternates from that side. */
 function FirstKicker({ homeName, awayName, homeColor, awayColor, onPick, onCancel }: {
@@ -1215,7 +1302,7 @@ function FirstKicker({ homeName, awayName, homeColor, awayColor, onPick, onCance
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={ctrl.label}>🪙 Who kicks first?</Text>
-      <Text style={ctrl.meta}>The referee tosses a coin; the winning captain chooses.</Text>
+      <Text style={ctrl.meta}>After the referee’s toss (or however they decide) — pick the team going first.</Text>
       <View style={ctrl.row}>
         <Button label={`${homeName} first`} variant="home" color={homeColor} style={ctrl.flex} onPress={() => onPick('home')} />
         <Button label={`${awayName} first`} variant="away" color={awayColor} style={ctrl.flex} onPress={() => onPick('away')} />
@@ -1291,6 +1378,8 @@ function ShootoutControls({
         <Text style={ctrl.label}>🏆 {state.shootoutWinner === 'home' ? homeName : awayName} win {Math.max(pens.home, pens.away)}–{Math.min(pens.home, pens.away)} on penalties</Text>
       ) : (<>
       <Text style={ctrl.label}>{nextName} — kick {state.shootout[nextSide].length + 1}</Text>
+      {/* SD-139: Law 10 keeps the same order in sudden death — no new pick */}
+      {state.shootout.home.length >= 5 && state.shootout.away.length >= 5 ? <Text style={ctrl.meta}>Sudden death — kicks continue in the same order ({(first === 'home' ? homeName : awayName)} first), Law 10.</Text> : null}
       {takerList.length > 0 && (
         <>
           <Text style={ctrl.meta}>Who takes it? (optional)</Text>
@@ -1329,13 +1418,15 @@ function ShootoutControls({
 const LiveClock: NonNullable<SportPlugin<FootballState>['LiveClock']> = ({ state }) => {
   const s = state as FootballState;
   const [, tick] = useState(0);
+  const gcRun = gcRunning(s);
   useEffect(() => {
-    if (!s.startedAt || s.ended) return;
+    if (!s.startedAt || s.ended || (s.gc && !gcRun)) return;
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [s.startedAt, s.ended]);
+  }, [s.startedAt, s.ended, gcRun, s.gc]);
 
-  const running = !!s.startedAt && !s.ended;
+  // SD-132: on the stopped clock (futsal) the dot is live only while it runs
+  const running = s.gc ? gcRun && !!s.startedAt && !gcTimeUp(s, Date.now()) : !!s.startedAt && !s.ended;
   const label = s.ended ? 'FT' : !s.startedAt ? (s.half === 2 ? 'HT' : '—') : clockTime(s);
   // SD-29: sin-bins running now + players on the pitch when a side is short.
   const live = s.ended ? null : footballLiveField(s, Date.now());
@@ -1382,7 +1473,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   const hc = homeColor ?? theme.colors.home;
   const ac = awayColor ?? theme.colors.away;
   if (view === 'timeline') {
-    return <Timeline events={s.events} stats={s.stats} halfMinutes={s.halfMinutes} etMinutes={s.etMinutes} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
+    return <Timeline events={s.events} stats={s.stats} shootout={s.shootout} halfMinutes={s.halfMinutes} etMinutes={s.etMinutes} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />;
   }
   if (view === 'stats') {
     // SD-23: the team comparison + each side's player box score (FB-09)
@@ -1466,10 +1557,11 @@ export const footballPlugin: SportPlugin<FootballState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'eleven',
       options: [
-        { value: 'eleven', label: '11-a-side', set: { playersPerSide: 11, halfMinutes: 45, substitutes: 5, subType: 'rolling' } },
-        { value: 'sevens', label: '7-a-side', set: { playersPerSide: 7, halfMinutes: 25, substitutes: 5, subType: 'rolling' } },
-        { value: 'fives', label: '5s turf', set: { playersPerSide: 5, halfMinutes: 20, substitutes: 5, subType: 'rolling' } },
-        { value: 'futsal', label: 'Futsal', set: { playersPerSide: 5, halfMinutes: 20, substitutes: 9, subType: 'rolling' } },
+        { value: 'eleven', label: '11-a-side', set: { playersPerSide: 11, halfMinutes: 45, substitutes: 5, subType: 'rolling', stoppedClock: false, futsal: false } },
+        { value: 'sevens', label: '7-a-side', set: { playersPerSide: 7, halfMinutes: 25, substitutes: 5, subType: 'rolling', stoppedClock: false, futsal: false } },
+        { value: 'fives', label: '5s turf', set: { playersPerSide: 5, halfMinutes: 20, substitutes: 5, subType: 'rolling', stoppedClock: false, futsal: false } },
+        // SD-132: futsal — stopped clock (Law 7), time-outs + accumulated fouls, 2 × 5 extra time
+        { value: 'futsal', label: 'Futsal', set: { playersPerSide: 5, halfMinutes: 20, substitutes: 9, subType: 'rolling', stoppedClock: true, futsal: true, extraTimeMinutes: 5 } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -1495,6 +1587,9 @@ export const footballPlugin: SportPlugin<FootballState> = {
     { key: 'extraTimeSubs', label: 'Extra substitutions in extra time', type: 'count', default: 1, min: 0, max: 3, advanced: true },
     // SD-29: grassroots / youth sin-bin (IFAB trial: 10 minutes). 0 = none.
     { key: 'sinBinMinutes', label: 'Sin-bin (minutes)', type: 'number', default: 0, min: 0, max: 15, advanced: true, hint: '0 = none · the player returns by himself' },
+    // SD-132: futsal (FIFA Futsal Laws 7, 12, 13)
+    { key: 'stoppedClock', label: 'Stopped clock', type: 'toggle', default: false, advanced: true, hint: 'Futsal: stop and restart the clock on every stoppage' },
+    { key: 'futsal', label: 'Futsal time-outs and accumulated fouls', type: 'toggle', default: false, advanced: true, hint: '1 time-out a half · 6th foul a half = 10 m free kick' },
   ],
 };
 

@@ -8,7 +8,7 @@ order: 56
 updated: 2026-10-11
 ---
 
-The toss and the rotation are optional. Record them and the app knows who serves every rally: it shows "🏐 Rohan serves", makes an ace one tap on the server, and charges a missed serve to the player who missed. Substitutions keep the six on court right, so the point chips and each player's sets played stay correct.
+The toss and the rotation are optional. Record them and the app knows who serves every rally: it shows "🏐 Rohan serves", makes an ace one tap on the server, and charges a missed serve to the player who missed. Substitutions keep the court right, so the point chips and sets played stay correct.
 
 ## Before you start
 - You must be a scorer or host of the match. See [How to score a volleyball match](/guides/score-volleyball/).
@@ -37,15 +37,20 @@ When a team wins the serve back, it rotates one place clockwise, and the next pl
 4. If something looks against the rules, the app asks first. For example: "Kiran Rao can only come back for Sneha Rao, who replaced them". Tap **No, cancel** to go back, or **Record anyway** if the referee allowed it.
 
 The checks follow the FIVB rules:
-- Each team has 6 substitutions per set. A 7th is offered only as an exceptional substitution for injury, which does not count.
+- Each team has 6 substitutions per set, or the number the organiser set under **Substitutions per team per set**. One more is offered only as an exceptional substitution for injury, which does not count.
+- An expelled player can't come back in that set, and a disqualified player not at all.
 - A starting player may leave once per set and come back once, only in place of the player who replaced them.
 - A substitute may come on once per set, and only the starter they replaced can take their place.
 
 ## Libero swaps
 Pick the libero as the player coming on or going off in **🔁 Sub**. Libero swaps are not substitutions and don't count toward the 6. The app asks if the libero would replace a front-row player, or if two swaps have no rally between them. A note appears if the libero rotates to the front row or to the serve, telling you who should come back on. The libero may not serve, block or attack above the net.
 
+## Beach and 9-a-side
+- Beach: two players, no substitutions, so there is no **🔁 Sub** button.
+- 9-a-side: tap **↻ Set serving order (1–9)** and tap the nine players in the order they serve. When a team wins the serve back, the next player serves. There are no I–VI positions and no libero, and the substitution limit is 3 a set unless the organiser changes it. 9-a-side rules vary, so check yours.
+
 ## What you get
-- The **Score** tab adds "Match stats": points won on serve, side-out % (points won when receiving), aces, serve errors, the longest run and set points saved, for the match or one set. It also lists points won on serve by each server.
+- The **Score** tab adds "Match stats": points won on serve, side-out %, aces, serve errors, the longest run and set points saved, per match or set, and each server's points won on serve.
 - A "Substitutions" list shows each change with the set and score, for example "Set 2 · 20-22 · Red House: ⬇ Kiran Rao ⬆ Sneha Rao".
 - **Serve errors** go on the server's profile. **Sets played** includes every substitute and libero who came on.
 
@@ -58,3 +63,6 @@ They stay. A substitution is kept with its set and the number of rallies played,
 
 ### Can I undo a substitution?
 Yes. Tap **Undo** straight after it.
+
+### Does a penalty change the rotation?
+Yes. A penalty gives the other team the point and the serve, so a team that wins the serve this way rotates, as after a rally.

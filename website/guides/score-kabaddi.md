@@ -12,14 +12,14 @@ One raid can score for both teams. You record each raid once, and the app works 
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
-- The organiser picks the **Rule set**: **Standard / Pro** has do-or-die and super tackles; **Circle style** and **School** don't; **Custom** sets each rule.
+- The organiser picks the **Rule set**: **Standard / Pro** (2×20), **Women / Junior** (2×15) or **School** (2×10). All three have super tackles; School has no do-or-die. **Custom** sets each rule, including the **Super tackle** and **Do-or-die raid** switches.
 - Add both squads first. Only named players appear in the player stats.
 
 ## Step by step: score a raid
 1. Open the match → **Scoring** tab and tap **▶ Start match**. The clock starts.
 2. Tap the raiding team's button, for example "🤼 Red House raiding". Raids alternate, so the team due to raid is highlighted with "◀ next", and **⚠ DoD** marks a team whose next raid is do-or-die.
 3. Under **Raider (optional)**, tap the raider (tap again to clear). Players the app knows are out show "· out" and can't be picked.
-4. Under "Defenders touched (they go out)", tap 0 to 5. Each touch is a point, and each touched defender goes out. You can't pick more than are on the mat.
+4. Under "Defenders touched (they go out)", tap the number, up to 7. Each touch is a point and each touched defender goes out. Numbers above the defenders on the mat are greyed out.
 5. If the raider crossed the bonus line, tap the chip so it reads **Bonus point: Yes**.
 6. If the raider was caught, tap the chip so it reads **Raider tackled: Yes**, then tap the tackler under "Who made the tackle?" and, if you like, how (**Ankle hold**, **Dash** and so on). A caught raider's touches don't score and the touched defenders stay in; a bonus still counts.
 7. Check the "Scores:" line, then tap **✓ Record raid** (or **Cancel**).
@@ -33,16 +33,16 @@ One raid can score for both teams. You record each raid once, and the app works 
 - Bonus: one point, only with 6 or more defenders on the mat.
 - Tackle: a point to the defending team and the tackler.
 - Super raid: a raid worth 3 or more points.
-- Super tackle (Pro rules): a tackle with 3 or fewer defenders on the mat is worth 2.
+- Super tackle: a tackle with 3 or fewer defenders on the mat is worth 2.
 - All out: the other team gets 2 extra points, and with Sanjeevani revival the whole team comes back on.
 
 > **Note:** With **Amar (points only)** revival, nobody goes out, so there are no all outs or super tackles.
 
 ## Do-or-die raids
-With Pro rules on, a team's raid after two empty raids in a row is do-or-die ("⚠ DO-OR-DIE raid"). If it scores nothing, the raider is out and the defence gets 1 point even without a tackle ("Do-or-die stop +1").
+With **Do-or-die raid** on, a team's raid after two empty raids in a row is do-or-die ("⚠ DO-OR-DIE raid"). If it scores nothing, the raider is out and the defence gets 1 point even without a tackle ("Do-or-die stop +1").
 
 ## Reading the board and the match centre
-The scoreboard shows each team's total and a column per half. On the **Score** tab, the timeline lists every raid by minute, with each kind of point labelled. "Team stats" (also on **Summary**) is the match centre: the points split, raids and **Raid strike rate**, do-or-die success, tackles and **Tackle strike rate**, super tackles and all outs. Each team then has RAID, TKL and PTS per player; tap **1st half** or **2nd half** to filter.
+The scoreboard shows each team's total and a column per half. The **Score** tab's timeline lists every raid by minute. "Team stats" (also on **Summary**) is the match centre: the points split, raids and **Raid strike rate**, do-or-die success, tackles and **Tackle strike rate**, super tackles and all outs. Each team then has RAID, TKL and PTS per player; tap **1st half** or **2nd half** to filter.
 
 ## Career stats
 When the match ends, each player's line is rebuilt from the raids. Their profile shows **Raid strike rate**, **Not-out %**, super raids and tackles, and **Best match**.
@@ -52,7 +52,7 @@ When the match ends, each player's line is rebuilt from the raids. Their profile
 2. On the wrong raid, tap **✎ Edit**, fix it and tap **✓ Save raid**. The score, outs and stats recalculate.
 3. To delete a raid, tap **✕**. The sheet lists what goes with it; tap **Yes, remove**.
 
-Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfill** and record it. A bar at the top shows the minute until you tap **Back to live**.
+Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfill** and record it, then tap **Back to live**.
 
 Line-outs, technical points and green, yellow or red cards have their own guide: [Kabaddi line-outs, technical points and cards](/guides/kabaddi-line-outs-and-cards/).
 

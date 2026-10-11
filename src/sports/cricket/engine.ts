@@ -32,6 +32,8 @@ interface BatCard {
   retired?: boolean;
   /** how they got out, e.g. "b Varun"; or "retired hurt"; undefined while batting */
   dismissal?: string;
+  /** SD-133 — retired not out at the local "retire at N runs" limit (v:2 only) */
+  retLimit?: true;
 }
 interface BowlCard {
   name: string;
@@ -168,6 +170,49 @@ export interface CricketState {
    *  DLS appendix). Set only by a `v: 2` RAIN_STOP (new action — no older log
    *  has it, REVIEW Decision 8). `par` = the score that ties; above it wins. */
   rainStop?: { par: number; balls: number; wickets: number; minOvers: number; byHand?: true };
+  /** SD-133 — "Innings ended by rain" in innings 1 (`RAIN_END_INNINGS`, v:2):
+   *  the balls / wickets when play stopped. The rest of the innings' resources
+   *  (incl. the lost part-over) were booked to `r1Lost`. */
+  inn1Rain?: { balls: number; wickets: number };
+  /** SD-133 — The Hundred (ECB playing conditions): 5-ball sets inside the
+   *  10-ball "over" (a free bowler change after 5), a 25-ball powerplay, at most
+   *  20 balls per bowler, and a Super Five for a tie. From the format's
+   *  `hundred: true` only — older Hundred-preset matches replay unchanged. */
+  hundred?: true;
+  /** SD-133 — Super Over eligibility (ICC; set by a `v: 2` START_SUPER_OVER on
+   *  the NESTED innings of round 2+): batters dismissed in any earlier Super
+   *  Over can't bat; the previous Super Over's bowlers can't bowl. */
+  soBarBat?: string[];
+  soBarBowl?: string[];
+  /** SD-133 — wagon wheel + shot type (CK-11): one record per tagged scoring
+   *  shot (`SHOT`). Absent until the first one — older states are unchanged. */
+  shots?: ShotRec[];
+}
+
+/** SD-133 — fielding zones for the wagon wheel, clockwise from straight (for a
+ *  right-hander; a left-hander's tap is mirrored onto these so careers add up):
+ *  1 Mid-off · 2 Cover · 3 Point · 4 Third man · 5 Fine leg · 6 Square leg ·
+ *  7 Mid-wicket · 8 Mid-on. Each is 45°, zone z centred on (z − 0.5) × 45°. */
+export const ZONES = ['Mid-off', 'Cover', 'Point', 'Third man', 'Fine leg', 'Square leg', 'Mid-wicket', 'Mid-on'] as const;
+/** Optional shot types (CricHeroes-style chips). */
+export const SHOT_TYPES = ['Drive', 'Cut', 'Pull', 'Hook', 'Sweep', 'Reverse sweep', 'Flick', 'Glance', 'Lofted', 'Edge', 'Defended'] as const;
+export type ShotType = typeof SHOT_TYPES[number];
+/** One tagged shot: the ball it belongs to (innings, stamp, batter) and where
+ *  it went. `zone` 1–8 (right-hander frame), `deep` = beyond the 30-yard ring. */
+export interface ShotRec {
+  inn: 1 | 2;
+  side: 'home' | 'away';
+  at: string;
+  batterId: string;
+  bowlerId?: string;
+  runs: number;
+  zone?: number;
+  deep?: boolean;
+  shot?: ShotType;
+  /** the batter was a left-hander (the tap was mirrored) */
+  lh?: true;
+  /** runs off the bat on a no-ball (shares its stamp with the next legal ball) */
+  nb?: true;
 }
 
 /** A bonus (+) or deduction (−) to one side's total (parity #20). */
@@ -309,6 +354,9 @@ const init = (config?: Record<string, unknown>): CricketState => ({
   inn1Overs: Number(config?.overs ?? 20),
   // SD-121 — only when the organiser set one (older states stay byte-identical)
   ...(Number(config?.minOvers) > 0 ? { minOvers: Math.floor(Number(config?.minOvers)) } : {}),
+  // SD-133 — The Hundred rules, only when the format says so (older Hundred-preset
+  // matches have no key and replay exactly as before).
+  ...(config?.hundred === true || config?.hundred === 'true' ? { hundred: true as const } : {}),
   log: [],
   adj: [],
   fieldNotes: [],
@@ -319,9 +367,16 @@ const init = (config?: Record<string, unknown>): CricketState => ({
 
 /** Overs bowled so far in the current innings (for the powerplay window). */
 export const oversBowled = (s: CricketState) => Math.floor(s.scores[s.battingSide].balls / s.ballsPerOver);
+/** SD-133 — The Hundred (ECB): a 25-ball powerplay; at most 20 balls a bowler. */
+export const HUNDRED_PP_BALLS = 25;
+export const HUNDRED_MAX_BALLS = 20;
 /** True while the innings is inside its powerplay (fielding restrictions). */
 export const inPowerplay = (s: CricketState) =>
-  s.powerplayOvers > 0 && !s.ended && oversBowled(s) < s.powerplayOvers;
+  s.hundred ? !s.ended && s.scores[s.battingSide].balls < HUNDRED_PP_BALLS
+    : s.powerplayOvers > 0 && !s.ended && oversBowled(s) < s.powerplayOvers;
+/** "overs 1–6" / "balls 1–25" — the powerplay span for the live strip. */
+export const powerplaySpan = (s: CricketState): string =>
+  (s.hundred ? `balls 1–${HUNDRED_PP_BALLS}` : `overs 1–${s.powerplayOvers}`);
 
 /** Auto commentary for a delivery. `isBoundary` (parity #15): only a real
  *  boundary reads "FOUR!"/"SIX!" — an all-run 4 or overthrows read as runs. */
@@ -517,7 +572,10 @@ export function noBatterLeft(s: CricketState, side: 'home' | 'away'): boolean {
   if (s.closedNoBatter?.[side]) return true;
   const inn = s.scores[side];
   if (inn.wickets >= s.wicketsLimit) return true;
-  const retired = Object.values(s.batting ?? {}).filter((c) => c.side === side && c.retired && !c.out).length;
+  // SD-133 — a batter retired at the local run limit may come back (unless the
+  // rule says they can't), so they don't use up the order.
+  const back = rulesOf(s).retireBack !== false;
+  const retired = Object.values(s.batting ?? {}).filter((c) => c.side === side && c.retired && !c.out && !(c.retLimit && back)).length;
   return retired > 0 && inn.wickets + retired >= s.wicketsLimit;
 }
 
@@ -638,8 +696,21 @@ const other = (s: 'home' | 'away') => (s === 'home' ? 'away' : 'home');
 const ensureCard = (batting: Record<string, BatCard>, id: string, name: string, side: 'home' | 'away'): Record<string, BatCard> => {
   const prev = batting[id];
   if (!prev) return { ...batting, [id]: { name, side, runs: 0, balls: 0, fours: 0, sixes: 0, out: false } };
-  if (prev.retired) return { ...batting, [id]: { ...prev, retired: false, dismissal: undefined } };
+  if (prev.retired) {
+    const { retLimit: _r, ...rest } = prev;
+    return { ...batting, [id]: { ...rest, retired: false, dismissal: undefined } };
+  }
   return batting;
+};
+
+/** SD-133 — a batter retired at the run limit who comes back in (as the new
+ *  batter after a wicket) resumes their innings: the "retired not out" note
+ *  goes. Only cards with `retLimit` (v:2) are touched. */
+const resumeLimit = (batting: Record<string, BatCard>, id?: string): Record<string, BatCard> => {
+  const c = id ? batting[id] : undefined;
+  if (!id || !c?.retLimit) return batting;
+  const { retLimit: _r, ...rest } = c;
+  return { ...batting, [id]: { ...rest, retired: false, dismissal: undefined } };
 };
 
 /** Swap which batsman is on strike. */
@@ -671,15 +742,21 @@ const currentOverIx = (s: CricketState) => Math.floor(s.scores[s.battingSide].ba
 /** Overs (incl. part-overs) a bowler has bowled this innings. */
 export const oversUsed = (s: CricketState, id: string): number => s.bowling[id]?.overs?.length ?? 0;
 
-export type BowlBlock = 'last-over' | 'quota' | 'barred' | 'unavailable' | 'this-over';
+export type BowlBlock = 'last-over' | 'quota' | 'barred' | 'unavailable' | 'this-over' | 'super-over';
 /** May `id` bowl (or take over) the current over? Order: hard blocks first, the
  *  quota last — it is the only one a `force` can override. */
 export function canBowl(s: CricketState, id: string): { ok: boolean; reason?: BowlBlock } {
   if (s.unavailable.includes(id)) return { ok: false, reason: 'unavailable' };
   if ((s.barredBowlers ?? []).includes(id)) return { ok: false, reason: 'barred' };
+  // SD-133 — bowled the previous Super Over (ICC: can't bowl the next one).
+  if ((s.soBarBowl ?? []).includes(id)) return { ok: false, reason: 'super-over' };
   const last = s.lastOverBowlerIds ?? [];
   if (id === s.lastOverBowlerId || last.includes(id)) return { ok: false, reason: 'last-over' };
   if (midOver(s) && id !== s.bowlerId && (s.overBowlers ?? []).includes(id)) return { ok: false, reason: 'this-over' };
+  // SD-133 — The Hundred: the quota is 20 balls (5-ball sets make part-overs normal).
+  if (s.hundred && s.bowlerQuotaAuto) {
+    return (s.bowling[id]?.balls ?? 0) >= HUNDRED_MAX_BALLS ? { ok: false, reason: 'quota' } : { ok: true };
+  }
   const q = s.bowlerQuota ?? 0;
   const overs = s.bowling[id]?.overs ?? [];
   if (q > 0 && overs.length >= q && !overs.includes(currentOverIx(s))) return { ok: false, reason: 'quota' };
@@ -827,7 +904,46 @@ export function lastBall(s: Pick<CricketState, 'log' | 'batting' | 'ballsPerOver
   return null;
 }
 
+/** SD-133 — tag a scoring shot (CK-11): where it went (zone 1–8 + deep) and/or
+ *  the shot type, for the ball named in the payload (`inn`, `side`, `at`,
+ *  `batterId`, `nb` for a no-ball). A second tag of the same ball merges (zone
+ *  first, then a shot chip). Score-neutral; allowed after the match ended (the
+ *  winning hit). A new action type, sent with `v: 2` only. */
+function applyShot(s: CricketState, a: ScoreAction): CricketState {
+  if (s.superOver && !s.superOver.state.ended) {
+    const inner = applyShot(s.superOver.state, a);
+    return inner === s.superOver.state ? s : { ...s, superOver: { ...s.superOver, state: inner } };
+  }
+  const p = a.payload ?? {};
+  if (p.v !== 2) return s;
+  const batterId = textOf(p.batterId);
+  const at = textOf(p.at);
+  if (!batterId || !at) return s;
+  const zone = Number(p.zone);
+  const hasZone = Number.isInteger(zone) && zone >= 1 && zone <= 8;
+  const shot = (SHOT_TYPES as readonly string[]).includes(String(p.shot)) ? (p.shot as ShotType) : undefined;
+  if (!hasZone && !shot) return s;
+  const inn: 1 | 2 = p.inn === 2 ? 2 : 1;
+  const side: 'home' | 'away' = p.side === 'home' || p.side === 'away' ? p.side : s.battingSide;
+  const nb = p.nb === true;
+  const same = (x: ShotRec) => x.inn === inn && x.side === side && x.at === at && x.batterId === batterId && !!x.nb === nb;
+  const list = s.shots ?? [];
+  const prev = list.find(same);
+  const bowlerId = textOf(p.bowlerId);
+  const rec: ShotRec = {
+    ...(prev ?? { inn, side, at, batterId, runs: clampRuns(p.runs) }),
+    ...(bowlerId ? { bowlerId } : {}),
+    ...(hasZone ? { zone, deep: p.deep === true || undefined } : {}),
+    ...(shot ? { shot } : {}),
+    ...(p.lh === true ? { lh: true as const } : {}),
+    ...(nb ? { nb: true as const } : {}),
+  };
+  if (rec.deep === undefined) delete rec.deep;
+  return { ...s, shots: [...list.filter((x) => !same(x)), rec] };
+}
+
 const step = (s: CricketState, a: ScoreAction): CricketState => {
+  if (a.type === 'SHOT') return applyShot(s, a);
   if (s.ended && a.type !== 'END' && a.type !== 'POTM') return s;
 
   // ── Change overs (parity #18) ─────────────────────────────────────────────
@@ -897,6 +1013,34 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
     return inn.runs === par ? { ...next, pendingTie: true } : { ...next, ended: true };
   }
 
+  // ── Innings 1 ended by rain (SD-133) ─────────────────────────────────────
+  // Play can't resume in innings 1: the innings closes at the ball play
+  // stopped. Everything it had left — the lost part-over included, ball-
+  // accurate (6-ball units) — is booked as lost resources, then the chase
+  // starts over `chaseOvers` (default: the current length) with a DLS target
+  // (Standard Edition: R1 = scheduled − lost; G50 when the chase has more).
+  // A new action, `v: 2` only; DLS must be on.
+  if (a.type === 'RAIN_END_INNINGS') {
+    if (a.payload?.v !== 2 || s.innings !== 1 || s.ended || tieInPlay(s) || !s.dls || s.dlsLocked || legacyRainBooked(s)) return s;
+    const inn = s.scores[s.battingSide];
+    if (inn.balls <= 0) return s;
+    const bpo = s.ballsPerOver;
+    const asked = Math.floor(Number(a.payload?.chaseOvers ?? s.oversLimit));
+    if (!Number.isFinite(asked) || asked < 1 || asked > 999) return s;
+    const loss = Math.max(0, resourcePct(uLeft(s.oversLimit, inn.balls, bpo), inn.wickets));
+    const cut: CricketState = recomputeQuota({
+      ...s, oversLimit: asked, dlsV: 2, revision: 'dls', r1Lost: r6(s.r1Lost + loss),
+      inn1Rain: { balls: inn.balls, wickets: inn.wickets },
+    }, asked);
+    const chase = chaseStart(cut, inn.runs);
+    const seq = s.seq + 1;
+    return {
+      ...cut, innings: 2, battingSide: other(s.battingSide), ...chase, thisOver: [], ballsInOver: 0, ...clearCrease,
+      seq,
+      events: [...s.events, { id: seq, stamp: '☔', icon: '☔', label: `Rain — innings ended at ${oversStr(inn.balls, bpo)} ov · target ${chase.target} in ${asked} ov (DLS)`, detail: `${inn.runs}/${inn.wickets}`, side: s.battingSide }],
+    };
+  }
+
   // ── Rain (DLS) ────────────────────────────────────────────────────────────
   // Cut the overs; in the chase, revise the target by the resources lost.
   // `v: 2` (or a match already on v2) → Standard Edition maths; otherwise the
@@ -939,7 +1083,7 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
 
   // ── Super Over ────────────────────────────────────────────────────────────
   // Starting one freezes the parent match and spins up a nested mini-innings.
-  if (a.type === 'START_SUPER_OVER') return startSuperOver(s);
+  if (a.type === 'START_SUPER_OVER') return startSuperOver(s, a.payload?.v === 2);
   // While a Super Over is live, route every scoring action into the nested match
   // (run through this very reducer) so all the ball-by-ball logic is reused.
   if (s.superOver && !s.superOver.state.ended) {
@@ -1145,7 +1289,7 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       if (kind === 'mankad') {
         seq += 1;
         let batting = applyBat(s.batting, outId, outName, { out: true, dismissal });
-        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false }); batting = resumeLimit(batting, newBatId);
         const overReset = s.ballsInOver >= s.ballsPerOver ? [] : s.thisOver;
         return settle({
           ...s,
@@ -1162,15 +1306,21 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       // Retired hurt / retired out / timed out — no delivery is bowled, no bowler involved.
       if (NO_DELIVERY.includes(kind)) {
         const isWicket = kind !== 'retired'; // retired hurt doesn't count as a wicket
+        // SD-133 — "retire at N runs" (local rule, v:2): retired NOT OUT, may
+        // come back later if the rule allows. Not a wicket, not hurt.
+        const atLimit = kind === 'retired' && a.payload?.v === 2 && a.payload?.limit === true;
         seq += 1;
-        let batting = applyBat(s.batting, outId, outName, kind === 'retired' ? { retired: true, dismissal } : { out: true, dismissal });
-        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        let batting = applyBat(s.batting, outId, outName, kind === 'retired' ? { retired: true, dismissal: atLimit ? 'retired not out' : dismissal } : { out: true, dismissal });
+        if (atLimit && outId && batting[outId]) batting = { ...batting, [outId]: { ...batting[outId], retLimit: true } };
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false }); batting = resumeLimit(batting, newBatId);
         const next: CricketState = {
           ...s,
           scores: { ...s.scores, [bat]: { ...cur, wickets: cur.wickets + (isWicket ? 1 : 0) } },
           batting,
           dismissals: isWicket ? [...s.dismissals, { kind, outId }] : s.dismissals,
-          events: [...s.events, { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: kind === 'retiredout' ? '🚶' : '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat), tone: 'wicket' }],
+          events: [...s.events, atLimit
+            ? { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: '🏁', label: 'RETIRED', detail: `${outName ?? 'Batter'} retired not out on ${batting[outId ?? '']?.runs ?? 0} (run limit)`, side: bat }
+            : { id: seq, stamp: oversStr(cur.balls, s.ballsPerOver), icon: kind === 'retiredout' ? '🚶' : '🚑', label: WICKET_LABEL[kind], detail: `${outName ?? 'Batter'} ${dismissal}`, side: other(bat), tone: 'wicket' }],
           seq,
           ...creaseFor(newBatId, newBatName),
         };
@@ -1192,7 +1342,7 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       // dismissed batsman (striker, or a run-out non-striker) is marked out.
       let batting = applyBat(s.batting, strikerId, strikerName, { balls: 1, runs: offBat });
       batting = applyBat(batting, outId, outName, { out: true, dismissal });
-      if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+      if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false }); batting = resumeLimit(batting, newBatId);
 
       // A stumping is credited to the keeper; otherwise to the named fielder.
       const fielderId = kind === 'stumped' ? s.keepers[other(bat)]?.id : (a.payload?.fielderId as string | undefined);
@@ -1360,7 +1510,7 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
         let batting = s.batting;
         if (isNoBall) batting = applyBat(batting, strikerId, strikerName, { runs: offBat, balls: 1 });
         batting = applyBat(batting, outId, outName, { out: true, dismissal });
-        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false });
+        if (newBatId) batting = applyBat(batting, newBatId, newBatName, { retired: false }); batting = resumeLimit(batting, newBatId);
         const end = RUNS_KINDS.includes(wk) ? asEnd(a.payload?.end) : undefined;
         const crease = end
           ? creaseAfterWicket({ strikerId, strikerName, nonStrikerId: s.nonStrikerId, nonStrikerName: s.nonStrikerName }, batterOut, end, { id: newBatId, name: newBatName }, legal && overEnd)
@@ -1451,12 +1601,14 @@ const step = (s: CricketState, a: ScoreAction): CricketState => {
       const id = String(a.payload?.id ?? '');
       const name = String(a.payload?.name ?? '');
       if (!id || s.unavailable.includes(id)) return s;
+      if (a.payload?.v === 2 && (s.soBarBat ?? []).includes(id)) return s; // SD-133 — out in an earlier Super Over
       return { ...s, strikerId: id, strikerName: name, batting: ensureCard(s.batting, id, name, bat) };
     }
     case 'SET_NONSTRIKER': {
       const id = String(a.payload?.id ?? '');
       const name = String(a.payload?.name ?? '');
       if (!id || s.unavailable.includes(id)) return s;
+      if (a.payload?.v === 2 && (s.soBarBat ?? []).includes(id)) return s;
       return { ...s, nonStrikerId: id, nonStrikerName: name, batting: ensureCard(s.batting, id, name, bat) };
     }
     case 'IMPACT_SUB': {
@@ -1744,18 +1896,33 @@ function superOverWinner(inn: CricketState): 'home' | 'away' | null {
  *  Round 1 — the side that batted second in the match bats first; then it
  *  alternates each subsequent (tied) round. Captains/keepers carry over so the
  *  scorer isn't re-prompted for setup. */
-function startSuperOver(s: CricketState): CricketState {
+function startSuperOver(s: CricketState, v2 = false): CricketState {
   const battingFirst = s.superOver ? other(s.superOver.battingFirst) : s.battingSide;
   const history = s.superOver
     ? [...s.superOver.history, { round: s.superOver.round, home: s.superOver.state.scores.home.runs, away: s.superOver.state.scores.away.runs }]
     : [];
   const round = (s.superOver?.round ?? 0) + 1;
+  // SD-133 — ICC Super Over eligibility for a `v: 2` start of round 2+: a batter
+  // dismissed in ANY earlier Super Over can't bat, and a bowler of the PREVIOUS
+  // Super Over can't bowl (ICC Men's T20I PC, Super Over appendix, as amended
+  // in 2019 — verify clause). Legacy starts (no `v`) carry nothing over.
+  let bars: Pick<CricketState, 'soBarBat' | 'soBarBowl'> = {};
+  if (v2 && s.superOver) {
+    const prev = s.superOver.state;
+    const outs = prev.dismissals.map((d) => d.outId).filter((x): x is string => !!x);
+    bars = {
+      soBarBat: [...new Set([...(prev.soBarBat ?? []), ...outs])],
+      soBarBowl: Object.entries(prev.bowling).filter(([, c]) => c.balls > 0 || (c.overs?.length ?? 0) > 0).map(([id]) => id),
+    };
+  }
   const inner: CricketState = {
-    ...init({ overs: 1, playersPerSide: 3 }), // oversLimit 1, wicketsLimit 2
+    // oversLimit 1, wicketsLimit 2 — The Hundred plays a Super Five (5 balls).
+    ...init(s.hundred ? { overs: 1, ballsPerOver: 5, playersPerSide: 3 } : { overs: 1, playersPerSide: 3 }),
     isSuperOver: true,
     battingSide: battingFirst,
     captains: s.captains,
     keepers: s.keepers,
+    ...bars,
   };
   return { ...s, ended: false, pendingTie: true, superOver: { round, battingFirst, history, state: inner } };
 }

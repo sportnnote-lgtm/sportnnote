@@ -8,7 +8,7 @@ order: 55
 updated: 2026-10-11
 ---
 
-Every rally ends with a point for one team. Record each rally once; the app keeps the serve, sets and player stats.
+Record each rally once; the app keeps the serve, sets and player stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -48,14 +48,20 @@ For attack attempts, attack efficiency and reception grades, turn on **🔎 Deta
 - A **Switch sides** note appears when teams change ends: beach every 7 points (5 in the decider), indoor at 8 in the decider. Beach sets 1–2 show a **Technical timeout** note at 21 points.
 - To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
+## Sanctions and delays
+Open **☰ Quick options** and tap **Sanction** or **Delay**. Pick the team and, for a sanction, the player. The app suggests the next step (FIVB rules 16 and 21) but you can pick another; every one asks you to confirm.
+- **Warning** or **Delay warning**: noted on the timeline, no point.
+- **Penalty** or **Delay penalty**: the other team wins the rally, so it gets a point and the serve.
+- **Expulsion** (rest of the set) or **Disqualification** (rest of the match): no point, and the app reminds you to substitute the player.
+
 ## Reading the board and the stats
-"Player stats" and "Team stats" are on the **Score** and **Summary** tabs; tap **Set 1**, **Set 2** … to filter. Columns for serve errors (**SE**) and errors (**ERR**) appear when players were named. The point log lists every rally with how it was won, the score and the player, for example "1-1 · Net touch · Rohan".
+"Player stats" and "Team stats" are on the **Score** and **Summary** tabs; tap **Set 1**, **Set 2** … to filter. Columns for serve errors (**SE**) and errors (**ERR**) appear when players were named.
 
 ## Sets played
 At the first point the app notes who is on court. **Sets played** counts each set a player was on court or scored in, substitutes and liberos included. Per-set figures divide by it, as the FIVB does.
 
 ## Fix a mistake
-- Wrong tap just now? Tap **Undo**. It also takes the stats back off the player.
+- Wrong tap just now? Tap **Undo**.
 - To fix an older point, tap **Edit** next to "Correct the timeline".
 1. Find the point and tap ✎. Change who won the rally, the point type or the player.
 2. Tap **Save**. The score, the sets and every player's stats recalculate, even if the fix moves the end of a set.
@@ -63,8 +69,5 @@ At the first point the app notes who is on court. **Sets played** counts each se
 4. Tap **Done** to close the editor.
 
 ## Common questions
-### Do I have to name the fault?
-No. Naming the player builds each player's error count.
-
 ### Can I score by voice?
 Yes. Open **🎤 Voice scoring** and say "attack Rohan" or "ace Rohan", then tap Apply.

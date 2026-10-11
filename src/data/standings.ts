@@ -158,7 +158,8 @@ export type BuiltinTieBreaker =
   | 'h2h' | 'nrr' | 'diff' | 'for' | 'wins' | 'sb' | 'h2hRatio' | 'h2hPoints'
   | 'h2hDiff' | 'h2hFor' | 'setRatio' | 'pointRatio' | 'gamesDiff' | 'pointsDiff'
   | 'setsPct' | 'gamesPct' | 'played' | 'fairPlay' | 'lots'
-  | 'rubbersRatio' | 'h2hGames' | 'rubbersDiff' | 'rubbersPct' | 'boardPoints';
+  | 'rubbersRatio' | 'h2hGames' | 'rubbersDiff' | 'rubbersPct' | 'boardPoints'
+  | 'avgFor';
 /** A built-in tie-breaker, or the key of one added with `registerTieBreaker`. */
 export type TieBreaker = BuiltinTieBreaker | (string & { readonly __customTieBreaker?: never });
 
@@ -189,7 +190,7 @@ export interface StandingsConfig {
   pairOrder?: TieBreaker[];
   /** what is compared before the points: 'wins' = matches won first, then
    *  points (FIVB: "number of matches won, match points, …"). Absent = points. */
-  rankBy?: 'points' | 'wins';
+  rankBy?: 'points' | 'wins' | 'winPct';
   /** match points by the sets score, winner-first "3-2" → [winner, loser]
    *  (FIVB 3-0 / 3-1 → 3-0, 3-2 → 2-1). A score not listed uses win / loss. */
   setPoints?: Record<string, [number, number]>;
@@ -239,6 +240,8 @@ const BUILTIN_TB: BuiltinTieBreaker[] = [
   'h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints',
   'h2hDiff', 'h2hFor', 'setRatio', 'pointRatio', 'gamesDiff', 'pointsDiff', 'setsPct', 'gamesPct', 'played', 'fairPlay', 'lots',
   'rubbersRatio', 'h2hGames', 'rubbersDiff', 'rubbersPct', 'boardPoints',
+  // SD-132 (BK-13): FIBA 3×3 — average points scored per game
+  'avgFor',
 ];
 /** The criteria computed only from matches among the tied teams. */
 const AMONG_TIED = new Set<string>(['h2h', 'h2hDiff', 'h2hFor', 'h2hRatio', 'h2hPoints', 'rubbersRatio', 'h2hGames']);
@@ -334,6 +337,10 @@ function simplePreset(sport: SportId | string): PointsPreset {
     { winPoints: win, drawPoints: 1, lossPoints: 0, tieBreak: order.join(',') });
 }
 
+// FIVB 3-3-2-1 is a best-of-5 table (VNL / World Championship pool criteria).
+// SD-136 check: no FIVB source maps it onto best-of-3; 2-0 → 3/0 and 2-1 → 2/1
+// is a house adaptation by analogy (straight win 3, decider win 2 / loss 1) —
+// organisers can switch to "Simple 2-1-0" or the beach table.
 const FIVB_SETS = '3-0:3/0,3-1:3/0,3-2:2/1,2-0:3/0,2-1:2/1';
 
 /** Each sport's international points system(s) (D1), first = the default a
@@ -349,10 +356,21 @@ const BODY_PRESETS: Record<string, PointsPreset[]> = {
   basketball: [
     preset('fiba', 'FIBA 2-1 (loss = 1)', '2 a win, 1 a loss, 0 a forfeit; ties: head-to-head points, difference, scored; then overall',
       { winPoints: 2, drawPoints: 1, lossPoints: 1, forfeitLossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: true }),
+    // SD-132 (BK-13): FIBA 3×3 pool ranking — win % (games played can
+    // differ), then head-to-head between two tied teams only, then the
+    // average points scored (FIBA 3×3 Rules, classification — verify)
+    preset('fiba3x3', 'FIBA 3×3', 'Ranked by win %; 2 tied → head-to-head; then average points scored',
+      { winPoints: 1, drawPoints: 0, lossPoints: 0, forfeitLossPoints: 0, rankBy: 'winPct', tieBreak: 'avgFor,lots', tieBreak2: 'h2h,avgFor,lots' }),
   ],
   volleyball: [
     preset('fivb', 'FIVB 3-3-2-1', 'Wins first; 3-0 / 3-1 → 3 pts, 3-2 → 2 and 1; ties: set ratio, point ratio, head-to-head',
       { winPoints: 3, drawPoints: 0, lossPoints: 0, forfeitLossPoints: 0, setPoints: FIVB_SETS, rankBy: 'wins', tieBreak: 'setRatio,pointRatio,h2h,lots' }),
+    // SD-136 — FIVB beach pool play: win 2, loss 1, forfeit 0; two level →
+    // the match between them; three or more → rally-point ratio among them,
+    // then over all pool matches (FIVB beach pool ranking criteria, e.g. Rio
+    // 2016; verify against the current Beach Pro Tour regulations).
+    preset('fivb-beach', 'FIVB Beach (2-1-0)', '2 a win, 1 a loss, 0 a forfeit; 2 tied → head-to-head; 3+ tied → point ratio among them, then overall',
+      { winPoints: 2, drawPoints: 0, lossPoints: 1, forfeitLossPoints: 0, tieBreak: 'h2hPoints,pointRatio,lots', tieBreak2: 'h2h,pointRatio,lots', tieRestart: true }),
   ],
   kabaddi: [
     preset('pkl', 'PKL 5-3-1', '5 a win, 3 a tie, +1 for a loss by 7 or fewer; ties: score difference, wins, head-to-head',
@@ -453,7 +471,20 @@ export const NEW_TOURNAMENT_POINTS: Partial<Record<SportId, Record<string, numbe
 /** A new tournament's format for one sport: the international points keys
  *  under whatever the organiser already chose (their keys win). */
 export function withNewTournamentPoints<T extends Record<string, unknown>>(sport: SportId, fmt?: T | null): T {
-  return { ...(NEW_TOURNAMENT_POINTS[sport] ?? {}), ...(fmt ?? {}) } as T;
+  const out = { ...(NEW_TOURNAMENT_POINTS[sport] ?? {}), ...(fmt ?? {}) } as T;
+  // SD-136: a beach volleyball tournament still on the indoor default starts on
+  // the FIVB Beach table instead (an organiser's own pick is kept).
+  if (sport === 'volleyball' && (out as Record<string, unknown>).preset === 'beach' && activePreset(sport, out)?.id === 'fivb') {
+    const beach = BODY_PRESETS.volleyball.find((p) => p.id === 'fivb-beach');
+    if (beach) return { ...out, ...beach.set } as T;
+  }
+  // SD-132 (BK-13): a 3×3 basketball event still on the 5×5 default starts on
+  // the FIBA 3×3 ranking instead (an organiser's own pick is kept).
+  if (sport === 'basketball' && (out as Record<string, unknown>).preset === '3x3' && activePreset(sport, out)?.id === 'fiba') {
+    const p3 = BODY_PRESETS.basketball.find((p) => p.id === 'fiba3x3');
+    if (p3) return { ...out, ...p3.set } as T;
+  }
+  return out;
 }
 
 /** Every sport of a tournament being created, stamped with `withNewTournamentPoints`
@@ -523,7 +554,7 @@ export function availableTieBreakers(sport: SportId, ties = false): TieBreaker[]
     case 'goals':
       return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', ...(sport === 'football' ? ['fairPlay' as const] : []), 'played', 'lots'];
     default:
-      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', 'played', 'lots'];
+      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', 'played', ...(sport === 'basketball' ? ['avgFor' as const] : []), 'lots'];
   }
 }
 
@@ -558,6 +589,7 @@ export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): strin
     case 'rubbersDiff': return 'rubbers difference';
     case 'rubbersPct': return '% of rubbers won';
     case 'boardPoints': return 'game points (boards)';
+    case 'avgFor': return 'average points scored';
     default: return customTB.get(tb)?.label ?? tb;
   }
 }
@@ -609,7 +641,7 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
     ...(has('byePoints') ? { bye: fmt.byePoints as number } : {}),
     ...(adjustments.length ? { adjustments } : {}),
     ...(pairOrder.length ? { pairOrder } : {}),
-    ...(fmt.rankBy === 'wins' ? { rankBy: 'wins' as const } : {}),
+    ...(fmt.rankBy === 'wins' ? { rankBy: 'wins' as const } : fmt.rankBy === 'winPct' ? { rankBy: 'winPct' as const } : {}),
     ...(setPoints ? { setPoints } : {}),
     ...(has('lossBonusMargin') && has('lossBonusPoints') && (fmt.lossBonusPoints as number) !== 0
       ? { lossBonus: { margin: fmt.lossBonusMargin as number, points: fmt.lossBonusPoints as number } } : {}),
@@ -1019,8 +1051,10 @@ export const FIDE_SWISS_ORDER: TieBreaker[] = ['bhc1', 'bh', 'sb', 'ps', 'h2h', 
 export function rankTeams(rows: TeamStanding[], matches: Match[], cfg: StandingsConfig): TeamStanding[] {
   const out: TeamStanding[] = [];
   const byWins = cfg.rankBy === 'wins';
-  const level = (x: TeamStanding, y: TeamStanding) => x.points === y.points && (!byWins || winsOf(x) === winsOf(y));
-  const byPoints = [...rows].sort((x, y) => (byWins ? winsOf(y) - winsOf(x) : 0) || y.points - x.points);
+  // SD-132 (BK-13): FIBA 3×3 ranks by win % (teams may have played a different number of games)
+  const byPct = cfg.rankBy === 'winPct';
+  const level = (x: TeamStanding, y: TeamStanding) => x.points === y.points && (!byWins || winsOf(x) === winsOf(y)) && (!byPct || winPctOf(x) === winPctOf(y));
+  const byPoints = [...rows].sort((x, y) => (byWins ? winsOf(y) - winsOf(x) : 0) || (byPct ? winPctOf(y) - winPctOf(x) : 0) || y.points - x.points);
   for (let i = 0; i < byPoints.length; ) {
     let j = i;
     while (j < byPoints.length && level(byPoints[j], byPoints[i])) j++;
@@ -1040,6 +1074,9 @@ const chainFor = (size: number, cfg: StandingsConfig): TieBreaker[] =>
  *  forfeit wins and a full-point bye (forfeits used to sit in `won`). */
 const winsOf = (t: TeamStanding) =>
   t.won + (t.forfeitWins ?? 0) + (t.games ?? []).filter((g) => g.kind === 'bye' && g.result === 'win').length;
+
+/** SD-132: share of games won (forfeit wins count as wins); 0 when none played. */
+const winPctOf = (t: TeamStanding) => (t.played > 0 ? winsOf(t) / t.played : 0);
 
 /** won ÷ (won + lost); 0 when nothing was played. */
 const pct = (won: number, lost: number) => (won + lost === 0 ? 0 : won / (won + lost));
@@ -1065,6 +1102,7 @@ function overallKey(t: TeamStanding, tb: TieBreaker): number | null {
     case 'rubbersDiff': return t.diff;
     case 'rubbersPct': return pct(t.for, t.against);
     case 'boardPoints': return t.for;
+    case 'avgFor': return t.played > 0 ? t.for / t.played : 0;
     default: return null;
   }
 }

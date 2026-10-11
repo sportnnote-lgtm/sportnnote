@@ -7,6 +7,7 @@ import { theme } from '../../core/theme';
 import type { Player } from '../../core/types';
 import { BB_META, DQ_LABEL, FOUL_LABEL, type BBEvent } from './events';
 import { playerLink, idByName } from '../playerLink';
+import { eventClock, type BasketballState } from './engine';
 
 function describe(e: BBEvent): string {
   const who = e.playerName ?? 'Team';
@@ -28,8 +29,11 @@ export function Timeline({
   homeRoster,
   awayRoster,
   onPlayer,
+  clock,
 }: {
   events: BBEvent[];
+  /** SD-132: period lengths, so plays on the game clock read "Q2 07:32" */
+  clock?: Pick<BasketballState, 'regPeriods' | 'periodMinutes' | 'overtimeMinutes'>;
   homeColor?: string;
   awayColor?: string;
   max?: number;
@@ -41,7 +45,8 @@ export function Timeline({
   if (events.length === 0) {
     return <Text style={st.empty}>No plays yet — updates appear here as the game unfolds.</Text>;
   }
-  const ordered = [...events].sort((a, b) => b.quarter - a.quarter || b.minute - a.minute || b.id - a.id).slice(0, max);
+  // SD-132: within a period, plays with a clock second order by it
+  const ordered = [...events].sort((a, b) => b.quarter - a.quarter || ((a.sec != null && b.sec != null) ? b.sec - a.sec : b.minute - a.minute) || b.id - a.id).slice(0, max);
   const hidden = events.length - ordered.length;
   return (
     <View style={st.wrap}>
@@ -58,7 +63,7 @@ export function Timeline({
               {latest ? <View style={[st.nodeHalo, { borderColor: color }]} /> : null}
               <View style={[st.node, { backgroundColor: color }]} />
             </View>
-            <Text style={[st.q, { color }]} numberOfLines={1}>Q{e.quarter} {e.minute}&apos;</Text>
+            <Text style={[st.q, { color }]} numberOfLines={1}>{(clock && eventClock(clock, e)) ? `Q${e.quarter} ${eventClock(clock, e)}` : `Q${e.quarter} ${e.minute}'`}</Text>
             <Text style={st.icon}>{meta.icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.label}>{meta.label}</Text>
@@ -83,7 +88,7 @@ const st = StyleSheet.create({
   railLineLast: { bottom: '50%' },
   node: { width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.bg },
   nodeHalo: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 2, opacity: 0.5 },
-  q: { fontSize: theme.font.small, fontWeight: '800', width: 56 },
+  q: { fontSize: theme.font.small, fontWeight: '800', width: 66 },
   icon: { fontSize: 18 },
   label: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },
   detail: { color: theme.colors.textMuted, fontSize: theme.font.small },

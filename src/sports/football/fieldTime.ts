@@ -12,7 +12,7 @@
  * would give a misleading partial picture — so old matches write nothing new.
  */
 import { trackField, timeLeft, type FieldEvent, type FieldLog, type FieldResult, type Who } from '../onField.ts';
-import { startOffset, halfBase, type FootballState } from './engine.ts';
+import { startOffset, halfBase, gcSec, type FootballState } from './engine.ts';
 import { end, keeperTotals, position } from './keepers.ts';
 
 type Side = 'home' | 'away';
@@ -80,6 +80,8 @@ export function footballTotals(s: FootballState): Record<string, { side: Side; s
 export function liveClockMinutes(s: FootballState, nowMs: number): number {
   const base = startOffset(s);
   if (!s.startedAt) return base;
+  // SD-132: the stopped clock (futsal) — the time actually played
+  if (s.gc) return base + gcSec(s, nowMs) / 60;
   const raw = base + Math.max(0, nowMs - s.startedAt) / 60000;
   return Math.min(raw, halfBase(s) + (s.stoppage?.[s.half] ?? 0));
 }

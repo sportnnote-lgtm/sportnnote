@@ -8,6 +8,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { TextField } from '../../components/ui';
 import { theme } from '../../core/theme';
 import { Button, SelectChip } from '../../components/ui';
 import { askConfirm, confirmMatchAction } from '../../components/ConfirmSheet';
@@ -31,6 +32,7 @@ import {
   type BasketballState, init, reducer, periodLabel, currentMinute,
   isFouledOut, isPlayerOut, isEjected, inBonus, timeoutStatus, onCourtNames, teamFoulsThisQuarter,
   disqualifyingFoul, freeThrowsFor,
+  gameSec, clockLeft, clockRunning, timedPeriod, timeUp, clockText, possessionAfterFoul,
 } from "./engine";
 
 /** SD-117 (B12): the foul-type chips, FIBA's U and D included. */
@@ -96,8 +98,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
 
   // While editing, stamp the re-entered play at the original moment; while
   // backfilling, at the chosen quarter; otherwise live.
-  const stampFor = () =>
-    edit ? { quarter: edit.quarter, minute: edit.minute } : backfillQ != null ? { quarter: backfillQ, minute: 0 } : { quarter: state.quarter, minute: currentMinute(state) };
+  // SD-132: on the game clock a live play also carries the clock second (and
+  // `at`, so a foul / time-out stops the clock); an edit keeps its own second.
+  const stampFor = (): { quarter: number; minute: number; sec?: number; at?: number } => {
+    if (edit) return { quarter: edit.quarter, minute: edit.minute, ...(typeof edit.sec === 'number' ? { sec: edit.sec } : {}) };
+    if (backfillQ != null) return { quarter: backfillQ, minute: 0 };
+    if (state.gc) { const now = Date.now(); const sec = gameSec(state, now); return { quarter: state.quarter, minute: Math.floor(sec / 60), sec, at: now }; }
+    return { quarter: state.quarter, minute: currentMinute(state) };
+  };
   // Any other play closes the "Assist?" prompt (a make re-opens it after).
   const fire = (action: ScoreAction) => {
     setAssistFor(null);
@@ -201,12 +209,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       detail: `${FOUL_LABEL[type]} — that's ${DQ_LABEL[dq]}, so the rules disqualify ${fouler.fullName}. The foul is logged and the player is ejected. Undo can bring it back.`,
     }))) return;
     const shots = freeThrowsFor(state, side, type);
+    // SD-132 (FIBA 3×3 Art. 15): team foul 10+ → 2 free throws AND the ball
+    const ball = possessionAfterFoul(state, side, type);
     const bonus = shots > 0 && (type === 'personal');
     fire({ type: 'FOUL', side, payload: { foulType: type, ...pidOf(fouler) }, attribution: { playerId: fouler.id, stat: 'fouls', playerName: fouler.fullName } });
     if (dq) fireEject(side, fouler, dq);
     if (shots > 0) {
       const why = bonus ? `Bonus — ${nameOf(side)} are over the team-foul limit` : `${FOUL_LABEL[type]} foul on ${fouler.fullName}`;
-      setFlow({ kind: 'ft', side: opp(side), remaining: shots, total: shots, reason: `${why}${dq ? ` · ${fouler.fullName} disqualified` : ''} — ${shots} free throw${shots > 1 ? 's' : ''} for ${nameOf(opp(side))}` });
+      setFlow({ kind: 'ft', side: opp(side), remaining: shots, total: shots, reason: `${why}${dq ? ` · ${fouler.fullName} disqualified` : ''} — ${shots} free throw${shots > 1 ? 's' : ''} for ${nameOf(opp(side))}${ball ? `, then ${nameOf(opp(side))} keep the ball (team foul ${teamFoulsThisQuarter(state, side) + 1})` : ''}` });
     } else setFlow(null);
   };
 
@@ -438,7 +448,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
   const otBanner = state.quarter > state.regPeriods ? (
     <View style={ctrl.otBanner}>
       <Text style={ctrl.otTitle}>🏀 OVERTIME{state.quarter > 5 ? ` ${state.quarter - 4}` : ''}</Text>
-      <Text style={ctrl.otMeta}>{state.overtimeMinutes}-minute period · score carries over · still level ⇒ another OT</Text>
+      <Text style={ctrl.otMeta}>{state.otTarget ? `First to score ${state.otTarget} points in overtime wins (FIBA 3×3) · ${state.home}–${state.away}` : `${state.overtimeMinutes}-minute period · score carries over · still level ⇒ another OT`}</Text>
     </View>
   ) : null;
 
@@ -446,7 +456,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     return (
       <View style={{ gap: theme.spacing(3) }}>
         {otBanner}
-        <Text style={ctrl.meta}>Tip off {periodLabel(state.quarter, state.regPeriods)} to start the clock.</Text>
+        <Text style={ctrl.meta}>Tip off {periodLabel(state.quarter, state.regPeriods)} to start the {timedPeriod(state) ? `game clock (${clockText(clockLeft(state))})` : 'clock'}.</Text>
         <Button label={`▶ Start ${periodLabel(state.quarter, state.regPeriods)}`} onPress={() => dispatch({ type: 'KICKOFF', payload: { at: Date.now() } })} />
       </View>
     );
@@ -557,9 +567,18 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
     );
   };
 
+  // SD-132: the stoppable game clock (FIBA Art. 49) — its own component, so
+  // only the clock re-renders each second (the scoring buttons stay put).
+  const endQuarter = async () => {
+    if (await confirmMatchAction('endPeriod', { period: periodLabel(state.quarter, state.regPeriods), score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_QUARTER' });
+  };
+  const clockPanel = timedPeriod(state) && backfillQ == null
+    ? <GameClockPanel state={state} dispatch={dispatch} nameOf={nameOf} onEndQuarter={() => void endQuarter()} /> : null;
+
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {backfillBar}
+      {clockPanel}
       {/* SD-117 (B6): "Assist?" right after a make — the on-court teammates, or Skip */}
       {assistFor && (() => {
         const mates = courtOf(assistFor.side).filter((p) => p.id !== assistFor.scorer?.id && !fouledOut(p));
@@ -583,7 +602,7 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
         <Text style={ctrl.fouledOut}>🚫 Out: {outNames.join(', ')}</Text>
       )}
       {state.foulsForBonus > 0 && (
-        <Text style={ctrl.meta}>Team fouls {foulPeriod} · {homeName} {homeTF} · {awayName} {awayTF}</Text>
+        <Text style={ctrl.meta}>Team fouls {foulPeriod} · {homeName} {homeTF} · {awayName} {awayTF}{state.ladder3x3 ? ' · 3×3: fouls 7–9 give 2 free throws, 10+ give 2 free throws and the ball' : ''}</Text>
       )}
       {homeBonus && (
         <Text style={ctrl.bonus}>🎯 BONUS · {homeName} shoots free throws on every foul ({awayName}: {awayTF} team fouls)</Text>
@@ -699,15 +718,14 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       )}
 
       {state.quarter < state.regPeriods ? (
-        <Button label={`End ${periodLabel(state.quarter, state.regPeriods)} →`}
-          onPress={async () => { if (await confirmMatchAction('endPeriod', { period: periodLabel(state.quarter, state.regPeriods), score: `${state.home}-${state.away}` })) dispatch({ type: 'NEXT_QUARTER' }); }} />
+        <Button label={`End ${periodLabel(state.quarter, state.regPeriods)} →`} onPress={() => void endQuarter()} />
       ) : levelForDecider(state) ? (
         // Level at the end of Q4 or an OT period → play (another) overtime.
         // SD-57: a draw only where the format allows one (league / friendly
         // option); otherwise ending level asks first and offers overtime.
         <View style={{ gap: theme.spacing(2) }}>
           <Text style={ctrl.meta}>{state.agg ? `Level on aggregate (${aggregateText(state)}) at the end of ${periodLabel(state.quarter, state.regPeriods)} — overtime decides the tie.` : `Scores level (${state.home}–${state.away}) at the end of ${periodLabel(state.quarter, state.regPeriods)}${state.allowDraw ? ' — this format allows a draw.' : ' — basketball plays overtime until there is a winner.'}`}</Text>
-          <Button label={`🏀 Start Overtime (${periodLabel(state.quarter + 1, state.regPeriods)})`} onPress={() => dispatch({ type: 'START_OVERTIME' })} />
+          <Button label={`🏀 Start Overtime (${periodLabel(state.quarter + 1, state.regPeriods)})${state.otTarget ? ` · first to ${state.otTarget}` : ''}`} onPress={() => dispatch({ type: 'START_OVERTIME' })} />
           {state.agg ? null : state.allowDraw ? (
             <Button label="End as a draw" variant="ghost" onPress={async () => { if (await confirmMatchAction('endTie', { drawWord: 'Draw', score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
           ) : (
@@ -723,27 +741,86 @@ const ScoringControls: SportPlugin<BasketballState>['ScoringControls'] = ({
       ) : (
         <>
         {state.agg && <Text style={ctrl.meta}>{aggregateText(state)} — {state.home === state.away ? 'the game is level but the tie is not, so no overtime.' : 'the tie is decided.'}</Text>}
-        <Button label="🏁 End Match" variant="danger" onPress={async () => { if (await confirmMatchAction('fullTime', { score: `${state.home}-${state.away}` })) dispatch({ type: 'END' }); }} />
+        <Button label="🏁 End Match" variant="danger" onPress={async () => { if (await confirmMatchAction('fullTime', { score: `${state.home}-${state.away}` })) dispatch({ type: 'END', payload: { at: Date.now() } }); }} />
         </>
       )}
     </View>
   );
 };
 
+/** SD-132 — the basketball game clock panel: the count-down face, ▶ Start /
+ *  ⏸ Stop, "Clock stopped" after a whistle, ⏱ Set clock (time left) and the
+ *  0:00 end-of-period prompt. Ticks on its own each second. */
+function GameClockPanel({ state, dispatch, nameOf, onEndQuarter }: {
+  state: BasketballState; dispatch: (a: ScoreAction) => void; nameOf: (side: 'home' | 'away') => string; onEndQuarter: () => void;
+}) {
+  const [, tick] = useState(0);
+  const run = clockRunning(state);
+  useEffect(() => {
+    if (!run) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [run]);
+  const [setting, setSetting] = useState(false);
+  const [clockInput, setClockInput] = useState('');
+  const applyClock = () => {
+    const m = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(clockInput.trim());
+    if (!m) return;
+    dispatch({ type: 'SET_CLOCK', payload: { left: Number(m[1]) * 60 + Number(m[2] ?? 0), at: Date.now() } });
+    setSetting(false); setClockInput('');
+  };
+  const nowMs = Date.now();
+  const up = timeUp(state, nowMs);
+  const lastWhistle = (() => {
+    const e = [...state.events].reverse().find((x) => x.quarter === state.quarter);
+    return e?.type === 'foul' ? ' (foul)' : e?.type === 'timeout' ? ` (time-out, ${nameOf(e.side)})` : '';
+  })();
+  const per = periodLabel(state.quarter, state.regPeriods);
+  return (
+    <View style={ctrl.clockPanel}>
+      <View style={ctrl.editHead}>
+        <Text style={ctrl.clockFace} accessibilityLabel="Game clock">{per} · {clockText(clockLeft(state, nowMs))}</Text>
+        <Button label={run && !up ? '⏸ Stop' : '▶ Start'} variant={run && !up ? 'ghost' : 'primary'} disabled={up}
+          onPress={() => dispatch({ type: 'CLOCK', payload: { run: !run, at: Date.now() } })} />
+      </View>
+      {!run && !up && gameSec(state, nowMs) > 0 ? (
+        <Text style={ctrl.stopped} accessibilityRole="alert">⏸ Clock stopped{lastWhistle} — tap ▶ Start when play restarts.</Text>
+      ) : null}
+      {up ? (
+        <View style={{ gap: theme.spacing(2) }}>
+          <Text style={ctrl.stopped} accessibilityRole="alert">⏰ 0:00 — end of {per}{state.targetPoints > 0 && state.quarter <= state.regPeriods ? ` · time is up: ${state.home === state.away ? `level, so overtime${state.otTarget ? ` (first to ${state.otTarget})` : ''}` : 'the higher score wins'}` : ''}.</Text>
+          {state.quarter < state.regPeriods ? <Button label={`End ${per} →`} onPress={onEndQuarter} /> : <Text style={ctrl.meta}>Finish any free throws, then use the button at the bottom.</Text>}
+        </View>
+      ) : null}
+      <Text style={ctrl.editLink} accessibilityRole="button" onPress={() => setSetting((v) => !v)}>{setting ? 'Cancel' : '⏱ Set clock'}</Text>
+      {setting ? (
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}><TextField label="Time left (mm:ss)" value={clockInput} onChange={setClockInput} placeholder={clockText(clockLeft(state, nowMs))} /></View>
+          <Button label="Set" onPress={applyClock} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /* ------------------------------ Live panel --------------------------------- */
 
 const LiveClock: NonNullable<SportPlugin<BasketballState>['LiveClock']> = ({ state }) => {
   const s = state as BasketballState;
   const [, tick] = useState(0);
+  const gcRun = clockRunning(s);
   useEffect(() => {
-    if (!s.startedAt || s.ended) return;
+    if (s.gc ? !gcRun : (!s.startedAt || s.ended)) return;
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [s.startedAt, s.ended]);
+  }, [s.startedAt, s.ended, gcRun, s.gc]);
 
-  const running = !!s.startedAt && !s.ended;
+  // SD-132: the game clock counts down (FIBA); older matches show the wall-clock minute
+  const running = s.gc ? gcRun && !timeUp(s, Date.now()) : !!s.startedAt && !s.ended;
   const per = periodLabel(s.quarter, s.regPeriods);
-  const label = s.ended ? (s.quarter > s.regPeriods ? `Final · ${per}` : 'Final') : !s.startedAt ? `${per} ·` : `${per} · ${currentMinute(s)}'`;
+  const label = s.ended ? (s.quarter > s.regPeriods ? `Final · ${per}` : 'Final')
+    : timedPeriod(s) ? `${per} · ${clockText(clockLeft(s, Date.now()))}`
+    : !s.startedAt ? `${per} ·` : s.gc ? per : `${per} · ${currentMinute(s)}'`;
   return (
     <View style={ctrl.clockRow}>
       <View style={[ctrl.liveDot, { backgroundColor: running ? theme.colors.danger : theme.colors.textMuted }]} />
@@ -768,7 +845,7 @@ const LiveExtras: NonNullable<SportPlugin<BasketballState>['LiveExtras']> = ({
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Play-by-play</Text>
-      <Timeline events={s.events} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <Timeline events={s.events} clock={s} homeColor={homeColor} awayColor={awayColor} homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={ctrl.label}>Box score</Text>
       <MatchBoxScore sport="basketball" source={basketballBox(s, { homeRoster, awayRoster, homeName, awayName })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
       {/* SD-50: biggest lead, lead changes, times tied, runs, bench points */}
@@ -841,13 +918,13 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'fiba',
       options: [
-        { value: 'fiba', label: 'FIBA (4×10)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 10, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 5, timeoutRule: 'fiba' } },
-        { value: 'nba', label: 'NBA (4×12)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 12, foulsToFoulOut: 6, foulsForBonus: 4, techIsTeamFoul: false, otFoulsCarry: false, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 7, timeoutRule: 'nba' } },
-        { value: 'ncaa', label: 'NCAA (2×20 halves)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 2, periodMinutes: 20, foulsToFoulOut: 5, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 30, timeouts: 4, timeoutRule: 'game' } },
-        { value: '3x3', label: '3×3 (first to 21)', set: { playersPerSide: 3, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 21, winBy: 1, shotClock: 12, timeouts: 1, timeoutRule: 'game' } },
-        { value: '2v2', label: '2v2 (first to 15)', set: { playersPerSide: 2, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 7, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 15, winBy: 2, shotClock: 0, timeouts: 0, timeoutRule: 'game' } },
-        { value: '1v1', label: '1v1 (first to 11)', set: { playersPerSide: 1, substitutes: 0, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 0, overtimeMinutes: 0, targetPoints: 11, winBy: 2, shotClock: 0, timeouts: 0, timeoutRule: 'game' } },
-        { value: 'school', label: 'School (4×8)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 4, periodMinutes: 8, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 4, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 4, timeoutRule: 'fiba' } },
+        { value: 'fiba', label: 'FIBA (4×10)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 10, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 5, timeoutRule: 'fiba', gameClock: true, otTarget: 0, foulLadder: 'fiba' } },
+        { value: 'nba', label: 'NBA (4×12)', set: { playersPerSide: 5, substitutes: 5, regPeriods: 4, periodMinutes: 12, foulsToFoulOut: 6, foulsForBonus: 4, techIsTeamFoul: false, otFoulsCarry: false, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 7, timeoutRule: 'nba', gameClock: true, otTarget: 0, foulLadder: 'fiba' } },
+        { value: 'ncaa', label: 'NCAA (2×20 halves)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 2, periodMinutes: 20, foulsToFoulOut: 5, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 5, targetPoints: 0, winBy: 2, shotClock: 30, timeouts: 4, timeoutRule: 'game', gameClock: true, otTarget: 0, foulLadder: 'fiba' } },
+        { value: '3x3', label: '3×3 (first to 21)', set: { playersPerSide: 3, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 6, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 21, winBy: 1, shotClock: 12, timeouts: 1, timeoutRule: 'game', gameClock: true, otTarget: 2, foulLadder: '3x3' } },
+        { value: '2v2', label: '2v2 (first to 15)', set: { playersPerSide: 2, substitutes: 1, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 7, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 0, targetPoints: 15, winBy: 2, shotClock: 0, timeouts: 0, timeoutRule: 'game', gameClock: false, otTarget: 0, foulLadder: 'fiba' } },
+        { value: '1v1', label: '1v1 (first to 11)', set: { playersPerSide: 1, substitutes: 0, regPeriods: 1, periodMinutes: 10, foulsToFoulOut: 0, foulsForBonus: 0, overtimeMinutes: 0, targetPoints: 11, winBy: 2, shotClock: 0, timeouts: 0, timeoutRule: 'game', gameClock: false, otTarget: 0, foulLadder: 'fiba' } },
+        { value: 'school', label: 'School (4×8)', set: { playersPerSide: 5, substitutes: 7, regPeriods: 4, periodMinutes: 8, foulsToFoulOut: 5, foulsForBonus: 4, techIsTeamFoul: true, otFoulsCarry: true, overtimeMinutes: 4, targetPoints: 0, winBy: 2, shotClock: 24, timeouts: 4, timeoutRule: 'fiba', gameClock: true, otTarget: 0, foulLadder: 'fiba' } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -871,6 +948,16 @@ export const basketballPlugin: SportPlugin<BasketballState> = {
     { key: 'otFoulsCarry', label: 'Overtime team fouls carry over from the last quarter', type: 'toggle', default: true, advanced: true, hint: 'FIBA yes · NBA resets' },
     { key: 'overtimeMinutes', label: 'Overtime length (min)', type: 'number', default: 5, min: 1, max: 10, advanced: true, hint: 'played when tied after regulation; repeats until decided' },
     { key: 'trackMisses', label: 'Track missed shots', type: 'toggle', default: false, hint: 'Miss 2 / Miss 3 buttons — FG%, 3P% and full EFF' },
+    // SD-132: the stoppable game clock (start / stop on whistles, set time)
+    { key: 'gameClock', label: 'Stoppable game clock', type: 'toggle', default: true, hint: 'Start / stop it on whistles — exact minutes, +/- and timeout limits' },
+    { key: 'otTarget', label: 'Overtime: first to N points', type: 'number', default: 0, min: 0, max: 5, advanced: true, hint: '0 = timed overtime · 3×3: 2' },
+    {
+      key: 'foulLadder', label: 'Team-foul penalties', type: 'choice', default: 'fiba', advanced: true,
+      options: [
+        { value: 'fiba', label: '5×5: free throws from the bonus' },
+        { value: '3x3', label: '3×3: 7–9 → 2 FTs · 10+ → 2 FTs + ball' },
+      ],
+    },
     { key: 'shotClock', label: 'Shot clock (sec)', type: 'number', default: 24, min: 0, max: 35, advanced: true, hint: 'shown for reference' },
     {
       key: 'timeoutRule', label: 'Timeouts', type: 'choice', default: 'fiba', advanced: true,
@@ -910,4 +997,8 @@ const ctrl = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(2), borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   editMin: { color: theme.colors.accent, fontWeight: '800', width: 40, fontSize: theme.font.small },
   editLabel: { flex: 1, color: theme.colors.text, fontSize: theme.font.small },
+  clockPanel: { gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
+  clockFace: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '900', letterSpacing: 1, flex: 1 },
+  stopped: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '800' },
+  editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
 });

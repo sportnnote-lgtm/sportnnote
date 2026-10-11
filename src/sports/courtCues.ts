@@ -13,6 +13,13 @@
  *    changed after each game and at 11 in the deciding game.
  *  • table tennis (ITTF 2.15): change ends after each game, and in the last
  *    possible game when a player first reaches 5 (10 in a 21-point game).
+ *  • pickleball (SD-135, USA Pickleball Rulebook "changing ends"): ends change
+ *    after each game, and in the match's final game (a single-game match's
+ *    only game) when a side first reaches 6 in a game to 11, 8 to 15, 11 to 21
+ *    (half the target, rounded up). Up to 2 min between games (verify the rule
+ *    number against the current rulebook).
+ *  • squash (SD-135, WSF Rules of Singles Squash, Rule 7): up to 90 s between
+ *    games (no change of ends — one court).
  *
  * `…Cue(state)` says what's due NOW (after the last point); `cueMarkers`
  * replays the log point by point to place the same cues on the timeline.
@@ -90,6 +97,29 @@ const lastPointSide = (events?: LiveEvent[]): Side | undefined => {
 export const isDecidingGame = (v: Pick<GameSportView, 'gamesWon' | 'gamesToWin'>): boolean =>
   v.gamesToWin > 1 && v.gamesWon.home === v.gamesToWin - 1 && v.gamesWon.away === v.gamesToWin - 1;
 
+/** Side-out logs (pickleball / English squash) put non-scoring 'rally' events
+ *  between points: the cue belongs only right after the point itself. */
+const lastRallyIsPoint = (events?: LiveEvent[]): boolean => {
+  for (let i = (events?.length ?? 0) - 1; i >= 0; i--) {
+    const k = events![i].kind;
+    if (k === 'point' || k === 'ace') return true;
+    if (k === 'rally') return false;
+  }
+  return false;
+};
+
+/** Between games: nothing played in the new game yet (a side-out / hand-out
+ *  rally at 0-0 has started it), so the cue shows (and is marked) once. */
+const freshGame = (v: GameSportView): boolean => {
+  const evs = v.events ?? [];
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const k = evs[i].kind;
+    if (k === 'rally') return evs[i].game !== v.games.length + 1;
+    if (k === 'point' || k === 'ace') return true;
+  }
+  return true;
+};
+
 /** Did the last point just take a side FIRST to `at` in this game? */
 const justReached = (v: GameSportView, at: number): boolean => {
   const { home, away } = v.current;
@@ -122,6 +152,31 @@ export function tableTennisCue(v: GameSportView): Cue | null {
   const at = Math.floor(v.target / 2);
   return isDecidingGame(v) && justReached(v, at) ? { kind: 'ends', text: `${ENDS} · ${at} in the deciding game` } : null;
 }
+
+/** SD-135 — pickleball: ends after each game, and at half the target (rounded
+ *  up: 6 / 8 / 11) in the final game. */
+export function pickleballCue(v: GameSportView): Cue | null {
+  if (v.ended) return null;
+  if (!v.current.home && !v.current.away) {
+    return v.games.length > 0 && freshGame(v) ? { kind: 'ends', text: `${ENDS} · up to 2 min between games` } : null;
+  }
+  const finalGame = v.gamesToWin === 1 || isDecidingGame(v);
+  const at = Math.ceil(v.target / 2);
+  return finalGame && lastRallyIsPoint(v.events) && justReached(v, at)
+    ? { kind: 'ends', text: `${ENDS} · ${at} in the ${v.gamesToWin === 1 ? 'game' : 'deciding game'}` }
+    : null;
+}
+
+/** SD-135 — squash: up to 90 s between games (WSF Rule 7). */
+export function squashCue(v: GameSportView): Cue | null {
+  if (v.ended) return null;
+  if (!v.current.home && !v.current.away && v.games.length > 0 && freshGame(v)) return { kind: 'interval', text: '⏸ Up to 90 s between games' };
+  return null;
+}
+
+/** The rally engine's cue per sport (null = none). */
+export const rallyCueOf = (sport: string): ((v: GameSportView) => Cue | null) | null =>
+  sport === 'tabletennis' ? tableTennisCue : sport === 'pickleball' ? pickleballCue : sport === 'squash' ? squashCue : null;
 
 // --------------------------------------------------------- the timeline --
 

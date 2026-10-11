@@ -26,6 +26,7 @@
  * previous set serves first. An explicit SET_SERVE for a set always wins.
  */
 import type { CourtPlayer, VolleyballState } from './engine.ts';
+import { barredPlayers } from './sanctions.ts';
 import type { ScoreAction } from '../types';
 
 type Side = 'home' | 'away';
@@ -43,8 +44,15 @@ export interface VbSub {
   kind: SubKind;
 }
 
-/** Regular substitutions per team per set (FIVB 15.6). */
+/** Regular substitutions per team per set (FIVB 15.6) — the indoor default;
+ *  a format may set its own (SD-136: `subLimitOf`). */
 export const SUBS_PER_SET = 6;
+/** SD-136 — the format's regular subs per set (6 unless stamped). */
+export const subLimitOf = (s: VolleyballState): number => s.subLimit ?? SUBS_PER_SET;
+/** SD-136 — players on court per side: 6, 2 on beach, or the format's (9-a-side). */
+export const courtSize = (s: VolleyballState): number => s.courtSize ?? (s.beach ? 2 : 6);
+/** SD-136 — positions I–VI, the front row and the libero apply to a court of 6 only. */
+export const sixCourt = (s: VolleyballState): boolean => courtSize(s) === 6;
 /** Positions in rotation order — index 0 = I (the server). */
 export const POSITIONS = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 /** Front-row positions (II, III, IV) — the libero may not play there (FIVB 19.3.1). */
@@ -125,7 +133,7 @@ export function rotationFor(s: VolleyballState, n: number, side: Side): { player
 
 export const liberosOf = (s: VolleyballState, side: Side): CourtPlayer[] => s.liberos?.[side] ?? [];
 
-export interface RallyServe { set: number; side: Side | null; serverId?: string; serverName?: string }
+export interface RallyServe { set: number; side: Side | null; serverId?: string; serverName?: string; /** SD-136: a penalty point (no rally served) */ pen?: true }
 
 export interface SetCourt {
   n: number;
@@ -210,7 +218,7 @@ export function trackCourt(s: VolleyballState): VbTrack {
       const e = s.events[pts[i]];
       const W = e.side as Side;
       const srv = S && ord[S] ? c[S]?.[0] : undefined;
-      out[order.get(pts[i])!] = { set: n, side: S, ...(srv ? { serverId: srv.id, serverName: srv.name } : {}) };
+      out[order.get(pts[i])!] = { set: n, side: S, ...(srv ? { serverId: srv.id, serverName: srv.name } : {}), ...(e.pen ? { pen: true as const } : {}) };
       // side-out: the team that wins the serve back rotates one place (FIVB 7.6.2)
       if (S && W !== S && ord[W] && c[W] && c[W]!.length > 1) c[W] = [...c[W]!.slice(1), c[W]![0]];
       S = W;
@@ -231,8 +239,10 @@ export function trackCourt(s: VolleyballState): VbTrack {
   return { rallies, set: cur, serving: s.ended ? null : serving, server, court, ordered, subsUsed: used, sets };
 }
 
-/** Who serves each rally (log order) — the SD-22 serve-stats adapter. */
-export const rallyServers = (s: VolleyballState): RallyServe[] => trackCourt(s).rallies;
+/** Who serves each rally (log order) — the SD-22 serve-stats adapter. SD-136:
+ *  a penalty point isn't a served rally (serve stats skip it), so it's left
+ *  out here too; it still moves the serve and the rotation in trackCourt. */
+export const rallyServers = (s: VolleyballState): RallyServe[] => trackCourt(s).rallies.filter((r) => !r.pen);
 
 /* ------------------------------------------------------------ sub checks -- */
 
@@ -260,11 +270,14 @@ export function checkSub(s: VolleyballState, side: Side, off: CourtPlayer, on: C
   const issues: string[] = [];
   const at = scoredIn(s, n).length;
   const nm = (p: CourtPlayer) => p.name || 'player';
+  // SD-136: an expelled (this set) or disqualified player can't come on (FIVB 21.3.2 / 21.3.3)
+  const barred = barredPlayers(s.events, side, n).find((b) => b.id === on.id);
+  if (barred) issues.push(`${nm(on)} was ${barred.why === 'expulsion' ? 'expelled for this set (FIVB 21.3.2)' : 'disqualified for the match (FIVB 21.3.3)'}`);
   if (want === 'libero' || libs.has(on.id) || libs.has(off.id)) {
     // Libero replacement (FIVB 19.3.2): not a substitution, unlimited
     const court = t.court[side];
     const pos = court ? court.findIndex((p) => p.id === off.id) : -1;
-    if (libs.has(on.id) && !libs.has(off.id) && t.ordered[side] && FRONT_ROW.has(pos)) {
+    if (libs.has(on.id) && !libs.has(off.id) && t.ordered[side] && sixCourt(s) && FRONT_ROW.has(pos)) {
       issues.push(`${nm(on)} would replace a front-row player — the libero replaces back-row players only (FIVB 19.3.2.1)`);
     }
     if (libs.has(off.id) && !libs.has(on.id)) {
@@ -278,8 +291,9 @@ export function checkSub(s: VolleyballState, side: Side, off: CourtPlayer, on: C
   if (want === 'exceptional') return { kind: 'exceptional', issues, overLimit: false, used: regular.length };
   // the set's starting six (a rotation stamped mid-set stands in for it)
   const starters = new Set((t.sets.find((x) => x.n === n)?.start[side] ?? rotationFor(s, n, side)?.players ?? []).map((p) => p.id));
-  const overLimit = regular.length >= SUBS_PER_SET;
-  if (overLimit) issues.push(`This would be substitution ${regular.length + 1} — only ${SUBS_PER_SET} per set (FIVB 15.6)`);
+  const limit = subLimitOf(s);
+  const overLimit = regular.length >= limit;
+  if (overLimit) issues.push(`This would be substitution ${regular.length + 1} — only ${limit} per set (${limit === SUBS_PER_SET ? 'FIVB 15.6' : 'this format'})`);
   if (starters.has(off.id)) {
     if (regular.some((x) => x.off.id === off.id)) issues.push(`${nm(off)} has already left the court once this set (FIVB 15.6.1)`);
   } else {
@@ -300,7 +314,7 @@ export function checkSub(s: VolleyballState, side: Side, off: CourtPlayer, on: C
  *  the team serves — FIVB 19.3.1.2 / 19.3.1.3). Null = fine / not known. */
 export function liberoCue(s: VolleyballState, side: Side, t: VbTrack = trackCourt(s)): string | null {
   const court = t.court[side];
-  if (!court || !t.ordered[side]) return null;
+  if (!court || !t.ordered[side] || !sixCourt(s)) return null;
   const libs = new Set(liberosOf(s, side).map((p) => p.id));
   if (!libs.size) return null;
   const i = court.findIndex((p) => libs.has(p.id));

@@ -106,7 +106,10 @@ export interface HandballState {
   decider: Decider;
   /** the clock stops by itself on a 2-minute suspension and a disqualification (2:9) */
   stopClock: boolean;
-  shootout: { home: SoThrow[]; away: SoThrow[]; first: Side } | null;
+  /** `first` = who threw first (the scorer's pick after the toss). `sdFirst`
+   *  (SD-139, new logs only): who throws first in sudden death, picked by the
+   *  scorer once both have thrown five; absent = the same order as before. */
+  shootout: { home: SoThrow[]; away: SoThrow[]; first: Side; sdFirst?: Side } | null;
   shootoutWinner?: Side;
   /** SD-120: leg 2 of a new two-legged tie — the leg-1 score; "level" then
    *  means level on aggregate (absent on every other match). */
@@ -294,13 +297,19 @@ export function decideShootout(h: SoThrow[], a: SoThrow[]): Side | undefined {
   if (h.length === a.length && h.length >= 5 && hs !== as) return hs > as ? 'home' : 'away';
   return undefined;
 }
-/** Whose throw: alternate, the team that won the toss first in every round. */
+/** Whose throw: alternate, `first` first in every round of the first five;
+ *  in sudden death the scorer's `sdFirst` pick (SD-139), else `first` again
+ *  (older logs). */
 export function nextThrower(so: NonNullable<HandballState['shootout']>): Side {
   const n = so.home.length + so.away.length;
-  const other: Side = so.first === 'home' ? 'away' : 'home';
+  const lead: Side = n >= 10 && so.sdFirst ? so.sdFirst : so.first;
+  const other: Side = lead === 'home' ? 'away' : 'home';
   const behind: Side | undefined = so.home.length < so.away.length ? 'home' : so.away.length < so.home.length ? 'away' : undefined;
-  return behind ?? (n % 2 === 0 ? so.first : other);
+  return behind ?? (n % 2 === 0 ? lead : other);
 }
+/** SD-139: five throws each, still level, no sudden-death order picked yet. */
+export const needsSdPick = (s: Pick<HandballState, 'shootout' | 'shootoutWinner'>): boolean =>
+  !!s.shootout && !s.shootoutWinner && !s.shootout.sdFirst && s.shootout.home.length === 5 && s.shootout.away.length === 5;
 export const soScore = (s: Pick<HandballState, 'shootout'>) => ({
   home: s.shootout?.home.filter((k) => k.scored).length ?? 0,
   away: s.shootout?.away.filter((k) => k.scored).length ?? 0,
@@ -308,7 +317,7 @@ export const soScore = (s: Pick<HandballState, 'shootout'>) => ({
 
 /* --------------------------------- reducer --------------------------------- */
 
-const SO_ACTIONS = new Set(['START_SHOOTOUT', 'SO', 'XI', 'STAT_ADJUST', 'REMOVE_EVENT', 'END']);
+const SO_ACTIONS = new Set(['START_SHOOTOUT', 'SO', 'SO_ORDER', 'XI', 'STAT_ADJUST', 'REMOVE_EVENT', 'END']);
 const shotTypeOf = (v: unknown): ShotType => (SHOT_TYPES.includes(v as ShotType) ? (v as ShotType) : 'nineM');
 
 export const reducer = (s: HandballState, a: ScoreAction): HandballState => {
@@ -439,6 +448,12 @@ export const reducer = (s: HandballState, a: ScoreAction): HandballState => {
     case 'START_SHOOTOUT': {
       if (!s.ended || !levelForDecider(s) || s.shootout || s.decider === 'none') return s;
       return { ...s, shootout: { home: [], away: [], first: a.payload?.first === 'away' ? 'away' : 'home' } };
+    }
+    case 'SO_ORDER': {
+      // SD-139: the scorer's pick of who throws first in sudden death
+      const f = a.payload?.first;
+      if (!needsSdPick(s) || (f !== 'home' && f !== 'away')) return s;
+      return { ...s, shootout: { ...s.shootout!, sdFirst: f } };
     }
     case 'SO': {
       if (!s.shootout || s.shootoutWinner || !side) return s;

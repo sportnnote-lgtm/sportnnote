@@ -19,7 +19,7 @@ import type { LineupSlot, Player } from '../../core/types';
 import type { ScoreAction } from '../types';
 import type { CourtPlayer, VolleyballState } from './engine';
 import {
-  checkSub, firstServer, liberosOf, rotationFor, serveTracked, setNoOf, POSITIONS, SUBS_PER_SET,
+  checkSub, firstServer, liberosOf, rotationFor, serveTracked, setNoOf, POSITIONS, courtSize, sixCourt, subLimitOf,
   type SubKind, type VbTrack,
 } from './rotation';
 
@@ -91,9 +91,12 @@ export function ServePanel({ s, track, dispatch, home, away }: {
         const rot = rotationFor(s, setNo, sd);
         const libs = new Set(liberosOf(s, sd).map((p) => p.id));
         const used = track.subsUsed[sd];
-        const canSub = !!x.court && x.court.length > 0;
+        // SD-136: the format's limit (Beach 0 — FIVB beach has no substitutions)
+        const limit = subLimitOf(s);
+        const six = sixCourt(s);
+        const canSub = !!x.court && x.court.length > 0 && limit > 0;
         if (open?.side === sd && open.kind === 'rotation') {
-          return <RotationPicker key={sd} info={x} size={s.beach ? 2 : 6} setNo={setNo} midSet={playedInSet}
+          return <RotationPicker key={sd} info={x} size={courtSize(s)} six={six} setNo={setNo} midSet={playedInSet}
             current={ordered ?? (rot?.from === setNo ? rot.players : null)} carried={rot?.players ?? null} liberos={liberosOf(s, sd)}
             onSave={(players, liberos) => { dispatch({ type: 'SET_ROTATION', payload: { team: sd, set: setNo, players, liberos } }); setOpen(null); }}
             onCancel={() => setOpen(null)} />;
@@ -103,10 +106,10 @@ export function ServePanel({ s, track, dispatch, home, away }: {
         }
         return (
           <View key={sd} style={[css.side, { borderLeftColor: x.color }]}>
-            <Text style={css.label}>{x.name}{rot ? ` · rotation${rot.from < setNo ? ` (from Set ${rot.from})` : ''}` : ''} · subs {used}/{SUBS_PER_SET}</Text>
+            <Text style={css.label}>{x.name}{rot ? ` · ${six ? 'rotation' : 'serving order'}${rot.from < setNo ? ` (from Set ${rot.from})` : ''}` : ''}{limit > 0 ? ` · subs ${used}/${limit}` : ' · no subs'}</Text>
             {ordered && <MiniCourt players={ordered} libs={libs} serving={serving === sd} color={x.color} />}
             <View style={css.row}>
-              <SelectChip label={rot ? '↻ Rotation…' : '↻ Set rotation (I–VI)'} active={false} onPress={() => setOpen({ kind: 'rotation', side: sd })} />
+              <SelectChip label={rot ? (six ? '↻ Rotation…' : '↻ Serving order…') : six ? '↻ Set rotation (I–VI)' : `↻ Set serving order (1–${courtSize(s)})`} active={false} onPress={() => setOpen({ kind: 'rotation', side: sd })} />
               {canSub && <SelectChip label="🔁 Sub" active={false} onPress={() => setOpen({ kind: 'sub', side: sd })} />}
             </View>
           </View>
@@ -120,7 +123,7 @@ export function ServePanel({ s, track, dispatch, home, away }: {
  *  IV · III · II in front, V · VI · I behind (I serves). */
 function MiniCourt({ players, libs, serving, color }: { players: CourtPlayer[]; libs: Set<string>; serving: boolean; color: string }) {
   if (players.length !== 6) {
-    return <Text style={css.hint}>{players.map((p, i) => `${POSITIONS[i] ?? i + 1} ${first(p.name)}${i === 0 && serving ? ' 🏐' : ''}`).join(' · ')}</Text>;
+    return <Text style={css.hint}>{players.map((p, i) => `${players.length === 6 ? POSITIONS[i] : i + 1} ${first(p.name)}${i === 0 && serving ? ' 🏐' : ''}`).join(' · ')}</Text>;
   }
   const cell = (i: number) => {
     const p = players[i];
@@ -141,8 +144,8 @@ function MiniCourt({ players, libs, serving, color }: { players: CourtPlayer[]; 
   );
 }
 
-function RotationPicker({ info, size, setNo, midSet, current, carried, liberos, onSave, onCancel }: {
-  info: SideInfo; size: number; setNo: number; midSet: boolean;
+function RotationPicker({ info, size, six, setNo, midSet, current, carried, liberos, onSave, onCancel }: {
+  info: SideInfo; size: number; six: boolean; setNo: number; midSet: boolean;
   current: CourtPlayer[] | null; carried: CourtPlayer[] | null; liberos: CourtPlayer[];
   onSave: (players: CourtPlayer[], liberos: CourtPlayer[]) => void; onCancel: () => void;
 }) {
@@ -155,29 +158,36 @@ function RotationPicker({ info, size, setNo, midSet, current, carried, liberos, 
   const [libs, setLibs] = useState<string[]>((liberos.length ? liberos.map((p) => p.id) : libSlot).filter((id) => byId(id)));
   const n = Math.min(size, roster.length);
   const free = roster.filter((p) => !order.includes(p.id) && !libs.includes(p.id));
+  // SD-136: positions I–VI on a court of 6; otherwise a numbered serving order
+  const pos = (i: number) => (six ? POSITIONS[i] ?? String(i + 1) : String(i + 1));
   return (
     <View style={[css.side, { borderLeftColor: info.color }]}>
-      <Text style={css.label}>{info.name} — Set {setNo} rotation{midSet ? ' (from now)' : ''}</Text>
-      <Text style={css.hint}>{midSet ? 'Where they stand now — tap players from position I (back right, serves next when you have the serve), then II, III…' : 'Tap players in serving order: I serves first, then II, III… (position I = back right).'}</Text>
+      <Text style={css.label}>{info.name} — Set {setNo} {six ? 'rotation' : 'serving order'}{midSet ? ' (from now)' : ''}</Text>
+      {!six && <Text style={css.hint}>{`Tap the ${size} players in serving order: 1 serves first; each time ${info.name} win the serve back the next one serves.`}</Text>}
+      {six && <Text style={css.hint}>{midSet ? 'Where they stand now — tap players from position I (back right, serves next when you have the serve), then II, III…' : 'Tap players in serving order: I serves first, then II, III… (position I = back right).'}</Text>}
       <View style={css.row}>
-        {order.map((id, i) => <SelectChip key={id} label={`${POSITIONS[i] ?? i + 1} · ${byId(id)?.fullName ?? '?'} ✕`} active dotColor={info.color} onPress={() => setOrder(order.filter((x) => x !== id))} />)}
-        {order.length < n && <Text style={css.next}>{POSITIONS[order.length] ?? order.length + 1}: tap a player ↓</Text>}
+        {order.map((id, i) => <SelectChip key={id} label={`${pos(i)} · ${byId(id)?.fullName ?? '?'} ✕`} active dotColor={info.color} onPress={() => setOrder(order.filter((x) => x !== id))} />)}
+        {order.length < n && <Text style={css.next}>{pos(order.length)}: tap a player ↓</Text>}
       </View>
       {order.length < n && (
         <View style={css.row}>
           {free.map((p) => <SelectChip key={p.id} label={p.fullName} active={false} dotColor={info.color} onPress={() => setOrder([...order, p.id])} />)}
         </View>
       )}
-      <Text style={css.hint}>Libero (up to 2 — not in the rotation; can't serve or attack above the net)</Text>
-      <View style={css.row}>
-        {roster.filter((p) => !order.includes(p.id)).map((p) => (
-          <SelectChip key={p.id} label={`${libs.includes(p.id) ? 'L · ' : ''}${p.fullName}`} active={libs.includes(p.id)}
-            onPress={() => setLibs(libs.includes(p.id) ? libs.filter((x) => x !== p.id) : libs.length < 2 ? [...libs, p.id] : libs)} />
-        ))}
-      </View>
+      {six && (
+        <>
+          <Text style={css.hint}>Libero (up to 2 — not in the rotation; can't serve or attack above the net)</Text>
+          <View style={css.row}>
+            {roster.filter((p) => !order.includes(p.id)).map((p) => (
+              <SelectChip key={p.id} label={`${libs.includes(p.id) ? 'L · ' : ''}${p.fullName}`} active={libs.includes(p.id)}
+                onPress={() => setLibs(libs.includes(p.id) ? libs.filter((x) => x !== p.id) : libs.length < 2 ? [...libs, p.id] : libs)} />
+            ))}
+          </View>
+        </>
+      )}
       <View style={css.row}>
         <Button label={`✓ Save rotation${order.length < n ? ` (${order.length}/${n})` : ''}`} style={{ flex: 1 }} disabled={order.length < n || n === 0}
-          onPress={() => onSave(order.map((id) => cp(byId(id)!)), libs.map((id) => cp(byId(id)!)))} />
+          onPress={() => onSave(order.map((id) => cp(byId(id)!)), six ? libs.map((id) => cp(byId(id)!)) : [])} />
         <Button label="Cancel" variant="ghost" onPress={onCancel} />
       </View>
     </View>
@@ -200,7 +210,7 @@ function SubPicker({ s, info, court, libs, dispatch, onDone }: {
     if (c.overLimit && kind === 'regular') {
       const ok = await askConfirm({
         title: `${ordinal(c.used + 1)} substitution?`,
-        message: `This would be the ${ordinal(c.used + 1)} substitution — only ${SUBS_PER_SET} per set. Allowed only as an exceptional sub (injury, FIVB 15.7). Record it as exceptional?`,
+        message: `This would be the ${ordinal(c.used + 1)} substitution — only ${subLimitOf(s)} per set. Allowed only as an exceptional sub (injury, FIVB 15.7). Record it as exceptional?`,
         yesLabel: 'Yes, exceptional sub', noLabel: 'No, cancel', tone: 'caution',
       });
       if (!ok) return;

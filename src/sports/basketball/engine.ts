@@ -72,6 +72,19 @@ export interface BasketballState {
    *  score) — overtime follows a level AGGREGATE (FIBA two-game total), not a
    *  level game. Only on the state for such a leg; absent = per-game rule. */
   agg?: AggPrior;
+  /** SD-132: the stoppable game clock (format key `gameClock`): ms played in
+   *  the current period (`since` = running since, epoch ms). Plays carry the
+   *  clock second (`sec`), so MIN, +/- and the last-2-minutes timeout cap come
+   *  from the real clock. Only on the state when the format sets the key —
+   *  absent = the legacy wall-clock minutes from tip-off. */
+  gc?: { ms: number; since?: number };
+  /** SD-132: 3×3 overtime is first to this many points scored in overtime
+   *  (FIBA 3×3 Art. 6.4: 2). Format key `otTarget`; absent = legacy. */
+  otTarget?: number;
+  /** SD-132: the FIBA 3×3 team-foul penalties (format `foulLadder: '3x3'`):
+   *  team fouls 7–9 → 2 free throws, 10+ → 2 free throws + possession, a
+   *  shooting foul inside the arc 1 free throw (3×3 Art. 15). Absent = legacy. */
+  ladder3x3?: true;
 }
 
 /** SD-29: merge name → id pairs into the state (only when a payload has any,
@@ -101,7 +114,55 @@ export const init = (config?: Record<string, unknown>): BasketballState => ({
   ...(config?.timeoutRule === 'fiba' || config?.timeoutRule === 'nba' ? { toRule: config.timeoutRule } : {}),
   ...(config?.allowDraw != null ? { allowDraw: config.allowDraw === true } : {}),
   ...((() => { const agg = aggPriorFromConfig(config); return agg ? { agg } : {}; })()),
+  // SD-132 — present only when the stored config carries the key.
+  ...(config?.gameClock === true ? { gc: { ms: 0 } } : {}),
+  ...(Number(config?.otTarget) > 0 ? { otTarget: Number(config?.otTarget) } : {}),
+  ...(config?.foulLadder === '3x3' ? { ladder3x3: true as const } : {}),
 });
+
+/* ------------------------------ SD-132 clock ------------------------------- */
+
+/** Length of period `q` in seconds (regulation, else overtime). */
+export const periodSeconds = (s: Pick<BasketballState, 'regPeriods' | 'periodMinutes' | 'overtimeMinutes' | 'quarter'>, q = s.quarter): number =>
+  Math.max(0, (q <= s.regPeriods ? s.periodMinutes : s.overtimeMinutes) * 60);
+/** Seconds played in the current period on the game clock at `now` (held at
+ *  the period's end — basketball clocks stop at 0:00). 0 without a game clock. */
+export function gameSec(s: BasketballState, now = 0): number {
+  if (!s.gc) return 0;
+  const ms = s.gc.ms + (s.gc.since && now ? Math.max(0, now - s.gc.since) : 0);
+  return Math.min(periodSeconds(s), Math.floor(ms / 1000));
+}
+/** The clock is running. */
+export const clockRunning = (s: BasketballState): boolean => !!s.gc?.since && !s.ended;
+/** Seconds left on the (count-down) game clock. */
+export const clockLeft = (s: BasketballState, now = 0): number => Math.max(0, periodSeconds(s) - gameSec(s, now));
+/** A timed period with a game clock (3×3 overtime is untimed: first to 2). */
+export const timedPeriod = (s: BasketballState): boolean => !!s.gc && periodSeconds(s) > 0 && !(s.otTarget && s.quarter > s.regPeriods);
+/** The period's clock has reached 0:00. */
+export const timeUp = (s: BasketballState, now = 0): boolean => timedPeriod(s) && gameSec(s, now) >= periodSeconds(s);
+/** "07:32" (count-down face). */
+export const clockText = (secLeft: number): string =>
+  `${String(Math.floor(secLeft / 60)).padStart(2, '0')}:${String(Math.floor(secLeft % 60)).padStart(2, '0')}`;
+/** A play's clock as the scoresheet reads it (time left in its period). */
+export const eventClock = (s: Pick<BasketballState, 'regPeriods' | 'periodMinutes' | 'overtimeMinutes'>, e: Pick<BBEvent, 'quarter' | 'sec'>): string | undefined =>
+  typeof e.sec === 'number' ? clockText(Math.max(0, periodSeconds({ ...s, quarter: e.quarter }, e.quarter) - e.sec)) : undefined;
+const stopGc = (s: BasketballState, at: number): BasketballState['gc'] =>
+  s.gc?.since ? { ms: s.gc.ms + Math.max(0, (at || s.gc.since) - s.gc.since) } : s.gc;
+/** FIBA Art. 49.2.3 — after a field goal the clock stops when it shows 2:00
+ *  or less in the 4th quarter and every overtime. */
+const lastTwoMinutes = (s: BasketballState, q: number, sec: number): boolean =>
+  q >= s.regPeriods && periodSeconds(s, q) - sec <= 120;
+
+/** SD-132 (3×3 Art. 6.4): points a side scored in overtime. */
+export const otPoints = (s: BasketballState, side: 'home' | 'away'): number =>
+  s.events.filter((e) => e.side === side && e.quarter > s.regPeriods).reduce((n, e) => n + pointsOf(e), 0);
+
+/** SD-132 (FIBA 3×3 Art. 15): does this foul also give the other side the
+ *  ball (team foul 10 and later)? Only with the 3×3 ladder. */
+export function possessionAfterFoul(s: BasketballState, side: 'home' | 'away', type: FoulType): boolean {
+  if (!s.ladder3x3 || type === 'offensive' || type === 'technical') return false;
+  return teamFoulsThisQuarter(s, side) >= 9;
+}
 
 /** Q1..Qn (or H1/H2 for a two-half game), then OT, OT2… for overtime periods. */
 export const periodLabel = (q: number, regPeriods = 4): string =>
@@ -253,6 +314,15 @@ export function disqualifyingFoul(s: BasketballState, name: string | undefined, 
  *  the team-foul limit (the bonus). 0 = no free throws. */
 export function freeThrowsFor(s: BasketballState, side: 'home' | 'away', type: FoulType): number {
   if (type === 'technical') return 1;
+  if (s.ladder3x3) {
+    // FIBA 3×3 Art. 15: a shooting foul inside the arc 1 (behind it 2 — the
+    // scorer can change it); team fouls 7+ → 2 for any non-offensive foul.
+    if (type === 'offensive') return 0;
+    const over = teamFoulsThisQuarter(s, side) >= 6;
+    if (type === 'shooting') return over ? 2 : 1;
+    if (type === 'unsportsmanlike' || type === 'disqualifying' || type === 'flagrant') return 2;
+    return over ? 2 : 0;
+  }
   if (type === 'unsportsmanlike' || type === 'disqualifying' || type === 'flagrant' || type === 'shooting') return 2;
   if (type === 'offensive') return 0;
   return inBonus(s, side === 'home' ? 'away' : 'home') ? 2 : 0;
@@ -264,6 +334,8 @@ export const inBonus = (s: BasketballState, side: 'home' | 'away'): boolean =>
   s.foulsForBonus > 0 && teamFoulsThisQuarter(s, side === 'home' ? 'away' : 'home') >= s.foulsForBonus;
 
 export function currentMinute(s: BasketballState): number {
+  // SD-132: on a game clock, the minute of the period being played
+  if (s.gc) return Math.floor(gameSec(s, Date.now()) / 60);
   if (!s.startedAt) return 0;
   // Hold at the period length rather than drift past it: the manual clock never
   // auto-ends a quarter, so without the cap a long-open tab reads "Q1 · 65'".
@@ -298,21 +370,47 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
   const v2 = a.payload?.v === 2 && !!a.side;
   const pidIn = typeof a.payload?.pid === 'string' && a.payload.pid ? a.payload.pid : undefined;
   const who: PlayerRef | undefined = v2 ? { side: a.side as 'home' | 'away', ...(pidIn ? { pid: pidIn } : {}) } : undefined;
+  // SD-132: the game-clock second rides on the play (new logs only)
+  const secIn = typeof a.payload?.sec === 'number' && a.payload.sec >= 0 ? Math.floor(a.payload.sec) : undefined;
+  const at = Number(a.payload?.at ?? 0);
   const push = (st: BasketballState, e: Omit<BBEvent, 'id' | 'quarter'>, q: number) =>
-    pushEv(st, v2 && pidIn && e.playerName ? { ...e, pid: pidIn } : e, q);
+    pushEv(st, { ...(v2 && pidIn && e.playerName ? { ...e, pid: pidIn } : e), ...(secIn !== undefined ? { sec: secIn } : {}) }, q);
+  // SD-132: the whistle stops the game clock (fouls, time-outs, and a field
+  // goal in the last 2 minutes of Q4 / overtime — FIBA Art. 49.2.3).
+  const whistle = (st: BasketballState): BasketballState => (st.gc?.since && at ? { ...st, gc: stopGc(st, at) } : st);
   // Put points on the board + log the play; ends a first-to-N game on the clincher.
   const scorePoints = (side: 'home' | 'away', pts: number, ev: Omit<BBEvent, 'id' | 'quarter'>): BasketballState => {
     const scored = { ...s, [side]: s[side] + pts } as BasketballState;
     const logged = push(scored, ev, quarter);
     const opp = side === 'home' ? 'away' : 'home';
     if (pts > 0 && logged.targetPoints > 0 && logged[side] >= logged.targetPoints && logged[side] - logged[opp] >= logged.winBy) {
-      return { ...logged, ended: true, startedAt: undefined };
+      return { ...logged, ended: true, startedAt: undefined, ...(logged.gc ? { gc: stopGc(logged, at) } : {}) };
     }
+    // SD-132 (3×3 Art. 6.4): overtime is won by the first side to 2 points
+    if (pts > 0 && logged.otTarget && quarter > logged.regPeriods && otPoints(logged, side) >= logged.otTarget) {
+      return { ...logged, ended: true, startedAt: undefined, ...(logged.gc ? { gc: stopGc(logged, at) } : {}) };
+    }
+    if (pts > 0 && ev.type === 'score' && logged.gc && secIn !== undefined && lastTwoMinutes(logged, quarter, secIn)) return whistle(logged);
     return logged;
   };
   switch (a.type) {
     case 'KICKOFF':
-      return { ...s, startedAt: Number(a.payload?.at) };
+      // SD-132: tip-off starts the game clock too
+      return { ...s, startedAt: Number(a.payload?.at), ...(s.gc ? { gc: { ms: s.gc.ms, since: Number(a.payload?.at) || 1 } } : {}) };
+    case 'CLOCK': {
+      // SD-132: start / stop the game clock (ignored without one)
+      if (!s.gc) return s;
+      if (a.payload?.run) return s.gc.since ? s : { ...s, ...(s.startedAt ? {} : { startedAt: at || 1 }), gc: { ms: s.gc.ms, since: at || 1 } };
+      return { ...s, gc: stopGc(s, at) };
+    }
+    case 'SET_CLOCK': {
+      // SD-132: set the clock to the time the table shows (`left` seconds)
+      if (!s.gc) return s;
+      const len = periodSeconds(s);
+      const played = typeof a.payload?.left === 'number' ? len - (a.payload.left as number) : Number(a.payload?.sec ?? 0);
+      const v = Math.max(0, Math.min(len, Math.round(played)));
+      return { ...s, gc: { ms: v * 1000, ...(s.gc.since ? { since: at || s.gc.since } : {}) } };
+    }
     case 'SCORE': {
       if (!a.side) return s;
       // a disqualified player takes no further part
@@ -351,10 +449,10 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
     case 'FOUL':
       // count the foul, but never beyond the limit (already fouled out)
       return a.side && !isPlayerOut(s, name, who)
-        ? push(s, { minute, type: 'foul', side: a.side, playerName: name, foulType: (a.payload?.foulType as FoulType | undefined) ?? 'personal' }, quarter)
+        ? whistle(push(s, { minute, type: 'foul', side: a.side, playerName: name, foulType: (a.payload?.foulType as FoulType | undefined) ?? 'personal' }, quarter))
         : s;
     case 'TIMEOUT':
-      return a.side ? push(s, { minute, type: 'timeout', side: a.side }, quarter) : s;
+      return a.side ? whistle(push(s, { minute, type: 'timeout', side: a.side }, quarter)) : s;
     case 'EJECT':
       // Remove a player for the rest of the game (2 technicals / flagrant-2 /
       // fighting) — independent of the personal-foul limit. Blocks further credit.
@@ -387,14 +485,14 @@ const reduce = (s: BasketballState, a: ScoreAction): BasketballState => {
       return scoreBack > 0 ? ({ ...next, [ev.side]: Math.max(0, next[ev.side] - scoreBack) } as BasketballState) : next;
     }
     case 'NEXT_QUARTER':
-      return s.quarter < s.regPeriods ? { ...s, quarter: s.quarter + 1, startedAt: undefined } : s;
+      return s.quarter < s.regPeriods ? { ...s, quarter: s.quarter + 1, startedAt: undefined, ...(s.gc ? { gc: { ms: 0 } } : {}) } : s;
     case 'START_OVERTIME':
       // A game level at the end of regulation (or an OT period) plays another
       // overtime period; the running score carries over. Repeats until decided.
       // SD-122: on leg 2 of a two-legged tie, "level" = level on aggregate.
-      return levelForDecider(s) ? { ...s, quarter: s.quarter + 1, startedAt: undefined } : s;
+      return levelForDecider(s) ? { ...s, quarter: s.quarter + 1, startedAt: undefined, ...(s.gc ? { gc: { ms: 0 } } : {}) } : s;
     case 'END':
-      return { ...s, ended: true, startedAt: undefined };
+      return { ...s, ended: true, startedAt: undefined, ...(s.gc ? { gc: stopGc(s, at) } : {}) };
     default:
       return s;
   }

@@ -19,6 +19,10 @@ import { replayPoints, type PointCredits, type PointInput, type PointKind } from
 import { pointsLineScore, type LineScore } from '../scoreline.ts';
 import { serveReducer, serveTracked, firstServer, type VbSub } from './rotation.ts';
 import { detailReducer, initDetail, type VbDetailEntry, type VbDetailToggle } from './detail.ts';
+import { keepMarks } from '../conduct.ts';
+import { isPointKind } from '../rallyEdit.ts';
+import { fromPen, isSanctionLevel, oppSide, sanctionDef, sanctionLabel, toPen, type VbSanction } from './sanctions.ts';
+import type { PenMark } from '../conduct';
 
 const TARGET = 25;
 const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
@@ -49,6 +53,15 @@ export interface VolleyballState {
   /** SD-117b: beach rules (Beach preset / 2 a side) — court switch every 7 points
    *  (5 in the decider) and the technical timeout at 21. Only stamped when true. */
   beach?: true;
+  /** SD-136: regular substitutions per team per set (format: substitutes).
+   *  Absent = 6 (FIVB 15.6); only stamped when the format says otherwise
+   *  (Beach 0, 9-a-side 3), so older states keep their shape. */
+  subLimit?: number;
+  /** SD-136: players on court per side when it isn't 6 (format:
+   *  playersPerSide, e.g. 9-a-side). Absent = 6 (2 when `beach`). The rotation
+   *  / serving order is this long; positions I–VI, the front row and the
+   *  libero checks apply only to a court of 6. */
+  courtSize?: number;
   /** SD-58: first server per set (the toss) — `SET_SERVE`. Absent on older
    *  logs: the serving side is then derived from the rallies (SD-117b). */
   serve?: Record<string, 'home' | 'away'>;
@@ -87,12 +100,24 @@ export const init = (config?: Record<string, unknown>): VolleyballState => ({
 
 /** SD-117b — Beach is the Beach preset or a 2-a-side format. */
 const isBeachFormat = (config?: Record<string, unknown>) => config?.preset === 'beach' || Number(config?.playersPerSide) === 2;
-function formatExtras(config?: Record<string, unknown>): Pick<VolleyballState, 'timeoutsPerSet' | 'beach'> {
+function formatExtras(config?: Record<string, unknown>): Pick<VolleyballState, 'timeoutsPerSet' | 'beach' | 'subLimit' | 'courtSize'> {
   const beach = isBeachFormat(config);
   const raw = config?.timeoutsPerSet;
   const tps = raw != null && Number.isFinite(Number(raw)) ? Math.max(0, Math.floor(Number(raw))) : beach ? 1 : undefined;
-  return { ...(tps != null ? { timeoutsPerSet: tps } : {}), ...(beach ? { beach: true as const } : {}) };
+  // SD-136: the format's sub limit and court size (only when not the indoor 6)
+  const subs = config?.substitutes != null && Number.isFinite(Number(config.substitutes)) ? Math.max(0, Math.floor(Number(config.substitutes))) : undefined;
+  const pps = config?.playersPerSide != null && Number.isFinite(Number(config.playersPerSide)) ? Math.max(1, Math.floor(Number(config.playersPerSide))) : undefined;
+  return {
+    ...(tps != null ? { timeoutsPerSet: tps } : {}), ...(beach ? { beach: true as const } : {}),
+    ...(subs != null && subs !== 6 ? { subLimit: subs } : {}),
+    ...(pps != null && pps !== 6 && !beach ? { courtSize: pps } : {}),
+  };
 }
+
+/** SD-136 — regular subs per team per set (6 indoor, or the format's). */
+export const subsPerSet = (s: VolleyballState): number => s.subLimit ?? 6;
+/** SD-136 — players on court per side (6, 2 on beach, or the format's). */
+export const courtSizeOf = (s: VolleyballState): number => s.courtSize ?? (s.beach ? 2 : 6);
 
 /** Timeouts each team gets per set (2 indoor, 1 beach, or the format's). */
 export const timeoutsPerSet = (s: VolleyballState): number => s.timeoutsPerSet ?? 2;
@@ -277,7 +302,16 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
   // effect); EDIT_LOG replays a corrected point list so the score & sets re-derive.
   if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  if (a.type === 'EDIT_LOG') {
+    const replayed = replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+    // SD-136: sanction records (no score effect) go back where they were; a log
+    // without any (every older match) is returned exactly as replayed.
+    return s.events.some((e) => e.kind === 'conduct')
+      ? keepMarks(s.events.filter((e) => e.kind === 'conduct' || isPointKind(e.kind)), replayed)
+      : replayed;
+  }
+  // SD-136: sanctions (FIVB 16 / 21) — ./sanctions.ts
+  if (a.type === 'CONDUCT' || a.type === 'PENALTY_POINT') return sanctionStep(s, a);
   if (a.type === 'TIMEOUT') {
     // A team timeout — a non-scoring timeline marker (2 per set in indoor).
     if (s.ended || !a.side) return s;
@@ -334,6 +368,49 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${setsWon.home}-${setsWon.away} sets`, side: won });
   return { ...s, current: { home: 0, away: 0 }, setsWon, sets, events, seq, ended };
 };
+
+/** SD-136 — CONDUCT (a new sanction) / PENALTY_POINT (a penalty point
+ *  replayed from a corrected list). A penalty scores like any rally won (the
+ *  serve follows, the set / match may end); the rest are timeline records. */
+function sanctionStep(s: VolleyballState, a: ScoreAction): VolleyballState {
+  if (s.ended) return s;
+  const setNo = s.setsWon.home + s.setsWon.away + 1;
+  const penaltyPoint = (x: VbSanction, pen: PenMark): VolleyballState => {
+    const to = oppSide(x.by);
+    const next = reducer(s, { type: 'POINT', side: to });
+    const i = s.events.length;
+    const e = next.events[i];
+    if (!e) return next;
+    const events = next.events.slice();
+    const who = x.playerName;
+    events[i] = { ...e, icon: sanctionDef(x.level)?.icon ?? '🟥', label: sanctionLabel(x), detail: [e.detail, x.reason, who].filter(Boolean).join(' · '), pen };
+    return { ...next, events };
+  };
+  if (a.type === 'PENALTY_POINT') {
+    const pen = a.payload?.pen as PenMark | undefined;
+    if (!pen || (pen.by !== 'home' && pen.by !== 'away')) return s;
+    return penaltyPoint(fromPen(pen, setNo), pen);
+  }
+  const by = a.side;
+  const p = a.payload ?? {};
+  if ((by !== 'home' && by !== 'away') || !isSanctionLevel(p.vb)) return s;
+  const str = (v: unknown, max = 80) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+  const playerId = str(p.playerId);
+  const playerName = str(p.playerName);
+  const reason = str(p.reason);
+  const x: VbSanction = { level: p.vb, by, set: setNo, ...(playerId ? { playerId } : {}), ...(playerName ? { playerName } : {}), ...(reason ? { reason } : {}) };
+  const def = sanctionDef(x.level)!;
+  if (def.effect === 'point') return penaltyPoint(x, toPen(x));
+  const seq = s.seq + 1;
+  return {
+    ...s, seq,
+    events: [...s.events, {
+      id: seq, stamp: `Set ${setNo}`, icon: def.icon, label: sanctionLabel(x),
+      detail: [reason, playerName].filter(Boolean).join(' · ') || undefined,
+      side: by, kind: 'conduct', set: setNo, ...(playerName ? { playerName } : {}), ...(playerId ? { playerId } : {}), vs: x,
+    }],
+  };
+}
 
 /** SD-117b — the fault detail an OPP_ERROR carries (payload.err + attribution2,
  *  or the replayed `_attr2`). undefined when it carries none. */

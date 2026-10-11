@@ -29,7 +29,7 @@ import type { Player } from '../../core/types';
 import type { ScoreAction, SportPlugin } from '../types';
 import {
   init, reducer, isComplete, result, levelAtEnd, aggLine, matchSec, periodSec, clockFace, periodName, periodLong, periodStarted, running,
-  eventCredits, creditAttribution, currentKeeper, soScore, nextShooter, hockeyScoreLine, HOCKEY_PRESETS, HOCKEY_LIVE_SETTINGS,
+  eventCredits, creditAttribution, currentKeeper, soScore, nextShooter, needsSdPick, hockeyScoreLine, HOCKEY_PRESETS, HOCKEY_LIVE_SETTINGS,
   type CardColour, type GoalType, type HockeyEvent, type HockeyState, type Side,
 } from './engine';
 import { hockeyTotals, hockeyLiveField, hockeyField, unavailable } from './totals';
@@ -260,6 +260,16 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
             ))}
             {s.shootoutWinner ? (
               <Text style={c.done}>{name(s.shootoutWinner)} win the shoot-out {sc.home}–{sc.away}</Text>
+            ) : needsSdPick(s) ? (
+              // SD-139: the scorer picks who goes first in sudden death
+              <>
+                <Text style={c.meta}>5 each and still level — sudden death. Who shoots first?</Text>
+                <Text style={c.meta}>FIH order: the team that shot second in the first five now goes first ({name(s.shootout.first === 'home' ? 'away' : 'home')}).</Text>
+                <View style={c.row}>
+                  <Button label={`${homeName} first`} color={color('home')} style={c.flex} onPress={() => dispatch({ type: 'SO_ORDER', payload: { first: 'home' } })} />
+                  <Button label={`${awayName} first`} color={color('away')} style={c.flex} onPress={() => dispatch({ type: 'SO_ORDER', payload: { first: 'away' } })} />
+                </View>
+              </>
             ) : (
               <>
                 <Text style={c.meta}>
@@ -290,7 +300,9 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
           <Text style={c.h}>Full time · {s.home}–{s.away}</Text>
           {level && s.decider === 'shootout' ? (
             <>
-              <Text style={c.meta}>Level — the match goes to a shoot-out (5 each, then sudden death). Who shoots first?</Text>
+              <Text style={c.meta}>Level — the match goes to a shoot-out (5 each, then sudden death).</Text>
+              <Text style={c.h}>🪙 Who shoots first?</Text>
+              <Text style={c.meta}>After the umpires’ toss (or however they decide) — pick the team going first.</Text>
               <View style={c.row}>
                 <Button label={`${homeName} first`} color={color('home')} style={c.flex} onPress={() => dispatch({ type: 'START_SHOOTOUT', payload: { first: 'home' } })} />
                 <Button label={`${awayName} first`} color={color('away')} style={c.flex} onPress={() => dispatch({ type: 'START_SHOOTOUT', payload: { first: 'away' } })} />
@@ -613,7 +625,7 @@ const LiveExtras: NonNullable<SportPlugin<HockeyState>['LiveExtras']> = ({ state
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={c.h}>Timeline</Text>
-      <LiveTimeline events={hockeyTimeline(s)} homeColor={homeColor} awayColor={awayColor} emptyText="No goals or cards yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
+      <LiveTimeline events={hockeyTimeline(s, { home: homeName, away: awayName })} homeColor={homeColor} awayColor={awayColor} emptyText="No goals or cards yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
       <Text style={c.h}>Match stats</Text>
       <MatchBoxScore sport="hockey" source={hockeyBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
     </View>

@@ -49,7 +49,7 @@ Minutes count the FIFA way: 10 minutes 30 seconds in is 11', and added time is 4
 ## Level knockout: penalties
 1. If a knockout is level (in leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/): level on aggregate), the end button reads **End 2nd Half →**; group games never do.
 2. Choose extra time if offered, or tap **Penalty shootout →**.
-3. The referee tosses a coin and the winning captain chooses. Tap **Red House first** or the other team's button.
+3. After the toss, tap **Red House first** or the other team's button. Sudden death keeps that order ([shoot-out order](/guides/choose-shoot-out-order/)).
 4. For each kick, optionally tap who takes it. Players who already kicked are listed last. The keeper facing it is filled in; tap **Change** if another player went in goal.
 5. Tap **✓ Scored**, **🧤 Saved** or **✗ Missed**. The kick list under each team grows ("Arjun ✓ · Kabir ✗ saved (Rohan)") and the app stops once it is decided.
 

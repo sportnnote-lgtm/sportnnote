@@ -125,6 +125,10 @@ export interface KabaddiState {
   style: KabaddiStyle;
   teamSize: number;
   proRules: boolean;
+  /** SD-136: super tackle / do-or-die switches (format keys). Stamped only when
+   *  the format carries them, so older matches replay on `proRules`. */
+  superTackle?: boolean;
+  doOrDie?: boolean;
   raids: RaidEntry[];
   /** SD-59 / SD-72 — technical points and cards (absent until the first one) */
   extras?: ExtraEntry[];
@@ -164,6 +168,9 @@ export const init = (config?: Record<string, unknown>): KabaddiState => ({
   ...(config?.subReturn === true ? { subReturn: true as const } : null),
   // SD-83: only formats that carry the key (older states keep their shape)
   ...(config?.caughtTouches === 'void' || config?.caughtTouches === 'count' ? { caughtTouches: config.caughtTouches as 'void' | 'count' } : null),
+  // SD-136: only formats that carry the keys (older states keep their shape)
+  ...(typeof config?.superTackle === 'boolean' ? { superTackle: config.superTackle } : null),
+  ...(typeof config?.doOrDie === 'boolean' ? { doOrDie: config.doOrDie } : null),
 });
 
 /** SD-117b — drop the pause mark (the clock stops / restarts). A state without
@@ -178,7 +185,14 @@ const unpause = (s: KabaddiState): KabaddiState => {
 export const kabaddiCfg = (s: KabaddiState): KabaddiCfg => ({
   teamSize: s.teamSize ?? 7, style: s.style ?? 'sanjeevani', proRules: s.proRules ?? true,
   ...(s.caughtTouches === 'void' ? { caughtVoid: true } : null),
+  ...(typeof s.superTackle === 'boolean' ? { superTackle: s.superTackle } : null),
+  ...(typeof s.doOrDie === 'boolean' ? { doOrDie: s.doOrDie } : null),
 });
+/** SD-136 — the raid form's touch chips 0…N, N = the most defenders who can
+ *  be on the mat (the team size, at least 5 so older layouts don't shrink,
+ *  never fewer than are on the mat now). Chips above the mat count are dimmed. */
+export const touchChips = (teamSize: number, onMat: number): number[] =>
+  Array.from({ length: Math.max(5, Math.min(11, Math.max(teamSize, onMat))) + 1 }, (_, i) => i);
 const raidsOf = (s: KabaddiState): RaidEntry[] => s.raids ?? [];
 export const extrasOf = (s: KabaddiState): ExtraEntry[] => s.extras ?? [];
 /** The full replay: raids + technical points / cards (SD-59 / SD-72). */

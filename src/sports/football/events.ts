@@ -1,6 +1,7 @@
 /** A single timeline event during a football match. */
 /** `sinbin` (SD-29): a timed suspension — only when the format sets a sin-bin. */
-export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub' | 'stoppage' | 'sinbin';
+/** `timeout` (SD-132): a futsal team time-out (Law 7) — only with futsal rules. */
+export type FootballEventType = 'goal' | 'owngoal' | 'yellow' | 'red' | 'sub' | 'stoppage' | 'sinbin' | 'timeout';
 
 export type GoalType = 'open' | 'penalty' | 'freekick' | 'header';
 
@@ -64,6 +65,7 @@ export const EVENT_META: Record<FootballEventType, { icon: string; label: string
   sub: { icon: '🔄', label: 'Substitution' },
   stoppage: { icon: '⏸️', label: 'Stoppage' },
   sinbin: { icon: '⏱️', label: 'Sin-bin' },
+  timeout: { icon: '⏸️', label: 'Time-out' },
 };
 
 /**

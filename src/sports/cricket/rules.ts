@@ -19,8 +19,15 @@ export interface CricketRules {
   byes: boolean;
   legByes: boolean;
   freeHit: boolean;
-  /** reserved — no UI yet */
+  /** SD-133 (CK-11) — offer the wagon wheel + shot type after each scoring
+   *  shot. A capture setting, not a playing rule (ignored by `isStandard`). */
   wagonWheel: boolean;
+  /** SD-133 — local "retire at N runs" (school / sixes cricket): a batter who
+   *  reaches N retires not out. Absent / 0 = off. Only present when set, so
+   *  older states keep their exact shape. */
+  retireAt?: number;
+  /** …and may come back once everyone else has batted (default yes). */
+  retireBack?: boolean;
 }
 
 export const STANDARD_RULES: CricketRules = {
@@ -30,13 +37,18 @@ export const STANDARD_RULES: CricketRules = {
 
 /** Config (format / SET_RULES payload) keys. Two differ from CricketRules:
  *  byesAllowed ⇄ byes, legByesAllowed ⇄ legByes. The rest are identical. */
-export const RULE_CONFIG_KEYS = ['wideRuns', 'wideLegal', 'noBallRuns', 'noBallLegal', 'freeHit', 'stdLastOvers', 'byesAllowed', 'legByesAllowed', 'wagonWheel'] as const;
+export const RULE_CONFIG_KEYS = ['wideRuns', 'wideLegal', 'noBallRuns', 'noBallLegal', 'freeHit', 'stdLastOvers', 'byesAllowed', 'legByesAllowed', 'wagonWheel', 'retireAt', 'retireBack'] as const;
 
 const clamp05 = (v: unknown, d: number) => {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) ? Math.max(0, Math.min(5, n)) : d;
 };
 const bool = (v: unknown, d: boolean) => (v === undefined || v === null ? d : v === true || v === 'true' || v === 1);
+/** SD-133 — the retire limit: a whole number 1–500, else off (0). */
+const retireOf = (v: unknown): number => {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(500, n) : 0;
+};
 
 /** Format / SET_RULES config → rules (missing keys = standard; numbers clamped 0–5). */
 export function rulesFromConfig(config?: Record<string, unknown> | null): CricketRules {
@@ -51,6 +63,8 @@ export function rulesFromConfig(config?: Record<string, unknown> | null): Cricke
     legByes: bool(c.legByesAllowed, STANDARD_RULES.legByes),
     freeHit: bool(c.freeHit, STANDARD_RULES.freeHit),
     wagonWheel: bool(c.wagonWheel, STANDARD_RULES.wagonWheel),
+    // SD-133 — only when on (older states: no keys).
+    ...(retireOf(c.retireAt) > 0 ? { retireAt: retireOf(c.retireAt), retireBack: bool(c.retireBack, true) } : {}),
   };
 }
 
@@ -60,6 +74,7 @@ export function rulesToConfig(r: CricketRules = STANDARD_RULES): Record<string, 
     wideRuns: r.wideRuns, wideLegal: r.wideLegal, noBallRuns: r.noBallRuns, noBallLegal: r.noBallLegal,
     freeHit: r.freeHit, stdLastOvers: r.stdLastOvers, byesAllowed: r.byes, legByesAllowed: r.legByes,
     wagonWheel: r.wagonWheel,
+    ...(r.retireAt ? { retireAt: r.retireAt, retireBack: r.retireBack !== false } : {}),
   };
 }
 
@@ -87,8 +102,10 @@ export function effectiveRules(s: Pick<CricketState, 'rules' | 'oversLimit' | 's
   return { ...r, wideRuns: STANDARD_RULES.wideRuns, wideLegal: STANDARD_RULES.wideLegal, noBallRuns: STANDARD_RULES.noBallRuns, noBallLegal: STANDARD_RULES.noBallLegal };
 }
 
+/** Standard playing rules? The wagon wheel is a capture setting, not a rule. */
 export const isStandard = (r: CricketRules) =>
-  (Object.keys(STANDARD_RULES) as (keyof CricketRules)[]).every((k) => r[k] === STANDARD_RULES[k]);
+  (Object.keys(STANDARD_RULES) as (keyof CricketRules)[]).every((k) => k === 'wagonWheel' || r[k] === STANDARD_RULES[k])
+  && !r.retireAt;
 
 const runsWord = (n: number) => `${n} run${n === 1 ? '' : 's'}`;
 
@@ -103,6 +120,7 @@ export function rulesChip(r: CricketRules): string {
   if (!r.byes) parts.push('no byes');
   if (!r.legByes) parts.push('no leg byes');
   if (r.stdLastOvers > 0) parts.push(`normal last ${r.stdLastOvers}`);
+  if (r.retireAt) parts.push(`retire at ${r.retireAt}`);
   return parts.join(' · ');
 }
 
@@ -125,6 +143,10 @@ export function describeRulesChange(prev: CricketRules, next: CricketRules): str
   if (prev.byes !== next.byes) parts.push(next.byes ? 'Byes allowed' : 'No byes');
   if (prev.legByes !== next.legByes) parts.push(next.legByes ? 'Leg byes allowed' : 'No leg byes');
   if (prev.stdLastOvers !== next.stdLastOvers) parts.push(next.stdLastOvers > 0 ? `Normal rules in the last ${next.stdLastOvers} over${next.stdLastOvers === 1 ? '' : 's'}` : 'Local rules all innings');
+  // SD-133
+  if ((prev.retireAt ?? 0) !== (next.retireAt ?? 0)) parts.push(next.retireAt ? `Batters retire at ${next.retireAt}` : 'No retire limit');
+  else if (next.retireAt && (prev.retireBack !== false) !== (next.retireBack !== false)) parts.push(next.retireBack !== false ? 'Retired batters may return' : 'Retired batters can’t return');
+  if (prev.wagonWheel !== next.wagonWheel) parts.push(next.wagonWheel ? 'Wagon wheel on' : 'Wagon wheel off');
   return parts.join(' · ');
 }
 
@@ -148,12 +170,14 @@ export const LOCAL_RULE_FIELDS: FormatField[] = [
   { key: 'stdLastOvers', label: 'Normal wide/no-ball rules in the last N overs', type: 'count', default: 0, min: 0, max: 5, hint: '0 = never', advanced: true },
   { key: 'byesAllowed', label: 'Byes allowed', type: 'toggle', default: true, advanced: true },
   { key: 'legByesAllowed', label: 'Leg byes allowed', type: 'toggle', default: true, advanced: true },
+  // SD-133 — school / sixes cricket: retire at N runs (0 = off)
+  { key: 'retireAt', label: 'Batters retire at (runs)', type: 'number', default: 0, min: 0, max: 500, advanced: true, hint: '0 = off · e.g. 25 in school cricket — the batter retires not out' },
+  { key: 'retireBack', label: 'Retired batters may bat again', type: 'toggle', default: true, advanced: true, hint: 'once everyone else has batted' },
+  // SD-133 (CK-11) — wagon wheel + shot type after each scoring shot (optional taps)
+  { key: 'wagonWheel', label: 'Wagon wheel (where each shot went)', type: 'toggle', default: false, advanced: true, hint: 'an optional field tap after each scoring shot' },
 ];
 
-export const LOCAL_RULE_DEFAULTS: Record<string, number | boolean> = (() => {
-  const { wagonWheel: _w, ...rest } = rulesToConfig(STANDARD_RULES);
-  return rest;
-})();
+export const LOCAL_RULE_DEFAULTS: Record<string, number | boolean> = { ...rulesToConfig(STANDARD_RULES), retireAt: 0, retireBack: true };
 
 /** Cricket's live settings (event mode): before ball 1 a change patches the
  *  match format; after it, Apply logs SET_RULES (from the next ball). */
@@ -164,8 +188,8 @@ export const CRICKET_LIVE_SETTINGS: LiveSettings<CricketState> = {
   actionType: 'SET_RULES',
   fields: LOCAL_RULE_FIELDS,
   read: (s) => {
-    const { wagonWheel: _w, ...rest } = rulesToConfig(rulesOf(s));
-    return rest;
+    const r = rulesOf(s);
+    return { ...rulesToConfig(r), retireAt: r.retireAt ?? 0, retireBack: r.retireBack !== false };
   },
   beforeStart: cricketBeforeStart,
   defaults: LOCAL_RULE_DEFAULTS,

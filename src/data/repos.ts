@@ -2596,7 +2596,12 @@ async function flagWinners(matchId: string, winner: 'home' | 'away' | 'draw' | n
  *  (REVIEW Decision 1); a correction (#05) calls this again. Returns 'legacy' when
  *  the database has no `result` column yet (migration 0040): the outcome is saved
  *  the old way and the reason isn't. */
-export async function endMatchManually(matchId: string, r: MatchResult): Promise<'full' | 'legacy'> {
+export async function endMatchManually(
+  matchId: string, r: MatchResult,
+  /** SD-133 — the live state at the moment it was ended (the scorer's screen);
+   *  else the stored event log is replayed for the stat sync. */
+  opts: { state?: unknown } = {},
+): Promise<'full' | 'legacy'> {
   // SD-126: a conceded / awarded match counts its federation forfeit score in the
   // table (result.forfeit; the board score stays in result.score).
   if ((r.kind === 'conceded' || r.kind === 'awarded') && r.winner && r.forfeit === undefined) r = await withForfeit(matchId, r, r.kind);
@@ -2609,6 +2614,7 @@ export async function endMatchManually(matchId: string, r: MatchResult): Promise
     m.result = r;
     m.winner = winner ?? undefined;
     if (r.score) m.score = r.score;
+    await syncHandEndedTotals(matchId, opts.state);
     await flagWinners(matchId, winner);
     await syncMatchAppearances(matchId);
     return 'full';
@@ -2628,15 +2634,52 @@ export async function endMatchManually(matchId: string, r: MatchResult): Promise
       const c = await supabase.from('matches').update({ status: 'completed', winner, updated_at: now }).eq('id', matchId).select('id');
       if (c.error) throw new Error(c.error.message);
     }
+    await syncHandEndedTotals(matchId, opts.state);
     await flagWinners(matchId, winner);
     await syncMatchAppearances(matchId);
     return 'legacy';
   }
   if (res.error) throw new Error(res.error.message);
   if (!res.data?.length) throw new Error('You can’t end this match.');
+  await syncHandEndedTotals(matchId, opts.state);
   await flagWinners(matchId, winner);
   await syncMatchAppearances(matchId);
   return 'full';
+}
+
+/** SD-133 (audit-2 cricket §3, P1) — a match ended by hand (abandoned with
+ *  play, no result after balls, awarded, conceded, a tie called) gets the SAME
+ *  absolute stat sync as a natural finish (`useLiveMatch` at completion):
+ *  `plugin.statTotals` → `syncMatchStatLines`. Without it its lines kept only
+ *  the live increments, so cricket innings / balls faced / balls bowled / runs
+ *  conceded / maidens never counted (Inns, Ave, SR, Econ). Every sport with
+ *  `statTotals`, as the completion path. Needs events (or the live state) — a
+ *  walkover with no play writes nothing. Never fails the save. */
+async function syncHandEndedTotals(matchId: string, liveState?: unknown): Promise<void> {
+  try {
+    const m = await getMatch(matchId);
+    if (!m) return;
+    const plugin = getSport(m.sport);
+    if (!plugin.statTotals) return;
+    let state = liveState;
+    if (state === undefined) {
+      const raw = await getMatchEvents(matchId);
+      if (!raw.length) return;
+      const tour = m.tournamentId ? (await getTournaments({ includeDeleted: true })).find((t) => t.id === m.tournamentId) : undefined;
+      const config = mergeMatchConfig(tour?.formats?.[m.sport] as Record<string, unknown> | undefined, m.format as Record<string, unknown> | undefined);
+      state = replayLog(plugin, config, raw);
+    }
+    // Cricket: no ball bowled = no innings to count (captain / keeper flags
+    // alone would start a Captaincy record for a match that never began).
+    if (m.sport === 'cricket') {
+      const sc = (state as { scores?: Record<'home' | 'away', { balls: number; runs: number }> } | null)?.scores;
+      if (!sc || sc.home.balls + sc.away.balls + sc.home.runs + sc.away.runs === 0) return;
+    }
+    const totals = await matchStatTotals(matchId, m.sport, state, m);
+    if (totals && Object.keys(totals).length) await syncMatchStatLines(matchId, m.sport, totals, { home: m.homeTeam.name, away: m.awayTeam.name });
+  } catch {
+    // best effort — the result is already saved
+  }
 }
 
 /** SD-126 — the match's sport, state and format (its tournament's format for

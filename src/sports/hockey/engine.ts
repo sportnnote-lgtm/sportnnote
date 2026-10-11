@@ -102,7 +102,10 @@ export interface HockeyState {
   stopClock: boolean;
   /** penalty corners exist in this format (not Hockey5s) */
   penaltyCorners: boolean;
-  shootout: { home: SoKick[]; away: SoKick[]; first: Side } | null;
+  /** `first` = who shot first (the scorer's pick after the toss). `sdFirst`
+   *  (SD-139, new logs only): who goes first in sudden death, picked by the
+   *  scorer once both have taken five; absent = the FIH order (reversed). */
+  shootout: { home: SoKick[]; away: SoKick[]; first: Side; sdFirst?: Side } | null;
   shootoutWinner?: Side;
   /** SD-120: leg 2 of a new two-legged tie — the leg-1 score; "level" then
    *  means level on aggregate (absent on every other match). */
@@ -256,17 +259,23 @@ export function decideShootout(h: SoKick[], a: SoKick[]): Side | undefined {
   return undefined;
 }
 /** Whose turn: alternate within each round; the first five rounds start with
- *  `first`, sudden-death rounds with the other side (FIH). */
+ *  `first`, sudden-death rounds with the scorer's `sdFirst` pick (SD-139), else
+ *  the other side (FIH: the team that went second now goes first). */
 export function nextShooter(so: NonNullable<HockeyState['shootout']>): Side {
   const n = so.home.length + so.away.length;
   const round = Math.floor(n / 2);
   const other: Side = so.first === 'home' ? 'away' : 'home';
-  const order: Side[] = round < 5 ? [so.first, other] : [other, so.first];
+  const sd: Side = so.sdFirst ?? other;
+  const order: Side[] = round < 5 ? [so.first, other] : [sd, sd === 'home' ? 'away' : 'home'];
   const want = order[n % 2];
   // keep turns honest if one side was keyed twice in a row
   const behind: Side | undefined = so.home.length < so.away.length ? 'home' : so.away.length < so.home.length ? 'away' : undefined;
   return behind ?? want;
 }
+/** SD-139: both sides have taken five, still level, and nobody has picked who
+ *  goes first in sudden death yet — the scorer is asked. */
+export const needsSdPick = (s: Pick<HockeyState, 'shootout' | 'shootoutWinner'>): boolean =>
+  !!s.shootout && !s.shootoutWinner && !s.shootout.sdFirst && s.shootout.home.length === 5 && s.shootout.away.length === 5;
 export const soScore = (s: Pick<HockeyState, 'shootout'>) => ({
   home: s.shootout?.home.filter((k) => k.scored).length ?? 0,
   away: s.shootout?.away.filter((k) => k.scored).length ?? 0,
@@ -274,7 +283,7 @@ export const soScore = (s: Pick<HockeyState, 'shootout'>) => ({
 
 /* --------------------------------- reducer --------------------------------- */
 
-const SO_ACTIONS = new Set(['START_SHOOTOUT', 'SO', 'XI', 'STAT_ADJUST', 'REMOVE_EVENT', 'END']);
+const SO_ACTIONS = new Set(['START_SHOOTOUT', 'SO', 'SO_ORDER', 'XI', 'STAT_ADJUST', 'REMOVE_EVENT', 'END']);
 
 export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
   if (s.ended && !SO_ACTIONS.has(a.type)) return s;
@@ -410,6 +419,12 @@ export const reducer = (s: HockeyState, a: ScoreAction): HockeyState => {
     case 'START_SHOOTOUT': {
       if (!s.ended || !levelForDecider(s) || s.shootout) return s;
       return { ...s, shootout: { home: [], away: [], first: a.payload?.first === 'away' ? 'away' : 'home' } };
+    }
+    case 'SO_ORDER': {
+      // SD-139: the scorer's pick of who goes first in sudden death
+      const f = a.payload?.first;
+      if (!needsSdPick(s) || (f !== 'home' && f !== 'away')) return s;
+      return { ...s, shootout: { ...s.shootout!, sdFirst: f } };
     }
     case 'SO': {
       if (!s.shootout || s.shootoutWinner || !side) return s;

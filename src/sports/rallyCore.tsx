@@ -30,7 +30,7 @@ import type { FormatField, ScoreAction, SportPlugin } from './types';
 import { courtFormation, makeCourt } from './courts';
 import { pointVoice } from './voiceParsers';
 import { ttServer, ttServeHint } from './tabletennis/serve';
-import { tableTennisCue } from './courtCues';
+import { rallyCueOf } from './courtCues';
 import { CueBanner, useCueTimeline } from './CueBanner';
 import { rallyTotals } from './racketTotals';
 import { SetLineBoard } from './SetLineBoard';
@@ -72,6 +72,8 @@ export interface RallyOpts {
 
 export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
   const { init, reducer } = makeRallyEngine(opts);
+  // SD-117c / SD-135 — change-ends / interval cues (TT, pickleball, squash)
+  const cueOf = rallyCueOf(opts.id);
 
   const ScoringControls: SportPlugin<RallyState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
     const s = state as RallyState;
@@ -93,10 +95,31 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     const detailRow = (
       <PointDetailRow sport={opts.id} state={s} dispatch={dispatch} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} rowsOf={rallyRows} />
     );
-    // SD-63 — squash: a plain Let (WSF Rule 8) — the rally is replayed, no point;
-    // sits with the Stroke / No let decisions of the point detail below.
+    // SD-63 — squash: a plain Let (WSF Rule 8) — the rally is replayed, no point.
+    // SD-135 (SQ-a) — the referee's other two decisions are first-class too:
+    // "Stroke → X" / "No let → X" give X the rally (a point in PAR, the serve
+    // in English scoring) and record the decision whether or not point detail
+    // is on (a `pd` on the POINT — counted as decisions only, never as a
+    // winners / errors match).
+    const decide = (side: 'home' | 'away', how: 'stroke' | 'nolet') => {
+      // singles: the rally winner is credited, as the point buttons do (and in
+      // English scoring only when they're serving — a hand-out credits nobody)
+      const solo = (side === 'home' ? homeRoster : awayRoster);
+      const p = solo.length === 1 && (!s.sideOut || side === s.serving) ? solo[0] : undefined;
+      dispatch({ type: 'POINT', side, payload: { pd: { how } }, ...(p ? { attribution: { playerId: p.id, stat: 'points', playerName: p.fullName } } : {}) });
+    };
     const letRow = opts.id === 'squash' && !s.ended && (s.serverPicked || s.events.length > 0) ? (
-      <SecondaryAction label="🔁 Let — replay the rally (no point)" onPress={() => dispatch({ type: 'LET' })} />
+      <View style={{ gap: theme.spacing(2) }}>
+        <SecondaryAction label="🔁 Let — replay the rally (no point)" onPress={() => dispatch({ type: 'LET' })} />
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}><SecondaryAction color={homeColor} label={`✋ Stroke → ${homeName}`} onPress={() => decide('home', 'stroke')} /></View>
+          <View style={ctrl.flex}><SecondaryAction color={awayColor} label={`✋ Stroke → ${awayName}`} onPress={() => decide('away', 'stroke')} /></View>
+        </View>
+        <View style={ctrl.row}>
+          <View style={ctrl.flex}><SecondaryAction color={homeColor} label={`🚫 No let → ${homeName}`} onPress={() => decide('home', 'nolet')} /></View>
+          <View style={ctrl.flex}><SecondaryAction color={awayColor} label={`🚫 No let → ${awayName}`} onPress={() => decide('away', 'nolet')} /></View>
+        </View>
+      </View>
     ) : null;
     const rosterOf = (t: 'home' | 'away') => (t === 'home' ? homeRoster : awayRoster);
     const point = (side: 'home' | 'away', p?: Player) =>
@@ -160,7 +183,8 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         picked={s.serverPicked || !noPlayYet ? s.opening ?? 'home' : null}
         // SD-65 — pickleball: new matches alternate the first serve by game
         // (USA Pickleball 5.B.1); the flag rides on the toss pick (`alt`).
-        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side, ...(opts.id === 'pickleball' ? { alt: true } : {}) } })}
+        // SD-135 — + rally-doubles court positions (`pos: 2`, see rallyEngine)
+        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side, ...(opts.id === 'pickleball' ? { alt: true, pos: 2 } : {}) } })}
       />
     ) : null;
     const blocked = needsServer || needsStart;
@@ -178,6 +202,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
       const rallyWon = (team: 'home' | 'away') => point(team, team === s.serving ? serverOf(team) : undefined);
       return (
         <View style={{ gap: theme.spacing(4) }}>
+          {cueOf && <CueBanner cue={cueOf(s)} />}
           <View style={ctrl.serveBox}>
             <Text style={ctrl.label}>{opts.serveSystemLabel}</Text>
             {blocked ? null : spot ? (
@@ -243,7 +268,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     ) : null;
     return (
       <View style={{ gap: theme.spacing(4) }}>
-        {isTT && <CueBanner cue={tableTennisCue(s)} />}
+        {cueOf && <CueBanner cue={cueOf(s)} />}
         {firstPicker}
         {ttDbl ? (
           <View style={{ gap: theme.spacing(1) }}>
@@ -272,7 +297,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
   const LiveExtras: NonNullable<SportPlugin<RallyState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
     const s = state as RallyState;
     // SD-117c (table tennis) — change-ends markers on the rally log (display only)
-    const timeline = useCueTimeline(reducer, s, rallyInputs, opts.serveRule === 'tt' ? tableTennisCue : null);
+    const timeline = useCueTimeline(reducer, s, rallyInputs, cueOf);
     return (
       <View style={{ gap: theme.spacing(3) }}>
         <Text style={ctrl.label}>Games</Text>
@@ -312,7 +337,7 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
         // SD-115 — GAME / MATCH POINT, derived by playing the next rally (side-out:
         // only the server can score, so only the server can have one).
         alerts={pressureText(pointPressure(reducer, s, { unit: 'game' }), { home: homeName, away: awayName })}
-        cue={opts.serveRule === 'tt' ? tableTennisCue(s)?.text : undefined}
+        cue={cueOf ? cueOf(s)?.text ?? undefined : undefined}
       />
     );
   };

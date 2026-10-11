@@ -31,6 +31,7 @@ export function marginRulesText(cfg: StandingsConfig): string[] {
   if (cfg.shootout) out.push(`Level, decided by a shoot-out: winner ${cfg.shootout.win}, loser ${cfg.shootout.loss}`);
   if (cfg.forfeitLoss !== undefined) out.push(`${cfg.forfeitLoss} for a forfeit / walkover loss`);
   if (cfg.rankBy === 'wins') out.push('Ranked by matches won first, then points');
+  if (cfg.rankBy === 'winPct') out.push('Ranked by win % first (FIBA 3×3)');
   return out;
 }
 

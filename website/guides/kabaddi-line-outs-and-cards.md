@@ -48,6 +48,8 @@ While a player is suspended or sent off, the raid form shows him as "· suspende
 ## How the rules change on the mat
 - "On mat" counts only players who can play: "6/7 (1 suspended)".
 - The bonus line needs 6 defenders on the mat, and a super tackle needs 3 or fewer, so a suspension can change both.
+- Touches can't be more than the defenders on the mat: the touch numbers above it are greyed out, and a line-out can only take the defenders left after the touches.
+- Super tackles count in every standard rule set (AKFI and IKF rules, not only the pro league). The organiser can switch them off under **Custom**.
 - An all out happens when the mat is empty. A suspended or sent-off player does not stop it. After the all out, everyone comes back except players still suspended or sent off.
 
 ## Fix a mistake

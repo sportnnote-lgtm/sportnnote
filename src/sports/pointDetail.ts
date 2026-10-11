@@ -117,7 +117,14 @@ export const DETAIL_HOWS: Record<DetailSport, HowDef[]> = {
 export const isDetailSport = (s: string): s is DetailSport => s in DETAIL_HOWS;
 /** Tennis only: the "At net" flag and the 1st / 2nd serve toggle. */
 export const hasNetFlag = (s: DetailSport) => s === 'tennis';
-export const hasServeDetail = (s: DetailSport) => s === 'tennis';
+/** Tennis, and padel from SD-135 (PD-b — Premier Padel's 1st-serve stats). */
+export const hasServeDetail = (s: DetailSport) => s === 'tennis' || s === 'padel';
+
+/** SD-135 (PD-a) — the hows a one-tap button records on its own, with point
+ *  detail OFF: padel's Ace, squash's Stroke / No let. A match whose only
+ *  detail is these tracked just these keys — never winners / errors (no
+ *  false zeros). */
+export const QUICK_HOWS: Partial<Record<DetailSport, How[]>> = { padel: ['ace'], squash: ['stroke', 'nolet'] };
 
 export const howDef = (sport: DetailSport, how: How): HowDef | undefined => DETAIL_HOWS[sport].find((h) => h.how === how);
 
@@ -136,15 +143,18 @@ export const NET_KEY = 'netPtsWon';
 export const strokeKey = (how: How, stroke: string): string | undefined =>
   how === 'winner' ? `winners${cap(stroke)}` : how === 'ue' ? `ue${cap(stroke)}` : undefined;
 
-/** Every key the sport's detail writes on a tracked line, in display order. */
-export function detailKeys(sport: DetailSport): string[] {
+/** Every key the sport's detail writes on a tracked line, in display order.
+ *  `quickOnly` (SD-135): just the one-tap keys (QUICK_HOWS). */
+export function detailKeys(sport: DetailSport, quickOnly = false): string[] {
   const out: string[] = [];
+  const quick = QUICK_HOWS[sport] ?? [];
   for (const h of DETAIL_HOWS[sport]) {
+    if (quickOnly && !quick.includes(h.how)) continue;
     out.push(HOW_KEY[h.how]);
     if (h.how === 'stroke') out.push(STROKES_CONCEDED);
     for (const st of h.strokes ?? []) out.push(strokeKey(h.how, st)!);
   }
-  if (hasNetFlag(sport)) out.push(NET_KEY);
+  if (hasNetFlag(sport) && !quickOnly) out.push(NET_KEY);
   return out;
 }
 
@@ -242,6 +252,22 @@ export function initDetailFlags(config?: Record<string, unknown>): { pointDetail
 export const detailTracked = (s: { pointDetail?: boolean; events?: LiveEvent[] } | null | undefined): boolean =>
   !!s && (s.pointDetail === true || (s.events ?? []).some((e) => !!e.pd));
 
+/** SD-135 (PD-a) — how much detail a match tracked: 'full' = point detail
+ *  was on, or a point carries a how no one-tap button records; 'quick' =
+ *  only one-tap hows (padel Ace, squash Stroke / No let); null = none. */
+export function detailCoverage(sport: DetailSport, s: { pointDetail?: boolean; events?: LiveEvent[] } | null | undefined): 'full' | 'quick' | null {
+  if (!s) return null;
+  if (s.pointDetail === true) return 'full';
+  const quick = QUICK_HOWS[sport] ?? [];
+  let any = false;
+  for (const e of s.events ?? []) {
+    if (!e.pd) continue;
+    if (!quick.includes(e.pd.how)) return 'full';
+    any = true;
+  }
+  return any ? 'quick' : null;
+}
+
 /** Did this match track 1st / 2nd serves on any point? */
 export const serveTracked = (s: { events?: LiveEvent[] } | null | undefined): boolean =>
   !!s && (s.events ?? []).some((e) => e.serve === 1 || e.serve === 2);
@@ -323,9 +349,19 @@ const HOW_ROW_LABEL: Record<How, string> = {
 /** The match-stats panel rows for point detail (empty when nothing is
  *  annotated in scope). Winners and errors, the winners / UE ratio, then the
  *  strokes that occurred (by stroke rows only when non-zero). */
-export function detailRows(sport: DetailSport, events: LiveEvent[] | undefined, period?: number): DetailRow[] {
+export function detailRows(sport: DetailSport, events: LiveEvent[] | undefined, period?: number, full = true): DetailRow[] {
   const t = detailTally(sport, events, period);
   if (!t.points) return [];
+  // SD-135 — one-tap detail only (Ace, Stroke / No let): just those rows
+  if (!full) {
+    const rows: DetailRow[] = [];
+    for (const how of QUICK_HOWS[sport] ?? []) {
+      const k = HOW_KEY[how];
+      const h = t.home[k] ?? 0, a = t.away[k] ?? 0;
+      if (h + a) rows.push({ key: k, label: HOW_ROW_LABEL[how], home: String(h), away: String(a), hv: h, av: a });
+    }
+    return rows;
+  }
   const rows: DetailRow[] = [];
   const count = (key: string, label: string, always = false) => {
     const h = t.home[key] ?? 0, a = t.away[key] ?? 0;

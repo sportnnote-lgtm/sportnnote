@@ -8,12 +8,12 @@ order: 51
 updated: 2026-10-11
 ---
 
-Score a handball match on one phone. You run the clock and tap what happens; the app times suspensions, counts time-outs and builds the box score and player stats.
+Score a handball match on one phone. You run the clock and tap what happens; the app times suspensions, counts time-outs and builds the stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - The organiser picks the **Format** (**Senior 2 × 30**, **Youth 2 × 25 (12–16)**, **Youth 2 × 20 (8–12)** or **Custom**) and **If level at full time**: **Draw stands (league)**, or an extra-time / 7 m throw option.
-- Place each team's players on the court on the **Info** tab, keeper in the GK spot, so everyone gets minutes played and the keeper gets saves. No line-up? Use **🧤 Set keeper**.
+- Place each team's players on the court on the **Info** tab, keeper in the GK spot, so everyone gets minutes and the keeper saves. No line-up? Use **🧤 Set keeper**.
 
 ## Step by step: run the clock
 1. Open the match → **Scoring** and tap **▶ Throw-off**. The clock counts up, like a handball scoreboard: the second half starts at 30:00.
@@ -31,22 +31,22 @@ Score a handball match on one phone. You run the clock and tap what happens; the
 5. **🔁 Sub**: tap who comes off, then who comes on. If the keeper comes off, the player coming on goes in goal.
 
 ## Time-outs
-Tap **⏸ Time-out** for the team that asks. The clock stops. The IHF limits apply: 3 a match, at most 2 a half, only 1 in the last 5 minutes, none in extra time. When a team can't take one, the button is off and a line says why.
+Tap **⏸ Time-out** for the team that asks; the clock stops. IHF limits: 3 a match, at most 2 a half, 1 in the last 5 minutes, none in extra time. When a team can't take one, the button is off and a line says why.
 
 ## Sanctions
 1. Tap **🟨 Card**, then **🟨 Warning**, **⏱ 2 minutes**, **🟥 Disqualify** or **🟥🟦 + report** (a disqualification with a written report, the blue card), then the player. Bench players can be sanctioned too.
-2. 2 minutes stops the clock and shows "⏱️ Suspended: Name (1:24 left)". The team plays a player short; the countdown runs on playing time and the player is back by himself. A player's third suspension is also a disqualification.
+2. 2 minutes stops the clock and shows "⏱️ Suspended: Name (1:24 left)". The team plays short; the countdown runs on playing time and the player returns by himself. A player's third suspension is also a disqualification.
 3. A disqualified player is out for the match and the team plays short for 2 minutes. Then tap **🔁 Sub** → **No one — fill the empty place** and pick who comes on.
 4. One warning per player: a second one is recorded as 2 minutes.
 5. For a team official, type the name under **Or a team official** (optional) and tap **Record**. An official's 2 minutes or disqualification also leaves the team short for 2 minutes.
 
 ## Extra time and 7-metre throws
 When it is still level and there is no more extra time, you see "Level — the match goes to 7-metre throws". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
-1. Tap which team throws first.
+1. Under "Who throws first?", tap the team going first after the toss ([shoot-out order](/guides/choose-shoot-out-order/)).
 2. For each throw, tap the thrower (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
-3. Still level after five each? The teams keep taking one throw each until one team leads.
+3. Still level after five each? Tap who throws first in sudden death, then one throw each until one team leads.
 
-The result keeps the score after playing time and adds the throws, for example "28–28" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
+The result keeps the playing-time score and adds the throws, for example "28–28" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
 
 ## Fix a mistake
 1. Tap **✎ Correct the timeline** under the buttons.

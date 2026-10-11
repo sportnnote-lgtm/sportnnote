@@ -19,13 +19,13 @@ import { kabaddiVoice } from '../voiceParsers';
 import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
 import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
-import { sum } from './rules';
+import { sum, doOrDieOn } from './rules';
 import { kabaddiTotals, kabaddiSuspended } from './totals.ts';
 
 import {
   init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints, defendersOnMat,
   expectedRaider, outPlayers, clockPaused, timeoutsUsed, TIMEOUTS_PER_HALF, TACKLE_TYPES,
-  formOutcome, matNow, unavailable, cardsOf, suggestedCard, TECH_REASONS, CARD_ICON,
+  formOutcome, matNow, kabaddiCfg, touchChips, unavailable, cardsOf, suggestedCard, TECH_REASONS, CARD_ICON,
   type KabaddiState, type KabaddiEvent, type CardColour,
 } from './engine.ts';
 
@@ -325,7 +325,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           {(['home', 'away'] as const).map((side) => {
             // SD-117b: raids alternate — the side due to raid is highlighted, the
             // other is a quiet button; ⚠ DoD when its next raid is do-or-die.
-            const dod = (state.proRules ?? true) && kEmpty[side] >= 2;
+            const dod = doOrDieOn(kabaddiCfg(state)) && kEmpty[side] >= 2;
             const due = expected === side;
             const nm = side === 'home' ? homeName : awayName;
             return (
@@ -343,7 +343,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
             <Button label="Cancel" variant="ghost" onPress={() => setRaidFlow(null)} />
           </View>
           {raidFlow.at && <Text style={ctrl.editBanner}>Editing the {raidFlow.at.minute}&apos; raid — saving replaces it in place.</Text>}
-          {raidFlow.editOf == null && (state.proRules ?? true) && kEmpty[raidFlow.side] >= 2 && (
+          {raidFlow.editOf == null && doOrDieOn(kabaddiCfg(state)) && kEmpty[raidFlow.side] >= 2 && (
             <Text style={ctrl.doOrDie}>⚠ DO-OR-DIE raid — the raider is out if this raid scores nothing.</Text>
           )}
           {onField(raidFlow.side, raidFlow.side === 'home' ? homeRoster : awayRoster).length > 0 && (
@@ -374,7 +374,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
                 <Text style={ctrl.meta}>Defenders touched (they go out) · {onMat} on the mat</Text>
                 {!noTouches && (
                   <View style={ctrl.chips}>
-                    {[0, 1, 2, 3, 4, 5].map((n) => (
+                    {/* SD-136: one chip per defender who can be on the mat (a
+                        6- or 7-touch raid is enterable); above the mat count is dimmed */}
+                    {touchChips(state.teamSize ?? 7, onMat).map((n) => (
                       <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} disabled={n > onMat} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
                     ))}
                   </View>
@@ -763,9 +765,12 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
     {
       key: 'preset', label: 'Rule set', type: 'preset', default: 'pro',
       options: [
-        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: true, subReturn: true, caughtTouches: 'void' } },
-        { value: 'circle', label: 'Circle style (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', proRules: false, subReturn: true, caughtTouches: 'void' } },
-        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: false, subReturn: true, caughtTouches: 'void' } },
+        // SD-136: super tackle is an AKFI / IKF rule (not PKL-only), so every
+        // preset keeps it; do-or-die is on for senior and women / junior play.
+        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', superTackle: true, doOrDie: true, subReturn: true, caughtTouches: 'void' } },
+        // stored value stays 'circle' (saved formats) — it was always standard 7-a-side over 2×15
+        { value: 'circle', label: 'Women / Junior (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', superTackle: true, doOrDie: true, subReturn: true, caughtTouches: 'void' } },
+        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', superTackle: true, doOrDie: false, subReturn: true, caughtTouches: 'void' } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -786,7 +791,10 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
         { value: 'golden_raid', label: 'Golden Raid straightaway' },
       ],
     },
-    { key: 'proRules', label: 'Pro rules (do-or-die, super tackle, bonus)', type: 'toggle', default: true },
+    // SD-136: was one "Pro rules (do-or-die, super tackle, bonus)" toggle (`proRules`,
+    // still read for older formats). The bonus line always applies (6+ defenders).
+    { key: 'superTackle', label: 'Super tackle (3 or fewer defenders: +2)', type: 'toggle', default: true, hint: 'AKFI / IKF / PKL' },
+    { key: 'doOrDie', label: 'Do-or-die raid (3rd empty raid: raider out)', type: 'toggle', default: true },
     // SD-83 (D6): AKFI / IKF — and PKL — a raider caught before getting back loses his touches
     {
       key: 'caughtTouches', label: 'Raider caught after touching', type: 'choice', default: 'void', advanced: true,

@@ -34,7 +34,7 @@ import type { PadelState } from './padel/engine.ts';
 import type { BadmintonState } from './badminton/engine.ts';
 import { creditedPoints as carromCredited, type CarromState } from './carrom/engine.ts';
 import { hockeyBox } from './hockey/box.ts';
-import { DETAIL_BOX_KEYS, detailPlayerCredits, detailTracked, type DetailSport } from './pointDetail.ts';
+import { DETAIL_BOX_KEYS, detailCoverage, detailPlayerCredits, detailTracked, type DetailSport } from './pointDetail.ts';
 import type { HockeyState } from './hockey/engine.ts';
 import { handballBox } from './handball/box.ts';
 import type { HandballState } from './handball/engine.ts';
@@ -448,7 +448,12 @@ function pointBox(events: LiveEvent[], ctx: BoxContext, periods: { value: number
   periodOf: (e: LiveEvent) => number | undefined; kinds: string[]; listRoster: boolean; aces?: boolean;
   /** SD-107 — the sport's point detail, when the match tracked it */
   detail?: DetailSport;
+  /** SD-135 (TN-b) — count `df` markers as the faulting server's doubleFaults */
+  dfs?: boolean;
 }): MatchBoxSource {
+  // SD-135 — the DF column only on a match with a marked double fault (older
+  // logs' double faults were plain points: the column stays hidden, not 0)
+  const dfOn = !!o.dfs && events.some((e) => !!e.df);
   return {
     periods,
     emptyText: 'No points yet.',
@@ -471,6 +476,20 @@ function pointBox(events: LiveEvent[], ctx: BoxContext, periods: { value: number
             const mine = detail.get(`${sd}|${r.name}`) ?? {};
             Object.assign(r.stats, Object.fromEntries(DETAIL_BOX_KEYS.map((k) => [k, mine[k] ?? 0])));
           }
+        }
+        if (dfOn) {
+          // a df point is the receiver's: the faulting server is on the other side
+          const faults = new Map<string, number>();
+          for (const e of events) {
+            if (!e.df || e.side === sd || (e.side !== 'home' && e.side !== 'away')) continue;
+            if (scope !== 'all' && o.periodOf(e) !== scope) continue;
+            const name = e.df.playerName ?? (e.df.playerId ? roster.find((p) => p.id === e.df!.playerId)?.fullName : undefined) ?? (roster.length === 1 ? roster[0].fullName : undefined);
+            if (name) faults.set(name, (faults.get(name) ?? 0) + 1);
+          }
+          for (const name of faults.keys()) {
+            if (!rows.some((r) => r.name === name)) rows.push(withId({ name, stats: { points: 0, ...(o.aces ? { aces: 0 } : null) } }, roster));
+          }
+          for (const r of rows) r.stats.doubleFaults = faults.get(r.name) ?? 0;
         }
         return { rows };
       };
@@ -499,14 +518,14 @@ function detailByName(sport: DetailSport, events: LiveEvent[], ctx: BoxContext):
 /** Table tennis / squash / pickleball (the rally engine): per game. `sport`
  *  names the point-detail options (SD-107; the rally state doesn't know it). */
 export const rallyBox = (s: RallyState, ctx: BoxContext = {}, sport?: 'tabletennis' | 'squash' | 'pickleball'): MatchBoxSource =>
-  pointBox(s.events, ctx, numbered(Math.max(1, s.games.length + 1), 'Game'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: sport && detailTracked(s) ? sport : undefined });
+  pointBox(s.events, ctx, numbered(Math.max(1, s.games.length + 1), 'Game'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: sport && detailCoverage(sport, s) === 'full' ? sport : undefined });
 
 export const padelBox = (s: PadelState, ctx: BoxContext = {}): MatchBoxSource =>
-  pointBox(s.events, ctx, numbered(Math.max(1, s.sets.length + 1), 'Set'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: detailTracked(s) ? 'padel' : undefined });
+  pointBox(s.events, ctx, numbered(Math.max(1, s.sets.length + 1), 'Set'), { periodOf: (e) => e.game ?? e.set, kinds: ['point'], listRoster: true, detail: detailCoverage('padel', s) === 'full' ? 'padel' : undefined });
 
 export function tennisBox(s: TennisState, ctx: BoxContext = {}): MatchBoxSource {
   const currentSet = s.setsWon.home + s.setsWon.away + 1;
-  return pointBox(s.events, ctx, numbered(s.ended ? s.sets.length : currentSet, 'Set'), { periodOf: (e) => e.set, kinds: ['point', 'ace'], listRoster: false, aces: true, detail: detailTracked(s) ? 'tennis' : undefined });
+  return pointBox(s.events, ctx, numbered(s.ended ? s.sets.length : currentSet, 'Set'), { periodOf: (e) => e.set, kinds: ['point', 'ace'], listRoster: false, aces: true, detail: detailTracked(s) ? 'tennis' : undefined, dfs: true });
 }
 
 export function badmintonBox(s: BadmintonState, ctx: BoxContext = {}): MatchBoxSource {

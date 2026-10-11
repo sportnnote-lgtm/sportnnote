@@ -12,7 +12,7 @@ In side-out pickleball only the serving team scores. You tap who won each rally;
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
-- **Format**, side-out: **Tournament (side-out · best of 3 to 11)**, **Tournament (side-out · 1 game to 15)**, **Tournament (side-out · 1 game to 21)**, **Medal match (side-out · best of 5 to 11)**. Rally: **Rally to 21 (1 game)**, **Rec (rally · 11)**, **Rec quick (rally · 11 · win by 1)**. **Custom** sets everything, including **Scoring**: **Side-out (tournament)** or **Rally (every rally scores)**.
+- Pick a **Format**: the **Tournament** and **Medal match** presets are side-out; **Rally to 21 (1 game)** and the **Rec** presets are rally scoring. **Custom** sets everything, including **Scoring**.
 - Add the players, or the server can't be named.
 
 ## Step by step: start a doubles game
@@ -32,16 +32,17 @@ The call is serving score, receiving score, server number, e.g. "Serving: Asha R
 
 ## Singles and rally scoring
 - Singles: serve from the right on an even score, left on odd. The call has two numbers, e.g. 3-1.
-- Rally scoring: every rally is a point and its winner serves. The buttons read "Point", and the status line gives the call with the server's score first, e.g. "Game 1 · Serving 4-2". Singles credits the player automatically; in doubles, crediting is optional: tap **credit a player** or long-press a side, then pick the name (**Cancel** closes it).
+- Rally scoring: every rally is a point and its winner serves. The status line gives the call with the server's score first, e.g. "Game 1 · Serving 4-2". In doubles, crediting a player is optional: tap **credit a player** or long-press a side.
+- Rally doubles: one server per turn. A team that wins a rally on its own serve swaps sides and the same player serves again. A team that wins the serve back doesn't swap; whoever stands on the right (even score) or left (odd score) serves. The serving line names them, e.g. "Serving: Bina Shah (left) · 3-2".
 
-## Points for players
-In side-out scoring a point goes to its server automatically, so there are no credit chips. "Box score" on the **Score** tab shows each player's points.
+## Change ends
+A banner shows **↔ Change ends** after each game, and in the last game when a team first reaches 6 (games to 11), 8 (to 15) or 11 (to 21). The same marks appear in the rally log. Up to 2 minutes are allowed between games.
 
 ## Reading the board
 A chip under the board shows **GAME POINT** or **MATCH POINT** with the team's name. In side-out scoring only the serving team can have one; in rally scoring both can show one at once.
 
 ## Match stats
-The **Score** tab's "Match stats" (per match or game) show side-outs, service turns and points per turn (side-out), points won on serve and receive (rally), streaks, and game or match points saved. Doubles adds "Service points won, by server".
+The **Score** tab shows "Match stats" (side-outs, points on serve and receive, streaks, game points saved; doubles adds points won by server) and a "Box score" of each player's points.
 
 ## Point detail (optional)
 Off by default. Turn it on with **On** in the "🔎 Point detail (optional)" row under the buttons.
@@ -55,12 +56,12 @@ Errors count against the opponent (doubles: pick who under **By:**).
 
 ## Games and the end of the match
 - A game ends at the target (11, 15 or 21) with a two-point lead, unless the format is win by 1.
-- The game's winner serves first next game, as server 2.
+- The first serve alternates each game (side-out: as server 2).
 - To stop early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 - Technical warnings and fouls, timeouts (2 per game, 3 to 21) and match time: see [Code violations, cards and timeouts](/guides/racket-conduct-and-timeouts/).
 
 ## Fix a mistake
-- Wrong tap just now? The Undo bar names what it removes, e.g. "↶ Undo: point to Red House (4-2)", "Undo: rally to Blue House · side-out" or "Undo: first-server pick". Each tap undoes one step; score, server and call go back too.
+- Wrong tap just now? The Undo bar names what it removes, e.g. "↶ Undo: point to Red House (4-2)". Score, server and call go back too.
 - Wrong player on the right? Mid-game, tap **Fix who started on the right** and pick the right player. The score stays; only the server's name updates.
 - Wrong first server in rally scoring? Tap **Fix who served first**. In side-out scoring there is no such link, because the server decides who can score; use **Correct the timeline** instead.
 - Older rally: tap **Edit** next to **Correct the timeline** on the **Scoring** tab.
@@ -75,4 +76,4 @@ The app replays the match; later serves follow any change.
 
 ## Common questions
 ### Why is there no MLP format?
-In MLP's rally scoring, from 20 a team can only win the game on its own serve. The app doesn't model that yet. **Rally to 21 (1 game)** plays the same length with every rally scoring.
+MLP's "freeze" at 20 isn't modelled yet. **Rally to 21 (1 game)** plays the same length with every rally scoring.

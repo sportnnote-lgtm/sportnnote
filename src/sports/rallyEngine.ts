@@ -54,6 +54,15 @@ export interface RallyState {
    *  game. Set by the toss pick of matches scored from SD-65 on (`alt: true` on
    *  SET_FIRST_SERVER); absent (every older match) → the game winner serves first. */
   altGames?: boolean;
+  /** SD-135 — pickleball rally-scoring doubles positions (USA Pickleball
+   *  provisional rally scoring; standard positioning rules apply): players
+   *  switch courts only after winning a rally on their own serve, and the
+   *  server is whoever stands in the court matching the team's score (even →
+   *  right, odd → left) — so the same player keeps serving through a run.
+   *  Set by the toss pick of matches scored from SD-135 on (`pos: 2` on
+   *  SET_FIRST_SERVER); absent (older matches) → the SD-06 naming (the
+   *  right-court starter by score parity). Never affects the score. */
+  rallyPos?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -180,7 +189,7 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
         }
         return { ...s, opening: side, serving: anyPoint ? s.serving : side, serverPicked: true };
       }
-      return { ...s, opening: side, serving: side, serverPicked: true, ...(a.payload?.alt === true ? { altGames: true } : {}) };
+      return { ...s, opening: side, serving: side, serverPicked: true, ...(a.payload?.alt === true ? { altGames: true } : {}), ...(a.payload?.pos === 2 ? { rallyPos: true } : {}) };
     }
     // SD-62 — table tennis doubles: who serves / receives first in this game
     // (player ids). New payload on the SET_SERVE_ORDER type; other rally sports
@@ -191,6 +200,16 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
     if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
     if (a.type !== 'POINT' || !a.side || s.ended) return s;
+    // SD-135 — a point that carries its detail (squash Stroke / No let quick
+    // buttons): annotated exactly as a POINT_DETAIL right after it would be
+    // (new optional payload key — older logs never carry it).
+    if (a.payload?.pd != null) {
+      const { pd, ...rest } = a.payload;
+      const next = core(s, { ...a, payload: rest });
+      if (next === s) return s;
+      const ev = applyPointDetail(next.events, { pd });
+      return ev ? { ...next, events: ev } : next;
+    }
     const gameNo = s.games.length + 1;
 
     // Side-out scoring: the action says who WON the rally.
@@ -276,6 +295,33 @@ export interface ServeSpot {
   call: string;
 }
 
+/** SD-135 — rally-scoring doubles: is the serving player of `side` the team's
+ *  game starter (right court at 0-0)? With `rallyPos` the team's players have
+ *  switched once per rally it won on its own serve this game, and the server
+ *  stands in the court of the team's score parity. Older matches: SD-06
+ *  (starter on an even score). */
+export function rallyDoublesStarter(s: RallyState, side: 'home' | 'away', gamePts?: Array<'home' | 'away'>): boolean {
+  const even = s.current[side] % 2 === 0;
+  if (!s.rallyPos) return even;
+  // who won each point of this game, in order (`gamePts` when the caller
+  // replays without the log — serveStats); else the game's last n points
+  let won: Array<'home' | 'away'> = gamePts ?? [];
+  if (!gamePts) {
+    const n = s.current.home + s.current.away;
+    for (let i = (s.events?.length ?? 0) - 1; i >= 0 && won.length < n; i--) {
+      const e = s.events[i];
+      if (e.kind === 'point' && (e.side === 'home' || e.side === 'away')) won = [e.side, ...won];
+    }
+  }
+  let srv: 'home' | 'away' = s.games.length === 0 ? s.opening ?? s.serving : s.serving;
+  let swaps = 0;
+  for (const w of won) {
+    if (w === srv && w === side) swaps += 1;
+    srv = w;
+  }
+  return (swaps % 2 === 0) === even;
+}
+
 /** Who serves and from which court, as a pure function of the state. */
 export function serveSpot(s: RallyState): ServeSpot {
   const side = rallyServingSide(s);
@@ -283,7 +329,7 @@ export function serveSpot(s: RallyState): ServeSpot {
   const even = own % 2 === 0;
   const call2 = `${own}-${s.current[other(side)]}`;
   if (!s.doubles) return { side, starter: true, court: even ? 'right' : 'left', call: call2 };
-  if (!s.sideOut) return { side, starter: even, court: 'right', call: call2 };
+  if (!s.sideOut) return { side, starter: rallyDoublesStarter(s, side), court: s.rallyPos && !even ? 'left' : 'right', call: call2 };
   const starter = s.srvStarter ?? true;
   return { side, starter, court: starter === even ? 'right' : 'left', call: `${call2}-${s.serverNo}` };
 }
