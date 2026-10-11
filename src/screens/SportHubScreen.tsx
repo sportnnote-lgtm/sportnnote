@@ -14,6 +14,7 @@ import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { LeagueTable } from '../components/LeagueTable';
 import { columnsConfig } from '../data/standingsColumns';
 import { StatLeaderRail } from '../components/StatLeaderRail';
+import { LeaderSplitChips, useLeaderSplits } from '../components/LeaderSplitChips';
 import { DivisionTabs } from '../components/DivisionTabs';
 import { GolfTournamentHub } from '../components/golf/GolfTournamentHub';
 import { AthleticsHub } from '../components/athletics/AthleticsHub';
@@ -59,7 +60,11 @@ export default function SportHubScreen() {
   // SD-18: the sport's column units (sets / games / rally points) filled in.
   const tableCfg = useMemo(() => columnsConfig(sport, standingsConfigFromFormat(sport, tournament?.formats?.[sport])), [sport, tournament]);
   const table = useMemo(() => standingsPhases(divMatches, sport, tableCfg)[0]?.rows ?? [], [divMatches, sport, tableCfg]);
-  const categories = useMemo(() => categoryLeaders(lines, players, sport, { matches }), [lines, players, sport, matches]);
+  // SD-43: cricket leaders by format / ball (the SD-25 line context); with no
+  // tournament the hub spans every tournament, so the hook loads them
+  const tourList = useMemo(() => (tournamentId ? (tournament ? [tournament] : []) : undefined), [tournamentId, tournament]);
+  const leaderScope = useLeaderSplits(sport, lines, matches, tourList);
+  const categories = useMemo(() => categoryLeaders(leaderScope.lines, players, sport, { matches }), [leaderScope.lines, players, sport, matches]);
 
   const canScore = canScoreByRole(profile?.role);
   // "See all" opens the full Matches browser filtered to this sport + section.
@@ -145,11 +150,16 @@ export default function SportHubScreen() {
           emptyLabel={`No completed ${plugin.name.toLowerCase()} matches yet.`}
         />
 
-        {categories.length > 0 && (
+        {(categories.length > 0 || leaderScope.options.length > 0) && (
           <>
             <Text style={[textStyles.h3, st.section]}>📊 Statistics</Text>
-            <Text style={textStyles.muted}>Swipe for more leaderboards →</Text>
-            <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+            <LeaderSplitChips scope={leaderScope} note="Leaders from" />
+            {categories.length > 0 ? (
+              <>
+                <Text style={textStyles.muted}>Swipe for more leaderboards →</Text>
+                <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+              </>
+            ) : <Text style={textStyles.muted}>No leaders for this filter yet.</Text>}
           </>
         )}
 

@@ -319,3 +319,33 @@ export function filterLines(lines: StatLine[], ctxOf: Map<string, LineContext>, 
     return chosen.every(([dim, key]) => splitValue(ctx, dim)?.key === key);
   });
 }
+
+/* ------------------------- SD-43 — leaderboard splits ------------------------- */
+
+export interface SplitScope {
+  /** the chips on offer (declared dims with ≥ 2 values among the lines) */
+  options: SplitOption[];
+  /** the selection, keeping only values still on offer */
+  active: SplitSelection;
+  /** the lines in scope: `sport`'s lines filtered, every other line untouched */
+  lines: StatLine[];
+  /** "T20 · Leather" — what the scope is ('' when unfiltered) */
+  label: string;
+}
+
+/** SD-43 — scope a tournament / sport-hub leaderboard (or the awards
+ *  rankings) to a format / ball: the same SD-25 line context and filter as the
+ *  profile chips. Only `sport`'s lines are filtered (a multi-sport tournament's
+ *  other lines pass through). No selection → the same array. */
+export function scopeBySplits(
+  lines: StatLine[], ctxOf: Map<string, LineContext>, sport: SportId, dims: readonly SplitDim[], sel: SplitSelection,
+): SplitScope {
+  const mine = lines.filter((l) => l.sport === sport);
+  const options = dims.length ? splitOptions(mine, ctxOf, dims) : [];
+  const active: SplitSelection = {};
+  for (const o of options) { const k = sel[o.dim]; if (k != null && o.values.some((x) => x.key === k)) active[o.dim] = k; }
+  if (!Object.keys(active).length) return { options, active, lines, label: '' };
+  const keep = new Set(filterLines(mine, ctxOf, active).map((l) => l.id));
+  const label = options.map((o) => o.values.find((x) => x.key === active[o.dim])?.label).filter(Boolean).join(' · ');
+  return { options, active, lines: lines.filter((l) => l.sport !== sport || keep.has(l.id)), label };
+}

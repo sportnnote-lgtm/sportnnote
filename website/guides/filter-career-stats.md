@@ -5,7 +5,7 @@ category: Teams & players
 audience: Players, Parents & fans, Captains
 sports: all
 order: 40
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 A player's sport page shows their career in that sport: the record, then sections of totals, averages, rates and bests. A career mixes everything, though: a box-cricket match with a T20 final, a doubles win with a singles loss. Filter chips show one slice at a time, and every figure is worked out again for just those matches.
@@ -48,6 +48,8 @@ A player's sport page shows their career in that sport: the record, then section
 - **Chess**: **Colour** (White or Black), **Time control** (classical, rapid, blitz, bullet, untimed), **Tournament**, **Season**, **Opponent**.
 - **Football, basketball, volleyball, kabaddi**: **Format** (for example 7-a-side, 3x3, Indoor or Beach), **Tournament**, **Season**, **Opponent**.
 - Golf has its own page and no filter chips yet.
+
+Cricket's **Format** and **Ball** chips also sit above a tournament's or sport page's leaders and the awards rankings, so a T20 can be ranked apart from box cricket.
 
 ## Where the details come from
 Each filter reads the match the stats came from: its format, tournament, date and teams. Nothing extra has to be entered.

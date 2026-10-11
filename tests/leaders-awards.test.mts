@@ -55,7 +55,9 @@ describe('SD-27 — sport-correct leader categories', () => {
     // football keeps its 14 and appends goals per 90 / save %; cricket keeps SD-16's records
     assert.deepEqual(keys('football').slice(-2), ['goalsPer90', 'savePct']);
     assert.equal(keys('football').length, 16);
-    assert.deepEqual(keys('cricket'), ['runs', 'wickets', 'catches', 'highest', 'best', 'avg', 'sr', 'econ', 'fifties', 'hundreds']);
+    // SD-38 / SD-69 appended 4s / 6s / maidens / dots / ducks / keeper dismissals
+    assert.deepEqual(keys('cricket'), ['runs', 'wickets', 'catches', 'highest', 'best', 'avg', 'sr', 'econ', 'fifties', 'hundreds',
+      'fours', 'sixes', 'maidens', 'dots', 'ducks', 'wkDismissals']);
   });
   test('racket sports never rank or award rally points; no "Top scorer"', () => {
     for (const sp of RACKET) {

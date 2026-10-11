@@ -19,6 +19,7 @@ import {
 } from '../data/ratings';
 import type { Match, Player, SportId, StatLine, Tournament, TournamentAward, TournamentAwards } from '../core/types';
 import { readLeaderMins, type LeaderMins } from '../data/leaderMinimums';
+import { LeaderSplitChips, useLeaderSplits } from './LeaderSplitChips';
 
 const CUSTOM_SUGGESTIONS = ['Best fielder', 'Emerging player', 'Fair play', 'Best goalkeeper'];
 
@@ -60,10 +61,20 @@ export function TournamentAwardsTab({
     };
   }, [matchIds, matches, savedMins, tournament.formats]);
 
+  // SD-43: the host can rank the active sport's awards on one format / ball
+  // (cricket T20 / Leather…); other sports' lines pass through. Published
+  // awards are never recomputed.
+  const tourList = useMemo(() => [tournament], [tournament]);
+  const splitScope = useLeaderSplits(sport, lines, matches, tourList);
+  const rankLines = splitScope.lines;
+  // a winner ranked on one format says so ("312 runs · T20 · Leather")
+  const scoped = (a: TournamentAward): TournamentAward =>
+    (splitScope.label && a.sport === sport ? { ...a, detail: [a.detail, splitScope.label].filter(Boolean).join(' · ') } : a);
   // Suggestions for every sport (the #1 candidate per slot).
   const suggested = useMemo(
-    () => sports.flatMap((sp) => defaultAwards(lines, players, sp, optsFor(sp))),
-    [sports, lines, players, optsFor],
+    () => sports.flatMap((sp) => defaultAwards(rankLines, players, sp, optsFor(sp))).map(scoped),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sports, rankLines, players, optsFor, splitScope.label, sport],
   );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<TournamentAward[] | null>(null);
@@ -83,35 +94,35 @@ export function TournamentAwardsTab({
 
   // Players with a stat line in this sport here — custom awards go only to them.
   const candidatesMvp = useMemo(
-    () => (sport ? rankAwardCandidates(lines, players, sport, 'mvp', Number.MAX_SAFE_INTEGER, optsFor(sport)) : []),
-    [lines, players, sport, optsFor],
+    () => (sport ? rankAwardCandidates(rankLines, players, sport, 'mvp', Number.MAX_SAFE_INTEGER, optsFor(sport)) : []),
+    [rankLines, players, sport, optsFor],
   );
   const linePlayerRows = useMemo((): PickerRow[] => {
     if (!sport) return [];
     const byId = new Map(players.map((p) => [p.id, p] as const));
     const mvpBy = new Map(candidatesMvp.map((c) => [c.playerId, c] as const));
     const games = new Map<string, number>();
-    for (const l of lines) if (l.sport === sport && matchIds.has(l.matchId)) games.set(l.playerId, (games.get(l.playerId) ?? 0) + 1);
+    for (const l of rankLines) if (l.sport === sport && matchIds.has(l.matchId)) games.set(l.playerId, (games.get(l.playerId) ?? 0) + 1);
     return [...games.entries()].map(([pid, g]) => {
       const p = byId.get(pid);
       return { id: pid, name: p?.fullName ?? 'Player', teamName: p?.houseName, teamColor: p?.houseColor, detail: mvpBy.get(pid)?.detail ?? `${g} m` };
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [sport, players, lines, matchIds, candidatesMvp]);
+  }, [sport, players, rankLines, matchIds, candidatesMvp]);
 
   const toRow = (c: AwardCandidate): PickerRow => ({ id: c.playerId, name: c.name, teamName: c.teamName, teamColor: c.teamColor, detail: c.detail, value: c.display ?? c.value });
   const pickerRows = useMemo((): PickerRow[] => {
     if (!picker) return [];
     if (picker.kind === 'custom') return linePlayerRows;
-    return rankAwardCandidates(lines, players, picker.sport, picker.slot, 10, optsFor(picker.sport)).map(toRow);
-  }, [picker, lines, players, optsFor, linePlayerRows]);
+    return rankAwardCandidates(rankLines, players, picker.sport, picker.slot, 10, optsFor(picker.sport)).map(toRow);
+  }, [picker, rankLines, players, optsFor, linePlayerRows]);
 
   const onPick = (row: PickerRow) => {
     if (!picker) return;
     if (picker.kind === 'slot') {
-      const c = rankAwardCandidates(lines, players, picker.sport, picker.slot, Number.MAX_SAFE_INTEGER, optsFor(picker.sport)).find((x) => x.playerId === row.id);
+      const c = rankAwardCandidates(rankLines, players, picker.sport, picker.slot, Number.MAX_SAFE_INTEGER, optsFor(picker.sport)).find((x) => x.playerId === row.id);
       if (c) {
         const id = awardId(picker.sport, picker.slot);
-        const next = awardFrom(picker.sport, picker.slot, picker.label, c);
+        const next = scoped(awardFrom(picker.sport, picker.slot, picker.label, c));
         mutate(id, (items) => (items.some((i) => i.id === id) ? items.map((i) => (i.id === id ? next : i)) : [...items, next]));
       }
     } else {
@@ -241,13 +252,14 @@ export function TournamentAwardsTab({
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         {sportRow}
+        <LeaderSplitChips scope={splitScope} note="Suggestions and rankings use" />
         {!hasPlayers && sportItems.length === 0 ? (
           <EmptyState icon="🏆" title="Awards" hint="Suggestions appear once matches have player stats." />
         ) : (
           <>
             <Text style={textStyles.muted}>{published ? 'Edit the awards, then tap Update.' : 'Pre-filled from the stats — change any, then publish.'}</Text>
             {slots.map((s) => {
-              const has = sport ? rankAwardCandidates(lines, players, sport, s.slot, 1, optsFor(sport)).length > 0 : false;
+              const has = sport ? rankAwardCandidates(rankLines, players, sport, s.slot, 1, optsFor(sport)).length > 0 : false;
               return slotCard(s.slot, s.label, s.icon, current.find((i) => i.id === awardId(sport!, s.slot)),
                 has ? () => setPicker({ kind: 'slot', sport: sport!, slot: s.slot, label: s.label }) : undefined);
             })}

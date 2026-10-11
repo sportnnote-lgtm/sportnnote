@@ -19,7 +19,7 @@
  */
 import type { Match, SportId, StatLine } from '../core/types';
 import type { LineResult } from '../core/types';
-import { aggregateValue, careerFromSchema, hasKey, trackedIn, statDefIn, statInputs, type SportStatSchema } from '../sports/statSchema.ts';
+import { aggregateValue, careerFromSchema, coverageOf, hasKey, lineOutcome, trackedIn, statDefIn, statInputs, type SportStatSchema } from '../sports/statSchema.ts';
 import { labelShort, statSchema } from '../sports/statSchemas.ts';
 import { sideOf, type LineContext } from './lineContext.ts';
 import { deriveSeries, readSeriesMeta, seriesWinnerId } from './series.ts';
@@ -66,7 +66,12 @@ export interface CareerSection { id: string; title: string; rows: CareerRow[] }
 export function careerSections(schema: SportStatSchema<SportId>, lines: StatLine[]): CareerSection[] {
   if (schema.sport === 'cricket') {
     const c = careerFromSchema(schema, lines);
-    return (schema.sections ?? []).map((s) => ({ id: s.id, title: s.title, rows: c[s.id] ?? [] }));
+    // SD-79: a row only some lines can give (BF, ducks, 4w…) says over how many
+    return (schema.sections ?? []).map((s) => ({ id: s.id, title: s.title, rows: (c[s.id] ?? []).map((r) => {
+      const def = statDefIn(schema, r.key);
+      const coverage = def ? coverageOf(schema, def, lines) : undefined;
+      return coverage ? { ...r, coverage } : r;
+    }) }));
   }
   const out: CareerSection[] = [];
   for (const sec of schema.sections ?? []) {
@@ -215,6 +220,43 @@ export function partnerRecords(
 /** Doubles lines the partner pairing needs other players' lines for. */
 export const doublesMatchIds = (lines: StatLine[], ctxOf: Map<string, LineContext>): string[] =>
   [...new Set(lines.filter((l) => l.matchId && ['doubles', 'mixed'].includes(ctxOf.get(l.id)?.discipline?.key ?? '')).map((l) => l.matchId))];
+
+/* -------------------------------- captaincy -------------------------------- */
+
+export interface CaptaincyRecord {
+  /** matches as captain (in play ones included) */
+  matches: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  noResults: number;
+  /** "67%" — wins over matches with a result (W + L + T), as the header's Win % */
+  winPct: string;
+  /** "5-2" or, with a tie, "5-2-1" (W-L-T) */
+  record: string;
+}
+
+/** SD-69 — a cricket player's record as captain: the lines stamped `capt`
+ *  (statTotals, from SET_CAPTAIN — lines synced before SD-69 carry it only
+ *  after the backfill re-sync). Null when they never captained. */
+export function captaincyRecord(lines: StatLine[]): CaptaincyRecord | null {
+  const mine = lines.filter((l) => (Number(l.stats?.capt ?? 0) || 0) > 0);
+  if (!mine.length) return null;
+  const r = { matches: mine.length, wins: 0, losses: 0, ties: 0, noResults: 0 };
+  for (const l of mine) {
+    const o = lineOutcome(l);
+    if (o === 'W') r.wins += 1;
+    else if (o === 'L') r.losses += 1;
+    else if (o === 'T' || o === 'D') r.ties += 1;
+    else if (o === 'NR') r.noResults += 1;
+  }
+  const decided = r.wins + r.losses + r.ties;
+  return {
+    ...r,
+    winPct: decided ? `${Math.round((r.wins / decided) * 100)}%` : '–',
+    record: r.ties ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`,
+  };
+}
 
 /* ------------------------------- match history ------------------------------- */
 

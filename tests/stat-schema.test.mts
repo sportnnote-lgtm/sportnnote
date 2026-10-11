@@ -196,7 +196,8 @@ describe('SD-15 — the old maps are derived views, equal to the golden values',
     assert.deepEqual(now, pick(golden.STAT_CATEGORIES));
     assert.deepEqual(STAT_CATEGORIES.football.slice(golden.STAT_CATEGORIES.football.length).map((c) => c.key), ['goalsPer90', 'savePct']);
     assert.deepEqual(STAT_CATEGORIES.cricket.slice(golden.STAT_CATEGORIES.cricket.length).map((c) => c.label),
-      ['Highest score', 'Best bowling', 'Best batting average', 'Best strike rate', 'Best economy', 'Most 50s', 'Most 100s']);
+      ['Highest score', 'Best bowling', 'Best batting average', 'Best strike rate', 'Best economy', 'Most 50s', 'Most 100s',
+        'Most 4s', 'Most 6s', 'Most maidens', 'Most dot balls', 'Most ducks', 'Most keeper dismissals']);
     for (const sp of KEPT) assert.deepEqual(leaderStat(sp as SportId), golden.leaderStat[sp]);
   });
   test('headline order', () => {
@@ -290,14 +291,18 @@ describe('SD-15 — leaders, awards, ratings and summaries render as before', ()
 
 describe('SD-15 — cricket is the proof spec: its career renders identically from the schema', () => {
   test('Batting / Bowling / Fielding on every fixture (legacy lines, no bowling, bowling only, empty)', () => {
+    // SD-79 / SD-69 added rows a full scorecard line gives (BF, ducks, bowling
+    // innings, 4w / 5w) and keeper rows: the golden rows are unchanged around them
+    const NEW = new Set(['bf', 'ducks', 'bowlInnings', 'fourW', 'fiveW', 'wkCatches', 'wkDismissals']);
+    const old = (c: Record<string, { key: string }[]>) => Object.fromEntries(Object.entries(c).map(([k, rows]) => [k, rows.filter((r) => !NEW.has(r.key))]));
     for (const [name, ls] of Object.entries(golden.cricketFixtures as Record<string, StatLine[]>)) {
-      assert.deepEqual(cricketCareer(ls), golden.cricketCareer[name], name);
+      assert.deepEqual(old(cricketCareer(ls) as never), golden.cricketCareer[name], name);
     }
   });
   test('the career is the schema: sections, rows and labels come from cricket/stats.ts', () => {
     const c = careerFromSchema(STAT_SCHEMAS.cricket, (golden.cricketFixtures.mixed as StatLine[]).filter((l) => l.sport === 'cricket'));
     assert.deepEqual(Object.keys(c), ['batting', 'bowling', 'fielding']);
-    assert.deepEqual(c.bowling.map((r) => r.label), ['Overs', 'Wickets', 'Runs', 'Maidens', 'Dots', 'Econ', 'Avg', 'SR', 'Best']);
+    assert.deepEqual(c.bowling.map((r) => r.label), ['Overs', 'Wickets', 'Runs', 'Maidens', 'Dots', 'Econ', 'Avg', 'SR', 'Best', 'Inns', '4w', '5w']);
     assert.equal(bestBowling(golden.cricketFixtures.mixed), golden.cricketCareer.mixed.bowling.find((r: { key: string }) => r.key === 'best').value);
     assert.equal(highestScore(golden.cricketFixtures.mixed), golden.cricketCareer.mixed.batting.find((r: { key: string }) => r.key === 'highest').value);
   });

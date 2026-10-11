@@ -17,7 +17,7 @@ import { parseTournamentToken } from '../core/tournamentInvite';
 import { getDeviceId } from '../core/deviceId';
 import { snapshotOutcome } from '../core/matchResult';
 import { followDisputes } from './eventLog';
-import { planStatSync, applyStatWrites, type MatchTotals } from './statSync';
+import { planStatSync, applyStatWrites, onlyKeys, changedKeys, type MatchTotals } from './statSync';
 import { planAppearances, sideResults, subsCameOn, type AppearanceWrite } from './appearances';
 import { mergeSportFormat } from './formatPatch';
 import { isLiveTournament } from './tournamentForm';
@@ -1778,10 +1778,13 @@ export async function matchStatTotals(matchId: string, sport: SportId, state: un
 export async function resyncSportLines(
   sport: SportId,
   matchIds?: string[],
-  opts: { dryRun?: boolean } = {},
-): Promise<{ matches: number; rowsWritten: number; perMatch: { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped' }[] }> {
+  /** SD-69: `keys` = write ONLY these stat keys (every other figure on the
+   *  lines stays exactly as stored); a dry run also lists the keys it would
+   *  change per match (`perMatch[].keys`) */
+  opts: { dryRun?: boolean; keys?: string[] } = {},
+): Promise<{ matches: number; rowsWritten: number; perMatch: { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped'; keys?: string[] }[] }> {
   const plugin = getSport(sport);
-  const out = { matches: 0, rowsWritten: 0, perMatch: [] as { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped' }[] };
+  const out = { matches: 0, rowsWritten: 0, perMatch: [] as { matchId: string; rows: number; source: 'log' | 'snapshot' | 'skipped'; keys?: string[] }[] };
   if (!plugin.statTotals) return out;
   const all = matchIds?.length
     ? (await Promise.all(matchIds.map((id) => getMatch(id)))).filter((m): m is Match => !!m)
@@ -1798,26 +1801,44 @@ export async function resyncSportLines(
     if (raw.length) state = replayLog(plugin, config, raw);
     else if (m.state) { state = m.state; source = 'snapshot'; }
     else { out.perMatch.push({ matchId: m.id, rows: 0, source: 'skipped' }); continue; }
-    const totals = await matchStatTotals(m.id, sport, state, m);
-    if (!totals) continue;
+    const all = await matchStatTotals(m.id, sport, state, m);
+    if (!all) continue;
+    const totals = opts.keys ? onlyKeys(all, opts.keys) : all;
     let rows = 0;
+    let keys: string[] | undefined;
     if (opts.dryRun) {
       const mapId = await disputeMapper(m.id);
       const existing = (await getMatchStatLines(m.id)).filter((l) => l.sport === sport && !l.eventId);
-      rows = planStatSync(existing, totals, mapId, { home: m.homeTeam.name, away: m.awayTeam.name }).length;
+      const writes = planStatSync(existing, totals, mapId, { home: m.homeTeam.name, away: m.awayTeam.name });
+      rows = writes.length;
+      keys = changedKeys(existing, writes);
     } else {
       rows = await syncMatchStatLines(m.id, sport, totals, { home: m.homeTeam.name, away: m.awayTeam.name });
     }
     out.rowsWritten += rows;
-    out.perMatch.push({ matchId: m.id, rows, source });
+    out.perMatch.push({ matchId: m.id, rows, source, ...(keys ? { keys } : {}) });
   }
   return out;
+}
+
+/** SD-69 — the one-off BACKFILL for cricket captain / keeper flags: replays
+ *  every completed cricket match's stored log and writes ONLY `capt`, `wk`
+ *  and `wkCatches` (from SET_CAPTAIN / SET_KEEPER + the dismissals), so old
+ *  matches gain the Captaincy record and keeper dismissals without any other
+ *  figure moving. Not run automatically — in the signed-in web console:
+ *    await __sportnnoteAdmin.backfillCricketCaptainKeeper({ dryRun: true })
+ *  then without `dryRun` to write. A match with no stored log falls back to
+ *  its snapshot (which also holds `captains` / `keepers`). */
+export const CRICKET_SD69_KEYS = ['capt', 'wk', 'wkCatches'];
+export function backfillCricketCaptainKeeper(opts: { dryRun?: boolean; matchIds?: string[] } = {}) {
+  return resyncSportLines('cricket', opts.matchIds, { dryRun: opts.dryRun, keys: CRICKET_SD69_KEYS });
 }
 
 // SD-19: the founder's console handle for the D2 backfill (web: devtools).
 (globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin = {
   ...(((globalThis as unknown as Record<string, unknown>).__sportnnoteAdmin as object | undefined) ?? {}),
   resyncSportLines,
+  backfillCricketCaptainKeeper,
 };
 
 /** SD-11 (GEN-01) — at completion: an appearance line for every player who

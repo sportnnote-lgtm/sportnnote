@@ -38,12 +38,18 @@ export const cricketStats: SportStatSchema<'cricket'> = {
   sport: 'cricket',
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'ball', 'tournament', 'season', 'opponent'],
+  /** SD-43 — tournament / sport-hub leaders and awards filter by format + ball */
+  leaderSplits: ['format', 'ball'],
   filters: {
     batted,
     /** #19 lines: innings / notOut / ballsFaced known */
     full: (l) => batted(l) && hasKey(l, 'innings'),
     bowled: (l) => hasKey(l, 'ballsBowled'),
     bowlFigures: (l) => hasKey(l, 'runsConceded'),
+    /** SD-79 — a line that bowled (a pre-#19 line says so only by a wicket) */
+    bowledAny: (l) => hasKey(l, 'ballsBowled') || n(l, 'wickets') > 0,
+    /** SD-69 — kept wicket in this match (`wk`, from statTotals: re-synced lines) */
+    kept: (l) => n(l, 'wk') > 0,
   },
   stats: [
     // ── batting
@@ -52,8 +58,15 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { key: 'innings', label: 'Innings', short: 'innings', group: 'batting', agg: { kind: 'sum', over: 'batted', missing: 1 } },
     { key: 'notOut', label: 'Not out', short: 'not out', group: 'batting', agg: { kind: 'sum', over: 'full' } },
     { key: 'ballsFaced', label: 'Balls faced', short: 'balls faced', one: 'ball faced', abbr: 'B', group: 'batting' },
-    { key: 'fours', label: '4s', abbr: '4s', group: 'batting' },
-    { key: 'sixes', label: '6s', abbr: '6s', group: 'batting' },
+    { key: 'fours', label: '4s', leaderLabel: 'Most 4s', abbr: '4s', group: 'batting', tieBreak: [{ key: 'runs', better: 'higher' }] },
+    { key: 'sixes', label: '6s', leaderLabel: 'Most 6s', abbr: '6s', group: 'batting', tieBreak: [{ key: 'runs', better: 'higher' }] },
+    // SD-79 — balls faced over full scorecard lines (a pre-#19 line has none:
+    // the coverage note says over how many innings)
+    { key: 'bf', label: 'Balls faced', abbr: 'BF', source: 'derived', group: 'batting', agg: { kind: 'sum', key: 'ballsFaced', over: 'full' }, coverOf: 'batted' },
+    // SD-38 / SD-79 — a duck: out (not retired hurt — that's not out) for 0.
+    // Read from the #19 keys (runs 0 and notOut 0 on a full line)
+    { key: 'ducks', label: 'Ducks', leaderLabel: 'Most ducks', short: 'ducks', one: 'duck', source: 'derived', group: 'batting',
+      agg: { kind: 'countIf', keys: ['runs', 'notOut'], lt: 1, over: 'full' }, coverOf: 'batted', tieBreak: [{ key: 'innings', better: 'lower' }] },
     { key: 'highest', label: 'Highest', leaderLabel: 'Highest score', abbr: 'HS', source: 'derived', group: 'batting', format: { unit: 'figure' },
       agg: { kind: 'best', over: 'batted', by: [{ key: 'runs', better: 'higher' }, { key: 'notOut', better: 'higher' }], render: (s) => `${Number(s.runs ?? 0) || 0}${(Number(s.notOut ?? 0) || 0) > 0 ? '*' : ''}` } },
     { key: 'avg', label: 'Batting average', leaderLabel: 'Best batting average', abbr: 'Avg', source: 'derived', group: 'batting', format: { unit: 'decimal', dp: 2 },
@@ -67,8 +80,14 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { key: 'ballsBowled', label: 'Balls bowled', short: 'balls bowled', one: 'ball bowled', group: 'bowling', agg: { kind: 'sum', over: 'bowled' } },
     { key: 'overs', label: 'Overs', abbr: 'O', source: 'derived', group: 'bowling', format: { unit: 'overs' }, agg: { kind: 'sum', key: 'ballsBowled', over: 'bowled' } },
     { key: 'runsConceded', label: 'Runs conceded', short: 'runs conceded', one: 'run conceded', abbr: 'R', group: 'bowling', format: { unit: 'count', better: 'lower' }, agg: { kind: 'sum', over: 'bowled' } },
-    { key: 'maidens', label: 'Maidens', short: 'maidens', one: 'maiden', abbr: 'M', group: 'bowling' },
-    { key: 'dots', label: 'Dots', short: 'dots', one: 'dot', group: 'bowling' },
+    { key: 'maidens', label: 'Maidens', leaderLabel: 'Most maidens', short: 'maidens', one: 'maiden', abbr: 'M', group: 'bowling', tieBreak: [{ key: 'wickets', better: 'higher' }] },
+    { key: 'dots', label: 'Dots', leaderLabel: 'Most dot balls', short: 'dots', one: 'dot', group: 'bowling', tieBreak: [{ key: 'ballsBowled', better: 'lower' }] },
+    // SD-79 — bowling innings and 4- / 5-wicket hauls (Statsguru 4w = exactly
+    // 4, 5w = 5 or more) from full bowling lines
+    { key: 'bowlInnings', label: 'Bowling innings', short: 'innings bowled', source: 'derived', group: 'bowling',
+      agg: { kind: 'countIf', key: 'ballsBowled', gte: 1, over: 'bowled' }, coverOf: 'bowledAny' },
+    { key: 'fourW', label: '4w', source: 'derived', group: 'bowling', agg: { kind: 'countIf', key: 'wickets', gte: 4, lt: 5, over: 'bowled' }, coverOf: 'bowledAny' },
+    { key: 'fiveW', label: '5w', source: 'derived', group: 'bowling', agg: { kind: 'countIf', key: 'wickets', gte: 5, over: 'bowled' }, coverOf: 'bowledAny' },
     { key: 'wides', label: 'Wides', short: 'wides', one: 'wide', group: 'bowling' },
     { key: 'noBalls', label: 'No balls', short: 'no balls', one: 'no ball', group: 'bowling' },
     { key: 'econ', label: 'Economy', leaderLabel: 'Best economy', abbr: 'Econ', source: 'derived', group: 'bowling', format: { unit: 'decimal', dp: 2, better: 'lower' },
@@ -87,26 +106,44 @@ export const cricketStats: SportStatSchema<'cricket'> = {
     { key: 'dropped', label: 'Drops', short: 'drops', one: 'drop', group: 'fielding' },
     { key: 'runsSaved', label: 'Runs saved', short: 'runs saved', group: 'fielding' },
     { key: 'runsMissed', label: 'Runs missed', short: 'runs missed', group: 'fielding' },
+    // SD-69 — captain / keeper flags statTotals stamps on the line (1 = this
+    // match), keeper catches (a catch by the side's keeper); a line synced
+    // before SD-69 has none of them until the backfill re-sync
+    { key: 'capt', label: 'Captain', short: 'matches as captain', one: 'match as captain', group: 'captaincy' },
+    { key: 'wk', label: 'Wicket-keeper', short: 'matches keeping wicket', one: 'match keeping wicket', group: 'fielding' },
+    { key: 'wkCatches', label: 'Catches as keeper', short: 'catches as keeper', one: 'catch as keeper', abbr: 'Ct (wk)', group: 'fielding',
+      agg: { kind: 'sum', over: 'kept' }, coverOf: 'kept' },
+    { key: 'wkDismissals', label: 'Keeper dismissals', leaderLabel: 'Most keeper dismissals', short: 'keeper dismissals', one: 'keeper dismissal', source: 'derived', group: 'fielding',
+      agg: { kind: 'sum', keys: ['wkCatches', 'stumpings'], over: 'kept' }, coverOf: 'kept', tieBreak: [{ key: 'stumpings', better: 'higher' }] },
   ],
   sections: [
     { id: 'batting', title: 'Batting', rows: [
       { stat: 'runs' }, { stat: 'innings' }, { stat: 'notOut' }, { stat: 'highest' }, { stat: 'avg', label: 'Avg' }, { stat: 'sr', label: 'SR' },
       { stat: 'fours' }, { stat: 'sixes' }, { stat: 'fifties' }, { stat: 'hundreds' },
+      // SD-79 (shown once a full scorecard line gives them)
+      { stat: 'bf', label: 'BF' }, { stat: 'ducks' },
     ] },
     { id: 'bowling', title: 'Bowling', rows: [
       { stat: 'overs' }, { stat: 'wickets' }, { stat: 'runsConceded', label: 'Runs' }, { stat: 'maidens' }, { stat: 'dots' },
       { stat: 'econ', label: 'Econ' }, { stat: 'bowlAvg', label: 'Avg' }, { stat: 'bowlSr', label: 'SR' }, { stat: 'best', label: 'Best' },
+      // SD-79
+      { stat: 'bowlInnings', label: 'Inns' }, { stat: 'fourW' }, { stat: 'fiveW' },
     ] },
-    { id: 'fielding', title: 'Fielding', rows: ['catches', 'stumpings', 'runouts', 'dropped', 'runsSaved', 'runsMissed'].map((stat) => ({ stat })) },
+    { id: 'fielding', title: 'Fielding', rows: [
+      ...['catches', 'stumpings', 'runouts', 'dropped', 'runsSaved', 'runsMissed'].map((stat) => ({ stat })),
+      // SD-69 — only for a player who kept wicket in a re-synced match
+      { stat: 'wkCatches', label: 'Ct as keeper' }, { stat: 'wkDismissals', label: 'Keeper dismissals' },
+    ] },
   ],
   careerView: 'sections',
   box: [
     { title: 'Batting', columns: ['runs', 'ballsFaced', 'fours', 'sixes', 'sr'] },
     { title: 'Bowling', columns: ['overs', 'maidens', 'runsConceded', 'wickets', 'econ'] },
   ],
-  // SD-16: records leaders after the original three (CK-01; the full set —
-  // 4s / 6s / maidens / dots / ducks, organiser minimums — is SD-38)
-  leaders: ['runs', 'wickets', 'catches', 'highest', 'best', 'avg', 'sr', 'econ', 'fifties', 'hundreds'],
+  // SD-16: records leaders after the original three (CK-01); SD-38: 4s / 6s /
+  // maidens / dots / ducks; SD-69: keeper dismissals (re-synced lines)
+  leaders: ['runs', 'wickets', 'catches', 'highest', 'best', 'avg', 'sr', 'econ', 'fifties', 'hundreds',
+    'fours', 'sixes', 'maidens', 'dots', 'ducks', 'wkDismissals'],
   headline: ['runs', 'wickets'],
   // cricket ships its own richer per-match summary: tournament slots only
   awards: [

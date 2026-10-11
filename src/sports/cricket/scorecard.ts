@@ -194,6 +194,8 @@ export const CRICKET_TOTAL_KEYS = [
   'catches', 'stumpings', 'runouts',
   // parity #20 — only on fielders with a fielding note
   'dropped', 'runsSaved', 'runsMissed',
+  // SD-69 — only on the captains / keepers (from SET_CAPTAIN / SET_KEEPER)
+  'capt', 'wk', 'wkCatches',
 ] as const;
 
 /** FIELD_NOTE kind → the fielder stat it credits (parity #20). */
@@ -271,6 +273,21 @@ export function statTotals(s: CricketState): Record<string, { side: Side; stats:
     const st = entry(n.fielderId, out[n.fielderId]?.side ?? n.side).stats;
     for (const k of Object.values(FIELD_NOTE_STAT)) st[k] ??= 0;
     st[FIELD_NOTE_STAT[n.kind]] += fieldNoteCredit(n);
+  }
+  // SD-69 — captain / keeper flags (SET_CAPTAIN / SET_KEEPER, no reducer
+  // change) and keeper catches: a catch taken by the fielding side's keeper.
+  // `keepers` holds each side's keeper at the end, so after a mid-match change
+  // of gloves the last keeper is the one flagged and credited (the reducer
+  // keeps no per-ball keeper; stumpings already go to the keeper of the time).
+  for (const side of ['home', 'away'] as const) {
+    const c = s.captains?.[side];
+    if (c?.id) entry(c.id, out[c.id]?.side ?? side).stats.capt = 1;
+    const k = s.keepers?.[side];
+    if (!k?.id) continue;
+    const st = entry(k.id, out[k.id]?.side ?? side).stats;
+    st.wk = 1;
+    st.wkCatches = s.dismissals.filter((d) => d.kind === 'caught' && d.fielderId === k.id
+      && (d.outId ? sideOfBatter.get(d.outId) !== side : true)).length;
   }
   // Every involved player carries the fielding keys (0 when none), so a
   // correction that moves a catch away zeroes it.

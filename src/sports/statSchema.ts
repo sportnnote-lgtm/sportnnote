@@ -172,6 +172,13 @@ export interface StatDef extends StatLabels {
    *  (racket point detail: statTotals writes it only for a match that
    *  captured it — a racket line's record keys don't make it a 0) */
   coverage?: 'core' | 'optional' | 'present' | 'keyed';
+  /** SD-79 — D8 for a figure only some lines can give (cricket BF / ducks /
+   *  4w need a full scorecard line; keeper catches a line that says who kept):
+   *  the lines that CAN give it are the stat's `agg.over` filter; this names
+   *  the filter of lines that SHOULD (batted / bowled / kept). No line passing
+   *  `over` = not tracked (hidden, never 0); fewer than the `coverOf` lines =
+   *  a coverage note (`coverageOf`). */
+  coverOf?: string;
   mode?: string;
   /** who can lead / win on this stat (football clean sheets: keepers only) */
   eligible?: 'goalkeeper';
@@ -300,6 +307,10 @@ export interface SportStatSchema<S extends string = SportId> {
    *  in chip order. A chip shows only when the player's lines carry ≥ 2
    *  values of it. Absent = no split chips (golf). */
   splits?: SplitDim[];
+  /** SD-43 — the context splits a tournament / sport-hub leaderboard and the
+   *  awards rankings offer as filter chips (cricket: format, ball). A chip
+   *  shows only with ≥ 2 values among the lines. Absent = none. */
+  leaderSplits?: SplitDim[];
   /** career sections, in order */
   sections?: SectionDef[];
   /** how the profile renders the career: 'sections' from the schema (SD-24:
@@ -471,6 +482,8 @@ export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def
   const covered = (ls: StatLine[], keys = inputsOf(def)) => ls.filter((l) => keys.every((k) => trackedIn(schema, l, k)));
   const none = (games = 0): AggValue => ({ text: DASH, tracked: true, games });
   const untracked: AggValue = { text: DASH, tracked: false, games: 0 };
+  // SD-79: a figure no line can give (only older / partial lines) is not tracked
+  if (def.coverOf && !linesFor(schema, lines, 'over' in agg ? agg.over : undefined).length) return untracked;
   switch (agg.kind) {
     case 'sum': {
       // Totals keep today's behaviour: every line counts (an untracked line
@@ -580,6 +593,17 @@ export function aggregateStat<S extends string>(schema: SportStatSchema<S>, def:
   if (def.agg?.kind === 'appearance') return undefined;
   const v = aggregateValue(schema, def, lines);
   return v.tracked ? v.text : undefined;
+}
+
+/** SD-79 — a `coverOf` stat's coverage: the lines that gave it (its `over`
+ *  filter) against the lines that should have (`coverOf`). Undefined when the
+ *  stat has no `coverOf` or every line that should give it did. */
+export function coverageOf<S extends string>(schema: SportStatSchema<S>, def: StatDef, lines: StatLine[]): { tracked: number; total: number } | undefined {
+  if (!def.coverOf) return undefined;
+  const agg = def.agg ?? { kind: 'sum' as const };
+  const tracked = linesFor(schema, lines, 'over' in agg ? agg.over : undefined).length;
+  const total = linesFor(schema, lines, def.coverOf).length;
+  return tracked > 0 && tracked < total ? { tracked, total } : undefined;
 }
 
 export interface CareerStat { key: string; label: string; value: string }
@@ -768,6 +792,7 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
     if (a.kind === 'best') a.by.forEach((b) => need(b.key, w));
   }
   for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));
+  for (const s of schema.stats) needFilter(s.coverOf, `stat ${s.key} coverOf`);
   for (const sec of schema.sections ?? []) sec.rows.forEach((r) => need(r.stat, `section ${sec.id}`));
   for (const b of schema.box ?? []) {
     for (const c of b.columns) {

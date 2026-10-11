@@ -32,6 +32,7 @@ import { LeaderMinimums } from '../components/LeaderMinimums';
 import { readLeaderMins, leaderMinsPatch, type LeaderMins } from '../data/leaderMinimums';
 import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
+import { LeaderSplitChips, useLeaderSplits } from '../components/LeaderSplitChips';
 import { DisciplineTable } from '../components/DisciplineTable';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
@@ -351,9 +352,12 @@ export default function TournamentProfileScreen() {
     () => (activeSport ? savedMins[activeSport] ?? readLeaderMins(tournament?.formats?.[activeSport] as Record<string, unknown> | undefined) : {}),
     [activeSport, savedMins, tournament?.formats],
   );
+  // SD-43: cricket leaders by format / ball (the SD-25 line context)
+  const tourList = useMemo(() => (tournament ? [tournament] : []), [tournament]);
+  const leaderScope = useLeaderSplits(activeSport, lines, matches, tourList);
   const categories = useMemo(
-    () => (activeSport ? categoryLeaders(lines, players, activeSport, { matches, mins }) : []),
-    [lines, players, activeSport, matches, mins]
+    () => (activeSport ? categoryLeaders(leaderScope.lines, players, activeSport, { matches, mins }) : []),
+    [leaderScope.lines, players, activeSport, matches, mins]
   );
   const saveMins = async (next: LeaderMins) => {
     if (!tournament || !activeSport) return;
@@ -990,11 +994,16 @@ export default function TournamentProfileScreen() {
               />
             ) : null}
 
-            {activeSport && !isEventSport(activeSport) && categories.length > 0 && (
+            {activeSport && !isEventSport(activeSport) && (categories.length > 0 || leaderScope.options.length > 0) && (
               <>
                 <Text style={[textStyles.h3, st.section]}>📈 {getSport(activeSport).name} leaders</Text>
-                <Text style={textStyles.muted}>Swipe for more →</Text>
-                <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+                <LeaderSplitChips scope={leaderScope} note="Leaders from" />
+                {categories.length > 0 ? (
+                  <>
+                    <Text style={textStyles.muted}>Swipe for more →</Text>
+                    <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+                  </>
+                ) : <Text style={textStyles.muted}>No leaders for this filter yet.</Text>}
               </>
             )}
             {activeSport && !isEventSport(activeSport) ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}

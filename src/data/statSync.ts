@@ -98,3 +98,25 @@ export function deltasBesideTotals<D extends { stat: string }>(deltas: D[], tota
   for (const t of Object.values(totals)) for (const k of Object.keys(t.stats)) owned.add(k);
   return deltas.filter((d) => !owned.has(d.stat));
 }
+
+/** SD-69 — `resyncSportLines(…, { keys })`: `totals` keeping only `keys` (a player left with none drops out). */
+export function onlyKeys(totals: MatchTotals, keys: string[]): MatchTotals {
+  const want = new Set(keys);
+  const out: MatchTotals = {};
+  for (const [id, t] of Object.entries(totals)) {
+    const stats = Object.fromEntries(Object.entries(t.stats).filter(([k]) => want.has(k)));
+    if (Object.keys(stats).length) out[id] = { side: t.side, stats };
+  }
+  return out;
+}
+
+/** The stat keys a planned sync would change (dry-run report). */
+export function changedKeys(existing: { id: string; stats: Record<string, number> }[], writes: StatWrite[]): string[] {
+  const keys = new Set<string>();
+  const byId = new Map(existing.map((l) => [l.id, l.stats]));
+  for (const w of writes) {
+    const before = w.kind === 'update' ? byId.get(w.id) ?? {} : {};
+    for (const [k, v] of Object.entries(w.stats)) if (before[k] !== v) keys.add(k);
+  }
+  return [...keys].sort();
+}

@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Cricket career, captaincy, keeper and records leaders; format/ball filter on leaders + awards (SD-38 / SD-43 / SD-69 / SD-79)
+- **Career (SD-79):** balls faced, ducks (0 and out — retired-hurt 0 isn't), bowling innings, 4w / 5w — derived at read time from existing #19 keys (no re-sync needed for #19 lines; pre-#19 lines read "not tracked"; mixed careers show ☁ "tracked in 3 of 4" via new `coverOf`).
+- **Captain + keeper (SD-69):** statTotals writes `capt`, `wk`, `wkCatches` from the toss/setup captains and keepers; career Fielding adds "Ct as keeper" / "Keeper dismissals"; new Captaincy section (matches, W-L(-T), win %). Only the final keeper is flagged after a mid-match change (stumpings already credit the keeper at the time). Backfill helper (not run live): `await __sportnnoteAdmin.backfillCricketCaptainKeeper({ dryRun: true })` — keys-only resync (`resyncSportLines(..., { keys })`).
+- **Records leaders (SD-38):** Most 4s, 6s, maidens, dot balls, ducks, keeper dismissals with tie-breaks.
+- **Filters (SD-43):** format / ball chips (`LeaderSplitChips`) on tournament Stats leaders, the Sport hub and the host's awards draft (a filtered pick reads "· T20"); shown only when ≥ 2 formats/balls exist.
+- **Verified:** `tests/cricket-sd38-43-69-79.test.mts` (13) + updated aggregate/leaders/schema pins; demo: backfill dry run, hub leaders, pre-#19 profile hides new rows. Chips / Captaincy / keeper rows not seen in the demo (no seed data) — unit tests only. Guides: cricket-scorecard-and-stats, filter-career-stats, tournament-awards.
+
+---
+
 ### 2026-10-11 — Basketball FIBA timeouts + overtime, game-flow stats for team sports (SD-57 / SD-50)
 - **Timeouts (`timeoutStatus`):** FIBA 2 in the first half, 3 in the second (max 2 once Q4 is at ≤ 2:00), 1 per overtime, no carry-over; NBA 7 / max 4 in Q4 / max 2 in the last 3 min / 2 per OT; other presets keep the whole-game count (3×3 = 1). "⏱️ Timeouts left (1st half / 2nd half / OT)" line; over the allowance asks ("Log anyway") rather than blocks.
 - **Level at full time:** "Start Overtime" first; "End as a draw" only when the format allows draws (new toggle, off by default), otherwise "End level, no overtime…" asks first (also on older matches).

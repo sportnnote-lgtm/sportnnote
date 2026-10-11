@@ -5,7 +5,7 @@ category: Tournaments
 audience: Organisers, Scorers, Players, Parents & fans
 sports: all
 order: 70
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 At the closing ceremony, you need to name a Player of the Tournament, a top scorer and a best bowler. The **Awards** tab suggests winners from the stats already recorded. You change any you disagree with, add your own awards, and publish. The winners get an alert, and everyone can see and share the list.
@@ -42,6 +42,7 @@ Each winner gets an alert, "You won" plus the award name. The Awards tab now sho
 ## How suggestions are worked out
 - **Player of the Tournament** usually adds up a points score across every match, weighting the sport's key stats, such as goals, runs, wickets and catches. Racket sports rank by matches won, then win %, then the share of sets or games won. Chess ranks by score, and basketball by efficiency per game.
 - Other awards rank by one figure: a total (runs, goals), a per-game average (basketball points per game) or a per-set rate (volleyball blocks per set).
+- Cricket: when the matches span formats or balls, **Format** and **Ball** chips rank on one of them, and the winner's line says so ("T20").
 - Ties follow the sport's rule. Football's **Top scorer** goes to more assists, then fewer minutes played, and the **Golden Glove** only to goalkeepers. **How is this ranked?** gives each award's exact rule. You always choose the final winner.
 
 ## Step by step: set the minimum to rank

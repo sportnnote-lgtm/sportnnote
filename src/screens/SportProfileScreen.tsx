@@ -20,7 +20,7 @@ import { lineResult, RESULT_PILL } from '../data/appearances';
 import { cricketMatchLine } from '../data/cricketCareer';
 import { statSchema, labelLong } from '../sports/statSchemas';
 import {
-  careerSections, recordFigure, winPctText, tileValueIsLong, bestWinRun, titlesAndFinals,
+  careerSections, captaincyRecord, recordFigure, winPctText, tileValueIsLong, bestWinRun, titlesAndFinals,
   disciplineRecords, partnerRecords, doublesMatchIds, historyStats, wlText,
 } from '../data/career';
 import { golfProfileSummary, golfDetailSummary } from '../sports/golf/engine';
@@ -352,6 +352,8 @@ export default function SportProfileScreen() {
               // nobody tracked are hidden (D8). Cricket's Batting / Bowling /
               // Fielding render exactly as before (parity #19).
               const secs = careerSections(schema, history);
+              // SD-69 — cricket: the record as captain (re-synced lines)
+              const capt = sport === 'cricket' ? captaincyRecord(history) : null;
               return (
                 <>
                   {secs.map((sec) => (
@@ -369,6 +371,17 @@ export default function SportProfileScreen() {
                       </View>
                     </React.Fragment>
                   ))}
+                  {capt && (
+                    <>
+                      <Text style={st.totalsLabel}>Captaincy</Text>
+                      <View style={st.statGrid}>
+                        <Stat value={String(capt.matches)} label="Mat" tone="neutral" />
+                        <Stat value={capt.record} label={capt.ties ? 'W-L-T' : 'W-L'} tone="neutral" />
+                        <Stat value={capt.winPct} label="Win %" tone="neutral" />
+                        {capt.noResults > 0 && <Stat value={String(capt.noResults)} label="No result" tone="neutral" />}
+                      </View>
+                    </>
+                  )}
                 </>
               );
             })() : Object.keys(bySport.totals).length > 0 && (
