@@ -69,10 +69,10 @@ P2 items are parked (PLAN.md §6.2).
 | SD-141 | Founder 2026-10-11: organiser-chosen competition rules for event sports — a "Competition rules" step before the meet starts (locked once results exist) exposing every house choice as an option with standard defaults: weightlifting lifting order + categories, athletics (false-start rule, wind/record rules, XC team scoring mode + tie-break, combined-event options, age cut-off), archery, shooting, cycling, rowing/canoe progression; bans and walkovers likewise editable (already editable — surface in setup) | measured, cross-sport | founder decision | DONE | 72a1804 · P1 · M–L · Wave D |
 | SD-142 | Release: build APK 38 after Wave D (expo-print for phone PDF printing + any Wave D native modules), update the website "Get the app" link, send the founder the link | release | founder 2026-10-11 | DONE | after Wave D batch 2 publish |
 | SD-143 | New sport: rugby union + sevens (World Rugby) | rugby | founder 2026-10-12 (international) | DONE | 3e49c34 · L · after the international audit |
-| SD-144 | New sport: baseball + softball (WBSC) | baseball | founder 2026-10-12 | READY | L |
+| SD-144 | New sport: baseball + softball (WBSC) | baseball | founder 2026-10-12 | IN-PROGRESS | L |
 | SD-145 | New sport: ice hockey (IIHF) | ice hockey | founder 2026-10-12 | DONE | 3e49c34 · L |
 | SD-146 | New sport: netball (World Netball) | netball | founder 2026-10-12 | DONE | 3e49c34 · M–L |
-| SD-147 | New sport: American football (NFL / NFHS / IFAF) | american football | founder 2026-10-12 | READY | L |
+| SD-147 | New sport: American football (NFL / NFHS / IFAF) | american football | founder 2026-10-12 | IN-PROGRESS | L |
 | SD-148 | International I-0: protect minors' data server-side (anon reads adults only, reduced cards, private minor photos, follow rules) | cross-platform | docs/international/audit/legal.md L3 | DONE | cce4686 · P0 · migration |
 | SD-149 | International I-0: phone identity by full E.164 (no last-10 matching), country-aware PhoneField | identity | docs/international/audit/identity.md | DONE | cce4686 · P0 · migration + functions |
 | SD-150 | International I-1a: region settings model + time zones (device zone seeded + saved to profile, kickoff entry in display zone, day/"today" in zone, tournaments.time_zone, date order, school-year labels) | locale | docs/international/audit/locale.md | DONE | cce4686 · P0/P1 · migration |
