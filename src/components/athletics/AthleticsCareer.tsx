@@ -11,7 +11,7 @@ import { theme } from '../../core/theme';
 import { Card, Pill, textStyles } from '../ui';
 import { formatDay } from '../../core/dates';
 import { getPhaseInfos } from '../../data/resultsStore';
-import { athleticsCareer, ordSuffix, type PhaseInfo } from '../../data/results';
+import { athleticsCareer, type PhaseInfo } from '../../data/results';
 import type { StatLine } from '../../core/types';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -42,17 +42,6 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
       </View>
       {(c.golds + c.silvers + c.bronzes > 0 || c.points > 0) && (
         <Text style={st.medals}>{c.golds} 🥇  {c.silvers} 🥈  {c.bronzes} 🥉{c.points ? `  ·  ${c.points} points` : ''}</Text>
-      )}
-
-      {/* SD-92: road races, race walks, cross-country (places and team medals) */}
-      {c.road + c.walks + c.xc > 0 && (
-        <Card style={{ gap: theme.spacing(1) }}>
-          <Text style={textStyles.body}>{[c.road ? `${c.road} road race${c.road === 1 ? '' : 's'}` : '', c.walks ? `${c.walks} race walk${c.walks === 1 ? '' : 's'}` : '', c.xc ? `${c.xc} cross-country` : ''].filter(Boolean).join(' · ')}</Text>
-          {c.bestXc ? <Text style={textStyles.muted}>Best cross-country place: {c.bestXc.place}{ordSuffix(c.bestXc.place)} — {c.bestXc.title}</Text> : null}
-          {c.teamGolds + c.teamSilvers + c.teamBronzes + c.teamScored > 0 ? (
-            <Text style={textStyles.muted}>Team: {c.teamGolds} 🥇  {c.teamSilvers} 🥈  {c.teamBronzes} 🥉{c.teamScored ? ` · scored for the team ${c.teamScored}×` : ''}</Text>
-          ) : null}
-        </Card>
       )}
 
       <Text style={st.section}>Personal bests</Text>
@@ -87,7 +76,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
             <TouchableOpacity key={`${h.eventId}${i}`} accessibilityRole="button" activeOpacity={0.85} disabled={!h.eventId} onPress={() => nav.navigate('ResultsEvent', { phaseId: h.eventId, tab: 'sheet' })}>
               <Card style={[st.hist, { borderLeftWidth: 3, borderLeftColor: h.medal ? theme.colors.accent : theme.colors.border }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline?.startsWith('ath.xc.') ? '🌳' : h.discipline?.startsWith('ath.walk.') ? '🚶' : h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : h.discipline?.startsWith('swim.') || swim ? '🏊' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
+                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : h.discipline?.startsWith('swim.') || swim ? '🏊' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
                   <Text style={textStyles.muted}>{[h.text, ...h.flags].filter(Boolean).join(' · ')}</Text>
                 </View>
                 {h.medal ? <Text style={{ fontSize: 20 }}>{MEDAL[h.medal]}</Text> : h.place ? <Pill label={`${h.place}`} /> : null}

@@ -22,7 +22,6 @@ import { WeighInCard, NextLiftCard, LiftGrid } from '../components/results/Lifti
 import { SeriesCard, FinalCard } from '../components/results/ShootingPanel';
 import { EndCard, BracketCard } from '../components/results/ArcheryPanel';
 import { FinishOrderCard, StageCard, PointsRaceCard, SprintBracketCard, cycHeader } from '../components/results/CyclingPanel';
-import { RoadFinishCard, TeamTable, roadHeader } from '../components/results/RoadPanel';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { getPlayers, getMyPlayerId } from '../data/repos';
@@ -47,7 +46,6 @@ import {
   archRound, isBracketRows, archQualView, archRowText, bracketState, bracketFormat, phaseNameOf, roundLine, hasMatchData, matchFormatOf, BOW_LABEL,
   isCrewSport, routeCrews, routeTarget, describeRoutes, crewMembersText, crewEventOf,
   cycKind, cycStatuses, sprintBracket, ittStart, startText, rankStage, stageClassifications, roadTimeMissing,
-  isRoadDiscipline, phaseTeams, teamAwards, roadRecordsAllowed, teamText,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
 import { useAuth } from '../core/auth';
@@ -66,7 +64,7 @@ const STATUSES: ResultStatus[] = ['DNS', 'DNF', 'FS', 'DQ'];
 // SD-99 / SD-100: rowing / canoe — did not start, did not finish, excluded / disqualified
 const statusesFor = (def: DisciplineDef): ResultStatus[] =>
   // SD-98 cycling: road — DNS, DNF, OTL (outside the time limit), DQ; track — DNS, DNF, DQ
-  def.sport === 'cycling' ? cycStatuses(def) : isRoadDiscipline(def) ? ['DNS', 'DNF', 'DQ'] : isCrewSport(def.sport) ? ['DNS', 'DNF', 'DQ'] : def.sport === 'swimming' ? ['DNS', 'DQ'] : def.capture === 'single' ? (def.unit === 'time' ? STATUSES : ['DNS', 'DQ']) : ['DNS', 'DQ', 'WD'];
+  def.sport === 'cycling' ? cycStatuses(def) : isCrewSport(def.sport) ? ['DNS', 'DNF', 'DQ'] : def.sport === 'swimming' ? ['DNS', 'DQ'] : def.capture === 'single' ? (def.unit === 'time' ? STATUSES : ['DNS', 'DQ']) : ['DNS', 'DQ', 'WD'];
 const ruleHint = (def: DisciplineDef) => (def.sport === 'cycling' ? 'e.g. irregular sprint / relegated (UCI)' : def.sport === 'rowing' ? 'Excluded — e.g. 2nd false start' : def.sport === 'canoe' ? 'e.g. False start / left lane (ICF)' : def.sport === 'swimming' ? 'SW 7.6' : def.sport === 'athletics' ? 'TR 16.8' : 'rule');
 /** The meet's points settings for an event sport (athletics / swimming / SD-97 weightlifting). */
 const pointsFor = (sport: string, fmt?: Record<string, unknown>) => eventMeetSettings(sport, fmt);
@@ -175,8 +173,7 @@ export default function ResultsEventScreen() {
   // Ranking per heat with Q / q and PB / SB / MR flags.
   const ranked = useMemo(() => {
     if (!def || !f || !phase) return new Map<number, RankedEntry[]>();
-    // SD-92: a road / walk race on an uncertified course (or chip timing) and cross-country never show MR / SR
-    const ctx = { history, records: roadRecordsAllowed(f) ? [...records, ...srBook] : [], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
+    const ctx = { history, records: [...records, ...srBook], category: categoryKey(f.category), seasonFrom: `${phase.startsAt.slice(0, 4)}-01-01`, eventKey: f.eventKey };
     if (timedFinal || raceFinal) {
       // every heat ranked together; each heat's rows keep their overall place
       // (SD-99: Finals A / B — race by race, places running on)
@@ -206,9 +203,6 @@ export default function ResultsEventScreen() {
   const cycK = def?.sport === 'cycling' ? cycKind(def.key) : undefined;
   const sprintBr = cycK === 'sprint' && isBracketRows(resEntries);
   const orderEv = def?.capture === 'order';
-  // SD-92: an athletics road race / race walk / cross-country — finish order, optional times, team score
-  const roadEv = isRoadDiscipline(def);
-  const teams = useMemo(() => (roadEv && f?.road?.team ? phaseTeams(f, [...ranked.values()].flat()) : []), [roadEv, f, ranked]);
   const heatName = (h: number) => (raceFinal && cycK ? (h === 1 ? 'Final for gold' : 'Final for bronze') : raceFinal ? `Final ${f?.races?.[h - 1] ?? h}` : f?.phase === 'repechage' ? `Repechage ${h}` : f?.phase === 'semi' && crew ? `Semi-final ${h}` : `Heat ${h}`);
   // SD-96: shooting — the ISSF event, and whether this phase is its elimination final
   const shoot = shootEvent(def);
@@ -311,7 +305,7 @@ export default function ResultsEventScreen() {
     // SD-95: an archery record is a ranking-round score — a bracket reads as its archers' ranking scores
     // SD-98: a sprint bracket's record is the riders' flying 200 m times
     const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : arch || sprintBr ? rankEntries(archQualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
-    for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    for (const d of recordDefsFor(def)) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
     const unfinished = (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
     const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
@@ -372,8 +366,6 @@ export default function ResultsEventScreen() {
   const relayX = meet && def.teamSize && meet.relayFactor !== 1 ? meet.relayFactor : 1;
   const awards = (f.phase === 'final' ? eventAwards(overall ?? [...ranked.values()].flat(), meet ? { positionPoints: meet.positionPoints } : {}) : [])
     .map((a) => (relayX !== 1 ? { ...a, points: Math.round(a.points * relayX * 100) / 100 } : a));
-  // SD-92: a road / XC team score earns the houses medals and points too
-  const teamAw = f.phase === 'final' && f.road?.team && f.road.team.points !== false ? teamAwards(teams, meet ? { positionPoints: meet.positionPoints } : {}) : [];
   // SD-97: snatch / C&J medals when the meet awards them
   const liftMedals = lifts && !!meet?.liftMedals ? liftAwards(resEntries, { positionPoints: meet!.positionPoints, liftMedals: true }) : null;
   const wlClasses = lifts ? weightClasses(f.category?.age, f.category?.gender === 'F' ? 'F' : 'M') : [];
@@ -447,8 +439,7 @@ export default function ResultsEventScreen() {
     })));
     const title = `${f.eventTitle ?? def.label} — ${pName(f.phase)}`;
     const icon = eventWords(def.sport).icon;
-    // SD-92: the team score follows the individual results
-    void shareMessage(anyMark ? (teams.length ? `${resultsText(title, rows, phase.status === 'completed', undefined, icon)}\n${teamText(teams)}\n\nFull results: ${resultsLink(phase.id)}` : resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id), icon)) : startListText(title, rows, resultsLink(phase.id), icon), 'results');
+    void shareMessage(anyMark ? resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id), icon) : startListText(title, rows, resultsLink(phase.id), icon), 'results');
   };
   // Manual lane override (World Athletics lets the referee re-draw / move).
   const pickLane = async (entryId: string, heatNo: number, lane: number) => {
@@ -492,7 +483,6 @@ export default function ResultsEventScreen() {
         {!swim && timedFinal ? <Text style={textStyles.muted}>Timed final: {f.heats} heats, places on time across heats.</Text> : null}
         {crew ? <Text style={textStyles.muted}>{def.sport === 'rowing' ? 'World Rowing' : 'ICF canoe sprint'} · {crewEventOf(def.key)?.boat.label} · {def.lanes} lanes · {f.handTimed ? 'hand timing (1/100)' : 'photo finish: thousandths decide the order'}{raceFinal ? ` · Finals ${f.races!.join(', ')}: Final A for the medals, places run on into Final ${f.races![1]}` : ''}</Text> : null}
         {cycK ? <Text style={textStyles.muted}>{cycHeader(cycK, def, f)}{raceFinal ? ' · Final for gold: 1st v 2nd fastest · Final for bronze: 3rd v 4th (a catch ends the race)' : ''}</Text> : null}
-        {roadEv ? <Text style={textStyles.muted}>{roadHeader(def, f.road)}</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
         {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
         {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]} · {archBracket ? (matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') : `${roundLine(arch)} · ties: most 10s (X included), then most X${f.progression ? ' · the best go to match play' : ' · no match play: the ranking round decides the medals'}`}</Text> : null}
@@ -558,8 +548,6 @@ export default function ResultsEventScreen() {
               <PointsRaceCard entries={heatRes} laps={f.cyc?.laps} every={f.cyc?.sprintEvery} editable={editable} onSave={saveLift} statuses={statusesFor(def)} />
             )}
             {sprintBr && <SprintBracketCard entries={resEntries} editable={editable} onSave={saveLift} />}
-            {/* SD-92: road / walk / XC — tap (or bib) in finish order, times optional */}
-            {roadEv && (editable || anyMark) && <RoadFinishCard def={def} entries={heatRes} editable={editable} onSave={saveLift} road={f.road} age={f.category?.age} />}
             {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} />}
             {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
             {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} />}
@@ -684,9 +672,8 @@ export default function ResultsEventScreen() {
             {lifts && liftRanked && curLift === 'snatch'
               // SD-97: during the snatch nobody has a total yet — show the snatch standings
               ? <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.snatch)!} title="Live — snatch standings" heats={new Map([[1, liftRanked.snatch]])} />
-              : <ResultsSheet def={def} title={cycK === 'stage' ? `GC after stage ${f.phaseNo}` : 'Live ranking'} subtitle={heats.length > 1 ? heatName(activeHeat) : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} notes={routeNotes} road={f.road} />}
+              : <ResultsSheet def={def} title={cycK === 'stage' ? `GC after stage ${f.phaseNo}` : 'Live ranking'} subtitle={heats.length > 1 ? heatName(activeHeat) : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} notes={routeNotes} />}
             {cycK === 'stage' && anyMark ? <StageSheets def={def} stageNo={f.phaseNo} entries={heatRes} /> : null}
-            {f.road?.team ? <TeamTable rows={teams} scorers={f.road.team.scorers} basis={f.road.team.basis} size={f.road.team.size} /> : null}
 
             {editable && next && <Button label={busy ? 'Seeding…' : f.progression?.stage ? `Close stage ${f.phaseNo} → start stage ${f.phaseNo + 1}` : `Close ${pName(f.phase).toLowerCase()} → seed ${arch ? '' : 'the '}${pName(next.phase).toLowerCase()}`} onPress={() => void advance()} disabled={busy} />}
             {editable && !next && <Button label={busy ? 'Finishing…' : '🏁 Finish & lock results'} onPress={() => void finish()} disabled={busy} />}
@@ -695,10 +682,9 @@ export default function ResultsEventScreen() {
 
         {view === 'sheet' && (
           <>
-            <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)}${swim ? ` · ${courseLabel(f.category?.course)}` : ''} · ${phase.startsAt.slice(0, 10)}`} heats={overall && anyMark ? new Map([[0, overall]]) : ranked} wind={windByHeat} overall={!!overall && anyMark} heatLabel={heatName} notes={routeNotes} road={f.road} />
+            <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)}${swim ? ` · ${courseLabel(f.category?.course)}` : ''} · ${phase.startsAt.slice(0, 10)}`} heats={overall && anyMark ? new Map([[0, overall]]) : ranked} wind={windByHeat} overall={!!overall && anyMark} heatLabel={heatName} notes={routeNotes} />
             {f.jumpOff ? <Text style={textStyles.muted}>{jumpOffText(f.jumpOff, def, resEntries)}</Text> : null}
             {cycK === 'stage' && anyMark ? <StageSheets def={def} stageNo={f.phaseNo} entries={resEntries} /> : null}
-            {f.road?.team && anyMark ? <TeamTable rows={teams} scorers={f.road.team.scorers} basis={f.road.team.basis} size={f.road.team.size} /> : null}
             {lifts && liftRanked && anyMark && (
               <>
                 <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.snatch)!} title="Snatch" heats={new Map([[1, liftRanked.snatch]])} />
@@ -721,14 +707,6 @@ export default function ResultsEventScreen() {
                     ))}
                   </View>
                 ))}
-                {teamAw.length > 0 && (
-                  <View style={{ gap: theme.spacing(1) }}>
-                    <Text style={st.label}>Teams</Text>
-                    {teamAw.map((a) => (
-                      <Text key={a.entryId} style={textStyles.body}>{a.medal === 'gold' ? '🥇' : a.medal === 'silver' ? '🥈' : a.medal === 'bronze' ? '🥉' : `${a.position}.`} {a.name} — {a.points} pts</Text>
-                    ))}
-                  </View>
-                )}
                 <Text style={textStyles.muted}>{meet ? pointsLabel(meet.positionPoints) : 'Default 8-7-6-5-4-3-2-1'}; tied places share the points.{meet && meet.relayFactor !== 1 && def.teamSize ? ` Relays score ×${meet.relayFactor}.` : ''} These feed the meet's house / medal table.</Text>
               </Card>
             )}

@@ -25,7 +25,6 @@ import { shootMeetSettings } from './shooting.ts';
 import { archMeetSettings, phaseNameOf } from './archery.ts';
 import { crewMeetSettings, describeCrewPlan } from './crews.ts';
 import { cycMeetSettings } from './cycling.ts';
-import { roadMarkKey, roadKeyDiscipline, roadEventOf, roadRecordsAllowed, phaseTeams, teamAwards } from './road.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -359,15 +358,12 @@ export function resultsText(title: string, rows: SheetRow[], final: boolean, lin
  *  'm_100m'). SD-94 swimming keeps the pool length in the key — long and short
  *  course are separate PBs / records: 'swim.50free' + LCM → 'm_sw_50free_lc'. */
 export const markKey = (discipline: string, course?: 'LCM' | 'SCM') =>
-  // SD-92: road / walk keep the distance in the key ('m_road_10000', 'm_walk_t3000')
-  (roadEventOf(discipline) ? roadMarkKey(discipline) : /^swim\./.test(discipline) ? `m_sw_${discipline.slice(5)}_${course === 'SCM' ? 'sc' : 'lc'}` : `m_${discipline.replace(/^ath\./, '')}`);
+  (/^swim\./.test(discipline) ? `m_sw_${discipline.slice(5)}_${course === 'SCM' ? 'sc' : 'lc'}` : `m_${discipline.replace(/^ath\./, '')}`);
 
 /** The discipline + course a mark key came from ('m_sw_50free_sc' → swim.50free, SCM). */
 export function markKeyDiscipline(key: string): { discipline: string; course?: 'LCM' | 'SCM' } {
   const m = /^m_sw_(.+)_(lc|sc)$/.exec(key);
   if (m) return { discipline: `swim.${m[1]}`, course: m[2] === 'sc' ? 'SCM' : 'LCM' };
-  const road = roadKeyDiscipline(key);
-  if (road) return { discipline: road };
   return { discipline: `ath.${key.slice(2)}` };
 }
 
@@ -429,11 +425,6 @@ export interface AthleticsCareer {
   races: number; relays: number; finals: number; golds: number; silvers: number; bronzes: number; points: number;
   /** SD-91: field events competed in (one per round) */
   field: number;
-  /** SD-92: road races, race walks and cross-country races run; team medals (XC / road team scoring); red cards */
-  road: number; walks: number; xc: number;
-  teamGolds: number; teamSilvers: number; teamBronzes: number; teamScored: number;
-  /** SD-92: the best cross-country place (courses differ — places, not times) */
-  bestXc?: { place: number; title: string; date: string; eventId: string };
   /** personal bests per event (hurdles per event + category: the barrier height
    *  differs; throws per implement — a 3 kg and a 4 kg shot are different events) */
   bests: { key: string; label: string; pb: CareerBest; sb?: CareerBest }[];
@@ -448,7 +439,7 @@ export function athleticsCareer(
   phases: Map<string, PhaseInfo>,
   seasonFrom: string,
 ): AthleticsCareer {
-  const c: AthleticsCareer = { races: 0, relays: 0, field: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, road: 0, walks: 0, xc: 0, teamGolds: 0, teamSilvers: 0, teamBronzes: 0, teamScored: 0, bests: [], history: [] };
+  const c: AthleticsCareer = { races: 0, relays: 0, field: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, bests: [], history: [] };
   const bests = new Map<string, { key: string; label: string; pb: CareerBest; sb?: CareerBest }>();
   // Oldest first, so a PB / SB flag on the history reads "at the time".
   const sorted = [...lines].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
@@ -458,11 +449,8 @@ export function athleticsCareer(
     c.races += s.races ?? 0; c.relays += s.relays ?? 0; c.field += s.field ?? 0; c.finals += s.finals ?? 0;
     c.golds += s.golds ?? 0; c.silvers += s.silvers ?? 0; c.bronzes += s.bronzes ?? 0;
     c.points += s.posPoints ?? 0;
-    c.road += s.road ?? 0; c.walks += s.walks ?? 0; c.xc += s.xc ?? 0;
-    c.teamGolds += s.teamGolds ?? 0; c.teamSilvers += s.teamSilvers ?? 0; c.teamBronzes += s.teamBronzes ?? 0; c.teamScored += s.teamScorer ?? 0;
     const info = l.eventId ? phases.get(l.eventId) : undefined;
     const key = Object.keys(s).find((k) => k.startsWith('m_'));
-    if (s.xc && s.place && (!c.bestXc || s.place < c.bestXc.place)) c.bestXc = { place: s.place, title: info?.title ?? l.opponent ?? 'Cross-country', date: info?.date ?? l.date ?? '', eventId: l.eventId ?? '' };
     const fromKey = key ? markKeyDiscipline(key) : undefined;
     const discipline = info?.discipline ?? fromKey?.discipline;
     // SD-94: swimming PBs per pool length
@@ -499,9 +487,6 @@ export function athleticsCareer(
       markText,
       s.wind != null ? `(${s.wind > 0 ? '+' : ''}${s.wind.toFixed(1)})` : '',
       s.relays ? 'relay' : '',
-      // SD-92: the team's place in a road / XC team score
-      s.teamPlace ? `· team ${s.teamPlace}${ordSuffix(s.teamPlace)}${s.teamGolds ? ' 🥇' : s.teamSilvers ? ' 🥈' : s.teamBronzes ? ' 🥉' : ''}` : '',
-      s.walkCards ? `· ${s.walkCards} red card${s.walkCards === 1 ? '' : 's'}` : '',
     ].filter(Boolean).join(' ');
     c.history.push({ eventId: l.eventId ?? '', title: info?.title ?? l.opponent ?? (s.field ? 'Field event' : 'Race'), date, discipline, text, place: s.place, medal, flags });
   }
@@ -570,13 +555,6 @@ export function meetFieldResults(events: MeetEvent[], cfg: PointsSettings = {}, 
     const r = finalAwards(e, cfg, handLegal);
     if (!r) continue;
     out.push({ sport: disciplineOf(e.discipline)!.sport, event: e.title, awards: r.awards });
-    // SD-92: a road / XC team score — team medals and position points for the houses too
-    const tcfg = r.fin.format.road?.team;
-    if (tcfg && tcfg.points !== false) {
-      const teams = phaseTeams(r.fin.format, rankEntries(r.fin.entries, disciplineOf(e.discipline)!));
-      const ta = teamAwards(teams, cfg);
-      if (ta.length) out.push({ sport: 'athletics', event: `${e.title} — Team`, awards: ta });
-    }
     // SD-97: separate snatch and C&J medals when the meet awards them
     if (cfg.liftMedals && disciplineOf(e.discipline)?.capture === 'lifts') {
       const la = liftAwards(r.fin.entries, cfg);
@@ -596,7 +574,7 @@ export function eventLeaders(events: MeetEvent[]): EventLeader[] {
   for (const e of events) {
     const def = disciplineOf(e.discipline);
     // SD-98: a cycling order event (road race, stage race GC, keirin …) has no "best mark" across rounds
-    if (!def || (def.capture === 'order' && def.tie !== 'road')) continue;
+    if (!def || def.capture === 'order') continue;
     let best: EventLeader | undefined;
     for (const p of e.phases) {
       for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
@@ -648,8 +626,7 @@ export function deriveRecordBook(events: MeetEvent[], scope: 'MR' | 'SR'): Recor
     const cat = categoryKey(e.category);
     // SD-97: a weightlifting session keeps snatch, C&J and total records
     for (const def of recordDefsFor(base)) for (const p of e.phases) {
-      // SD-92: road / walk records only on a certified course (gun time); never cross-country
-      if (p.status !== 'completed' || !roadRecordsAllowed(p.format)) continue;
+      if (p.status !== 'completed') continue;
       for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
         if (r.position == null || r.bestLegal == null) continue;
         const k = `${def.key}|${cat}`;

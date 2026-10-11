@@ -25,7 +25,6 @@ import { WL_RANGE, outOfRange } from './weightlifting.ts';
 import { hasMatchData } from './archeryBracket.ts';
 import { crewRange } from './crewDefs.ts';
 import { cycRange } from './cyclingDefs.ts';
-import { roadRange } from './roadDefs.ts';
 
 export interface MarkRange { min: number; max: number }
 
@@ -79,9 +78,6 @@ export function markRange(discipline: string, course?: Category['course']): Mark
   // SD-98: cycling time trials, pursuits and the flying 200 m
   const cyc = cycRange(discipline);
   if (cyc) return cyc;
-  // SD-92: road / race walk / cross-country by distance (the generous school end; the entry card checks by age)
-  const road = roadRange(discipline, 'U10');
-  if (road) return road;
   if (discipline.startsWith('swim.')) {
     const base = SWIM_LCM_MIN[discipline.slice(5)];
     if (base == null) return null;
@@ -163,8 +159,7 @@ const outside = (def: DisciplineDef, v: number | undefined, course?: Category['c
 
 /** An out-of-range mark nobody confirmed (a single mark or any attempt). */
 export function unconfirmedOutOfRange(r: EntryResult, def: DisciplineDef, course?: Category['course']): boolean {
-  // SD-92: a road / walk / XC time (optional per athlete) is checked like a track time
-  if (def.capture === 'single' || def.tie === 'road') return outside(def, r.mark, course) && !r.rangeOk;
+  if (def.capture === 'single') return outside(def, r.mark, course) && !r.rangeOk;
   if (def.capture === 'attempts') return (r.attempts ?? []).some((a: Attempt | undefined) => !!a && !a.foul && !a.pass && outside(def, a.mark, course) && !a.rangeOk);
   // SD-97: a good lift at a weight outside the usual range, not confirmed
   if (def.capture === 'lifts') {
@@ -203,8 +198,6 @@ export function blankEntries(entries: ResultEntry[], def: DisciplineDef): Result
     if (def.capture === 'heights') return !(r.heights ?? []).some((h) => !!h.tries);
     if (def.capture === 'lifts') return !r.lifts?.snatch?.length && !r.lifts?.cj?.length;
     // SD-98: a cycling order event — not on the line yet (a points-race rider may score 0, see the sprints)
-    // SD-92: a road / walk / XC athlete still to cross the line
-    if (def.tie === 'road') return r.fin == null;
     if (def.capture === 'order') return def.key !== 'cyc.points' && r.fin == null && !Object.keys(r.spr ?? {}).length && !r.laps && r.mark == null;
     return false;
   });

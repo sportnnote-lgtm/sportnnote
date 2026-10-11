@@ -16,4 +16,3 @@ export * from './shooting.ts';
 export * from './archery.ts';
 export * from './crews.ts';
 export * from './cycling.ts';
-export * from './road.ts';
