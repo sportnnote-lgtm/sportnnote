@@ -28,7 +28,15 @@ export interface BoardResult {
    *  chip): 'winner' (= `queen`), 'loser' (covered by the side that lost the
    *  board — it scores nobody anything) or 'none'. Absent = not recorded. */
   queenBy?: QueenBy;
+  /** SD-68 (CR-07) — a penalty board: `PENALTY_POINTS` (3) to `winner` (the
+   *  side NOT penalised). It is a board played (the break moves on, it counts
+   *  toward the board limit) but not a board won, a Queen or a slam. Only on
+   *  a board recorded as one (old logs: absent). */
+  penalty?: true;
 }
+
+/** SD-68 (CR-07) — what a penalty board gives the opponent. */
+export const PENALTY_POINTS = 3;
 
 /** SD-117c — the three-way Queen chip. */
 export type QueenBy = 'winner' | 'loser' | 'none';
@@ -71,6 +79,8 @@ export interface CarromState {
 export interface BoardInput {
   side: Side; coins: number; queen: boolean;
   queenBy?: QueenBy; slam?: Slam;
+  /** SD-68 — a penalty board (3 to `side`) */
+  penalty?: boolean;
   /** the players the board credited (attribution / attribution2) */
   by?: CarromCredit[];
 }
@@ -133,6 +143,8 @@ function creditsOf(side: Side, a: { attribution?: Attr; attribution2?: Attr; pay
 /**
  * BOARD {side: winner, payload: {coins (opponent's left, 0-9), queen, slam?}}.
  * SD-37: `slam` ('white' | 'black') is optional — old logs replay identically.
+ * SD-68 (CR-07): `penalty: true` (optional) = a penalty board — `side` is the
+ * side awarded PENALTY_POINTS; coins / Queen / slam are ignored.
  */
 export function reducer(s: CarromState, a: { type: string; side?: Side; payload?: Record<string, unknown>; attribution?: Attr; attribution2?: Attr }): CarromState {
   // SD-117c — corrections. STAT_ADJUST only reconciles player profiles (no
@@ -148,17 +160,18 @@ export function reducer(s: CarromState, a: { type: string; side?: Side; payload?
   }
   if (a.type !== 'BOARD' || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
   const side = a.side;
-  const coins = Number(a.payload?.coins ?? 0);
-  const qb = a.payload?.queenBy;
+  const penalty = a.payload?.penalty === true;
+  const coins = penalty ? 0 : Number(a.payload?.coins ?? 0);
+  const qb = penalty ? undefined : a.payload?.queenBy;
   const queenBy: QueenBy | undefined = qb === 'winner' || qb === 'loser' || qb === 'none' ? qb : undefined;
   // the three-way chip wins over the old flag; old logs carry only `queen`
-  const queen = queenBy ? queenBy === 'winner' : !!a.payload?.queen;
-  const slam = a.payload?.slam === 'white' || a.payload?.slam === 'black' ? (a.payload.slam as Slam) : undefined;
-  const pts = boardPoints(coins, queen, s.current[side], s);
+  const queen = penalty ? false : queenBy ? queenBy === 'winner' : !!a.payload?.queen;
+  const slam = !penalty && (a.payload?.slam === 'white' || a.payload?.slam === 'black') ? (a.payload!.slam as Slam) : undefined;
+  const pts = penalty ? PENALTY_POINTS : boardPoints(coins, queen, s.current[side], s);
   const gameNo = s.games.length + 1;
   const current = { ...s.current, [side]: s.current[side] + pts };
   const boardsInGame = s.boardsInGame + 1;
-  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo, ...(slam ? { slam } : {}), ...(queenBy ? { queenBy } : {}) }];
+  const boards = [...s.boards, { winner: side, coins, queen, points: pts, game: gameNo, ...(slam ? { slam } : {}), ...(queenBy ? { queenBy } : {}), ...(penalty ? { penalty: true as const } : {}) }];
   const credited = creditsOf(side, a, s.credited);
   if (credited) s = { ...s, credited };
   // SD-117c — this board's own credits (for the editor's replay)
@@ -219,9 +232,9 @@ export function standingsUnits(s: CarromState): { points: { home: number; away: 
  *  ("✓ Record board · wins Game 2"). Pure: replays the board on a copy.
  *  `winner` is the side that takes the game — after the board limit that can
  *  be the side that LOST this board. null = the game goes on. */
-export function boardCloses(s: CarromState, side: Side, coins: number, queen: boolean): { kind: 'game' | 'match'; game: number; winner: Side } | null {
+export function boardCloses(s: CarromState, side: Side, coins: number, queen: boolean, penalty = false): { kind: 'game' | 'match'; game: number; winner: Side } | null {
   if (s.ended) return null;
-  const next = reducer(s, { type: 'BOARD', side, payload: { coins, queen } });
+  const next = reducer(s, { type: 'BOARD', side, payload: penalty ? { penalty: true } : { coins, queen } });
   if (next.games.length === s.games.length) return null;
   const winner: Side = next.gamesWon.home > s.gamesWon.home ? 'home' : 'away';
   return { kind: next.ended ? 'match' : 'game', game: next.games.length, winner };
@@ -274,7 +287,8 @@ const attrOf = (c?: CarromCredit): Attr => (c ? { ...(c.id ? { playerId: c.id } 
 export function boardAction(b: BoardInput): { type: string; side: Side; payload: Record<string, unknown>; attribution?: Attr; attribution2?: Attr } {
   return {
     type: 'BOARD', side: b.side,
-    payload: { coins: b.coins, queen: b.queenBy ? b.queenBy === 'winner' : !!b.queen, ...(b.queenBy ? { queenBy: b.queenBy } : {}), ...(b.slam ? { slam: b.slam } : {}) },
+    payload: b.penalty ? { coins: 0, queen: false, penalty: true }
+      : { coins: b.coins, queen: b.queenBy ? b.queenBy === 'winner' : !!b.queen, ...(b.queenBy ? { queenBy: b.queenBy } : {}), ...(b.slam ? { slam: b.slam } : {}) },
     attribution: attrOf(b.by?.[0]), attribution2: attrOf(b.by?.[1]),
   };
 }
@@ -290,6 +304,7 @@ export function boardInputs(s: CarromState): BoardInput[] {
   return (s?.boards ?? []).map((b, i) => ({
     side: b.winner, coins: b.coins, queen: b.queen,
     ...(b.queenBy ? { queenBy: b.queenBy } : {}), ...(b.slam ? { slam: b.slam } : {}),
+    ...(b.penalty ? { penalty: true } : {}),
     ...(s.boardBy?.[i]?.length ? { by: s.boardBy[i] } : {}),
   }));
 }
@@ -303,7 +318,8 @@ export function liveCredits(s: CarromState): Map<string, { name?: string; points
     for (const c of s.boardBy?.[i] ?? []) {
       if (!c.id) continue;
       const t = out.get(c.id) ?? { name: c.name, points: 0, boards: 0, queens: 0 };
-      t.points += capped[i]; t.boards += 1; if (b.queen) t.queens += 1;
+      // SD-68 — a penalty board's points count, but it is not a board won
+      t.points += capped[i]; if (!b.penalty) t.boards += 1; if (b.queen) t.queens += 1;
       out.set(c.id, t);
     }
   });
@@ -326,6 +342,68 @@ export function boardCorrection(s: CarromState, edited: BoardInput[]): Array<{ t
       const d = (a?.[stat] ?? 0) - (b?.[stat] ?? 0);
       if (d) out.push({ type: 'STAT_ADJUST', attribution: { playerId: id, stat, by: d, playerName: a?.name ?? b?.name } });
     }
+  }
+  return out;
+}
+
+// --------------------------------------------- SD-68 · ICF score sheet --
+
+/** One row of the ICF score sheet: a board as the referee writes it. */
+export interface SheetRow {
+  /** board number inside the game (1-based) */
+  n: number;
+  /** who broke it (null = the toss wasn't recorded) */
+  breaker: Side | null;
+  winner: Side;
+  /** opponent's coins left (0 on a penalty board) */
+  coins: number;
+  /** the Queen: 'winner' (+3 counted, or covered past 21), 'loser', 'none', or undefined (not recorded) */
+  queen?: QueenBy;
+  /** did the Queen add points on this board (under 22)? */
+  queenCounted: boolean;
+  slam?: Slam;
+  penalty?: true;
+  /** what the board added to the winner's GAME score (capped at the target) */
+  pts: number;
+  /** the game's running total after the board */
+  total: { home: number; away: number };
+  /** a tie-break board (after the board limit) */
+  tieBreak: boolean;
+}
+
+export interface SheetGame {
+  game: number;
+  rows: SheetRow[];
+  /** the final score, when the game is over (else the running total) */
+  score: [number, number];
+  done: boolean;
+  winner?: Side;
+}
+
+/** SD-68 (CR-03) — the ICF score sheet: per game, board # · breaker · winner ·
+ *  coins · Queen · points · running total; penalty boards and slams marked.
+ *  Pure — derived from the boards (and the toss, when recorded). */
+export function scoreSheet(s: CarromState): SheetGame[] {
+  const capped = creditedPoints(s);
+  const breakers = boardBreakers(s);
+  const out: SheetGame[] = [];
+  (s?.boards ?? []).forEach((b, i) => {
+    let g = out.find((x) => x.game === b.game);
+    if (!g) { g = { game: b.game, rows: [], score: [0, 0], done: false }; out.push(g); }
+    const prev = g.rows[g.rows.length - 1]?.total ?? { home: 0, away: 0 };
+    const total = { ...prev, [b.winner]: prev[b.winner] + capped[i] };
+    const queen: QueenBy | undefined = b.queenBy ?? (b.queen ? 'winner' : undefined);
+    g.rows.push({
+      n: g.rows.length + 1, breaker: breakers[i], winner: b.winner, coins: b.coins,
+      ...(queen ? { queen } : {}), queenCounted: b.queen && b.points > b.coins,
+      ...(b.slam ? { slam: b.slam } : {}), ...(b.penalty ? { penalty: true as const } : {}),
+      pts: capped[i], total, tieBreak: g.rows.length >= s.maxBoards,
+    });
+    g.score = [total.home, total.away];
+  });
+  for (const g of out) {
+    const final = s.games?.[g.game - 1];
+    if (final) { g.score = [final[0], final[1]]; g.done = true; g.winner = final[0] > final[1] ? 'home' : 'away'; }
   }
   return out;
 }

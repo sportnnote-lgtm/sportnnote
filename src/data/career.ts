@@ -109,7 +109,20 @@ export function careerSections(schema: SportStatSchema<SportId>, lines: StatLine
     }
     if (rows.length) out.push({ id: sec.id, title: sec.title, rows });
   }
-  return out;
+  return leadSections(schema, out, lines);
+}
+
+/** SD-39 — a section with `leadWhen` moves to the top when more than half of
+ *  the lines pass its filter (a football player who mostly kept goal reads
+ *  Goalkeeping first, an outfielder Attack first). */
+function leadSections(schema: SportStatSchema<SportId>, secs: CareerSection[], lines: StatLine[]): CareerSection[] {
+  if (!lines.length) return secs;
+  const lead = (schema.sections ?? []).filter((s) => {
+    const f = s.leadWhen ? schema.filters?.[s.leadWhen] : undefined;
+    return !!f && lines.filter(f).length * 2 > lines.length;
+  }).map((s) => s.id);
+  if (!lead.length) return secs;
+  return [...secs.filter((s) => lead.includes(s.id)), ...secs.filter((s) => !lead.includes(s.id))];
 }
 
 /* ------------------------------ framework figures ------------------------------ */

@@ -28,6 +28,7 @@ import { mergeTotals, volleyballSetRecord } from '../racketTotals.ts';
 import { volleyballCredits, type VolleyballState } from './engine.ts';
 import { volleyballTotals } from './fieldTime.ts';
 import type { PointKind } from '../rallyEdit.ts';
+import { detailTally, detailTracked, receptionTracked, VB_ATTACK_KEYS, VB_RECEPTION_KEYS } from './detail.ts';
 
 type Side = 'home' | 'away';
 
@@ -102,11 +103,37 @@ export const volleyballServeErrorTotals = (s: VolleyballState, ctx: StatTotalsCo
 export const VOLLEYBALL_SERVE_ERROR_KEY = 'serveErrors';
 export const VOLLEYBALL_ERROR_KEY = 'errors';
 
+/** SD-81 — the "Detailed stats" keys per player id: attack attempts / kills /
+ *  errors / blocked (a match that had detail on) and receptions (a match that
+ *  graded one). Keyed coverage: written on EVERY line of such a match (0 for
+ *  the rest), never on any other match ("not tracked"). Left out whole when a
+ *  named player can't be resolved (the SD-30 / SD-40 safeguard). */
+export function volleyballDetailTotals(s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>): Record<string, StatTotalsEntry> {
+  const attack = detailTracked(s);
+  const recv = receptionTracked(s);
+  if (!attack && !recv) return {};
+  const keys: string[] = [...(attack ? VB_ATTACK_KEYS : []), ...(recv ? VB_RECEPTION_KEYS : [])];
+  const idx = nameIndex(s, ctx);
+  for (const x of s.vd ?? []) if (x.playerId) idx[x.side].set(x.playerName, idx[x.side].get(x.playerName) ?? x.playerId);
+  const zero = () => Object.fromEntries(keys.map((k) => [k, 0]));
+  const out: Record<string, StatTotalsEntry> = {};
+  for (const [id, e] of Object.entries(lines)) out[id] = { side: e.side, stats: zero() };
+  for (const l of detailTally(s).values()) {
+    const id = l.playerId || idx[l.side].get(l.name) || undefined;
+    if (!id) return {};
+    const line = out[id] ?? (out[id] = { side: l.side, stats: zero() });
+    for (const k of keys) line.stats[k] = (line.stats[k] ?? 0) + (l[k as keyof typeof l] as number);
+  }
+  return out;
+}
+
 /** The plugin's `statTotals`: box keys, SD-29 sets played, SD-19 set record,
  *  SD-117b errors (only for a match that named an erring player), SD-58
  *  serve errors (only for a match that named a server who missed). */
 export const volleyballStatTotals = (s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> => {
   const base = mergeTotals(mergeTotals(volleyballBoxTotals(s, ctx), volleyballTotals(s)), volleyballSetRecord(s, ctx));
   const withErrors = mergeTotals(base, volleyballErrorTotals(s, ctx, base));
-  return mergeTotals(withErrors, volleyballServeErrorTotals(s, ctx, withErrors));
+  const withServe = mergeTotals(withErrors, volleyballServeErrorTotals(s, ctx, withErrors));
+  // SD-81 — attack attempts / efficiency inputs and receptions (detail mode)
+  return mergeTotals(withServe, volleyballDetailTotals(s, ctx, withServe));
 };

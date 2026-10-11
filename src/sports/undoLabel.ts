@@ -19,6 +19,7 @@ const QUIET: Record<string, string> = {
   SET_ROTATION: 'rotation', // SD-58
   SET_DETAIL: 'point-detail setting',
   POINT_DETAIL: 'point detail',
+  VB_DETAIL: 'rally detail', // SD-81 volleyball attack / reception detail
   EDIT_LOG: 'timeline correction',
   AMEND: 'correction',
   STAT_ADJUST: 'stat correction',

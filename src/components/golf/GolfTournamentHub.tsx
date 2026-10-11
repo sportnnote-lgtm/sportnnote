@@ -1,7 +1,7 @@
 /** Golf inside a tournament (stroke play / Stableford): its rounds and the
  *  cumulative leaderboard across them, plus "set up a round". Match-play golf
  *  tournaments use the normal matches/bracket hub instead. */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,12 @@ import { golfTeamFormatOf } from '../../data/golfTeams';
 import { useGolfRounds } from '../../data/useGolf';
 import { buildLeaderboard, golfFormatOf, roundCells, roundContext, cardOf } from '../../data/golf';
 import type { RootStackParamList } from '../../navigation/types';
+import type { StatLine } from '../../core/types';
+import { StatLeaderRail } from '../StatLeaderRail';
+import { getAllStatLines } from '../../data/repos';
+import { categoryLeaders } from '../../data/standings';
+import { readLeaderMins } from '../../data/leaderMinimums';
+import { golfLeaderCategories } from '../../data/golfLeaders';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -38,6 +44,24 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
     }
     return m;
   }, [cardEv, courses, entries]);
+
+  // SD-49 (GF-08) — leaders from the finished rounds' stat lines (low round,
+  // scoring average, birdies, eagles, putts, greens); a live round has no line yet
+  const done = events.filter((e) => e.status === 'completed').map((e) => e.id).join(',');
+  const [lines, setLines] = useState<StatLine[]>([]);
+  useEffect(() => {
+    let on = true;
+    if (!done) { setLines([]); return; }
+    const ids = new Set(done.split(','));
+    void getAllStatLines()
+      .then((ls) => on && setLines(ls.filter((l) => l.sport === 'golf' && !!l.eventId && ids.has(l.eventId))))
+      .catch(() => {});
+    return () => { on = false; };
+  }, [done]);
+  const categories = useMemo(
+    () => golfLeaderCategories(categoryLeaders(lines, [...players.values()], 'golf', { mins: readLeaderMins(format) }), format),
+    [lines, players, format],
+  );
 
   return (
     <View style={{ gap: theme.spacing(3) }}>
@@ -83,6 +107,13 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
         <>
           <SectionHeader title="👥 Team leaderboard" count={new Set(entries.filter((e) => e.teamId).map((e) => e.teamId)).size} />
           <GolfTeamBoard events={events} entries={entries} courses={courses} nameOf={nameOf} teamName={(id) => teams.get(id)?.name ?? 'Team'} />
+        </>
+      )}
+      {categories.length > 0 && (
+        <>
+          <SectionHeader title="📊 Leaders" count={categories.length} />
+          <Text style={textStyles.muted}>From finished rounds. Swipe for more →</Text>
+          <StatLeaderRail categories={categories} onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
         </>
       )}
     </View>

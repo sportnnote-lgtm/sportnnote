@@ -2226,6 +2226,17 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                         <Button label="📅 Add to my calendar" variant="ghost" onPress={addToCalendar} />
                       </View>
                     )}
+                    {/* SD-47 — head-to-head: singles = player vs player, else team vs team */}
+                    {(() => {
+                      const singles = getSport(sport).participantKind !== 'team' && homeRoster.length === 1 && awayRoster.length === 1;
+                      const params = singles
+                        ? { sport, a: homeRoster[0].id, b: awayRoster[0].id, aName: homeRoster[0].fullName, bName: awayRoster[0].fullName }
+                        : meta.homeTeamId && meta.awayTeamId
+                          ? { sport, teamA: meta.homeTeamId, teamB: meta.awayTeamId, aName: homeTeamName ?? homeName, bName: awayTeamName ?? awayName }
+                          : null;
+                      if (!params) return null;
+                      return <Text style={[st.editLink, { marginTop: theme.spacing(2) }]} accessibilityRole="button" onPress={() => navigation.navigate('HeadToHead', params)}>⚔️ Head-to-head &amp; form ›</Text>;
+                    })()}
                   </>
                 ) : (
                   <View style={{ gap: theme.spacing(3), marginTop: theme.spacing(1) }}>

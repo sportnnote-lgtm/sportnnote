@@ -165,7 +165,7 @@ describe('SD-23 · schemas declare the box', () => {
     const h = (sp: keyof typeof STAT_SCHEMAS) => boxColumns(STAT_SCHEMAS[sp]).map((c) => c.abbr);
     // SD-40: the FIBA box (shooting pairs / % and OREB / DREB show only when tracked)
     assert.deepEqual(h('basketball'), ['MIN', 'PTS', 'FGM-A', 'FG%', '3PM-A', '3P%', 'FTM-A', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-', 'EFF']);
-    assert.deepEqual(h('volleyball'), ['PTS', 'ATK', 'ACE', 'BLK']);
+    assert.deepEqual(h('volleyball'), ['PTS', 'ATK', 'ACE', 'BLK', 'ATT', 'EFF', 'SE', 'ERR']); // SD-81
     assert.deepEqual(h('kabaddi'), ['RAID', 'TKL', 'PTS']);
     // SD-80: OG / shootout columns are occasional (only when a row carries them)
     assert.deepEqual(h('football'), ['MIN', 'G', 'A', 'SH', 'SOT', 'SV', 'GA', 'FC', 'YC', 'RC', 'OG', 'SO', 'SOS']);

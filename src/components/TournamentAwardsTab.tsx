@@ -51,15 +51,17 @@ export function TournamentAwardsTab({
   const sports = tournament.sports;
   const sport = activeSport ?? sports[0];
   const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
+  // SD-49: field-event lines here (golf rounds …) — `lines` is this tournament's
+  const eventIds = useMemo(() => new Set(lines.flatMap((l) => (l.eventId ? [l.eventId] : []))), [lines]);
   const published = !!awards?.publishedAt;
   // SD-27: every ranking uses the matches (W / L) and the organiser's minimums
   const optsFor = useMemo(() => {
-    const cache = new Map<SportId, { matchIds: Set<string>; matches: Match[]; mins: LeaderMins }>();
+    const cache = new Map<SportId, { matchIds: Set<string>; eventIds: Set<string>; matches: Match[]; mins: LeaderMins }>();
     return (sp: SportId) => {
-      if (!cache.has(sp)) cache.set(sp, { matchIds, matches, mins: savedMins?.[sp] ?? readLeaderMins(tournament.formats?.[sp] as Record<string, unknown> | undefined) });
+      if (!cache.has(sp)) cache.set(sp, { matchIds, eventIds, matches, mins: savedMins?.[sp] ?? readLeaderMins(tournament.formats?.[sp] as Record<string, unknown> | undefined) });
       return cache.get(sp)!;
     };
-  }, [matchIds, matches, savedMins, tournament.formats]);
+  }, [matchIds, eventIds, matches, savedMins, tournament.formats]);
 
   // SD-43: the host can rank the active sport's awards on one format / ball
   // (cricket T20 / Leather…); other sports' lines pass through. Published
@@ -102,12 +104,12 @@ export function TournamentAwardsTab({
     const byId = new Map(players.map((p) => [p.id, p] as const));
     const mvpBy = new Map(candidatesMvp.map((c) => [c.playerId, c] as const));
     const games = new Map<string, number>();
-    for (const l of rankLines) if (l.sport === sport && matchIds.has(l.matchId)) games.set(l.playerId, (games.get(l.playerId) ?? 0) + 1);
+    for (const l of rankLines) if (l.sport === sport && (matchIds.has(l.matchId) || (!!l.eventId && eventIds.has(l.eventId)))) games.set(l.playerId, (games.get(l.playerId) ?? 0) + 1);
     return [...games.entries()].map(([pid, g]) => {
       const p = byId.get(pid);
       return { id: pid, name: p?.fullName ?? 'Player', teamName: p?.houseName, teamColor: p?.houseColor, detail: mvpBy.get(pid)?.detail ?? `${g} m` };
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [sport, players, rankLines, matchIds, candidatesMvp]);
+  }, [sport, players, rankLines, matchIds, eventIds, candidatesMvp]);
 
   const toRow = (c: AwardCandidate): PickerRow => ({ id: c.playerId, name: c.name, teamName: c.teamName, teamColor: c.teamColor, detail: c.detail, value: c.display ?? c.value });
   const pickerRows = useMemo((): PickerRow[] => {

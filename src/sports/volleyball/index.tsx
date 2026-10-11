@@ -26,6 +26,7 @@ import {
 import { pointPressure, pressureText } from '../pointStatus';
 import { trackCourt, liberoCue, setNoOf, type VbTrack } from './rotation';
 import { ServePanel, asPlayer } from './ServePanel';
+import { VolleyballDetailRow } from './DetailRow';
 import { MatchStatsPanel } from '../MatchStatsPanel';
 
 export { isDecider, setTarget } from './engine';
@@ -140,7 +141,7 @@ function splitCourt(roster: Player[], lineup: { playerId?: string }[], stamped?:
 /** Point / timeout controls — volleyball's, parameterised so a future set-based
  *  net sport without blocks can reuse them. `timeoutsPerSet` is the fallback
  *  when the state doesn't carry the format's (SD-117b). */
-export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet?: number; serve?: boolean }): SportPlugin<VolleyballState>['ScoringControls'] {
+export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet?: number; serve?: boolean; detail?: boolean }): SportPlugin<VolleyballState>['ScoringControls'] {
   const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [] }) => {
     const s = state as VolleyballState;
     // SD-29: before the first point, stamp who is on court (the lineup's court
@@ -187,6 +188,12 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
         )}
         <SidePoints side="home" name={homeName} color={hc} court={home.court} bench={home.bench} opponents={away.court.length ? away.court : awayRoster} oppColor={ac} serving={servingOf('home')} server={serverOf('home')} oppServer={serverOf('away')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
         <SidePoints side="away" name={awayName} color={ac} court={away.court} bench={away.bench} opponents={home.court.length ? home.court : homeRoster} oppColor={hc} serving={servingOf('away')} server={serverOf('away')} oppServer={serverOf('home')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        {/* SD-81 — optional "Detailed stats": attack attempts + reception */}
+        {opts.detail && (homeRoster.length > 0 || awayRoster.length > 0) && (
+          <VolleyballDetailRow state={s} dispatch={dispatch}
+            home={{ side: 'home', name: homeName, color: hc, court: home.court }}
+            away={{ side: 'away', name: awayName, color: ac, court: away.court }} />
+        )}
         {perSet > 0 && (() => {
           const setNo = s.setsWon.home + s.setsWon.away + 1;
           const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
@@ -240,7 +247,7 @@ function courtPlayers(roster: Player[], lineup: { playerId?: string; playerName?
 }
 
 // Timeouts per set come from the format (2 indoor, 1 beach — SD-117b).
-const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, serve: true });
+const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, serve: true, detail: true });
 
 const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as VolleyballState;

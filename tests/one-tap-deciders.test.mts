@@ -102,8 +102,10 @@ describe('carrom: Record says when it closes a game', () => {
   test('controls: no coin default; Record disabled until picked', () => {
     const c = src('sports/carrom/index.tsx');
     assert.ok(/useState<number \| null>\(null\)/.test(c));
-    assert.ok(/disabled=\{coins == null\}/.test(c));
-    assert.ok(/boardCloses\(s, winner, coins, queen\)/.test(c));
+    // SD-68: a penalty board needs no coins; any other board waits for the pick
+    assert.ok(/const ready = penalty \|\| coins != null/.test(c));
+    assert.ok(/disabled=\{!ready\}/.test(c));
+    assert.ok(/boardCloses\(s, winner, coins \?\? 0, queen, penalty\)/.test(c));
   });
 });
 

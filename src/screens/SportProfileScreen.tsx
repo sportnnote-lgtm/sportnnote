@@ -39,6 +39,8 @@ import { SPORT_SIDE_FIELDS } from '../data/sportProfileFields';
 import type { RootStackParamList } from '../navigation/types';
 import { isGuestSession, promptSignIn } from '../core/guest';
 import { ageOf } from '../core/age';
+import { playerForm } from '../data/headToHead';
+import { FormStrip } from '../components/FormStrip';
 
 
 
@@ -326,6 +328,26 @@ export default function SportProfileScreen() {
                 </>
               );
             })()}
+            {/* SD-47 — form (last 5, latest first) and head-to-head */}
+            {(() => {
+              const form = playerForm(history, matchById, sport);
+              const h2h = (plugin.participantKind === 'individual' || plugin.participantKind === 'both');
+              if (!form.length && !h2h) return null;
+              return (
+                <View style={st.formRow}>
+                  {form.length > 0 && (
+                    <>
+                      <Text style={[st.totalsLabel, { marginTop: 0 }]}>Form</Text>
+                      <FormStrip form={form} onPress={openMatch} />
+                    </>
+                  )}
+                  <View style={{ flex: 1 }} />
+                  {h2h && (
+                    <Text style={st.editLink} accessibilityRole="button" onPress={() => nav.navigate('HeadToHead', { sport, a: playerId, aName: player.fullName })}>⚔️ Compare with…</Text>
+                  )}
+                </View>
+              );
+            })()}
             {/* SD-24 — singles / doubles W-L (when the player has played both)
                 and the doubles record per partner. */}
             {(() => {
@@ -574,6 +596,7 @@ const st = StyleSheet.create({
   fbMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   editLink: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   partnerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
+  formRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) },
   partnerWL: { color: theme.colors.text, fontWeight: '800', minWidth: 44, textAlign: 'right' },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) },
   histDate: { color: theme.colors.textMuted, fontWeight: '400' },

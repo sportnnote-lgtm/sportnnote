@@ -29,7 +29,7 @@ A player's sport page shows their career in that sport: the record, then section
 - Under it, when they apply: **Starts**, **Ties**, **No result**, **Best win run** (most wins in a row), and **Titles** and **Finals** (knockout finals the player's side won and reached).
 - **Sections** for the sport, for example:
 - Basketball: **Per game** (points, rebounds, assists, steals, blocks, turnovers, minutes), **Shooting** (free throws and FT %), **Totals**, **Career highs** and double-doubles.
-- Football: goals per game and per 90 minutes, shots on target %, shot conversion %, minutes, **Bests** (hat-tricks), and **Goalkeeping** for a player who has kept goal (clean sheets, goals conceded, save %).
+- Football: goals per game and per 90 minutes, **Minutes per goal**, **Goals + assists**, shots on target %, shot conversion %, **Playing time** (**Starts**, **Off the bench**, minutes per game), hat-tricks, and **Goalkeeping** for keepers (**Games in goal**, clean sheets, save %, **Conceded per 90**), shown first for a player mostly in goal.
 - Volleyball: points, aces and blocks per set (over the sets the player was on court), and sets won and lost.
 - Kabaddi: total points, raid and tackle points per match, Super 10s and High 5s.
 - Racket sports: **Match play** (sets, games, points, deciders and tiebreaks won and lost, with won %), and **Serve & return** (service and return points won %, holds, breaks and break points where the sport has them).

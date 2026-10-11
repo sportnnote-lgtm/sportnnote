@@ -48,6 +48,7 @@ const OrganizerDashboardScreen = lazyScreen(() => import('../screens/OrganizerDa
 const NotificationPrefsScreen = lazyScreen(() => import('../screens/NotificationPrefsScreen'));
 const PlayerProfileScreen = lazyScreen(() => import('../screens/PlayerProfileScreen'));
 const SportProfileScreen = lazyScreen(() => import('../screens/SportProfileScreen'));
+const HeadToHeadScreen = lazyScreen(() => import('../screens/HeadToHeadScreen'));
 const EditProfileScreen = lazyScreen(() => import('../screens/EditProfileScreen'));
 const VerificationReviewScreen = lazyScreen(() => import('../screens/VerificationReviewScreen'));
 const CreateListingScreen = lazyScreen(() => import('../screens/CreateListingScreen'));
@@ -100,7 +101,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -307,6 +308,11 @@ export default function RootNavigator() {
       name="SportProfile"
       component={SportProfileScreen}
       options={{ ...stackScreenOpts, title: 'Sport' }}
+        />
+      <Stack.Screen
+      name="HeadToHead"
+      component={HeadToHeadScreen}
+      options={{ ...stackScreenOpts, title: 'Head-to-head' }}
         />
       <Stack.Screen
       name="SportHub"

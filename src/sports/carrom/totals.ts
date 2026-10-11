@@ -58,6 +58,7 @@ export function carromSideRecord(s: CarromState, side: Side): Record<string, num
   (s?.boards ?? []).forEach((b, i) => {
     if (b.winner !== side) return;
     points += capped[i];
+    if (b.penalty) return; // SD-68 — penalty points count, but not as a board won
     boards += 1;
     if (b.queen) queens += 1;
     if (b.slam === 'white') whiteSlams += 1;

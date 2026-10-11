@@ -21,6 +21,7 @@ import { eventCredits } from './basketball/credits.ts';
 import { shotsTracked } from './basketball/totals.ts';
 import { boxFieldByName } from './basketball/fieldTime.ts';
 import { tally as volleyballTally, type VolleyballState } from './volleyball/engine.ts';
+import { detailTally as vbDetailTally, detailTracked as vbDetailTracked } from './volleyball/detail.ts';
 import { tally as kabaddiTally, isShootoutEvent, type KabaddiState } from './kabaddi/engine.ts';
 import { kabaddiMatchCentre, KABADDI_COUNT_KEYS } from './kabaddi/totals.ts';
 import { footballStats, kickText, type FootballState, type TrackConfig } from './football/engine.ts';
@@ -160,11 +161,15 @@ export function volleyballBox(s: VolleyballState, ctx: BoxContext = {}): MatchBo
   // D8: attack points exist only once the scorer logs outcomes (SD-04); an
   // older "Point"-only log hides the ATK column instead of showing zeros.
   const outcomes = s.events.some((e) => VB_OUTCOME_KINDS.has(e.kind ?? ''));
+  // SD-81 — keyed: a column shows only when the match captured it
+  const namedSE = s.events.some((e) => e.kind === 'serveerror' && e.oe?.playerName);
+  const namedErr = s.events.some((e) => e.kind === 'opperror' && e.oe?.playerName);
   return {
     periods,
     emptyText: 'No points yet.',
     data: (scope) => {
       const inScope = (e: LiveEvent) => scope === 'all' || e.set === scope;
+      const vbDetail = vbDetailTracked(s) ? vbDetailTally(s, scope) : null;
       const count = (sd: Side, kind: string, name?: string) =>
         s.events.filter((e) => e.side === sd && e.kind === kind && inScope(e) && (name === undefined || e.playerName === name)).length;
       const side = (sd: Side): BoxSideInput => {
@@ -173,6 +178,33 @@ export function volleyballBox(s: VolleyballState, ctx: BoxContext = {}): MatchBo
           name: l.name,
           stats: { points: l.points, aces: l.aces, blocks: l.blocks, ...(outcomes ? { attackPoints: count(sd, 'attack', l.name) } : null) },
         }, roster));
+        // SD-81 — per-player ATT / EFF (detail mode), SE / ERR (named faults):
+        // only on a match that captured them, so older matches hide the columns
+        const extra = new Map<string, Record<string, number>>();
+        const add = (name: string, k: string, n = 1) => {
+          const m = extra.get(name) ?? extra.set(name, {}).get(name)!;
+          m[k] = (m[k] ?? 0) + n;
+        };
+        if (vbDetail) {
+          for (const l of vbDetail.values()) {
+            if (l.side !== sd) continue;
+            for (const k of ['attackAttempts', 'attackKills', 'attackErrors', 'attacksBlocked'] as const) add(l.name, k, l[k]);
+          }
+        }
+        for (const [kind, key, on] of [['serveerror', 'serveErrors', namedSE], ['opperror', 'errors', namedErr]] as const) {
+          if (!on) continue;
+          for (const e of s.events) if (e.kind === kind && e.side === other(sd) && inScope(e) && e.oe?.playerName) add(e.oe.playerName, key);
+        }
+        const zero: Record<string, number> = {
+          ...(vbDetail ? { attackAttempts: 0, attackKills: 0, attackErrors: 0, attacksBlocked: 0 } : null),
+          ...(namedSE ? { serveErrors: 0 } : null), ...(namedErr ? { errors: 0 } : null),
+        };
+        if (Object.keys(zero).length) {
+          for (const name of extra.keys()) {
+            if (!rows.some((r) => r.name === name)) rows.push(withId({ name, stats: { points: 0, aces: 0, blocks: 0, ...(outcomes ? { attackPoints: 0 } : null) } }, roster));
+          }
+          for (const r of rows) Object.assign(r.stats, zero, extra.get(r.name) ?? {});
+        }
         const oppErrors = count(sd, 'opperror') + count(sd, 'serveerror');
         const scoredKinds = ['point', 'attack', 'ace', 'block'];
         const scored = s.events.filter((e) => e.side === sd && inScope(e) && scoredKinds.includes(e.kind ?? '')).length;
@@ -495,7 +527,7 @@ export function carromBox(s: CarromState): MatchBoxSource {
     data: (scope) => {
       const side = (sd: Side): BoxSideInput => {
         const won = s.boards.map((b, i) => ({ b, pts: credit[i] })).filter(({ b }) => b.winner === sd && (scope === 'all' || b.game === scope));
-        return { rows: [], teamStats: { points: won.reduce((a, x) => a + x.pts, 0), boards: won.length, queens: won.filter((x) => x.b.queen).length } };
+        return { rows: [], teamStats: { points: won.reduce((a, x) => a + x.pts, 0), boards: won.filter((x) => !x.b.penalty).length, queens: won.filter((x) => x.b.queen).length } };
       };
       return { home: side('home'), away: side('away') };
     },

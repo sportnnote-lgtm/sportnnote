@@ -16,7 +16,7 @@ import { getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
 import { useTeamSummary, useMatches, usePlayers, useFollow, useTeamPermission } from '../data/hooks';
-import { getRoster, getMatchStatLines, getMatchSquads } from '../data/repos';
+import { getRoster, getMatchStatLines, getMatchSquads, getTournaments } from '../data/repos';
 import { computeTeamStats, h2hLastText, resultFor, type Result } from '../data/teamStats';
 import { matchLineFor } from '../sports/matchLine';
 import { SPORT_AWARDS, statLabel } from '../data/ratings';
@@ -24,6 +24,8 @@ import type { Player, SportId, StatLine } from '../core/types';
 import { teamStandings, tableLabels } from '../data/standings';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
+import { teamPerGame, teamAverages, teamLeaders, teamRecords, teamMatchFilters, filterTeamMatches } from '../data/teamRecords';
+import { formatDay } from '../core/dates';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -44,6 +46,15 @@ export default function TeamProfileScreen() {
   const [playedFor, setPlayedFor] = useState<Record<string, string[]>>({});
   // Stats are per sport (goals and runs don't add up) — a multi-sport team picks one.
   const [statSport, setStatSport] = useParamState<string>('sport', '');
+  // SD-46 — stats for one tournament / season ('' = all)
+  const [statTour, setStatTour] = useParamState<string>('tour', '');
+  const [statSeason, setStatSeason] = useParamState<string>('season', '');
+  const [tourNames, setTourNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let on = true;
+    getTournaments({ includeDeleted: true }).then((ts) => on && setTourNames(new Map(ts.map((t) => [t.id, t.name])))).catch(() => {});
+    return () => { on = false; };
+  }, []);
   const scrollRef = useRef<ScrollView>(null);
   const [statsY, setStatsY] = useState(0);
 
@@ -65,8 +76,17 @@ export default function TeamProfileScreen() {
   const sportsPlayed = [...new Set(finished.map((m) => m.sport))]
     .sort((a, b) => finished.filter((m) => m.sport === b).length - finished.filter((m) => m.sport === a).length);
   const sport = (sportsPlayed.includes(statSport as SportId) ? statSport : sportsPlayed[0]) as SportId | undefined;
+  // SD-46 — tournament / season chips (offered with ≥ 2 values; a stale pick is ignored)
+  const sportMatches = matches.filter((m) => m.sport === sport);
+  const filters = team ? teamMatchFilters(team.id, sportMatches, (id) => tourNames.get(id)) : { tournaments: [], seasons: [] };
+  const sel = {
+    tournament: filters.tournaments.some((t) => t.key === statTour) ? statTour : undefined,
+    season: filters.seasons.some((x) => x.key === statSeason) ? statSeason : undefined,
+  };
+  const scoped = filterTeamMatches(sportMatches, sel);
+  const scopedIds = new Set(scoped.map((m) => m.id));
   const doneIds = finished
-    .filter((m) => m.sport === sport)
+    .filter((m) => m.sport === sport && scopedIds.has(m.id))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt)).slice(0, 40).map((m) => m.id);
   const doneKey = doneIds.join(',');
   useEffect(() => {
@@ -115,7 +135,13 @@ export default function TeamProfileScreen() {
   }
 
   const following = isFollowing('team', team.id);
-  const stats = computeTeamStats(team.id, matches.filter((m) => m.sport === sport), lines, playedFor, SPORT_AWARDS, (m) => matchLineFor(m, team.id));
+  const stats = computeTeamStats(team.id, scoped, lines, playedFor, SPORT_AWARDS, (m) => matchLineFor(m, team.id));
+  // SD-46 — per game, team averages, team leaders and records from the schema
+  const perGame = sport ? teamPerGame(sport, team.id, scoped) : undefined;
+  const averages = sport ? teamAverages(sport, team.id, scoped, lines, playedFor) : [];
+  const moreLeaders = sport ? teamLeaders(sport, team.id, scoped, lines, playedFor, stats.leaders.map((l) => l.stat), Math.max(0, 6 - stats.leaders.length)) : [];
+  const leaders = [...stats.leaders, ...moreLeaders];
+  const teamRecs = sport ? teamRecords(sport, team.id, scoped, { lineOf: (m) => matchLineFor(m, team.id), dayOf: formatDay }) : [];
   const nameOf = (id: string) => squad.find((p) => p.id === id)?.fullName ?? players.find((p) => p.id === id)?.fullName ?? 'Player';
   const openMatch = (m: (typeof matches)[number]) => nav.navigate('LiveScoring', {
     matchId: m.id, sport: m.sport,
@@ -131,7 +157,9 @@ export default function TeamProfileScreen() {
   // Cricket ties read "T", a no result "NR"; cricket shows season NRR, not a
   // run difference (SD-12 / CK-02).
   const labels = tableLabels(sport);
-  const nrr = sport === 'cricket' ? records.find((r) => r.sport === 'cricket')?.row?.nrr : undefined;
+  const nrr = sport === 'cricket'
+    ? (sel.tournament || sel.season ? teamStandings(scoped, 'cricket').find((t) => t.teamId === team.id)?.nrr : records.find((r) => r.sport === 'cricket')?.row?.nrr)
+    : undefined;
   const decided = stats.played - stats.nr;
   // Aggregate record across every sport, for the at-a-glance headline (mirrors
   // the player profile's Matches / Wins / Win-rate tiles).
@@ -182,6 +210,26 @@ export default function TeamProfileScreen() {
               ))}
             </View>
           )}
+          {(filters.tournaments.length > 0 || filters.seasons.length > 0) && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipRow}>
+              {filters.tournaments.length > 0 && (
+                <>
+                  <SelectChip label="All events" active={!sel.tournament} onPress={() => setStatTour('')} />
+                  {filters.tournaments.map((t) => (
+                    <SelectChip key={t.key} label={`${t.label} · ${t.count}`} active={sel.tournament === t.key} onPress={() => setStatTour(t.key)} />
+                  ))}
+                </>
+              )}
+              {filters.seasons.length > 0 && (
+                <>
+                  <SelectChip label="All seasons" active={!sel.season} onPress={() => setStatSeason('')} />
+                  {filters.seasons.map((x) => (
+                    <SelectChip key={x.key} label={x.label} active={sel.season === x.key} onPress={() => setStatSeason(x.key)} />
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          )}
           {stats.played === 0 ? (
             <EmptyState icon="📊" title="No results yet" hint="Stats appear here after this team’s first finished match." compact />
           ) : (
@@ -205,13 +253,27 @@ export default function TeamProfileScreen() {
                 <Stat value={String(stats.scored)} label={stats.unit ? `${cap(stats.unit)} for` : 'Scored'} />
                 <Stat value={String(stats.conceded)} label={stats.unit ? `${cap(stats.unit)} against` : 'Conceded'} />
                 {labels.showDiff
-                  ? <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label="Difference" />
+                  ? <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label={perGame?.diffLabel ?? 'Difference'} />
                   : <Stat value={nrr === undefined ? '—' : `${nrr >= 0 ? '+' : ''}${nrr.toFixed(2)}`} label="Net run rate" />}
               </View>
-              {(stats.leaders.length > 0 || stats.appearances.length > 0) && (
+              {/* SD-46 — per game in the sport's unit, then the team's per-game figures */}
+              {perGame && (
                 <Card style={{ gap: theme.spacing(2) }}>
-                  <Text style={textStyles.muted}>Top performers</Text>
-                  {stats.leaders.map((l) => (
+                  <Text style={textStyles.muted}>Per game · {perGame.games} {perGame.games === 1 ? 'match' : 'matches'}</Text>
+                  <View style={st.avgGrid}>
+                    <Avg value={perGame.forPg} label={`${cap(perGame.word)} for`} />
+                    <Avg value={perGame.againstPg} label={`${cap(perGame.word)} against`} />
+                    <Avg value={perGame.marginPg} label="Margin" />
+                    {averages.map((a) => (
+                      <Avg key={a.key} value={a.value} label={a.rate ? a.label : `${a.label}${a.games < a.of ? ` · ${a.games} of ${a.of}` : ''}`} />
+                    ))}
+                  </View>
+                </Card>
+              )}
+              {(leaders.length > 0 || stats.appearances.length > 0) && (
+                <Card style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.muted}>Team leaders</Text>
+                  {leaders.map((l) => (
                     <TouchableOpacity key={l.stat} accessibilityRole="button" style={st.leaderRow} onPress={() => nav.navigate('PlayerProfile', { playerId: l.playerId })}>
                       <Text style={st.leaderIcon}>{l.icon}</Text>
                       <Text style={[textStyles.muted, { width: 96 }]}>{l.label}</Text>
@@ -227,6 +289,27 @@ export default function TeamProfileScreen() {
                       <Text style={st.leaderVal}>{stats.appearances[0].matches}</Text>
                     </TouchableOpacity>
                   )}
+                </Card>
+              )}
+              {/* SD-46 — records (biggest win, runs, clean sheets…) */}
+              {teamRecs.length > 0 && (
+                <Card style={{ gap: theme.spacing(2) }}>
+                  <Text style={textStyles.muted}>Records</Text>
+                  {teamRecs.map((r) => {
+                    const m = r.matchId ? matches.find((x) => x.id === r.matchId) : undefined;
+                    const body = (
+                      <View style={st.recRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={textStyles.body}>{r.label}</Text>
+                          {r.detail ? <Text style={[textStyles.muted, st.h2hLast]} numberOfLines={1}>{r.detail}</Text> : null}
+                        </View>
+                        <Text style={st.leaderVal}>{r.value}</Text>
+                      </View>
+                    );
+                    return m ? (
+                      <TouchableOpacity key={r.key} accessibilityRole="button" accessibilityLabel={`${r.label} ${r.value}${r.detail ? `, ${r.detail}` : ''}`} onPress={() => openMatch(m)}>{body}</TouchableOpacity>
+                    ) : <View key={r.key}>{body}</View>;
+                  })}
                 </Card>
               )}
               {stats.headToHead.length > 0 && (
@@ -312,6 +395,16 @@ export default function TeamProfileScreen() {
   );
 }
 
+/** SD-46 — one per-game figure (a third of the card's width). */
+function Avg({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={st.avgCell}>
+      <Text style={st.avgValue} numberOfLines={1}>{value}</Text>
+      <Text style={[textStyles.muted, st.avgLabel]} numberOfLines={2}>{label}</Text>
+    </View>
+  );
+}
+
 /** One headline record tile (Played / Won / Win rate) — same treatment as the
  *  player profile, so a team's record reads at a glance and the two pages match. */
 function Stat({ value, label }: { value: string; label: string }) {
@@ -335,6 +428,12 @@ const st = StyleSheet.create({
   followRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   actions: { flexDirection: 'row', gap: theme.spacing(3) },
   formRow: { flexDirection: 'row', gap: theme.spacing(2) },
+  chipRow: { flexDirection: 'row', gap: theme.spacing(2), paddingRight: theme.spacing(2) },
+  avgGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: theme.spacing(3) },
+  avgCell: { width: '33.33%', alignItems: 'center', gap: 2, paddingHorizontal: theme.spacing(1) },
+  avgValue: { color: theme.colors.text, fontSize: theme.font.h3, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  avgLabel: { fontSize: theme.font.small, textAlign: 'center' },
+  recRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },
   formChip: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   formText: { color: '#06120D', fontWeight: '900', fontSize: theme.font.body },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },

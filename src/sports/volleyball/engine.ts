@@ -18,6 +18,7 @@ import type { Attribution, ScoreAction } from '../types';
 import { replayPoints, type PointCredits, type PointInput, type PointKind } from '../rallyEdit.ts';
 import { pointsLineScore, type LineScore } from '../scoreline.ts';
 import { serveReducer, serveTracked, firstServer, type VbSub } from './rotation.ts';
+import { detailReducer, initDetail, type VbDetailEntry, type VbDetailToggle } from './detail.ts';
 
 const TARGET = 25;
 const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
@@ -57,6 +58,12 @@ export interface VolleyballState {
   liberos?: { home?: CourtPlayer[]; away?: CourtPlayer[] };
   /** SD-71: substitutions and libero replacements — `SUB` (see ./rotation.ts). */
   subs?: VbSub[];
+  /** SD-81: the "Detailed stats" switches (attack attempts, reception) —
+   *  `SET_DETAIL` (./detail.ts). Absent = never on (every older match). */
+  detail?: VbDetailToggle[];
+  /** SD-81: detail entries — attacks kept in play, blocked attackers,
+   *  receptions (`VB_DETAIL`). State stamps; absent on older logs. */
+  vd?: VbDetailEntry[];
 }
 
 export interface CourtPlayer { id: string; name: string }
@@ -74,6 +81,8 @@ export const init = (config?: Record<string, unknown>): VolleyballState => ({
   ended: false,
   // SD-117b: format-only keys, added only when set (old states keep their shape)
   ...formatExtras(config),
+  // SD-81: only when the format starts with detail on
+  ...initDetail(config),
 });
 
 /** SD-117b — Beach is the Beach preset or a 2-a-side format. */
@@ -278,6 +287,9 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   // SD-58 / SD-71: toss, rotation, substitutions — state stamps (./rotation.ts)
   const stamped = serveReducer(s, a);
   if (stamped) return stamped;
+  // SD-81: the detail switch and entries — state stamps (./detail.ts)
+  const detailed = detailReducer(s, a);
+  if (detailed) return detailed;
   if (a.type === 'LINEUP') {
     // SD-29: the court at the start (a state stamp, not a timeline event — it
     // survives an EDIT_LOG replay). The latest stamp for a side wins.

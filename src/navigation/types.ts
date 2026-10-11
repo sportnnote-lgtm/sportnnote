@@ -85,6 +85,9 @@ export type RootStackParamList = {
   TryNewSport: { sports?: SportId[] } | undefined;
   PlayerProfile: { playerId: string };
   SportProfile: { playerId: string; sport: SportId };
+  /** SD-47: head-to-head — player `a` vs `b` (no `b` = "Compare with…" picker),
+   *  or team `teamA` vs `teamB`. Names are optional (shown while loading). */
+  HeadToHead: { sport: SportId; a?: string; b?: string; teamA?: string; teamB?: string; aName?: string; bName?: string };
   /** asAdmin (parity #12): a manager editing an unclaimed player they added or run.
    *  On web it may come back from the URL as the string 'true'. */
   EditProfile: { playerId: string; asAdmin?: boolean };

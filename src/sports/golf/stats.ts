@@ -3,14 +3,29 @@
  *  engine.ts). The profile keeps golf's own block (careerView 'custom') until
  *  golf moves onto the results engine (SD-28). */
 import type { SportStatSchema } from '../statSchema.ts';
+import type { StatLine } from '../../core/types.ts';
 
 const opt = { coverage: 'optional' as const, mode: 'perHoleStats' };
 /** SD-45 — written only by a card kept with the stats row (D8: a line
  *  without the key reads "not tracked", never 0). */
 const keyed = { coverage: 'keyed' as const, mode: 'perHoleStats' };
 
+/** SD-49 — "68 (−4)": a round's gross with its score to par. */
+const toPar = (n: number) => (n === 0 ? 'E' : n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+const roundText = (s: Record<string, number>) => (typeof s.toPar === 'number' ? `${s.strokes} (${toPar(s.toPar)})` : String(s.strokes));
+/** a complete round (every hole, no pickup) of `n` holes */
+const completeOf = (n: number) => (l: StatLine) => !!l.stats?.completeRounds && l.stats?.holes === n;
+
 export const golfStats: SportStatSchema<'golf'> = {
   sport: 'golf',
+  // SD-49 — low round compares like for like (an 18-hole 72, a 9-hole 36);
+  // putts per round only over lines that say how many holes had putts (an
+  // older line without `puttHoles` is "not tracked", never 0 putts).
+  filters: {
+    complete18: completeOf(18),
+    complete9: completeOf(9),
+    putted: (l) => (Number(l.stats?.puttHoles) || 0) > 0,
+  },
   stats: [
     { key: 'holesWon', label: 'Holes won', short: 'holes won', one: 'hole won', group: 'matchPlay', weight: 1, matchSummary: true },
     { key: 'birdies', label: 'Birdies', short: 'birdies', one: 'birdie', group: 'scoring', weight: 3, matchSummary: true },
@@ -50,10 +65,20 @@ export const golfStats: SportStatSchema<'golf'> = {
     { key: 'differential', label: 'Score differential (unofficial)', short: 'differential', group: 'rounds', format: { unit: 'strokes', dp: 1, better: 'lower' }, coverage: 'keyed' as const },
     { key: 'hcpIndex', label: 'Handicap Index used', short: 'index', group: 'rounds', format: { unit: 'count', dp: 1, better: 'lower' }, coverage: 'keyed' as const },
     // derived figures (the profile's golf block computes these today)
-    { key: 'scoringAvg', label: 'Scoring avg', source: 'derived', group: 'rounds', format: { unit: 'strokes', dp: 1 },
-      agg: { kind: 'rate', num: 'completeStrokes', den: 'completeRounds', dp: 1 } },
-    { key: 'girPct', label: 'Greens (GIR)', source: 'derived', group: 'shots', format: { unit: 'percent', dp: 0 },
-      agg: { kind: 'rate', num: 'girHit', den: 'girHoles', scale: 100, dp: 0 } },
+    // SD-49 — the minimum applies on leaderboards / award slots only (careers
+    // always show the figure)
+    { key: 'scoringAvg', label: 'Scoring avg', leaderLabel: 'Scoring average', source: 'derived', group: 'rounds', format: { unit: 'strokes', dp: 1 },
+      agg: { kind: 'rate', num: 'completeStrokes', den: 'completeRounds', dp: 1, qualifier: { den: 2, unit: { label: 'rounds', one: 'round' } } } },
+    { key: 'girPct', label: 'Greens (GIR)', leaderLabel: 'Greens in regulation', source: 'derived', group: 'shots', format: { unit: 'percent', dp: 0 },
+      agg: { kind: 'rate', num: 'girHit', den: 'girHoles', scale: 100, dp: 0, qualifier: { den: 18, unit: { label: 'greens tracked', one: 'green tracked' } } } },
+    // SD-49 (GF-08) — tournament leaders / award slots from field-event lines
+    { key: 'lowRound', label: 'Low round', source: 'derived', group: 'rounds', format: { unit: 'strokes' },
+      agg: { kind: 'best', over: 'complete18', by: [{ key: 'strokes', better: 'lower' }], render: roundText } },
+    { key: 'lowRound9', label: 'Low round (9 holes)', source: 'derived', group: 'rounds', format: { unit: 'strokes' },
+      agg: { kind: 'best', over: 'complete9', by: [{ key: 'strokes', better: 'lower' }], render: roundText } },
+    { key: 'puttsPerRound', label: 'Putts per round', leaderLabel: 'Fewest putts per round', source: 'derived', group: 'shots',
+      format: { unit: 'count', dp: 1, better: 'lower' },
+      agg: { kind: 'rate', over: 'putted', num: 'putts', den: 'puttHoles', scale: 18, dp: 1, qualifier: { den: 18, unit: { label: 'holes putted', one: 'hole putted' } } } },
     { key: 'firPct', label: 'Fairways', source: 'derived', group: 'shots', format: { unit: 'percent', dp: 0 },
       agg: { kind: 'rate', num: 'firHit', den: 'firHoles', scale: 100, dp: 0 } },
     { key: 'scramblePct', label: 'Scrambling', source: 'derived', group: 'shots', format: { unit: 'percent', dp: 0 },
@@ -70,7 +95,18 @@ export const golfStats: SportStatSchema<'golf'> = {
     { id: 'matchPlay', title: 'Match play', rows: [{ stat: 'holesWon' }] },
   ],
   careerView: 'custom',
-  leaders: ['birdies', 'holesWon'],
+  // SD-49 — birdies stays the headline (match play with strokes has them too);
+  // the stroke-play categories only rank lines from finished rounds, and
+  // `holesWon` only exists in match play (golfLeaders.ts orders / drops them
+  // by the tournament's competition)
+  leaders: ['birdies', 'lowRound', 'lowRound9', 'scoringAvg', 'eagles', 'puttsPerRound', 'girPct', 'holesWon'],
   headline: ['rounds', 'birdies', 'eagles'],
-  awards: [{ stat: 'birdies', icon: '🐦', label: 'Most birdies' }],
+  awards: [
+    { stat: 'birdies', icon: '🐦', label: 'Most birdies' },
+    // tournament slots only — a single round has no "average"
+    { stat: 'lowRound', icon: '🎯', label: 'Low round', match: false,
+      howRanked: 'The lowest gross score in one complete 18-hole round of this tournament (every hole holed out, no pick-up). Ties go by name. You choose the winner.' },
+    { stat: 'scoringAvg', icon: '⛳', label: 'Best scoring average', match: false,
+      howRanked: 'Strokes per complete round (18-hole equivalent) over this tournament\'s finished rounds; the lowest wins. Players need at least {min} to rank. Ties go by name. You choose the winner.' },
+  ],
 };

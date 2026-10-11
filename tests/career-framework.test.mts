@@ -104,7 +104,8 @@ describe('SD-24 — per-sport sections from fixture lines', () => {
       L(M('football'), { cleanSheets: 0, goalsConceded: 1, minutes: 90 }, { tracked: ['goals', 'cleanSheets'] }), // saves off
     ];
     const c = rowsOf('football', ls);
-    assert.deepEqual(c.goalkeeping, { 'Clean sheets': '1', Saves: '10', 'Goals conceded': '3', 'Save %': '83%', 'Conceded per game': '1.00' });
+    // SD-39: games in goal and conceded per 90 (3 in 270 minutes)
+    assert.deepEqual(c.goalkeeping, { 'Games in goal': '3', 'Clean sheets': '1', Saves: '10', 'Goals conceded': '3', 'Save %': '83%', 'Conceded per game': '1.00', 'Conceded per 90': '1.00' });
   });
   test('volleyball: per-set figures over sets played, sets W-L (VB-08)', () => {
     const ls = [
@@ -142,7 +143,7 @@ describe('SD-24 — per-sport sections from fixture lines', () => {
   });
   test('a rate with nothing to divide by is hidden, not "–" (a keeper with no shots faced)', () => {
     const c = rowsOf('football', [L(M('football'), { cleanSheets: 1, goalsConceded: 0, minutes: 61 })]);
-    assert.deepEqual(c.goalkeeping, { 'Clean sheets': '1', 'Goals conceded': '0', 'Conceded per game': '0.00' });
+    assert.deepEqual(c.goalkeeping, { 'Games in goal': '1', 'Clean sheets': '1', 'Goals conceded': '0', 'Conceded per game': '0.00', 'Conceded per 90': '0.00' });
   });
   test('carrom: points per match and best match', () => {
     const c = rowsOf('carrom', [L(M('carrom'), { points: 25, queens: 1 }), L(M('carrom'), { points: 13, queens: 0 })]);

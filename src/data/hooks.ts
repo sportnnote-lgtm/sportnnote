@@ -3,6 +3,7 @@
 import { promptSignIn } from '../core/guest';
 import { isSupabaseConfigured } from '../core/supabase';
 import { getFieldEvents } from './golf';
+import { scopeTournamentLines } from './golfLeaders';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -132,13 +133,19 @@ export function useLeagueData(tournamentId?: string, nonce = 0) {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([getMatches(), getAllStatLines(), getPlayers()]).then(([m, l, p]) => {
+      Promise.all([
+        getMatches(), getAllStatLines(), getPlayers(),
+        // SD-49: the tournament's field events (golf rounds, results-engine events)
+        tournamentId ? getFieldEvents({ tournamentId }).catch(() => []) : Promise.resolve([]),
+      ]).then(([m, l, p, evs]) => {
         if (!on) return;
         const matches = tournamentId ? m.filter((x) => x.tournamentId === tournamentId) : m;
         // Scope stat lines to THIS tournament's matches so leaders reflect only
-        // contributions here — not a player's history elsewhere.
+        // contributions here — not a player's history elsewhere. SD-49 (GEN-18):
+        // plus field-event lines (no match) whose event belongs to it.
         const matchIds = new Set(matches.map((x) => x.id));
-        const lines = tournamentId ? l.filter((sl) => matchIds.has(sl.matchId)) : l;
+        const eventIds = new Set(evs.map((e) => e.id));
+        const lines = tournamentId ? scopeTournamentLines(l, matchIds, eventIds) : l;
         setData({ matches, lines, players: p, loading: false });
       });
       return () => {

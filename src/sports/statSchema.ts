@@ -232,6 +232,10 @@ export interface SectionDef {
   /** `hideZero` (SD-24): a milestone row ("Hat-tricks", "Super 10s") shows
    *  only once the player has one */
   rows: { stat: string; label?: string; hideZero?: boolean }[];
+  /** SD-39 — a schema line filter: the section moves to the top of the career
+   *  when more than half of the player's lines pass it (football's
+   *  Goalkeeping section for a player who mostly kept goal) */
+  leadWhen?: string;
 }
 
 /** SD-23 — a box-score column with more than a plain stat key. */
@@ -794,6 +798,7 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
   for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));
   for (const s of schema.stats) needFilter(s.coverOf, `stat ${s.key} coverOf`);
   for (const sec of schema.sections ?? []) sec.rows.forEach((r) => need(r.stat, `section ${sec.id}`));
+  for (const sec of schema.sections ?? []) needFilter(sec.leadWhen, `section ${sec.id} leadWhen`);
   for (const b of schema.box ?? []) {
     for (const c of b.columns) {
       const where = `box ${b.title ?? ''}`;

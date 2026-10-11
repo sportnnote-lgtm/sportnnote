@@ -140,6 +140,9 @@ export const awardIcon = (sport: SportId, slot: string): string =>
 export interface AwardRankOptions {
   /** restrict to a tournament's matches */
   matchIds?: Iterable<string>;
+  /** SD-49 — field events (golf rounds, results-engine events) whose lines
+   *  count too when `matchIds` restricts: a field-event line has no match */
+  eventIds?: Iterable<string>;
   /** SD-27 — the matches, so each line's W / L is known (racket wins) */
   matches?: Match[];
   /** SD-27 — the organiser's minimums for this tournament (format `leaderMins`) */
@@ -294,7 +297,8 @@ export function rankAwardCandidates(
   opts: AwardRankOptions = {},
 ): AwardCandidate[] {
   const ids = opts.matchIds ? new Set(opts.matchIds) : null;
-  const mine = withLineResults(lines.filter((l) => l.sport === sport && (!ids || ids.has(l.matchId))), opts.matches);
+  const evs = opts.eventIds ? new Set(opts.eventIds) : null;
+  const mine = withLineResults(lines.filter((l) => l.sport === sport && (!ids || ids.has(l.matchId) || (!!l.eventId && !!evs?.has(l.eventId)))), opts.matches);
   const byId = new Map(players.map((p) => [p.id, p] as const));
   const linesOf = new Map<string, StatLine[]>();
   for (const l of mine) (linesOf.get(l.playerId) ?? linesOf.set(l.playerId, []).get(l.playerId)!).push(l);
@@ -321,7 +325,8 @@ export function rankAwardCandidates(
           .sort((a, b) => b[1] * (w[b[0]] ?? 0) - a[1] * (w[a[0]] ?? 0))
           .slice(0, 3)
           .map(([k, v]) => `${v} ${statLabel(k, v)}`);
-        return { pid, value, games: ls.length, detail: [`${ls.length} m`, ...top].join(' · ') };
+        const n = sport === 'golf' && ls.every((l) => l.eventId) ? `${ls.length} ${ls.length === 1 ? 'round' : 'rounds'}` : `${ls.length} m`;
+        return { pid, value, games: ls.length, detail: [n, ...top].join(' · ') };
       })
       .filter((r) => r.value > 0)
       .sort((a, b) => b.value - a.value || nameOf(a.pid).localeCompare(nameOf(b.pid)))
@@ -356,7 +361,8 @@ export function rankAwardCandidates(
   return ranked.map((r) => {
     const ls = linesOf.get(r.playerId) ?? [];
     const games = ls.length;
-    const m = `${games} m`;
+    // SD-49: golf rounds (field-event lines) read "2 rounds", not "2 m"
+    const m = sport === 'golf' && ls.length && ls.every((l) => l.eventId) ? `${games} ${games === 1 ? 'round' : 'rounds'}` : `${games} m`;
     let detail: string;
     if (sport === 'cricket' && slot === 'runs') {
       const c = career(ls);

@@ -16,11 +16,12 @@ import { SetLineBoard } from '../SetLineBoard';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { carromBox } from '../boxSources';
 import {
-  init, reducer, result, boardPoints, boardCloses, creditPoints, creditedPoints, summary, scoreLine, lineScore, standingsUnits,
+  init, reducer, result, boardPoints, boardCloses, creditedPoints, PENALTY_POINTS, summary, scoreLine, lineScore, standingsUnits,
   nextBreaker, boardBreakers, slamFor, boardInputs, boardCorrection,
   type BoardInput, type CarromState, type QueenBy, type Side, type Slam,
 } from './engine';
 import { carromStatTotals, creditedPlayers } from './totals';
+import { ScoreSheet } from './ScoreSheet';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
@@ -36,6 +37,8 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   const [queenBy, setQueenBy] = useState<QueenBy | null>(null);
   const queen = queenBy === 'winner';
   const [slam, setSlam] = useState<Slam | null>(null);
+  // SD-68 (CR-07) — a penalty board: 3 to the side picked, not a board won
+  const [penalty, setPenalty] = useState(false);
   const [fixToss, setFixToss] = useState(false);
   // "Played by" (a roster bigger than the side) — kept from board to board
   const [picked, setPicked] = useState<Record<Side, string[]>>({ home: [], away: [] });
@@ -47,10 +50,11 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   const roster = winner ? (winner === 'home' ? homeRoster : awayRoster) : [];
   const players = winner ? creditedPlayers(roster, perSide, picked[winner]) : [];
   // SD-37: the game score counts at most to 25, and so do the players' points
-  const value = winner && coins != null ? boardPoints(coins, queen, s.current[winner], s) : 0;
-  const credit = winner && coins != null ? creditPoints(coins, queen, s.current[winner], s) : 0;
+  const ready = penalty || coins != null;
+  const value = winner && ready ? (penalty ? PENALTY_POINTS : boardPoints(coins!, queen, s.current[winner], s)) : 0;
+  const credit = winner && ready ? Math.min(value, Math.max(0, s.target - s.current[winner])) : 0;
   // SD-116: say on the button when this board closes the game / the match
-  const closes = winner && coins != null ? boardCloses(s, winner, coins, queen) : null;
+  const closes = winner && ready ? boardCloses(s, winner, coins ?? 0, queen, penalty) : null;
   const queenCounts = winner ? s.current[winner] < s.queenCutoff : true;
   const togglePick = (side: Side, id: string) => setPicked((cur) => {
     const now = creditedPlayers(roster, perSide, cur[side]).map((p) => p.id);
@@ -58,15 +62,17 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
     return { ...cur, [side]: next.length ? next : now };
   });
   const record = () => {
-    if (!winner || coins == null) return;
-    const attr = (p: Player) => ({ playerId: p.id, playerName: p.fullName, stat: 'points', by: credit, extra: { boards: 1, ...(queen ? { queens: 1 } : {}) } });
+    if (!winner || !ready) return;
+    // SD-68 — a penalty board credits its points, never a board won / Queen
+    const attr = (p: Player) => ({ playerId: p.id, playerName: p.fullName, stat: 'points', by: credit, ...(penalty ? {} : { extra: { boards: 1, ...(queen ? { queens: 1 } : {}) } }) });
     dispatch({
-      type: 'BOARD', side: winner, payload: { coins, queen, ...(queenBy ? { queenBy } : {}), ...(slam ? { slam } : {}) },
+      type: 'BOARD', side: winner,
+      payload: penalty ? { coins: 0, queen: false, penalty: true } : { coins, queen, ...(queenBy ? { queenBy } : {}), ...(slam ? { slam } : {}) },
       // SD-37: a board is the side's — both doubles partners are credited
       attribution: players[0] ? attr(players[0]) : undefined,
       attribution2: players[1] ? attr(players[1]) : undefined,
     });
-    setWinner(null); setCoins(null); setQueenBy(null); setSlam(null);
+    setWinner(null); setCoins(null); setQueenBy(null); setSlam(null); setPenalty(false);
   };
   const toss = (side: Side) => { dispatch({ type: 'FIRST_BREAK', payload: { side } }); setFixToss(false); };
   const tossPicker = (
@@ -108,6 +114,14 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
               </View>
             </View>
           )}
+          {/* SD-68 (CR-07) — a penalty board instead of a played-out one */}
+          <View style={ctrl.chips}>
+            <SelectChip label="Board played out" active={!penalty} onPress={() => setPenalty(false)} />
+            <SelectChip label={`⚠️ Penalty board · +${PENALTY_POINTS} to ${nameOf(winner)}`} active={penalty} onPress={() => { setPenalty(true); setSlam(null); setQueenBy(null); }} />
+          </View>
+          {penalty ? (
+            <Text style={ctrl.meta}>The opponent was penalised: {nameOf(winner)} get {PENALTY_POINTS} points. It is not counted as a board won, a Queen or a slam.</Text>
+          ) : (<>
           <View style={{ gap: theme.spacing(2) }}>
             <Text style={ctrl.label}>Opponent's coins left{coins == null ? <Text style={ctrl.meta}> · tap one</Text> : null}</Text>
             <View style={ctrl.chips}>
@@ -137,10 +151,11 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
               )}
             </View>
           </View>
+          </>)}
           <Button
-            label={coins == null ? '✓ Record board — pick the coins left'
-              : `✓ Record board · +${credit}${closes ? ` · ${closes.winner === winner ? '' : `${nameOf(closes.winner)} `}wins ${closes.kind === 'match' ? 'the match' : `Game ${closes.game}`}` : credit < value ? ` (game at ${s.target})` : ''}`}
-            variant={closes ? 'primary' : winner} onPress={record} disabled={coins == null} />
+            label={!ready ? '✓ Record board — pick the coins left'
+              : `✓ Record ${penalty ? 'penalty board' : 'board'} · +${credit}${closes ? ` · ${closes.winner === winner ? '' : `${nameOf(closes.winner)} `}wins ${closes.kind === 'match' ? 'the match' : `Game ${closes.game}`}` : credit < value ? ` (game at ${s.target})` : ''}`}
+            variant={closes ? 'primary' : winner} onPress={record} disabled={!ready} />
         </>
       )}
       {/* SD-117c — fix or remove any past board (the boards replay: EDIT_LOG) */}
@@ -190,7 +205,7 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
     if (ok) commit(list.map((x, i) => (i === draft.index ? b : x)));
   };
   const label = (b: BoardInput, i: number) =>
-    `G${s.boards[i].game} · ${nameOf(b.side)} +${capped[i]} (${b.coins} coin${b.coins === 1 ? '' : 's'}${b.queen ? ' + 👑' : ''})${breakers[i] ? ` · ${nameOf(breakers[i]!)} broke` : ''}`;
+    `G${s.boards[i].game} · ${nameOf(b.side)} +${capped[i]} ${b.penalty ? '(⚠️ penalty)' : `(${b.coins} coin${b.coins === 1 ? '' : 's'}${b.queen ? ' + 👑' : ''})`}${breakers[i] ? ` · ${nameOf(breakers[i]!)} broke` : ''}`;
 
   return (
     <View style={{ gap: theme.spacing(2) }}>
@@ -210,6 +225,11 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
                     onPress={() => setDraft({ ...draft, b: { ...draft.b, side, slam: undefined } })} />
                 ))}
               </View>
+              <View style={ctrl.chips}>
+                <SelectChip label="Played out" active={!draft.b.penalty} onPress={() => setDraft({ ...draft, b: { ...draft.b, penalty: false } })} />
+                <SelectChip label={`⚠️ Penalty · +${PENALTY_POINTS}`} active={!!draft.b.penalty} onPress={() => setDraft({ ...draft, b: { ...draft.b, penalty: true, coins: 0, queen: false, queenBy: undefined, slam: undefined } })} />
+              </View>
+              {!draft.b.penalty && (<>
               <Text style={ctrl.meta}>Opponent's coins left</Text>
               <View style={ctrl.chips}>
                 {Array.from({ length: 10 }, (_, n) => <SelectChip key={n} label={String(n)} active={draft.b.coins === n} onPress={() => setDraft({ ...draft, b: { ...draft.b, coins: n } })} />)}
@@ -221,6 +241,7 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
                     onPress={() => setDraft({ ...draft, b: { ...draft.b, queenBy: q, queen: q === 'winner' } })} />
                 ))}
               </View>
+              </>)}
               <View style={ctrl.row}>
                 <Button label="Save…" variant={draft.b.side} style={ctrl.flex} onPress={() => void save()} />
                 <Button label="Cancel" variant="ghost" onPress={() => setDraft(null)} />
@@ -247,9 +268,6 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
 
 const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor }) => {
   const s = state as CarromState;
-  // SD-37: a game-winning board shows what it added (the game is written at 25)
-  const credited = creditedPoints(s);
-  const breakers = boardBreakers(s); // SD-117c — who broke each board (toss recorded)
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Games</Text>
@@ -261,13 +279,10 @@ const LiveExtras: NonNullable<SportPlugin<CarromState>['LiveExtras']> = ({ state
       {s.boards.length > 0 && (
         <MatchBoxScore sport="carrom" source={carromBox(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />
       )}
-      <Text style={ctrl.label}>Boards</Text>
+      {/* SD-68 (CR-03) — the ICF score sheet: board · breaker · winner · coins · Queen · running total */}
+      <Text style={ctrl.label}>Score sheet</Text>
       {s.boards.length === 0 ? <Text style={textStyles.muted}>No boards yet.</Text> : (
-        s.boards.map((b, i) => ({ b, pts: credited[i], br: breakers[i] })).reverse().map(({ b, pts, br }, i) => (
-          <Text key={i} style={textStyles.body}>
-            G{b.game} · {b.winner === 'home' ? homeName : awayName} +{pts} ({b.coins} coin{b.coins === 1 ? '' : 's'}{b.queen ? ' + 👑' : ''}){b.queenBy === 'loser' ? ' · 👑 covered by the loser' : ''}{b.slam ? ` · ${b.slam === 'white' ? '⚪ White' : '⚫ Black'} slam` : ''}{br ? ` · ${br === 'home' ? homeName : awayName} broke` : ''}
-          </Text>
-        ))
+        <ScoreSheet state={s} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} />
       )}
     </View>
   );

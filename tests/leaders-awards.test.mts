@@ -42,7 +42,7 @@ describe('SD-27 — sport-correct leader categories', () => {
   });
   test('per sport, in order', () => {
     assert.deepEqual(keys('basketball'), ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'effPg', 'points', 'rebounds', 'assists', 'doubleDoubles']);
-    assert.deepEqual(keys('volleyball'), ['points', 'attackPoints', 'aces', 'blocks', 'pointsPerSet', 'acesPerSet', 'blocksPerSet']);
+    assert.deepEqual(keys('volleyball'), ['points', 'attackPoints', 'aces', 'blocks', 'pointsPerSet', 'acesPerSet', 'blocksPerSet', 'attackEff']); // SD-81
     assert.deepEqual(keys('kabaddi'), ['matchPoints', 'raidPoints', 'tacklePoints', 'ptsPerMatch', 'raidPerMatch', 'tacklePerMatch', 'super10s', 'high5s']);
     assert.deepEqual(keys('chess'), ['score', 'scorePct', 'wins']);
     assert.deepEqual(keys('carrom'), ['points', 'boards', 'queens', 'pointsPerMatch']);
@@ -82,7 +82,7 @@ describe('SD-27 — award slots and MVP weights from the schema', () => {
   const slots = (sp: SportId) => TOURNAMENT_AWARD_SLOTS[sp].map((s) => [s.slot, s.label]);
   test('slots per sport (slot keys kept where a slot already existed)', () => {
     assert.deepEqual(slots('basketball'), [['mvp', 'Player of the Tournament'], ['points', 'Top scorer'], ['rebounds', 'Top rebounder'], ['assists', 'Playmaker']]);
-    assert.deepEqual(slots('volleyball'), [['mvp', 'Player of the Tournament'], ['points', 'Best scorer'], ['aces', 'Best server'], ['blocks', 'Best blocker'], ['attackPoints', 'Most attack points']]);
+    assert.deepEqual(slots('volleyball'), [['mvp', 'Player of the Tournament'], ['points', 'Best scorer'], ['aces', 'Best server'], ['blocks', 'Best blocker'], ['attackPoints', 'Most attack points'], ['attackKills', 'Best attacker']]); // SD-81
     assert.deepEqual(slots('kabaddi'), [['mvp', 'Player of the Tournament'], ['raidPoints', 'Best raider'], ['tacklePoints', 'Best defender']]);
     assert.deepEqual(slots('chess'), [['mvp', 'Player of the Tournament'], ['scorePct', 'Best score %']]);
     assert.deepEqual(slots('carrom'), [['mvp', 'Player of the Tournament'], ['points', 'Top scorer'], ['queens', 'Queens']]);
@@ -211,7 +211,8 @@ describe('SD-27 — minimums and the organiser override', () => {
       ['winPct', 'min 3 matches'], ['winnersPerMatch', 'min 3 matches'], ['srvPtsPct', 'min 30 service points'], ['holdPct', 'min 6 service games'], ['bpWonPct', 'min 5 break point chances'],
     ]);
     assert.deepEqual(minimumRows('cricket').map((r) => [r.key, r.text]), [['avg', 'min 3 innings'], ['sr', 'min 30 balls'], ['econ', 'min 10 overs']]);
-    assert.deepEqual(minimumRows('golf'), []);
+    // SD-49: golf's stroke-play rates rank with a minimum
+    assert.deepEqual(minimumRows('golf').map((r) => [r.key, r.text]), [['scoringAvg', 'min 2 rounds'], ['puttsPerRound', 'min 18 holes putted'], ['girPct', 'min 18 greens tracked']]);
   });
 });
 

@@ -46,6 +46,8 @@ import { useMeet } from '../data/useAthletics';
 import { meetFieldResults, meetSettings, swimMeetSettings, courseShort, eventMeetSettings, pointsLabel } from '../data/results';
 import { isEventSport, eventWords, eventPrefix } from '../sports/eventSports';
 import { MedalTable } from '../components/MedalTable';
+import { useGolfRounds } from '../data/useGolf';
+import { golfFieldResults, golfLeaderCategories, golfPositionPoints, isGolfMatchPlay } from '../data/golfLeaders';
 import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -204,6 +206,12 @@ export default function TournamentProfileScreen() {
   const hasAthletics = sports.some((s) => isEventSport(s));
   const eventSport = sports.find((s) => isEventSport(s));
   const meet = useMeet(hasAthletics ? params.tournamentId : undefined, undefined, 'all');
+  // SD-49: golf stroke play / Stableford is a field event too — its final
+  // positions feed the medal table when the tournament counts positions.
+  const golfFmt = tournament?.formats?.golf as Record<string, unknown> | undefined;
+  const golfStroke = sports.includes('golf') && !isGolfMatchPlay(golfFmt);
+  const golfMedals = golfStroke && (tournament?.scoring?.mode === 'position' || hasAthletics);
+  const golf = useGolfRounds({ tournamentId: golfMedals ? params.tournamentId : undefined });
   const [sport, setSport] = useState<SportId | null>(null);
   const activeSport = sport ?? sports[0];
 
@@ -324,15 +332,29 @@ export default function TournamentProfileScreen() {
   // A medal meet ranks the overall table by position points, not match points.
   const isMedal = tournament?.scoring?.mode === 'position';
   const fieldResults = useMemo(() => {
-    if (!hasAthletics) return [];
+    // SD-49: the golf leaderboard's final positions (all rounds finished); a
+    // golfer scores for their entry's team, else their house
+    const golfResults = golfMedals
+      ? golfFieldResults(golf.events, golf.entries, golf.courses, {
+          teamOf: (en) => {
+            const t = en.teamId ? golf.teams.get(en.teamId) : undefined;
+            if (t) return { id: t.id, name: t.name, colorHex: t.colorHex };
+            const p = golf.players.get(en.playerId);
+            return p?.houseName ? { name: p.houseName, colorHex: p.houseColor } : undefined;
+          },
+          nameOf: (pid) => golf.players.get(pid)?.fullName ?? 'Player',
+          positionPoints: golfPositionPoints(golfFmt, tournament?.scoring),
+        })
+      : [];
+    if (!hasAthletics) return golfResults;
     // each event sport scores with its own points settings
-    return sports.filter((s) => isEventSport(s)).flatMap((s) => {
+    return [...sports.filter((s) => isEventSport(s)).flatMap((s) => {
       const f = tournament?.formats?.[s] as Record<string, unknown> | undefined;
       const cfg = eventMeetSettings(s, f);
       // SD-97: weightlifting may award snatch / C&J medals too (liftMedals)
       return meetFieldResults(meet.events.filter((e) => e.discipline.startsWith(eventPrefix(s))), { positionPoints: cfg.positionPoints, relayFactor: cfg.relayFactor, liftMedals: cfg.liftMedals });
-    });
-  }, [hasAthletics, meet.events, tournament?.formats, sports]);
+    }), ...golfResults];
+  }, [hasAthletics, meet.events, tournament?.formats, tournament?.scoring, sports, golfMedals, golf.events, golf.entries, golf.courses, golf.teams, golf.players, golfFmt]);
   const showMedal = (isMedal && sports.length > 1) || fieldResults.length > 0;
   const medal = useMemo(
     () => (showMedal ? medalStandings(matches, isMedal ? sports : [], isMedal ? tournament?.scoring : { mode: 'position' }, tournament?.formats, fieldResults) : []),
@@ -357,8 +379,13 @@ export default function TournamentProfileScreen() {
   const tourList = useMemo(() => (tournament ? [tournament] : []), [tournament]);
   const leaderScope = useLeaderSplits(activeSport, lines, matches, tourList);
   const categories = useMemo(
-    () => (activeSport ? categoryLeaders(leaderScope.lines, players, activeSport, { matches, mins }) : []),
-    [leaderScope.lines, players, activeSport, matches, mins]
+    () => {
+      if (!activeSport) return [];
+      const cats = categoryLeaders(leaderScope.lines, players, activeSport, { matches, mins });
+      // SD-49: golf in golf order — stroke play drops "Holes won"
+      return activeSport === 'golf' ? golfLeaderCategories(cats, golfFmt) : cats;
+    },
+    [leaderScope.lines, players, activeSport, matches, mins, golfFmt]
   );
   const saveMins = async (next: LeaderMins) => {
     if (!tournament || !activeSport) return;
@@ -980,6 +1007,10 @@ export default function TournamentProfileScreen() {
               // SD-90 / SD-94: athletics and swimming have no league table — the programme, leaders and records live on the sport's page.
               <Button label={`${eventWords(activeSport).icon} ${getSport(activeSport).name} results, leaders & records`} variant="ghost"
                 onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: activeSport, tournamentName: tournament.name })} />
+            ) : activeSport === 'golf' && golfStroke ? (
+              // SD-49: stroke play / Stableford has a leaderboard, not a league table
+              <Button label="⛳ Golf leaderboard & rounds" variant="ghost"
+                onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: 'golf', tournamentName: tournament.name })} />
             ) : activeSport && phases.length > 0 ? (
               phases.map((ph) => (
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>

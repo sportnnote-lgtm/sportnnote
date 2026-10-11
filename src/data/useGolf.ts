@@ -27,6 +27,8 @@ export function useGolfRounds(scope: { eventId?: string; tournamentId?: string }
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
+    // SD-49: no scope = nothing to load (a page that only needs golf sometimes)
+    if (!scope.eventId && !scope.tournamentId) { setEvents([]); setEntries([]); setLoading(false); return; }
     const evs = scope.eventId
       ? [await getFieldEvent(scope.eventId)].filter((e): e is FieldEvent => !!e)
       : scope.tournamentId ? await getFieldEvents({ tournamentId: scope.tournamentId, sport: 'golf' }) : [];

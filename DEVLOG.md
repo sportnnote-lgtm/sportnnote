@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Team stats + records, head-to-head + form, football career remainder (SD-46 / SD-47 / SD-39); carrom score sheet + penalty board, volleyball detailed stats, golf in leaders/awards/medal table (SD-68 / SD-81 / SD-49; SD-78 already delivered)
+- **Team pages (`teamRecords.ts`):** tournament/season chips, sport-labelled difference, Per game card (for/against/margin), team averages from the schema with coverage ("· 3 of 4"), Team leaders, Records (biggest win, heaviest defeat, most in a match, longest winning/unbeaten run, current run, clean sheets; cricket highest/lowest total).
+- **Head-to-head (`headToHead.ts`, `HeadToHeadScreen`, `FormStrip`):** form strip + "⚔️ Compare with…" on profiles; W/D tiles, each side's last 5, up to 10 meetings; team vs team; "⚔️ Head-to-head & form ›" on a match's Info card.
+- **Football career:** G+A, minutes per goal, starts / off the bench, minutes per game, games in goal, conceded per 90; Goalkeeping section leads for mostly-keeper players (`leadWhen`).
+- **Carrom:** penalty board (+3, counts as a board played, not a board won); ICF-style score sheet per game (# · Break · Won by · Coins · Queen · Pts · running total, PEN/slam marks). SD-78 break/slams confirmed delivered by SD-117c.
+- **Volleyball detailed stats (optional, off by default):** attack attempts (kill / error / blocked / in play) → attack efficiency (NCAA/VIS) and success %; optional reception grades → perfect/positive %; ATT/EFF/SE/ERR box columns only where captured; "Best attacker" award slot.
+- **Golf in leaders/awards/medal table:** low round (18/9), scoring average, putts per round, eagles, GIR % with minimums; Low round + Best scoring average award slots; hub "📊 Leaders"; golf finishes feed the medal table. Side effect: results-engine sports now also feed the Awards tab.
+- **Verified:** `tests/sd39-46-47-team-h2h.test.mts` (19), `tests/sd68-78-81-carrom-volleyball.test.mts` (23), `tests/sd49-golf-field-leaders.test.mts` (14); demos on static exports (no live keys). Guides: new team-stats-and-records, head-to-head-and-form, volleyball-detailed-stats, golf-leaders-awards-and-medal-table; updated filter-career-stats, score-carrom, score-volleyball. No migration.
+
+---
+
 ### 2026-10-11 — Athletics combined events (SD-93)
 - **Events:** decathlon, heptathlon, women's decathlon, indoor heptathlon / pentathlon, school pentathlon + tetrathlon (editable house lists; own keys and records). Each event inside is an ordinary phase using the existing track/field screens (heats + lanes, three trials, bar raises +3 cm HJ / +10 cm PV).
 - **Points:** World Athletics Scoring Tables formula with the official coefficients — reproduces Mayer 9126, Eaton 9045 / 6645, Joyner-Kersee 7291, Thiam 5055, Skujytė 8358 exactly; hand times converted (+0.24 / +0.14 s). Running total + places after every event; next event seeded by total.

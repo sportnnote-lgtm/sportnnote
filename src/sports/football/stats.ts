@@ -63,6 +63,21 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'goalsPer90', label: 'Goals per 90', short: 'goals per 90', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 2 },
       agg: { kind: 'rate', num: 'goals', den: 'minutes', scale: 90, dp: 2, over: 'withMinutes', qualifier: { den: 180, unit: { label: 'minutes', one: 'minute' } } },
       tieBreak: [{ key: 'goals', better: 'higher' }] },
+    // SD-39 (FB-08) — G+A, minutes per goal (lower is better; the games with
+    // minutes only), Playing time (starts / off the bench where a line-up was
+    // set — SD-11 `starts` — and minutes per game), keepers' games in goal and
+    // goals conceded per 90 (keeper lines with minutes)
+    { key: 'goalsAssists', label: 'Goals + assists', short: 'G+A', abbr: 'G+A', source: 'derived', group: 'attack', agg: { kind: 'sum', keys: ['goals', 'assists'] } },
+    { key: 'minutesPerGoal', label: 'Minutes per goal', short: 'mins per goal', source: 'derived', group: 'attack', format: { unit: 'decimal', dp: 0, better: 'lower' },
+      agg: { kind: 'rate', num: 'minutes', den: 'goals', dp: 0, over: 'withMinutes' } },
+    // the SD-11 appearance key (as SHARED_STATS) — read by `started` / `subApps`
+    { key: 'starts', label: 'Starts', short: 'starts', one: 'start', agg: { kind: 'appearance' } },
+    { key: 'started', label: 'Starts', short: 'starts', one: 'start', source: 'derived', group: 'playing', agg: { kind: 'sum', key: 'starts', over: 'lineupKnown' }, coverOf: 'appeared' },
+    { key: 'subApps', label: 'Off the bench', short: 'sub apps', one: 'sub app', source: 'derived', group: 'playing', agg: { kind: 'countIf', key: 'starts', lt: 1, over: 'lineupKnown' }, coverOf: 'appeared' },
+    { key: 'minutesPerGame', label: 'Minutes per game', short: 'mins per game', source: 'derived', group: 'playing', format: { unit: 'decimal', dp: 0 }, agg: { kind: 'perGame', key: 'minutes', dp: 0, over: 'withMinutes' } },
+    { key: 'keeperApps', label: 'Games in goal', short: 'games in goal', one: 'game in goal', source: 'derived', group: 'goalkeeping', agg: { kind: 'countIf', key: 'goalsConceded', gte: 0, over: 'keeper' } },
+    { key: 'concededPer90', label: 'Conceded per 90', short: 'conceded per 90', source: 'derived', group: 'goalkeeping', format: { unit: 'decimal', dp: 2, better: 'lower' },
+      agg: { kind: 'rate', num: 'goalsConceded', den: 'minutes', scale: 90, dp: 2, over: 'keeperMinutes' } },
     { key: 'shotAccuracy', label: 'Shots on target %', source: 'derived', group: 'attack', format: { unit: 'percent', dp: 0 },
       agg: { kind: 'rate', num: 'shotsOnTarget', den: 'shots', scale: 100, dp: 0 } },
     { key: 'conversion', label: 'Shot conversion %', source: 'derived', group: 'attack', format: { unit: 'percent', dp: 0 },
@@ -84,14 +99,19 @@ export const footballStats: SportStatSchema<'football'> = {
   filters: {
     withMinutes: (l) => Number(l.stats?.minutes) > 0,
     keeper: (l) => l.stats != null && 'goalsConceded' in l.stats,
+    // SD-39
+    keeperMinutes: (l) => l.stats != null && 'goalsConceded' in l.stats && Number(l.stats.minutes) > 0,
+    lineupKnown: (l) => typeof l.stats?.starts === 'number',
+    appeared: () => true,
   },
   sections: [
-    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed', 'penKicksTaken', 'penKicksScored']
+    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'minutesPerGoal', 'goalsAssists', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed', 'penKicksTaken', 'penKicksScored']
       .map((stat) => (stat === 'headedGoals' || stat.startsWith('penKicks') ? { stat, hideZero: true } : { stat })) },
     { id: 'passing', title: 'Passing', rows: [{ stat: 'passes' }, { stat: 'passesComplete' }] },
     { id: 'defence', title: 'Defence', rows: [{ stat: 'tackles' }, { stat: 'interceptions' }, { stat: 'blocks' }, { stat: 'defensiveContributions' }] },
-    { id: 'playing', title: 'Playing time', rows: [{ stat: 'minutes' }] },
-    { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'savePct' }, { stat: 'concededPerGame' }, { stat: 'shootoutSaves', hideZero: true }] },
+    { id: 'playing', title: 'Playing time', rows: [{ stat: 'started' }, { stat: 'subApps', hideZero: true }, { stat: 'minutes' }, { stat: 'minutesPerGame' }] },
+    // SD-39 — leads the career when most of the player's games were in goal
+    { id: 'goalkeeping', title: 'Goalkeeping', leadWhen: 'keeper', rows: [{ stat: 'keeperApps' }, { stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'savePct' }, { stat: 'concededPerGame' }, { stat: 'concededPer90' }, { stat: 'shootoutSaves', hideZero: true }] },
     { id: 'bests', title: 'Bests', rows: [{ stat: 'mostGoals', label: 'Most goals (match)', hideZero: true }, { stat: 'hatTricks', hideZero: true }] },
     { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }, { stat: 'ownGoals', hideZero: true }] },
   ],

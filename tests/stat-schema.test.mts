@@ -190,7 +190,12 @@ describe('SD-15 — the old maps are derived views, equal to the golden values',
   });
   test('per-match rating labels (STAT_LABELS)', () => assert.deepEqual(STAT_LABELS, golden.STAT_LABELS));
   test('per-match role awards (SPORT_AWARDS)', () => assert.deepEqual(pick(SPORT_AWARDS), pick(golden.SPORT_AWARDS)));
-  test('tournament award slots', () => assert.deepEqual(pick(TOURNAMENT_AWARD_SLOTS), pick(golden.TOURNAMENT_AWARD_SLOTS)));
+  test('tournament award slots', () => {
+    // SD-49 appended golf's Low round and Best scoring average after the golden slots
+    const golfN = golden.TOURNAMENT_AWARD_SLOTS.golf.length;
+    assert.deepEqual(pick({ ...TOURNAMENT_AWARD_SLOTS, golf: TOURNAMENT_AWARD_SLOTS.golf.slice(0, golfN) }), pick(golden.TOURNAMENT_AWARD_SLOTS));
+    assert.deepEqual(TOURNAMENT_AWARD_SLOTS.golf.slice(golfN).map((s) => s.slot), ['lowRound', 'scoringAvg']);
+  });
   test('leaderboard categories + headline leader', () => {
     // SD-16 appended cricket's records categories after the original three
     // SD-27 appended football's goals per 90 and save % after the golden ones
@@ -198,12 +203,15 @@ describe('SD-15 — the old maps are derived views, equal to the golden values',
       ...STAT_CATEGORIES,
       cricket: STAT_CATEGORIES.cricket.slice(0, golden.STAT_CATEGORIES.cricket.length),
       football: STAT_CATEGORIES.football.slice(0, golden.STAT_CATEGORIES.football.length),
+      // SD-49 inserted golf's stroke-play categories between birdies and holes won
+      golf: STAT_CATEGORIES.golf.filter((c) => ['birdies', 'holesWon'].includes(c.key)),
     });
     assert.deepEqual(now, pick(golden.STAT_CATEGORIES));
     assert.deepEqual(STAT_CATEGORIES.football.slice(golden.STAT_CATEGORIES.football.length).map((c) => c.key), ['goalsPer90', 'savePct']);
     assert.deepEqual(STAT_CATEGORIES.cricket.slice(golden.STAT_CATEGORIES.cricket.length).map((c) => c.label),
       ['Highest score', 'Best bowling', 'Best batting average', 'Best strike rate', 'Best economy', 'Most 50s', 'Most 100s',
         'Most 4s', 'Most 6s', 'Most maidens', 'Most dot balls', 'Most ducks', 'Most keeper dismissals']);
+    assert.deepEqual(STAT_CATEGORIES.golf.map((c) => c.key), ['birdies', 'lowRound', 'lowRound9', 'scoringAvg', 'eagles', 'puttsPerRound', 'girPct', 'holesWon']);
     for (const sp of KEPT) assert.deepEqual(leaderStat(sp as SportId), golden.leaderStat[sp]);
   });
   test('headline order', () => {
@@ -274,7 +282,9 @@ describe('SD-15 — leaders, awards, ratings and summaries render as before', ()
       // SD-16: cricket's records categories follow the golden ones (tested in aggregate-engine.test.mts);
       // SD-27: so do football's goals per 90 / save %
       const old = sp === 'cricket' ? now.filter((c) => ['runs', 'wickets', 'catches'].includes(c.key))
-        : sp === 'football' ? now.filter((c) => !['goalsPer90', 'savePct'].includes(c.key)) : now;
+        : sp === 'football' ? now.filter((c) => !['goalsPer90', 'savePct'].includes(c.key))
+        // SD-49: golf's stroke-play categories (pinned in sd49-golf-field-leaders.test.mts)
+        : sp === 'golf' ? now.filter((c) => ['birdies', 'holesWon'].includes(c.key)) : now;
       assert.deepEqual(old, golden.categoryLeaders[sp], sp);
     }
   });
