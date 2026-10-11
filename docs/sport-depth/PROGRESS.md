@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-59 / SD-72 / SD-83 kabaddi discipline — DONE (3e2bc8d, 2026-10-11)
+- See DEVLOG. AKFI rulebook unreachable — secondary sources only (no rule numbers). Check: touches lost when caught under both AKFI and PKL (no difference found → flag is a house-rule switch); whether the bonus survives a tackle; yellow = +1 technical point? (optional, off); all-out while a player is suspended; yellow while out starts at the side's next revival (approximate); defender line-out credited as an extra point; lobby not modelled.
+- Not done: voice for cards/tech points, cards in team comparison, live (non-completion) card stat writes, reducer enforcement of red-carded raiders (UI only).
+
 ## SD-53 / SD-54 racket conduct + timeouts, SD-63 let — DONE (133422a, 2026-10-11)
 - See DEVLOG. Check: pickleball technical foul in side-out (point to receiver?), further foul = forfeit?, medical timeout per side vs per player (USAP 13.G / 10.C); TT second penalty point carrying into the next game (ITTF 3.5.2.2); tennis default is suggested never (Referee's call); squash escalation one level at a time (WSF 15 leaves it to the referee); padel FIP schedule unverified; badminton cards per player (BWF 16.7).
 - Not done: Stroke / No let still only in the point-detail row; Match stats "Total points won" counts rallies (excludes penalty points); conduct tile remembers last side; volleyball conduct, padel/squash timeouts, voice.
