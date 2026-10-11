@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-95 archery — DONE (df28288, 2026-10-11)
+- See DEVLOG. Check vs World Archery Book 3 (from memory): tie order 10s→X for compound (inner-10 ring), shared =5/=9 places, X vs 10 in shoot-offs left to the judge + repeat shoot-off arrow, ranking-round shoot-offs only for the last bracket place. Not built: team/mixed team, end-total-only entry, points below a small bracket cut, shoot-off distances, >64 brackets untested.
+
 ## SD-58 / SD-71 volleyball serve, rotation, subs + libero — DONE (a4b28ee, 2026-10-11)
 - See DEVLOG. Check: libero clause numbers (19.3.x, from memory of 2025–28 numbering); exceptional-sub eligibility not checked (15.7); expulsion/disqualification subs (15.8) not modelled; national "libero may serve" variants not modelled.
 - Not done: per-player SE column in the live box; libero digs; SD-81 detailed attack mode; libero not auto-forced off at the front row (cue only); subs not drawn on the point timeline; 9-a-side rotation.

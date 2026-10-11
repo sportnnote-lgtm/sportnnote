@@ -83,8 +83,8 @@ P2 items are parked (PLAN.md §6.2).
 | SD-50 | Game-flow stats: biggest lead, lead changes, times tied, largest run, bench points | basketball, football, kabaddi | GEN-20; BK-09 | READY | Wave 3a · S |
 | SD-51 | Match-records hook persisted in the snapshot (partnerships, team totals, team highs) → tournament Records card | generic | GEN-21; CK-07 | READY | Wave 3a · M · one-off backfill replay |
 | SD-52 | Optional point-outcome tag (winner / forced / unforced / fault / kitchen / smash) with coverage | racket sports | GEN-22; PD-05, PB-05 (P1); TN-12, BD-06, TT-11, SQ-10 (P2) | READY | Wave 3a · M · D8 · optional `how` payload |
-| SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | READY | Wave 3a · M · additive actions |
-| SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | READY | Wave 3a · S · new TIMEOUT action |
+| SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | IN-PROGRESS | Wave 3a · M · additive actions |
+| SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | IN-PROGRESS | Wave 3a · S · new TIMEOUT action |
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
 | SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | READY | Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
 | SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | READY | Wave 3b R1 · S |
@@ -125,7 +125,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-92 | Athletics: road and cross-country (marathon/half/10 km, race walks, XC), team scoring by placings | athletics | World Athletics road / XC rules | READY | Wave 4 · M · needs SD-28 |
 | SD-93 | Athletics: combined events (heptathlon / decathlon / school pentathlon) with World Athletics scoring tables | athletics | World Athletics Scoring Tables for Combined Events | READY | Wave 4 · M · needs SD-90, SD-91 |
 | SD-94 | Swimming: heats/semis/finals by time, lanes, splits, relays (takeover DQ), DQ codes, records | swimming | World Aquatics Swimming Rules (SW) | DONE | 68dd087 · Wave 4 · L · needs SD-28 |
-| SD-95 | Archery: ranking round (ends × arrows, X/10 count tie-breaks), set-system match play (recurve), cumulative (compound), shoot-off | archery | World Archery Rulebook | IN-PROGRESS | Wave 4 · L · needs SD-28 (+ bracket) |
+| SD-95 | Archery: ranking round (ends × arrows, X/10 count tie-breaks), set-system match play (recurve), cumulative (compound), shoot-off | archery | World Archery Rulebook | DONE | df28288 · Wave 4 · L · needs SD-28 (+ bracket) |
 | SD-96 | Shooting: qualification series (decimal / integer scoring), finals elimination format, inner-ten tie-breaks | shooting | ISSF General Technical Rules | DONE | fc9f370 · Wave 4 · M · needs SD-28 |
 | SD-97 | Weightlifting: snatch + clean & jerk, 3 attempts each, total, bodyweight categories, tie goes to the athlete who reached the total first | weightlifting | IWF Technical & Competition Rules | DONE | 73317eb · Wave 4 · M · needs SD-28 |
 | SD-98 | Cycling: road (mass start, time trial, GC by time) and track (sprint, keirin, pursuit, points / scratch races) | cycling | UCI Regulations (Part 2 road, Part 3 track) | READY | Wave 4 · L · needs SD-28 |
