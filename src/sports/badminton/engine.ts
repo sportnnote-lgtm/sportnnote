@@ -5,10 +5,11 @@
  */
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
-import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import type { PointInput } from '../rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
 import { badmintonCue as cueOf, type Cue } from '../courtCues.ts';
+import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from '../conduct.ts';
 
 const TARGET = 21;
 const CAP = 30;
@@ -88,11 +89,23 @@ const clearMatch = (s: BadmintonState): BadmintonState => ({
   ...s, current: { home: 0, away: 0 }, games: [], gamesWon: { home: 0, away: 0 }, events: [], seq: 0, ended: false,
 });
 
-export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
+/** SD-53 — the generic conduct step's hooks: a fault (red card, BWF Law
+ *  16.7) is a rally lost — a plain point to the opponent, who then serves. */
+const conductOps: ConductOps<BadmintonState> = {
+  sport: 'badminton',
+  point: (s, side) => core(s, { type: 'POINT', side }),
+  gameKey: (s) => `${s.games.length}${s.ended ? 'E' : ''}`,
+  where: (s) => ({ stamp: `Game ${s.games.length + 1}`, game: s.games.length + 1 }),
+};
+
+const core = (s: BadmintonState, a: ScoreAction): BadmintonState => {
   // Timeline correction: STAT_ADJUST only reconciles player profiles (no match
   // effect); EDIT_LOG replays a corrected point list so the games re-derive.
   if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  if (a.type === 'EDIT_LOG') return replayKeepingMarks(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? [], s.events);
+  // SD-53 — misconduct (warning / fault / disqualification)
+  const extra = applyRacketExtras(s, a, conductOps);
+  if (extra) return extra;
   // Who serves the first rally — settable only before any point; after that the
   // rally winner serves. No `side` on this action.
   // SD-115: a `v:2` payload may fix it mid-match — it only names who served the
@@ -130,6 +143,8 @@ export const reducer = (s: BadmintonState, a: ScoreAction): BadmintonState => {
   if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${gamesWon.home}-${gamesWon.away} games`, side: winner });
   return { ...s, current: { home: 0, away: 0 }, games, gamesWon, events, seq, ended };
 };
+// SD-54 — every new event carries the step's `payload.at` (durations)
+export const reducer = withStamps(core);
 
 
 /** SD-01 — the completed games, "21-18, 19-21, 21-15". */

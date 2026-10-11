@@ -20,6 +20,7 @@ import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '.
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
 import { WeighInCard, NextLiftCard, LiftGrid } from '../components/results/LiftingPanel';
 import { SeriesCard, FinalCard } from '../components/results/ShootingPanel';
+import { EndCard, BracketCard } from '../components/results/ArcheryPanel';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { getPlayers, getMyPlayerId } from '../data/repos';
@@ -41,6 +42,7 @@ import {
   rangeCheck, readDigits, toggleHand, stripUnconfirmedFlags, unconfirmedOutOfRange, rowsForRecords, blankEntries, newRecords,
   closeRoundDetail, finishDetail, reopenVerdict, updateRecords, type KeypadMode, type RangeIssue, type Category,
   shootEvent, shotsOf, qualView, isFinalRows, finalState, totalText,
+  archRound, isBracketRows, archQualView, archRowText, bracketState, bracketFormat, phaseNameOf, roundLine, hasMatchData, matchFormatOf, BOW_LABEL,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
 import { useAuth } from '../core/auth';
@@ -178,6 +180,14 @@ export default function ResultsEventScreen() {
   // SD-96: shooting — the ISSF event, and whether this phase is its elimination final
   const shoot = shootEvent(def);
   const shootFinalPhase = !!shoot && isFinalRows(resEntries);
+  // SD-95: archery — the round, and whether this phase is match play (the bracket)
+  const arch = def?.sport === 'archery' ? archRound(def) : undefined;
+  const archBracket = !!arch && isBracketRows(resEntries);
+  // SD-95: a tie for the last match-play place is shot off (WA)
+  const archCut = useMemo(() => {
+    if (!arch || !def || !f?.progression || archBracket) return new Set<string>();
+    return new Set(qualify(rankByHeat(resEntries, def), def, f.progression).tieAtLine);
+  }, [arch, def, f, resEntries, archBracket]);
   // SD-97: weightlifting — the snatch and C&J rankings (own medals / records / PBs)
   const lifts = def?.capture === 'lifts';
   const liftRanked = useMemo(() => {
@@ -226,6 +236,8 @@ export default function ResultsEventScreen() {
   if (!phase || !f || !def) return <SafeAreaView style={st.safe}><Text style={[textStyles.muted, { padding: 16 }]}>This event isn't available.</Text></SafeAreaView>;
 
   const next = f.plan?.[f.phaseNo];
+  // SD-95: "Ranking round" / "Match play" for archery; the usual labels elsewhere
+  const pName = (k: typeof f.phase) => phaseNameOf({ discipline: f.discipline, phase: k, plan: f.plan });
   const orderFor = (list: FieldEntry[]) => {
     if (def.capture === 'attempts') {
       const ids = attemptOrder(list.map((e) => toResultEntry(e, nameOf)), def, round).map((e) => e.id);
@@ -240,8 +252,8 @@ export default function ResultsEventScreen() {
   const advance = async () => {
     if (!next) return;
     // SD-112: say who has no result — they drop out without a place
-    const detail = closeRoundDetail(blankEntries(resEntries, def), def, phaseLabel(next.phase).toLowerCase());
-    const ok = await askConfirm({ ...confirmCopy('closePhase', { detail }), title: `Close ${phaseLabel(f.phase).toLowerCase()}?` });
+    const detail = closeRoundDetail(blankEntries(resEntries, def), def, pName(next.phase).toLowerCase());
+    const ok = await askConfirm({ ...confirmCopy('closePhase', { detail }), title: `Close ${pName(f.phase).toLowerCase()}?` });
     if (!ok) return;
     setBusy(true);
     try {
@@ -256,9 +268,10 @@ export default function ResultsEventScreen() {
     // SD-97: a weightlifting session can set snatch, C&J and total records
     let after = records;
     // SD-96: a shooting record is a qualification / match score — a final reads as its finalists' qualification scores
-    const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
+    // SD-95: an archery record is a ranking-round score — a bracket reads as its archers' ranking scores
+    const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : arch ? rankEntries(archQualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
     for (const d of recordDefsFor(def)) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
-    const unfinished = shoot && shootFinalPhase && !finalState(resEntries, shoot).done ? 'The final isn’t complete — the places stand as they are now. ' : '';
+    const unfinished = (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def)).done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
     const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
       unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
@@ -281,15 +294,15 @@ export default function ResultsEventScreen() {
   const isFinal = !next;
   const reopen = phase.status === 'completed' ? reopenVerdict(phase, nextResults, isFinal) : null;
   const doReopen = async () => {
-    const nextLabel = next ? phaseLabel(next.phase).toLowerCase() : '';
+    const nextLabel = next ? pName(next.phase).toLowerCase() : '';
     const ok = await askConfirm(isFinal
-      ? { title: 'Reopen the final?', message: 'It goes back to live so you can correct it. Any record it set goes back to the previous holder, and its medals and points leave the meet table until you finish & lock again.', yesLabel: 'Yes, reopen final', noLabel: 'No, keep it locked', tone: 'danger' }
-      : { title: `Reopen ${phaseLabel(f.phase).toLowerCase()}?`, message: `It goes back to live so you can correct it. The ${nextLabel} start list is removed and seeded again when you close this round.`, yesLabel: 'Yes, reopen round', noLabel: 'No, keep it locked', tone: 'caution' });
+      ? { title: arch ? `Reopen ${pName(f.phase).toLowerCase()}?` : 'Reopen the final?', message: 'It goes back to live so you can correct it. Any record it set goes back to the previous holder, and its medals and points leave the meet table until you finish & lock again.', yesLabel: 'Yes, reopen final', noLabel: 'No, keep it locked', tone: 'danger' }
+      : { title: `Reopen ${pName(f.phase).toLowerCase()}?`, message: `It goes back to live so you can correct it. The ${nextLabel} start list is removed and seeded again when you close this round.`, yesLabel: 'Yes, reopen round', noLabel: 'No, keep it locked', tone: 'caution' });
     if (!ok) return;
     setBusy(true);
     try {
       await reopenPhase(phase);
-      setInfo(isFinal ? 'Final reopened — records and points are rolled back until you finish & lock again.' : `${phaseLabel(f.phase)} reopened.`);
+      setInfo(isFinal ? 'Final reopened — records and points are rolled back until you finish & lock again.' : `${pName(f.phase)} reopened.`);
       setTab('enter');
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -327,7 +340,7 @@ export default function ResultsEventScreen() {
     if (undoLabel) offerUndo(entryId, resultOf(e), undoLabel);
     void save(e, n);
   };
-  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass) || !!r.fshots?.length; });
+  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass) || !!r.fshots?.length || !!r.ends?.length || hasMatchData(r); });
   const curLift = lifts ? activeLift(resEntries) : null;
   const hurdles = hurdleHeight(def.key, f.category ?? {});
   // SD-91: the field event's set-up line (implement, board, wind gauge)
@@ -389,7 +402,7 @@ export default function ResultsEventScreen() {
       heat: h, lane: r.entry.result.lane, order: r.entry.result.order, name: r.entry.name, team: r.entry.team?.name,
       mark: (r.bestText ? r.bestText + (def.wind === 'attempt' && r.wind != null ? ` (${windText(r.wind)})` : '') : '') || (r.status !== 'ok' ? r.status : ''), place: r.label && r.position != null ? r.label : '', flags: r.flags.filter((x) => x !== 'w' && x !== 'h'),
     })));
-    const title = `${f.eventTitle ?? def.label} — ${phaseLabel(f.phase)}`;
+    const title = `${f.eventTitle ?? def.label} — ${pName(f.phase)}`;
     const icon = eventWords(def.sport).icon;
     void shareMessage(anyMark ? resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id), icon) : startListText(title, rows, resultsLink(phase.id), icon), 'results');
   };
@@ -413,7 +426,7 @@ export default function ResultsEventScreen() {
         <View>
           <Text style={textStyles.h2}>{f.eventTitle ?? def.label}</Text>
           <Text style={textStyles.muted}>
-            {phaseLabel(f.phase)} · {categoryLabel(f.category)} · {phase.status === 'completed' ? 'final results' : phase.status === 'live' ? 'in progress' : 'start list'}
+            {pName(f.phase)} · {categoryLabel(f.category)} · {phase.status === 'completed' ? 'final results' : phase.status === 'live' ? 'in progress' : 'start list'}
             {pending ? `  ·  ${pending} waiting to sync` : ''}
           </Text>
         </View>
@@ -421,7 +434,7 @@ export default function ResultsEventScreen() {
           <View style={st.wrap}>
             {phases.map((p) => {
               const pf = phaseOf(p)!;
-              return <SelectChip key={p.id} label={`${phaseLabel(pf.phase)}${p.status === 'completed' ? ' ✓' : ''}`} active={p.id === phase.id} onPress={() => p.id !== phase.id && nav.replace('ResultsEvent', { phaseId: p.id })} />;
+              return <SelectChip key={p.id} label={`${phaseNameOf(pf)}${p.status === 'completed' ? ' ✓' : ''}`} active={p.id === phase.id} onPress={() => p.id !== phase.id && nav.replace('ResultsEvent', { phaseId: p.id })} />;
             })}
           </View>
         )}
@@ -435,6 +448,7 @@ export default function ResultsEventScreen() {
         {!swim && timedFinal ? <Text style={textStyles.muted}>Timed final: {f.heats} heats, places on time across heats.</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
         {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
+        {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]} · {archBracket ? (matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') : `${roundLine(arch)} · ties: most 10s (X included), then most X${f.progression ? ' · the best go to match play' : ' · no match play: the ranking round decides the medals'}`}</Text> : null}
         {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
@@ -448,7 +462,7 @@ export default function ResultsEventScreen() {
             )}
             {f.progression && (
               <Text style={textStyles.muted}>
-                Through: {f.progression.byPlace ? `first ${f.progression.byPlace} in each heat (Q)` : ''}{f.progression.byMark ? ` + ${f.progression.byMark} fastest / best (q)` : ''}{f.progression.standard != null ? `standard ${formatMark(f.progression.standard, def)} (Q)` : ''}{f.progression.fillTo != null && f.progression.standard == null && !f.progression.byPlace ? `the best ${f.progression.fillTo} to the ${next ? phaseLabel(next.phase).toLowerCase() : 'next round'} (q)` : ''}
+                Through: {f.progression.byPlace ? `first ${f.progression.byPlace} in each heat (Q)` : ''}{f.progression.byMark ? ` + ${f.progression.byMark} fastest / best (q)` : ''}{f.progression.standard != null ? `standard ${formatMark(f.progression.standard, def)} (Q)` : ''}{f.progression.fillTo != null && f.progression.standard == null && !f.progression.byPlace ? `the best ${f.progression.fillTo} to ${arch ? '' : 'the '}${next ? pName(next.phase).toLowerCase() : 'next round'} (q)` : ''}
               </Text>
             )}
 
@@ -478,6 +492,8 @@ export default function ResultsEventScreen() {
             {shoot && !shootFinalPhase && (editable || anyMark) && (
               <SeriesCard entries={heatRes} ev={shoot} shots={shotsOf(shoot, f.category)} mode={f.shootEntry ?? 'series'} editable={editable} onSave={saveLift} />
             )}
+            {arch && !archBracket && (editable || anyMark) && <EndCard entries={heatRes} round={arch} editable={editable} onSave={saveLift} />}
+            {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} />}
             {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
             {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} />}
             {def.capture === 'attempts' && editable && (
@@ -507,7 +523,7 @@ export default function ResultsEventScreen() {
               <BarHeights def={def} bar={f.bar ?? []} current={curBar} onPick={setBar} editable={editable} onAdd={addBar} />
             )}
 
-            {(shootFinalPhase ? [] : orderFor(heatEntries)).map((e) => {
+            {(shootFinalPhase || archBracket ? [] : orderFor(heatEntries)).map((e) => {
               const r = resultOf(e);
               const re = toResultEntry({ ...e, result: r }, nameOf);
               const row = heatRows.find((x) => x.id === e.id);
@@ -527,7 +543,9 @@ export default function ResultsEventScreen() {
                       {row ? <Flags flags={row.flags} /> : null}
                     </View>
                   </View>
-                  {shoot ? (
+                  {arch ? (
+                    <Text style={textStyles.muted} numberOfLines={2}>{archRowText(r, arch) || 'No ends yet'}</Text>
+                  ) : shoot ? (
                     <Text style={textStyles.muted} numberOfLines={2}>{r.mark != null ? `${(r.series ?? []).length} series · ${totalText(r.mark, shoot.scoring === 'integer' ? r.xs : undefined, shoot.scoring)}` : 'No series yet'}{r.members?.length ? ` · ${r.members.map((m) => m.name).join(' / ')}` : ''}</Text>
                   ) : def.capture === 'single' || def.capture === 'target' ? (
                     def.unit === 'time'
@@ -562,8 +580,17 @@ export default function ResultsEventScreen() {
                       <DeciderField label="Swim-off place" value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
                     </View>
                   )}
+                  {arch && editable && archCut.has(e.id) && !row?.needsDecider && (
+                    <View style={{ gap: theme.spacing(1) }}>
+                      <Text style={st.badTxt}>Level for the last match-play place (same score, 10s and X) — a shoot-off decides who goes through (WA). Enter the shoot-off place (1 = through).</Text>
+                      <DeciderField label="Shoot-off place" value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
+                    </View>
+                  )}
+                  {arch && f.progression && editable && row?.tie && !row.needsDecider && !archCut.has(e.id) && (
+                    <DeciderField label="Coin-toss place (seed)" value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
+                  )}
                   {row?.needsDecider && editable && (
-                    <DeciderField label={def.tie === 'vertical' ? 'Jump-off place' : 'Shoot-off place'} value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
+                    <DeciderField label={def.tie === 'vertical' ? 'Jump-off place' : arch && f.progression ? 'Shoot-off / toss place' : 'Shoot-off place'} value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
                   )}
                   {editable && (swim ? <SwimStatusChips def={def} r={r} onChange={(n) => void save(e, n)} /> : <StatusChips def={def} r={r} onChange={(n) => void save(e, n)} />)}
                 </Card>
@@ -579,7 +606,7 @@ export default function ResultsEventScreen() {
               ? <ResultsSheet def={disciplineOf(LIFT_DISCIPLINE.snatch)!} title="Live — snatch standings" heats={new Map([[1, liftRanked.snatch]])} />
               : <ResultsSheet def={def} title="Live ranking" subtitle={heats.length > 1 ? `Heat ${activeHeat}` : undefined} heats={new Map([[activeHeat, heatRows]])} wind={windByHeat} />}
 
-            {editable && next && <Button label={busy ? 'Seeding…' : `Close ${phaseLabel(f.phase).toLowerCase()} → seed the ${phaseLabel(next.phase).toLowerCase()}`} onPress={() => void advance()} disabled={busy} />}
+            {editable && next && <Button label={busy ? 'Seeding…' : `Close ${pName(f.phase).toLowerCase()} → seed ${arch ? '' : 'the '}${pName(next.phase).toLowerCase()}`} onPress={() => void advance()} disabled={busy} />}
             {editable && !next && <Button label={busy ? 'Finishing…' : '🏁 Finish & lock results'} onPress={() => void finish()} disabled={busy} />}
           </>
         )}
@@ -618,7 +645,7 @@ export default function ResultsEventScreen() {
 
         {canManage && reopen && (
           reopen.ok
-            ? <Button label={busy ? 'Reopening…' : isFinal ? '↺ Reopen final' : `↺ Reopen ${phaseLabel(f.phase).toLowerCase()}`} variant="ghost" onPress={() => void doReopen()} disabled={busy} />
+            ? <Button label={busy ? 'Reopening…' : isFinal ? (arch ? `↺ Reopen ${pName(f.phase).toLowerCase()}` : '↺ Reopen final') : `↺ Reopen ${pName(f.phase).toLowerCase()}`} variant="ghost" onPress={() => void doReopen()} disabled={busy} />
             : <Text style={textStyles.muted}>Locked. {reopen.reason}</Text>
         )}
       </ScrollView>

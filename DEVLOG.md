@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Archery (SD-95) as a live sport
+- **Rounds:** recurve 70/60 m, compound 50 m, barebow 50 m outdoor (72 arrows, ends of 6) and indoor 18 m (60, ends of 3); school/club presets (house). Records/PBs per bow + distance.
+- **Ranking round:** keypad X, 10…1, M (or typed "X 10 9 9 8 7 = 53", checked); a full end saves itself with a 5 s Undo and moves to the next archer; E1…E12 chips to correct. Ties: total → 10s (X incl.) → X; a tie across the last bracket place needs a shoot-off place, other seeding ties a coin toss.
+- **Match play:** seeded bracket 4–64 / All N with byes; recurve + barebow set system (2/1/0, first to 6; 5–5 one-arrow shoot-off, scorer picks closest to centre), compound cumulative 5 ends; bronze before gold; walkover; correcting a decided match asks and clears dependent later scores only on Yes. Places 1–4 from medal matches, shared =5 / =9 for same-round losers. Records from complete ranking rounds only.
+- **Career:** match W-L, average arrow, 10+X rate, set points, PBs. Hub: house table, best archers, best ranking round, meet records. Guide: run-an-archery-competition. No migration.
+- **Verified:** `tests/archery.test.mts` (23); demo 8093 375 px — 8-archer recurve meet with X-count ties, a coin toss, a 5–5 shoot-off, a blocked bracket-changing correction, bronze + gold, record, profile.
+
+---
+
 ### 2026-10-11 — SD-58 / SD-71 volleyball serve, rotation, substitutions + libero
 - **Serve + rotation:** toss per set (`SET_SERVE`; sets 2–4 flip, decider re-tossed, FIVB 7.1); positions I–VI + up to 2 liberos (`SET_ROTATION`, can be entered mid-set); rotation on every side-out (7.6); "🏐 Rohan serves · RED" with a small court per team. Ace is one tap on the server; "Opp. missed serve · {server}" credits `serveErrors` to the opponent's server (SD-81 part).
 - **Substitutions (FIVB 15 / 19):** `SUB` regular / exceptional / libero with the "subs n/6" count; `checkSub` asks before a 7th sub (offers exceptional), a starter returning for the wrong player, a sub coming on twice, a libero replacing a front-row player or swapping with no rally between; libero front-row / serve cue. Sets played follow subs and liberos. Score tab lists substitutions.

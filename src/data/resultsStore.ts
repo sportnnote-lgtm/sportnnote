@@ -22,6 +22,7 @@ import {
   type RecordMark, type RecordScope, type ResultEntry, type RankedEntry, type PhaseKind, compareKeys, type MeetEvent, type MeetPhase, type PhaseInfo, type PointsSettings,
   type FieldResultInput, looseLegal, seededRng, phaseDiscipline, swimSeed, timedFinalHeats, laneOrder, type Seeded,
   rowsForRecords, recordsFor, rollbackRecords, reopenVerdict, recordDefsFor, liftLines, shootLines, finalistResult, qualView,
+  phaseNameOf, archLines, archQualView, bracketEntrant, bracketSeeds, hasMatchData,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
@@ -77,7 +78,8 @@ export interface NewResultsEvent {
   shootFinal?: boolean;
 }
 
-const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase'>) => `${eventTitle} — ${phaseLabel(f.phase)}`;
+// SD-95: archery phases read "Ranking round" / "Match play"
+const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase' | 'discipline' | 'plan'>) => `${eventTitle} — ${phaseNameOf(f)}`;
 
 async function insertPhase(base: Omit<FieldEvent, 'id' | 'status'>): Promise<FieldEvent> {
   if (!live()) {
@@ -224,7 +226,7 @@ export { getFieldEntries as getPhaseEntries };
 
 /** Save one entry's result (offline-safe; returns how many saves are waiting to sync). */
 export function saveEntryResult(entryId: string, result: EntryResult): Promise<number> {
-  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good) || !!result.lifts?.cj?.some((l) => l.good) || !!result.fshots?.length;
+  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good) || !!result.lifts?.cj?.some((l) => l.good) || !!result.fshots?.length || !!result.ends?.length || hasMatchData(result);
   return saveFieldResult(entryId, result, fieldStatusFor(result.status, hasMark));
 }
 
@@ -259,6 +261,8 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   if (!next || !f.progression) throw new Error('This is the last round.');
   const res = entries.map((e) => toResultEntry(e, nameOf));
   const byHeat = rankByHeat(res, def, { handLegal: looseLegal(f) });
+  // SD-95: archery — the ranking round seeds a match-play bracket
+  if (def.sport === 'archery' && next.phase === 'final') return advanceToBracket(phase, f, def, entries, [...byHeat.values()].flat(), next);
   const q = qualify(byHeat, def, f.progression);
   if (!q.marks.size) throw new Error('Nobody has qualified yet — enter the results first.');
   if (isEventSport(def.sport)) {
@@ -281,6 +285,37 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
     // SD-96: a shooting finalist starts the final from zero (its qualification score kept for the sheet / records)
     const extra = def.sport === 'shooting' && next.phase === 'final' && !!f.shootFinal ? finalistResult(r) : {};
     return { playerId: old.playerId || undefined, teamId: old.teamId, heat: s.heat, result: { lane: s.lane, order: s.order, bib: r.bib, team: r.team, name: r.name, members: r.members, ...extra } };
+  }));
+  await setPhaseStatus(phase.id, 'completed');
+  return ev;
+}
+
+/**
+ * SD-95 — close an archery ranking round: the best N (the bracket's field) are
+ * seeded 1 … N by rank into match play; a tie for the last place needs a
+ * shoot-off first (WA), other equal ranks keep the target order (a coin toss
+ * result can be entered as the shoot-off / toss place).
+ */
+async function advanceToBracket(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], ranked: RankedEntry[], next: PlannedPhase): Promise<FieldEvent> {
+  const n = f.progression?.fillTo ?? ranked.length;
+  const { ids, tieAtCut } = bracketSeeds(ranked, n);
+  if (ids.length < 2) throw new Error('Match play needs at least two archers with a score — enter the ranking round first.');
+  if (tieAtCut.length) {
+    const names = ranked.filter((r) => tieAtCut.includes(r.id)).map((r) => r.entry.name).join(', ');
+    throw new Error(`${names} are level for the last match-play place — a shoot-off decides it (WA). Enter each archer's shoot-off place, then close the ranking round.`);
+  }
+  const seeded = new Set(ids);
+  await writePhaseLines(phase, f, archLines(f, ranked.map((r) => (seeded.has(r.id) ? { ...r, flags: ['q' as const, ...r.flags] } : r)), 'qual', [], seeded));
+  const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: 1, progression: undefined };
+  const ev = await insertPhase({
+    tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: fmt.phaseNo,
+    startsAt: new Date().toISOString(), format: { results: fmt }, hostIds: phase.hostIds ?? [],
+  });
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  await insertEntries(ev.id, ids.map((id, i) => {
+    const old = byId.get(id)!;
+    const r = (old.result ?? {}) as EntryResult;
+    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: 1, result: { bib: r.bib, team: r.team, name: r.name, members: r.members, ...bracketEntrant(r, i + 1) } };
   }));
   await setPhaseStatus(phase.id, 'completed');
   return ev;
@@ -311,6 +346,10 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   if (def.capture === 'lifts') {
     // SD-97: weightlifting lines — best snatch / C&J / total, make rate, medals
     await writePhaseLines(phase, f, liftLines(f, entries.map((e) => toResultEntry(e, nameOf)), points ?? {}));
+  } else if (def.sport === 'archery') {
+    // SD-95: match play (places, matches won / lost, set points) or a ranking round that decides the medals
+    const bracket = rows.some((r) => r.entry.result.mp != null);
+    await writePhaseLines(phase, f, archLines(f, rows, bracket ? 'bracket' : 'match', eventAwards(rows, points ?? {})));
   } else if (def.sport === 'shooting') {
     // SD-96: an elimination final (finals reached, place, final score) or a match with no final (the score)
     const fin = rows.some((r) => Array.isArray(r.entry.result.fshots));
@@ -327,7 +366,9 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   let next = book;
   for (const d of recordDefsFor(def)) {
     // SD-96: a shooting final's rows read as their qualification scores (a final score is no record)
-    const dRows = def.sport === 'shooting' ? rankEntries(qualView(entries.map((e) => toResultEntry(e, nameOf))), d) : d === def ? rows : rankEntries(entries.map((e) => toResultEntry(e, nameOf)), d);
+    // SD-95: an archery bracket's rows read as their ranking-round scores (a match is no record)
+    const view = def.sport === 'shooting' ? qualView : def.sport === 'archery' ? archQualView : null;
+    const dRows = view ? rankEntries(view(entries.map((e) => toResultEntry(e, nameOf))), d) : d === def ? rows : rankEntries(entries.map((e) => toResultEntry(e, nameOf)), d);
     next = updateRecords(rowsForRecords(dRows, d, f.category?.course), d, cat, next, phase.startsAt.slice(0, 10), scopes, f.eventKey);
   }
   // SD-112: keep what the book said before, so "Reopen final" can put it back

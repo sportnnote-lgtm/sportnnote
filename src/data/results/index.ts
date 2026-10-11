@@ -13,3 +13,4 @@ export * from './swimming.ts';
 export * from './safety.ts';
 export * from './weightlifting.ts';
 export * from './shooting.ts';
+export * from './archery.ts';

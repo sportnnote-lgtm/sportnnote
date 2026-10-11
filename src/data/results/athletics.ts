@@ -22,6 +22,7 @@ import { phaseLabel } from './plan.ts';
 import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER, swimMeetSettings } from './swimming.ts';
 import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
 import { shootMeetSettings } from './shooting.ts';
+import { archMeetSettings, phaseNameOf } from './archery.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -44,6 +45,7 @@ export function eventMeetSettings(sport: string, fmt?: Record<string, unknown>):
   if (sport === 'swimming') return swimMeetSettings(fmt);
   if (sport === 'weightlifting') return wlMeetSettings(fmt);
   if (sport === 'shooting') return shootMeetSettings(fmt);
+  if (sport === 'archery') return archMeetSettings(fmt);
   return meetSettings(fmt);
 }
 
@@ -517,7 +519,8 @@ export function groupMeet(phases: MeetPhase[]): MeetEvent[] {
 export function eventStatus(e: MeetEvent): { label: string; done: boolean; live: boolean } {
   const cur = [...e.phases].reverse().find((p) => p.status !== 'completed') ?? e.phases[e.phases.length - 1];
   const done = !!cur && cur.format.phase === 'final' && cur.status === 'completed';
-  return { label: cur ? `${phaseLabel(cur.format.phase)}${done ? ' · final results' : cur.status === 'live' ? ' · live' : ' · start list'}` : '', done, live: cur?.status === 'live' };
+  // SD-95: archery phases read "Ranking round" / "Match play"
+  return { label: cur ? `${phaseNameOf(cur.format)}${done ? ' · final results' : cur.status === 'live' ? ' · live' : ' · start list'}` : '', done, live: cur?.status === 'live' };
 }
 
 export interface PointsSettings extends PointsConfig {

@@ -24,7 +24,7 @@ describe('plausible range per event (P0)', () => {
       'ath.4x100', 'ath.4x400', 'ath.lj', 'ath.tj', 'ath.sp', 'ath.dt', 'ath.jt', 'ath.ht', 'ath.hj', 'ath.pv']) assert.ok(markRange(k), k);
     for (const d of ['50free', '100free', '200free', '400free', '800free', '1500free', '50back', '100back', '200back', '50breast', '100breast', '200breast',
       '50fly', '100fly', '200fly', '100im', '200im', '400im', '4x50free', '4x100free', '4x200free', '4x50medley', '4x100medley']) assert.ok(markRange(`swim.${d}`), d);
-    assert.equal(markRange('arch.720'), null);
+    assert.equal(markRange('arch.r70'), null);
     assert.deepEqual(markRange('wl.snatch'), { min: 5, max: 230 }); // SD-97: kg per lift
   });
 

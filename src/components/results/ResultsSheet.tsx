@@ -9,7 +9,7 @@ import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
-  shootEventOf, seriesLine, totalText,
+  shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -55,6 +55,9 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
     const line = seriesLine(res, shoot, (res.series?.length ?? 0) * shoot.seriesOf);
     return [members, line, shoot.scoring === 'integer' && res.xs != null && res.mark != null ? totalText(res.mark, res.xs, 'integer') : ''].filter(Boolean).join(' · ');
   }
+  // SD-95 archery: a ranking row's ends / 10s / X (a match-play row's line comes from the bracket — see ResultsSheet)
+  const arch = def.sport === 'archery' ? archRoundOf(def.key) : undefined;
+  if (arch) return res.mp != null ? (res.seed != null ? `Seed ${res.seed}${res.qual ? ` (${res.qual.mark})` : ''}` : '') : archRowText(res, arch);
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
   // SD-94 swimming: medley legs by stroke, then the 50 m splits
   const swim = def.sport === 'swimming';
@@ -79,6 +82,9 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
 }) {
   const lanes = usesLanes(def);
   const many = heats.size > 1;
+  // SD-95: archery match play — each archer's matches ("QF W 6–4 · SF L 5–6 (SO 9–10)")
+  const allRows = [...heats.values()].flat().map((r) => r.entry);
+  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def)) : null;
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <View>
@@ -95,11 +101,11 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : 'Athlete'}</Text>
-            <Text style={[st.mark, st.headTxt]}>{def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
+            <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
-            const detail = [overall ? `Heat ${r.entry.heat}` : '', seriesText(r, def)].filter(Boolean).join(' · ');
+            const detail = [overall ? `Heat ${r.entry.heat}` : '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>

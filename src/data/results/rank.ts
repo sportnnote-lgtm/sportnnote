@@ -10,6 +10,8 @@ import { bestLiftAttempt, effectiveStatus, formatMark, summarizeAttempts, summar
 import { compareKeys, sharedPositions } from './positions.ts';
 import { isFinalRows, qualKeys, rankShootFinal } from './shootingRank.ts';
 import { shootEventOf, sumTenths, fromTenths } from './shootingDefs.ts';
+import { isBracketRows, rankArcheryBracket } from './archeryBracket.ts';
+import { archRoundOf, endsOf } from './archeryDefs.ts';
 
 export interface Performance {
   status: ResultStatus;
@@ -82,6 +84,15 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
         const best = r.mark ?? (r.series?.length ? fromTenths(sumTenths(r.series)) : null);
         return { status, best, bestLegal: best, legal: best != null, keys: best == null ? [-Infinity] : [...qualKeys(r, shoot), decider], flags };
       }
+      const arch = def.sport === 'archery' ? archRoundOf(def.key) : undefined;
+      if (arch) {
+        // SD-95: a match-play row is ranked by the bracket and never counts for records / PBs
+        if (r.mp != null) return { status, best: null, bestLegal: null, legal: false, keys: [-Infinity], flags };
+        // a ranking round counts for records / PBs only when every end was shot
+        const best = r.mark ?? null;
+        const full = !r.ends || r.ends.filter((x) => x?.length).length >= endsOf(arch);
+        return { status, best, bestLegal: full ? best : null, legal: best != null && full, keys: [best ?? -Infinity, r.tens ?? 0, r.xs ?? 0, decider], flags };
+      }
       const best = r.mark ?? null;
       return { status, best, bestLegal: best, legal: best != null, keys: [best ?? -Infinity, r.tens, r.xs, decider], flags };
     }
@@ -133,6 +144,8 @@ export const betterMark = (a: number, b: number, def: Pick<DisciplineDef, 'bette
 export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): RankedEntry[] {
   // SD-96: an ISSF elimination final ranks by elimination, not by a mark
   if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
+  // SD-95: archery match play ranks by the bracket
+  if (def.sport === 'archery' && isBracketRows(entries)) return rankArcheryBracket(entries, def);
   const prefix = o.tiePrefix ?? '=';
   const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt, o.handLegal) }));
   levelKeys(rows.map((x) => x.p));

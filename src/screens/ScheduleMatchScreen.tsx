@@ -355,6 +355,13 @@ export default function ScheduleMatchScreen() {
             </Text>
             <Button label="🏊 Set up a swimming event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'swimming' })} />
           </>
+        ) : sport === 'archery' ? (
+          <>
+            <Text style={textStyles.muted}>
+              🏹 Archery isn’t a single match: each event (Recurve 70 m, Compound 50 m …) is a ranking round of ends, then a seeded match-play bracket with a bronze medal match. Add the event and its archers, then enter each end as it is scored.
+            </Text>
+            <Button label="🏹 Set up an archery event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'archery' })} />
+          </>
         ) : sport === 'shooting' ? (
           <>
             <Text style={textStyles.muted}>

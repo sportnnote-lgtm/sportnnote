@@ -17,6 +17,7 @@
 
 import type { RecordMark } from './records.ts';
 import { SHOOT_EVENTS } from './shootingDefs.ts';
+import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -38,7 +39,7 @@ export type TieRule =
   | 'countback' // horizontal jumps / throws: next-best mark, then the next …
   | 'vertical' // HJ / PV: fewer failures at the tie height, then fewer total failures; jump-off for 1st
   | 'lifted-first' // weightlifting (IWF): the lifter who reached the total first
-  | 'inner-count' // archery (10s incl. X, then X); then shoot-off
+  | 'inner-count' // SD-95 archery (WA): total → most 10s (incl. X) → most X; then shoot-off / coin toss
   | 'issf'; // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
 
 export type ResultStatus =
@@ -250,7 +251,16 @@ export interface EntryResult {
   /** SD-96: final shoot-offs, keyed by the shot after which the tie arose ("12") — one shot per round */
   so?: Record<string, number[]>;
   /** SD-96: the qualification score carried into the final (records / sheet) */
-  qual?: { mark: number; xs?: number; series?: number[] };
+  qual?: { mark: number; xs?: number; series?: number[]; tens?: number };
+  /** SD-95 archery: the ranking round's ends in order (arrows highest first) —
+   *  `mark` / `tens` (10s incl. X) / `xs` follow from them */
+  ends?: Arrow[][];
+  /** SD-95: the ranking-round seed of a match-play (bracket) row */
+  seed?: number;
+  /** SD-95: match play — this archer's side of each match, keyed by bracket
+   *  round ('1' = the first round … the gold match; 'B' = the bronze match).
+   *  Present (even empty) on every bracket row. */
+  mp?: Record<string, ArchSide>;
   /** jump-off / shoot-off / swim-off place (1 = won it). Only compared when both rows have one. */
   decider?: number;
   /** start-list fields */
@@ -276,6 +286,17 @@ export interface EntryResult {
   /** SD-112: the official confirmed a mark outside the event's usual range —
    *  without it an out-of-range mark never shows PB / SB / MR or sets a record */
   rangeOk?: boolean;
+}
+
+/** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,
+ *  and (per shoot-off arrow) whether the judge called this arrow the closer one
+ *  when the scores were level. */
+export interface ArchSide {
+  ends?: Arrow[][];
+  so?: Arrow[];
+  closer?: boolean[];
+  /** didn't shoot this match (absent / withdrew) — the opponent goes through */
+  wo?: boolean;
 }
 
 /** One entry in one phase, as the engine sees it. */
@@ -380,7 +401,8 @@ export const DISCIPLINES: DisciplineDef[] = [
   // Not events of their own — a weightlifting event is always 'wl.total'.
   { key: 'wl.snatch', label: 'Snatch', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['snatch'] },
   { key: 'wl.cj', label: 'Clean & jerk', sport: 'weightlifting', unit: 'mass', better: 'higher', dp: 0, capture: 'lifts', tie: 'lifted-first', lifts: ['cj'] },
-  { key: 'arch.720', label: 'Archery 70 m ranking round (72 arrows)', sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count' },
+  // SD-95: the World Archery rounds (archeryDefs.ts) — ranking round by ends, then a seeded match-play bracket
+  ...ARCH_ROUNDS.map((r): DisciplineDef => ({ key: r.key, label: r.label, sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count' })),
   // SD-96: the ISSF programme (shootingDefs.ts) — qualification by series, finals by elimination
   ...SHOOT_EVENTS.map((e): DisciplineDef => ({
     key: e.key, label: e.label, sport: 'shooting', unit: 'points', better: 'higher', dp: e.scoring === 'decimal' ? 1 : 0, capture: 'target', tie: 'issf',

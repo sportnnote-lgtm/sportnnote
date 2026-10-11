@@ -22,6 +22,7 @@ import { formatMark } from './marks.ts';
 import { disciplineOf } from './model.ts';
 import { digitsToTime, handTime } from './athletics.ts';
 import { WL_RANGE, outOfRange } from './weightlifting.ts';
+import { hasMatchData } from './archeryBracket.ts';
 
 export interface MarkRange { min: number; max: number }
 
@@ -182,6 +183,8 @@ export function blankEntries(entries: ResultEntry[], def: DisciplineDef): Result
     if ((r.status ?? 'ok') !== 'ok') return false;
     // SD-96: a finalist with no final shot yet
     if (Array.isArray(r.fshots)) return !r.fshots.length;
+    // SD-95: a match-play row — the bracket says who is still to shoot
+    if (r.mp != null) return false;
     if (def.capture === 'single' || def.capture === 'target') return r.mark == null;
     if (def.capture === 'attempts') return !(r.attempts ?? []).some((a) => !!a && (a.mark != null || a.foul || a.pass));
     if (def.capture === 'heights') return !(r.heights ?? []).some((h) => !!h.tries);
@@ -196,7 +199,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : (n === 1 ? 'athlete' : 'athletes');
+  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {
@@ -232,7 +235,7 @@ export function finishDetail(opts: {
 
 /** Anything entered on a phase (a mark, a status, a trial, a bar try)? */
 export function hasAnyResult(results: (EntryResult | null | undefined)[]): boolean {
-  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length || !!r.fshots?.length || !!r.series?.length));
+  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length || !!r.fshots?.length || !!r.series?.length || !!r.ends?.length || hasMatchData(r)));
 }
 
 export type ReopenVerdict = { ok: true; kind: 'round' | 'final' } | { ok: false; reason: string };

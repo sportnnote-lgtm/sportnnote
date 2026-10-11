@@ -45,7 +45,7 @@ const rowsOf = (sport: SportId, lines: StatLine[]) =>
 describe('SD-24 — every sport renders sections (golf stays custom)', () => {
   test('careerView', () => {
     for (const sp of STAT_SPORTS) {
-      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting' || sp === 'shooting' ? 'measured' : 'sections', sp); // SD-90 / SD-94: athletics and swimming render a measured career
+      assert.equal(statSchema(sp)?.careerView, sp === 'golf' ? 'custom' : sp === 'athletics' || sp === 'swimming' || sp === 'weightlifting' || sp === 'shooting' || sp === 'archery' ? 'measured' : 'sections', sp); // SD-90 / SD-94: athletics and swimming render a measured career
       assert.deepEqual(validateSchema(STAT_SCHEMAS[sp]), [], sp);
     }
   });

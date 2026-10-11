@@ -20,7 +20,7 @@ import type { FieldEntry } from '../src/core/types.ts';
 
 const D = (k: string): DisciplineDef => { const d = disciplineOf(k); assert.ok(d, k); return d!; };
 const M100 = D('ath.100m'), LJ = D('ath.lj'), HJ = D('ath.hj'), R4 = D('ath.4x100'), S50 = D('swim.50free');
-const WL = D('wl.total'), ARCH = D('arch.720'), SHOOT = D('shoot.10mar');
+const WL = D('wl.total'), ARCH = D('arch.r70'), SHOOT = D('shoot.10mar');
 
 let seq = 0;
 const en = (name: string, result: EntryResult, heat = 1, team?: string): ResultEntry =>

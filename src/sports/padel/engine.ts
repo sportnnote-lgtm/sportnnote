@@ -7,9 +7,10 @@ import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction, ScoreSummary } from '../types';
 import { serveInfo as serveInfoOf, gamesPlayed as gamesPlayedOf, withServeOrder, type ServeOrder } from '../serve.ts';
 import { scoreLine as lineOf, finalSummary, type Pair, type LineScore } from '../scoreline.ts';
-import { replayPoints, type PointInput } from '../rallyEdit.ts';
+import type { PointInput } from '../rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.ts';
 import { setSportCue, type Cue } from '../courtCues.ts';
+import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from '../conduct.ts';
 
 const SETS_TO_WIN = 2;
 
@@ -152,11 +153,19 @@ const clearMatch = (s: PadelState): PadelState => ({
   ...s, pts: { home: 0, away: 0 }, games: { home: 0, away: 0 }, sets: [], setsWon: { home: 0, away: 0 }, tb: [], events: [], seq: 0, ended: false,
 });
 
-export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
+/** SD-53 — the generic conduct step's hooks (FIP: warning → point → game). */
+const conductOps: ConductOps<PadelState> = {
+  sport: 'padel',
+  point: (s, side) => scorePoint(s, side, undefined),
+  gameKey: (s) => `${s.sets.length}:${s.games.home + s.games.away}${s.ended ? 'E' : ''}`,
+  where: (s) => { const setNo = s.setsWon.home + s.setsWon.away + 1; return { stamp: `Set ${setNo}`, set: setNo }; },
+};
+
+const core = (s: PadelState, a: ScoreAction): PadelState => {
   // SD-21 — timeline correction (as tennis): STAT_ADJUST only reconciles player
   // profiles; EDIT_LOG replays a corrected point list so games/sets/serve re-derive.
   if (a.type === 'STAT_ADJUST') return s;
-  if (a.type === 'EDIT_LOG') return replayPoints(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? []);
+  if (a.type === 'EDIT_LOG') return replayKeepingMarks(reducer, clearMatch(s), (a.payload?.points as PointInput[]) ?? [], s.events);
   // Who serves first — settable only before the first point; serve alternates
   // from there. No `side` on this action.
   // SD-104 — doubles: which player of a pair serves its first game of this set
@@ -176,6 +185,9 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
   // (annotates the last point; allowed after the match point too).
   if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
   if (a.type === 'POINT_DETAIL') { const ev = applyPointDetail(s.events, a.payload); return ev ? { ...s, events: ev } : s; }
+  // SD-53 — code violations (warning → point → game)
+  const extra = applyRacketExtras(s, a, conductOps);
+  if (extra) return extra;
   if (s.ended || !a.side) return s;
   // SD-19: the credited player's id rides on the point (absolute statTotals).
   // SD-117c — one-tap Double fault / Ace (new optional payload keys, so old logs
@@ -194,6 +206,8 @@ export const reducer = (s: PadelState, a: ScoreAction): PadelState => {
   }
   return s;
 };
+// SD-54 — every new event carries the step's `payload.at` (durations)
+export const reducer = withStamps(core);
 
 
 // ------------------------------------------------------------ scoreline ----
