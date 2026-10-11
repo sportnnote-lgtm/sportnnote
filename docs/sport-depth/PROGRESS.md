@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-39 / SD-46 / SD-47 / SD-49 / SD-68 / SD-78 / SD-81 — DONE (0fdf364, 2026-10-11)
+- See DEVLOG. Check: carrom penalty board vs ICF Laws (counts toward 8-board limit + break order = house choice); volleyball efficiency counts blocked attacks against the attacker, 10-attempt minimum (house).
+- Not done: corners/possession in team averages; mixed outfield/keeper minutes in one match; pre-match player H2H path not demoed; carrom doubles per-player break order; volleyball format-level detail default + voice; golf position-points table UI; golf Player of the Tournament still weighted.
+- Remaining READY: SD-48 team ties (L, migration TBD), SD-51 match-records hook, SD-55 optional RPC — founder call.
+
 ## SD-93 combined events — DONE (7042c7d, 2026-10-11)
 - See DEVLOG. Note: the brief's sample values for heptathlon 100 mH 13.00 (1115) and 800 m 2:00.00 (1087) were wrong; the formula gives 1124 and 1116 (verified against 1000-point anchors and six world-record totals).
 - Check (from memory): current combined-events false-start rule (TR 39.8.3 / 16.8 — may have changed); 3+-way tie method (pairwise sum, then highest single scores); CR 31 sub-rule number; women's 60 m not offered (no coefficients). Not done: organiser-set heats/groups per event; separate withdraw button; hub/profile/reopen not seen in the demo (unit tests only). run-athletics-track-events is 907 words.
