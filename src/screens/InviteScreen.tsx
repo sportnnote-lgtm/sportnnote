@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { fnPath } from '../core/functionPath';
+import { clearReadCache } from '../data/readCache';
 import { Button, Card, textStyles } from '../components/ui';
 import { Logo } from '../components/Logo';
 import { PhoneLoginCard } from '../components/PhoneLoginCard';
@@ -36,7 +38,7 @@ export default function InviteScreen() {
   useEffect(() => {
     let on = true;
     if (!FN) { setInfo({ team: 'your team', teamId: null, claimed: false }); return; }
-    fetch(`${FN}/join?p=${encodeURIComponent(params.playerId)}&format=json`)
+    fetch(`${FN}/${fnPath(`join?p=${encodeURIComponent(params.playerId)}&format=json`)}`)
       .then((r) => r.json() as Promise<Info>)
       .then((d) => on && setInfo(d))
       .catch(() => on && setInfo({ team: '', teamId: null, claimed: false }));
@@ -47,7 +49,7 @@ export default function InviteScreen() {
     setReported('busy');
     try {
       if (FN) {
-        const r = await fetch(`${FN}/report-invite`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p: params.playerId }) });
+        const r = await fetch(`${FN}/${fnPath('report-invite')}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p: params.playerId }) }).finally(clearReadCache); // a write outside the Supabase client (F-19)
         if (!r.ok) throw new Error(String(r.status));
       }
       setReported('done');

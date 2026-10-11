@@ -7,6 +7,7 @@
  */
 import { Platform, Share } from 'react-native';
 import { isSupabaseConfigured, supabase } from '../core/supabase';
+import { fnPath } from '../core/functionPath';
 import { downloadText } from '../core/download';
 import { ageOf } from '../core/age';
 import { analyticsChoice } from '../core/analyticsConsent';
@@ -119,7 +120,7 @@ export function exportSummary(x: DataExport): { label: string; value: string }[]
 /** The child asks for (another) confirmation email to their guardian. */
 export async function requestGuardianConsent(): Promise<{ sent: boolean; reason?: string; email?: string }> {
   if (!live()) return { sent: false, reason: 'Guardian emails need the live app.' };
-  const { data, error } = await supabase!.functions.invoke('guardian-consent', { body: {} });
+  const { data, error } = await supabase!.functions.invoke(fnPath('guardian-consent'), { body: {} });
   if (error) return { sent: false, reason: await fnError(error, 'Couldn’t send the email just now — try again later.') };
   return data as { sent: boolean; reason?: string; email?: string };
 }
@@ -180,7 +181,7 @@ export async function guardianSetConsent(playerId: string, confirm: boolean): Pr
 export async function guardianDeleteChild(playerId: string): Promise<string | null> {
   if (!live()) return 'Deleting isn’t available in demo mode.';
   try {
-    const { data, error } = await supabase!.functions.invoke('delete-account', { body: { confirm: 'DELETE', childPlayerId: playerId } });
+    const { data, error } = await supabase!.functions.invoke(fnPath('delete-account'), { body: { confirm: 'DELETE', childPlayerId: playerId } });
     if (error) return fnError(error, 'Couldn’t delete just now — check your connection and try again.');
     return data?.deleted ? null : 'Couldn’t delete just now — please try again.';
   } catch {

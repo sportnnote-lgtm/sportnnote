@@ -17,6 +17,10 @@
  * Contract: POST { idToken, signup?: { fullName, dob, role, guardian?, legalVersion, agreed } }
  *   → { status: 'ok', tokenHash } | { status: 'new' } | { status: 'unverified', reason } | { error }
  * Secrets: FIREBASE_PROJECT_ID (+ the injected service role).
+ *
+ * Perf (docs/perf/audit.md F-04): independent steps run side by side and the
+ * owner lookup returns the account's sign-in state (no getUserById) — the
+ * checks, their order of precedence and every response are unchanged.
  */
 import { admin, clip, CORS, json, rateLimit, tooMany } from '../_shared/guard.ts';
 import { firebaseConfigured, verifiedPhoneFromToken } from '../_shared/firebaseToken.ts';
@@ -35,12 +39,25 @@ function ageFrom(dob: string): number | null {
   return a >= 0 && a < 120 ? a : null;
 }
 
-async function sessionFor(profileId: string): Promise<Response> {
-  const { data: u, error } = await admin.auth.admin.getUserById(profileId);
-  if (error || !u?.user?.email || u.user.deleted_at || (u.user as { banned_until?: string }).banned_until) {
+/** The account fields the sign-in check needs (auth.users). */
+interface Account { email?: string | null; deleted_at?: string | null; banned_until?: string | null }
+
+/** Sign into `profileId`. `account` = its auth.users state when the caller
+ *  already has it (phone_login_lookup_account, or the user just created);
+ *  otherwise it is read here with getUserById, as before. Same refusal rule
+ *  either way: no email, deleted or banned → 403. */
+async function sessionFor(profileId: string, account?: Account): Promise<Response> {
+  let acct = account;
+  if (!acct) {
+    const { data: u, error } = await admin.auth.admin.getUserById(profileId);
+    acct = error || !u?.user ? undefined : {
+      email: u.user.email, deleted_at: u.user.deleted_at, banned_until: (u.user as { banned_until?: string }).banned_until,
+    };
+  }
+  if (!acct?.email || acct.deleted_at || acct.banned_until) {
     return json({ error: 'This account can’t sign in right now — contact support.' }, 403);
   }
-  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'magiclink', email: u.user.email });
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'magiclink', email: acct.email });
   const tokenHash = link?.properties?.hashed_token;
   if (linkErr || !tokenHash) {
     console.error('generateLink', linkErr);
@@ -49,31 +66,53 @@ async function sessionFor(profileId: string): Promise<Response> {
   return json({ status: 'ok', tokenHash });
 }
 
+type Owner = { profile_id: string; verified: boolean } & Account;
+
+/** Who owns this number — with the account's sign-in state in the same call
+ *  (migration 20261023100000). Before that migration: the old lookup, and
+ *  sessionFor reads the account itself. */
+let lookupHasAccount = true;
+async function lookupOwner(phone: string): Promise<{ row?: Owner; withAccount: boolean }> {
+  if (lookupHasAccount) {
+    const { data, error } = await admin.rpc('phone_login_lookup_account', { p_phone: phone });
+    if (!error) return { row: (data as Owner[] | null)?.[0], withAccount: true };
+    // PGRST202 / 42883 = not deployed yet; anything else: use the old path this time
+    if (['PGRST202', '42883'].includes((error as { code?: string }).code ?? '')) lookupHasAccount = false;
+  }
+  const { data: owner } = await admin.rpc('phone_login_lookup', { p_phone: phone });
+  return { row: (owner as Owner[] | null)?.[0], withAccount: false };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   if (!firebaseConfigured()) return json({ error: 'Mobile sign-in isn’t available yet.' }, 503);
 
   const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
-  if (!(await rateLimit('phone-login-ip', ip, 30, 3600))) return tooMany();
-
+  // Perf F-04: the IP limit, the body and Google's token check run side by side.
+  // The answers are checked in the old order (429 before 400 before 401), so
+  // every response is what the sequential version returned.
+  const ipOk = rateLimit('phone-login-ip', ip, 30, 3600);
   const body = (await req.json().catch(() => ({}))) as { idToken?: unknown; signup?: Record<string, unknown> };
   const idToken = typeof body.idToken === 'string' ? body.idToken : '';
-  if (!idToken) return json({ error: 'idToken is required' }, 400);
+  const verifying = idToken ? verifiedPhoneFromToken(idToken) : null;
+  if (!(await ipOk)) return tooMany();
+  if (!idToken || !verifying) return json({ error: 'idToken is required' }, 400);
 
-  const verified = await verifiedPhoneFromToken(idToken);
+  const verified = await verifying;
   if (verified instanceof Error) return json({ error: verified.message }, 401);
   // The identity is the FULL international number Firebase verified (E.164,
   // e.g. +19175551234) — never its last 10 digits, which a number in another
   // country can share (+1 917 555 1234 vs +91 91755 51234 = account takeover).
   const phone = verified.startsWith('+') ? phoneKey(verified) : '';
   if (!phone) return json({ error: 'That number couldn’t be read — try again with the country code.' }, 400);
-  if (!(await rateLimit('phone-login', phone, 10, 3600))) return tooMany();
+  // The per-number limit and the owner lookup (a read) run side by side; a
+  // limited number still gets 429 and nothing else.
+  const [phoneOk, { row, withAccount }] = await Promise.all([rateLimit('phone-login', phone, 10, 3600), lookupOwner(phone)]);
+  if (!phoneOk) return tooMany();
 
   // Who owns this number?
-  const { data: owner } = await admin.rpc('phone_login_lookup', { p_phone: phone });
-  const row = (owner as { profile_id: string; verified: boolean }[] | null)?.[0];
-  if (row?.verified) return sessionFor(row.profile_id);
+  if (row?.verified) return sessionFor(row.profile_id, withAccount ? row : undefined);
   if (row && !row.verified) {
     return json({
       status: 'unverified',
@@ -122,5 +161,10 @@ Deno.serve(async (req) => {
   }
   const { error: attachErr } = await admin.rpc('phone_login_attach_player', { p_profile: created.user.id, p_phone: phone });
   if (attachErr) console.error('attach player', attachErr); // the app's createMyPlayer still covers this
-  return sessionFor(created.user.id);
+  // The account was created a moment ago with this email, not deleted or banned:
+  // no need to read it back (the old getUserById here returned the same fields).
+  return sessionFor(created.user.id, {
+    email: created.user.email, deleted_at: (created.user as { deleted_at?: string }).deleted_at,
+    banned_until: (created.user as { banned_until?: string }).banned_until,
+  });
 });

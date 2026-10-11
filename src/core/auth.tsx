@@ -14,6 +14,7 @@ import { privacyCountry, US_UNDER_13_MESSAGE } from './privacyRegion';
 import { analyticsChoice } from './analyticsConsent';
 import { planAuthEvent, profileFromSession, confirmedLoginEmail } from './authEvents';
 import { clearMyPlayerIdCache } from '../data/myPlayerIdMemo';
+import { clearReadCache } from '../data/readCache';
 import type { GuardianContact, Profile, Role } from './types';
 
 /** Turn a raw Supabase/network error into a plain, actionable message. Users
@@ -157,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       s.loadingProfile = false;
       s.seq++; // drop any profile read still in flight
       clearMyPlayerIdCache(); // F-10: never hand the next account this one's player id
+      clearReadCache(); // F-19: nothing read as one account is served to the next
       emailSynced.current.clear();
       setProf(null);
       setLoading(false);
@@ -167,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (plan === 'switch') {
       s.userId = user.id;
       clearMyPlayerIdCache(); // a different account (or the first) — re-resolve its player
+      clearReadCache(); // F-19: nothing read as one account is served to the next
       // F-05: a fresh sign-in renders Home at once from the sign-up metadata while
       // `profiles` loads. Launch (BOOT) keeps waiting for the stored profile.
       const quick = s.bootDone && event === 'SIGNED_IN' ? profileFromSession(user) : null;
@@ -302,6 +305,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       clearMyPlayerIdCache();
+      clearReadCache(); // F-19: nothing read as one account is served to the next
       if (supabase) await supabase.auth.signOut();
       // Web: wipe the offline copies of data the service worker kept (public/sw.js).
       try {

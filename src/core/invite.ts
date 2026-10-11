@@ -4,6 +4,7 @@
  *  a mailto fallback so it still works before that function is deployed. */
 import { Linking } from 'react-native';
 import { supabase } from './supabase';
+import { fnPath } from './functionPath';
 import { SITE_URL } from './hosts';
 
 /** Marketing site (used only as a demo fallback for invite links). */
@@ -29,7 +30,7 @@ export async function sendInviteEmail(to: string, opts: { name: string; inviterN
     try {
       // The server composes the email from a fixed template (so the function can't
       // be used to send arbitrary text from our domain); we send only the parts.
-      const { data, error } = await supabase.functions.invoke('send-invite', {
+      const { data, error } = await supabase.functions.invoke(fnPath('send-invite'), {
         body: { to, name: opts.name, link: opts.link, context: opts.context ?? '', role: opts.role ?? 'co-host' },
       });
       if (!error && (data as { delivered?: boolean } | null)?.delivered) return true;

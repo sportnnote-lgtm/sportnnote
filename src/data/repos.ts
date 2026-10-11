@@ -8,6 +8,7 @@ import { ageOf } from '../core/age';
 import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
 import { serializePrefs, type FollowPrefs } from './followPrefs';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
+import { fnPath } from '../core/functionPath';
 import type { PickedDoc } from '../core/document';
 import type { PickedImage } from '../core/photo';
 import { isLocalImageUri, mediaPath, extForMime, isPrivateImageKind, privateImageRef, PLAYER_PHOTO_BUCKET, type ImageKind } from '../core/imageUrl';
@@ -25,7 +26,7 @@ import { mergeSportFormat } from './formatPatch';
 import { forfeitFor, walkoverFormatFor, isWalkover, WALKOVER_SCORE_SPORTS } from './walkover';
 import { isLiveTournament } from './tournamentForm';
 import { myPlayerIdMemo } from './myPlayerIdMemo';
-import { shareInflight } from './shareInflight';
+import { readCache } from './readCache';
 import {
   orSafe, parseVsQuery, rankByName, filterByName, capIds, collapseTeams, liveOnly, selectMatchHits, matchNames, narrowBySports,
   isSearchable, SEARCH_LIMIT, SEARCH_ID_CAP, type TeamHit, type SearchResults, type SearchKind,
@@ -340,23 +341,84 @@ export async function getTournaments(opts: { includeDeleted?: boolean } = {}): P
   return opts.includeDeleted ? all : all.filter(isLiveTournament);
 }
 
-// Perf F-09: Home asks for every tournament twice at once (the feed and the
-// switcher). Calls that START within a moment of each other share one read —
-// the same answer two parallel requests would get; later calls read afresh.
-const tournamentsRead = shareInflight(async (): Promise<Tournament[]> => {
-  const { data, error } = await withTournamentCols<any[]>((cols) =>
-    supabase!.from('tournaments').select(cols).order('start_date', { ascending: false }));
-  if (error || !data) return [];
-  return data.map(toTournament);
-}, 50);
+/* ---------------- Short-lived read cache (perf F-19, data/readCache.ts) ---------------- */
+
+/** A read failed: return the caller's usual fallback, and don't cache it. */
+const NOT_CACHED = Symbol('not cached');
+/** Run `load` through the read cache. The raw rows are cached; every caller gets
+ *  its own deep copy (they came from JSON, so a JSON copy is exact) and maps it
+ *  itself, so no caller can change what another one sees. `null` = the read
+ *  failed (never cached). */
+async function cachedRows<T>(key: string, load: () => Promise<T | typeof NOT_CACHED>): Promise<T | null> {
+  try {
+    const raw = await readCache.get(key, async () => {
+      const r = await load();
+      if (r === NOT_CACHED) throw new Error('not cached');
+      return r;
+    });
+    return JSON.parse(JSON.stringify(raw)) as T;
+  } catch {
+    return null;
+  }
+}
+
+// Perf F-09/F-19: Home asks for every tournament twice at once (the feed and the
+// switcher), and every focus asked again — one cached read serves them all.
 async function sharedTournamentsRead(): Promise<Tournament[]> {
-  // a fresh array per caller, so one caller's sort/splice can't touch another's
-  return [...(await tournamentsRead())];
+  const rows = await cachedRows<any[]>('tournaments', async () => {
+    const { data, error } = await withTournamentCols<any[]>((cols) =>
+      supabase!.from('tournaments').select(cols).order('start_date', { ascending: false }));
+    return error || !data ? NOT_CACHED : data;
+  });
+  return (rows ?? []).map(toTournament);
+}
+
+/* ---------------- Home in one read (perf F-09(4)) ---------------- */
+
+/** What the `home_feed()` RPC returns (migration 20261023100000): the caller's
+ *  player id, every tournament they can see (the tournaments read's columns,
+ *  newest first) and their scoped feed's matches (the match read's columns,
+ *  oldest first) with the ids of the "mine" subset. Read through the caller's
+ *  own RLS, like the reads it replaces. */
+interface HomeFeedRaw {
+  player_id: string | null;
+  tournaments: any[];
+  matches: MatchRow[];
+  mine_ids: string[];
+}
+/** false once the database says home_feed() isn't there (migration not run yet). */
+let homeFeedAvailable = true;
+const isMissingFunction = (e: { code?: string; message?: string } | null | undefined): boolean =>
+  !!e && (['PGRST202', '42883', 'PGRST205'].includes(e.code ?? '') || /could not find the function/i.test(e.message ?? ''));
+/** The signed-in user's Home data in one round trip, or null → use the old reads. */
+async function readHomeFeed(): Promise<HomeFeedRaw | null> {
+  if (!isSupabaseConfigured || !supabase || !homeFeedAvailable) return null;
+  return cachedRows<HomeFeedRaw>('home_feed', async () => {
+    // GET: a read, so it doesn't empty the read cache like a POST would
+    const { data, error } = await supabase!.rpc('home_feed', {}, { get: true });
+    if (error) {
+      if (isMissingFunction(error)) homeFeedAvailable = false;
+      return NOT_CACHED;
+    }
+    const d = data as HomeFeedRaw | null;
+    return d && Array.isArray(d.tournaments) && Array.isArray(d.matches) && Array.isArray(d.mine_ids) ? d : NOT_CACHED;
+  });
 }
 
 /** Tournaments the user plays in or follows (organizer-owned + followed). In
  *  demo mode the local user runs the sample meets, so all are returned. */
 export async function getMyTournaments(profileId?: string, followedIds: string[] = []): Promise<Tournament[]> {
+  // Perf F-09(4): the same answer from the one Home read, when it's there.
+  const feed = profileId ? await readHomeFeed() : null;
+  if (feed) {
+    const live = feed.tournaments.map(toTournament).filter(isLiveTournament);
+    const pid = feed.player_id;
+    // = the host_ids "contains my player" read below (deleted ones drop out next)
+    const hosted = pid ? feed.tournaments.filter((r) => Array.isArray(r.host_ids) && r.host_ids.includes(pid)).map((r) => r.id as string) : [];
+    const ids = new Set([...hosted, ...followedIds]);
+    const scoped = live.filter((t) => ids.has(t.id));
+    return scoped.length ? scoped : live;
+  }
   const all = await getTournaments();
   if (!isSupabaseConfigured || !supabase || !profileId) return all;
   // host_ids hold player ids (the same identity the host UI checks), so resolve
@@ -408,17 +470,26 @@ async function readMatches(opts: { sport?: SportId; after?: number }): Promise<M
   }
   // Perf F-09: the deleted-tournament ids and the matches are read in parallel
   // (they were two sequential round trips).
-  const [deleted, { data, error }] = await Promise.all([
-    deletedTournamentIds(),
-    withMatchCols<unknown[]>((cols) => {
-      let q = supabase!.from('matches').select(cols).order('starts_at', { ascending: true });
-      if (sport) q = q.eq('sport', sport);
-      if (after !== undefined) q = q.gt('starts_at', new Date(after).toISOString());
-      return q;
-    }),
-  ]);
-  if (error || !data) return [];
-  return (data as unknown as MatchRow[]).map(toMatch).filter(visibleAfterDelete(deleted));
+  const load = async (): Promise<{ rows: MatchRow[]; deleted: string[] } | typeof NOT_CACHED> => {
+    const [deleted, { data, error }] = await Promise.all([
+      deletedTournamentIds(),
+      withMatchCols<unknown[]>((cols) => {
+        let q = supabase!.from('matches').select(cols).order('starts_at', { ascending: true });
+        if (sport) q = q.eq('sport', sport);
+        if (after !== undefined) q = q.gt('starts_at', new Date(after).toISOString());
+        return q;
+      }),
+    ]);
+    if (error || !data) return NOT_CACHED;
+    return { rows: data as unknown as MatchRow[], deleted: [...deleted] };
+  };
+  // Perf F-19: the all-matches reads (every screen's) go through the read cache;
+  // the reminder engine's "from now on" read is always fresh.
+  const res = after === undefined
+    ? await cachedRows(`matches:${sport ?? '*'}`, load)
+    : await load().then((r) => (r === NOT_CACHED ? null : r));
+  if (!res) return [];
+  return res.rows.map(toMatch).filter(visibleAfterDelete(new Set(res.deleted)));
 }
 
 export async function getMatch(id: string): Promise<Match | null> {
@@ -464,6 +535,15 @@ export async function getTeamRosters(teamIds: string[]): Promise<Map<string, str
  *    (following a player resolves to that player's team's matches).
  *  Used by the Home page (feed) and the Matches tab (mine). */
 export async function getScopedMatches(profileId?: string): Promise<{ mine: Match[]; feed: Match[] }> {
+  // Perf F-09(4): one round trip (home_feed) when the database has it; it applies
+  // the rule below on the server, through the same RLS. Else the reads below.
+  const homeFeed = profileId ? await readHomeFeed() : null;
+  if (homeFeed) {
+    const deleted = new Set(homeFeed.tournaments.filter((t) => t.deleted_at).map((t) => t.id as string));
+    const feed = homeFeed.matches.map(toMatch).filter(visibleAfterDelete(deleted));
+    const mineIds = new Set(homeFeed.mine_ids);
+    return { mine: feed.filter((m) => mineIds.has(m.id)), feed };
+  }
   const [matches, myPlayerId, followKeys, tournaments] = await Promise.all([
     getMatches(), getMyPlayerId(profileId), getFollows(profileId), getTournaments(),
   ]);
@@ -836,9 +916,12 @@ async function readPlayers(run: (cols: string) => PromiseLike<{ data: unknown; e
 
 export async function getPlayers(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) return demo.players;
-  const { data, error } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).order('full_name'));
-  if (error || !data) return [];
-  return (data as PlayerRow[]).map(toPlayer);
+  // Perf F-19: through the short-lived read cache (emptied by any write).
+  const rows = await cachedRows<PlayerRow[]>('players', async () => {
+    const { data, error } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).order('full_name'));
+    return error || !data ? NOT_CACHED : (data as PlayerRow[]);
+  });
+  return (rows ?? []).map(toPlayer);
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {
@@ -3573,7 +3656,7 @@ export interface SupportCaseInput {
 export async function submitSupportCase(input: SupportCaseInput): Promise<{ delivered: boolean }> {
   if (!isSupabaseConfigured || !supabase) return { delivered: false };
   try {
-    const { data, error } = await supabase.functions.invoke('support-escalate', {
+    const { data, error } = await supabase.functions.invoke(fnPath('support-escalate'), {
       body: { question: input.question, tried: input.tried, handle: input.handle, appVersion: input.appVersion },
     });
     if (error) return { delivered: false };
@@ -3589,7 +3672,7 @@ export async function submitSupportCase(input: SupportCaseInput): Promise<{ deli
 export async function deleteMyAccount(): Promise<string | null> {
   if (!isSupabaseConfigured || !supabase) return 'Account deletion isn’t available in demo mode.';
   try {
-    const { data, error } = await supabase.functions.invoke('delete-account', { body: { confirm: 'DELETE' } });
+    const { data, error } = await supabase.functions.invoke(fnPath('delete-account'), { body: { confirm: 'DELETE' } });
     if (error) {
       const ctx = (error as { context?: Response }).context;
       const body = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) : null;
@@ -3712,7 +3795,7 @@ export async function beginContactVerification(playerId: string, channel: OtpCha
     // flags since migration 0025) — never fall back to an on-screen code here.
     let why: string | undefined;
     try {
-      const { data, error } = await supabase.functions.invoke('send-contact-otp', { body: { playerId, channel } });
+      const { data, error } = await supabase.functions.invoke(fnPath('send-contact-otp'), { body: { playerId, channel } });
       const d = data as { sent?: boolean; reason?: string; detail?: string } | null;
       if (!error && d?.sent) return { sent: true, via: channel === 'email' ? 'email' : 'whatsapp' };
       why = d?.reason ?? error?.message;
@@ -3738,14 +3821,14 @@ export async function verifyContactOtp(playerId: string, channel: OtpChannel, co
   // Throws (with a user-facing message) on a wrong/expired code.
   if (firebasePending && firebasePending.playerId === playerId && firebasePending.channel === channel) {
     const idToken = await confirmPhoneCode(code);
-    const { data, error } = await supabase.functions.invoke('verify-phone-firebase', { body: { playerId, channel, idToken } });
+    const { data, error } = await supabase.functions.invoke(fnPath('verify-phone-firebase'), { body: { playerId, channel, idToken } });
     const d = data as { verified?: boolean; reason?: string } | null;
     if (error || !d?.verified) throw new Error(d?.reason ?? 'Couldn’t verify the number — try again.');
     firebasePending = null;
     return true;
   }
   try {
-    const { data, error } = await supabase.functions.invoke('verify-contact-otp', { body: { playerId, channel, code } });
+    const { data, error } = await supabase.functions.invoke(fnPath('verify-contact-otp'), { body: { playerId, channel, code } });
     return !error && !!(data as { verified?: boolean } | null)?.verified;
   } catch {
     return false;
@@ -3807,7 +3890,7 @@ export async function submitVerificationDoc(id: string, doc: PickedDoc): Promise
   // and the in-app review queue works regardless of whether email is wired up).
   if (isSupabaseConfigured && supabase && docPath) {
     try {
-      await supabase.functions.invoke('verification-submit', { body: { playerId: id } });
+      await supabase.functions.invoke(fnPath('verification-submit'), { body: { playerId: id } });
     } catch (e) {
       console.warn('verification-submit invoke failed:', e);
     }
@@ -4468,9 +4551,8 @@ const MEMBER_COLS = 'org_id, player_id, role, since, until, grades';
 const MEMBER_COLS_FULL = `${MEMBER_COLS}, houses`;
 
 /** Load org_members rows, grouped by org id (optionally for specific orgs). */
-async function loadOrgMembers(orgIds?: string[]): Promise<Map<string, OrgMember[]>> {
-  const map = new Map<string, OrgMember[]>();
-  if (!isSupabaseConfigured || !supabase) return map;
+async function loadOrgMemberRows(orgIds?: string[]): Promise<any[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
   const run = (cols: string) => {
     let q = supabase!.from('org_members').select(cols);
     if (orgIds && orgIds.length) q = q.in('org_id', orgIds);
@@ -4478,12 +4560,19 @@ async function loadOrgMembers(orgIds?: string[]): Promise<Map<string, OrgMember[
   };
   let res = await run(MEMBER_COLS_FULL); // houses needs migration 0022
   if (res.error) res = await run(MEMBER_COLS);
-  for (const r of (res.data ?? []) as any[]) {
+  return (res.data ?? []) as any[];
+}
+function orgMembersByOrg(rows: any[]): Map<string, OrgMember[]> {
+  const map = new Map<string, OrgMember[]>();
+  for (const r of rows) {
     const arr = map.get(r.org_id) ?? [];
     arr.push(toOrgMember(r));
     map.set(r.org_id, arr);
   }
   return map;
+}
+async function loadOrgMembers(orgIds?: string[]): Promise<Map<string, OrgMember[]>> {
+  return orgMembersByOrg(await loadOrgMemberRows(orgIds));
 }
 
 const toOrgRequest = (r: any): OrgRequest => ({
@@ -4543,10 +4632,15 @@ export async function createOrganization(input: NewOrganization, creatorPlayerId
 
 export async function getOrganizations(): Promise<Organization[]> {
   if (!isSupabaseConfigured || !supabase) return demo.organizations;
-  const { data, error } = await withOrgCols<any[]>((cols) => supabase!.from('organizations').select(cols).order('name'));
-  if (error || !data) return [];
-  const byOrg = await loadOrgMembers();
-  return data.map((r: any) => toOrganization(r, byOrg.get(r.id) ?? []));
+  // Perf F-19: through the short-lived read cache (emptied by any write).
+  const res = await cachedRows<{ orgs: any[]; members: any[] }>('organizations', async () => {
+    const { data, error } = await withOrgCols<any[]>((cols) => supabase!.from('organizations').select(cols).order('name'));
+    if (error || !data) return NOT_CACHED;
+    return { orgs: data, members: await loadOrgMemberRows() };
+  });
+  if (!res) return [];
+  const byOrg = orgMembersByOrg(res.members);
+  return res.orgs.map((r: any) => toOrganization(r, byOrg.get(r.id) ?? []));
 }
 
 export async function getOrganization(id: string): Promise<Organization | null> {

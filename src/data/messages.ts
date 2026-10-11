@@ -10,6 +10,7 @@
  *  Live writes are RPCs; after each send we ask the `message-notify` edge function
  *  to deliver it (push, or the guardian email). */
 import { supabase, isSupabaseConfigured } from '../core/supabase';
+import { fnPath } from '../core/functionPath';
 import { ageOf } from '../core/age';
 import { demo, genId } from './demoStore';
 
@@ -190,7 +191,7 @@ export async function reportMessage(messageId: string, reason: string): Promise<
 /** From the child's profile: email the guardian a code to link their own account. */
 export async function inviteGuardianToLink(playerId: string): Promise<{ sent: boolean; reason?: string }> {
   if (!live()) return { sent: true };
-  const { data, error } = await supabase!.functions.invoke('guardian-link', { body: { playerId } });
+  const { data, error } = await supabase!.functions.invoke(fnPath('guardian-link'), { body: { playerId } });
   const d = data as { sent?: boolean; reason?: string } | null;
   if (error && !d) return { sent: false, reason: 'Could not send right now — try again later.' };
   return { sent: !!d?.sent, reason: d?.reason };

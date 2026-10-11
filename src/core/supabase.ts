@@ -9,6 +9,7 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { clearReadCache, writeAwareFetch } from '../data/readCache';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -23,5 +24,8 @@ export const supabase = isSupabaseConfigured
         persistSession: true,
         detectSessionInUrl: false,
       },
+      // Perf F-19: every write empties the short-lived read cache (data/readCache.ts),
+      // so the user's own changes are always read back fresh.
+      global: { fetch: writeAwareFetch((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init), clearReadCache) },
     })
   : null;

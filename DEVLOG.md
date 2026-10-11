@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-13 — Speed Wave 2 (docs/perf/audit.md)
+- **Phone sign-in (F-04):** `phone-login` runs the IP limit, body and Google token check side by side, and the number limit beside the owner lookup; the lookup (`phone_login_lookup_account`) returns the account's email / deleted / banned state, so no `getUserById` (and none after creating an account). Same checks, E.164 identity, precedence (429 → 400 → 401) and responses; falls back to the old lookup until the migration runs.
+- **Home in one read (F-09(4)):** `home_feed()` (security invoker, caller's RLS) returns my player id, every visible tournament and the scoped feed with its "mine" ids; Home's feed, the Matches tab and the tournament switcher all use it (one shared request). Old reads remain the fallback when the RPC isn't there.
+- **Push permission check (F-17):** `push_allowed_targets()` builds the caller's managed teams / matches / tournaments once with indexed predicates instead of calling can_edit_team_roster / can_manage_match per row; same targets, same order, same grants.
+- **players_view (live finding after Wave 1):** provisional players' phone visibility tests a once-per-query set of editable teams (`my_roster_editable_team_ids`) instead of `can_contact_provisional()` per row; per-row privacy checks run once per row (`offset 0`). PGlite: 574 → 51 function calls per read, 7.5 → 2.2 ms.
+- **Read cache (F-19):** getMatches / getTournaments / getPlayers / getOrganizations / home_feed answers are reused for 10 s; any write through the Supabase client (or the invite "not me" report) empties it before and after, as do sign-out and account switch. Each caller gets its own copy.
+- **Abroad (F-22):** outside India (saved country, else device zone) the database-heavy edge functions are pinned to Mumbai with `?forceFunctionRegion=ap-south-1` (query only — the `x-region` header would fail the web CORS preflight). India unchanged; push-send / message-notify never pinned.
+- **Migration `20261023100000_perf_wave2.sql`** (not run). Verified: PGlite wave2 (24 random worlds, every user × every target, home_feed vs the app's old reads) + perfview (players_view identical incl. provisional on editable / non-editable teams); suite green; tsc clean; deno check phone-login. Deploy phone-login after the migration.
+
+---
+
 ### 2026-10-13 — Speed Wave 1 (docs/perf/audit.md)
 - **Phone sign-in (web):** Firebase and the "I'm not a robot" check load when the phone card opens (invisible reCAPTCHA pre-rendered on the first digit; each send still uses a fresh one); `phone-login` is woken as soon as the code is sent; sign-in shows Home from session details while the profile fills in; no extra `getUser` call.
 - **No spinner flashes / keeps place:** auth events (token refresh, returning to the web app) no longer reload the profile behind a full-screen spinner (`core/authEvents.ts`); the navigator resets only when a different user signs in.

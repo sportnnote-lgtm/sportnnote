@@ -21,6 +21,7 @@
  *  own docs rather than inventing product behaviour.
  */
 import { supabase, isSupabaseConfigured } from './supabase';
+import { fnPath } from './functionPath';
 import { deviceRegion } from './chatRegion';
 
 /** AI answers are available only in live mode, where the edge function is deployed. */
@@ -43,7 +44,7 @@ export async function askSupport(
 ): Promise<SupportAnswer | null> {
   if (!enabled() || !supabase) return null;
   try {
-    const { data, error } = await supabase.functions.invoke('support-assistant', {
+    const { data, error } = await supabase.functions.invoke(fnPath('support-assistant'), {
       body: { question, context, appVersion, region: deviceRegion() ?? undefined, timeZone: deviceTimeZone() },
     });
     if (error) return null;

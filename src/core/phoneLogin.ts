@@ -4,6 +4,7 @@
  * proven number into a SportnNote session.
  */
 import { supabase } from './supabase';
+import { fnPath } from './functionPath';
 import { firebasePhoneAvailable, sendPhoneCode as sendFirebaseCode, confirmPhoneCode, prewarmPhoneSdk, prewarmPhoneCode, releasePrewarmedPhoneCode } from './firebasePhone';
 import { LEGAL_VERSION } from '../data/legal';
 import type { GuardianContact, Role } from './types';
@@ -19,7 +20,7 @@ export { prewarmPhoneSdk, prewarmPhoneCode, releasePrewarmedPhoneCode };
 export function warmPhoneLogin(): void {
   if (!supabase) return;
   try {
-    void Promise.resolve(supabase.functions.invoke('phone-login', { method: 'GET' })).catch(() => undefined);
+    void Promise.resolve(supabase.functions.invoke(fnPath('phone-login'), { method: 'GET' })).catch(() => undefined);
   } catch { /* never let a warm-up break sign-in */ }
 }
 
@@ -46,7 +47,7 @@ export type PhoneLoginResult =
 let pendingToken: string | null = null;
 
 async function callPhoneLogin(idToken: string, signup?: PhoneSignup): Promise<PhoneLoginResult> {
-  const { data, error } = await supabase!.functions.invoke('phone-login', {
+  const { data, error } = await supabase!.functions.invoke(fnPath('phone-login'), {
     body: { idToken, ...(signup ? { signup: { ...signup, legalVersion: LEGAL_VERSION } } : {}) },
   });
   if (error) {
