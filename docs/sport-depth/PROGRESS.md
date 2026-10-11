@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-99 rowing, SD-100 canoe, SD-56/70/80 football — DONE (6ab6a1a, 2026-10-11)
+- See DEVLOG. No migration.
+- **Rowing/canoe — check:** World Rowing progression tables (13–18 crews) and ICF 10–18 boat table from memory; ICF 9-lane order may be mirrored; ICF official times are 1/1000 (app shows 1/100, keeps thousandths for order); ranges approximate. Not built: quarter-finals, lightweight weigh-in, para canoe, slalom, marathon, 5000 m mass start; "Best rowers (points)" counts singles only.
+- **Football — confirm:** default ban rule (red 1, 2 yellows 1) applies to existing tournaments as a warning; second-yellow red fixed at 1; any completed match / walkover serves a ban; officials never suspended (FIFA would); name→id matching within team for old logs. Not done: shootout panel after the winner is decided doesn't show (screen goes to Match complete); finished shootout card says "Full time" without the pens; demo "Julián Álvarez" accent duplicate; fixture team search can pick a different team id (suspension warning then missing).
+
 ## SD-59 / SD-72 / SD-83 kabaddi discipline — DONE (3e2bc8d, 2026-10-11)
 - See DEVLOG. AKFI rulebook unreachable — secondary sources only (no rule numbers). Check: touches lost when caught under both AKFI and PKL (no difference found → flag is a house-rule switch); whether the bonus survives a tackle; yellow = +1 technical point? (optional, off); all-out while a player is suspended; yellow while out starts at the side's next revival (approximate); defender line-out credited as an extra point; lobby not modelled.
 - Not done: voice for cards/tech points, cards in team comparison, live (non-completion) card stat writes, reducer enforcement of red-carded raiders (UI only).
