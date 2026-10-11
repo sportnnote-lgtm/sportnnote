@@ -66,7 +66,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-33 | Kabaddi statTotals from raids[] (raid/touch/bonus/tackle points, raids, successful/empty/out, super raids/tackles, do-or-die) | kabaddi | KB-02 | DONE | 665c38f · Wave 2 R1 · M · heals SD-03 history (D2) |
 | SD-34 | Tennis double faults scored before SD-104 (plain POINT + attribution2 / `_attr2` doubleFaults, no `df` flag) re-labelled as double faults on replay, so the timeline, DF column and point editor see them; score unchanged | tennis | TN-01, TN-02 | DONE | 60531e0 · Wave 2 R1 · S · replay test for relabelled DFs · PARTIAL: rest delivered by SD-104 (b3fbe7e): `df` point marker, timeline label, DF box column, editor kind, correction reconcile, server-only one-tap Ace / DF |
 | SD-35 | Golf entry admin: WD / DQ / DNS, edit handicap, remove | golf | GF-04 | DONE | fc9f370 · Wave 2 R1 · S · no migration |
-| SD-36 | Chess career remainder: wins by method (checkmate / resignation / time / forfeit…) and unbeaten streak; needs a `method` key on the line | chess | CH-05 | READY | Wave 2 R1 · S–M · PARTIAL: rest delivered by SD-24 (b3fbe7e) score / score %, SD-25 (9eaf301) W/D/L by colour and time control (split chips) |
+| SD-36 | Chess career remainder: wins by method (checkmate / resignation / time / forfeit…) and unbeaten streak; needs a `method` key on the line | chess | CH-05 | IN-PROGRESS | Wave 2 R1 · S–M · PARTIAL: rest delivered by SD-24 (b3fbe7e) score / score %, SD-25 (9eaf301) W/D/L by colour and time control (split chips) |
 | SD-37 | Carrom statTotals: games W/L, boards won/played, capped points, Queens, written absolute at completion | carrom | CR-02 | DONE | 68dd087 · Wave 2 R1 · M · needs SD-19 · PARTIAL: lines for the loser and both doubles partners delivered by SD-11 (4994c8d) |
 | SD-38 | Cricket records leaders remainder: most 4s / 6s / maidens / dots, ducks (new derived key) | cricket | CK-01 | DONE | 67849fa · Wave 2 R1 · S · PARTIAL: rest delivered by SD-16 (acb7669) HS / BBI / Ave / SR / Econ with qualifiers + 50s / 100s, SD-27 (526d50e) organiser minimums (`leaderMins`) |
 | SD-39 | Football career remainder: G+A, minutes per goal, starts in Playing time, keeper GA per 90, outfield vs goalkeeper section split | football | FB-08 | READY | Wave 2 R2 · S · needs SD-30 (accurate keys) · PARTIAL: rest delivered by SD-24 (b3fbe7e): sections, goals per game / per 90, SoT %, conversion, hat-tricks, most goals, save %, history line |
@@ -97,7 +97,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-64 | Padel Star Point deuce option | padel | PD-07 | DONE | 60531e0 · Wave 3b R1 · S · D5 (verify FIP 2026 text) |
 | SD-65 | Pickleball "Serves first" picker (the engine already accepts SET_FIRST_SERVER); verify pickleball's game-2 first server | squash, pickleball | SQ-06, PB-11 | DONE | 60531e0 · Wave 3b R1 · S · PARTIAL: squash (and TT) first-server picker delivered by SD-104 (b3fbe7e) |
 | SD-66 | Golf gross and net boards side by side (Best Gross / Best Net) | golf | GF-06 | DONE | fc9f370 · Wave 3b R1 · S |
-| SD-67 | Chess more results (double forfeit, dead position, adjudication, arbiter decision); name in "has White"; exact time control | chess | CH-08 | READY | Wave 3b R1 · S |
+| SD-67 | Chess more results (double forfeit, dead position, adjudication, arbiter decision); name in "has White"; exact time control | chess | CH-08 | IN-PROGRESS | Wave 3b R1 · S |
 | SD-68 | Carrom ICF score sheet (breaker, running total, penalty boards) | carrom | CR-03 | READY | Wave 3b R1 · S |
 | SD-69 | Cricket captain and keeper flags → Captaincy section, keeper dismissals | cricket | CK-04 | DONE | 67849fa · Wave 3b R1 · S · backfill replay script |
 | SD-70 | Football discipline table + suspension rule | football | FB-12 | DONE | 6ab6a1a · Wave 3b R2 · M |
@@ -106,19 +106,19 @@ P2 items are parked (PLAN.md §6.2).
 | SD-73 | Doubles serving order chosen per set (tennis ITF Rule 14; padel server naming) | tennis, padel | TN-09, PD-08 | DONE | delivered by SD-104 (b3fbe7e): per-set SET_SERVE_ORDER picker for tennis / padel; tiebreak rotation and serve stats follow it |
 | SD-74 | Badminton doubles server and receiver by name (Law 11) | badminton | BD-05 | DONE | 60531e0 · Wave 3b R2 · M |
 | SD-75 | Padel timeline labels: Game / Break / Hold with team names | padel | PD-09 | DONE | 60531e0 · Wave 3b R2 · S |
-| SD-76 | Golf team stroke play, best N of M | golf | GF-07 | READY | Wave 3b R2 · M · uses SD-28's `field_entries.team_id` (no separate migration) |
-| SD-77 | Chess wall chart / crosstable | chess | CH-06 | READY | Wave 3b R2 · M · needs SD-26 |
+| SD-76 | Golf team stroke play, best N of M | golf | GF-07 | IN-PROGRESS | Wave 3b R2 · M · uses SD-28's `field_entries.team_id` (no separate migration) |
+| SD-77 | Chess wall chart / crosstable | chess | CH-06 | IN-PROGRESS | Wave 3b R2 · M · needs SD-26 |
 | SD-78 | Carrom break and White/Black Slams | carrom | CR-04 | READY | Wave 3b R2 · S |
 | SD-79 | Cricket career shows BF, ducks, bowling innings, 4w/5w | cricket | CK-08 (rest) | DONE | 67849fa · Wave 3b R2 · S |
 | SD-80 | Football own goals credited + shootout takers/keepers | football | FB-13, FB-14 | DONE | 6ab6a1a · Wave 3b R3 · S |
 | SD-81 | Volleyball box remainder: per-player attack attempts, serve errors and errors (needs a detailed capture mode; SD-04 credits errors to nobody) and attack efficiency for a Best Attacker award | volleyball | VB-07, VB-08 | READY | Wave 3b R3 · M · needs SD-71 · PARTIAL: rest delivered by SD-23 (ba10433) box + opp-error rows, SD-24 (b3fbe7e) per-set career, SD-27 (526d50e) FIVB awards |
 | SD-82 | Kabaddi career remainder: raid strike %, not-out %, tackle %, super raids / super tackles (need SD-33's attempt keys), best match by total points | kabaddi | KB-04 | DONE | 665c38f · Wave 3b R3 · S · needs SD-33 · PARTIAL: rest delivered by SD-24 (b3fbe7e) pts/match, raid / tackle split, Super 10s, High 5s, best raid match |
 | SD-83 | Kabaddi rule check: touches when the raider is caught | kabaddi | KB-11 | DONE | 3e2bc8d · Wave 3b R3 · S · D6 · new matches only (v2) |
-| SD-84 | Golf Handicap Index field, trend, unofficial differential | golf | GF-09 | READY | Wave 3b R3 · M |
-| SD-85 | Chess ratings (FIDE ID, per time control), rating-seeded R1, ARO, performance rating | chess | CH-07 | READY | Wave 3b R3 · M |
+| SD-84 | Golf Handicap Index field, trend, unofficial differential | golf | GF-09 | IN-PROGRESS | Wave 3b R3 · M |
+| SD-85 | Chess ratings (FIDE ID, per time control), rating-seeded R1, ARO, performance rating | chess | CH-07 | IN-PROGRESS | Wave 3b R3 · M |
 | SD-86 | Carrom career remainder: games W/L, board % and points per board (need SD-37), slams, 25-0 games, best game | carrom | CR-05 | DONE | 68dd087 · Wave 3b R3 · M · needs SD-37, SD-78 · PARTIAL: rest delivered by SD-24 (b3fbe7e) match W-L, points per match, boards, queens, best match |
-| SD-87 | Golf match play with strokes (handicap dots, holes 10–18) | golf | GF-10 | READY | Wave 3b R4 · M |
-| SD-88 | Golf proper scorecard view | golf | GF-11 | READY | Wave 3b R4 · S |
+| SD-87 | Golf match play with strokes (handicap dots, holes 10–18) | golf | GF-10 | IN-PROGRESS | Wave 3b R4 · M |
+| SD-88 | Golf proper scorecard view | golf | GF-11 | IN-PROGRESS | Wave 3b R4 · S |
 | SD-89 | Golf playoff tie-break option | golf | GF-12 (playoff) | DONE | fc9f370 · Wave 3b R4 · S |
 | SD-90 | Athletics: track (sprints, hurdles, middle/long distance, steeplechase, relays): heats → semis → final with Q/q, lanes, times to 0.01 (hand times flagged), wind for 100/200/hurdles; DNS/DNF/DQ with rule ref; PB/SB/records; relay teams | athletics | World Athletics Technical Rules / Competition Rules | DONE | 665c38f · Wave 4 · L · needs SD-28 · D9 picks the first event list |
 | SD-91 | Athletics: field (LJ, TJ, HJ, PV, SP, discus, hammer, javelin): attempt cards (3 + 3 for top 8), best mark with countback on the next best, height progression with O/X/– and jump-off, wind for horizontal jumps, NM | athletics | World Athletics Technical Rules (field events) | DONE | 3e6ea63 · Wave 4 · L · needs SD-28 |
