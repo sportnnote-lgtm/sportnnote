@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-155 accessibility, SD-146 netball, SD-143 rugby, SD-145 ice hockey — DONE (3e49c34, 2026-10-12)
+- See DEVLOG. No live steps.
+- **Verify:** netball suspension length, coach time-outs, extra-time format, goal % vs GD tie-break, 20-0 walkover; rugby sevens final length, tens sin-bin, age-grade halves, KO deciders, bonus-point model, 28-0 walkover, ban defaults; ice hockey IIHF playoff OT, shoot-out order, PIM for GM/MP, coincident penalties, tie-break orders, NFHS OT, 5-0 walkover.
+- **Not done:** real VoiceOver/TalkBack + device 200% text; web table semantics; ~120 role-less links outside core; netball Fast5 + 2-leg ties; rugby HIA timer + yellow-card citing; ice hockey delayed penalty / faceoffs / TOI, goalie goals via edit only.
+- **Investigate (SD-156):** a player's main profile showed "0W 0D 0L" for a newly created team while the sport page showed 1-0-0 (seen in the demo with rugby; may be demo roster ids). Schedule-a-match in a tournament doesn't list participating teams as chips.
+
 ## International I-2 — SD-153 / SD-154 — DONE (9fa0d9c, 2026-10-12)
 - See DEVLOG. **Founder:** run `20261021120000_team_levels_feeders.sql` (market presets already run).
 - **Verify (general knowledge, organiser-editable):** BSME/ESAA 31 Aug, NSG A/B/C ages, ESAA Junior/Inter/Senior ages, US 1 Sep, SCY fast-end ranges, NFHS feet-and-inches rounding (app rounds to nearest ¼", NFHS measures down).
