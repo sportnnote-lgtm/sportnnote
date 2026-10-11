@@ -21,6 +21,7 @@ import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
 import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
 import { CYC_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
 import { ROAD_EVENTS, roadEventOf, type RoadEvent, type RoadFormat } from './roadDefs.ts';
+import { combinedEventOf, type CombinedFormat } from './combinedDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -46,7 +47,8 @@ export type TieRule =
   | 'inner-count' // SD-95 archery (WA): total → most 10s (incl. X) → most X; then shoot-off / coin toss
   | 'issf' // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
   | 'cycling' // SD-98 (UCI): finish order / points / GC time — cyclingRank.ts
-  | 'road'; // SD-92 (World Athletics TR 54–56): the order of finish; times optional — road.ts
+  | 'road' // SD-92 (World Athletics TR 54–56): the order of finish; times optional — road.ts
+  | 'combined'; // SD-93 (World Athletics TR 39): a combined event's total points — combined.ts (never a phase's own discipline)
 
 export type ResultStatus =
   | 'ok' // a valid mark (or still competing)
@@ -218,6 +220,9 @@ export interface PhaseFormat {
   cyc?: CycFormat;
   /** SD-92 athletics road / race walk / cross-country: certified course, timing, team scoring, walk rules */
   road?: RoadFormat;
+  /** SD-93 athletics combined events: this phase is one event of a decathlon /
+   *  heptathlon / pentathlon … (its `discipline` is that event's) */
+  combined?: CombinedFormat;
 }
 
 /** SD-98 — a cycling phase's set-up (cycling.ts). */
@@ -395,6 +400,8 @@ export interface EntryResult {
   bo?: 1 | 3;
   /** SD-92 race walk: red cards from the judges (TR 54.6 / 54.7) */
   rc?: number;
+  /** SD-93 combined events: this athlete was warned for the race's one allowed false start (TR 39.8.3) */
+  fsWarn?: boolean;
 }
 
 /** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,
@@ -475,12 +482,16 @@ const swim = (key: string, label: string, extra: Partial<DisciplineDef> = {}): D
  * full swimming / archery / shooting / lifting programmes).
  */
 export const DISCIPLINES: DisciplineDef[] = [
+  // SD-93: 60 m / 60 m hurdles / 1000 m — the indoor combined events (scored by the Combined Events tables)
+  track('60m', '60 m', { lanes: 8 }),
   track('100m', '100 m', { wind: 'race', windLimit: 2.0 }),
   track('200m', '200 m', { wind: 'race', windLimit: 2.0 }),
   track('400m', '400 m'),
   track('800m', '800 m', { lanes: 8 }),
+  track('1000m', '1000 m', { lanes: undefined }),
   track('1500m', '1500 m', { lanes: undefined }),
   track('3000m', '3000 m', { lanes: undefined }),
+  track('60mh', '60 m hurdles', { lanes: 8 }),
   track('100mh', '100 m hurdles', { wind: 'race', windLimit: 2.0 }),
   track('110mh', '110 m hurdles', { wind: 'race', windLimit: 2.0 }),
   track('80mh', '80 m hurdles', { wind: 'race', windLimit: 2.0 }),
@@ -546,12 +557,18 @@ export const disciplineOf = (key: string): DisciplineDef | undefined => {
   if (d) return d;
   // SD-92: any road / walk / XC distance ('ath.road.7500', 'ath.xc.4000')
   const r = roadEventOf(key);
-  return r ? roadDiscipline(r) : undefined;
+  if (r) return roadDiscipline(r);
+  // SD-93: a combined event's total ('ath.ce_dec', 'ath.ce_x_100m_lj_sp') — points, higher wins
+  const c = combinedEventOf(key);
+  return c ? { key: c.key, label: c.label, sport: 'athletics', unit: 'points', better: 'higher', dp: 0, capture: 'single', tie: 'combined' } : undefined;
 };
 
 /** SD-94: the discipline as raced at this phase's venue (a 6- or 10-lane pool). */
-export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes'> | null): DisciplineDef =>
-  (f?.lanes && def.lanes ? { ...def, lanes: f.lanes } : def);
+export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes' | 'combined'> | null): DisciplineDef => {
+  // SD-93: in a combined event the horizontal jumps and throws have three trials only (TR 39.8, from memory)
+  const d = f?.combined && def.attempts ? { ...def, attempts: { count: def.attempts.count } } : def;
+  return f?.lanes && d.lanes ? { ...d, lanes: f.lanes } : d;
+};
 
 /** SD-94: the lane numbers of a venue — a 10-lane pool uses 0–9 (SW 3.1.2), else 1…n. */
 export const laneNumbers = (lanes: number): number[] => Array.from({ length: lanes }, (_, i) => (lanes === 10 ? i : i + 1));

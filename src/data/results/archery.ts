@@ -15,7 +15,7 @@
  *    meet points.
  */
 import type { ArchSide, Category, EntryResult, PhaseFormat, PhaseKind, RankedEntry, ResultEntry } from './model.ts';
-import { categoryLabel } from './model.ts';
+import { categoryLabel, disciplineOf } from './model.ts';
 import { phaseLabel } from './plan.ts';
 import type { Award } from './medals.ts';
 import {
@@ -40,7 +40,9 @@ export const archRound = (def?: { key: string } | null): ArchRoundDef | undefine
 export const endText = (arrows?: Arrow[]): string => (arrows ?? []).map(String).join(' ');
 
 /** The ranking-round phase is "Ranking round", match play "Match play"; other sports keep their labels. */
-export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[]; races?: string[]; phaseNo?: number }): string {
+export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[]; races?: string[]; phaseNo?: number; combined?: PhaseFormat['combined'] }): string {
+  // SD-93: a combined event's phases are its events — "3. Shot put"
+  if (f.combined) return `${f.combined.index + 1}. ${disciplineOf(f.discipline)?.label ?? f.discipline}`;
   // SD-98 cycling: "Stage 2", "Qualifying (flying 200 m)", "Match play", "Finals (gold / bronze)"
   const cyc = cycPhaseName(f);
   if (cyc) return cyc;

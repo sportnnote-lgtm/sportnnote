@@ -25,6 +25,8 @@ import {
   phaseNameOf, archLines, archQualView, bracketEntrant, bracketSeeds, hasMatchData, advanceCrews, crewLines, isCrewSport,
   cycLines, cycKind, sprintEntrant, stageFinishers, type CycFormat,
   roadLines, phaseTeams, teamAwards, roadRecordsAllowed, type RoadFormat,
+  combinedStandings, combinedAwards, combinedLines, combinedEventLines, combinedRanked, combinedSeed, combinedBar, continuing, nextCombinedFormat,
+  combinedKey, markKey, type CombinedKind, type CombinedTable, type CombinedPhaseInput,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
@@ -267,6 +269,8 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   const base = f && disciplineOf(f.discipline);
   const def = base ? phaseDiscipline(base, f) : null;
   if (!f || !def) throw new Error('Not a results event');
+  // SD-93: a combined event — everyone still in goes on to the next event
+  if (f.combined) return advanceCombined(phase, f, def, entries, nameOf);
   const next = f.plan?.[f.phaseNo];
   if (!next || !f.progression) throw new Error('This is the last round.');
   const res = entries.map((e) => toResultEntry(e, nameOf));
@@ -420,6 +424,8 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   const f = phaseOf(phase);
   const def = f && disciplineOf(f.discipline);
   if (!f || !def) throw new Error('Not a results event');
+  // SD-93: the last event of a combined event — totals, medals, records on the total
+  if (f.combined) return completeCombined(phase, f, def, entries, nameOf, scopes, points);
   // A timed final (several heats) ranks across heats — the whole phase at once.
   const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
   if (def.capture === 'lifts') {
@@ -504,7 +510,9 @@ export async function reopenPhase(stale: FieldEvent): Promise<{ removedPhase?: s
     const cat = categoryKey(f.category);
     const book = await getRecordBook(phase.tournamentId, def.sport);
     let next = book;
-    for (const d of recordDefsFor(def)) next = rollbackRecords(next, d.key, cat, f.eventKey, f.recordsBefore);
+    // SD-93: a combined event's record is its total
+    const defs = f.combined ? [disciplineOf(f.combined.key)!] : recordDefsFor(def);
+    for (const d of defs) next = rollbackRecords(next, d.key, cat, f.eventKey, f.recordsBefore);
     if (next.length !== book.length || next.some((r, i) => r !== book[i])) await saveRecordBook(phase.tournamentId, def.sport, next);
     out.records = next;
   }
@@ -653,7 +661,7 @@ export async function getPhaseInfos(ids: string[]): Promise<Map<string, PhaseInf
   }
   for (const e of evs) {
     const f = phaseOf(e);
-    if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle, implement: f.implement });
+    if (f) out.set(e.id, { discipline: f.discipline, category: f.category, phase: f.phase, title: e.title, date: e.startsAt, eventTitle: f.eventTitle, implement: f.implement, ...(f.combined ? { combinedKey: f.combined.key } : {}) });
   }
   return out;
 }
@@ -668,4 +676,151 @@ function swimNextRound(byHeat: Map<number, RankedEntry[]>, def: DisciplineDef, q
   const keyOf = (r: RankedEntry) => [...performanceOf(r.entry, def).keys, r.entry.result.decider != null ? -r.entry.result.decider : undefined];
   through.sort((a, b) => compareKeys(keyOf(a), keyOf(b)) || a.entry.name.localeCompare(b.entry.name));
   return swimSeed(through.map((r) => r.id), phase, heats, def.lanes ?? 8, def.key);
+}
+
+/* ------------------------------ SD-93 combined events ------------------------------ */
+
+export interface NewCombinedEvent {
+  kind: CombinedKind | 'x';
+  table: CombinedTable;
+  /** the events in order */
+  events: string[];
+  /** the first event of day 2 (index) — absent = one day */
+  day2?: number;
+  category: Category;
+  title?: string;
+  tournamentId?: string;
+  startsAt?: string;
+  hostIds?: string[];
+  /** individual athletes only (a combined event has no relays) */
+  entrants: NewEntrant[];
+  /** the throws' implements ("ath.sp" → "4 kg") */
+  implements?: Record<string, string>;
+  handTimed?: boolean;
+  noWindGauge?: boolean;
+}
+
+/** Create a combined event: its first event's phase with the start list.
+ *  Each later event is created when the one before is closed. */
+export async function createCombinedEvent(input: NewCombinedEvent): Promise<FieldEvent> {
+  if (input.events.length < 2) throw new Error('Pick at least two events.');
+  if (!input.entrants.length) throw new Error('Add at least one athlete.');
+  if (input.entrants.some((e) => !e.playerId)) throw new Error('Combined events are for individual athletes.');
+  const key = combinedKey(input.kind, input.table, input.events);
+  const cdef = disciplineOf(key);
+  const first = disciplineOf(input.events[0]);
+  if (!cdef || !first) throw new Error('Unknown event');
+  const eventTitle = input.title ?? `${cdef.label} ${categoryLabel(input.category)}`;
+  const n = input.events.length;
+  const seeded = combinedSeed(input.entrants.map((_, i) => ({ id: String(i), total: 0 })), first);
+  const heats = Math.max(1, ...seeded.map((x) => x.heat));
+  const fmt: PhaseFormat = {
+    discipline: first.key, category: input.category, phase: 'final', phaseNo: 1, heats, eventKey: genId('rev'), eventTitle,
+    plan: input.events.map(() => ({ phase: 'final' as const, heats: 1 })),
+    ...(input.handTimed ? { handTimed: true } : {}), ...(input.noWindGauge ? { noWindGauge: true } : {}),
+    ...(combinedBar(first.key, input.category) ? { bar: combinedBar(first.key, input.category) } : {}),
+    ...(input.implements?.[first.key] ? { implement: input.implements[first.key] } : {}),
+    combined: { key, table: input.table, events: input.events, index: 0, ...(input.day2 != null && input.day2 > 0 && input.day2 < n ? { day2: input.day2 } : {}), ...(input.implements ? { implements: input.implements } : {}) },
+  };
+  const ev = await insertPhase({
+    tournamentId: input.tournamentId, sport: 'athletics', title: phaseTitle(eventTitle, fmt), roundNo: 1,
+    startsAt: input.startsAt ?? new Date().toISOString(), format: { results: fmt }, hostIds: input.hostIds ?? [],
+  });
+  await insertEntries(ev.id, seeded.map((x) => {
+    const e = input.entrants[Number(x.id)];
+    return { playerId: e.playerId, teamId: e.team?.id, heat: x.heat, result: { lane: x.lane, order: x.order, bib: e.bib, team: e.team } };
+  }));
+  return ev;
+}
+
+/** Every phase of a combined event with its entries (the current phase's from `current` when given). */
+async function combinedPhases(f: PhaseFormat, nameOf: (id: string) => string, current?: { id: string; entries: FieldEntry[] }): Promise<CombinedPhaseInput[]> {
+  const all = await getResultsPhases({ eventKey: f.eventKey });
+  const others = all.filter((p) => p.id !== current?.id);
+  const ens = await getFieldEntries(others.map((p) => p.id));
+  const out: CombinedPhaseInput[] = others.flatMap((p) => { const pf = phaseOf(p); return pf ? [{ id: p.id, format: pf, status: p.status, date: p.startsAt, entries: ens.filter((e) => e.eventId === p.id).map((e) => toResultEntry(e, nameOf)) }] : []; });
+  if (current) {
+    const p = all.find((x) => x.id === current.id);
+    if (p) out.push({ id: p.id, format: phaseOf(p)!, status: p.status, date: p.startsAt, entries: current.entries.map((e) => toResultEntry(e, nameOf)) });
+  }
+  return out;
+}
+
+/** SD-93 — close one event of a combined event: its stat lines (marks, points),
+ *  then the next event's start list for everyone still in (TR 39.10: a DNS / WD
+ *  is out), seeded by the running total (leaders in the last heat). */
+async function advanceCombined(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], nameOf: (id: string) => string): Promise<FieldEvent> {
+  const res = entries.map((e) => toResultEntry(e, nameOf));
+  const ranked = rankEntries(res, phaseDiscipline(def, f), { handLegal: looseLegal(f) });
+  await writePhaseLines(phase, f, combinedEventLines(f, ranked));
+  const on = continuing(res, f);
+  if (!on.length) throw new Error('Nobody is left in the competition — check the DNS / withdrawn marks.');
+  const standings = combinedStandings(await combinedPhases(f, nameOf, { id: phase.id, entries }));
+  const totalOf = new Map(standings.map((r) => [r.athleteId, r.total]));
+  const nextDef = disciplineOf(f.combined!.events[f.combined!.index + 1]);
+  if (!nextDef) throw new Error('This is the last event.');
+  const seeded = combinedSeed(on.map((e) => ({ id: e.id, total: totalOf.get(e.athleteId ?? '') ?? 0 })), nextDef);
+  const fmt = nextCombinedFormat(f, Math.max(1, ...seeded.map((x) => x.heat)));
+  if (!fmt) throw new Error('This is the last event.');
+  const ev = await insertPhase({
+    tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: fmt.phaseNo,
+    startsAt: new Date().toISOString(), format: { results: fmt }, hostIds: phase.hostIds ?? [],
+  });
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  await insertEntries(ev.id, seeded.map((x) => {
+    const old = byId.get(x.id)!;
+    const r = (old.result ?? {}) as EntryResult;
+    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: x.heat, result: { lane: x.lane, order: x.order, bib: r.bib, team: r.team } };
+  }));
+  await setPhaseStatus(phase.id, 'completed');
+  return ev;
+}
+
+/** SD-93 — lock the last event: its lines + the totals (places, medals, points,
+ *  the legal total as a PB key), and a meet record on the total. */
+async function completeCombined(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], nameOf: (id: string) => string, scopes: RecordScope[], points?: PointsSettings): Promise<RecordMark[]> {
+  const res = entries.map((e) => toResultEntry(e, nameOf));
+  const ranked = rankEntries(res, phaseDiscipline(def, f), { handLegal: looseLegal(f) });
+  const rows = combinedStandings(await combinedPhases(f, nameOf, { id: phase.id, entries }), { final: true });
+  const awards = combinedAwards(rows, points ?? {});
+  await writePhaseLines(phase, f, [...combinedEventLines(f, ranked), ...combinedLines(f, rows, awards)]);
+  const cdef = disciplineOf(f.combined!.key)!;
+  const cat = categoryKey(f.category);
+  const book = await getRecordBook(phase.tournamentId, 'athletics');
+  const next = updateRecords(combinedRanked(rows, cdef.key), cdef, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  await patchPhaseFormat(phase.id, { recordsBefore: recordsFor(book, cdef.key, cat) });
+  if (next !== book) await saveRecordBook(phase.tournamentId, 'athletics', next);
+  await setPhaseStatus(phase.id, 'completed');
+  return next;
+}
+
+/** The standings of a combined event (every event so far) — for screens. */
+export async function getCombinedPhases(f: PhaseFormat, nameOf: (id: string) => string): Promise<CombinedPhaseInput[]> {
+  return combinedPhases(f, nameOf);
+}
+
+/**
+ * SD-93 — earlier legal totals of these athletes in this combined event and
+ * age group (from their stat lines), excluding this event's own phases — the
+ * PB / SB input for the standings.
+ */
+export async function getCombinedHistory(key: string, athleteIds: string[], exceptPhaseIds: string[], age?: string): Promise<MarkHistory[]> {
+  const ids = athleteIds.filter(Boolean);
+  if (!ids.length) return [];
+  const mk = markKey(key);
+  let rows: { playerId: string; eventId?: string; value: number; date: string }[];
+  if (!live()) {
+    rows = demo.statLines.filter((l) => ids.includes(l.playerId) && l.stats?.[mk] != null && !exceptPhaseIds.includes(l.eventId ?? ''))
+      .map((l) => ({ playerId: l.playerId, eventId: l.eventId, value: l.stats[mk], date: (l.date ?? '').slice(0, 10) }));
+  } else {
+    const { data } = await supabase!.from('stat_lines').select('player_id, event_id, stats, recorded_at').eq('sport', 'athletics').in('player_id', ids).not(`stats->>${mk}`, 'is', null);
+    rows = ((data ?? []) as { player_id: string; event_id?: string; stats: Record<string, number>; recorded_at?: string }[])
+      .filter((l) => !exceptPhaseIds.includes(l.event_id ?? ''))
+      .map((l) => ({ playerId: l.player_id, eventId: l.event_id, value: Number(l.stats?.[mk]), date: (l.recorded_at ?? '').slice(0, 10) }));
+  }
+  if (age) {
+    const infos = await getPhaseInfos(rows.map((r) => r.eventId ?? ''));
+    rows = rows.filter((r) => (infos.get(r.eventId ?? '')?.category?.age ?? age) === age);
+  }
+  return rows.filter((r) => Number.isFinite(r.value)).map((r) => ({ athleteId: r.playerId, discipline: key, value: r.value, date: r.date }));
 }

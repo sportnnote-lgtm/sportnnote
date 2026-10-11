@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Athletics combined events (SD-93)
+- **Events:** decathlon, heptathlon, women's decathlon, indoor heptathlon / pentathlon, school pentathlon + tetrathlon (editable house lists; own keys and records). Each event inside is an ordinary phase using the existing track/field screens (heats + lanes, three trials, bar raises +3 cm HJ / +10 cm PV).
+- **Points:** World Athletics Scoring Tables formula with the official coefficients — reproduces Mayer 9126, Eaton 9045 / 6645, Joyner-Kersee 7291, Thiam 5055, Skujytė 8358 exactly; hand times converted (+0.24 / +0.14 s). Running total + places after every event; next event seeded by total.
+- **Rules:** DNS / withdrawn in any event = out of the competition (TR 39.10); DNF / no mark / DQ scores 0 and continues; one false start per race warned, second disqualifies (TR 39.8.3 / 16.8); ties per TR 39.12; record wind rule on the total (CR 31).
+- **Results:** total sets meet/school records (events inside don't); marks inside still count toward individual-event PBs; career best total per combined event + age group; medals and house points on the total. Guide: run-a-combined-event.
+- **Verified:** `tests/combined-events.test.mts` (26); demo (static export, no live keys) — U16 girls pentathlon through all five events with an FS warning + DQ, a no-height, a DNS (out), three LJ fouls, an 800 m DNF and a meet record. No migration.
+
+---
+
 ### 2026-10-11 — Athletics road races, race walks and cross-country with team scoring (SD-92)
 - **Events:** road 5 / 10 / 15 km, half, marathon, custom; race walks track 3000 / 5000 / 10,000 m and road 5 / 10 / 20 km; cross-country with per-age distances (school U10–U16 presets). Each distance keeps its own PBs/records.
 - **Finish entry** (cycling's finish-order pattern): tap runners or type a bib + Enter (duplicate-bib warning); optional gun/chip time per runner, digits fill from the right, rounded up to the whole second (TR 19.24); ↑ / ✕ to fix order; range and order-clash confirms; DNF/DQ/DNS.

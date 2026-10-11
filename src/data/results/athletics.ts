@@ -26,6 +26,8 @@ import { archMeetSettings, phaseNameOf } from './archery.ts';
 import { crewMeetSettings, describeCrewPlan } from './crews.ts';
 import { cycMeetSettings } from './cycling.ts';
 import { roadMarkKey, roadKeyDiscipline, roadEventOf, roadRecordsAllowed, phaseTeams, teamAwards } from './road.ts';
+import { combinedStandings, combinedAwards, combinedDone, combinedRanked } from './combined.ts';
+import { isCombinedKey } from './combinedDefs.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -421,7 +423,7 @@ export function phaseLines(f: Pick<PhaseFormat, 'discipline' | 'phase' | 'catego
 /* --------------------------------- career --------------------------------- */
 
 /** What the career needs to know about a phase a line came from. */
-export interface PhaseInfo { discipline: string; category?: Category; phase: PhaseKind; title: string; date: string; eventTitle?: string; implement?: string }
+export interface PhaseInfo { discipline: string; category?: Category; phase: PhaseKind; title: string; date: string; eventTitle?: string; implement?: string; /** SD-93: the combined event this phase is an event of ('ath.ce_dec') */ combinedKey?: string }
 
 export interface CareerBest { discipline: string; label: string; category?: string; value: number; text: string; date: string; eventId: string; wind?: number; hand?: boolean; implement?: string }
 export interface CareerRace { eventId: string; title: string; date: string; discipline?: string; text: string; place?: number; medal?: 'gold' | 'silver' | 'bronze'; flags: string[] }
@@ -432,6 +434,8 @@ export interface AthleticsCareer {
   /** SD-92: road races, race walks and cross-country races run; team medals (XC / road team scoring); red cards */
   road: number; walks: number; xc: number;
   teamGolds: number; teamSilvers: number; teamBronzes: number; teamScored: number;
+  /** SD-93: combined events completed (decathlon, heptathlon, pentathlon …) */
+  combined: number;
   /** SD-92: the best cross-country place (courses differ — places, not times) */
   bestXc?: { place: number; title: string; date: string; eventId: string };
   /** personal bests per event (hurdles per event + category: the barrier height
@@ -448,7 +452,7 @@ export function athleticsCareer(
   phases: Map<string, PhaseInfo>,
   seasonFrom: string,
 ): AthleticsCareer {
-  const c: AthleticsCareer = { races: 0, relays: 0, field: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, road: 0, walks: 0, xc: 0, teamGolds: 0, teamSilvers: 0, teamBronzes: 0, teamScored: 0, bests: [], history: [] };
+  const c: AthleticsCareer = { races: 0, relays: 0, field: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, road: 0, walks: 0, xc: 0, teamGolds: 0, teamSilvers: 0, teamBronzes: 0, teamScored: 0, combined: 0, bests: [], history: [] };
   const bests = new Map<string, { key: string; label: string; pb: CareerBest; sb?: CareerBest }>();
   // Oldest first, so a PB / SB flag on the history reads "at the time".
   const sorted = [...lines].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
@@ -460,11 +464,14 @@ export function athleticsCareer(
     c.points += s.posPoints ?? 0;
     c.road += s.road ?? 0; c.walks += s.walks ?? 0; c.xc += s.xc ?? 0;
     c.teamGolds += s.teamGolds ?? 0; c.teamSilvers += s.teamSilvers ?? 0; c.teamBronzes += s.teamBronzes ?? 0; c.teamScored += s.teamScorer ?? 0;
+    c.combined += s.combined ?? 0;
     const info = l.eventId ? phases.get(l.eventId) : undefined;
     const key = Object.keys(s).find((k) => k.startsWith('m_'));
     if (s.xc && s.place && (!c.bestXc || s.place < c.bestXc.place)) c.bestXc = { place: s.place, title: info?.title ?? l.opponent ?? 'Cross-country', date: info?.date ?? l.date ?? '', eventId: l.eventId ?? '' };
     const fromKey = key ? markKeyDiscipline(key) : undefined;
-    const discipline = info?.discipline ?? fromKey?.discipline;
+    // SD-93: a combined event's total line comes from its last event's phase — the discipline is the combined event's
+    const discipline = s.combined ? (fromKey && isCombinedKey(fromKey.discipline) ? fromKey.discipline : info?.combinedKey ?? fromKey?.discipline) : info?.discipline ?? fromKey?.discipline;
+    const ce = !!discipline && isCombinedKey(discipline);
     // SD-94: swimming PBs per pool length
     const course = info?.category?.course ?? fromKey?.course;
     const def = discipline ? disciplineOf(discipline) : undefined;
@@ -478,14 +485,15 @@ export function athleticsCareer(
       const throwKey = THROWS.includes(def.key);
       const implement = throwKey ? info?.implement : undefined;
       const swim = def.sport === 'swimming';
-      const bk = swim ? `${def.key}|${course ?? 'LCM'}` : hurdles || (throwKey && !implement) ? `${def.key}|${categoryKey(info?.category)}` : implement ? `${def.key}|${implement}` : def.key;
+      // SD-93: a combined total per category (U18 implements / hurdles differ from senior)
+      const bk = swim ? `${def.key}|${course ?? 'LCM'}` : hurdles || ce || (throwKey && !implement) ? `${def.key}|${categoryKey(info?.category)}` : implement ? `${def.key}|${implement}` : def.key;
       const best: CareerBest = {
         discipline: def.key, label: def.label, category: info?.category ? categoryLabel(info.category) : undefined, value: v,
-        text: formatMark(v, def) + (s.hand ? 'h' : ''), date, eventId: l.eventId ?? '', wind: s.wind, hand: !!s.hand, ...(implement ? { implement } : {}),
+        text: formatMark(v, def) + (s.hand ? 'h' : '') + (ce ? ' pts' : ''), date, eventId: l.eventId ?? '', wind: s.wind, hand: !!s.hand, ...(implement ? { implement } : {}),
       };
       const prev = pbSoFar.get(bk);
       if (prev == null || betterMark(v, prev, def)) { if (prev != null) flags.push('PB'); pbSoFar.set(bk, v); }
-      const label = swim ? `${def.label} (${courseShort(course)})` : implement ? `${def.label} (${implement})` : (hurdles || throwKey) && best.category ? `${def.label} (${best.category})` : def.label;
+      const label = swim ? `${def.label} (${courseShort(course)})` : implement ? `${def.label} (${implement})` : (hurdles || throwKey || ce) && best.category ? `${def.label} (${best.category})` : def.label;
       const row = bests.get(bk) ?? { key: bk, label, pb: best };
       if (betterMark(v, row.pb.value, def)) row.pb = best;
       if (day >= seasonFrom && (!row.sb || betterMark(v, row.sb.value, def))) row.sb = best;
@@ -493,7 +501,7 @@ export function athleticsCareer(
     }
     if (s.qualified) flags.push('Q');
     const medal = s.golds ? 'gold' : s.silvers ? 'silver' : s.bronzes ? 'bronze' : undefined;
-    const markText = def && s.mark != null ? formatMark(s.mark, def) + (s.hand ? 'h' : '') : '';
+    const markText = def && s.mark != null ? formatMark(s.mark, def) + (s.hand ? 'h' : '') + (ce ? ' pts' : '') : '';
     const text = [
       s.place ? `${s.place}${ordSuffix(s.place)}` : s.dnf ? 'DNF' : s.dq ? 'DQ' : '',
       markText,
@@ -502,8 +510,12 @@ export function athleticsCareer(
       // SD-92: the team's place in a road / XC team score
       s.teamPlace ? `· team ${s.teamPlace}${ordSuffix(s.teamPlace)}${s.teamGolds ? ' 🥇' : s.teamSilvers ? ' 🥈' : s.teamBronzes ? ' 🥉' : ''}` : '',
       s.walkCards ? `· ${s.walkCards} red card${s.walkCards === 1 ? '' : 's'}` : '',
+      // SD-93: an event inside a combined event — its points
+      s.cePts ? `· ${s.cePts} pts` : '',
     ].filter(Boolean).join(' ');
-    c.history.push({ eventId: l.eventId ?? '', title: info?.title ?? l.opponent ?? (s.field ? 'Field event' : 'Race'), date, discipline, text, place: s.place, medal, flags });
+    // SD-93: the total reads as the combined event ("Decathlon U18 Boys"), not its last event
+    const title = s.combined ? info?.eventTitle ?? info?.title ?? l.opponent ?? 'Combined event' : info?.title ?? l.opponent ?? (s.field ? 'Field event' : 'Race');
+    c.history.push({ eventId: l.eventId ?? '', title, date, discipline, text, place: s.place, medal, flags });
   }
   c.points = Math.round(c.points * 100) / 100;
   c.bests = [...bests.values()].sort((a, b) => order(a.pb.discipline) - order(b.pb.discipline) || a.key.localeCompare(b.key));
@@ -511,7 +523,7 @@ export function athleticsCareer(
   return c;
 }
 
-const ORDER = ['ath.100m', 'ath.200m', 'ath.400m', 'ath.800m', 'ath.1500m', 'ath.3000m', 'ath.80mh', 'ath.100mh', 'ath.110mh', 'ath.300mh', 'ath.400mh',
+const ORDER = ['ath.60m', 'ath.100m', 'ath.200m', 'ath.400m', 'ath.800m', 'ath.1000m', 'ath.1500m', 'ath.3000m', 'ath.60mh', 'ath.80mh', 'ath.100mh', 'ath.110mh', 'ath.300mh', 'ath.400mh',
   'ath.lj', 'ath.tj', 'ath.hj', 'ath.pv', 'ath.sp', 'ath.dt', 'ath.jt', 'ath.ht', ...SWIM_ORDER];
 const THROWS = ['ath.sp', 'ath.dt', 'ath.jt', 'ath.ht'];
 const order = (d: string) => { const i = ORDER.indexOf(d); return i < 0 ? 99 : i; };
@@ -528,7 +540,8 @@ export function groupMeet(phases: MeetPhase[]): MeetEvent[] {
   const by = new Map<string, MeetEvent>();
   for (const p of phases) {
     const f = p.format;
-    const ev = by.get(f.eventKey) ?? { eventKey: f.eventKey, title: f.eventTitle ?? disciplineOf(f.discipline)?.label ?? 'Event', discipline: f.discipline, category: f.category, phases: [] };
+    // SD-93: a combined event is one event whose discipline is the combined one ('ath.ce_dec')
+    const ev = by.get(f.eventKey) ?? { eventKey: f.eventKey, title: f.eventTitle ?? disciplineOf(f.discipline)?.label ?? 'Event', discipline: f.combined?.key ?? f.discipline, category: f.category, phases: [] };
     ev.phases.push(p);
     by.set(f.eventKey, ev);
   }
@@ -539,7 +552,8 @@ export function groupMeet(phases: MeetPhase[]): MeetEvent[] {
 /** Where an event stands: "Heats · live", "Final ✓" … */
 export function eventStatus(e: MeetEvent): { label: string; done: boolean; live: boolean } {
   const cur = [...e.phases].reverse().find((p) => p.status !== 'completed') ?? e.phases[e.phases.length - 1];
-  const done = !!cur && cur.format.phase === 'final' && cur.status === 'completed';
+  // SD-93: a combined event is done when its last event is locked
+  const done = !!cur && cur.format.phase === 'final' && cur.status === 'completed' && (!cur.format.combined || cur.format.combined.index === cur.format.combined.events.length - 1);
   // SD-95: archery phases read "Ranking round" / "Match play"
   return { label: cur ? `${phaseNameOf(cur.format)}${done ? ' · final results' : cur.status === 'live' ? ' · live' : ' · start list'}` : '', done, live: cur?.status === 'live' };
 }
@@ -553,6 +567,12 @@ export interface PointsSettings extends PointsConfig {
 
 /** A finished final's medals and points (relays × relayFactor), or null. */
 function finalAwards(e: MeetEvent, cfg: PointsSettings, handLegal?: boolean): { awards: Award[]; fin: MeetPhase } | null {
+  // SD-93: a combined event — medals and points on the total, once the last event is locked
+  if (disciplineOf(e.discipline)?.tie === 'combined') {
+    if (!combinedDone(e.phases)) return null;
+    const last = [...e.phases].sort((a, b) => b.format.phaseNo - a.format.phaseNo)[0];
+    return { awards: combinedAwards(combinedStandings(e.phases, { final: true }), cfg), fin: last };
+  }
   const fin = e.phases.find((p) => p.format.phase === 'final' && p.status === 'completed');
   const def = disciplineOf(e.discipline);
   if (!fin || !def) return null;
@@ -597,6 +617,12 @@ export function eventLeaders(events: MeetEvent[]): EventLeader[] {
     const def = disciplineOf(e.discipline);
     // SD-98: a cycling order event (road race, stage race GC, keirin …) has no "best mark" across rounds
     if (!def || (def.capture === 'order' && def.tie !== 'road')) continue;
+    // SD-93: a combined event's leader on points (so far)
+    if (def.tie === 'combined') {
+      const lead = combinedStandings(e.phases, { final: combinedDone(e.phases) }).find((r) => r.position === 1);
+      if (lead) out.push({ eventKey: e.eventKey, title: e.title, category: categoryLabel(e.category), discipline: def.key, name: lead.name, team: lead.team?.name, athleteId: lead.athleteId, mark: lead.total, text: `${lead.total} pts`, legal: lead.legal, flags: [] });
+      continue;
+    }
     let best: EventLeader | undefined;
     for (const p of e.phases) {
       for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {
@@ -646,6 +672,18 @@ export function deriveRecordBook(events: MeetEvent[], scope: 'MR' | 'SR'): Recor
     const base = disciplineOf(e.discipline);
     if (!base) continue;
     const cat = categoryKey(e.category);
+    // SD-93: a combined event's record is its total (complete, record-legal) — its events set none
+    if (base.tie === 'combined') {
+      if (!combinedDone(e.phases)) continue;
+      const last = [...e.phases].sort((a, b) => b.format.phaseNo - a.format.phaseNo)[0];
+      for (const r of combinedRanked(combinedStandings(e.phases, { final: true }), base.key)) {
+        if (r.position == null || r.bestLegal == null) continue;
+        const k = `${base.key}|${cat}`;
+        const cur = out.get(k);
+        if (!cur || r.bestLegal > cur.value) out.set(k, { scope, discipline: base.key, category: cat, value: r.bestLegal, holder: r.entry.name, team: r.entry.team?.name, date: last.date.slice(0, 10), eventKey: e.eventKey });
+      }
+      continue;
+    }
     // SD-97: a weightlifting session keeps snatch, C&J and total records
     for (const def of recordDefsFor(base)) for (const p of e.phases) {
       // SD-92: road / walk records only on a certified course (gun time); never cross-country

@@ -17,3 +17,4 @@ export * from './archery.ts';
 export * from './crews.ts';
 export * from './cycling.ts';
 export * from './road.ts';
+export * from './combined.ts';

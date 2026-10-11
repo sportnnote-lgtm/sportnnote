@@ -90,6 +90,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
         <View style={{ gap: theme.spacing(2) }}>
           <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew || sport === 'cycling' ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
           {sport === 'athletics' && <Button label="🌳 ＋ Road race, race walk or cross-country" variant="ghost" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, mode: 'road' })} />}
+          {sport === 'athletics' && <Button label="🏅 ＋ Combined event (decathlon, heptathlon, pentathlon)" variant="ghost" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, mode: 'combined' })} />}
           <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : crew ? '⚙ Lanes, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}
@@ -115,6 +116,8 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
           {g.events.map((e) => {
             const s = eventStatus(e);
             const first = e.phases[0];
+            // SD-93: a combined event — "EVENT 3/10"
+            const ce = first?.format.combined;
             return (
               <TouchableOpacity key={e.eventKey} accessibilityRole="button" activeOpacity={0.85} onPress={() => open(e)}>
                 <View style={st.row}>
@@ -122,7 +125,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                     <Text style={[textStyles.body, st.bold]} numberOfLines={1}>{e.title}</Text>
                     <Text style={textStyles.muted} numberOfLines={1}>{s.label} · {first?.entries.length ?? 0} {disciplineOf(e.discipline)?.teamSize ? 'teams' : words.athletes}{first?.format.implement ? ` · ${first.format.implement}` : ''}</Text>
                   </View>
-                  <Pill label={s.done ? 'FINAL' : s.live ? 'LIVE' : e.phases.length > 1 ? `ROUND ${e.phases.length}` : 'START LIST'}
+                  <Pill label={s.done ? 'FINAL' : s.live ? 'LIVE' : ce ? `EVENT ${e.phases.length}/${ce.events.length}` : e.phases.length > 1 ? `ROUND ${e.phases.length}` : 'START LIST'}
                     color={s.live ? theme.colors.danger : theme.colors.surfaceAlt} textColor={s.live ? '#fff' : theme.colors.textMuted} />
                 </View>
               </TouchableOpacity>

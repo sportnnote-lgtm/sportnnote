@@ -55,6 +55,9 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
         </Card>
       )}
 
+      {/* SD-93: decathlon / heptathlon / pentathlon totals (best per event in Personal bests) */}
+      {c.combined > 0 && <Text style={textStyles.muted}>🏅 {c.combined} combined event{c.combined === 1 ? '' : 's'} — the events inside them count for your individual bests too.</Text>}
+
       <Text style={st.section}>Personal bests</Text>
       {c.bests.length === 0 ? (
         <Text style={textStyles.muted}>{swim ? 'No times yet (25 m and 50 m pool bests are kept apart).' : 'No legal marks yet (wind-aided and, at fully-timed meets, hand times don’t count).'}</Text>
@@ -87,7 +90,7 @@ export function AthleticsCareer({ lines }: { lines: StatLine[] }) {
             <TouchableOpacity key={`${h.eventId}${i}`} accessibilityRole="button" activeOpacity={0.85} disabled={!h.eventId} onPress={() => nav.navigate('ResultsEvent', { phaseId: h.eventId, tab: 'sheet' })}>
               <Card style={[st.hist, { borderLeftWidth: 3, borderLeftColor: h.medal ? theme.colors.accent : theme.colors.border }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline?.startsWith('ath.xc.') ? '🌳' : h.discipline?.startsWith('ath.walk.') ? '🚶' : h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : h.discipline?.startsWith('swim.') || swim ? '🏊' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
+                  <Text style={textStyles.body} numberOfLines={1}>{h.discipline?.startsWith('ath.ce_') ? '🏅' : h.discipline?.startsWith('ath.xc.') ? '🌳' : h.discipline?.startsWith('ath.walk.') ? '🚶' : h.discipline && /^ath\.(lj|tj|hj|pv)$/.test(h.discipline) ? '🦘' : h.discipline && /^ath\.(sp|dt|jt|ht)$/.test(h.discipline) ? '🥏' : h.discipline?.startsWith('swim.') || swim ? '🏊' : '🏃'} {h.title}{h.date ? <Text style={st.date}>  ·  {formatDay(h.date)}</Text> : null}</Text>
                   <Text style={textStyles.muted}>{[h.text, ...h.flags].filter(Boolean).join(' · ')}</Text>
                 </View>
                 {h.medal ? <Text style={{ fontSize: 20 }}>{MEDAL[h.medal]}</Text> : h.place ? <Pill label={`${h.place}`} /> : null}

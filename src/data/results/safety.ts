@@ -31,12 +31,15 @@ export interface MarkRange { min: number; max: number }
 
 /** Athletics: [min, max] — seconds for races, metres for jumps / throws. */
 const ATHLETICS: Record<string, [number, number]> = {
+  'ath.60m': [6.2, 18],
   'ath.100m': [9.3, 30],
   'ath.200m': [18.8, 60],
   'ath.400m': [42, 150],
   'ath.800m': [98, 360],
+  'ath.1000m': [128, 480],
   'ath.1500m': [200, 720],
   'ath.3000m': [430, 1500],
+  'ath.60mh': [7.2, 20],
   'ath.80mh': [10, 30],
   'ath.100mh': [11.9, 35],
   'ath.110mh': [12.5, 35],

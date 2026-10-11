@@ -12,9 +12,11 @@ import type { MeasuredEventDef, SportStatSchema, StatDef } from '../statSchema.t
 /** The track disciplines (results engine keys without the 'ath.' prefix). */
 export const TRACK_EVENTS: { key: string; label: string }[] = [
   { key: '100m', label: '100 m' }, { key: '200m', label: '200 m' }, { key: '400m', label: '400 m' },
-  { key: '800m', label: '800 m' }, { key: '1500m', label: '1500 m' }, { key: '3000m', label: '3000 m' },
+  { key: '800m', label: '800 m' }, { key: '1000m', label: '1000 m' }, { key: '1500m', label: '1500 m' }, { key: '3000m', label: '3000 m' },
   { key: '80mh', label: '80 m hurdles' }, { key: '100mh', label: '100 m hurdles' }, { key: '110mh', label: '110 m hurdles' },
   { key: '300mh', label: '300 m hurdles' }, { key: '400mh', label: '400 m hurdles' },
+  // SD-93: the indoor combined-event races (credited to the athlete's PBs)
+  { key: '60m', label: '60 m' }, { key: '60mh', label: '60 m hurdles' },
 ];
 
 /** SD-91 — the field disciplines (distance / height, higher is better). */
@@ -62,6 +64,21 @@ function fmtRoad(v: number, key: string): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+/** SD-93 — combined events: the total (points) per event — decathlon, heptathlon,
+ *  indoor heptathlon / pentathlon, school pentathlon / tetrathlon. A house's own
+ *  list keeps its own key (m_ce_x_…) and shows on the measured career only. */
+export const COMBINED_STAT_EVENTS: { key: string; disc: string; label: string }[] = [
+  { key: 'ce_dec', disc: 'ath.ce_dec', label: 'Decathlon' }, { key: 'ce_hep', disc: 'ath.ce_hep', label: 'Heptathlon' },
+  { key: 'ce_ihep', disc: 'ath.ce_ihep', label: 'Indoor heptathlon' }, { key: 'ce_ipen', disc: 'ath.ce_ipen', label: 'Indoor pentathlon' },
+  { key: 'ce_pen', disc: 'ath.ce_pen', label: 'Pentathlon' }, { key: 'ce_tet', disc: 'ath.ce_tet', label: 'Tetrathlon' },
+];
+const ceFmt = { unit: 'points' as const, dp: 0, better: 'higher' as const };
+const ceMarkStats: StatDef[] = COMBINED_STAT_EVENTS.map((e) => ({ key: `m_${e.key}`, label: e.label, short: e.label, group: 'marks', format: ceFmt }));
+const cePbStats: StatDef[] = COMBINED_STAT_EVENTS.map((e) => ({
+  key: `pb_${e.key}`, label: `${e.label} PB`, leaderLabel: `Best ${e.label.toLowerCase()}`, source: 'derived', group: 'bests', format: ceFmt,
+  agg: { kind: 'best', over: `m_${e.key}`, by: [{ key: `m_${e.key}`, better: 'higher' }], render: (s) => `${s[`m_${e.key}`] ?? 0} pts` },
+}));
+
 const fieldFmt = (unit: 'distance' | 'height') => ({ unit, dp: 2, better: 'higher' as const });
 const fieldMarkStats: StatDef[] = FIELD_EVENTS.map((e) => ({ key: `m_${e.key}`, label: e.label, short: e.label, group: 'marks', format: fieldFmt(e.unit) }));
 const fieldPbStats: StatDef[] = FIELD_EVENTS.map((e) => ({
@@ -75,8 +92,9 @@ export const athleticsStats: SportStatSchema<'athletics'> = {
     ...TRACK_EVENTS.map((e): MeasuredEventDef => ({ key: `ath.${e.key}`, label: e.label, format: timeFmt })),
     ...FIELD_EVENTS.map((e): MeasuredEventDef => ({ key: `ath.${e.key}`, label: e.label, format: fieldFmt(e.unit), ...(e.unit === 'distance' ? { attempts: 6 } : {}) })),
     ...ROAD_STAT_EVENTS.map((e): MeasuredEventDef => ({ key: e.disc, label: e.label, format: roadFmt(e.key) })),
+    ...COMBINED_STAT_EVENTS.map((e): MeasuredEventDef => ({ key: e.disc, label: e.label, format: ceFmt })),
   ],
-  filters: Object.fromEntries([...TRACK_EVENTS, ...FIELD_EVENTS, ...ROAD_STAT_EVENTS].map((e) => [`m_${e.key}`, (l: StatLine) => l.stats?.[`m_${e.key}`] != null])),
+  filters: Object.fromEntries([...TRACK_EVENTS, ...FIELD_EVENTS, ...ROAD_STAT_EVENTS, ...COMBINED_STAT_EVENTS].map((e) => [`m_${e.key}`, (l: StatLine) => l.stats?.[`m_${e.key}`] != null])),
   stats: [
     { key: 'races', label: 'Races', short: 'races', one: 'race', group: 'racing' },
     { key: 'field', label: 'Field events', short: 'field events', one: 'field event', group: 'racing' },
@@ -91,6 +109,10 @@ export const athleticsStats: SportStatSchema<'athletics'> = {
     { key: 'teamSilvers', label: 'Team silvers', short: 'team silvers', one: 'team silver', group: 'medals' },
     { key: 'teamBronzes', label: 'Team bronzes', short: 'team bronzes', one: 'team bronze', group: 'medals' },
     { key: 'walkCards', label: 'Red cards (race walk)', short: 'walk red cards', one: 'walk red card', group: 'line', format: { unit: 'count', better: 'lower' } },
+    // SD-93: combined events — totals completed, events inside them, their points
+    { key: 'combined', label: 'Combined events', short: 'combined events', one: 'combined event', group: 'racing' },
+    { key: 'ceEvent', label: 'Combined-event events', short: 'CE events', one: 'CE event', group: 'racing' },
+    { key: 'cePts', label: 'Combined-event points', short: 'CE pts', one: 'CE pt', group: 'line', format: { unit: 'points', dp: 0 }, agg: { kind: 'max' } },
     { key: 'finals', label: 'Finals', short: 'finals', one: 'final', group: 'racing' },
     { key: 'qualified', label: 'Rounds qualified from', short: 'qualified', group: 'racing' },
     // golds / silvers keep the shared labels (sharedStats.ts)
@@ -111,9 +133,11 @@ export const athleticsStats: SportStatSchema<'athletics'> = {
     ...fieldPbStats,
     ...roadMarkStats,
     ...roadPbStats,
+    ...ceMarkStats,
+    ...cePbStats,
   ],
   sections: [
-    { id: 'bests', title: 'Personal bests', rows: [...pbStats, ...fieldPbStats, ...roadPbStats].map((s) => ({ stat: s.key, hideZero: true })) },
+    { id: 'bests', title: 'Personal bests', rows: [...pbStats, ...fieldPbStats, ...roadPbStats, ...cePbStats].map((s) => ({ stat: s.key, hideZero: true })) },
     { id: 'medals', title: 'Medals', rows: [{ stat: 'golds' }, { stat: 'silvers' }, { stat: 'bronzes' }, { stat: 'finals' }, { stat: 'teamGolds', hideZero: true }, { stat: 'teamSilvers', hideZero: true }, { stat: 'teamBronzes', hideZero: true }] },
   ],
   careerView: 'measured',

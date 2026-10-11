@@ -8,7 +8,7 @@ order: 86
 updated: 2026-10-11
 ---
 
-Field events run on trials, not heats. The app shows who is up, ranks everyone as you go and settles ties the World Athletics way. Finals add house points like track finals.
+Field events run on trials, not heats. The app shows who is up, ranks everyone as you go and settles ties the World Athletics way. Finals add house points like track finals. Combined events: [decathlon, heptathlon, pentathlon](/guides/run-a-combined-event/).
 
 ## Before you start
 - Set up the tournament as in [Run athletics track events](/guides/run-athletics-track-events/): **Athletics** as a sport, position points, and houses as teams.
