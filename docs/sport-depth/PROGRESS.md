@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Wave C — SD-128 / SD-129 / SD-130 / SD-131 — DONE (0ea0b11, 2026-10-11)
+- See DEVLOG. **Founder actions:** (1) run `20261019124330_field_record_book.sql`; (2) run `20261019124310_event_result_alerts.sql`; (3) then I redeploy `notify-followers` (needs the alerts migration first — deploying before it makes the function return 500 without sending).
+- **Check / decide:** late-entry lane = outside free lane; a new late heat gets its own top-N; entries document is last-write-wins per meet; record in a non-winner's event in the winner's alert body; board cut-off dates (SGFI/CBSE) unverified — organisers told to check their circular.
+- **Not done:** retry list is in memory (Re-sync covers finals); champions not on the printable meet sheet; run-athletics-track-events guide at 930 words; matrix doesn't use timetable clashes; no CSV upload; PB-only alerts; team page reads ≤20 tournaments / 40 casual events; native print needs APK 38.
+
 ## Founder decisions — 2026-10-11 (after Wave B)
 - Medal table: keep hidden for a groups + knockout sport until the knockout starts (SD-123 as built). Add history views (SD-138).
 - Handball / shoot-outs: the scorer picks who throws first (SD-139).
