@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-98 cycling, SD-36/67/77/85 chess, SD-76/84/87/88 golf — DONE (2fdda8a, 2026-10-11)
+- See DEVLOG.
+- **Cycling — check (UCI from memory):** 1 s group gap (2.3.039), GC ties (2.6.015), track Part 3 rules, junior distances. Not built: team pursuit/sprint, madison, omnium, sprint/keirin repechages, pursuit last-lap tie, 3 km rule, clock-time TT entry, custom TT distances.
+- **Chess — check:** FIDE dp table section numbering (B.02 8.1a); unrated opponents excluded from ARO (C.07 art. 10 allows assigned ratings); double-forfeited pair treated as already met (C.04.1). Not done: ARO tie-break, TPR on the profile filter, share text "Home has White", no SQL backfill for double forfeit (re-running 0050 would mark D/D), titles in seeding. Bug found → SD-119.
+- **Golf — confirm:** team countback order (dropped scores first, then last 9/6/3/1); differential rounding; extra-hole shots by replayed hole's SI. Not done: change team after creation, image share, scorecard in profile history, 9-hole differentials, backfilling past differentials, four-ball/foursomes (GF-16). Unrelated crash: /EditProfile opened directly by URL without params.
+
 ## SD-62 / SD-74 / SD-64 / SD-75 + close-out SD-34 / SD-52 / SD-60 / SD-61 / SD-65 — DONE (60531e0, 2026-10-11)
 - See DEVLOG. Check: ITTF 2.13.x numbers from memory; default picks when none are made (house choice); FIP Star Point text and USA Pickleball 5.B.1 read from secondary sources. Not done: squash doubles names; tennis game rows still "Game home" (SD-75 was padel only).
 
