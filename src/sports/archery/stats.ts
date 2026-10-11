@@ -27,7 +27,7 @@ export const archeryStats: SportStatSchema<'archery'> = {
     { key: 'arrows', label: 'Arrows', short: 'arrows', one: 'arrow', group: 'archery' },
     { key: 'pts', label: 'Points', short: 'points', one: 'point', group: 'archery' },
     { key: 'tens', label: '10s (incl. X)', short: '10s', one: '10', group: 'archery' },
-    { key: 'xs', label: 'Xs', short: 'X', one: 'X', group: 'archery' },
+    { key: 'xs', label: 'Inner tens', short: 'inner tens', one: 'inner ten', group: 'archery' },
     { key: 'avgArrow', label: 'Average arrow', short: 'avg arrow', source: 'derived', group: 'archery', format: { unit: 'points', dp: 2 }, agg: { kind: 'rate', num: 'pts', den: 'arrows', dp: 2, qualifier: { den: 36 } } },
     { key: 'tenRate', label: '10 + X rate', short: '10+X %', source: 'derived', group: 'archery', format: { unit: 'percent', dp: 1 }, agg: { kind: 'rate', num: 'tens', den: 'arrows', scale: 100, dp: 1, qualifier: { den: 36 } } },
     { key: 'brackets', label: 'Match-play events', short: 'match-play events', one: 'match-play event', group: 'matches' },
