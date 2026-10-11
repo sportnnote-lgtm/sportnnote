@@ -35,6 +35,7 @@ import { bestLiftAttempt, liftFailed, summarizeLifts } from './marks.ts';
 import { rankEntries } from './rank.ts';
 import { eventAwards, type Award, type PointsConfig } from './medals.ts';
 import type { RecordMark } from './records.ts';
+import { ruleOf, parseClassList, type CompRules } from './competitionRules.ts';
 
 export type Lift = 'snatch' | 'cj';
 export const LIFTS: Lift[] = ['snatch', 'cj'];
@@ -70,8 +71,11 @@ const CLASSES: Record<'senior' | 'youth' | 'school', Record<'M' | 'F', number[]>
 const tableFor = (age?: string) => (age === 'Youth' ? CLASSES.youth : age === 'School' || /^U\d+$/i.test(age ?? '') ? CLASSES.school : CLASSES.senior);
 
 /** The bodyweight categories for an age group and gender: "60 kg" … "+110 kg". */
-export function weightClasses(age: string | undefined, gender: 'M' | 'F'): string[] {
-  const lims = tableFor(age)[gender];
+export function weightClasses(age: string | undefined, gender: 'M' | 'F', rules?: CompRules | null): string[] {
+  // SD-141: the organiser's category list (Competition rules)
+  const mode = ruleOf(rules, 'wlClasses');
+  const custom = mode === 'custom' ? parseClassList(ruleOf(rules, gender === 'F' ? 'wlClassesF' : 'wlClassesM')) : null;
+  const lims = custom ?? (mode === 'iwf2025' ? CLASSES.senior : mode === 'youth' ? CLASSES.youth : mode === 'school' ? CLASSES.school : tableFor(age))[gender];
   return [...lims.map((n) => `${n} kg`), `+${lims[lims.length - 1]} kg`];
 }
 
@@ -141,13 +145,16 @@ export const takenCount = (list?: LiftAttempt[]): number => (list ?? []).filter(
 /** May attempt `idx` of a lift be declared at `kg`? null = yes. IWF: whole
  *  kilograms; never lighter than the attempt before; at least 1 kg more after a
  *  good lift; a no lift (or a declined attempt) may be repeated at the same weight. */
-export function declareError(list: LiftAttempt[] | undefined, idx: number, kg: number): string | null {
+export function declareError(list: LiftAttempt[] | undefined, idx: number, kg: number, rules?: CompRules | null): string | null {
   if (!Number.isFinite(kg) || kg <= 0) return 'Type the weight in kg.';
   if (!Number.isInteger(kg)) return 'Weights go up in whole kilograms (IWF).';
   if (idx > 2) return 'Only three attempts per lift.';
   const prev = idx > 0 ? (list ?? [])[idx - 1] : undefined;
   if (prev && taken(prev)) {
-    if (prev.good === true && kg < prev.kg + 1) return `After a good lift at ${prev.kg} kg the next attempt is at least ${prev.kg + 1} kg.`;
+    // SD-141: the increase after a good lift (IWF +1 kg) and whether a no lift may be repeated
+    const step = Number(ruleOf(rules, 'wlStep')) || 1;
+    if (prev.good === true && kg < prev.kg + step) return `After a good lift at ${prev.kg} kg the next attempt is at least ${prev.kg + step} kg.`;
+    if (prev.good !== true && ruleOf(rules, 'wlRepeat') === 'up' && kg < prev.kg + step) return `This meet’s rule: after a no lift at ${prev.kg} kg the next attempt is at least ${prev.kg + step} kg.`;
     if (kg < prev.kg) return `The next attempt can't be lighter than ${prev.kg} kg.`;
   }
   return null;
@@ -163,8 +170,12 @@ export function declare(list: LiftAttempt[] | undefined, kg: number, rangeOk?: b
   return l;
 }
 
-/** The automatic next declaration: +1 kg after a good lift, the same after a no lift. */
-export const autoNext = (kg: number, good: boolean): number => (good ? kg + 1 : kg);
+/** The automatic next declaration: +1 kg after a good lift, the same after a no lift
+ *  (SD-141: the meet's increase; "must go up" after a no lift too). */
+export const autoNext = (kg: number, good: boolean, rules?: CompRules | null): number => {
+  const step = Number(ruleOf(rules, 'wlStep')) || 1;
+  return good || ruleOf(rules, 'wlRepeat') === 'up' ? kg + step : kg;
+};
 
 /** The referees' decision from their lights: two or three white = good lift. */
 export const majority = (lights: boolean[]): boolean => lights.filter(Boolean).length >= 2;
@@ -174,14 +185,14 @@ export const majority = (lights: boolean[]): boolean => lights.filter(Boolean).l
  * `pass`), stamped with the competition-wide attempt number `seq`. Unless it
  * was the third attempt, the next attempt is declared automatically.
  */
-export function recordLift(list: LiftAttempt[] | undefined, decision: { good?: boolean; pass?: boolean; lights?: boolean[] }, seq: number): LiftAttempt[] {
+export function recordLift(list: LiftAttempt[] | undefined, decision: { good?: boolean; pass?: boolean; lights?: boolean[] }, seq: number, rules?: CompRules | null): LiftAttempt[] {
   const l = [...(list ?? [])];
   const i = pendingIndex(l);
   if (i < 0) return l;
   const good = decision.pass ? undefined : decision.lights?.length === 3 ? majority(decision.lights) : !!decision.good;
   const done: LiftAttempt = { kg: l[i].kg, seq, ...(l[i].rangeOk ? { rangeOk: true } : {}), ...(decision.pass ? { pass: true, good: false } : { good }), ...(decision.lights?.length === 3 ? { lights: decision.lights } : {}) };
   l[i] = done;
-  if (i < 2 && l.length === i + 1) l.push({ kg: autoNext(done.kg, done.good === true), auto: true });
+  if (i < 2 && l.length === i + 1) l.push({ kg: autoNext(done.kg, done.good === true, rules), auto: true });
   return l;
 }
 
@@ -226,7 +237,9 @@ export interface LiftCall {
  * attempt still to declare come last (they must declare before the bar reaches
  * their weight).
  */
-export function liftingOrder(entries: ResultEntry[], lift: Lift): LiftCall[] {
+export function liftingOrder(entries: ResultEntry[], lift: Lift, rules?: CompRules | null): LiftCall[] {
+  // SD-141: 'simple' = bar → attempt → lot (no progression / earlier-lifter steps)
+  const iwf = ruleOf(rules, 'wlOrder') !== 'simple';
   const calls: (LiftCall & { prog: number; prevSeq: number })[] = [];
   const undeclared: LiftCall[] = [];
   for (const e of entries) {
@@ -240,14 +253,14 @@ export function liftingOrder(entries: ResultEntry[], lift: Lift): LiftCall[] {
     const prev = i > 0 ? list[i - 1] : undefined;
     calls.push({ ...base, kg: list[i].kg, prog: prev ? list[i].kg - prev.kg : 0, prevSeq: prev?.seq ?? 0 });
   }
-  calls.sort((a, b) => (a.kg! - b.kg!) || (a.attempt - b.attempt) || (b.prog - a.prog) || (a.prevSeq - b.prevSeq) || ((a.lot ?? 999) - (b.lot ?? 999)) || a.name.localeCompare(b.name));
+  calls.sort((a, b) => (a.kg! - b.kg!) || (a.attempt - b.attempt) || (iwf ? (b.prog - a.prog) || (a.prevSeq - b.prevSeq) : 0) || ((a.lot ?? 999) - (b.lot ?? 999)) || a.name.localeCompare(b.name));
   return [...calls.map(({ prog: _p, prevSeq: _s, ...c }) => c), ...undeclared.sort((a, b) => (a.lot ?? 999) - (b.lot ?? 999))];
 }
 
 /** Who lifts next: the head of the active lift's calling order. */
-export function nextLift(entries: ResultEntry[]): LiftCall | null {
+export function nextLift(entries: ResultEntry[], rules?: CompRules | null): LiftCall | null {
   const lift = activeLift(entries);
-  return lift ? liftingOrder(entries, lift)[0] ?? null : null;
+  return lift ? liftingOrder(entries, lift, rules)[0] ?? null : null;
 }
 
 export const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][n % 100] ?? 'th'}`;
@@ -283,19 +296,23 @@ export const bombedOutOf = (r: EntryResult): Lift | null => (liftFailed(r.lifts?
 /** IWF Sinclair coefficients for the 2021–2024 Olympiad (the 2025–2028 values
  *  were not published when this was built — check iwf.sport). */
 export const SINCLAIR = { period: '2021–2024', M: { A: 0.722762521, b: 193.609 }, F: { A: 0.787004341, b: 153.757 } } as const;
+/** SD-141: the 2017–2020 Olympiad's coefficients (from memory — verify) */
+export const SINCLAIR_2017 = { period: '2017–2020', M: { A: 0.751945030, b: 175.508 }, F: { A: 0.783497476, b: 153.655 } } as const;
+/** The coefficient set a meet uses ('2021' default, '2017'). */
+export const sinclairSet = (period?: unknown) => (period === '2017' ? SINCLAIR_2017 : SINCLAIR);
 
 /** 10^(A·log10(bw / b)²) under b, else 1. */
-export function sinclairCoefficient(bw: number, gender: 'M' | 'F'): number {
-  const { A, b } = SINCLAIR[gender];
+export function sinclairCoefficient(bw: number, gender: 'M' | 'F', period?: unknown): number {
+  const { A, b } = sinclairSet(period)[gender];
   if (!(bw > 0)) return 1;
   if (bw >= b) return 1;
   return 10 ** (A * Math.log10(bw / b) ** 2);
 }
 
 /** The Sinclair total to 0.01 (total × coefficient), or null without the inputs. */
-export function sinclairTotal(total: number | null | undefined, bw: number | undefined, gender?: string): number | null {
+export function sinclairTotal(total: number | null | undefined, bw: number | undefined, gender?: string, period?: unknown): number | null {
   if (total == null || bw == null || (gender !== 'M' && gender !== 'F')) return null;
-  return Math.round(total * sinclairCoefficient(bw, gender) * 100) / 100;
+  return Math.round(total * sinclairCoefficient(bw, gender, period) * 100) / 100;
 }
 
 /* ------------------------------ meet settings ----------------------------- */
@@ -355,7 +372,7 @@ export interface LiftLine { playerId: string; stats: Record<string, number>; won
  *   m_wl_snatch / m_wl_cj / m_wl_total (best good lifts — an out-of-range weight
  *   nobody confirmed is left out), made / attempted, bombOut, bw, sinclair, dq.
  */
-export function liftLines(f: Pick<PhaseFormat, 'category'>, entries: ResultEntry[], cfg: PointsConfig & { liftMedals?: boolean } = {}): LiftLine[] {
+export function liftLines(f: Pick<PhaseFormat, 'category' | 'rules'>, entries: ResultEntry[], cfg: PointsConfig & { liftMedals?: boolean } = {}): LiftLine[] {
   const total = rankEntries(entries, disciplineOf('wl.total')!);
   const aw = liftAwards(entries, cfg);
   const by = (list: Award[]) => new Map(list.map((a) => [a.entryId, a]));
@@ -389,7 +406,7 @@ export function liftLines(f: Pick<PhaseFormat, 'category'>, entries: ResultEntry
     s.made = mc.made; s.attempted = mc.attempted;
     if (r.status === 'NM') s.bombOut = 1;
     if (res.bodyweight != null) s.bw = res.bodyweight;
-    const sin = sinclairTotal(s.m_wl_total, res.bodyweight, f.category?.gender);
+    const sin = sinclairTotal(s.m_wl_total, res.bodyweight, f.category?.gender, ruleOf(f.rules, 'sinclairPeriod'));
     if (sin != null) s.sinclair = sin;
     out.push({ playerId: e.athleteId, stats: s, won: t?.medal === 'gold' });
   }

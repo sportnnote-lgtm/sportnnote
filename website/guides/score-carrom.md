@@ -33,17 +33,19 @@ Carrom is scored one board at a time. The board winner scores one point for each
 7. Tap **✓ Record board**. The button shows what the board adds. If it wins a game or the match, it says so, for example "✓ Record board · +4 · wins Game 2", so check it before you tap.
 8. For a penalty board, tap the player who gets the points under **Board won by**, then **⚠️ Penalty board · +3 to …** and **✓ Record penalty board**. No coins, Queen or slam are asked.
 
-The break alternates board by board (penalty boards too), and each new game opens with the other side breaking. In doubles both partners get the board's points. If the team list has more players than the side, a **Played by** row appears: tap who played.
+> **Tip:** You can also say the board: tap **🎤 Voice scoring** and say "board home 5", "Aarav 3 queen" or "penalty away". A board that wins a game asks first. See [Score by voice](/guides/score-by-voice/).
+
+The break alternates board by board (penalty boards too), and each new game opens with the other side breaking. In doubles both partners get the board's points, and before the toss you tap who breaks first for each side. Partners then take turns (A1, B1, A2, B2), the line names the player ("⚪ Bilal (NOR) to break"), and each partner's **Boards broken** counts their own breaks. If the team list has more players than the side, a **Played by** row appears: tap who played.
 
 ## If the toss was wrong or missed
 Tap **Fix the toss** (or **Record who broke the first board**) and pick who really broke first. The score stays.
 
 ## Reading the score sheet
-Below the scoreboard, the **Score sheet** follows the ICF referee's sheet: one table per game with the result on top ("Game 1 · 25-18 · Aarav won"), then a row per board: **#**, **Break**, **Won by**, **Coins**, **Queen**, **Pts** and the running total. **PEN** marks a penalty board, ⚪ / ⚫ a White or Black slam, and * a tie-break board. In the Queen column, 👑 +3 counted, 👑 0 means covered at 22 or more, and 👑 L covered by the loser. The **Box score** compares points, boards and Queens.
+Below the scoreboard, the **Score sheet** follows the ICF referee's sheet: one table per game, then a row per board: **#**, **Break**, **Won by**, **Coins**, **Queen**, **Pts** and the running total. **PEN** marks a penalty board, ⚪ / ⚫ a White or Black slam, and * a tie-break board. In the Queen column, 👑 +3 counted, 👑 0 means covered at 22 or more, and 👑 L covered by the loser. The **Box score** compares points, boards and Queens.
 
 ## Fix a mistake
 - Wrong tap just now? Tap **↶ Undo**. Tap it again to go back further.
-- An older board was wrong? Under the controls, find **✎ Correct a board** and tap **Edit**. Tap ✎ to change the winner, **Played out** or **⚠️ Penalty**, the coins left or the Queen, then **Save…** and confirm. Tap ✕ to remove a board; the app asks first. The boards after it are replayed, so game scores and player points re-adjust.
+- An older board was wrong? Under **✎ Correct a board**, tap **Edit**, then ✎ to change a board (winner, penalty, coins, Queen) and **Save…**, or ✕ to remove one; the app asks first. Later boards are replayed, so scores re-adjust.
 - After the match, see [Correct a match after full time](/guides/correct-a-finished-match/).
 
 ## Ending the match

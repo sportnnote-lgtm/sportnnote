@@ -12,11 +12,12 @@ import { Button, Card, EmptyState, Pill, textStyles } from '../ui';
 import { SectionHeader } from '../SectionHeader';
 import { MedalTable } from '../MedalTable';
 import { ChampionsCard } from '../results/ChampionsCard';
+import { CompetitionRulesCard } from '../results/CompetitionRulesCard';
 import { useMeet } from '../../data/useAthletics';
 import { medalStandings } from '../../data/medalStandings';
 import {
   categoryKey, categoryLabel, disciplineOf, eventLeaders, eventStatus, formatMark, meetFieldResults, meetSettings, topAthletes,
-  swimMeetSettings, courseLabel, courseShort, eventMeetSettings, wlMeetSettings, sinclairTotal, summarizeLifts, fmtKg, SINCLAIR, pointsLabel,
+  swimMeetSettings, courseLabel, courseShort, eventMeetSettings, wlMeetSettings, sinclairTotal, summarizeLifts, fmtKg, sinclairSet, sportRule, pointsLabel,
   isCrewSport, crewMeetSettings, champTieOf,
   type MeetEvent, type RecordMark,
 } from '../../data/results';
@@ -57,12 +58,12 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
       const fin = e.phases.find((p) => p.status === 'completed');
       for (const en of fin?.entries ?? []) {
         const total = summarizeLifts(en.result.lifts).total;
-        const pts = sinclairTotal(total, en.result.bodyweight, e.category?.gender);
+        const pts = sinclairTotal(total, en.result.bodyweight, e.category?.gender, sportRule(fmt, 'sinclairPeriod'));
         if (pts != null && total != null) out.push({ id: en.id, athleteId: en.athleteId, name: en.name, team: en.team?.name, total, bw: en.result.bodyweight!, points: pts, cat: categoryLabel(e.category) });
       }
     }
     return out.sort((a, b) => b.points - a.points).slice(0, 5);
-  }, [events, wlSettings?.sinclair]);
+  }, [events, wlSettings?.sinclair, fmt?.sinclairPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Programme by category (age, then Boys / Girls / Mixed).
   const byCat = useMemo(() => {
@@ -87,6 +88,8 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
 
   return (
     <View style={{ gap: theme.spacing(3) }}>
+      {/* SD-141: the meet's competition rules (set before the meet starts, locked once results exist) */}
+      {canOrganize && <CompetitionRulesCard tournament={tournament} sport={sport} />}
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
           <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew || sport === 'cycling' ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
@@ -199,7 +202,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                 </View>
               </TouchableOpacity>
             ))}
-            <Text style={textStyles.muted}>Total × the IWF Sinclair coefficient for the bodyweight ({SINCLAIR.period} coefficients).</Text>
+            <Text style={textStyles.muted}>Total × the IWF Sinclair coefficient for the bodyweight ({sinclairSet(sportRule(fmt, 'sinclairPeriod')).period} coefficients).</Text>
           </Card>
         </>
       )}

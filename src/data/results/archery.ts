@@ -22,13 +22,13 @@ import {
   ARCH_ROUNDS, archRoundOf, arrowValue, endMax, endSum, endTens, endXs, endsOf, parseArrow, sortEnd, BOW_LABEL, MATCH_ARROWS, matchFormatOf,
   type ArchRoundDef, type Arrow, type Bow,
 } from './archeryDefs.ts';
-import { bracketState, isBracketRows, outcomeText, roundShort, type BracketState } from './archeryBracket.ts';
+import { archMatch, bracketState, isBracketRows, outcomeText, roundShort, type BracketState } from './archeryBracket.ts';
 import { cycPhaseName } from './cyclingDefs.ts';
 
 export * from './archeryDefs.ts';
 export {
   isBracketRows, bracketSize, seedPositions, roundLabel, roundShort, matchOutcome, outcomeText, bracketState, staleMatchData, hasMatchData,
-  rankArcheryBracket, bracketFormat, type BMatch, type BracketState, type MatchOutcome, type EndScore,
+  rankArcheryBracket, bracketFormat, archMatch, type BMatch, type BracketState, type MatchOutcome, type EndScore,
 } from './archeryBracket.ts';
 
 /* ---------------------------------- format --------------------------------- */
@@ -221,11 +221,11 @@ export interface ArchLine { playerId: string; stats: Record<string, number>; won
  *     points won / against, set system), place;
  *   medals (golds / silvers / bronzes) and posPoints on the deciding phase.
  */
-export function archLines(f: Pick<PhaseFormat, 'discipline' | 'category'>, ranked: RankedEntry[], kind: 'qual' | 'match' | 'bracket', awards: Award[] = [], seeded: Set<string> = new Set()): ArchLine[] {
+export function archLines(f: Pick<PhaseFormat, 'discipline' | 'category' | 'rules'>, ranked: RankedEntry[], kind: 'qual' | 'match' | 'bracket', awards: Award[] = [], seeded: Set<string> = new Set()): ArchLine[] {
   const round = archRoundOf(f.discipline);
   if (!round) return [];
   const byEntry = new Map(awards.map((a) => [a.entryId, a]));
-  const st: BracketState | null = kind === 'bracket' ? bracketState(ranked.map((r) => r.entry), matchFormatOf(round.bow)) : null;
+  const st: BracketState | null = kind === 'bracket' ? bracketState(ranked.map((r) => r.entry), matchFormatOf(round.bow), archMatch(matchFormatOf(round.bow), f.rules)) : null;
   const out: ArchLine[] = [];
   for (const r of ranked) {
     if (r.status === 'DNS' || r.status === 'WD') continue;

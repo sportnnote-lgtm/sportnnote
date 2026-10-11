@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
@@ -23,6 +24,7 @@ import {
   describeCrewPlan, crewMeetSettings, categoryLabel, eligibleFor, markRange, formatMark, disciplineOf,
   type Category, type CrewSport, type PlannedPhase,
 } from '../data/results';
+import { sportRule } from '../data/results/competitionRules';
 import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
@@ -153,7 +155,9 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
   const presets = useMemo(() => crewRoundPresets(sport, entrants, lanes), [sport, entrants, lanes]);
   const [presetKey, setPresetKey] = useState<string | null>(null);
   const [custom, setCustom] = useState({ heats: 2, direct: 1, repechage: true, finalB: true });
-  const preset = presets.find((p) => p.key === presetKey) ?? presets[0];
+  // SD-141: the meet's progression table (Competition rules) is offered first
+  const rulePreset = sportRule(tournament?.formats?.[sport] as Record<string, unknown> | undefined, 'crewProgression') === 'ab' ? presets.find((p) => p.key === 'ab') : undefined;
+  const preset = presets.find((p) => p.key === presetKey) ?? rulePreset ?? presets[0];
   const plan: PlannedPhase[] = presetKey === 'custom' ? customCrewPlan(entrants, lanes, custom) : preset?.plan ?? [{ phase: 'final', heats: 1 }];
   const overfull = plan[0] && Math.ceil(entrants / Math.max(1, plan[0].heats)) > lanes;
   const [splits, setSplits] = useState(meet.splits);
@@ -198,6 +202,8 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title={rowing ? '🚣 New rowing race' : '🛶 New canoe sprint race'} subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={sport} />
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Boat & distance</Text>

@@ -8,6 +8,7 @@ import type { Match, SportId, StatLine } from '../core/types';
 import { statSchema, labelCompact } from '../sports/statSchemas.ts';
 import { rankPlayers, statDefIn } from '../sports/statSchema.ts';
 import { withLineResults } from './leaderMinimums.ts';
+import { isWalkover, teamScoreOf } from './walkover.ts';
 
 /** W / D / L, plus a cricket tie ('T') and a no result / abandoned match
  *  ('NR'), which counts as played (SD-12) — the same Played as the table. */
@@ -28,7 +29,8 @@ export interface HeadToHead {
 export function h2hLastText(h: Pick<HeadToHead, 'last'>): string {
   const l = h.last;
   if (!l) return '';
-  if (l.line === 'w/o') return `Last: ${l.result} w/o`;
+  // SD-140: a walkover with a forfeit score reads "Last: W 3–0 w/o"
+  if (l.line === 'w/o') return `Last: ${l.result}${l.for != null && l.against != null ? ` ${l.for}–${l.against}` : ''} w/o`;
   const score = l.for != null && l.against != null ? ` ${l.for}–${l.against}` : '';
   return `Last: ${l.result}${score}${l.line ? ` · ${l.line}` : ''}`;
 }
@@ -53,7 +55,11 @@ export interface TeamStats {
   nr: number;
   /** most recent first, up to 5 */
   form: { matchId: string; result: Result; opponentName: string; line?: string }[];
+  /** SD-140 — goals / points FOR the team, walkover / forfeit scores included
+   *  (`result.forfeit`, as the table counts them); never credited to players */
   scored: number; conceded: number;
+  /** SD-140 — walkovers this team was given (won without play) / gave (lost) */
+  walkoversWon: number; walkoversGiven: number;
   /** what the score counts in this sport, e.g. "goals"; undefined = mixed / generic */
   unit?: string;
   headToHead: HeadToHead[];
@@ -92,7 +98,7 @@ export function computeTeamStats(
   const done = matches
     .filter((m) => (m.homeTeam.id === teamId || m.awayTeam.id === teamId) && resultFor(m, teamId))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
-  const out: TeamStats = { played: 0, won: 0, drawn: 0, lost: 0, nr: 0, form: [], scored: 0, conceded: 0, headToHead: [], leaders: [], appearances: [] };
+  const out: TeamStats = { played: 0, won: 0, drawn: 0, lost: 0, nr: 0, form: [], scored: 0, conceded: 0, walkoversWon: 0, walkoversGiven: 0, headToHead: [], leaders: [], appearances: [] };
   const h2h = new Map<string, HeadToHead>();
   const sports = new Set<SportId>();
   for (const m of done) {
@@ -109,9 +115,13 @@ export function computeTeamStats(
     try { line = lineOf?.(m) ?? ''; } catch { line = ''; }
     if (out.form.length < 5) out.form.push({ matchId: m.id, result: r, opponentName: opp.name, ...(line ? { line } : {}) });
     // A no result has no score to count (the table leaves it out of for/against too).
-    const noScore = m.walkover || !m.score || r === 'NR';
-    const f = noScore ? 0 : home ? m.score!.home : m.score!.away;
-    const a = noScore ? 0 : home ? m.score!.away : m.score!.home;
+    // SD-140: a walkover / forfeit counts its forfeit score (result.forfeit) —
+    // the team's, like the table; an old walkover without one counts nothing.
+    const ts = r === 'NR' ? undefined : teamScoreOf(m);
+    const noScore = !ts;
+    const f = ts ? (home ? ts.home : ts.away) : 0;
+    const a = ts ? (home ? ts.away : ts.home) : 0;
+    if (isWalkover(m) && (r === 'W' || r === 'L')) { if (r === 'W') out.walkoversWon++; else out.walkoversGiven++; }
     out.scored += f; out.conceded += a;
     const row = h2h.get(opp.id) ?? { opponentId: opp.id, opponentName: opp.name, played: 0, won: 0, drawn: 0, lost: 0, for: 0, against: 0, nr: 0 };
     row.played++; row.for += f; row.against += a;
@@ -129,6 +139,8 @@ export function computeTeamStats(
   const totals = new Map<string, Record<string, number>>();
   const apps = new Map<string, number>();
   for (const m of done) {
+    // SD-140: nobody played in a walkover — no appearance for anyone
+    if (isWalkover(m)) continue;
     for (const pid of new Set(playedFor[m.id] ?? [])) apps.set(pid, (apps.get(pid) ?? 0) + 1);
   }
   for (const l of lines) {

@@ -36,6 +36,7 @@ In a tournament, the leaderboard on the golf page adds up every round. It also s
 - Ties: Players on the same total share the place, shown with a T, for example T3.
 - Countback: If the format uses countback, ties on finished cards are split on the last 9, 6, 3 and then the last hole of the final round. While any of them is still on the course, they stay tied (T).
 - NR, WD, DQ and DNS: A player who picks up in stroke play has no return (NR) and is listed at the bottom with anyone who withdrew, was disqualified or did not start.
+- Divisions: juniors playing together (Boys U-12, Girls U-15 …) can each have their own places and prizes on the same leaderboard. See [Category prizes and golf divisions](/guides/category-prizes-and-divisions/).
 
 ## Making a cut
 1. After round 2 is finished, open the golf page and tap "＋ Set up round 3". You can also tap **＋ Set up the next round** on the finished round.

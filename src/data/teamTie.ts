@@ -545,6 +545,8 @@ export function tieAsMatch(s: Series): TieMatch {
     tournamentId: first.tournamentId,
     group: first.group,
     stage: first.stage,
+    // SD-134 — a team Swiss: the team sitting out rides on every rubber
+    ...(first.byes?.length ? { byes: first.byes } : {}),
     sport: first.sport,
     status,
     startsAt: s.legs.reduce((min, m) => (m.startsAt < min ? m.startsAt : min), first.startsAt),

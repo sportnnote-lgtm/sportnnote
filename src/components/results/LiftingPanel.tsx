@@ -16,7 +16,7 @@ import { askConfirm } from '../ConfirmSheet';
 import {
   activeLift, liftingOrder, callText, declareError, declare, recordLift, pendingIndex, taken, weighInIssue, classForBodyweight,
   summarizeLifts, bombedOutOf, fmtKg, WL_RANGE, BIG_JUMP, LIFT_LABEL, LIFT_SHORT, LIFTS, ordinal,
-  type EntryResult, type LiftAttempt, type Lift, type ResultEntry,
+  type EntryResult, type LiftAttempt, type Lift, type ResultEntry, type CompRules,
 } from '../../data/results';
 
 type Save = (entryId: string, next: EntryResult, undoLabel?: string) => void;
@@ -38,10 +38,10 @@ async function checkWeight(lift: Lift, kg: number, prev?: number): Promise<{ ok:
 }
 
 /** Validate + confirm a declaration for the lifter's pending attempt. Returns the new list or null. */
-async function declared(list: LiftAttempt[] | undefined, lift: Lift, kg: number, setErr: (s: string | null) => void): Promise<LiftAttempt[] | null> {
+async function declared(list: LiftAttempt[] | undefined, lift: Lift, kg: number, setErr: (s: string | null) => void, rules?: CompRules): Promise<LiftAttempt[] | null> {
   const l = list ?? [];
   const i = pendingIndex(l) >= 0 ? pendingIndex(l) : l.length;
-  const bad = declareError(l, i, kg);
+  const bad = declareError(l, i, kg, rules);
   if (bad) { setErr(bad); return null; }
   const c = await checkWeight(lift, kg, i > 0 ? l[i - 1]?.kg : undefined);
   if (!c.ok) return null;
@@ -137,9 +137,9 @@ function WeighInRow({ e, classes, weightClass, editable, onSave }: { e: ResultEn
 
 /* ----------------------------- next attempt ----------------------------- */
 
-export function NextLiftCard({ entries, seq, onSave }: { entries: ResultEntry[]; seq: number; onSave: Save }) {
+export function NextLiftCard({ entries, seq, onSave, rules }: { entries: ResultEntry[]; seq: number; onSave: Save; /** SD-141: the meet's lifting rules */ rules?: CompRules }) {
   const lift = activeLift(entries);
-  const order = useMemo(() => (lift ? liftingOrder(entries, lift) : []), [entries, lift]);
+  const order = useMemo(() => (lift ? liftingOrder(entries, lift, rules) : []), [entries, lift, rules]);
   const cur = order[0];
   const [lightsMode, setLightsMode] = useState(false);
   const [lights, setLights] = useState<(boolean | null)[]>([null, null, null]);
@@ -160,7 +160,7 @@ export function NextLiftCard({ entries, seq, onSave }: { entries: ResultEntry[];
   const list = r.lifts?.[lift] ?? [];
   const first = e.name.split(' ')[0];
   const decide = (d: { good?: boolean; pass?: boolean; lights?: boolean[] }) => {
-    const nextList = recordLift(list, d, seq);
+    const nextList = recordLift(list, d, seq, rules);
     const done = nextList[pendingIndex(list)];
     const word = d.pass ? '– declined' : done?.good ? '✓ good lift' : '✗ no lift';
     onSave(e.id, { ...r, lifts: { ...r.lifts, [lift]: nextList } }, `${word} · ${first} ${cur.kg} kg`);
@@ -168,7 +168,7 @@ export function NextLiftCard({ entries, seq, onSave }: { entries: ResultEntry[];
   const changeWeight = async () => {
     const v = kgOf(kg);
     if (v == null) { setErr('Type the weight in kg.'); return; }
-    const next = await declared(list, lift, v, setErr);
+    const next = await declared(list, lift, v, setErr, rules);
     if (next) onSave(e.id, { ...r, lifts: { ...r.lifts, [lift]: next } });
   };
   const decline = async () => {
@@ -235,7 +235,7 @@ export function NextLiftCard({ entries, seq, onSave }: { entries: ResultEntry[];
 /* ------------------------------ attempt grid ----------------------------- */
 
 /** One lifter's attempts: Sn / C&J rows, tap a cell to correct it. */
-export function LiftGrid({ r, editable, onChange }: { r: EntryResult; editable: boolean; onChange: (next: EntryResult) => void }) {
+export function LiftGrid({ r, editable, onChange, rules }: { r: EntryResult; editable: boolean; onChange: (next: EntryResult) => void; /** SD-141 */ rules?: CompRules }) {
   const [sel, setSel] = useState<{ lift: Lift; i: number } | null>(null);
   const [kg, setKg] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -254,7 +254,7 @@ export function LiftGrid({ r, editable, onChange }: { r: EntryResult; editable: 
     const v = kgOf(kg) ?? cur?.kg;
     if (v == null) { setErr('Type the weight in kg.'); return; }
     if (sel.i > list.length || (!cur && sel.i > 0 && !taken(list[sel.i - 1]))) { setErr('Fill the attempts in order.'); return; }
-    const bad = declareError(list, sel.i, v);
+    const bad = declareError(list, sel.i, v, rules);
     if (bad) { setErr(bad); return; }
     if (v !== cur?.kg) { const c = await checkWeight(sel.lift, v, sel.i > 0 ? list[sel.i - 1]?.kg : undefined); if (!c.ok) return; }
     const next: LiftAttempt = { ...(cur ?? {}), kg: v, auto: undefined };

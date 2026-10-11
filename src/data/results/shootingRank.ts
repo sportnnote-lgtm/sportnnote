@@ -36,11 +36,13 @@ function countbackBlocks(series: number[], ev: ShootEventDef): number[] {
 }
 
 /** Comparison keys for a qualification / match result (bigger first). */
-export function qualKeys(r: ResultEntry['result'], ev: ShootEventDef): (number | undefined)[] {
+export function qualKeys(r: ResultEntry['result'], ev: ShootEventDef, innerOnly = false): (number | undefined)[] {
   const series = r.series ?? [];
   const total = r.mark != null ? tenths(r.mark) : sumTenths(series);
   const keys: (number | undefined)[] = [total];
   if (ev.scoring === 'integer') keys.push(r.xs ?? 0);
+  // SD-141: 'inner tens only' — no series / shot countback (a tie still level shares or is shot off)
+  if (innerOnly) return keys;
   if (ev.positions) {
     const shots = series.length * ev.seriesOf;
     const by = new Map<string, number>();

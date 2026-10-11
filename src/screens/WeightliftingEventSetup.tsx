@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
@@ -23,6 +24,7 @@ import {
   WL_AGES, weightClasses, categoryLabel, declareError, eligibleFor, wlMeetSettings, WL_RANGE,
   type Category, type WlAge, type LiftAttempt,
 } from '../data/results';
+import { phaseRules } from '../data/results/competitionRules';
 import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
@@ -40,7 +42,9 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
   const settings = wlMeetSettings(tournament?.formats?.weightlifting as Record<string, unknown> | undefined);
   const [age, setAge] = useState<WlAge>('Senior');
   const [gender, setGender] = useState<'M' | 'F'>('M');
-  const classes = useMemo(() => weightClasses(age, gender), [age, gender]);
+  // SD-141: the meet's category list (Competition rules)
+  const wlRules = useMemo(() => phaseRules('weightlifting', tournament?.formats?.weightlifting as Record<string, unknown> | undefined), [tournament]);
+  const classes = useMemo(() => weightClasses(age, gender, wlRules), [age, gender, wlRules]);
   const [cls, setCls] = useState<string>(classes[3]);
   useEffect(() => { if (!classes.includes(cls)) setCls(classes[Math.min(3, classes.length - 1)]); }, [classes, cls]);
   const cat: Category = { age, gender, weightClass: cls };
@@ -104,7 +108,7 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
       for (const [lift, text] of [['snatch', p.sn], ['cj', p.cj]] as const) {
         if (!text.trim()) continue;
         const kg = kgOf(text);
-        const bad = kg == null ? 'Type the weight in kg.' : declareError([], 0, kg);
+        const bad = kg == null ? 'Type the weight in kg.' : declareError([], 0, kg, wlRules);
         if (bad) { setError(`${name} — ${lift === 'snatch' ? 'snatch' : 'C&J'} opening: ${bad}`); return; }
         const r = WL_RANGE[lift === 'snatch' ? 'wl.snatch' : 'wl.cj'];
         if (kg! < r.min || kg! > r.max) odd += 1;
@@ -129,6 +133,8 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="🏋️ New weightlifting event" subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={'weightlifting'} />
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Category</Text>

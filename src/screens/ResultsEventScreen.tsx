@@ -51,7 +51,7 @@ import {
   isCrewSport, routeCrews, routeTarget, describeRoutes, crewMembersText, crewEventOf,
   cycKind, cycStatuses, sprintBracket, ittStart, startText, rankStage, stageClassifications, roadTimeMissing,
   isRoadDiscipline, phaseTeams, teamAwards, roadRecordsAllowed, teamText,
-  combinedStandings, combinedRanked, combinedAwards, combinedHeader, combinedText, falseStartAction, combinedPhaseName, phasePoints, blankWarning,
+  combinedStandings, combinedRanked, combinedAwards, combinedHeader, combinedText, falseStartStep, ruleOf, archMatch, combinedPhaseName, phasePoints, blankWarning,
   type CombinedPhaseInput, type ResultFlag,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
@@ -341,7 +341,7 @@ export default function ResultsEventScreen() {
     // SD-112: say who has no result — they drop out without a place
     const detail = f.progression?.stage
       // SD-98: a stage race — finishers start the next stage with their GC time
-      ? `${roadTimeMissing(resEntries) ? 'Some riders on the line have no time yet — type the winner’s time first. ' : ''}Every rider who finished this stage starts stage ${f.phaseNo + 1} carrying their GC time (bonuses off, points and KOM kept); DNF, OTL, DQ and DNS riders are out of the race. An organiser can reopen this stage until the next one has results.`
+      ? `${roadTimeMissing(resEntries, f.rules) ? 'Some riders on the line have no time yet — type the winner’s time first. ' : ''}Every rider who finished this stage starts stage ${f.phaseNo + 1} carrying their GC time (bonuses off, points and KOM kept); DNF, OTL, DQ and DNS riders are out of the race. An organiser can reopen this stage until the next one has results.`
       : f.progression?.routes?.length
       // SD-99 / SD-100: crews go where the progression sends them
       ? `${closeRoundDetail(blankEntries(resEntries, def), def, pName(next.phase).toLowerCase()).split('The qualifiers')[0]}Each crew goes on by place: ${describeRoutes(f.progression.routes, f.plan)}${routing?.tieAtLine.length ? '. A dead heat on a line sends both crews on (enter a re-row / draw place to separate them)' : ''}. An organiser can reopen this round until the next one has results.`
@@ -366,7 +366,7 @@ export default function ResultsEventScreen() {
     // SD-98: a sprint bracket's record is the riders' flying 200 m times
     const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : arch || sprintBr ? rankEntries(archQualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
     for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
-    const unfinished = (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
+    const unfinished = (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def), archMatch(bracketFormat(def), f.rules)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
     const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
       unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
@@ -403,24 +403,44 @@ export default function ResultsEventScreen() {
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
-  /** SD-93 (TR 39.8.3): the first false start in a race is charged to the race (warning); the next one disqualifies. */
-  const combinedFalseStart = async (e: FieldEntry) => {
+  /** SD-93 (TR 39.8.3) / SD-141: a false start under the meet's rule — the first
+   *  one in a race is charged to the race (warning) where the meet allows one;
+   *  otherwise (or after that) the athlete responsible is disqualified. */
+  const falseStart = async (e: FieldEntry) => {
     const r = resultOf(e);
     const who = toResultEntry(e, nameOf).name;
-    if (falseStartAction(comb!, e.groupNo) === 'warn') {
-      const ok = await askConfirm({ title: 'First false start in this race', message: `${who} is warned and the race is restarted (combined events allow one false start per race, TR 39.8.3). Anyone responsible for a further false start in this race is disqualified.`, yesLabel: 'Yes, warn & restart', noLabel: 'No, cancel', tone: 'caution' });
+    const kind = comb ? 'combined' : swim ? 'swim' : 'track';
+    const ref = comb ? 'TR 39.8.3' : swim ? 'SW 4.4' : 'TR 16.8';
+    if (falseStartStep(f.rules, e.groupNo, comb ? comb.fsWarned : f.fsWarned, kind) === 'warn') {
+      const why = comb ? 'combined events allow one false start per race, TR 39.8.3' : 'this meet allows one false start per race';
+      const ok = await askConfirm({ title: 'First false start in this race', message: `${who} is warned and the ${swim ? 'heat' : 'race'} is restarted (${why}). Anyone responsible for a further false start in this ${swim ? 'heat' : 'race'} is disqualified.`, yesLabel: 'Yes, warn & restart', noLabel: 'No, cancel', tone: 'caution' });
       if (!ok) return;
-      const combined = { ...comb!, fsWarned: [...new Set([...(comb!.fsWarned ?? []), e.groupNo])] };
       try {
-        await patchPhaseFormat(phase.id, { combined });
-        setPhase({ ...phase, format: { ...phase.format, results: { ...f, combined } } });
+        if (comb) {
+          const combined = { ...comb, fsWarned: [...new Set([...(comb.fsWarned ?? []), e.groupNo])] };
+          await patchPhaseFormat(phase.id, { combined });
+          setPhase({ ...phase, format: { ...phase.format, results: { ...f, combined } } });
+        } else {
+          const fsWarned = [...new Set([...(f.fsWarned ?? []), e.groupNo])];
+          await patchPhaseFormat(phase.id, { fsWarned });
+          setPhase({ ...phase, format: { ...phase.format, results: { ...f, fsWarned } } });
+        }
       } catch (err) { setError((err as Error).message); return; }
       void save(e, { ...r, fsWarn: true });
       return;
     }
-    const ok = await askConfirm({ title: `Disqualify ${who}?`, message: 'This race has already had its false start. A further false start disqualifies (TR 39.8.3): 0 points for this event — the athlete may carry on in the next event.', yesLabel: 'Yes, disqualify (FS)', noLabel: 'No, cancel', tone: 'danger' });
-    if (ok) void save(e, { ...r, status: 'FS', ruleRef: 'TR 39.8.3' });
+    const allowed = comb ? ruleOf(f.rules, 'ceFalseStart') !== 'zero' : true;
+    const ok = await askConfirm({
+      title: `Disqualify ${who}?`,
+      message: comb
+        ? `${allowed ? 'This race has already had its false start. A further false start disqualifies (TR 39.8.3)' : 'False starts: zero tolerance at this meet'}: 0 points for this event — the athlete may carry on in the next event.`
+        : `${swim ? 'The heat' : 'This race'} has already had its false start — a further one disqualifies (meet rule, ${ref}).`,
+      yesLabel: swim ? 'Yes, disqualify (DQ)' : 'Yes, disqualify (FS)', noLabel: 'No, cancel', tone: 'danger',
+    });
+    if (ok) void save(e, swim ? { ...r, status: 'DQ', ruleRef: 'SW 4.4', reason: 'False start' } : { ...r, status: 'FS', ruleRef: ref });
   };
+  // SD-141: who handles a false start in this phase (the plain FS chip disqualifies straight away)
+  const fsHandled = !!comb || (swim ? ruleOf(f.rules, 'swimFalseStart') === 'recall' : ruleOf(f.rules, 'falseStart') === 'one');
   // SD-112: an organiser reopens a locked round (while the next round has no
   // results) or the final (records and medal points rolled back).
   const isFinal = !next;
@@ -468,7 +488,7 @@ export default function ResultsEventScreen() {
   const teamAw = f.phase === 'final' && f.road?.team && f.road.team.points !== false ? teamAwards(teams, meet ? { positionPoints: meet.positionPoints } : {}) : [];
   // SD-97: snatch / C&J medals when the meet awards them
   const liftMedals = lifts && !!meet?.liftMedals ? liftAwards(resEntries, { positionPoints: meet!.positionPoints, liftMedals: true }) : null;
-  const wlClasses = lifts ? weightClasses(f.category?.age, f.category?.gender === 'F' ? 'F' : 'M') : [];
+  const wlClasses = lifts ? weightClasses(f.category?.age, f.category?.gender === 'F' ? 'F' : 'M', f.rules) : [];
   const saveLift = (entryId: string, n: EntryResult, undoLabel?: string) => {
     const e = merged.find((x) => x.id === entryId);
     if (!e) return;
@@ -599,9 +619,9 @@ export default function ResultsEventScreen() {
         {roadEv ? <Text style={textStyles.muted}>{roadHeader(def, f.road)}</Text> : null}
         {comb ? <Text style={textStyles.muted}>{combinedHeader(f, def)}</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
-        {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
-        {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]} · {archBracket ? (matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') : `${roundLine(arch)} · ties: most 10s (X included), then most X${f.progression ? ' · the best go to match play' : ' · no match play: the ranking round decides the medals'}`}</Text> : null}
-        {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
+        {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ruleOf(f.rules, 'shootTie') === 'inner' ? ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${ruleOf(f.rules, 'shootOff') === 'share' ? 'shared' : 'shared (a medal place: shoot-off)'} (meet rule)` : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
+        {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]} · {archBracket ? (matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') + (ruleOf(f.rules, 'archShootOff') === 'repeat' ? ' (level arrows shoot again — meet rule)' : '') : `${roundLine(arch)} · ties: ${ruleOf(f.rules, 'archTie') === 'xs' ? 'most X, then most 10s (meet rule)' : 'most 10s (X included), then most X'}${f.progression ? ' · the best go to match play' : ' · no match play: the ranking round decides the medals'}`}</Text> : null}
+        {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first{f.rules && (ruleOf(f.rules, 'wlStep') !== 1 || ruleOf(f.rules, 'wlRepeat') !== 'same' || ruleOf(f.rules, 'wlOrder') !== 'iwf') ? ` · meet rules: +${ruleOf(f.rules, 'wlStep')} kg after a good lift${ruleOf(f.rules, 'wlRepeat') === 'up' ? ' and after a no lift' : ''}${ruleOf(f.rules, 'wlOrder') === 'simple' ? ', order by bar → attempt → lot' : ''}` : ''} · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
         {/* SD-130: lines / records that didn't save at lock — retry */}
@@ -629,6 +649,9 @@ export default function ResultsEventScreen() {
             {comb && (comb.fsWarned ?? []).includes(activeHeat) ? (
               <Text style={st.badTxt}>⚠ This race has had its false start — a further one disqualifies (TR 39.8.3).</Text>
             ) : null}
+            {!comb && (f.fsWarned ?? []).includes(activeHeat) ? (
+              <Text style={st.badTxt}>⚠ This {swim ? 'heat' : 'race'} has had its false start — a further one disqualifies (meet rule).</Text>
+            ) : null}
             {def.wind === 'race' && editable && (
               <WindField value={windByHeat.get(activeHeat)} onSave={(w) => { for (const e of heatEntries) void save(e, { ...resultOf(e), wind: w }); }} />
             )}
@@ -640,7 +663,7 @@ export default function ResultsEventScreen() {
                 {lanesOpen && moving && (
                   <View style={st.wrap}>
                     {heats.length > 1 && heats.map((h) => <SelectChip key={`h${h}`} label={`Heat ${h}`} active={h === activeHeat} onPress={() => setHeat(h)} />)}
-                    {laneNumbers(def.lanes ?? 8).map((ln) => {
+                    {laneNumbers(def.lanes ?? 8, def.rules).map((ln) => {
                       const who = merged.find((e) => e.groupNo === activeHeat && ((e.result ?? {}) as EntryResult).lane === ln);
                       return <SelectChip key={ln} label={`L${ln}${who ? ` · ${toResultEntry(who, nameOf).name.split(' ')[0]}` : ''}`} active={false} onPress={() => void pickLane(moving, activeHeat, ln)} />;
                     })}
@@ -665,14 +688,14 @@ export default function ResultsEventScreen() {
                 entries={heatRes} editable={editable} onSave={saveLift} statuses={statusesFor(def)} />
             )}
             {cycK === 'points' && (editable || anyMark) && (
-              <PointsRaceCard entries={heatRes} laps={f.cyc?.laps} every={f.cyc?.sprintEvery} editable={editable} onSave={saveLift} statuses={statusesFor(def)} />
+              <PointsRaceCard entries={heatRes} laps={f.cyc?.laps} every={f.cyc?.sprintEvery} editable={editable} onSave={saveLift} statuses={statusesFor(def)} rules={f.rules} />
             )}
             {sprintBr && <SprintBracketCard entries={resEntries} editable={editable} onSave={saveLift} />}
             {/* SD-92: road / walk / XC — tap (or bib) in finish order, times optional */}
             {roadEv && (editable || anyMark) && <RoadFinishCard def={def} entries={heatRes} editable={editable} onSave={saveLift} road={f.road} age={f.category?.age} />}
-            {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} />}
+            {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} rules={f.rules} />}
             {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
-            {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} />}
+            {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} rules={f.rules} />}
             {def.capture === 'attempts' && editable && (
               <AttemptCard def={def} up={nextUp} rows={heatRows} heatRes={heatRes} phaseKind={f.phase} onSave={saveAttempt} />
             )}
@@ -741,7 +764,7 @@ export default function ResultsEventScreen() {
                       onUndoable={(label) => offerUndo(e.id, r, `${label} · ${re.name.split(' ')[0]} R${round}`)} />
                   )}
                   {def.capture === 'heights' && <HeightRow def={def} r={r} bar={curBar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
-                  {def.capture === 'lifts' && <LiftGrid r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
+                  {def.capture === 'lifts' && <LiftGrid r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} rules={f.rules} />}
                   {swim && editable && f.handTimed && (r.status ?? 'ok') === 'ok' && (
                     <WatchesField key={`${e.id}:w:${(r.watches ?? []).join(',')}`} def={def} r={r} course={course}
                       register={(x) => { inputs.current.set(e.id, x); }} onNext={() => focusAfter(e.id)} onChange={(n) => void save(e, n)} />
@@ -783,7 +806,7 @@ export default function ResultsEventScreen() {
                   {row?.needsDecider && editable && (
                     <DeciderField label={def.tie === 'vertical' ? 'Jump-off place' : arch && f.progression ? 'Shoot-off / toss place' : 'Shoot-off place'} value={r.decider} onSave={(d) => void save(e, { ...r, decider: d })} />
                   )}
-                  {editable && (swim ? <SwimStatusChips def={def} r={r} onChange={(n) => void save(e, n)} /> : <StatusChips def={def} r={r} onChange={(n) => void save(e, n)} onFalseStart={comb && def.unit === 'time' ? () => void combinedFalseStart(e) : undefined} />)}
+                  {editable && (swim ? <SwimStatusChips def={def} r={r} onChange={(n) => void save(e, n)} onFalseStart={fsHandled ? () => void falseStart(e) : undefined} /> : <StatusChips def={def} r={r} onChange={(n) => void save(e, n)} onFalseStart={fsHandled && def.unit === 'time' && def.capture === 'single' ? () => void falseStart(e) : undefined} />)}
                 </Card>
               );
             })}
@@ -875,10 +898,10 @@ export default function ResultsEventScreen() {
 
 /** SD-98: a stage's own result and the points / mountains classifications (the GC is the main sheet). */
 function StageSheets({ def, stageNo, entries }: { def: DisciplineDef; stageNo: number; entries: ResultEntry[] }) {
-  const cls = stageClassifications(entries);
+  const cls = stageClassifications(entries, def.rules);
   return (
     <>
-      <ResultsSheet def={def} title={`Stage ${stageNo} result`} heats={new Map([[1, rankStage(entries)]])} />
+      <ResultsSheet def={def} title={`Stage ${stageNo} result`} heats={new Map([[1, rankStage(entries, def.rules)]])} />
       {cls.points.length || cls.kom.length ? (
         <Card style={{ gap: theme.spacing(1) }}>
           <Text style={textStyles.h3}>Classifications after stage {stageNo}</Text>
@@ -1150,7 +1173,7 @@ function SplitsField({ def, r, onChange }: { def: DisciplineDef; r: EntryResult;
 
 /** SD-94: DNS / DQ with the World Aquatics reason (the event's strokes, the
  *  relay rules — early take-off by leg). */
-function SwimStatusChips({ def, r, onChange }: { def: DisciplineDef; r: EntryResult; onChange: Change }) {
+function SwimStatusChips({ def, r, onChange, onFalseStart }: { def: DisciplineDef; r: EntryResult; onChange: Change; /** SD-141: the meet recalls the first false start */ onFalseStart?: () => void }) {
   const s = r.status ?? 'ok';
   const codes = dqCodesFor(def.key);
   const [leg, setLeg] = useState<number | undefined>(undefined);
@@ -1158,6 +1181,11 @@ function SwimStatusChips({ def, r, onChange }: { def: DisciplineDef; r: EntryRes
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <View style={st.wrap}>
+        {onFalseStart && s === 'ok' ? (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="False start" onPress={onFalseStart} style={st.status}>
+            <Text style={st.statusTxt}>FS</Text>
+          </TouchableOpacity>
+        ) : null}
         {(['DNS', 'DQ'] as ResultStatus[]).map((x) => (
           <TouchableOpacity key={x} accessibilityRole="button" accessibilityState={{ selected: s === x }} accessibilityLabel={`Mark ${x}`}
             onPress={() => onChange({ ...r, status: s === x ? undefined : x, ruleRef: undefined, reason: undefined })}

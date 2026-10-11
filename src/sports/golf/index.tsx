@@ -18,6 +18,7 @@ import { concededLine, holeWinner, type HoleWinner } from './engine';
 import { initGolfMatch, golfMatchReducer, golfMatchStateOf, type GolfMatchState } from './match';
 import { matchHole, holeNumber, scoreStatKey, strokesLine } from './matchStrokes';
 import { MatchStrokesSetup } from './MatchStrokesSetup';
+import { golfMatchVoice } from '../voiceParsers';
 
 // The state + reducer live in ./match (pure, unit-tested); SD-87 adds the
 // handicap strokes and per-hole gross strokes as optional keys.
@@ -200,6 +201,8 @@ export const golfPlugin: SportPlugin<GolfMatchState> = {
       detailLine: m.dormie ? 'Dormie' : `${s.regulation} holes${s.extraHoles ? ' · extra holes if level' : ''}`,
     };
   },
+  // SD-137a — voice scoring (period / match ends ask first)
+  voice: { hints: ['hole home', '{name} wins the hole', 'halved', 'strokes 4 5'], parse: golfMatchVoice },
   ScoringControls,
   LiveExtras,
   formatFields: [

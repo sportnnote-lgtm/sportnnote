@@ -5,6 +5,7 @@
 import type { Match, SportId } from '../core/types';
 import { teamStandings, chessWhiteSide, isChessForfeit, isNoResultMatch, swissRoundOf, type StandingsConfig } from './standings.ts';
 import type { Colour, SwissPlayer } from './swiss.ts';
+import type { SwissOps } from './swissOps.ts';
 
 /**
  * `seedOrder` is the organiser's seed list (round 1's order): its position is
@@ -13,11 +14,16 @@ import type { Colour, SwissPlayer } from './swiss.ts';
 export function swissField(
   matches: Match[], sport: SportId, cfg: StandingsConfig, seedOrder: string[] = [],
   teams?: { id: string; name: string }[],
+  /** SD-134 — late entrants join the field (their missed rounds score through
+   *  `cfg.swissExtras`); the caller drops anyone not available this round */
+  ops?: SwissOps,
 ): SwissPlayer[] {
   const swiss = matches.filter((m) => m.sport === sport && m.status !== 'cancelled' && swissRoundOf(m.stage) !== undefined);
   const rows = teamStandings(swiss, sport, cfg, 'swiss', teams);
   const ids = new Set<string>();
   for (const m of swiss) { ids.add(m.homeTeam.id); ids.add(m.awayTeam.id); for (const b of m.byes ?? []) ids.add(b); }
+  for (const id of Object.keys(ops?.late ?? {})) ids.add(id);
+  for (const r of rows) ids.add(r.teamId); // SD-134: a requested bye / late entry's row
   const ranking = [...seedOrder.filter((id) => ids.has(id)), ...rows.map((r) => r.teamId).filter((id) => !seedOrder.includes(id))];
   for (const id of ids) if (!ranking.includes(id)) ranking.push(id);
   const score = new Map(rows.map((r) => [r.teamId, r.points]));

@@ -147,6 +147,8 @@ export interface TeamResult {
   total: number | null;
   /** the last scoring runner's place (the tie-break) */
   last?: number;
+  /** SD-141: the first non-scoring runner's place (the "6th runner" tie-break) */
+  next?: number;
   runners: TeamRunner[];
   complete: boolean;
 }
@@ -198,10 +200,15 @@ export function teamScores(ranked: RankedEntry[], cfg: TeamScoring): TeamResult[
     return {
       key: k, name: t.name, teamId: t.teamId, colorHex: t.colorHex, position: null, label: '', tie: false, complete: full, runners,
       total: full ? scoring.reduce((s, r) => s + (r.place ?? 0), 0) : null, last: full ? scoring[scoring.length - 1]?.place ?? undefined : undefined,
+      ...(full ? (() => { const n = runners.find((r) => !r.scoring); return n ? { next: n.place ?? n.overall } : {}; })() : {}),
     };
   });
-  const ranked2 = rows.filter((r) => r.complete).sort((a, b) => a.total! - b.total! || (a.last ?? 0) - (b.last ?? 0) || a.name.localeCompare(b.name));
-  const same = (a: TeamResult, b: TeamResult) => a.total === b.total && a.last === b.last;
+  // SD-141: the "next runner" rule compares the first non-scorers (none = loses), then the last scorers
+  const byNext = cfg.tieBreak === 'next';
+  const nextKey = (t: TeamResult) => (t.next ?? Infinity);
+  const tb = (a: TeamResult, b: TeamResult) => (byNext ? (nextKey(a) === nextKey(b) ? 0 : nextKey(a) < nextKey(b) ? -1 : 1) : 0) || (a.last ?? 0) - (b.last ?? 0);
+  const ranked2 = rows.filter((r) => r.complete).sort((a, b) => a.total! - b.total! || tb(a, b) || a.name.localeCompare(b.name));
+  const same = (a: TeamResult, b: TeamResult) => a.total === b.total && tb(a, b) === 0;
   sharedPositions(ranked2, same).forEach((x, i) => { ranked2[i].position = x.position; ranked2[i].tie = x.tie; ranked2[i].label = `${x.tie ? '=' : ''}${x.position}`; });
   const rest = rows.filter((r) => !r.complete).sort((a, b) => b.runners.length - a.runners.length || a.name.localeCompare(b.name));
   for (const r of rest) r.label = 'inc';
@@ -212,7 +219,7 @@ export function teamScores(ranked: RankedEntry[], cfg: TeamScoring): TeamResult[
 export function tieBrokenByLast(rows: TeamResult[]): Set<string> {
   const out = new Set<string>();
   const done = rows.filter((r) => r.complete);
-  for (const a of done) if (done.some((b) => b !== a && b.total === a.total && b.last !== a.last)) out.add(a.key);
+  for (const a of done) if (done.some((b) => b !== a && b.total === a.total && (b.last !== a.last || b.next !== a.next) && b.position !== a.position)) out.add(a.key);
   return out;
 }
 
@@ -249,7 +256,8 @@ export function describeTeamScoring(t: TeamScoring): string {
     overall: 'everyone’s overall finishing place counts, individuals included',
     scorers: 'places counted among scoring runners only — non-scorers don’t displace',
   };
-  return `Team score: first ${t.scorers}${t.size ? ` of up to ${t.size}` : ''} finishers per team, ${basis[t.basis]}. Lowest total wins; equal totals → the team whose last scorer finished higher. Fewer than ${t.scorers} finishers: not ranked.`;
+  const tie = t.tieBreak === 'next' ? 'the team whose next (first non-scoring) runner finished higher — a team without one loses' : 'the team whose last scorer finished higher';
+  return `Team score: first ${t.scorers}${t.size ? ` of up to ${t.size}` : ''} finishers per team, ${basis[t.basis]}. Lowest total wins; equal totals → ${tie}. Fewer than ${t.scorers} finishers: not ranked.`;
 }
 
 /* --------------------------------- stat lines --------------------------------- */

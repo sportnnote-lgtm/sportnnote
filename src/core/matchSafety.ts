@@ -179,7 +179,7 @@ export function confirmCopy(action: MatchAction, ctx: ConfirmContext = {}): Conf
       return { title: 'Cancel the start?', message: 'Nothing has been scored yet — the match goes back to not started.', yesLabel: 'Yes, cancel start', noLabel: 'No, keep the match on', tone: 'caution' };
     case 'walkover': {
       const w = ctx.winner ?? 'this side';
-      return { title: `Walkover to ${w}?`, message: ctx.detail ?? `${w} is awarded the win without a score and the match closes.`, yesLabel: `Yes, walkover to ${w}`, noLabel: 'No, go back', tone: 'danger' };
+      return { title: `Walkover to ${w}?`, message: ctx.detail ?? `${w} is awarded the win without play and the match closes. Any walkover score counts for the team, never for a player.`, yesLabel: `Yes, walkover to ${w}`, noLabel: 'No, go back', tone: 'danger' };
     }
     case 'discardTaps': {
       const n = ctx.count ?? 0;

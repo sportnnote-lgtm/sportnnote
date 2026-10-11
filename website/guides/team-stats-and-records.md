@@ -30,11 +30,13 @@ A team page adds up every finished match the team has played. It shows the recor
 - **Team leaders**: the team's best player in each of the sport's leader categories, counting only matches they played for this team. Averages need a minimum number of games, the same minimum as tournament leaders. **Most games** is the player with the most appearances.
 - **Records**: **Biggest win** and **Heaviest defeat** with the score, opponent and date; the most goals or points in one match; **Longest winning run**; **Longest unbeaten run** (sports with draws); **Current run** (for example W3); and, in goal sports, **Clean sheets** and **Failed to score**. Cricket shows **Highest total** and **Lowest total** instead of the biggest win, because a chase is won by wickets, not runs.
 - **Head-to-head**: the record against each opponent, with the latest meeting's score.
+- **Walkovers won** and **Walkovers given**: shown when the team has had a walkover in the matches you picked. Given means the team didn't turn up.
 
 ## Why some figures are missing
 - A per-game stat counts only the matches where the scorer tracked it. If shots were tracked in 3 of 4 matches, the tile says **Shots · 3 of 4**, and the average is over those 3. A match that didn't track it is never counted as 0.
 - A stat that averages 0 (no cards at all, for example) is left out to keep the card short.
-- A walkover or a no result counts in **Played**, but it has no score, so it's left out of for, against, per game and the score records.
+- A no result counts in **Played**, but it has no score, so it's left out of for, against, per game and the score records.
+- A walkover counts the tournament's walkover score (for example 3-0 in football), the same as the points table. It goes to the team only, never to a player's goals or points, and it isn't a clean sheet. An old walkover recorded before walkover scores has no score until the organiser recalculates it. See [Walkover and forfeit scores](/guides/walkover-and-forfeit-scores/).
 - Sets and games sports don't show "most sets in a match"; the biggest win (for example 3–0) says more.
 
 ## Common questions

@@ -13,6 +13,8 @@ const q2: Qualifier = { games: 2, unit: { label: 'matches', one: 'match' } };
 export const hockeyStats: SportStatSchema<'hockey'> = {
   sport: 'hockey',
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (11-a-side / Hockey5s / indoor) */
+  leaderSplits: ['format'],
   stats: [
     // Top scorer: goals, then field goals (open-play skill over set pieces),
     // then assists, then fewer minutes — a house chain (FIH names no order)

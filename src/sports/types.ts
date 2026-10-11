@@ -71,6 +71,20 @@ export interface VoiceContext {
   awayName: string;
   homeRoster: Player[];
   awayRoster: Player[];
+  /** SD-137a — the moment the call was heard (ms). Clock sports stamp their
+   *  events with it; absent = Date.now(). */
+  now?: number;
+}
+
+/** SD-137a — a voice call that closes a period or the match: the VoiceScorer
+ *  asks in the ConfirmSheet before it applies (Auto mode included). */
+export interface VoiceEnding {
+  action: 'endPeriod' | 'fullTime';
+  /** "1st half", "Q2", "game 2" — for endPeriod */
+  period?: string;
+  /** the score line the sheet shows ("2-1") */
+  score?: string;
+  detail?: string;
 }
 
 /** What the big scoreboard renders, regardless of sport. */
@@ -410,6 +424,10 @@ export interface SportPlugin<S = unknown> {
   voice?: {
     hints: string[];
     parse: (text: string, ctx: VoiceContext) => ScoreAction[] | null;
+    /** SD-137a — which parsed calls end a period / the match (they go through
+     *  the ConfirmSheet). A call that would complete the match is caught by the
+     *  shared panel anyway (reducer + isComplete). */
+    ends?: (actions: ScoreAction[], state: unknown) => VoiceEnding | null;
   };
   /**
    * Optional positional layout. `formation(perSide?)` is a fresh, unfilled

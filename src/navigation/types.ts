@@ -44,6 +44,8 @@ export type RootStackParamList = {
   Series: { seriesId: string };
   EditMatch: { matchId: string };
   GenerateFixtures: { tournamentId: string; sport?: SportId };
+  /** SD-134 — a Swiss round: numbered pairings (share / print) + the round results sheet */
+  SwissRound: { tournamentId: string; sport?: SportId; round?: number };
   /** bulk schedule import from a spreadsheet (parity #24) */
   ImportSchedule: { tournamentId: string };
   AssignScorers: { tournamentId: string };
@@ -86,6 +88,8 @@ export type RootStackParamList = {
     discipline?: string; age?: string; gender?: 'M' | 'F' | 'X' } | undefined;
   /** SD-128: a meet's entries — athletes × events matrix per age group / gender, event caps, bulk add. */
   MeetEntries: { tournamentId: string; sport?: string };
+  /** SD-141: the competition rules an organiser picks for an event sport before the meet starts (read-only once results exist). */
+  CompetitionRules: { tournamentId: string; sport: string };
   /** SD-129: a meet's timetable (day tabs, now / next, running late, clashes) and its printable sheets. */
   MeetTimetable: { tournamentId: string; day?: string };
   /** SD-130: a meet's record board — historic meet / school records entered or pasted, edited, removed. */
@@ -107,6 +111,8 @@ export type RootStackParamList = {
   Standings: { sport?: SportId; tournamentId?: string } | undefined;
   SportHub: { tournamentId: string; sport: SportId; tournamentName?: string };
   Bracket: { tournamentId?: string; sport?: SportId } | undefined;
+  /** SD-138 — one entrant's tournament: group finish → knockout rounds → place */
+  TeamJourney: { tournamentId: string; teamId: string; sport?: SportId };
   Team: { teamId: string };
   Squad: { teamId: string };
   /** correct a finished match (parity #05) */

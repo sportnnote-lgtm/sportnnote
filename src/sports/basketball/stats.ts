@@ -23,6 +23,8 @@ export const basketballStats: SportStatSchema<'basketball'> = {
   sport: 'basketball',
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (5×5 / 3×3) */
+  leaderSplits: ['format'],
   stats: [
     // SD-27 (BK-07): the match rating / MVP weights are FIBA efficiency (EFF)
     { ...POINTS, group: 'scoring', weight: 1 },

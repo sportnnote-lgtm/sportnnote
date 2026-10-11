@@ -33,6 +33,7 @@ import { removeFieldEntry } from './golf';
 import { applyRecordOps, recordOpsFor, bestRecords, type RecordOp } from './results/recordBook';
 import { updateFieldEventFormat } from './golf';
 import { finalAlert, combinedAlert, type ResultAlert } from './results/alerts';
+import { phaseRules, zeroLanes, type CompRules } from './results/competitionRules';
 
 /** SD-131 — leave the podium on the row (format.alert) for the follower push.
  *  Never blocks the lock: the push is a courtesy, the result is what matters. */
@@ -101,7 +102,27 @@ export interface NewResultsEvent {
 // SD-95: archery phases read "Ranking round" / "Match play"
 const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase' | 'discipline' | 'plan' | 'races'>) => `${eventTitle} — ${phaseNameOf(f)}`;
 
+/** SD-141: the tournament's settings for one sport (fresh read; demo store offline). */
+export async function sportFormatOf(tournamentId: string | undefined, sport: string): Promise<Record<string, unknown> | undefined> {
+  if (!tournamentId) return undefined;
+  if (!live()) return (demo.tournaments.find((t) => t.id === tournamentId)?.formats as Record<string, Record<string, unknown>> | undefined)?.[sport];
+  const { data } = await supabase!.from('tournaments').select('formats').eq('id', tournamentId).maybeSingle();
+  return (data as { formats?: Record<string, Record<string, unknown>> } | null)?.formats?.[sport];
+}
+
+/** SD-141: the competition rules a new phase of this sport carries (only non-default values). */
+export async function rulesForNewPhase(tournamentId: string | undefined, sport: string): Promise<CompRules> {
+  try { return phaseRules(sport, await sportFormatOf(tournamentId, sport)); } catch { return {}; }
+}
+
 async function insertPhase(input: Omit<FieldEvent, 'id' | 'status'>): Promise<FieldEvent> {
+  // SD-141: a phase without the meet's rules (a new event, or an older event's
+  // next round) takes them from the tournament now — later rounds copy them.
+  const res = (input.format as { results?: PhaseFormat } | undefined)?.results;
+  if (res && !res.rules && input.tournamentId) {
+    const rules = await rulesForNewPhase(input.tournamentId, input.sport);
+    input = { ...input, format: { ...input.format, results: { ...res, rules } } };
+  }
   const base = withPlannedSlot(input);
   if (!live()) {
     const ev: FieldEvent = { ...base, id: genId('fev'), status: 'scheduled' };
@@ -162,7 +183,9 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
   const base = disciplineOf(input.discipline);
   if (!base) throw new Error('Unknown discipline');
   const venueLanes = input.venueLanes && base.lanes && input.venueLanes !== base.lanes ? input.venueLanes : undefined;
-  const def = phaseDiscipline(base, { lanes: venueLanes });
+  // SD-141: the meet's competition rules (lane numbering, late lanes …) from the start
+  const rules = input.tournamentId ? await rulesForNewPhase(input.tournamentId, base.sport) : undefined;
+  const def = phaseDiscipline(base, { lanes: venueLanes, rules });
   if (!input.entrants.length) throw new Error('Add at least one entry.');
   if (def.teamSize && input.entrants.some((e) => e.playerId)) throw new Error(`${def.label} entries are teams, not athletes.`);
   const plan = input.plan ?? planRounds(def, input.entrants.length);
@@ -180,6 +203,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     ...(input.cyc ? { cyc: { ...input.cyc, ...(input.cyc.stages?.length ? { stageType: input.cyc.stages[0] } : {}) } } : {}),
     ...(input.road ? { road: input.road } : {}),
     ...(input.sched?.rounds.length ? { sched: input.sched } : {}),
+    ...(rules ? { rules } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -194,7 +218,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
   // SD-94: swimming seeds by World Aquatics SW 3.1 (heats circle-seeded, the
   // fastest in the centre lanes, no lane draw); a timed final (a final run in
   // several heats) puts the fastest in the last heat — athletics too.
-  let seeded = def.sport === 'swimming' ? swimSeed(ids, first.phase, first.heats, def.lanes ?? 8, def.key)
+  let seeded = def.sport === 'swimming' ? swimSeed(ids, first.phase, first.heats, def.lanes ?? 8, def.key, zeroLanes(def.lanes ?? 8, rules))
     : first.phase === 'final' && first.heats > 1 && def.lanes && def.capture === 'single' ? timedFinalSeed(ids, def.lanes, def.key, draw ? rng : undefined)
       : seedHeats(ids, first.heats, def, draw ? rng : undefined, { drawAll: draw });
   // SD-91 field events: seeds are spread over the qualification groups; the
@@ -404,7 +428,7 @@ async function advanceCrewPhase(phase: FieldEvent, f: PhaseFormat, def: Discipli
  */
 async function advanceStage(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], byHeat: Map<number, RankedEntry[]>, next: PlannedPhase): Promise<FieldEvent> {
   const rows = [...byHeat.values()].flat();
-  const on = stageFinishers(rows.map((r) => r.entry));
+  const on = stageFinishers(rows.map((r) => r.entry), f.rules);
   if (!on.length) throw new Error('No rider has finished this stage yet — enter the finish order (and the winner’s time) first.');
   await writePhaseLines(phase, f, cycLines(f, rows));
   const no = f.phaseNo + 1;
@@ -905,7 +929,7 @@ function swimNextRound(byHeat: Map<number, RankedEntry[]>, def: DisciplineDef, q
   const through = [...byHeat.values()].flat().filter((r) => q.marks.has(r.id));
   const keyOf = (r: RankedEntry) => [...performanceOf(r.entry, def).keys, r.entry.result.decider != null ? -r.entry.result.decider : undefined];
   through.sort((a, b) => compareKeys(keyOf(a), keyOf(b)) || a.entry.name.localeCompare(b.entry.name));
-  return swimSeed(through.map((r) => r.id), phase, heats, def.lanes ?? 8, def.key);
+  return swimSeed(through.map((r) => r.id), phase, heats, def.lanes ?? 8, def.key, zeroLanes(def.lanes ?? 8, def.rules));
 }
 
 /* ------------------------------ SD-93 combined events ------------------------------ */

@@ -268,9 +268,9 @@ describe('tournament Records — ranking across matches', () => {
     assert.deepEqual(out.find((x) => x.type.key === 'biggestWin')?.rows.map((r) => [r.teamName, r.item.text]), [['Red House', '1–0']]);
     assert.equal(tournamentRecords('football', [M('football', R, B, fs)]).length, 0); // no derive → nothing
   });
-  test('golf / carrom / results sports have no record types', () => {
-    for (const s of ['golf', 'carrom', 'athletics', 'swimming'] as SportId[]) assert.equal(MATCH_RECORD_TYPES[s], undefined);
-    assert.equal(MATCH_RECORD_HOOKS.golf, undefined);
+  test('results sports have no record types (SD-137a: carrom and golf match play now do)', () => {
+    for (const s of ['athletics', 'swimming'] as SportId[]) assert.equal(MATCH_RECORD_TYPES[s], undefined);
+    assert.ok(MATCH_RECORD_HOOKS.golf && MATCH_RECORD_HOOKS.carrom);
   });
 });
 

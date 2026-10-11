@@ -26,6 +26,15 @@ import { compareKeys, sharedPositions } from './positions.ts';
 import { formatMark } from './marks.ts';
 import { cycKind, sprintPoints, LAP_POINTS, SPRINT_POINTS } from './cyclingDefs.ts';
 import { isBracketRows, rankArcheryBracket, type MatchFn, type MatchOutcome } from './archeryBracket.ts';
+import { ruleOf, sprintTable, type CompRules } from './competitionRules.ts';
+
+/** SD-141: the meet's points-race tables (5-3-2-1, final sprint double by default). */
+export const sprintRule = (rules?: CompRules | null): { table: number[]; double: boolean } => ({ table: sprintTable(rules), double: ruleOf(rules, 'cycFinishDouble') !== false });
+/** SD-141: points for a place in the final sprint. */
+export const finishPoints = (place: number | undefined, rules?: CompRules | null): number => {
+  const { table, double } = sprintRule(rules);
+  return place == null || place < 1 ? 0 : (table[place - 1] ?? 0) * (double ? 2 : 1);
+};
 
 const ok = (e: ResultEntry) => (e.result?.status ?? 'ok') === 'ok';
 const TIME0 = { unit: 'time' as const, dp: 0 };
@@ -54,14 +63,16 @@ export interface RoadTime {
  * at least 1 s after the rider ahead (a new group) — otherwise, or with no
  * time entered, the time of the rider ahead ("same time").
  */
-export function roadTimes(entries: ResultEntry[]): Map<string, RoadTime> {
+export function roadTimes(entries: ResultEntry[], rules?: CompRules | null): Map<string, RoadTime> {
+  // SD-141: the gap that starts a new time group (UCI 1 s; 0 = every rider their own time)
+  const gap = Number(ruleOf(rules, 'cycGap'));
   const out = new Map<string, RoadTime>();
   const line = entries.filter((e) => ok(e) && e.result?.fin != null).sort((a, b) => a.result.fin! - b.result.fin!);
   let prevRaw: number | undefined, prevTime: number | undefined, lead: number | undefined;
   for (const e of line) {
     const raw = e.result.mark != null ? Math.floor(e.result.mark) : undefined;
     let time: number | undefined, st = false;
-    if (raw != null && (prevRaw == null || raw - prevRaw >= 1)) time = raw;
+    if (raw != null && (prevRaw == null || raw - prevRaw >= (Number.isFinite(gap) ? gap : 1))) time = raw;
     else if (prevTime != null) { time = prevTime; st = true; }
     if (lead == null && time != null) lead = time;
     out.set(e.id, { time, raw, st, gap: time != null && lead != null ? time - lead : undefined });
@@ -76,9 +87,10 @@ export function roadTimes(entries: ResultEntry[]): Map<string, RoadTime> {
 export interface PointsTotal { total: number; sprints: number; finish: number; laps: number }
 
 /** A points-race rider's total: intermediate sprints + the final sprint (double) + 20 per lap gained (−20 per lap lost). */
-export function pointsTotal(r: ResultEntry['result']): PointsTotal {
-  const sprints = Object.values(r?.spr ?? {}).reduce((s, p) => s + sprintPoints(p, 1, 2), 0);
-  const finish = r?.fin != null ? (SPRINT_POINTS[r.fin - 1] ?? 0) * 2 : 0;
+export function pointsTotal(r: ResultEntry['result'], rules?: CompRules | null): PointsTotal {
+  const { table } = sprintRule(rules);
+  const sprints = Object.values(r?.spr ?? {}).reduce((s, p) => s + sprintPoints(p, 1, 2, table), 0);
+  const finish = r?.fin != null ? finishPoints(r.fin, rules) : 0;
   const laps = (r?.laps ?? 0) * LAP_POINTS;
   return { total: sprints + finish + laps, sprints, finish, laps };
 }
@@ -94,10 +106,10 @@ export const isRoadStage = (entries: ResultEntry[]): boolean => entries.some((e)
 export interface StageTime { id: string; secs: number; frac: number; place?: number }
 
 /** Each rider's time on this stage (whole seconds + the dropped fraction of an ITT time) and stage place. */
-export function stageTimes(entries: ResultEntry[]): Map<string, StageTime> {
+export function stageTimes(entries: ResultEntry[], rules?: CompRules | null): Map<string, StageTime> {
   const out = new Map<string, StageTime>();
   if (isRoadStage(entries)) {
-    const rt = roadTimes(entries);
+    const rt = roadTimes(entries, rules);
     const anyTime = [...rt.values()].some((t) => t.time != null);
     for (const e of entries) {
       const t = rt.get(e.id);
@@ -177,20 +189,22 @@ export function rankCycling(entries: ResultEntry[], def: DisciplineDef, o: { tie
   type Row = { e: ResultEntry; keys: (number | undefined)[]; best: number | null; text: string; ranked: boolean };
   const rows: Row[] = [];
   if (kind === 'stage') {
-    const times = stageTimes(entries);
+    const times = stageTimes(entries, def.rules);
+    // SD-141: 'places' = equal GC times by stage places (no time-trial hundredths)
+    const uci = ruleOf(def.rules, 'cycGcTie') !== 'places';
     for (const e of entries) {
       const st = times.get(e.id);
       const g = gcAfter(e, st);
-      rows.push({ e, keys: g ? [-g.time, -g.frac, -g.places, -(st?.place ?? 999)] : [], best: g?.time ?? null, text: '', ranked: !!g });
+      rows.push({ e, keys: g ? [-g.time, uci ? -g.frac : 0, -g.places, -(st?.place ?? 999)] : [], best: g?.time ?? null, text: '', ranked: !!g });
     }
   } else if (kind === 'points') {
     const started = raceStarted(entries);
     for (const e of entries) {
-      const t = pointsTotal(e.result);
+      const t = pointsTotal(e.result, def.rules);
       rows.push({ e, keys: [t.total, -(e.result?.fin ?? 9999)], best: t.total, text: `${t.total} pts`, ranked: ok(e) && started });
     }
   } else {
-    const rt = kind === 'rr' ? roadTimes(entries) : null;
+    const rt = kind === 'rr' ? roadTimes(entries, def.rules) : null;
     for (const e of entries) {
       const fin = e.result?.fin;
       const t = rt?.get(e.id);
@@ -221,10 +235,10 @@ export function rankCycling(entries: ResultEntry[], def: DisciplineDef, o: { tie
  * A stage's own result (not the GC): road — the order on the line with the
  * group times; time trial — the times, fastest first.
  */
-export function rankStage(entries: ResultEntry[]): RankedEntry[] {
-  const times = stageTimes(entries);
+export function rankStage(entries: ResultEntry[], rules?: CompRules | null): RankedEntry[] {
+  const times = stageTimes(entries, rules);
   const road = isRoadStage(entries);
-  const rt = road ? roadTimes(entries) : null;
+  const rt = road ? roadTimes(entries, rules) : null;
   const lead = Math.min(...[...times.values()].map((t) => t.secs + t.frac));
   const rows = entries.map((e) => {
     const t = times.get(e.id);
@@ -250,8 +264,8 @@ export function rankStage(entries: ResultEntry[]): RankedEntry[] {
 export interface Classification { id: string; name: string; team?: string; value: number; wins: number }
 
 /** The points and mountains classifications of a stage race after this stage (most points first; ties: stage wins). */
-export function stageClassifications(entries: ResultEntry[]): { points: Classification[]; kom: Classification[] } {
-  const times = stageTimes(entries);
+export function stageClassifications(entries: ResultEntry[], rules?: CompRules | null): { points: Classification[]; kom: Classification[] } {
+  const times = stageTimes(entries, rules);
   const rows = entries.flatMap((e) => { const g = gcAfter(e, times.get(e.id)); return g ? [{ e, g }] : []; });
   const list = (k: 'pts' | 'kom') => rows.filter((r) => r.g[k] > 0).map((r) => ({ id: r.e.id, name: r.e.name, team: r.e.team?.name, value: r.g[k], wins: r.g.wins }))
     .sort((a, b) => b.value - a.value || b.wins - a.wins || a.name.localeCompare(b.name));

@@ -52,7 +52,7 @@ When teams share a place, they split the points for all the places they cover. W
 
 ## Common questions
 ### Why is a sport missing from the table halfway through?
-Knockout places only count once they are decided. Quarter-final losers appear as soon as their match ends; the medals appear when the semi-finals, the 3rd-place match and the final are played. A sport set up as a league or groups followed by a knockout shows no places until the knockout starts, because the knockout decides the medals. If you never play the knockout, change that sport's format to a league.
+Knockout places only count once they are decided. Quarter-final losers appear as soon as their match ends; the medals appear when the semi-finals, the 3rd-place match and the final are played. A sport set up as a league or groups followed by a knockout (or any sport with two or more groups) shows no places until the knockout starts, because the knockout decides the medals. Meanwhile the group tables show where everyone stands: see [Follow the groups and knockouts](/guides/follow-a-tournament-groups-and-knockouts/). If you never play the knockout, change that sport's format to a league.
 
 ### We played a 3rd-place match but want two bronzes.
 Tap that sport under **Bronze in knockouts** so it shows **two bronzes**. The 3rd-place match result is then ignored for medals.

@@ -16,6 +16,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
@@ -273,6 +274,8 @@ function TrackSwimEventSetup() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title={swim ? '🏊 New swimming event' : '🏃 New event'} subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={sport} />
         {/* SD-92: road races, race walks and cross-country have their own setup */}
         {!swim && <Button label="🌳 Road race, race walk or cross-country →" variant="ghost" onPress={() => nav.setParams({ mode: 'road' })} />}
         {/* SD-93: decathlon / heptathlon / school pentathlon have their own setup */}

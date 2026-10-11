@@ -49,7 +49,7 @@ A player's sport page shows their career in that sport: the record, then section
 - **Football, basketball, volleyball, kabaddi**: **Format** (for example 7-a-side, 3x3, Indoor or Beach), **Tournament**, **Season**, **Opponent**.
 - Golf has its own page and no filter chips yet.
 
-Cricket's **Format** and **Ball** chips also sit above a tournament's or sport page's leaders and the awards rankings, so a T20 can be ranked apart from box cricket.
+Format chips also sit above a tournament's or sport page's leaders and the awards rankings, in every match sport. See [Rank leaders and awards by format](/guides/rank-leaders-by-format/).
 
 ## Where the details come from
 Each filter reads the match the stats came from: its format, tournament, date and teams. Nothing extra has to be entered.

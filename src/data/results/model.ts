@@ -22,6 +22,7 @@ import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
 import { CYC_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
 import { ROAD_EVENTS, roadEventOf, type RoadEvent, type RoadFormat } from './roadDefs.ts';
 import { combinedEventOf, type CombinedFormat } from './combinedDefs.ts';
+import { zeroLanes, type CompRules } from './competitionRules.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -89,6 +90,8 @@ export interface DisciplineDef {
   lanes?: number;
   /** a 'lifts' discipline: which lifts make the result */
   lifts?: ('snatch' | 'cj')[];
+  /** SD-141: the competition rules of the phase it is raced in (phaseDiscipline) */
+  rules?: CompRules;
 }
 
 export interface Category {
@@ -228,6 +231,13 @@ export interface PhaseFormat {
    *  an entry has an organiser-set time (= field_events.starts_at). Absent on
    *  events made before SD-129 (their starts_at is the creation time). */
   sched?: PhaseSched;
+  /** SD-141: the tournament's competition rules for this sport, copied when
+   *  the phase is made (only values that differ from the default — see
+   *  competitionRules.ts). Absent on phases made before SD-141 = defaults. */
+  rules?: CompRules;
+  /** SD-141: heats in which a false start has been charged to the race (a
+   *  one-false-start-per-race meet; combined events keep theirs on `combined`) */
+  fsWarned?: number[];
 }
 
 /** SD-129: a meet session — morning / afternoon / evening. */
@@ -589,14 +599,21 @@ export const disciplineOf = (key: string): DisciplineDef | undefined => {
 };
 
 /** SD-94: the discipline as raced at this phase's venue (a 6- or 10-lane pool). */
-export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes' | 'combined'> | null): DisciplineDef => {
+export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes' | 'combined' | 'rules'> | null): DisciplineDef => {
   // SD-93: in a combined event the horizontal jumps and throws have three trials only (TR 39.8, from memory)
-  const d = f?.combined && def.attempts ? { ...def, attempts: { count: def.attempts.count } } : def;
-  return f?.lanes && d.lanes ? { ...d, lanes: f.lanes } : d;
+  let d = f?.combined && def.attempts ? { ...def, attempts: { count: def.attempts.count } } : def;
+  d = f?.lanes && d.lanes ? { ...d, lanes: f.lanes } : d;
+  // SD-141: the meet's competition rules ride on the discipline (ranking reads def.rules)
+  if (f?.rules && Object.keys(f.rules).length) {
+    d = { ...d, rules: f.rules };
+    if (f.rules.windLimit === 'none' && d.wind) d = { ...d, windLimit: Infinity };
+  }
+  return d;
 };
 
-/** SD-94: the lane numbers of a venue — a 10-lane pool uses 0–9 (SW 3.1.2), else 1…n. */
-export const laneNumbers = (lanes: number): number[] => Array.from({ length: lanes }, (_, i) => (lanes === 10 ? i : i + 1));
+/** SD-94: the lane numbers of a venue — a 10-lane pool uses 0–9 (SW 3.1.2), else 1…n
+ *  (SD-141: 1–10 when the organiser chose it). */
+export const laneNumbers = (lanes: number, rules?: CompRules | null): number[] => Array.from({ length: lanes }, (_, i) => (zeroLanes(lanes, rules) ? i : i + 1));
 
 /** Whether a discipline races in lanes (start list shows Lane; else Order). */
 export const usesLanes = (d: DisciplineDef) => !!d.lanes && d.capture === 'single';

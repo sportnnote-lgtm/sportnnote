@@ -20,8 +20,8 @@ import { Card, SelectChip, textStyles } from '../ui';
 import { askConfirm } from '../ConfirmSheet';
 import {
   parseMark, formatMark, roadTimes, placeOnLine, nextFin, nextOutPlace, pointsTotal, setSprintPlace, sprintCount, sprintPoints,
-  SPRINT_POINTS, cycEventOf, bracketState, staleMatchData, clearMatches, setWalkover, setSprintHeat, sprintMatch, sprintBo, roundShort, secsText, gapText, startText, ittStart,
-  type BMatch, type CycKind, type DisciplineDef, type EntryResult, type ResultEntry, type ResultStatus,
+  sprintRule, finishPoints, cycEventOf, bracketState, staleMatchData, clearMatches, setWalkover, setSprintHeat, sprintMatch, sprintBo, roundShort, secsText, gapText, startText, ittStart,
+  type BMatch, type CycKind, type DisciplineDef, type EntryResult, type ResultEntry, type ResultStatus, type CompRules,
 } from '../../data/results';
 
 type Save = (entryId: string, next: EntryResult, undoLabel?: string) => void;
@@ -64,7 +64,7 @@ export function FinishOrderCard({ def, kind, entries, editable, onSave, statuses
   const placed = useMemo(() => entries.filter((e) => inRace(e) && e.result?.fin != null).sort((a, b) => a.result.fin! - b.result.fin!), [entries]);
   const pool = useMemo(() => entries.filter((e) => inRace(e) && e.result?.fin == null).sort(byOrder), [entries]);
   const out = useMemo(() => entries.filter((e) => !inRace(e)).sort(byOrder), [entries]);
-  const times = useMemo(() => (timed ? roadTimes(entries) : null), [timed, entries]);
+  const times = useMemo(() => (timed ? roadTimes(entries, def.rules) : null), [timed, entries, def.rules]);
 
   const tap = (e: ResultEntry) => {
     if (!editable) return;
@@ -287,13 +287,17 @@ function IttStageCard({ stageNo, stages, interval, entries, editable, onSave, st
 
 /* -------------------------------- points race --------------------------------- */
 
-export function PointsRaceCard({ entries, laps, every, editable, onSave, statuses }: {
+export function PointsRaceCard({ entries, laps, every, editable, onSave, statuses, rules }: {
   entries: ResultEntry[]; laps?: number; every?: number; editable: boolean; onSave: Save; statuses: ResultStatus[];
+  /** SD-141: the meet's points per sprint and final-sprint rule */
+  rules?: CompRules;
 }) {
+  const { table, double } = sprintRule(rules);
+  const top = table.length;
   const S = Math.max(1, sprintCount(laps, every) || 1);
   const [sel, setSel] = useState<number>(() => {
     // the first sprint without its four places, else the finish
-    for (let k = 1; k < S; k++) if (entries.filter((e) => e.result?.spr?.[String(k)] != null).length < Math.min(4, entries.length)) return k;
+    for (let k = 1; k < S; k++) if (entries.filter((e) => e.result?.spr?.[String(k)] != null).length < Math.min(top, entries.length)) return k;
     return S;
   });
   const [mode, setMode] = useState<'line' | ResultStatus>('line');
@@ -308,10 +312,10 @@ export function PointsRaceCard({ entries, laps, every, editable, onSave, statuse
   const tap = (e: ResultEntry) => {
     if (!editable) return;
     if (mode !== 'line') { onSave(e.id, { ...e.result, status: mode }, `${mode} · ${first(e.name)}`); return; }
-    if (isFinish) { const p = nextFin(entries); onSave(e.id, { ...e.result, fin: p }, `Finish ${p}. ${first(e.name)}${p <= 4 ? ` (${SPRINT_POINTS[p - 1] * 2} pts)` : ''}`); return; }
-    if (placed.length >= 4) return;
+    if (isFinish) { const p = nextFin(entries); onSave(e.id, { ...e.result, fin: p }, `Finish ${p}. ${first(e.name)}${p <= top ? ` (${finishPoints(p, rules)} pts)` : ''}`); return; }
+    if (placed.length >= top) return;
     const p = placed.length + 1;
-    saveAll(setSprintPlace(entries, e.id, sel, p), onSave, `Sprint ${sel}: ${p}. ${first(e.name)} (${sprintPoints(p, sel, S)} pts)`);
+    saveAll(setSprintPlace(entries, e.id, sel, p), onSave, `Sprint ${sel}: ${p}. ${first(e.name)} (${sprintPoints(p, sel, S, table, double)} pts)`);
   };
   const unplace = (e: ResultEntry) => {
     if (!editable) return;
@@ -336,7 +340,7 @@ export function PointsRaceCard({ entries, laps, every, editable, onSave, statuse
         <Text style={[textStyles.h3, { flex: 1 }]}>🚴 Points race</Text>
         <Text style={textStyles.muted}>{laps ? `${laps} laps · ` : ''}{S} sprint{S === 1 ? '' : 's'}</Text>
       </View>
-      <Text style={textStyles.muted}>A sprint every {every ?? '–'} laps: 5-3-2-1 points; the final sprint (the finish) scores double, 10-6-4-2. Gaining a lap on the bunch +20, losing one −20. Equal points: the order in the final sprint.</Text>
+      <Text style={textStyles.muted}>A sprint every {every ?? '–'} laps: {table.join('-')} points; {double ? `the final sprint (the finish) scores double, ${table.map((x) => x * 2).join('-')}` : 'the final sprint scores the same'}. Gaining a lap on the bunch +20, losing one −20. Equal points: the order in the final sprint.</Text>
       <View style={st.wrap}>
         {Array.from({ length: S }, (_, i) => i + 1).map((k) => {
           const n = placedIn(k).length;
@@ -344,26 +348,26 @@ export function PointsRaceCard({ entries, laps, every, editable, onSave, statuse
         })}
       </View>
       {editable && <ModeChips modes={['line', ...statuses]} mode={mode} setMode={setMode} lineLabel="Placings" />}
-      <Text style={st.head}>{isFinish ? 'FINISH — TAP RIDERS IN ORDER (top 4 double points; the rest settle ties)' : `SPRINT ${sel} — TAP THE FIRST FOUR`}</Text>
+      <Text style={st.head}>{isFinish ? `FINISH — TAP RIDERS IN ORDER (top ${top}${double ? ' double' : ''} points; the rest settle ties)` : `SPRINT ${sel} — TAP THE FIRST ${top === 4 ? 'FOUR' : top}`}</Text>
       {placed.map((e) => {
         const p = isFinish ? e.result.fin! : e.result.spr![String(sel)];
         return (
           <View key={e.id} style={st.row}>
             <Text style={st.pos}>{p}</Text>
             <Text style={[st.name, { flex: 1 }]} numberOfLines={1}>{e.name}</Text>
-            <Text style={st.gap}>{isFinish ? (p <= 4 ? `${SPRINT_POINTS[p - 1] * 2} pts` : '') : `${sprintPoints(p, sel, S)} pts`}</Text>
+            <Text style={st.gap}>{isFinish ? (p <= top ? `${finishPoints(p, rules)} pts` : '') : `${sprintPoints(p, sel, S, table, double)} pts`}</Text>
             {editable ? <SmallBtn label="✕" a11y={`Take ${e.name} off this sprint`} onPress={() => unplace(e)} /> : null}
           </View>
         );
       })}
-      {(isFinish || placed.length < 4) && pool.length > 0 && (
+      {(isFinish || placed.length < top) && pool.length > 0 && (
         <View style={st.wrap}>
           {pool.map((e) => <SelectChip key={e.id} label={`${e.result.order ? `#${e.result.order} ` : ''}${e.name}`} dotColor={e.team?.colorHex} active={false} disabled={!editable} onPress={() => tap(e)} />)}
         </View>
       )}
       <Text style={st.head}>LAPS GAINED / LOST · TOTALS</Text>
       {riders.map((e) => {
-        const t = pointsTotal(e.result);
+        const t = pointsTotal(e.result, rules);
         return (
           <View key={e.id} style={st.row}>
             <Text style={[st.name, { flex: 1 }]} numberOfLines={1}>{e.name}</Text>

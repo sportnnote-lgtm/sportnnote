@@ -11,6 +11,8 @@ export const footballStats: SportStatSchema<'football'> = {
   sport: 'football',
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (11-a-side / 7s / futsal) */
+  leaderSplits: ['format'],
   stats: [
     // SD-27 (FB-11): the Golden Boot chain — goals, then assists, then fewer minutes
     { key: 'goals', label: 'Goals', short: 'goals', one: 'goal', group: 'attack', weight: 10, matchSummary: true,

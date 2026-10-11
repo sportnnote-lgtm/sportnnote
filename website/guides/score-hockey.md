@@ -1,6 +1,6 @@
 ---
 title: How to score a hockey match
-description: Run the game clock, log field goals, penalty corners, strokes, shots and green, yellow and red cards, then settle a draw with a shoot-out.
+description: Run the game clock, log goals, penalty corners, strokes, shots and cards by tap or voice, backfill a missed moment and settle a draw with a shoot-out.
 category: Live scoring
 audience: Scorers, Organisers
 sports: hockey
@@ -22,22 +22,20 @@ Score a hockey match on one phone. You run the game clock and tap what happens; 
 4. When the hooter goes, tap **⏭ End Q1**, then **▶ Start Q2** after the break. **🏁 Full time**, at the bottom of the controls, stays off until the last period has started, so a slip at half-time can't end the match.
 5. Clock wrong, or you joined late? Tap **⏱ Set clock**, type the time left (for example `8:30`) and tap **Set**.
 
-> **Tip:** Minutes follow FIH match reports: a goal at 14:20 of the first quarter is 15', and the second quarter runs 16' to 30'.
-
 ## Step by step: log the play
 1. **🏑 Goal**: choose **Field goal**, **From PC** or **Stroke**, then tap the scorer, then the assist or **No assist**. If you don't know who scored, tap **Team goal (no scorer)**.
-2. **🚩 PC**: a penalty corner. A panel asks how it ended: **🏑 Goal**, **🧤 Saved** or **↗ Wide** (then the shooter), **🛡 Defended**, **⚪ Stroke awarded** (then the stroke) or **🔁 Re-awarded** (a new corner). **Later** closes it. The outcome shows on the timeline and PC conversion is worked out for you.
+2. **🚩 PC**: a penalty corner. A panel asks how it ended: **🏑 Goal**, **🧤 Saved** or **↗ Wide** (then the shooter), **🛡 Defended**, **⚪ Stroke awarded** (then the stroke) or **🔁 Re-awarded** (a new corner). **Later** closes it.
 3. **🎯 Shot**: tap **On goal — saved** or **Off target / blocked**, then the shooter (or **Skip player**). A save goes to the other team's keeper.
 4. **⚪ Stroke**: tap **Scored** (then the scorer), **Saved** or **Missed**.
 5. **🔁 Sub**: tap who comes off, then who comes on. Subs are rolling. If the keeper comes off, the player coming on takes over in goal.
-6. **Circle entries**: tap the team's button each time it carries the ball into the shooting circle; **−1** takes one back. Matches that never logged one show circle entries as "not tracked".
+6. **Circle entries**: tap the team's button each time it carries the ball into the shooting circle; **−1** takes one back.
+
+> **Tip:** Hands busy? Tap **🎤 Voice scoring** and say "goal Rao", "penalty corner home" or "green card Khan". See [Score by voice](/guides/score-by-voice/).
 
 ## Cards and suspensions
 1. Tap **🟨 Card**, then **🟩 Green 2′**, **🟨 Yellow 5′**, **🟨 Yellow 10′** or **🟥 Red**, then the player.
 2. Green and yellow cards are timed: "⏱️ Suspended: Name (1:24 left)" shows under the clock. The countdown pauses when the clock stops, and the player is back by himself.
 3. A red card is permanent. The team plays a player short for the rest of the match.
-
-A suspended or sent-off player is left out of the player lists until he is allowed back.
 
 ## Shoot-out
 Level at full time with a shoot-out decider? You see "Level — the match goes to a shoot-out". Group games never go to one; knockouts always do. In leg 2 of a [two-legged tie](/guides/knockouts-and-who-goes-through/), level means level on aggregate.
@@ -48,8 +46,8 @@ Level at full time with a shoot-out decider? You see "Level — the match goes t
 The result keeps the level score and adds the shoot-out, for example "2–2" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
 
 ## Fix a mistake
-1. Tap **✎ Correct the timeline** under the buttons.
-2. Tap **✕** to remove a moment (it asks first), or **✎ Edit** to enter it again. It keeps its time; Cancel leaves it as it was.
+1. Tap **✎ Correct the timeline** under the buttons. Tap **✕** to remove a moment (it asks first), or **✎ Edit** to enter it again at its own time.
+2. Missed a goal or card? Under **⏪ Backfill a missed moment**, type the match minute and tap **Backfill**. A bar at the top shows where your taps are stamped. Log it, then tap **▶ Back to live**.
 3. After the match, use [Correct a finished match](/guides/correct-a-finished-match/).
 
 ## What you get

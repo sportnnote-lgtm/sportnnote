@@ -291,7 +291,7 @@ const carrySnap = (r: RankedEntry, phase: number, race: number | undefined, heat
  * lettered finals, lanes by ranking — place in the heat, then time), and who
  * waits for a later round (carried on the next round's format).
  */
-export function advanceCrews(byHeat: Map<number, RankedEntry[]>, f: Pick<PhaseFormat, 'phaseNo' | 'progression' | 'carry' | 'phase'>, next: { heats: number; races?: string[] }, lanes: number): { seeded: CrewSeeded[]; carry: CarriedCrew[]; tieAtLine: string[] } {
+export function advanceCrews(byHeat: Map<number, RankedEntry[]>, f: Pick<PhaseFormat, 'phaseNo' | 'progression' | 'carry' | 'phase' | 'rules'>, next: { heats: number; races?: string[] }, lanes: number): { seeded: CrewSeeded[]; carry: CarriedCrew[]; tieAtLine: string[] } {
   const target = f.phaseNo + 1;
   const routing = routeCrews(byHeat, f.progression ?? {});
   const heatName = (h: number) => `${f.phase === 'repechage' ? 'Repechage' : f.phase === 'semi' ? 'Semi-final' : 'Heat'} ${h}`;
@@ -311,7 +311,8 @@ export function advanceCrews(byHeat: Map<number, RankedEntry[]>, f: Pick<PhaseFo
     }
   }
   arrivals.sort((a, b) => a.place - b.place || (a.mark ?? Infinity) - (b.mark ?? Infinity) || a.heat - b.heat);
-  const order = crewLaneOrder(lanes);
+  // SD-141: 'sequential' = the best-ranked crew in lane 1, then 2, 3 … (else World Rowing / ICF centre-out)
+  const order = f.rules?.crewLanes === 'sequential' ? Array.from({ length: lanes }, (_, i) => i + 1) : crewLaneOrder(lanes);
   const laneAt = (i: number) => order[i] ?? (order[order.length - 1] + (i - order.length + 1));
   const seeded: CrewSeeded[] = [];
   if (next.races && next.races.length > 1) {

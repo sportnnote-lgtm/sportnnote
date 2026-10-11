@@ -11,6 +11,7 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, LoadingState, textStyles } from '../components/ui';
 import { DateField, DateTimeField } from '../components/DateTimeField';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
+import { WalkoverSetupCard } from '../components/DisciplineSettings';
 import { SportSettingsButtons, coarseStructureFrom, migrateFormatsForSettings } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
@@ -222,6 +223,9 @@ export default function EditTournamentScreen() {
         {sports.length > 1 && <MedalScoringEditor sports={sports} value={scoring} onChange={setScoring} />}
 
         <SportBasics sports={sports} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
+
+        {/* SD-140: a sport added now asks for its walkover score (the rest live in each sport's settings) */}
+        <WalkoverSetupCard sports={sports.filter((sp) => !tournament.sports.includes(sp))} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
 
         <SportSettingsButtons sports={sports} />
 

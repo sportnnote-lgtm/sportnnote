@@ -12,6 +12,9 @@ import type { Match, Player, StatLine } from '../core/types';
 import { isNoResultMatch, swissRoundOf, type StandingsConfig, type TeamStanding } from '../data/standings';
 import { buildCrosstable, entrantPlayers, playerLine } from '../data/chessCrosstable';
 import { chessRatingsOf, ratingListFor, ratingOn, UNOFFICIAL_NOTE } from '../data/chessRatings';
+import { prizeSetupOf, prizeSetupPatch, prizeCutoff, type PrizeSetup, type PrizeContext } from '../data/prizeCategories';
+import { patchTournamentFormat } from '../data/repos';
+import { PrizeCategoryBar, PrizeList, useCategoryRows } from './PrizeCategories';
 
 const ROW_H = 34;
 const NAME_W = 132;
@@ -19,7 +22,7 @@ const CELL_W = 46;
 const NUM_W = 50;
 
 export function ChessCrosstable({
-  rows, cfg, matches, teams, players, lines, timeControl, swissRounds, onPlayer,
+  rows, cfg, matches, teams, players, lines, timeControl, swissRounds, onPlayer, tournamentId, format, canEdit = false,
 }: {
   rows: TeamStanding[];
   cfg?: StandingsConfig;
@@ -33,6 +36,10 @@ export function ChessCrosstable({
   timeControl?: unknown;
   swissRounds?: number;
   onPlayer?: (playerId: string | undefined, teamId: string) => void;
+  /** SD-134 — category prizes (the chess format's `prizeCats`): organisers edit them */
+  tournamentId?: string;
+  format?: Record<string, unknown>;
+  canEdit?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const list = ratingListFor(timeControl);
@@ -49,6 +56,27 @@ export function ChessCrosstable({
     }
     return { table: buildCrosstable({ rows, cfg, ratingOf, pending, rounds: swissRounds }), who };
   }, [rows, cfg, teams, matches, lines, players, list, swissRounds]);
+  // SD-134 — category prizes (U-age / girls / unrated / rating bands)
+  const [prizeDraft, setPrizeDraft] = useState<PrizeSetup | null | undefined>(undefined);
+  const [prizeCat, setPrizeCat] = useState<string | null>(null);
+  const prize = prizeDraft !== undefined ? prizeDraft : prizeSetupOf(format);
+  const prizeCtx = useMemo<PrizeContext>(() => {
+    const who = entrantPlayers(teams, matches, lines);
+    const byId = new Map(players.map((p) => [p.id, p]));
+    const start = matches.map((m) => m.startsAt).filter(Boolean).sort()[0];
+    return {
+      cutoff: prizeCutoff(prize, 'chess', start),
+      personOf: (id) => { const pid = who.get(id); const p = pid ? byId.get(pid) : undefined; return p ? { id: p.id, gender: p.gender, dob: p.dob, age: p.age } : undefined; },
+      ratingOf: (id) => { const pid = who.get(id); return pid ? ratingOn(chessRatingsOf(byId.get(pid)), list) : undefined; },
+    };
+  }, [teams, matches, lines, players, list, prize]);
+  const ranked = useMemo(() => (x?.table.rows ?? []).map((r) => ({ id: r.teamId, position: r.rank, pts: r.pointsText })), [x]);
+  const catRows = useCategoryRows(ranked, prize, prizeCat, prizeCtx);
+  const savePrize = async (next: PrizeSetup | null) => {
+    if (!tournamentId) return;
+    await patchTournamentFormat(tournamentId, 'chess', prizeSetupPatch(next));
+    setPrizeDraft(next);
+  };
   if (!x || !x.table.rows.some((r) => r.cells.some((c) => c.done && c.kind !== 'self'))) return null;
   const { table, who } = x;
   const heads = [
@@ -112,6 +140,23 @@ export function ChessCrosstable({
             <Text style={st.link} accessibilityRole="button" onPress={() => onPlayer(who.get(sel.teamId), sel.teamId)}>Open profile ›</Text>
           )}
         </Card>
+      )}
+      {/* SD-134 — category prizes inside the field */}
+      {(tournamentId && (canEdit || prize?.cats.length)) ? (
+        <PrizeCategoryBar sport="chess" setup={prize} canEdit={canEdit && !!tournamentId} onSave={savePrize} active={prizeCat} onPick={setPrizeCat}
+          ids={ranked.map((r) => r.id)} nameOf={(id) => table.rows.find((r) => r.teamId === id)?.name ?? 'Player'} ctx={prizeCtx} />
+      ) : null}
+      {catRows && (
+        <Card style={{ gap: theme.spacing(1) }}>
+          {catRows.length === 0 ? <Text style={textStyles.muted}>No one in this category yet.</Text> : catRows.map((c) => (
+            <Text key={c.row.id} style={textStyles.body}>
+              <Text style={{ fontWeight: '800' }}>{c.label}.</Text> {table.rows.find((r) => r.teamId === c.row.id)?.name} · {c.row.pts} <Text style={st.note}>(overall {c.row.position})</Text>
+            </Text>
+          ))}
+        </Card>
+      )}
+      {prize && prize.cats.length > 0 && (
+        <PrizeList rows={ranked} setup={prize} ctx={prizeCtx} nameOf={(id) => table.rows.find((r) => r.teamId === id)?.name ?? 'Player'} valueOf={(r) => `${r.pts} pts`} />
       )}
       <Text style={st.note}>
         {table.swiss ? '4w1 = v No. 4 with White, won · b = Black · + / − forfeit won / lost · bye · – absent · … to play. ' : 'Row v column: 1 win · ½ draw · 0 loss · + / − forfeit. '}

@@ -79,8 +79,9 @@ const setTypes = (sport: string): MatchRecordType[] => {
   ];
 };
 
-/** Every sport's record types, in display order. Sports not listed (golf and
- *  the results-engine sports — they have their own records; carrom) have none. */
+/** Every sport's record types, in display order. Sports not listed (the
+ *  results-engine sports — they have their own records) have none. Golf here
+ *  is match play only. */
 export const MATCH_RECORD_TYPES: Partial<Record<SportId, MatchRecordType[]>> = {
   cricket: [
     { key: 'teamHigh', label: 'Highest team totals', who: 'team' },
@@ -110,6 +111,18 @@ export const MATCH_RECORD_TYPES: Partial<Record<SportId, MatchRecordType[]>> = {
   ],
   chess: [
     { key: 'fastestWin', label: 'Fastest wins (moves)', dir: 'low', who: 'team' },
+  ],
+  // SD-137a — carrom: the biggest game win, the longest run of boards, slams
+  carrom: [
+    { key: 'biggestWin', label: 'Biggest game wins', who: 'team' },
+    { key: 'boardRun', label: 'Most boards in a row', who: 'team' },
+    { key: 'slam', label: 'Slams (whole board in one turn)', who: 'team' },
+  ],
+  // SD-137a — golf MATCH PLAY (stroke play keeps its own records)
+  golf: [
+    { key: 'biggestMargin', label: 'Biggest match-play wins', who: 'team' },
+    { key: 'holesWon', label: 'Most holes won in a match', who: 'team' },
+    { key: 'birdies', label: 'Most birdies or better in a match', who: 'team' },
   ],
   ...Object.fromEntries(SET_SPORTS.map((s) => [s, setTypes(s)])),
 };

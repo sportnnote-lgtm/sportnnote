@@ -16,6 +16,8 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
   sport: 'volleyball',
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (indoor / beach / 9-a-side) */
+  leaderSplits: ['format'],
   stats: [
     { ...POINTS, group: 'attack', weight: 1 },
     { ...ACES, group: 'serve', weight: 2 },

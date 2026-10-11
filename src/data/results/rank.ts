@@ -14,6 +14,7 @@ import { isBracketRows, rankArcheryBracket } from './archeryBracket.ts';
 import { archRoundOf, endsOf } from './archeryDefs.ts';
 import { isCyclingRanked, rankCycling } from './cyclingRank.ts';
 import { rankRoad } from './road.ts';
+import { ruleOf } from './competitionRules.ts';
 
 export interface Performance {
   status: ResultStatus;
@@ -93,7 +94,7 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
           return { status, best: t, bestLegal: null, legal: false, keys: [t ?? -Infinity], flags };
         }
         const best = r.mark ?? (r.series?.length ? fromTenths(sumTenths(r.series)) : null);
-        return { status, best, bestLegal: best, legal: best != null, keys: best == null ? [-Infinity] : [...qualKeys(r, shoot), decider], flags };
+        return { status, best, bestLegal: best, legal: best != null, keys: best == null ? [-Infinity] : [...qualKeys(r, shoot, ruleOf(def.rules, 'shootTie') === 'inner'), decider], flags };
       }
       const arch = def.sport === 'archery' ? archRoundOf(def.key) : undefined;
       if (arch) {
@@ -102,7 +103,9 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
         // a ranking round counts for records / PBs only when every end was shot
         const best = r.mark ?? null;
         const full = !r.ends || r.ends.filter((x) => x?.length).length >= endsOf(arch);
-        return { status, best, bestLegal: full ? best : null, legal: best != null && full, keys: [best ?? -Infinity, r.tens ?? 0, r.xs ?? 0, decider], flags };
+        // SD-141: the meet may count X before 10s ('archTie' = 'xs'); World Archery: 10s (X included), then X
+        const counts = ruleOf(def.rules, 'archTie') === 'xs' ? [r.xs ?? 0, r.tens ?? 0] : [r.tens ?? 0, r.xs ?? 0];
+        return { status, best, bestLegal: full ? best : null, legal: best != null && full, keys: [best ?? -Infinity, ...counts, decider], flags };
       }
       const best = r.mark ?? null;
       return { status, best, bestLegal: best, legal: best != null, keys: [best ?? -Infinity, r.tens, r.xs, decider], flags };
@@ -188,7 +191,9 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
     // SD-91: a group where every row carries a decider has settled it (a held
     // jump-off, or athletes who agreed to share — all decider 1).
     const settled = ranked.filter((_y, j) => places[j].position === position).every((y) => y.entry.result?.decider != null);
-    if (tie && !settled && ((def.tie === 'vertical' && position === 1) || ((def.tie === 'inner-count' || def.tie === 'issf') && position <= 3))) {
+    // SD-141: a shooting meet may let equal medal places share (no shoot-off)
+    const shootOff = def.tie === 'inner-count' || (def.tie === 'issf' && ruleOf(def.rules, 'shootOff') !== 'share');
+    if (tie && !settled && ((def.tie === 'vertical' && position === 1) || (shootOff && position <= 3))) {
       row.needsDecider = true;
       row.flags.push(def.tie === 'vertical' ? 'JO' : 'SO');
     }

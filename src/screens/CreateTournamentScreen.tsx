@@ -12,6 +12,7 @@ import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, text
 import { DateField, DateTimeField } from '../components/DateTimeField';
 import { TouchableOpacity } from 'react-native';
 import { MedalScoringEditor } from '../components/MedalScoringEditor';
+import { WalkoverSetupCard } from '../components/DisciplineSettings';
 import { SportSettingsButtons, coarseStructureFrom } from '../components/SportSettingsButtons';
 import { tournamentDraft } from '../data/tournamentDraft';
 import { defaultsFor } from '../components/FormatEditor';
@@ -265,6 +266,9 @@ export default function CreateTournamentScreen() {
         })}
 
         <SportBasics sports={sports} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
+
+        {/* SD-140: each team sport's walkover score, asked here (prefilled with the federation default) */}
+        <WalkoverSetupCard sports={sports} onChanged={() => setFormats(tournamentDraft.all() as FormatMap)} />
 
         <SportSettingsButtons sports={sports} />
 

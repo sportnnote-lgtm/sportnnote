@@ -37,6 +37,8 @@ A defender line-out also saves a do-or-die raid, because the raiding team scored
 4. If the referee also gave the other team a technical point, set the chip to **Technical point to … : Yes**. It is on by default for a red card.
 5. Tap the record button, for example **✓ Yellow card — Ravi**. For a red card the app asks first; tap **Yes, red card**.
 
+> **Tip:** With **🎤 Voice scoring** you can say "green card Ravi", "yellow card Ravi" or "technical point home". A red card stays on the **🟨 Card** button. See [Score by voice](/guides/score-by-voice/).
+
 ## What each card does
 - Green: a warning only. Two greens for the same player? The panel reminds you the next card is yellow.
 - Yellow: the player is off the mat for 2 minutes of playing time and his team plays a player short. The line under the mat count shows "Suspended: Ravi (Red House) (1:24 left)". The 2 minutes stop when you pause the clock, and he comes back by himself.

@@ -44,6 +44,10 @@ export interface TeamScoring {
   basis: TeamBasis;
   /** team places get the meet's position points / medals too (default on) */
   points?: boolean;
+  /** SD-141: equal totals → 'last' (default): the team whose last scorer
+   *  finished higher; 'next': the team whose first non-scoring runner finished
+   *  higher (NFHS "6th runner" rule) — a team without one loses */
+  tieBreak?: 'last' | 'next';
 }
 
 /** What `PhaseFormat.road` holds for a road / walk / cross-country race. */

@@ -49,6 +49,8 @@ export const chessStats: SportStatSchema<'chess'> = {
   sport: 'chess',
   /** SD-25 — career split chips (line context) */
   splits: ['colour', 'timeControl', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (classical / rapid / blitz) */
+  leaderSplits: ['timeControl'],
   filters: { winHow, wonOtb },
   stats: [
     // SD-27: the rating weights are the game score (win 1, draw ½)

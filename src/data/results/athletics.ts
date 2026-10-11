@@ -12,7 +12,7 @@
  */
 import type { Category, DisciplineDef, PhaseFormat, PhaseKind, Progression, RankedEntry, ResultEntry } from './model.ts';
 import type { RecordMark } from './records.ts';
-import { categoryKey, categoryLabel, disciplineOf, looseLegal } from './model.ts';
+import { categoryKey, categoryLabel, disciplineOf, looseLegal, phaseDiscipline } from './model.ts';
 import { formatMark } from './marks.ts';
 import { rankEntries, betterMark } from './rank.ts';
 import { eventAwards, type Award, type FieldResultInput, type PointsConfig } from './medals.ts';
@@ -313,7 +313,8 @@ export function handConversion(discipline: string): number | undefined {
 }
 
 export function handNote(def: DisciplineDef, mark?: number): string {
-  const c = handConversion(def.key);
+  // SD-141: the organiser may switch the ≈ electronic conversion off (def.rules from the phase)
+  const c = def.rules?.handConvert === 'none' ? undefined : handConversion(def.key);
   const base = 'Hand time: read to the tenth (TR 19.21).';
   if (c == null) return base;
   return `${base} ≈ ${mark != null ? formatMark(Math.round((mark + c) * 100) / 100, def) : `+${c.toFixed(2)} s`} electronic (+${c.toFixed(2)} s, statistics only).`;
@@ -574,8 +575,10 @@ function finalAwards(e: MeetEvent, cfg: PointsSettings, handLegal?: boolean): { 
     return { awards: combinedAwards(combinedStandings(e.phases, { final: true }), cfg), fin: last };
   }
   const fin = e.phases.find((p) => p.format.phase === 'final' && p.status === 'completed');
-  const def = disciplineOf(e.discipline);
-  if (!fin || !def) return null;
+  const base = disciplineOf(e.discipline);
+  if (!fin || !base) return null;
+  // SD-141: ranked under the meet's rules (ties, shoot-offs, GC tie-breaks) as on the event screen
+  const def = phaseDiscipline(base, fin.format);
   const rows = rankEntries(fin.entries, def, { handLegal: handLegal ?? looseLegal(fin.format) });
   let awards = eventAwards(rows, cfg);
   if (def.teamSize && cfg.relayFactor && cfg.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * cfg.relayFactor! * 100) / 100 }));

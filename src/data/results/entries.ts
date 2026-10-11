@@ -24,6 +24,7 @@ import { laneOrder } from './progression.ts';
 import { AGE_GROUPS, ageLimit, eligibleFor, trackEventsFor } from './athletics.ts';
 import { hasAnyResult } from './safety.ts';
 import { fieldEventsFor } from './field.ts';
+import { ruleOf, zeroLanes, type CompRules } from './competitionRules.ts';
 import { swimEventsFor } from './swimming.ts';
 
 /* ------------------------------- late entry ------------------------------- */
@@ -45,11 +46,13 @@ export interface LatePlace { heat: number; lane?: number; order: number; newHeat
 
 /** Lane numbers in the order a late (unseeded) entrant takes them — the
  *  worst seeded lanes first (the outside), as the venue numbers them. */
-export function lateLanePreference(lanes: number, discipline?: string): number[] {
-  const nums = laneNumbers(lanes);
+export function lateLanePreference(lanes: number, discipline?: string, rules?: CompRules | null): number[] {
+  const nums = laneNumbers(lanes, rules);
+  // SD-141: the organiser's choice — the lowest free lane first
+  if (ruleOf(rules, 'lateLanes') === 'inside') return nums;
   const set = new Set(nums);
   // laneOrder numbers 1…n; a 10-lane pool numbers 0…9 (SW 3.1.2)
-  const shift = lanes === 10 ? -1 : 0;
+  const shift = zeroLanes(lanes, rules) ? -1 : 0;
   const pref = laneOrder(lanes, undefined, discipline).map((l) => l + shift).filter((l) => set.has(l));
   return [...pref.reverse(), ...nums.filter((n) => !pref.includes(n))];
 }
@@ -61,7 +64,7 @@ export function lateLanePreference(lanes: number, discipline?: string): number[]
  * flight with the fewest entrants, last in its order. `heat` forces a heat
  * ('new' = a new one).
  */
-export function placeLateEntry(rows: { heat: number; lane?: number; order?: number }[], def: Pick<DisciplineDef, 'lanes' | 'capture' | 'key' | 'tie'>, opts: { heats?: number; heat?: number | 'new' } = {}): LatePlace {
+export function placeLateEntry(rows: { heat: number; lane?: number; order?: number }[], def: Pick<DisciplineDef, 'lanes' | 'capture' | 'key' | 'tie' | 'rules'>, opts: { heats?: number; heat?: number | 'new' } = {}): LatePlace {
   const used = [...new Set(rows.map((r) => r.heat))];
   const heats = Math.max(1, opts.heats ?? 1, ...used);
   const all = Array.from({ length: heats }, (_, i) => i + 1);
@@ -72,9 +75,9 @@ export function placeLateEntry(rows: { heat: number; lane?: number; order?: numb
     const h = opts.heat === 'new' ? heats + 1 : opts.heat ?? [...all].sort((a, b) => count(a) - count(b) || a - b)[0];
     return { heat: h, order: opts.heat === 'new' ? 1 : orderIn(h), newHeat: h > heats };
   }
-  const pref = lateLanePreference(lanes, def.key);
+  const pref = lateLanePreference(lanes, def.key, def.rules);
   const free = (h: number) => pref.filter((l) => !rows.some((r) => r.heat === h && r.lane === l));
-  const fresh = (): LatePlace => ({ heat: heats + 1, lane: laneOrder(lanes, undefined, def.key).map((l) => (lanes === 10 ? l - 1 : l))[0], order: 1, newHeat: true });
+  const fresh = (): LatePlace => ({ heat: heats + 1, lane: laneOrder(lanes, undefined, def.key).map((l) => (zeroLanes(lanes, def.rules) ? l - 1 : l))[0], order: 1, newHeat: true });
   if (opts.heat === 'new') return fresh();
   if (typeof opts.heat === 'number') {
     const f = free(opts.heat);
@@ -86,8 +89,8 @@ export function placeLateEntry(rows: { heat: number; lane?: number; order?: numb
 }
 
 /** Free lanes per heat (for the heat picker). */
-export function freeLanes(rows: { heat: number; lane?: number }[], lanes: number, heat: number): number[] {
-  return laneNumbers(lanes).filter((l) => !rows.some((r) => r.heat === heat && r.lane === l));
+export function freeLanes(rows: { heat: number; lane?: number }[], lanes: number, heat: number, rules?: CompRules | null): number[] {
+  return laneNumbers(lanes, rules).filter((l) => !rows.some((r) => r.heat === heat && r.lane === l));
 }
 
 /* --------------------------------- scratch -------------------------------- */

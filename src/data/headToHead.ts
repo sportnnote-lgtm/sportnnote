@@ -19,6 +19,7 @@ import type { LineResult } from '../core/types';
 import { lineResult } from './appearances.ts';
 import { sideOf } from './lineContext.ts';
 import { resultFor } from './teamStats.ts';
+import { teamScoreOf } from './walkover.ts';
 
 type Side = 'home' | 'away';
 
@@ -71,15 +72,17 @@ export interface HeadToHeadRecord {
 
 const blank = (): HeadToHeadRecord => ({ played: 0, won: 0, drawn: 0, lost: 0, nr: 0, meetings: [] });
 
-function add(rec: HeadToHeadRecord, m: Match, side: Side, result: LineResult, lineOf?: (m: Match, side: Side) => string) {
+function add(rec: HeadToHeadRecord, m: Match, side: Side, result: LineResult, lineOf?: (m: Match, side: Side) => string, team = false) {
   rec.played++;
   if (result === 'W') rec.won++; else if (result === 'L') rec.lost++; else if (result === 'NR') rec.nr++; else rec.drawn++;
   let line = '';
   try { line = lineOf?.(m, side) ?? ''; } catch { line = ''; }
-  const scored = result !== 'NR' && !m.walkover && m.score;
+  // SD-140: a TEAM meeting counts a walkover / forfeit's forfeit score (the
+  // team's); a player's meeting keeps the board (walkover = no score).
+  const sc = result === 'NR' ? undefined : team ? teamScoreOf(m) : !m.walkover && m.score ? m.score : undefined;
   rec.meetings.push({
     matchId: m.id, date: m.startsAt, result, line,
-    ...(scored ? { for: side === 'home' ? m.score!.home : m.score!.away, against: side === 'home' ? m.score!.away : m.score!.home } : {}),
+    ...(sc ? { for: side === 'home' ? sc.home : sc.away, against: side === 'home' ? sc.away : sc.home } : {}),
     ...(m.tournamentId ? { tournamentId: m.tournamentId } : {}),
     ...(m.walkover ? { walkover: true } : {}),
   });
@@ -191,7 +194,7 @@ export function teamHeadToHead(
     if (!ids.includes(a) || !ids.includes(b)) continue;
     const r = resultFor(m, a);
     if (!r) continue;
-    add(rec, m, m.homeTeam.id === a ? 'home' : 'away', r, lineOf);
+    add(rec, m, m.homeTeam.id === a ? 'home' : 'away', r, lineOf, true);
   }
   return sortMeetings(rec);
 }
@@ -219,7 +222,7 @@ export function h2hRecordText(r: Pick<HeadToHeadRecord, 'won' | 'drawn' | 'lost'
 /** A meeting's score as read from the first side: "W 2–1 · 6-4, 3-6, 7-5",
  *  "W w/o", "NR". */
 export function meetingText(m: Meeting): string {
-  if (m.walkover) return `${m.result} w/o`;
+  if (m.walkover) return `${m.result}${m.for != null && m.against != null ? ` ${m.for}–${m.against}` : ''} w/o`;
   const score = m.for != null && m.against != null ? ` ${m.for}–${m.against}` : '';
   return `${m.result}${score}${m.line ? ` · ${m.line}` : ''}`;
 }

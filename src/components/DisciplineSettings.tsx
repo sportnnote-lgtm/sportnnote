@@ -4,7 +4,7 @@
  *  - the walkover / forfeit score the points table counts (federation default,
  *    the organiser's own, or off), with "Recalculate past walkovers" for an
  *    existing tournament (asks first). */
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, FieldLabel, SelectChip, textStyles } from './ui';
@@ -13,6 +13,8 @@ import { notice } from '../core/confirm';
 import { DISCIPLINE_SPECS, readSportRule, sportRuleText } from '../sports/discipline';
 import { WALKOVER_SCORES, WALKOVER_SCORE_SPORTS, walkoverRuleFor, walkoverRuleText } from '../data/walkover';
 import { recalcWalkovers } from '../data/repos';
+import { tournamentDraft } from '../data/tournamentDraft';
+import { getSport } from '../sports/registry';
 import type { SportId } from '../core/types';
 
 type Val = number | string | boolean;
@@ -67,6 +69,47 @@ const CHOICES: Partial<Record<SportId, string[]>> = {
   kabaddi: ['10-0', '5-0'],
 };
 
+/** The score chips: the federation default first, one-tap scores, "No score". */
+function WalkoverChips({ sport, value: cur, onPick }: { sport: SportId; value: unknown; onPick: (v: string) => void }) {
+  const base = WALKOVER_SCORES[sport];
+  const choices = (CHOICES[sport] ?? []).filter((c) => !base || base.sets || c !== `${base.win}-${base.loss}`);
+  return (
+    <View style={st.chips}>
+      {base ? <SelectChip label={base.sets ? `Federation (${base.source})` : `${base.win}-${base.loss} (${base.source})`} active={cur === undefined || cur === ''} onPress={() => onPick('')} /> : null}
+      {choices.map((c) => <SelectChip key={c} label={c} active={cur === c} onPress={() => onPick(c)} />)}
+      <SelectChip label="No score" active={cur === 'off' || (!base && (cur === undefined || cur === ''))} onPress={() => onPick(base ? 'off' : '')} />
+    </View>
+  );
+}
+
+/**
+ * SD-140 (founder, 2026-10-11) — in the tournament form itself (create, and a
+ * sport added on edit): one row per team sport asking for its walkover score,
+ * prefilled with the federation default ("No score" allowed). Writes the
+ * shared tournament draft (`formats[sport].walkoverScore`); the sport's
+ * settings page keeps the full card for later edits.
+ */
+export function WalkoverSetupCard({ sports, onChanged }: { sports: SportId[]; onChanged?: () => void }) {
+  useSyncExternalStore(tournamentDraft.subscribe, tournamentDraft.getVersion);
+  const list = sports.filter((s) => WALKOVER_SCORE_SPORTS.includes(s));
+  if (!list.length) return null;
+  return (
+    <View style={st.card} accessibilityLabel="Walkover scores">
+      <FieldLabel hint="A walkover is a match a team didn’t turn up for.">Walkover scores — confirm for each sport</FieldLabel>
+      {list.map((sport) => {
+        const f = tournamentDraft.get(sport) as Record<string, unknown>;
+        return (
+          <View key={sport} style={{ gap: theme.spacing(1) }}>
+            <Text style={textStyles.body}>{getSport(sport).icon} {getSport(sport).name} · {walkoverRuleText(sport, walkoverRuleFor(sport, f), f)}</Text>
+            <WalkoverChips sport={sport} value={f.walkoverScore} onPick={(v) => { tournamentDraft.setField(sport, 'walkoverScore', v); onChanged?.(); }} />
+          </View>
+        );
+      })}
+      <Text style={textStyles.muted}>The score counts for the team in the table and on team pages — never for any player. Change it later in each sport’s settings.</Text>
+    </View>
+  );
+}
+
 export function WalkoverScoreSettings({ sport, value, onChange, tournamentId, savedFormat }: {
   sport: SportId;
   value: Record<string, unknown>;
@@ -81,7 +124,6 @@ export function WalkoverScoreSettings({ sport, value, onChange, tournamentId, sa
   const base = WALKOVER_SCORES[sport];
   const cur = value.walkoverScore;
   const rule = walkoverRuleFor(sport, value);
-  const choices = (CHOICES[sport] ?? []).filter((c) => !base || base.sets || c !== `${base.win}-${base.loss}`);
   const norm = (v: unknown) => (v === undefined || v === null || v === '' ? '' : String(v));
   const unsaved = norm(savedFormat?.walkoverScore) !== norm(cur);
   const recalc = async () => {
@@ -107,11 +149,7 @@ export function WalkoverScoreSettings({ sport, value, onChange, tournamentId, sa
   return (
     <View style={st.card}>
       <FieldLabel hint={walkoverRuleText(sport, rule, value)}>Walkover / forfeit score</FieldLabel>
-      <View style={st.chips}>
-        {base ? <SelectChip label={base.sets ? `Federation (${base.source})` : `${base.win}-${base.loss} (${base.source})`} active={cur === undefined || cur === ''} onPress={() => onChange('walkoverScore', '')} /> : null}
-        {choices.map((c) => <SelectChip key={c} label={c} active={cur === c} onPress={() => onChange('walkoverScore', c)} />)}
-        <SelectChip label="No score" active={cur === 'off' || (!base && (cur === undefined || cur === ''))} onPress={() => onChange('walkoverScore', base ? 'off' : '')} />
-      </View>
+      <WalkoverChips sport={sport} value={cur} onPick={(v) => onChange('walkoverScore', v)} />
       <Text style={textStyles.muted}>
         {sport === 'volleyball'
           ? 'A walkover counts sets-to-win to 0 and every set at the set target to 0 (FIVB 6.4). A team that concedes during play keeps its sets and points; the other side is given what it needed.'

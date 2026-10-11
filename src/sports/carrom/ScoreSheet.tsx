@@ -53,7 +53,7 @@ export function ScoreSheet({ state, homeName, awayName, homeColor, awayColor }: 
             <View key={r.n} style={[st.row, r.penalty && st.penRow]}
               accessibilityLabel={`Board ${r.n}: ${name(r.winner)} ${r.penalty ? 'penalty' : ''} +${r.pts}, ${r.total.home}-${r.total.away}`}>
               <Text style={[st.cell, st.n]}>{r.n}{r.tieBreak ? '*' : ''}</Text>
-              {toss && <Text style={[st.cell, st.who]} numberOfLines={1}>{r.breaker ? tagOf(name(r.breaker)) : '–'}</Text>}
+              {toss && <Text style={[st.cell, st.who]} numberOfLines={1}>{r.breakerBy?.name ? tagOf(r.breakerBy.name) : r.breaker ? tagOf(name(r.breaker)) : '–'}</Text>}
               <Text style={[st.cell, st.who, { color: color(r.winner), fontWeight: '800' }]} numberOfLines={1}>{tagOf(name(r.winner))}</Text>
               <Text style={[st.cell, st.num]}>{r.penalty ? 'PEN' : r.coins}</Text>
               {anyQueen && <Text style={[st.cell, st.q]}>{queenText(r)}</Text>}

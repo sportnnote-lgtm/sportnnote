@@ -32,7 +32,7 @@
  * totals are always right; only the in-between live line may lag.
  */
 import type { StatTotalsContext, StatTotalsEntry } from '../types';
-import { boardBreakers, creditedPoints, type CarromState } from './engine.ts';
+import { boardBreakers, breakerPlayers, creditedPoints, type CarromState } from './engine.ts';
 
 type Side = 'home' | 'away';
 const SIDES: Side[] = ['home', 'away'];
@@ -116,8 +116,13 @@ export function carromStatTotals(s: CarromState, ctx?: StatTotalsContext): Recor
     for (const k of [...CARROM_BREAK_KEYS, ...CARROM_QUEEN_KEYS]) if (k in rec) stats[k] = rec[k];
     if (resolved) for (const k of CARROM_BOX_KEYS) stats[k] = rec[k];
     const list = ids[side];
+    // SD-134 — doubles with a recorded break order: each partner's OWN breaks
+    const mine = s.breakOrder?.[side] && s.firstBreak ? breakerPlayers(s) : null;
     for (const id of list) {
-      out[id] = { side, stats: { ...stats }, ...(list.length === 2 ? { partnerId: list.find((x) => x !== id) } : {}) };
+      const own: Record<string, number> = mine && s.breakOrder![side]!.some((c) => c.id === id)
+        ? { boardBreaks: mine.filter((c) => c?.id === id).length, boardBreaksWon: s.boards.filter((b, i) => mine[i]?.id === id && b.winner === side).length }
+        : {};
+      out[id] = { side, stats: { ...stats, ...own }, ...(list.length === 2 ? { partnerId: list.find((x) => x !== id) } : {}) };
     }
   }
   return out;

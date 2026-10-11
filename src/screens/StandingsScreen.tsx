@@ -1,7 +1,7 @@
 /** Per-sport standings: a league table (P/W/L/Pts) plus the individual stat
  *  leaders. A sport selector appears for multi-sport meets; a single-sport
  *  tournament just shows that sport. */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -24,6 +24,8 @@ import { structureFromFormat } from '../data/structureConfig';
 import { manualRows, withManualRows, blankManualRow, rankManualRows, type ManualStandingRow } from '../data/manualStandings';
 import { getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff, savePointsAdjustments } from '../data/repos';
 import { notice, confirmAction } from '../core/confirm';
+import { groupViews, groupHeading, type GroupView } from '../data/tournamentHistory';
+import { MarkTag, LiveDot, useLiveRefresh } from '../components/TournamentHistory';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -42,7 +44,12 @@ export default function StandingsScreen() {
   // Clamp the shown sport to one this tournament actually has (a generic open
   // defaults to football, which the meet may not include).
   const activeSport = sports.includes(sport) ? sport : sports[0] ?? sport;
-  const { teams, leaders, matches } = useStandings(activeSport, params?.tournamentId);
+  // SD-138: refetch every 30 s while a match of this sport is live.
+  const [nonce, setNonce] = useState(0);
+  const { teams, leaders, matches } = useStandings(activeSport, params?.tournamentId, nonce);
+  const anyLive = useMemo(() => matches.some((m) => m.sport === activeSport && m.status === 'live'), [matches, activeSport]);
+  const bump = useCallback(() => setNonce((x) => x + 1), []);
+  useLiveRefresh(anyLive, bump);
   // Scope the table to the selected division (age × gender), if any.
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params?.tournamentId);
   const table = useMemo(
@@ -68,6 +75,16 @@ export default function StandingsScreen() {
     () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg, entries.map((e) => e.team)),
     [activeCat, matches, entries, activeSport, cfg],
   );
+  // SD-138: each group (and the Super round) live → final, with who went through.
+  const views = useMemo(() => {
+    const struct = structureFromFormat(tournament?.formats?.[activeSport]);
+    const scoped = activeCat ? matchesInDivision(matches, entries, activeCat) : matches;
+    const vs = groupViews(scoped, activeSport, cfg, struct?.shape === 'groups' ? { advanceTopN: struct.advanceTopN, advanceBest: struct.advanceBest } : {});
+    return new Map(vs.map((v) => [v.key, v]));
+  }, [activeCat, matches, entries, activeSport, cfg, tournament]);
+  const openEntrant = (id: string) => (tournament?.id
+    ? nav.navigate('TeamJourney', { tournamentId: tournament.id, teamId: id, sport: activeSport })
+    : nav.navigate('Team', { teamId: id }));
   const lead = leaderStat(activeSport);
   const [showTeams, setShowTeams] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);
@@ -206,13 +223,17 @@ export default function StandingsScreen() {
             <SectionHeader title={`${getSport(activeSport).icon} Team standings`} count={0} />
             <Card><EmptyState icon="🏁" title={`No completed ${getSport(activeSport).name.toLowerCase()} matches yet`} hint="The table fills in as results come in." compact /></Card>
           </>
-        ) : phases.map((ph) => (
-          <PhaseTable key={ph.key} title={phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} ${participant === 'team' ? 'Team' : participant === 'pairs' ? 'Pair' : 'Player'} standings` : ph.title}
-            sport={activeSport} cfg={cfg} participant={participant} phaseKey={ph.key} rows={ph.rows} adjustments={cfg.adjustments ?? []} canManage={canManage}
-            expanded={showTeams} onToggle={() => setShowTeams((v) => !v)}
-            onTeam={(id) => nav.navigate('Team', { teamId: id })}
-            onSave={(list, detail) => saveAdjustments(list, detail)} />
-        ))}
+        ) : phases.map((ph) => {
+          const view = views.get(ph.key);
+          return (
+            <PhaseTable key={ph.key} title={view ? groupHeading(view) : phases.length === 1 && ph.key === 'league' ? `${getSport(activeSport).icon} ${participant === 'team' ? 'Team' : participant === 'pairs' ? 'Pair' : 'Player'} standings` : ph.title}
+              sport={activeSport} cfg={cfg} participant={participant} phaseKey={ph.key} rows={view ? view.rows : ph.rows} view={view} adjustments={cfg.adjustments ?? []} canManage={canManage}
+              expanded={showTeams} onToggle={() => setShowTeams((v) => !v)}
+              onTeam={openEntrant}
+              onSave={(list, detail) => saveAdjustments(list, detail)} />
+          );
+        })}
+        {anyLive && <Text style={textStyles.muted}>● Live — tables update every 30 seconds while a match is in play.</Text>}
 
         <SectionHeader
           title={`Top performers · ${lead.label}`}
@@ -259,7 +280,9 @@ export default function StandingsScreen() {
  *  header says "Player" / "Pair" for individual events, and when the numbers
  *  don't fit (a phone at 375 px) the name column stays put while the numbers
  *  scroll sideways — the page itself never overflows. */
-function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave, sport, cfg, participant }: {
+function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, onToggle, onTeam, onSave, sport, cfg, participant, view }: {
+  /** SD-138: a group / Super round — live rows, provisional or final, Q / E marks */
+  view?: GroupView;
   sport: SportId;
   cfg: StandingsConfig;
   participant: TableParticipant;
@@ -297,7 +320,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
     return tier ? { backgroundColor: tier + '14', borderRadius: split ? 0 : theme.radius.sm } : i > 3 ? st.rowDivider : null;
   };
   const rowLabel = (t: TeamStanding, i: number) =>
-    `${i + 1}. ${t.name}, ${columns.map((c) => `${c.title} ${c.value(t, rows)}`).join(', ')}${t.adjust ? `, adjusted ${signed(t.adjust)}` : ''}`;
+    `${i + 1}. ${t.name}${vrow(t.teamId)?.live ? ', playing now' : ''}${vrow(t.teamId)?.mark ? `, ${vrow(t.teamId)!.mark}` : ''}, ${columns.map((c) => `${c.title} ${c.value(t, rows)}`).join(', ')}${t.adjust ? `, adjusted ${signed(t.adjust)}` : ''}`;
   const cells = (t: TeamStanding) => columns.map((c) => (
     <Text key={c.key} style={[st.num, { width: widthOf(c) }, c.emphasis && st.pts]} numberOfLines={1}>
       {c.value(t, rows)}{c.emphasis ? `${t.adjust ? '*' : ''}${t.lots ? '‡' : ''}` : ''}
@@ -342,12 +365,18 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
       </View>
     );
   };
-  const nameCell = (t: TeamStanding, i: number, style?: object) => (
-    <View style={[st.teamCol, st.teamCell, style]}>
-      <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
-      <Text style={[textStyles.body, { flexShrink: 1 }, i === 0 && { fontWeight: '700' }]} numberOfLines={1}>{t.name}</Text>
-    </View>
-  );
+  const vrow = (id: string) => view?.rows.find((r) => r.teamId === id);
+  const nameCell = (t: TeamStanding, i: number, style?: object) => {
+    const g = vrow(t.teamId);
+    return (
+      <View style={[st.teamCol, st.teamCell, style]}>
+        <View style={[st.dot, { backgroundColor: t.colorHex ?? theme.colors.surfaceAlt }]} />
+        <Text style={[textStyles.body, { flexShrink: 1 }, i === 0 && { fontWeight: '700' }, g?.mark === 'eliminated' && { color: theme.colors.textMuted }]} numberOfLines={1}>{t.name}</Text>
+        {g?.live ? <LiveDot /> : null}
+        {g?.mark ? <MarkTag mark={g.mark} via={g.via} /> : null}
+      </View>
+    );
+  };
   const openRow = split ? shown.find((t) => t.teamId === openTeam) : undefined;
   return (
     <>
@@ -418,6 +447,20 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
             * {nameOf(a.teamId)} {signed(a.points)} · {a.reason}{a.byName ? ` · by ${a.byName}` : ''}, {new Date(a.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
           </Text>
         ))}
+        {/* SD-138: what's in play now, and whether the order can still change. */}
+        {view && view.live.length > 0 && (
+          <Text style={st.liveLine}>
+            ● Live: {view.live.map((m) => `${m.homeTeam.name} ${m.score ? `${m.score.home}–${m.score.away}` : 'v'} ${m.awayTeam.name}`).join(' · ')}
+          </Text>
+        )}
+        {view && view.status !== 'final' && view.played > 0 && (
+          <Text style={textStyles.muted}>Provisional — positions can change until every group match is played.</Text>
+        )}
+        {view && view.rows.some((r) => r.mark) && (
+          <Text style={st.legend}>
+            Q through{view.rows.some((r) => r.via === 'best') ? ' · Q* through as a best-placed team' : ''} · E out{view.marksFrom === 'rule' ? ' (by the tournament’s rule — the organiser makes the draw)' : ''}
+          </Text>
+        )}
         {/* SD-17: teams level on every tie-break are ordered by drawing lots — said
             out loud instead of a silent name order. */}
         {rows.some((t) => t.lots) && (
@@ -474,6 +517,7 @@ const st = StyleSheet.create({
   numDense: { width: 26 },
   pts: { fontWeight: '900', color: theme.colors.primary },
   legend: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
+  liveLine: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   splitHead: { height: 30 },
   leaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   leaderVal: { color: theme.colors.primary, fontSize: theme.font.h3, fontWeight: '900' },

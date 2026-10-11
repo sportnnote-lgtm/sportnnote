@@ -21,6 +21,12 @@
  *  the same everywhere and is unit-testable under `node --test`. */
 import type { Match, SportId, SportFormat } from '../core/types';
 import { chessTeamKoWinner, koBreakOf } from '../sports/chess/teamKo.ts';
+import { teamScoreOf } from './walkover.ts';
+
+/** SD-140 — a leg's score for the aggregate: its walkover / forfeit score
+ *  (`result.forfeit`) when it has one, else the board (older legs unchanged). */
+const legScore = (m: Match): { home: number; away: number } | undefined =>
+  m.result?.forfeit ? teamScoreOf(m) : m.score ?? undefined;
 
 export type SeriesFormat = 'best_of' | 'aggregate' | 'rubbers';
 
@@ -74,9 +80,11 @@ export function aggregatePriorFor(leg2: Match, legs: Match[]): { home: number; a
   const meta = readSeriesMeta(leg2);
   if (!meta || meta.format !== 'aggregate' || meta.leg !== 2) return null;
   const leg1 = legs.find((m) => m.id !== leg2.id && readSeriesMeta(m)?.id === meta.id && readSeriesMeta(m)?.leg === 1);
-  if (!leg1 || leg1.status !== 'completed' || !leg1.score) return null;
+  // SD-140: a walkover / forfeit leg counts its forfeit score (result.forfeit)
+  const sc = leg1 ? legScore(leg1) : undefined;
+  if (!leg1 || leg1.status !== 'completed' || !sc) return null;
   const forTeam = (teamId: string) =>
-    leg1.homeTeam?.id === teamId ? leg1.score!.home : leg1.awayTeam?.id === teamId ? leg1.score!.away : 0;
+    leg1.homeTeam?.id === teamId ? sc.home : leg1.awayTeam?.id === teamId ? sc.away : 0;
   return { home: forTeam(leg2.homeTeam.id), away: forTeam(leg2.awayTeam.id) };
 }
 
@@ -222,9 +230,12 @@ export function resolveSeries(s: Series): SeriesStanding {
   for (const m of s.legs) {
     const aIsHome = m.homeTeam?.id === s.teamAId;
     if (m.status === 'live') anyLive = true;
-    if (m.score) {
-      const aScore = aIsHome ? m.score.home : m.score.away;
-      const bScore = aIsHome ? m.score.away : m.score.home;
+    // SD-140: a walkover / forfeit leg adds its forfeit score (result.forfeit),
+    // not the board — the aggregate the table would count.
+    const sc = legScore(m);
+    if (sc) {
+      const aScore = aIsHome ? sc.home : sc.away;
+      const bScore = aIsHome ? sc.away : sc.home;
       aggA += aScore;
       aggB += bScore;
     }
@@ -333,8 +344,9 @@ function awayGoalsFor(s: Series, teamId?: string): number {
   if (!teamId) return 0;
   let goals = 0;
   for (const m of s.legs) {
-    if (!m.score) continue;
-    if (m.awayTeam?.id === teamId) goals += m.score.away;
+    const sc = legScore(m);
+    if (!sc) continue;
+    if (m.awayTeam?.id === teamId) goals += sc.away;
   }
   return goals;
 }

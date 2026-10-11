@@ -30,6 +30,8 @@ const typeStats: StatDef[] = TYPES.flatMap(([k, label, short, abbr]) => [
 export const handballStats: SportStatSchema<'handball'> = {
   sport: 'handball',
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (2 × 30 / 2 × 25 / 2 × 20) */
+  leaderSplits: ['format'],
   stats: [
     // Top scorer: goals, then fewer attempts (IHF statistics rank by goals;
     // the shooting tie-break is a house choice), then assists

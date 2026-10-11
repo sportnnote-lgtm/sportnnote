@@ -560,8 +560,38 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
     const startStat = (kind: StatKind | 'card') => setFlow({ mode: 'stat', kind, step: 'team' });
     switch (intent.kind) {
       case 'kickoff': if (!state.startedAt) { kickoffAt(Date.now()); say('Kicked off ▶'); } else say('Already underway.'); return;
-      case 'endHalf': if (state.half === 1 || state.half === 3) { const ended = HALF_NAME[state.half]; dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } }); say(`Ended the ${ended}.`); } else say('Say "full time" to end the match.'); return;
-      case 'fullTime': endMatch(); say('Full time — match ended.'); return;
+      // SD-137a: spoken "end half" / "full time" ask in the ConfirmSheet, exactly
+      // like the buttons (they used to apply straight away).
+      case 'endHalf': {
+        if (state.half !== 1 && state.half !== 3) { say('Say "full time" to end the match.'); return; }
+        const half = state.half;
+        const ended = HALF_NAME[half];
+        say(`End the ${ended}? Confirm on screen.`);
+        void confirmMatchAction('endPeriod', { period: half === 1 ? '1st half' : 'ET 1st half', score: `${state.home}-${state.away}` }).then((ok) => {
+          if (!ok) { say('Kept playing.'); return; }
+          dispatch({ type: 'NEXT_HALF', payload: { at: Date.now() } }); say(`Ended the ${ended}.`);
+        });
+        return;
+      }
+      case 'fullTime': {
+        const score = `${state.home}-${state.away}`;
+        say('Full time? Confirm on screen.');
+        // the button's own rule: a level knockout goes to its decision; full
+        // time before the 2nd half says so in the sheet
+        if ((state.half === 2 || state.half === 4) && needsDecision(state)) {
+          void confirmMatchAction('endPeriod', { period: state.half === 2 ? '2nd half' : 'extra time', score, detail: `Level at ${score} — it goes to the knockout decision. Undo can bring it back.` }).then((ok) => {
+            if (!ok) { say('Kept playing.'); return; }
+            stampXi(); dispatch({ type: 'END', payload: { at: Date.now() } }); say('Full time — on to the knockout decision.');
+          });
+          return;
+        }
+        const early = state.half === 1 || state.half === 3;
+        void confirmMatchAction('fullTime', { score, ...(early ? { detail: `It’s still the ${HALF_NAME[state.half]}. Final score ${score} will be saved and the match closes.` } : {}) }).then((ok) => {
+          if (!ok) { say('Kept playing.'); return; }
+          endMatch(); say('Full time — match ended.');
+        });
+        return;
+      }
       case 'goal': { const side = teamIn ?? state.possession.side ?? 'home'; setFlow({ mode: 'goal', side, step: 'scorer' }); say(`Goal for ${teamName(side)} — who scored?`); return; }
       case 'ownGoal': { const side = teamIn ?? 'home'; setFlow({ mode: 'goal', side, step: 'og' }); say(`Own goal for ${teamName(side)} — which opponent?`); return; }
       case 'card': {

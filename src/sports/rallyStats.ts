@@ -248,6 +248,8 @@ export function rallyStats<S extends SportId>(sport: S, icon: string, opts: { se
     sport,
     /** SD-25 — career split chips (line context) */
     splits: ['discipline', 'format', 'tournament', 'season', 'opponent'],
+    /** SD-137a — leaderboard + awards chips: singles / doubles, best-of */
+    leaderSplits: ['discipline', 'format'],
     stats: [
       { ...POINTS, group: 'points', weight: 1 },
       ...racketRecordStats(!!opts.sets, true), ...racketServeStats(!!opts.sets), ...racketCareerStats(!!opts.sets),

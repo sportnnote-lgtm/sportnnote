@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
@@ -23,6 +24,7 @@ import {
   SHOOT_EVENTS, SHOOT_AGES, categoryLabel, eligibleFor, defaultShots, defaultFinalists, seriesCount, finalSchedule,
   type Category, type ShootAge, type PlannedPhase,
 } from '../data/results';
+import { sportRule } from '../data/results/competitionRules';
 import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
@@ -93,7 +95,10 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
 
   const [mode, setMode] = useState<'series' | 'shot'>('series');
   const [finalists, setFinalists] = useState<number | null>(null);
-  const fin = ev.final && !team ? (finalists ?? defaultFinalists(ev, entrants)) : 0;
+  // SD-141: the meet's final size (Competition rules) when it fits, else by entries
+  const ruleFin = sportRule(tournament?.formats?.shooting as Record<string, unknown> | undefined, 'shootFinal');
+  const ruleDefault = ruleFin === 'auto' ? defaultFinalists(ev, entrants) : Number(ruleFin) === 0 ? 0 : Number(ruleFin) < entrants ? Number(ruleFin) : defaultFinalists(ev, entrants);
+  const fin = ev.final && !team ? (finalists ?? ruleDefault) : 0;
   const finalOk = fin >= 3 && fin < entrants;
 
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +137,8 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="🎯 New shooting event" subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={'shooting'} />
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Event</Text>

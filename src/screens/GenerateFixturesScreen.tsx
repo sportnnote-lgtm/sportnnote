@@ -23,6 +23,9 @@ import { matchFormatFor } from '../data/matchFormat';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { swissRound1, swissPairRound, suggestedSwissRounds } from '../data/swiss';
 import { swissField } from '../data/swissField';
+import { swissOpsOf, swissOpsPatch, unavailableIn, roundStatusText, swissRoundComplete, type SwissOps } from '../data/swissOps';
+import { SwissFieldPanel } from '../components/SwissFieldPanel';
+import { BOARD_KEY } from '../sports/chess/roundSheet';
 import { chessRatingsOf, ratingListFor, ratingOn, ratingSeedOrder } from '../data/chessRatings';
 import { entrantPlayers } from '../data/chessCrosstable';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, seedFromGroups, seededRound, advancementBasis, crossoverFits, type GroupTable } from '../data/groups';
@@ -255,7 +258,8 @@ export default function GenerateFixturesScreen() {
   );
   const swissRoundNo = (stage?: string) => parseInt(String(stage).replace('swiss', ''), 10) || 0;
   const swissRoundsPlayed = swissMatches.length ? Math.max(...swissMatches.map((m) => swissRoundNo(m.stage))) : 0;
-  const swissAllDone = swissMatches.length > 0 && swissMatches.every((m) => m.status === 'completed');
+  // SD-134: a cancelled game (or a team tie's set-aside rubber) no longer blocks the next round
+  const swissAllDone = swissRoundComplete(swissMatches);
   const swissEntrants = useMemo(() => {
     const s = new Set<string>();
     for (const m of swissMatches) { s.add(m.homeTeam.id); s.add(m.awayTeam.id); (m.byes ?? []).forEach((b) => s.add(b)); }
@@ -282,11 +286,38 @@ export default function GenerateFixturesScreen() {
     () => (bySeedRating ? ratingSeedOrder(selected, ratingOfTeam, (id) => teamName[id] ?? id) : selected),
     [bySeedRating, selected, ratingOfTeam, teamName],
   );
-  const swissPlayers = useMemo(() => swissField(swissMatches, sport, stCfg, seedOrder), [swissMatches, sport, stCfg, seedOrder]);
+  // SD-134 — withdrawals / absences / requested byes / late entries (`swissOps`
+  // on the sport format); a saved change shows at once (the refetch catches up).
+  const [opsDraft, setOpsDraft] = useState<SwissOps | null>(null);
+  const [opsBusy, setOpsBusy] = useState(false);
+  const swissOps = useMemo(() => opsDraft ?? swissOpsOf(sportFormat), [opsDraft, sportFormat]);
+  const swissCfg = useMemo(
+    () => (opsDraft ? standingsConfigFromFormat(sport, { ...(sportFormat ?? {}), ...swissOpsPatch(opsDraft) }) : stCfg),
+    [opsDraft, sport, sportFormat, stCfg],
+  );
+  const saveSwissOps = async (next: SwissOps) => {
+    setOpsBusy(true); setError(null);
+    try {
+      await patchTournamentFormat(params.tournamentId, sport, swissOpsPatch(next));
+      setOpsDraft(next); invalidate();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save'); } finally { setOpsBusy(false); }
+  };
+  const swissPlayers = useMemo(() => swissField(swissMatches, sport, swissCfg, seedOrder, teams, swissOps), [swissMatches, sport, swissCfg, seedOrder, teams, swissOps]);
   const swissTargetRounds = savedStruct?.swissRounds ?? suggestedSwissRounds(selected.length || swissEntrants.size);
   const swissNextNo = swissRoundsPlayed + 1;
   const swissByePts = byePointsFor(sport, stCfg); // SD-10: shown with the drawn bye
   const swissDone = swissRoundsPlayed >= swissTargetRounds;
+  // SD-134 — who is in the Swiss (for the panel) and who could still join late
+  const swissRoster = useMemo(() => {
+    if (!swissMatches.length) return selected.map((id) => ({ id, name: teamName[id] ?? 'Entrant' }));
+    return swissPlayers.map((p) => ({ id: p.id, name: teamName[p.id] ?? swissOps.late?.[p.id]?.name ?? 'Entrant', score: p.score }));
+  }, [swissMatches.length, selected, swissPlayers, teamName, swissOps]);
+  const lateCandidates = useMemo(
+    () => (swissMatches.length ? pickTeams.filter((t) => !swissPlayers.some((p) => p.id === t.id)).map((t) => ({ id: t.id, name: t.name })) : []),
+    [swissMatches.length, pickTeams, swissPlayers],
+  );
+  // SD-134 — the Swiss draft's pairing ids, to name anyone a ✕ left unpaired
+  const [swissPool, setSwissPool] = useState<string[]>([]);
 
   function generate() {
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
@@ -336,19 +367,27 @@ export default function GenerateFixturesScreen() {
         if (selected.length < 2) return setError('Pick at least two entrants.');
         setError(null);
         // Round 1: seed order; a coin toss gives the top seed's colour (chess).
-        const { pairings, byeId } = swissRound1(seedOrder, Math.random() < 0.5 ? 'W' : 'B');
+        // SD-134: anyone withdrawn / absent / on a requested bye sits out.
+        const r1 = seedOrder.filter((id) => unavailableIn(swissOps, id, 1) === null);
+        if (r1.length < 2) return setError('Fewer than two entrants are available for round 1.');
+        const { pairings, byeId } = swissRound1(r1, Math.random() < 0.5 ? 'W' : 'B');
         setPairNote(null);
-        setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, when: at(i) })));
+        setSwissPool(r1);
+        setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
         return;
       }
       if (!swissAllDone) return setError('Finish the current Swiss round before generating the next.');
       if (swissDone) return setError(`All ${swissTargetRounds} Swiss rounds are done.`);
       setError(null);
-      const { pairings, byeId, relaxed } = swissPairRound(swissPlayers, swissNextNo);
+      // SD-134: pair only the entrants available this round
+      const avail = swissPlayers.filter((p) => unavailableIn(swissOps, p.id, swissNextNo) === null);
+      if (avail.length < 2) return setError(`Fewer than two entrants are available for round ${swissNextNo}.`);
+      const { pairings, byeId, relaxed } = swissPairRound(avail, swissNextNo);
       if (!pairings.length) return setError('Couldn’t pair a further round.');
+      setSwissPool(avail.map((p) => p.id));
       setPairNote(relaxed === 'repeat' ? 'Every pairing left repeats a game — the fewest rematches are shown.'
         : relaxed === 'colours' ? 'No pairing kept every colour rule — someone gets a third colour in a row or a 3-game imbalance.' : null);
-      setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, when: at(i) })));
+      setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
@@ -399,6 +438,8 @@ export default function GenerateFixturesScreen() {
           await createTeamTie({
             tournamentId: params.tournamentId, sport, spec: effTie,
             group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined),
+            // SD-134: a team Swiss — the team sitting out gets its bye points
+            byes: d.byes,
             teamAId: d.homeId, teamBId: d.awayId, startsAt: d.when.toISOString(),
             venueName: venue.trim() || undefined, hostIds: myId ? [myId] : [], matchFormat: format,
           });
@@ -445,6 +486,9 @@ export default function GenerateFixturesScreen() {
         if (tiesOn && effTie) {
           merged.teamTie = JSON.stringify(effTie);
           if (!before?.teamTie) Object.assign(merged, TIE_POINTS[sport]?.set ?? {});
+          // SD-134: a team Swiss bye counts as a tie won (FIDE C.04.1 "the points
+          // of a win" — verify the Olympiad team rule) unless the organiser set one
+          if (structure === 'swiss' && typeof before?.byePoints !== 'number' && typeof merged.winPoints === 'number') merged.byePoints = merged.winPoints;
         }
         await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, merged));
         await updateTournament(params.tournamentId, {
@@ -458,7 +502,10 @@ export default function GenerateFixturesScreen() {
         const before = tournament?.formats?.[sport] as Record<string, unknown> | undefined;
         if ((before?.structPlate === true) !== plate) await patchTournamentFormat(params.tournamentId, sport, { structPlate: plate });
       }
-      nav.goBack();
+      // SD-134: a chess Swiss round lands on its pairings & results sheet
+      const swissNo = structure === 'swiss' && isChess ? Number(String(drafts[0]?.stage ?? '').replace('swiss', '')) : 0;
+      if (swissNo > 0 && params.tournamentId) nav.replace('SwissRound', { tournamentId: params.tournamentId, sport, round: swissNo });
+      else nav.goBack();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the matches');
     } finally { setBusy(false); }
@@ -553,6 +600,16 @@ export default function GenerateFixturesScreen() {
           <Text style={st.notCertified} accessibilityLabel="In-app Swiss pairing, not FIDE-certified">
             ⓘ In-app Swiss pairing — not FIDE-certified. For a rated event, pair in a FIDE-endorsed program (e.g. Swiss-Manager).
           </Text>
+        )}
+        {/* SD-134 — the arbiter's round screen: numbered pairings to share / print, every board's result on one sheet */}
+        {structure === 'swiss' && isChess && swissRoundsPlayed > 0 && (
+          <Button label={`📋 Round ${swissRoundsPlayed} — pairings & results sheet`} variant="ghost"
+            onPress={() => nav.navigate('SwissRound', { tournamentId: params.tournamentId, sport, round: swissRoundsPlayed })} />
+        )}
+        {/* SD-134 — withdrawals, absences, requested byes, late entries */}
+        {structure === 'swiss' && !swissDone && (swissMatches.length === 0 ? selected.length >= 2 : swissAllDone) && (
+          <SwissFieldPanel round={swissMatches.length ? swissNextNo : 1} entrants={swissRoster} candidates={lateCandidates}
+            ops={swissOps} onSave={saveSwissOps} busy={opsBusy} />
         )}
         {(structure === 'league' || structure === 'groups') && (
           <View style={st.chips}>
@@ -777,18 +834,37 @@ export default function GenerateFixturesScreen() {
                   Bye this round: {byeNames(drafts[0].byes)}{swissByePts !== undefined ? ` — ${swissByePts === 0.5 ? '½' : swissByePts} point${swissByePts === 1 || swissByePts === 0.5 ? '' : 's'} in the standings (not a game played)` : ''}.
                 </Text>
               ) : null}
+              {structure === 'swiss' && (() => {
+                // SD-134 — who isn't paired this round: requested byes / absences / withdrawals, and anyone a ✕ left out
+                const rnd = swissMatches.length ? swissNextNo : 1;
+                const all = swissRoster.map((e) => e.id);
+                const off = roundStatusText(swissOps, all, rnd, (id) => teamName[id] ?? swissOps.late?.[id]?.name ?? 'Entrant');
+                const inDraft = new Set(drafts.flatMap((d) => [d.homeId, d.awayId, ...(d.byes ?? [])]));
+                const dropped = swissPool.filter((id) => !inDraft.has(id));
+                return (
+                  <>
+                    {off ? <Text style={textStyles.muted}>Not paired — {off}.</Text> : null}
+                    {dropped.length ? (
+                      <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
+                        ⚠ Unpaired after your edit: {byeNames(dropped)} — they score 0 this round. To pair them again, generate the preview again (mark anyone not playing in “Who plays” first).
+                      </Text>
+                    ) : null}
+                  </>
+                );
+              })()}
               {drafts.map((d, i) => (
                 <View key={i} style={st.draftCard}>
                   <View style={st.rowBetween}>
                     {d.white ? (
-                      // Chess: White first, as on a pairing sheet.
+                      // Chess: White first, as on a pairing sheet (SD-134: board numbers).
                       <Text style={[textStyles.body, st.flex]}>
+                        {d.extra?.[BOARD_KEY] ? <Text style={st.boardNo}>Bd {String(d.extra[BOARD_KEY])}  </Text> : null}
                         <Text accessibilityLabel="White">♔ </Text>{teamName[d.white === 'home' ? d.homeId : d.awayId] ?? (d.white === 'home' ? d.homeId : d.awayId)}
                         <Text style={textStyles.muted}>  –  </Text>
                         <Text accessibilityLabel="Black">♚ </Text>{teamName[d.white === 'home' ? d.awayId : d.homeId] ?? (d.white === 'home' ? d.awayId : d.homeId)}
                       </Text>
                     ) : (
-                      <Text style={textStyles.body}>{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
+                      <Text style={textStyles.body}>{d.extra?.[BOARD_KEY] ? <Text style={st.boardNo}>Bd {String(d.extra[BOARD_KEY])}  </Text> : null}{teamName[d.homeId] ?? d.homeId} vs {teamName[d.awayId] ?? d.awayId}</Text>
                     )}
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
@@ -817,4 +893,5 @@ const st = StyleSheet.create({
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
   seedList: { gap: theme.spacing(1), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
   groupHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  boardNo: { color: theme.colors.textMuted, fontWeight: '800', fontSize: theme.font.small },
 });

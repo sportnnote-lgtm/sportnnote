@@ -38,7 +38,8 @@ import { hockeyTimeline, describeEvent, eventWhen, timelineEvents, GOAL_LABEL } 
 import { hockeyTickerDetail, hockeyTickerFlash } from './ticker';
 import { hockeyFormation, HockeyPitch } from './pitch';
 import { usePendingEdit } from '../usePendingEdit';
-import { RowAction, confirmRemove } from '../TimelineControls';
+import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
+import { hockeyVoice, hockeyVoiceEnds } from '../voiceParsers';
 
 const opp = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -87,6 +88,9 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
   // SD-117 (H6): the penalty corner awaiting its outcome (side + its event id)
   const [pcOpen, setPcOpen] = useState<{ side: Side; id: string } | null>(null);
   const [editAt, setEditAt] = useState<{ sec: number; period: number } | null>(null);
+  // SD-137a: ⏪ backfill — every tap is stamped at a past minute until "Back to live"
+  const [backfill, setBackfill] = useState<{ sec: number; period: number } | null>(null);
+  const [backfillText, setBackfillText] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [clockText, setClockText] = useState('');
   const [setting, setSetting] = useState(false);
@@ -108,9 +112,10 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     rosterOf(sd).find((p) => (id && p.id === id) || (!id && nm && p.fullName === nm)) ?? (id ? { id, fullName: nm ?? 'Player', sports: ['hockey'] } as Player : undefined);
 
   // stamp every event with its game-clock second (or the edited moment's)
+  const pastAt = editAt ?? backfill;
   const fire = (a: ScoreAction) => {
     const at = Date.now();
-    dispatch({ ...a, payload: { ...a.payload, uid: (a.payload?.uid as string | undefined) ?? uid(), at, sec: editAt?.sec ?? matchSec(s, at), period: editAt?.period ?? s.period, ...(editAt ? { edit: true } : {}) } });
+    dispatch({ ...a, payload: { ...a.payload, uid: (a.payload?.uid as string | undefined) ?? uid(), at, sec: pastAt?.sec ?? matchSec(s, at), period: pastAt?.period ?? s.period, ...(pastAt ? { edit: true } : {}) } });
   };
 
   /* ---- who is on the field ---- */
@@ -323,7 +328,7 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     const sd = flow.side;
     const head = (t: string) => (
       <View style={c.flowHead}>
-        <Text style={[c.h, { color: color(sd) }]} numberOfLines={1}>{t} · {name(sd)}{editAt ? ` · ${Math.max(1, Math.ceil(editAt.sec / 60))}'` : ''}</Text>
+        <Text style={[c.h, { color: color(sd) }]} numberOfLines={1}>{t} · {name(sd)}{pastAt ? ` · ${Math.max(1, Math.ceil(pastAt.sec / 60))}'` : ''}</Text>
         <Text style={c.cancel} accessibilityRole="button" onPress={() => setFlow(null)}>Cancel</Text>
       </View>
     );
@@ -443,8 +448,24 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
     );
   };
 
+  // SD-137a: the match minute typed → its second + period (never past now)
+  const nowMin = Math.max(1, Math.ceil(matchSec(s, now) / 60));
+  const startBackfill = () => {
+    const min = Math.floor(Number(backfillText));
+    if (!Number.isFinite(min) || min < 1) return;
+    const m = Math.min(min, nowMin);
+    const sec = m * 60 - 30;
+    const period = Math.min(s.period, Math.max(1, Math.ceil(sec / (s.periodMinutes * 60))));
+    setBackfill({ sec, period });
+    setBackfillText('');
+    setShowEdit(false);
+  };
+  const backToLive = () => { setBackfill(null); setFlow(null); };
+
   return (
     <View style={c.wrap}>
+      {/* SD-114 / SD-137a: pinned first while backfilling (or re-entering) */}
+      {pastAt ? <BackfillBar at={`${periodName(s, pastAt.period)} · ${Math.max(1, Math.ceil(pastAt.sec / 60))}′`} onLive={editAt ? () => setFlow(null) : backToLive} /> : null}
       {/* the game clock */}
       <View style={c.panel}>
         <View style={c.clockRow}>
@@ -531,6 +552,20 @@ const ScoringControls: SportPlugin<HockeyState>['ScoringControls'] = ({
       )}
 
       <EditList s={s} show={showEdit} setShow={setShowEdit} onRemove={remove} onEdit={edit} homeName={homeName} awayName={awayName} />
+      {/* SD-137a: ⏪ add a goal / card / shot the scorer missed, at its minute */}
+      {periodStarted(s) || s.period > 1 ? (
+        <View style={c.panel}>
+          <Text style={c.small}>⏪ Backfill a missed moment</Text>
+          {backfill ? (
+            <Text style={c.meta}>Every tap now is stamped at {periodName(s, backfill.period)} · {Math.max(1, Math.ceil(backfill.sec / 60))}′. Log it above, then ▶ Back to live.</Text>
+          ) : (
+            <View style={c.row}>
+              <View style={c.flex}><TextField label={`Match minute (1–${nowMin})`} value={backfillText} onChange={setBackfillText} placeholder="e.g. 12" /></View>
+              <Button label="Backfill" variant="ghost" disabled={!backfillText.trim()} onPress={startBackfill} />
+            </View>
+          )}
+        </View>
+      ) : null}
       {/* SD-116 (H1): not live during the break before the last period — it
           would credit a whole unplayed half / quarter */}
       {last ? <Button label="🏁 Full time" variant="danger" disabled={!periodStarted(s)} onPress={() => void endPeriod()} /> : null}
@@ -664,6 +699,8 @@ export const hockeyPlugin: SportPlugin<HockeyState> = {
   statTotals: hockeyTotals,
   tickerDetail: hockeyTickerDetail,
   tickerFlash: hockeyTickerFlash,
+  // SD-137a — voice scoring (period / match ends ask first)
+  voice: { hints: ['goal {name}', 'PC goal {name} assist {name}', 'penalty corner home', 'shot saved {name}', 'green card {name}', 'end quarter'], parse: hockeyVoice, ends: hockeyVoiceEnds },
   ScoringControls,
   LiveClock,
   Scoreboard: HockeyScoreboard,

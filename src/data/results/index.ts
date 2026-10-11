@@ -24,3 +24,4 @@ export * from './printSheets.ts';
 export * from './teamResults.ts';
 export * from './recordBook.ts';
 export * from './champions.ts';
+export * from './competitionRules.ts';

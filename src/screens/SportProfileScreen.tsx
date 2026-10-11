@@ -43,6 +43,7 @@ import { playerForm } from '../data/headToHead';
 import { FormStrip } from '../components/FormStrip';
 import { WagonWheelView } from '../sports/cricket/WagonWheel';
 import { careerZones } from '../sports/cricket/wagon';
+import { TournamentJourneyList, type JourneyEntry } from '../components/TournamentHistory';
 
 
 
@@ -501,6 +502,29 @@ export default function SportProfileScreen() {
             </Text>
           )}
         </Card>
+
+        {/* SD-138 — the player's tournaments in this sport: how far their side got */}
+        {schema?.careerView !== 'measured' && (
+          <TournamentJourneyList
+            entries={(() => {
+              const seen = new Set<string>();
+              const out: JourneyEntry[] = [];
+              for (const l of [...sportLines].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))) {
+                const m = matchById.get(l.matchId);
+                const side = ctxOf.get(l.id)?.side;
+                if (!m?.tournamentId || !side) continue;
+                const teamId = side === 'home' ? m.homeTeam.id : m.awayTeam.id;
+                const k = `${m.tournamentId}|${teamId}`;
+                if (seen.has(k)) continue;
+                seen.add(k);
+                out.push({ tournamentId: m.tournamentId, sport, teamId });
+              }
+              return out;
+            })()}
+            matches={matches}
+            onOpen={(e) => nav.navigate('TeamJourney', { tournamentId: e.tournamentId, teamId: e.teamId, sport: e.sport })}
+          />
+        )}
 
         {history.length > 0 && schema?.careerView !== 'measured' && (
           <>

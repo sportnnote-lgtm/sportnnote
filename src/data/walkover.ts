@@ -201,3 +201,47 @@ export function forfeitNote(r: Pick<MatchResult, 'forfeit'> | null | undefined, 
   const sets = f.sets ? ` sets${f.points ? `, ${f.points.home}-${f.points.away} points` : ''}` : '';
   return `Counted ${homeName} ${f.score.home}-${f.score.away} ${awayName}${sets} in the table · ${f.rule}`;
 }
+
+/* ------------------------------ SD-140 ------------------------------ */
+
+/**
+ * SD-140 (founder, 2026-10-11) — the format the walkover / forfeit score reads.
+ * A friendly (no tournament) always uses the federation default: an override
+ * on the match's own format doesn't count there (only an organiser sets a
+ * tournament's score). In a tournament: the sport's format under the match's
+ * own (as SD-126 built it).
+ */
+export function walkoverFormatFor(
+  tournamentFormat: Record<string, unknown> | null | undefined,
+  matchFormat: Record<string, unknown> | null | undefined,
+  inTournament: boolean,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(tournamentFormat ?? {}), ...(matchFormat ?? {}) };
+  if (!inTournament) delete merged.walkoverScore;
+  return merged;
+}
+
+/** The bits of a match the team-side helpers read. */
+type TeamScoreMatch = { score?: Pair | null; walkover?: boolean; result?: Pick<MatchResult, 'kind' | 'reason' | 'forfeit'> | null };
+
+/** A match decided as a walkover (no play): the `__walkover` flag, or a
+ *  conceded result whose reason is "Walkover" (written before the flag lands). */
+export function isWalkover(m: TeamScoreMatch): boolean {
+  if (m.walkover) return true;
+  return m.result?.kind === 'conceded' && /^walkover$/i.test((m.result.reason ?? '').trim());
+}
+
+/**
+ * SD-140 — the score a TEAM is credited with: the walkover / forfeit score the
+ * table counts (`result.forfeit`) when there is one, else the board score; a
+ * walkover with no forfeit score (an old result, or "no score") has none.
+ * Team pages, team records, team head-to-head and series aggregates read this.
+ * Player stat lines and careers never do — a walkover's goals / points are the
+ * team's only.
+ */
+export function teamScoreOf(m: TeamScoreMatch): Pair | undefined {
+  const f = m.result?.forfeit?.score;
+  if (fin(f)) return { home: f.home, away: f.away };
+  if (isWalkover(m)) return undefined;
+  return fin(m.score) ? { home: m.score.home, away: m.score.away } : undefined;
+}

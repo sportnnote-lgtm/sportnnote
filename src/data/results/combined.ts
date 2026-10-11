@@ -38,6 +38,7 @@ import { laneOrder, type Seeded } from './progression.ts';
 import { barPlan, defaultBar } from './field.ts';
 import { phaseLines, markKey, type PhaseLine } from './athletics.ts';
 import { combinedPoints, combinedEventOf, shortName, type CombinedFormat } from './combinedDefs.ts';
+import { ruleOf } from './competitionRules.ts';
 
 export * from './combinedDefs.ts';
 
@@ -85,7 +86,8 @@ export function cellOf(e: ResultEntry, f: PhaseFormat): CombinedCell {
   const loose = looseLegal(f);
   const p = performanceOf(e, def, undefined, loose);
   const r = e.result ?? {};
-  if (p.status === 'DNS' || p.status === 'WD') return { ...shell, points: 0, state: 'out', status: p.status, text: p.status };
+  // SD-141: a school meet may let a DNS score 0 and carry on (rule 'ceDns' = 'zero'); a withdrawal is always out
+  if (p.status === 'WD' || (p.status === 'DNS' && ruleOf(f.rules, 'ceDns') !== 'zero')) return { ...shell, points: 0, state: 'out', status: p.status, text: p.status };
   if (p.status !== 'ok') return { ...shell, points: 0, state: 'zero', status: p.status, text: p.status };
   if (p.best == null) return { ...shell, points: 0, state: 'pending', status: 'ok', text: '' };
   const hand = def.capture === 'single' && !!r.hand;
@@ -191,7 +193,9 @@ export function combinedStandings(phases: CombinedPhaseInput[], o: { final?: boo
   }
   const desc = (r: CombinedRow) => r.cells.map((c) => c?.points ?? 0).sort((x, y) => y - x);
   const lex = (a: CombinedRow, b: CombinedRow) => { const x = desc(a), y = desc(b); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0); return 0; };
-  const cmp = (a: CombinedRow, b: CombinedRow) => b.total - a.total || (score.get(b.athleteId)! - score.get(a.athleteId)!) || lex(a, b);
+  // SD-141: 'share' = equal totals share the place (no TR 39.12 tie-break)
+  const share = ruleOf(sorted[0]?.format.rules, 'ceTie') === 'share';
+  const cmp = (a: CombinedRow, b: CombinedRow) => b.total - a.total || (share ? 0 : (score.get(b.athleteId)! - score.get(a.athleteId)!) || lex(a, b));
   active.sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
   sharedPositions(active, (a, b) => cmp(a, b) === 0).forEach((x, i) => {
     const r = active[i];
@@ -310,7 +314,9 @@ export function nextCombinedFormat(f: PhaseFormat, heats: number): PhaseFormat |
 
 /** TR 39.8.3 (from memory): the first false start in a race is charged to the
  *  race (warning); anyone responsible for a further one is disqualified. */
-export const falseStartAction = (c: Pick<CombinedFormat, 'fsWarned'>, heat: number): 'warn' | 'dq' => ((c.fsWarned ?? []).includes(heat) ? 'dq' : 'warn');
+export const falseStartAction = (c: Pick<CombinedFormat, 'fsWarned'>, heat: number, rules?: PhaseFormat['rules']): 'warn' | 'dq' =>
+  // SD-141: a meet can choose zero tolerance in combined events too
+  (ruleOf(rules, 'ceFalseStart') === 'zero' || (c.fsWarned ?? []).includes(heat) ? 'dq' : 'warn');
 
 /* ---------------------------------- stat lines ---------------------------------- */
 
@@ -359,14 +365,15 @@ export function combinedLines(f: PhaseFormat, rows: CombinedRow[], awards: Award
 /* ------------------------------------ text ------------------------------------ */
 
 /** The rules line under the event's title. */
-export function combinedHeader(f: Pick<PhaseFormat, 'discipline' | 'combined'>, def: DisciplineDef): string {
+export function combinedHeader(f: Pick<PhaseFormat, 'discipline' | 'combined' | 'rules'>, def: DisciplineDef): string {
   const c = f.combined!;
   const name = combinedEventOf(c.key)?.label ?? 'Combined event';
   const day = combinedDay(c, c.index);
   const rule = def.capture === 'attempts' ? '3 trials each (TR 39.8)'
     : def.capture === 'heights' ? `bar up ${def.key === 'ath.pv' ? '10' : '3'} cm each time (TR 39.8)`
-      : 'one false start per race — the next one disqualifies (TR 39.8.3)';
-  return `${name} · event ${c.index + 1} of ${c.events.length}${day ? ` · ${day}` : ''} · ${c.table === 'M' ? 'men’s' : 'women’s'} scoring tables · ${rule} · DNS = out of the competition (TR 39.10); DNF / NM / DQ score 0 and carry on`;
+      : ruleOf(f.rules, 'ceFalseStart') === 'zero' ? 'false starts: zero tolerance (meet rule)' : 'one false start per race — the next one disqualifies (TR 39.8.3)';
+  const dns = ruleOf(f.rules, 'ceDns') === 'zero' ? 'DNS / DNF / NM / DQ score 0 and carry on (meet rule)' : 'DNS = out of the competition (TR 39.10); DNF / NM / DQ score 0 and carry on';
+  return `${name} · event ${c.index + 1} of ${c.events.length}${day ? ` · ${day}` : ''} · ${c.table === 'M' ? 'men’s' : 'women’s'} scoring tables · ${rule} · ${dns}`;
 }
 
 /** "1. Arjun 4012 · 2. …" share text for the standings. */

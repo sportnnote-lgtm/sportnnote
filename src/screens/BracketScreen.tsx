@@ -5,7 +5,7 @@
  *  • Computed (preview) — otherwise, seed the participating teams into a draw
  *    (byes for non-power-of-two) as a preview. Group-stage matches are excluded
  *    from both, so a grouped tournament's bracket shows only its knockout. */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -40,6 +40,11 @@ import { structureFromFormat } from '../data/structureConfig';
 import { resolveSeries, advancePatch, type SeriesFormat } from '../data/series';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { roundProgress } from '../data/tournamentHistory';
+import { matchDecider, useLiveRefresh } from '../components/TournamentHistory';
+
+/** SD-138 — tap a side's name to open that entrant's tournament journey. */
+const TeamTap = createContext<((teamId: string) => void) | undefined>(undefined);
 
 type SlotState = 'won' | 'lost' | 'neutral';
 
@@ -55,11 +60,13 @@ function Slot({ slot, state = 'neutral' }: { slot: BracketSlot; state?: SlotStat
 }
 
 /** A real staged match: team + colour + score, winner emphasised, loser dimmed. */
-function StagedSide({ name, color, score, state }: { name: string; color?: string; score?: number; state: SlotState }) {
+function StagedSide({ name, color, score, state, teamId }: { name: string; color?: string; score?: number; state: SlotState; teamId?: string }) {
+  const onTeam = useContext(TeamTap);
   return (
     <View style={st.slot}>
       {color ? <View style={[st.dot, { backgroundColor: color }]} /> : <View style={st.dotGap} />}
-      <Text style={[st.slotName, state === 'lost' && st.muted, state === 'won' && st.winnerName]} numberOfLines={1}>{name}</Text>
+      <Text style={[st.slotName, state === 'lost' && st.muted, state === 'won' && st.winnerName]} numberOfLines={1}
+        {...(onTeam && teamId ? { onPress: () => onTeam(teamId), accessibilityRole: 'link' as const, accessibilityHint: 'Opens their tournament journey' } : {})}>{name}</Text>
       {score != null && <Text style={[st.score, state === 'won' && st.winnerName, state === 'lost' && st.muted]}>{score}</Text>}
       {state === 'won' && <Text style={st.check}>✓</Text>}
     </View>
@@ -85,6 +92,13 @@ export default function BracketScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { matches } = useLeagueData(tournamentId, nonce);
+  // SD-138: a live knockout match → refetch every 30 s while the bracket is open.
+  const anyLive = useMemo(() => matches.some((m) => m.sport === activeSport && m.status === 'live'), [matches, activeSport]);
+  const bump = useCallback(() => setNonce((x) => x + 1), []);
+  useLiveRefresh(anyLive, bump);
+  const openJourney = useCallback((teamId: string) => {
+    if (tournamentId) nav.navigate('TeamJourney', { tournamentId, teamId, sport: activeSport });
+  }, [nav, tournamentId, activeSport]);
   // Scope the bracket to the selected division (age × gender), if any.
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(tournamentId, nonce);
   const divMatches = useMemo(() => matchesInDivision(matches, entries, activeCat), [matches, entries, activeCat]);
@@ -289,9 +303,11 @@ export default function BracketScreen() {
   const subtitle = de ? `Double elimination · ${de.seeds.length} entrants` : dcActive ? 'Double-chance playoff' : isStaged ? `${koRounds.reduce((n, r) => n + r.matches.length, 0)} knockout matches` : `${previewTeams.length} teams`;
 
   return (
+    <TeamTap.Provider value={tournamentId ? openJourney : undefined}>
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title="Knockout bracket" subtitle={subtitle} />
+        {(isStaged || de || dcActive) && <Text style={textStyles.muted}>Tap a name to see their whole journey.{anyLive ? ' Live — updates every 30 seconds.' : ''}</Text>}
 
         {sports.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chips}>
@@ -358,7 +374,10 @@ export default function BracketScreen() {
               const roundByes = [...new Set(round.matches.flatMap((m) => m.byes ?? []))];
               return (
                 <View key={round.stage} style={{ gap: theme.spacing(2) }}>
-                  <Text style={textStyles.h3}>{round.label}</Text>
+                  <View style={st.roundHead}>
+                    <Text style={[textStyles.h3, { flex: 1 }]}>{round.label}</Text>
+                    <Text style={st.roundProg}>{roundProgress(round.pairings).text}</Text>
+                  </View>
                   {round.pairings.map((p) => (
                     <View key={p.key} style={{ gap: theme.spacing(2) }}>
                       <PairingCard p={p} />
@@ -449,6 +468,7 @@ export default function BracketScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+    </TeamTap.Provider>
   );
 }
 
@@ -547,10 +567,12 @@ function PairingCard({ p }: { p: KnockoutPairing }) {
         <Text style={st.seriesTag}>{s.name || SERIES_LABEL[s.format](s.legsPlanned)}</Text>
         <Text style={st.seriesStatus}>{st2.decided ? 'DECIDED' : anyLive ? '● LIVE' : `${st2.played}/${s.legsPlanned}`}</Text>
       </View>
-      <StagedSide name={s.teamA?.name ?? '—'} color={s.teamA?.colorHex} score={scoreA} state={state(s.teamA?.id)} />
+      <StagedSide name={s.teamA?.name ?? '—'} color={s.teamA?.colorHex} score={scoreA} state={state(s.teamA?.id)} teamId={s.teamA?.id} />
       <View style={st.vsRow}><Text style={st.vs}>{isAgg ? 'agg' : 'wins'}</Text></View>
-      <StagedSide name={s.teamB?.name ?? '—'} color={s.teamB?.colorHex} score={scoreB} state={state(s.teamB?.id)} />
+      <StagedSide name={s.teamB?.name ?? '—'} color={s.teamB?.colorHex} score={scoreB} state={state(s.teamB?.id)} teamId={s.teamB?.id} />
       <Text style={st.seriesSummary}>{st2.summary}</Text>
+      {/* SD-138: how the deciding leg was settled (pens on aggregate, shoot-out…) */}
+      {(() => { const d = [...s.legs].reverse().map(matchDecider).find(Boolean); return d ? <Text style={st.deciderLine}>{d}</Text> : null; })()}
       <View style={st.legList}>
         {s.legs.map((m, i) => {
           const w = matchWinnerId(m);
@@ -575,12 +597,15 @@ function StagedMatchCard({ m }: { m: Match }) {
   const state = (id: string): SlotState => (!winnerId ? 'neutral' : winnerId === id ? 'won' : 'lost');
   const live = m.status === 'live';
   const line = matchLine(m);
+  const decider = matchDecider(m);
   return (
     <View style={[st.matchCard, live && st.matchCardLive]}>
-      <StagedSide name={m.homeTeam.name} color={m.homeTeam.colorHex} score={m.score?.home} state={state(m.homeTeam.id)} />
+      <StagedSide name={m.homeTeam.name} color={m.homeTeam.colorHex} score={m.score?.home} state={state(m.homeTeam.id)} teamId={m.homeTeam.id} />
       {/* SD-20: the decided scoreline between the sides ("6-4, 3-2 ret.", "w/o"). */}
       <View style={st.vsRow}><Text style={[st.vs, !live && !!line && st.cellLine]} numberOfLines={1}>{bracketCellText({ live, decided: !!winnerId, line })}</Text></View>
-      <StagedSide name={m.awayTeam.name} color={m.awayTeam.colorHex} score={m.score?.away} state={state(m.awayTeam.id)} />
+      <StagedSide name={m.awayTeam.name} color={m.awayTeam.colorHex} score={m.score?.away} state={state(m.awayTeam.id)} teamId={m.awayTeam.id} />
+      {/* SD-138: penalties / shoot-out / Super Over / Armageddon / overtime */}
+      {decider ? <Text style={st.deciderLine}>{decider}</Text> : null}
     </View>
   );
 }
@@ -632,4 +657,7 @@ const st = StyleSheet.create({
   colBody: { flex: 1, justifyContent: 'space-around', gap: theme.spacing(2) },
   nodeEmpty: { opacity: 0.6 },
   plateWinner: { color: theme.colors.accent, fontSize: theme.font.body, fontWeight: '800' },
+  deciderLine: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700', textAlign: 'center' },
+  roundHead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  roundProg: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800' },
 });

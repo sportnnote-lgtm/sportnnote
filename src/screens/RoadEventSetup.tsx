@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
@@ -26,6 +27,7 @@ import {
   ROAD_METRES, WALK_ROAD_METRES, WALK_TRACK_METRES, XC_METRES, HALF, MARATHON,
   type Category, type RoadKind, type RoadFormat, type TeamBasis,
 } from '../data/results';
+import { sportRule } from '../data/results/competitionRules';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -76,7 +78,18 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
   const [size, setSize] = useState<number | null>(6);
   const [basis, setBasis] = useState<TeamBasis>('teams');
   const [teamPts, setTeamPts] = useState(true);
-  useEffect(() => { setScorers(defaultTeamScoring(age).scorers); }, [age]);
+  // SD-141: the meet's team-scoring rules (Competition rules) are the starting point
+  const rf = tournament?.formats?.athletics as Record<string, unknown> | undefined;
+  const ruleScorers = sportRule(rf, 'xcScorers');
+  const tieBreak = sportRule(rf, 'xcTieBreak') === 'next' ? 'next' as const : undefined;
+  useEffect(() => { setScorers(ruleScorers === 'auto' ? defaultTeamScoring(age).scorers : Number(ruleScorers)); }, [age, ruleScorers]);
+  useEffect(() => {
+    if (!tournament) return;
+    const sz = Number(sportRule(rf, 'xcSize'));
+    setSize(sz > 0 ? sz : null);
+    setBasis(sportRule(rf, 'xcBasis') as TeamBasis);
+    setCertified(sportRule(rf, 'roadCertified') === true);
+  }, [tournament?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Teams / houses (as the other event setups)
   const [sources, setSources] = useState<Source[]>([]);
@@ -135,7 +148,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
     ...(kind === 'road' || (kind === 'walk' && !trackWalk) ? { certified } : {}),
     ...(kind === 'road' && timing === 'chip' ? { timing: 'chip' as const } : {}),
     ...(kind === 'walk' && penaltyZone ? { penaltyZone: true } : {}),
-    ...(teamOn ? { team: { scorers, ...(size ? { size } : {}), basis, points: teamPts } } : {}),
+    ...(teamOn ? { team: { scorers, ...(size ? { size } : {}), basis, points: teamPts, ...(tieBreak ? { tieBreak } : {}) } } : {}),
   };
 
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +180,8 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="🏃 New road / cross-country race" subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={'athletics'} />
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Race</Text>
@@ -265,7 +280,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
               </View>
               <Text style={st.label}>How places count</Text>
               <View style={st.wrap}>{(['teams', 'overall', 'scorers'] as TeamBasis[]).map((b) => <SelectChip key={b} label={BASIS_LABEL[b]} active={basis === b} onPress={() => setBasis(b)} />)}</View>
-              <Text style={textStyles.muted}>{describeTeamScoring({ scorers, basis, ...(size ? { size } : {}) })}</Text>
+              <Text style={textStyles.muted}>{describeTeamScoring({ scorers, basis, ...(size ? { size } : {}), ...(tieBreak ? { tieBreak } : {}) })}</Text>
               <SelectChip label={teamPts ? '✓ Team places earn house points + medals' : 'Team places: no house points'} active={teamPts} onPress={() => setTeamPts(!teamPts)} />
             </>
           )}

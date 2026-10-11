@@ -53,6 +53,7 @@ import { MedalTable } from '../components/MedalTable';
 import { useGolfRounds } from '../data/useGolf';
 import { golfFieldResults, golfLeaderCategories, golfPositionPoints, isGolfMatchPlay } from '../data/golfLeaders';
 import { groupTables, superPhaseLabel, standingsPhases } from '../data/groups';
+import { groupViews, groupHeading } from '../data/tournamentHistory';
 import type { SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
@@ -395,6 +396,16 @@ export default function TournamentProfileScreen() {
   const superMatches = useMemo(() => (activeSport ? matches.filter((m) => m.stage === 'super' && m.sport === activeSport) : []), [matches, activeSport]);
   const superTable = useMemo(() => (activeSport ? teamStandings(superMatches, activeSport, stCfg) : []), [superMatches, activeSport, stCfg]);
   const phases = useMemo(() => (activeSport ? standingsPhases(matches, activeSport, stCfg, participants) : []), [matches, activeSport, stCfg, participants]);
+  // SD-138: each group live → final, with who went through (Q / E).
+  const groupViewMap = useMemo(() => {
+    if (!activeSport) return new Map<string, ReturnType<typeof groupViews>[number]>();
+    const struct = structureFromFormat(tournament?.formats?.[activeSport]);
+    const vs = groupViews(matches, activeSport, stCfg, struct?.shape === 'groups' ? { advanceTopN: struct.advanceTopN, advanceBest: struct.advanceBest } : {});
+    return new Map(vs.map((v) => [v.key, v]));
+  }, [matches, activeSport, stCfg, tournament]);
+  const openJourney = (teamId: string) => (tournament
+    ? nav.navigate('TeamJourney', { tournamentId: tournament.id, teamId, ...(activeSport ? { sport: activeSport } : {}) })
+    : nav.navigate('Team', { teamId }));
   const superName = superPhaseLabel(new Set(superMatches.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])).size);
   // SD-27: the organiser's minimums (format `leaderMins`), kept locally after a save
   const [savedMins, setSavedMins] = useState<Partial<Record<SportId, LeaderMins>>>({});
@@ -1039,20 +1050,32 @@ export default function TournamentProfileScreen() {
               <Button label="⛳ Golf leaderboard & rounds" variant="ghost"
                 onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: 'golf', tournamentName: tournament.name })} />
             ) : activeSport && phases.length > 0 ? (
-              phases.map((ph) => (
+              phases.map((ph) => {
+                const gv = groupViewMap.get(ph.key);
+                const through = gv?.rows.filter((r) => r.mark === 'qualified') ?? [];
+                const out = gv?.rows.filter((r) => r.mark === 'eliminated') ?? [];
+                return (
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>
-                  {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
-                  <LeagueTable sport={activeSport} cfg={stCfg} teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+                  {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{gv ? groupHeading(gv) : ph.title}</Text> : null}
+                  <LeagueTable sport={activeSport} cfg={stCfg} teams={gv ? gv.rows : ph.rows} onTeam={openJourney} emptyLabel="No results yet." />
+                  {gv && gv.live.length > 0 ? (
+                    <Text style={st.liveLine}>● Live: {gv.live.map((m) => `${m.homeTeam.name} ${m.score ? `${m.score.home}–${m.score.away}` : 'v'} ${m.awayTeam.name}`).join(' · ')}</Text>
+                  ) : null}
+                  {through.length > 0 ? (
+                    <Text style={textStyles.muted}>✅ Through: {through.map((r) => r.name).join(', ')}{out.length ? `  ·  Out: ${out.map((r) => r.name).join(', ')}` : ''}</Text>
+                  ) : null}
                   {/* SD-77 — chess wall chart / crosstable (+ SD-85 ARO / TPR) */}
                   {activeSport === 'chess' && (ph.key === 'swiss' || ph.key === 'league') ? (
                     <ChessCrosstable rows={ph.rows} cfg={stCfg} matches={matches.filter((m) => m.sport === 'chess')}
                       teams={participants} players={allPlayers.length ? allPlayers : players} lines={lines}
                       timeControl={(tournament.formats?.chess as Record<string, unknown> | undefined)?.timeControl}
                       swissRounds={ph.key === 'swiss' ? structureFromFormat(tournament.formats?.chess)?.swissRounds : undefined}
+                      tournamentId={tournament.id} format={tournament.formats?.chess as Record<string, unknown> | undefined} canEdit={canManageHosts}
                       onPlayer={(pid, teamId) => (pid ? nav.navigate('PlayerProfile', { playerId: pid }) : nav.navigate('Team', { teamId }))} />
                   ) : null}
                 </View>
-              ))
+                );
+              })
             ) : activeSport ? (
               <LeagueTable
                 teams={[]}
@@ -1164,6 +1187,7 @@ const st = StyleSheet.create({
   histLine: { color: theme.colors.textMuted, fontSize: theme.font.small },
   section: { marginTop: theme.spacing(2) },
   groupHead: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: theme.spacing(2) },
+  liveLine: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   oRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), paddingVertical: theme.spacing(2), paddingHorizontal: theme.spacing(1) },
   divider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   dot: { width: 14, height: 14, borderRadius: 7 },

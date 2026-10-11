@@ -20,7 +20,8 @@ import { formatMark } from './marks.ts';
 import { betterMark } from './rank.ts';
 import { bracketState, isBracketRows } from './archeryBracket.ts';
 import { cycEventOf, cycKind, CYC_EVENTS, sprintPoints, LAP_POINTS, SPRINT_POINTS, type CycKind } from './cyclingDefs.ts';
-import { pointsTotal, sprintMatch, sprintBo, stageTimes, gcAfter, roadTimes } from './cyclingRank.ts';
+import { pointsTotal, sprintMatch, sprintBo, stageTimes, gcAfter, roadTimes, sprintRule, finishPoints } from './cyclingRank.ts';
+import { ruleOf, type CompRules } from './competitionRules.ts';
 
 export * from './cyclingDefs.ts';
 export * from './cyclingRank.ts';
@@ -142,10 +143,11 @@ export function nextOutPlace(entries: ResultEntry[]): number {
 export const sprintCount = (laps?: number, every?: number): number => (laps && every ? Math.max(1, Math.floor(laps / every)) : 0);
 
 /** A rider's sprint line: "S1 5 · S3 2 · Finish 6 · +1 lap (+20) = 33". */
-export function pointsLine(r: EntryResult): string {
-  const t = pointsTotal(r);
-  const parts = Object.entries(r.spr ?? {}).sort((a, b) => Number(a[0]) - Number(b[0])).filter(([, p]) => sprintPoints(p, 1, 2) > 0).map(([k, p]) => `S${k} ${sprintPoints(p, 1, 2)}`);
-  if (r.fin != null && (SPRINT_POINTS[r.fin - 1] ?? 0) > 0) parts.push(`Finish ${SPRINT_POINTS[r.fin - 1] * 2}`);
+export function pointsLine(r: EntryResult, rules?: CompRules | null): string {
+  const t = pointsTotal(r, rules);
+  const { table } = sprintRule(rules);
+  const parts = Object.entries(r.spr ?? {}).sort((a, b) => Number(a[0]) - Number(b[0])).filter(([, p]) => sprintPoints(p, 1, 2, table) > 0).map(([k, p]) => `S${k} ${sprintPoints(p, 1, 2, table)}`);
+  if (r.fin != null && finishPoints(r.fin, rules) > 0) parts.push(`Finish ${finishPoints(r.fin, rules)}`);
   if (r.laps) parts.push(`${r.laps > 0 ? '+' : ''}${r.laps} lap${Math.abs(r.laps) === 1 ? '' : 's'} (${r.laps > 0 ? '+' : ''}${r.laps * LAP_POINTS})`);
   return parts.length ? `${parts.join(' · ')} = ${t.total}` : '';
 }
@@ -202,9 +204,9 @@ export const cycStatuses = (def: Pick<DisciplineDef, 'key'>): ResultStatus[] => 
 export function cycRowText(r: RankedEntry, def: DisciplineDef): string {
   const res = r.entry.result ?? {};
   const kind = cycKind(def.key);
-  if (kind === 'points') return pointsLine(res);
+  if (kind === 'points') return pointsLine(res, def.rules);
   if (kind === 'stage') {
-    const st = stageTimes([r.entry]).get(r.id);
+    const st = stageTimes([r.entry], def.rules).get(r.id);
     return [
       res.fin != null ? `Stage ${ordinal(res.fin)}` : res.mark != null ? `Stage ${formatMark(res.mark, { unit: 'time', dp: 2 })}` : '',
       res.bonus ? `bonus −${res.bonus}″` : '', res.pts ? `${res.pts} pts` : '', res.kom ? `${res.kom} KOM` : '',
@@ -238,14 +240,14 @@ export interface CycLine { playerId: string; stats: Record<string, number>; won:
  * and laps gained; sprint matches won / lost; stage race — stages, stage wins
  * (and on the last stage the GC place, its medals and points).
  */
-export function cycLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked: RankedEntry[], awards: Award[] = []): CycLine[] {
+export function cycLines(f: Pick<PhaseFormat, 'discipline' | 'phase' | 'rules'>, ranked: RankedEntry[], awards: Award[] = []): CycLine[] {
   const def = disciplineOf(f.discipline);
   const kind = cycKind(f.discipline);
   if (!def || !kind) return [];
   const byEntry = new Map(awards.map((a) => [a.entryId, a]));
   const rows = ranked.map((r) => r.entry);
   const bracket = isBracketRows(rows) ? bracketState(rows, 'sets', sprintMatch(sprintBo(rows))) : null;
-  const stage = kind === 'stage' ? stageTimes(rows) : null;
+  const stage = kind === 'stage' ? stageTimes(rows, f.rules) : null;
   const out: CycLine[] = [];
   for (const r of ranked) {
     if (r.status === 'DNS' || r.status === 'WD' || !r.entry.athleteId) continue;
@@ -272,7 +274,7 @@ export function cycLines(f: Pick<PhaseFormat, 'discipline' | 'phase'>, ranked: R
       if (res.hand) s.hand = 1;
     }
     if (kind === 'points') {
-      s.prPts = pointsTotal(res).total;
+      s.prPts = pointsTotal(res, f.rules).total;
       if ((res.laps ?? 0) > 0) s.lapsGained = res.laps!;
     }
     if (kind === 'scratch' && (res.laps ?? 0) > 0) s.lapsGained = res.laps!;
@@ -351,15 +353,18 @@ export function cyclingCareer(lines: { eventId?: string; stats: Record<string, n
  * starts the next stage carrying the GC after this one; DNF / OTL / DQ / DNS
  * riders are out of the race. Returns entry id → GC, in GC order.
  */
-export function stageFinishers(entries: ResultEntry[]): { id: string; gc: NonNullable<ReturnType<typeof gcAfter>> }[] {
-  const times = stageTimes(entries);
+export function stageFinishers(entries: ResultEntry[], rules?: CompRules | null): { id: string; gc: NonNullable<ReturnType<typeof gcAfter>> }[] {
+  const times = stageTimes(entries, rules);
+  const uci = ruleOf(rules, 'cycGcTie') !== 'places';
   return entries.flatMap((e) => { const g = gcAfter(e, times.get(e.id)); return g ? [{ id: e.id, gc: g }] : []; })
-    .sort((a, b) => a.gc.time - b.gc.time || a.gc.frac - b.gc.frac || a.gc.places - b.gc.places);
+    .sort((a, b) => a.gc.time - b.gc.time || (uci ? a.gc.frac - b.gc.frac : 0) || a.gc.places - b.gc.places
+      // SD-141 'places': then the place on this stage (as the GC ranking does)
+      || (uci ? 0 : (times.get(a.id)?.place ?? 999) - (times.get(b.id)?.place ?? 999)));
 }
 
 /** Road race / stage: does any rider on the line still lack a time while others have one (the winner's time is needed)? */
-export function roadTimeMissing(entries: ResultEntry[]): boolean {
-  const t = roadTimes(entries);
+export function roadTimeMissing(entries: ResultEntry[], rules?: CompRules | null): boolean {
+  const t = roadTimes(entries, rules);
   return [...t.values()].some((x) => x.time == null) && [...t.values()].some((x) => x.time != null);
 }
 

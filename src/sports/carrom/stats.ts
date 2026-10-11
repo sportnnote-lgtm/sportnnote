@@ -9,6 +9,8 @@ export const carromStats: SportStatSchema<'carrom'> = {
   sport: 'carrom',
   /** SD-25 — career split chips (line context) */
   splits: ['discipline', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (singles / doubles) */
+  leaderSplits: ['discipline'],
   stats: [
     // SD-27: level totals go to more boards, then more queens (and back)
     { ...POINTS, group: 'scoring', weight: 1, tieBreak: [{ key: 'boards', better: 'higher' }, { key: 'queens', better: 'higher' }] },

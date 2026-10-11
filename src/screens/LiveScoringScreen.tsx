@@ -35,6 +35,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { getSport } from '../sports/registry';
 import { VoiceScorer } from '../sports/VoiceScorer';
+import { completesMatch } from '../sports/voiceMatch';
 import { Scoreboard } from '../components/Scoreboard';
 import { MiniScore } from '../components/MiniScore';
 import { Pill, textStyles } from '../components/ui';
@@ -166,6 +167,18 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             setRawFormat(m.format as Record<string, unknown> | undefined);
             setHomeLeaders(hl);
             setAwayLeaders(al);
+            // A match opened from a link carries no names in the route — take
+            // them from the loaded match (was "undefined vs undefined").
+            if (!route.params.homeName || !route.params.awayName) {
+              navigation.setParams({
+                homeName: route.params.homeName || m.homeTeam.shortName || m.homeTeam.name,
+                awayName: route.params.awayName || m.awayTeam.shortName || m.awayTeam.name,
+                homeTeamName: route.params.homeTeamName || m.homeTeam.name,
+                awayTeamName: route.params.awayTeamName || m.awayTeam.name,
+                ...(!route.params.homeColor && m.homeTeam.colorHex ? { homeColor: m.homeTeam.colorHex } : {}),
+                ...(!route.params.awayColor && m.awayTeam.colorHex ? { awayColor: m.awayTeam.colorHex } : {}),
+              });
+            }
             setMeta({
               homeTeamId: m.homeTeam.id, awayTeamId: m.awayTeam.id, tournamentId: m.tournamentId,
               tournamentName: tour?.name, config, venueName: m.venueName, venueMapsUrl: m.venueMapsUrl, streamUrl: m.streamUrl, startsAt: m.startsAt,
@@ -1312,6 +1325,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               homeName={homeName} awayName={awayName}
               homeRoster={homeScoreRoster} awayRoster={awayScoreRoster}
               onUndo={undo}
+              wouldComplete={(acts) => completesMatch(plugin, state, acts)}
             />
           )}
         </View>

@@ -6,8 +6,8 @@
  * set/game-sport helper live in matchRecords.ts.
  *
  * PURE (no React Native): node tests load it — note the `.ts` imports.
- * Golf, carrom and the results-engine sports have no hook (golf and the
- * results engine keep their own records).
+ * The results-engine sports and golf STROKE play have no hook (they keep
+ * their own records); carrom and golf match play joined in SD-137a.
  */
 import type { SportId } from '../core/types';
 import { block, scoreItems, otherSide, setSportRecords, type MatchRecordItem, type MatchRecordsBlock, type Side } from './matchRecords.ts';
@@ -27,6 +27,10 @@ import { lineScore as padelLine, type PadelState } from './padel/engine.ts';
 import { lineScore as badmintonLine, type BadmintonState } from './badminton/engine.ts';
 import { lineScore as volleyballLine, type VolleyballState } from './volleyball/engine.ts';
 import { rallyLineScore, type RallyState } from './rallyEngine.ts';
+import type { CarromState } from './carrom/engine.ts';
+import { matchState as golfMatchState } from './golf/engine.ts';
+import type { GolfMatchState } from './golf/match.ts';
+import { matchHole } from './golf/matchStrokes.ts';
 
 const ordinal = (n: number): string => {
   const v = n % 100;
@@ -247,6 +251,71 @@ export function chessMatchRecords(s: ChessState): MatchRecordsBlock | null {
   return block([{ type: 'fastestWin', value: s.moves, text: `${s.moves} moves`, side: s.winner, ...(how ? { note: how } : {}) }]);
 }
 
+/* --------------------------------------------------------------- carrom -- */
+
+/**
+ * SD-137a — carrom: each game's winning margin ("25–3", game 2; margin, then
+ * the winner's points), the longest run of boards won in a row by one side
+ * (penalty boards break a run and never count as won), and every slam (white
+ * / black, the game and board). The board winner's credited player(s) name
+ * the run / slam when the scorer picked them.
+ */
+export function carromMatchRecords(s: CarromState): MatchRecordsBlock | null {
+  if (!s || !s.ended) return null;
+  const items: MatchRecordItem[] = [];
+  (s.games ?? []).forEach(([h, a], i) => {
+    if (h === a) return;
+    const w: Side = h > a ? 'home' : 'away';
+    items.push({ type: 'biggestWin', value: Math.abs(h - a) * 1000 + Math.max(h, a), text: w === 'home' ? `${h}–${a}` : `${a}–${h}`, side: w, note: `game ${i + 1}` });
+  });
+  const who = (i: number) => {
+    const c = s.boardBy?.[i]?.[0];
+    return c ? { ...(c.id ? { playerId: c.id } : {}), ...(c.name ? { playerName: c.name } : {}) } : {};
+  };
+  let best: { side: Side; n: number; at: number } | null = null;
+  let run: { side: Side; n: number; at: number } | null = null;
+  (s.boards ?? []).forEach((b, i) => {
+    if (b.penalty) { run = null; return; }
+    run = run && run.side === b.winner ? { ...run, n: run.n + 1 } : { side: b.winner, n: 1, at: i };
+    if (!best || run.n > best.n) best = { ...run };
+    if (b.slam) items.push({ type: 'slam', value: 1, text: `${b.slam === 'white' ? 'White' : 'Black'} slam`, side: b.winner, note: `game ${b.game}`, ...who(i) });
+  });
+  const top = best as { side: Side; n: number; at: number } | null;
+  if (top && top.n >= 2) items.push({ type: 'boardRun', value: top.n, text: `${top.n} boards`, side: top.side });
+  return block(items);
+}
+
+/* ------------------------------------------------------ golf match play -- */
+
+/**
+ * SD-137a — golf match play: the winning margin ("5&4"; holes up, then holes
+ * to spare — a conceded or halved match has none), each side's holes won,
+ * and birdies or better when the hole scores were entered (with handicap
+ * strokes set up). Stroke play is scored on the round screens and keeps its
+ * own records.
+ */
+export function golfMatchRecords(s: GolfMatchState): MatchRecordsBlock | null {
+  if (!s || !s.ended || !Array.isArray(s.holes)) return null;
+  const items: MatchRecordItem[] = [];
+  const m = golfMatchState(s.holes, s.regulation, s.extraHoles, s.firstHole ?? 1);
+  if (!s.conceded && (m.winner === 'home' || m.winner === 'away') && m.result) {
+    items.push({ type: 'biggestMargin', value: Math.abs(m.up) * 100 + m.remaining, text: m.result, side: m.winner });
+  }
+  const counted = s.holes.slice(0, m.played);
+  for (const side of ['home', 'away'] as Side[]) {
+    const n = counted.filter((w) => w === side).length;
+    if (n > 0) items.push({ type: 'holesWon', value: n, text: `${n} hole${n === 1 ? '' : 's'}`, side });
+  }
+  const ms = s.strokes;
+  if (s.scores && ms?.holes?.length) {
+    for (const side of ['home', 'away'] as Side[]) {
+      const n = s.scores.slice(0, m.played).filter((sc, i) => sc && sc[side] < matchHole(ms, i).hole.par).length;
+      if (n > 0) items.push({ type: 'birdies', value: n, text: `${n} birdie${n === 1 ? '' : 's'} or better`, side });
+    }
+  }
+  return block(items);
+}
+
 /* ------------------------------------------------------ set / game sports -- */
 
 export const tennisMatchRecords = (s: TennisState) => setSportRecords(tennisLine(s), s?.events, { tiebreaks: true });
@@ -272,4 +341,6 @@ export const MATCH_RECORD_HOOKS: Partial<Record<SportId, (state: any) => MatchRe
   tabletennis: rallyMatchRecords,
   squash: rallyMatchRecords,
   pickleball: rallyMatchRecords,
+  carrom: carromMatchRecords,
+  golf: golfMatchRecords,
 };

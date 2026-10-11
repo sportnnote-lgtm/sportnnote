@@ -17,11 +17,12 @@ import { MatchBoxScore } from '../../components/BoxScore';
 import { carromBox } from '../boxSources';
 import {
   init, reducer, result, boardPoints, boardCloses, creditedPoints, PENALTY_POINTS, summary, scoreLine, lineScore, standingsUnits,
-  nextBreaker, boardBreakers, slamFor, boardInputs, boardCorrection,
+  nextBreaker, nextBreakerPlayer, boardBreakers, breakerPlayers, slamFor, boardInputs, boardCorrection,
   type BoardInput, type CarromState, type QueenBy, type Side, type Slam,
 } from './engine';
 import { carromStatTotals, creditedPlayers } from './totals';
 import { ScoreSheet } from './ScoreSheet';
+import { carromVoice, carromVoiceEnds } from '../voiceParsers';
 
 const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as CarromState;
@@ -40,11 +41,17 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
   // SD-68 (CR-07) — a penalty board: 3 to the side picked, not a board won
   const [penalty, setPenalty] = useState(false);
   const [fixToss, setFixToss] = useState(false);
+  // SD-134 — doubles: who breaks first for each side (A1 → B1 → A2 → B2)
+  const [firstOf, setFirstOf] = useState<Record<Side, string | null>>({ home: null, away: null });
   // "Played by" (a roster bigger than the side) — kept from board to board
   const [picked, setPicked] = useState<Record<Side, string[]>>({ home: [], away: [] });
   if (s.ended) return <Text style={textStyles.muted}>Match over.</Text>;
   // SD-117c (CR-04) — who breaks this board (toss, then alternating)
   const breaker = nextBreaker(s);
+  const breakerP = nextBreakerPlayer(s);
+  // SD-134 — a doubles break order needs both players of a side
+  const pairOf = (side: Side) => creditedPlayers(side === 'home' ? homeRoster : awayRoster, 2, picked[side]);
+  const doublesOrder = perSide === 2 && pairOf('home').length === 2 && pairOf('away').length === 2;
   const derivedSlam = winner ? slamFor(winner, breaker) : null;
 
   const roster = winner ? (winner === 'home' ? homeRoster : awayRoster) : [];
@@ -74,10 +81,31 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
     });
     setWinner(null); setCoins(null); setQueenBy(null); setSlam(null); setPenalty(false);
   };
-  const toss = (side: Side) => { dispatch({ type: 'FIRST_BREAK', payload: { side } }); setFixToss(false); };
+  const orderOf = (side: Side) => {
+    const pair = pairOf(side);
+    const first = pair.find((p) => p.id === firstOf[side]) ?? pair.find((p) => p.id === s.breakOrder?.[side]?.[0]?.id) ?? pair[0];
+    return [first, ...pair.filter((p) => p.id !== first.id)].map((p) => ({ id: p.id, name: p.fullName }));
+  };
+  const toss = (side: Side) => {
+    dispatch({ type: 'FIRST_BREAK', payload: { side, ...(doublesOrder ? { order: { home: orderOf('home'), away: orderOf('away') } } : {}) } });
+    setFixToss(false);
+  };
   const tossPicker = (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={ctrl.label}>{s.boards.length ? 'Who broke the first board?' : 'Who breaks first?'} <Text style={ctrl.meta}>(the toss · then it alternates)</Text></Text>
+      {/* SD-134 — doubles: each side's first breaker; partners then alternate */}
+      {doublesOrder && (
+        <View style={{ gap: theme.spacing(1) }}>
+          <Text style={ctrl.meta}>Doubles break order — pick who breaks first for each side (then A1 → B1 → A2 → B2), then tap who won the toss</Text>
+          {(['home', 'away'] as Side[]).map((sd) => (
+            <View key={sd} style={ctrl.chips}>
+              {pairOf(sd).map((p) => (
+                <SelectChip key={p.id} label={`${p.fullName}`} active={orderOf(sd)[0].id === p.id} onPress={() => setFirstOf((cur) => ({ ...cur, [sd]: p.id }))} />
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
       <View style={ctrl.row}>
         <Button label={nameOf('home')} variant={s.firstBreak === 'home' ? 'home' : 'ghost'} style={ctrl.flex} onPress={() => toss('home')} />
         <Button label={nameOf('away')} variant={s.firstBreak === 'away' ? 'away' : 'ghost'} style={ctrl.flex} onPress={() => toss('away')} />
@@ -92,7 +120,7 @@ const ScoringControls: SportPlugin<CarromState>['ScoringControls'] = ({ state, d
       {/* SD-117c (CR-04) — the toss before board 1, then "{name} to break" */}
       {(!s.firstBreak && s.boards.length === 0) || fixToss ? tossPicker : breaker ? (
         <Text style={ctrl.breakLine}>
-          ⚪ {nameOf(breaker)} to break{'  '}<Text style={ctrl.link} accessibilityRole="button" onPress={() => setFixToss(true)}>Fix the toss</Text>
+          ⚪ {breakerP?.name ? `${breakerP.name} (${nameOf(breaker)})` : nameOf(breaker)} to break{'  '}<Text style={ctrl.link} accessibilityRole="button" onPress={() => setFixToss(true)}>Fix the toss</Text>
         </Text>
       ) : (
         <Text style={ctrl.link} accessibilityRole="button" onPress={() => setFixToss(true)}>Record who broke the first board</Text>
@@ -180,6 +208,7 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
   if (s.boards.length === 0) return null;
   const list = boardInputs(s);
   const breakers = boardBreakers(s);
+  const breakBy = s.breakOrder ? breakerPlayers(s) : []; // SD-134
   const capped = creditedPoints(s);
   const commit = (edited: BoardInput[]) => {
     for (const a of boardCorrection(s, edited)) dispatch(a as never);
@@ -205,7 +234,7 @@ function BoardEditor({ state: s, dispatch, nameOf, homeRoster, awayRoster }: {
     if (ok) commit(list.map((x, i) => (i === draft.index ? b : x)));
   };
   const label = (b: BoardInput, i: number) =>
-    `G${s.boards[i].game} · ${nameOf(b.side)} +${capped[i]} ${b.penalty ? '(⚠️ penalty)' : `(${b.coins} coin${b.coins === 1 ? '' : 's'}${b.queen ? ' + 👑' : ''})`}${breakers[i] ? ` · ${nameOf(breakers[i]!)} broke` : ''}`;
+    `G${s.boards[i].game} · ${nameOf(b.side)} +${capped[i]} ${b.penalty ? '(⚠️ penalty)' : `(${b.coins} coin${b.coins === 1 ? '' : 's'}${b.queen ? ' + 👑' : ''})`}${breakBy[i]?.name ? ` · ${breakBy[i]!.name} broke` : breakers[i] ? ` · ${nameOf(breakers[i]!)} broke` : ''}`;
 
   return (
     <View style={{ gap: theme.spacing(2) }}>
@@ -324,6 +353,8 @@ export const carromPlugin: SportPlugin<CarromState> = {
   statTotalsNeedsPlayers: true,
   statTotalsPartial: true,
   Scoreboard: CarromScoreboard,
+  // SD-137a — voice scoring (period / match ends ask first)
+  voice: { hints: ['board home 5', '{name} 3 queen', 'board away 9 slam', 'penalty home'], parse: carromVoice, ends: carromVoiceEnds },
   ScoringControls,
   LiveExtras,
   formatFields: [

@@ -3,7 +3,7 @@
  *  an utterance means (explicit home/away, a team name, or a matched player).
  *  Football keeps its own richer grammar; these power every other sport. */
 import type { Player } from '../core/types';
-import type { VoiceContext } from './types';
+import type { ScoreAction, SportPlugin, VoiceContext, VoiceEnding } from './types';
 
 /** Strip accents so "Modric" matches "Modrić", lower-case, keep alnum + spaces. */
 export const deburr = (s: string): string =>
@@ -21,6 +21,27 @@ export function numberFromText(text: string): number | undefined {
   if (digit) return Number(digit[1]);
   for (const [w, n] of Object.entries(NUM_WORDS)) if (new RegExp(`\\b${w}\\b`).test(q)) return n;
   return undefined;
+}
+
+/** SD-137a — every number in the phrase, in the order spoken ("4 5",
+ *  "four five", "Rao 4 Khan five"). */
+export function numbersFromText(text: string): number[] {
+  const words = Object.keys(NUM_WORDS).join('|');
+  const re = new RegExp(`\\b(\\d{1,2}|${words}|zero|nil)\\b`, 'g');
+  const out: number[] = [];
+  for (const m of deburr(text).matchAll(re)) out.push(/^\d/.test(m[1]) ? Number(m[1]) : m[1] === 'zero' || m[1] === 'nil' ? 0 : NUM_WORDS[m[1]]);
+  return out;
+}
+
+/** SD-137a — the phrase with both team names taken out, so a house called
+ *  "Red" or "Yellow" never reads as a card colour. */
+export function withoutTeams(text: string, ctx: Pick<VoiceContext, 'homeName' | 'awayName'>): string {
+  let q = deburr(text);
+  for (const n of [ctx.homeName, ctx.awayName]) {
+    const t = n ? deburr(n) : '';
+    if (t) q = q.split(t).join(' ');
+  }
+  return q.replace(/\s+/g, ' ').trim();
 }
 
 /** Best player match: surname / any name token contained, else jersey number. */
@@ -67,3 +88,25 @@ export const attribution = (player: Player | undefined, stat: string, by?: numbe
 /** SD-119 — stamp the credited player's own side (when it isn't the action's). */
 export const sided = <A extends object>(a: A | undefined, side: 'home' | 'away'): (A & { side: 'home' | 'away' }) | undefined =>
   a ? { ...a, side } : undefined;
+
+/** SD-137a — does this call end a period / the match? The sport says first;
+ *  otherwise any call that would complete the match counts as full time. */
+export function voiceEnding(
+  voice: Pick<NonNullable<SportPlugin['voice']>, 'ends'>, actions: ScoreAction[], state: unknown, wouldComplete?: (actions: ScoreAction[]) => boolean,
+): VoiceEnding | null {
+  let e: VoiceEnding | null = null;
+  try { e = voice.ends?.(actions, state) ?? null; } catch { e = null; }
+  if (e) return e;
+  try { return wouldComplete?.(actions) ? { action: 'fullTime' } : null; } catch { return null; }
+}
+
+/** SD-137a — would these actions complete a match that isn't complete yet?
+ *  (the plugin's own pure reducer + isComplete; never throws). */
+export function completesMatch<S>(
+  plugin: { reducer: (s: S, a: ScoreAction) => S; isComplete: (s: S) => boolean }, state: S, actions: ScoreAction[],
+): boolean {
+  try {
+    if (plugin.isComplete(state)) return false;
+    return plugin.isComplete(actions.reduce((s, a) => plugin.reducer(s, a), state));
+  } catch { return false; }
+}

@@ -469,7 +469,8 @@ export function useTeamSummary(id: string) {
 /** Per-sport standings + individual stat leaders (and the matches, for reuse).
  *  Pass `tournamentId` to scope the table AND the leaders to one tournament —
  *  otherwise it's every match in that sport. */
-export function useStandings(sport: SportId, tournamentId?: string): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[]; phases: StandingsPhase[] } {
+/** `nonce` (SD-138): bump it to refetch while the screen stays open (live groups). */
+export function useStandings(sport: SportId, tournamentId?: string, nonce = 0): { teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[]; phases: StandingsPhase[] } {
   const [data, setData] = useState<{ teams: TeamStanding[]; leaders: StatLeader[]; matches: Match[]; phases: StandingsPhase[] }>({ teams: [], leaders: [], matches: [], phases: [] });
   useFocusEffect(
     useCallback(() => {
@@ -496,7 +497,7 @@ export function useStandings(sport: SportId, tournamentId?: string): { teams: Te
       return () => {
         on = false;
       };
-    }, [sport, tournamentId])
+    }, [sport, tournamentId, nonce])
   );
   return data;
 }

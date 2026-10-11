@@ -7,6 +7,8 @@ export const tennisStats: SportStatSchema<'tennis'> = {
   sport: 'tennis',
   /** SD-25 — career split chips (line context) */
   splits: ['discipline', 'format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (singles / doubles, best-of) */
+  leaderSplits: ['discipline', 'format'],
   stats: [
     { ...POINTS, group: 'points', weight: 1 },
     { ...ACES, group: 'serve', weight: 2 },

@@ -9,7 +9,7 @@ import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
-  shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText, isCrewSport, crewMembersText,
+  shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, archMatch, bracketRowText, isCrewSport, crewMembersText,
   cycRowText, cycKind, sprintBracket, isRoadDiscipline, roadRowText,
   type DisciplineDef, type RankedEntry, type ResultFlag, type RoadFormat,
 } from '../../data/results';
@@ -103,7 +103,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   const many = heats.size > 1;
   // SD-95: archery match play — each archer's matches ("QF W 6–4 · SF L 5–6 (SO 9–10)")
   const allRows = [...heats.values()].flat().map((r) => r.entry);
-  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
+  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def), archMatch(bracketFormat(def), def.rules)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
   // SD-98: an order event's column — time / gap (road), points (points race), nothing (keirin, scratch, elimination)
   const cycK = def.sport === 'cycling' ? cycKind(def.key) : undefined;
   // SD-92: road / walk / XC — the bib column (the detail line drops it)

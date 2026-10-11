@@ -20,6 +20,10 @@ import { getAllStatLines } from '../../data/repos';
 import { categoryLeaders } from '../../data/standings';
 import { readLeaderMins } from '../../data/leaderMinimums';
 import { golfLeaderCategories } from '../../data/golfLeaders';
+import { patchTournamentFormat } from '../../data/repos';
+import { prizeSetupOf, prizeSetupPatch, prizeCutoff, type PrizeSetup, type PrizeContext } from '../../data/prizeCategories';
+import { PrizeCategoryBar, PrizeList, useCategoryRows } from '../PrizeCategories';
+import { toParLabel } from '../../sports/golf/engine';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,6 +34,24 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
   const scoring = events.length ? golfFormatOf(events[events.length - 1]).scoring : (format?.competition === 'stableford' ? 'stableford' : 'stroke');
   const last = events[events.length - 1];
   const nameOf = (pid: string) => players.get(pid)?.fullName ?? 'Player';
+  // SD-134 — divisions inside one field (Boys U-12 / U-15, Girls …): one
+  // leaderboard filtered to a division, places within it, prizes per division
+  const [divDraft, setDivDraft] = useState<PrizeSetup | null | undefined>(undefined);
+  const [div, setDiv] = useState<string | null>(null);
+  const divSetup = divDraft !== undefined ? divDraft : prizeSetupOf(format);
+  const divCtx = useMemo<PrizeContext>(() => ({
+    cutoff: prizeCutoff(divSetup, 'golf', [...events].map((e) => e.startsAt).filter(Boolean).sort()[0]),
+    personOf: (id) => { const p = players.get(id); return p ? { id: p.id, gender: p.gender, dob: p.dob, age: p.age } : undefined; },
+  }), [divSetup, events, players]);
+  const divRows = useCategoryRows(rows, divSetup, div, divCtx);
+  const shownRows = useMemo(
+    () => (divRows ? divRows.map((x) => ({ ...x.row, positionLabel: x.place == null ? x.row.positionLabel : x.label })) : rows),
+    [divRows, rows],
+  );
+  const saveDivs = async (next: PrizeSetup | null) => {
+    await patchTournamentFormat(tournamentId, 'golf', prizeSetupPatch(next));
+    setDivDraft(next);
+  };
   // SD-42 — R1–R4 + "F" / thru N / "–", and a card drill-down per round
   const cells = useMemo(() => roundCells(events, entries, courses), [events, entries, courses]);
   const [pick, setPick] = useState<number | null>(null);
@@ -99,9 +121,15 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
           ))}
         </View>
       )}
-      <GolfLeaderboard rows={rows} scoring={scoring} nameOf={nameOf} roundCols={cells} cards={cards}
+      {/* SD-134 — divisions on one leaderboard */}
+      <PrizeCategoryBar sport="golf" setup={divSetup} canEdit={canOrganize} onSave={saveDivs} active={div} onPick={setDiv}
+        ids={rows.map((r) => r.id)} nameOf={nameOf} ctx={divCtx} />
+      <GolfLeaderboard rows={shownRows} scoring={scoring} nameOf={nameOf} roundCols={cells} cards={cards}
         cardTitle={cardEv ? `Round ${cardEv.roundNo} card` : undefined} />
       {rows.length > 0 && <Text style={textStyles.muted}>Tap a player for their card{events.length > 1 ? ' (pick the round above)' : ''}. F = round finished · – = not teed off.</Text>}
+      {divSetup && divSetup.cats.length > 0 && rows.some((r) => r.thru > 0 || r.grossTotal > 0) && (
+        <PrizeList title="🏅 Division prizes" rows={rows} setup={divSetup} ctx={divCtx} nameOf={nameOf} valueOf={(r) => (scoring === 'stableford' ? `${r.total} pts` : toParLabel(r.total))} />
+      )}
       {/* SD-76 — team stroke play: best N of M across the rounds */}
       {last && golfTeamFormatOf(last) && (
         <>

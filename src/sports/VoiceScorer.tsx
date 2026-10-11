@@ -4,14 +4,19 @@
  *  mishear must never silently change a scoreline, calls default to a **confirm**
  *  step (propose → tap to apply); a scorer who trusts it can flip on **auto-apply**
  *  for confident calls, with a live feed + one-tap **Undo** as the safety net.
- *  Typed commands are explicit, so they apply immediately. */
+ *  Typed commands are explicit, so they apply immediately.
+ *  SD-137a: a call that ends a period or the match (the sport's `voice.ends`,
+ *  or any call that would complete the match) always asks in the ConfirmSheet
+ *  before it applies — Auto mode included — exactly like the buttons. */
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, TextField, textStyles } from '../components/ui';
 import { useSpeech } from '../core/speech';
+import { confirmMatchAction } from '../components/ConfirmSheet';
 import type { Player } from '../core/types';
-import type { ScoreAction, SportPlugin } from './types';
+import type { ScoreAction, SportPlugin, VoiceEnding } from './types';
+import { voiceEnding } from './voiceMatch';
 
 /** Below this recognizer confidence a call is sent to confirm even in auto mode
  *  (0 / absent confidence ⇒ unknown ⇒ trusted, so it still works where the
@@ -20,10 +25,11 @@ const LOW_CONFIDENCE = 0.55;
 
 type LogKind = 'applied' | 'confirmed' | 'discarded' | 'unheard';
 interface LogEntry { id: number; text: string; summary: string; kind: LogKind }
-interface Pending { text: string; actions: ScoreAction[]; summary: string; conf?: number; typed?: boolean }
+interface Pending { text: string; actions: ScoreAction[]; summary: string; conf?: number; typed?: boolean; ending?: VoiceEnding | null }
+
 
 export function VoiceScorer({
-  voice, state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [], onUndo,
+  voice, state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [], onUndo, wouldComplete,
 }: {
   voice: NonNullable<SportPlugin['voice']>;
   state: unknown;
@@ -34,6 +40,8 @@ export function VoiceScorer({
   awayRoster?: Player[];
   /** the live screen's rewind — wired to the "Undo last" safety button */
   onUndo?: () => void;
+  /** SD-137a — would these actions complete the match? (reducer + isComplete) */
+  wouldComplete?: (actions: ScoreAction[]) => boolean;
 }) {
   const [text, setText] = useState('');
   const [autoApply, setAutoApply] = useState(false);
@@ -62,7 +70,13 @@ export function VoiceScorer({
   const pushLog = (text: string, summary: string, kind: LogKind) =>
     setLog((prev) => [{ id: ++idRef.current, text, summary, kind }, ...prev].slice(0, 6));
 
-  const applyNow = (actions: ScoreAction[], text: string, summary: string, kind: LogKind = 'applied') => {
+  const applyNow = async (actions: ScoreAction[], text: string, summary: string, kind: LogKind = 'applied', ending?: VoiceEnding | null) => {
+    // SD-137a: ending a period / the match asks first, as the buttons do
+    if (ending && !(await confirmMatchAction(ending.action, { period: ending.period, score: ending.score, detail: ending.detail }))) {
+      pushLog(text, summary, 'discarded');
+      setPending(null);
+      return;
+    }
     actions.forEach(dispatch);
     pushLog(text, summary, kind);
     setPending(null);
@@ -72,14 +86,20 @@ export function VoiceScorer({
   const handle = (raw: string, confidence?: number, typed = false) => {
     const t = raw.trim();
     if (!t) return;
-    const actions = voice.parse(t, { state, homeName, awayName, homeRoster, awayRoster });
+    const actions = voice.parse(t, { state, homeName, awayName, homeRoster, awayRoster, now: Date.now() });
     if (!actions || actions.length === 0) { pushLog(t, `didn’t catch “${t}”`, 'unheard'); return; }
-    const summary = describe(actions);
+    const ending = voiceEnding(voice, actions, state, wouldComplete);
+    // an explicit "end the quarter / full time" reads as such; a point that
+    // would close the match keeps its own line plus a warning
+    const explicit = ending && actions.every((a) => /^(END|END_PERIOD|NEXT_HALF|END_GAME)$/.test(a.type));
+    const summary = !ending ? describe(actions)
+      : explicit ? `${ending.action === 'fullTime' ? 'full time' : `end of ${ending.period ?? 'the period'}`}${ending.score ? ` · ${ending.score}` : ''}`
+      : `${describe(actions)} · ${ending.action === 'fullTime' ? 'ends the match' : `ends ${ending.period ?? 'the period'}`}`;
     const lowConf = confidence != null && confidence > 0 && confidence < LOW_CONFIDENCE;
     // Auto mode applies confident calls straight away; Confirm mode (default) and any
     // low-confidence call wait for a tap — a mishear never changes the score silently.
-    if (autoApply && !lowConf) applyNow(actions, t, summary);
-    else setPending({ text: t, actions, summary, conf: confidence, typed });
+    if (autoApply && !lowConf) void applyNow(actions, t, summary, 'applied', ending);
+    else setPending({ text: t, actions, summary, conf: confidence, typed, ending });
   };
 
   const speech = useSpeech(handle);
@@ -120,7 +140,7 @@ export function VoiceScorer({
             <Text style={st.pendingSummary} numberOfLines={1}>→ {pending.summary}</Text>
           </View>
           <Button label="✕" variant="ghost" onPress={() => { pushLog(pending.text, pending.summary, 'discarded'); setPending(null); }} />
-          <Button label="✓ Apply" variant="primary" onPress={() => applyNow(pending.actions, pending.text, pending.summary, 'confirmed')} />
+          <Button label={pending.ending ? '✓ Apply…' : '✓ Apply'} variant="primary" onPress={() => void applyNow(pending.actions, pending.text, pending.summary, 'confirmed', pending.ending)} />
         </View>
       ) : null}
 

@@ -18,7 +18,7 @@ import {
   endsOf, endSum, endText, parseEnd, archRowText, setEnd, sortEnd,
   bracketState, staleMatchData, outcomeText, roundShort, setMatchEnd, setMatchSo, setCloser, setWalkover, clearMatches,
   MATCH_ARROWS, MATCH_ENDS, arrowValue,
-  type Arrow, type ArchRoundDef, type ArchMatchFormat, type BMatch, type EntryResult, type ResultEntry,
+  type Arrow, type ArchRoundDef, type ArchMatchFormat, type BMatch, type EntryResult, type ResultEntry, type CompRules, archMatch,
 } from '../../data/results';
 
 type Save = (entryId: string, next: EntryResult, undoLabel?: string) => void;
@@ -168,8 +168,9 @@ export function EndCard({ entries, round, editable, onSave }: { entries: ResultE
 
 /* -------------------------------- match play ------------------------------- */
 
-export function BracketCard({ entries, round, fmt, editable, onSave }: { entries: ResultEntry[]; round: ArchRoundDef; fmt: ArchMatchFormat; editable: boolean; onSave: Save }) {
-  const state = useMemo(() => bracketState(entries, fmt), [entries, fmt]);
+export function BracketCard({ entries, round, fmt, editable, onSave, rules }: { entries: ResultEntry[]; round: ArchRoundDef; fmt: ArchMatchFormat; editable: boolean; onSave: Save; /** SD-141: the meet's shoot-off rule */ rules?: CompRules }) {
+  const match = useMemo(() => archMatch(fmt, rules), [fmt, rules]);
+  const state = useMemo(() => bracketState(entries, fmt, match), [entries, fmt, match]);
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const nm = (id?: string) => (id ? byId.get(id)?.name ?? '' : '');
   const seed = (id?: string) => (id ? byId.get(id)?.result.seed : undefined);
@@ -211,13 +212,13 @@ export function BracketCard({ entries, round, fmt, editable, onSave }: { entries
         </View>
       ))}
       {sel && sel.known && !sel.bye && sel.a && sel.b ? (
-        <MatchScorer key={`${sel.key}:${sel.slot}:${sel.a}:${sel.b}`} m={sel} rounds={state.rounds} entries={entries} fmt={fmt} editable={editable} onSave={onSave} />
+        <MatchScorer key={`${sel.key}:${sel.slot}:${sel.a}:${sel.b}`} m={sel} rounds={state.rounds} entries={entries} fmt={fmt} editable={editable} onSave={onSave} match={match} />
       ) : null}
     </Card>
   );
 }
 
-function MatchScorer({ m, rounds, entries, fmt, editable, onSave }: { m: BMatch; rounds: number; entries: ResultEntry[]; fmt: ArchMatchFormat; editable: boolean; onSave: Save }) {
+function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: BMatch; rounds: number; entries: ResultEntry[]; fmt: ArchMatchFormat; editable: boolean; onSave: Save; match?: ReturnType<typeof archMatch> }) {
   const ea = entries.find((e) => e.id === m.a)!, eb = entries.find((e) => e.id === m.b)!;
   const A = ea.result.mp?.[m.key], B = eb.result.mp?.[m.key];
   const out = m.out!;
@@ -249,9 +250,9 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave }: { m: BMatch;
   /** Save new results for A and B; if that changes who went through, ask, and clear the later scores that no longer belong. */
   const apply = async (ra: EntryResult, rb: EntryResult, label: string) => {
     const after = entries.map((e) => (e.id === ea.id ? { ...e, result: ra } : e.id === eb.id ? { ...e, result: rb } : e));
-    const stale = staleMatchData(after, fmt, entries);
-    const before = bracketState(entries, fmt).matches.find((x) => x.key === m.key && x.slot === m.slot);
-    const now = bracketState(after, fmt).matches.find((x) => x.key === m.key && x.slot === m.slot);
+    const stale = staleMatchData(after, fmt, entries, match);
+    const before = bracketState(entries, fmt, match).matches.find((x) => x.key === m.key && x.slot === m.slot);
+    const now = bracketState(after, fmt, match).matches.find((x) => x.key === m.key && x.slot === m.slot);
     const flipped = !!before?.winner && before.winner !== now?.winner;
     if (stale.length || flipped) {
       const lines = stale.map((s) => `${entries.find((e) => e.id === s.id)?.name}: ${s.keys.map((k) => (k === 'B' ? 'bronze medal match' : roundShort(Number(k), rounds))).join(', ')}`);

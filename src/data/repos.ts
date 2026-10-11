@@ -21,7 +21,7 @@ import { planStatSync, applyStatWrites, onlyKeys, changedKeys, type MatchTotals 
 import { planAppearances, sideResults, subsCameOn, type AppearanceWrite } from './appearances';
 import { matchSideOf, planOpponentRepair } from './lineOpponent';
 import { mergeSportFormat } from './formatPatch';
-import { forfeitFor } from './walkover';
+import { forfeitFor, walkoverFormatFor, isWalkover, WALKOVER_SCORE_SPORTS } from './walkover';
 import { isLiveTournament } from './tournamentForm';
 import {
   orSafe, parseVsQuery, rankByName, filterByName, capIds, collapseTeams, liveOnly, selectMatchHits, matchNames, narrowBySports,
@@ -1971,6 +1971,9 @@ export async function syncMatchAppearances(matchId: string, stateArg?: unknown):
     if (!m) return 0;
     const outcome = sideResults({ sport: m.sport, status: m.status, winner: m.winner ?? null, result: m.result ?? null, state: stateArg ?? m.state });
     if (!outcome) return 0;
+    // SD-140: a team-sport walkover wasn't played — no player gets an
+    // appearance (or the result) from it; the team keeps the win and score.
+    if (WALKOVER_SCORE_SPORTS.includes(m.sport) && isWalkover(m)) return 0;
     const state = stateArg ?? m.state;
     const plugin = getSport(m.sport);
     const [squads, lineup, rosters, lines, mapId] = await Promise.all([
@@ -2688,7 +2691,8 @@ async function forfeitContext(matchId: string) {
   const m = await getMatch(matchId);
   if (!m) return null;
   const t = m.tournamentId ? (await getTournaments()).find((x) => x.id === m.tournamentId) : undefined;
-  const format = { ...((t?.formats?.[m.sport] as Record<string, unknown> | undefined) ?? {}), ...((m.format as Record<string, unknown> | undefined) ?? {}) };
+  // SD-140: a friendly always uses the federation default (walkoverFormatFor)
+  const format = walkoverFormatFor(t?.formats?.[m.sport] as Record<string, unknown> | undefined, m.format as Record<string, unknown> | undefined, !!m.tournamentId);
   return { m, format };
 }
 
@@ -2892,6 +2896,8 @@ export interface NewTeamTie {
   venueName?: string;
   /** the sport's match rules (points per game, games per match…) for every rubber */
   matchFormat?: SportFormat;
+  /** SD-134 — a team Swiss round's bye (the team sitting out), on every rubber */
+  byes?: string[];
 }
 
 /** Create a team tie: one normal match per rubber, all sharing a `__seriesId`
@@ -2911,6 +2917,7 @@ export async function createTeamTie(input: NewTeamTie): Promise<{ seriesId: stri
       sport: input.sport,
       group: input.group,
       stage: input.stage,
+      ...(input.byes?.length ? { byes: input.byes } : {}),
       homeTeamId: input.teamAId,
       awayTeamId: input.teamBId,
       startsAt: new Date(base + i * gapMs).toISOString(),

@@ -22,6 +22,8 @@ A weightlifting meet is a list of bodyweight categories (say Senior Men 79 kg), 
 4. **Opening weights (optional):** first snatch and clean & jerk in whole kilograms, or enter them at the weigh-in.
 5. Tap **Create event & weigh-in list**. Each lifter gets a drawn lot number: it sets the weigh-in order and breaks ties in the lifting order.
 
+> **Note:** The weight jump, the lifting order and the category lists are set once per meet in [competition rules](/guides/competition-rules-for-meets/).
+
 ## Step by step: weigh-in
 1. Open the category. The **⚖️ Weigh-in** card lists lifters in lot order.
 2. Type each **Bw** (bodyweight) to 0.01 kg, and the opening **Sn** and **C&J** if you haven't yet.

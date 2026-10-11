@@ -26,6 +26,7 @@ import { scoreUnit, type ScoreUnit } from './standings.ts';
 import { resultFor, type Leader, type Result } from './teamStats.ts';
 import { withLineResults } from './leaderMinimums.ts';
 import { seasonOf } from './lineContext.ts';
+import { isWalkover, teamScoreOf } from './walkover.ts';
 
 /* --------------------------------- unit --------------------------------- */
 
@@ -46,7 +47,8 @@ export function teamUnit(sport: SportId): { unit: ScoreUnit; word: string; one: 
 
 const signedText = (n: number, dp = 0) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(dp)}`;
 
-/** A completed match this team played with a counted score (not NR / w/o). */
+/** A completed match this team played, with its counted score (not NR; a
+ *  walkover / forfeit counts its forfeit score — SD-140). */
 interface Played { m: Match; side: 'home' | 'away'; r: Result; f?: number; a?: number; opp: string }
 
 function playedBy(teamId: string, matches: Match[]): Played[] {
@@ -55,10 +57,12 @@ function playedBy(teamId: string, matches: Match[]): Played[] {
     const r = resultFor(m, teamId);
     if (!r) return;
     const side = m.homeTeam.id === teamId ? 'home' : 'away';
-    const scored = r !== 'NR' && !m.walkover && !!m.score;
+    // SD-140: the team's score — a walkover / forfeit's `result.forfeit` score
+    // (as the table counts it), else the board; an old walkover has none
+    const ts = r !== 'NR' ? teamScoreOf(m) : undefined;
     out.push({
       i, m, side, r, opp: (side === 'home' ? m.awayTeam : m.homeTeam).name,
-      ...(scored ? { f: side === 'home' ? m.score!.home : m.score!.away, a: side === 'home' ? m.score!.away : m.score!.home } : {}),
+      ...(ts ? { f: side === 'home' ? ts.home : ts.away, a: side === 'home' ? ts.away : ts.home } : {}),
     });
   });
   // oldest → newest (runs read forwards); same kick-off time → the later in
@@ -215,6 +219,8 @@ export function teamRecords(
   const detail = (p: Played) => {
     let line = '';
     try { line = opts.lineOf?.(p.m) ?? ''; } catch { line = ''; }
+    // SD-140: a walkover's forfeit score reads as one ("vs X · w/o · date")
+    if (!line && isWalkover(p.m)) line = 'w/o';
     return [`vs ${p.opp}`, line, day(p.m.startsAt)].filter(Boolean).join(' · ');
   };
   const score = (p: Played) => `${p.f}–${p.a}`;
@@ -258,9 +264,11 @@ export function teamRecords(
     for (let i = decided.length - 1; i >= 0 && decided[i].r === last; i--) n++;
     out.push({ key: 'currentRun', label: 'Current run', value: `${last}${n}` });
   }
-  if (GOAL_SPORTS.has(sport) && scored.length) {
-    out.push({ key: 'cleanSheets', label: 'Clean sheets', value: String(scored.filter((p) => p.a === 0).length) });
-    out.push({ key: 'failedToScore', label: 'Failed to score', value: String(scored.filter((p) => p.f === 0).length) });
+  // a walkover wasn't played — no clean sheet / failure to score (SD-140)
+  const onPitch = scored.filter((p) => !isWalkover(p.m));
+  if (GOAL_SPORTS.has(sport) && onPitch.length) {
+    out.push({ key: 'cleanSheets', label: 'Clean sheets', value: String(onPitch.filter((p) => p.a === 0).length) });
+    out.push({ key: 'failedToScore', label: 'Failed to score', value: String(onPitch.filter((p) => p.f === 0).length) });
   }
   return out;
 }

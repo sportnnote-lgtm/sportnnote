@@ -20,6 +20,7 @@
 import type { ArchSide, DisciplineDef, RankedEntry, ResultEntry, ResultFlag, ResultStatus } from './model.ts';
 import { STATUS_ORDER } from './model.ts';
 import { archRoundOf, arrowValue, endSum, matchFormatOf, MATCH_ARROWS, MATCH_ENDS, SET_WIN, type ArchMatchFormat, type Arrow } from './archeryDefs.ts';
+import { ruleOf, type CompRules } from './competitionRules.ts';
 
 /** Is this a phase of match play (bracket rows carry `mp`)? */
 export const isBracketRows = (entries: ResultEntry[]): boolean => entries.some((e) => e.result?.mp != null);
@@ -85,7 +86,7 @@ export interface MatchOutcome {
 const fullEnds = (s?: ArchSide): Arrow[][] => (s?.ends ?? []).filter((e) => e && e.length >= MATCH_ARROWS);
 
 /** One match from both sides' arrows. `okA` / `okB` = still competing (no DNS / WD / DQ). */
-export function matchOutcome(A: ArchSide | undefined, B: ArchSide | undefined, fmt: ArchMatchFormat, okA = true, okB = true): MatchOutcome {
+export function matchOutcome(A: ArchSide | undefined, B: ArchSide | undefined, fmt: ArchMatchFormat, okA = true, okB = true, soRepeat = false): MatchOutcome {
   const base: MatchOutcome = { ends: [], a: 0, b: 0, ta: 0, tb: 0, shootOff: false, done: false };
   okA = okA && !A?.wo; okB = okB && !B?.wo;
   if (!okA || !okB) return { ...base, done: true, walkover: true, ...(okA ? { winner: 'a' as const } : okB ? { winner: 'b' as const } : {}) };
@@ -117,6 +118,8 @@ export function matchOutcome(A: ArchSide | undefined, B: ArchSide | undefined, f
     if (va == null || vb == null) return { ...o, soNeed: { round: j + 1, kind: 'arrows' } };
     const x = arrowValue(va), y = arrowValue(vb);
     if (x !== y) return finishSo(o, x > y ? 'a' : 'b', j, false, fmt);
+    // SD-141: a meet that doesn't measure — level arrows shoot again
+    if (soRepeat) continue;
     const ca = !!A?.closer?.[j], cb = !!B?.closer?.[j];
     if (ca !== cb) return finishSo(o, ca ? 'a' : 'b', j, true, fmt);
     if (A?.so?.[j + 1] == null && B?.so?.[j + 1] == null) return { ...o, soNeed: { round: j + 1, kind: 'closer' } };
@@ -184,6 +187,11 @@ export const bracketFormat = (def: Pick<DisciplineDef, 'key'>): ArchMatchFormat 
 /** SD-98: how one match is decided — archery by default; the track sprint
  *  (cycling.ts `sprintMatch`) passes its best-of-three heats. */
 export type MatchFn = (A: ArchSide | undefined, B: ArchSide | undefined, okA: boolean, okB: boolean) => MatchOutcome;
+
+/** SD-141: the match rule for an archery bracket under the meet's rules —
+ *  undefined = World Archery (level shoot-off arrows: closest to the centre). */
+export const archMatch = (fmt: ArchMatchFormat, rules?: CompRules | null): MatchFn | undefined =>
+  (ruleOf(rules, 'archShootOff') === 'repeat' ? (A, B, okA, okB) => matchOutcome(A, B, fmt, okA, okB, true) : undefined);
 
 /** Where the bracket stands (pure — from the rows' seeds and match sides). */
 export function bracketState(entries: ResultEntry[], fmt: ArchMatchFormat, match?: MatchFn): BracketState {
@@ -297,7 +305,7 @@ export const hasMatchData = (r?: { mp?: Record<string, ArchSide> } | null): bool
 
 /** Rank match play: places from the bracket, the archers still in (by seed), then DNS / WD / DQ. */
 export function rankArcheryBracket(entries: ResultEntry[], def: DisciplineDef, match?: MatchFn): RankedEntry[] {
-  const st = bracketState(entries, bracketFormat(def), match);
+  const st = bracketState(entries, bracketFormat(def), match ?? archMatch(bracketFormat(def), def.rules));
   const out: RankedEntry[] = [];
   const lastText = (id: string): string => {
     const mine = st.matches.filter((m) => m.out && !m.bye && (m.a === id || m.b === id) && (m.out.ends.length || m.out.walkover || m.out.done));

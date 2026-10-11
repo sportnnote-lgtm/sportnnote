@@ -103,7 +103,9 @@ export function buildCrosstable({ rows, cfg, ratingOf, rounds, pending }: Crosst
           continue;
         }
         if (g.kind === 'bye') {
-          cells.push({ col: r, text: 'bye', title: `Round ${r}: bye (${halfText(g.points)})`, done: true, kind: 'bye', points: g.points });
+          // SD-134 — a requested bye / a late entry's missed round: "bye½" / "bye0"
+          const asked = g.requested ? `${g.requested === 'hpb' ? 'requested ' : ''}${g.points === 0.5 ? '½-point' : g.points === 0 ? 'zero-point' : `${halfText(g.points)}-point`} bye` : '';
+          cells.push({ col: r, text: g.requested ? `bye${halfText(g.points)}` : 'bye', title: g.requested ? `Round ${r}: ${asked} (not paired)` : `Round ${r}: bye (${halfText(g.points)})`, done: true, kind: 'bye', points: g.points });
           continue;
         }
         const oppRank = g.opponentId ? rankOf.get(g.opponentId) : undefined;

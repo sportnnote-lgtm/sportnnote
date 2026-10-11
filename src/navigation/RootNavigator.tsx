@@ -16,6 +16,7 @@ import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
 import '../data/teamTieDemoSeed'; // SD-48: __sportnnoteDemo.seedTeamTies() — demo mode (no backend) only
+import '../data/sd134DemoSeed'; // SD-134: __sportnnoteDemo.seedChessSwiss() / seedGolfDivisions() — demo mode only
 import '../data/matchRecordsBackfill'; // SD-51: registers __sportnnoteAdmin.backfillMatchRecords (console only)
 import { OnboardingOverlay } from '../components/OnboardingOverlay';
 import HomeScreen from '../screens/HomeScreen';
@@ -40,6 +41,7 @@ const CreateSeriesScreen = lazyScreen(() => import('../screens/CreateSeriesScree
 const SeriesScreen = lazyScreen(() => import('../screens/SeriesScreen'));
 const EditMatchScreen = lazyScreen(() => import('../screens/EditMatchScreen'));
 const GenerateFixturesScreen = lazyScreen(() => import('../screens/GenerateFixturesScreen'));
+const SwissRoundScreen = lazyScreen(() => import('../screens/SwissRoundScreen'));
 const ImportScheduleScreen = lazyScreen(() => import('../screens/ImportScheduleScreen'));
 const AssignScorersScreen = lazyScreen(() => import('../screens/AssignScorersScreen'));
 const TournamentTeamsScreen = lazyScreen(() => import('../screens/TournamentTeamsScreen'));
@@ -68,10 +70,12 @@ const AthleticsEventSetupScreen = lazyScreen(() => import('../screens/AthleticsE
 const RecordBoardScreen = lazyScreen(() => import('../screens/RecordBoardScreen'));
 const MeetTimetableScreen = lazyScreen(() => import('../screens/MeetTimetableScreen'));
 const MeetEntriesScreen = lazyScreen(() => import('../screens/MeetEntriesScreen'));
+const CompetitionRulesScreen = lazyScreen(() => import('../screens/CompetitionRulesScreen'));
 const StandingsScreen = lazyScreen(() => import('../screens/StandingsScreen'));
 const SportHubScreen = lazyScreen(() => import('../screens/SportHubScreen'));
 const TryNewSportScreen = lazyScreen(() => import('../screens/TryNewSportScreen'));
 const BracketScreen = lazyScreen(() => import('../screens/BracketScreen'));
+const TeamJourneyScreen = lazyScreen(() => import('../screens/TeamJourneyScreen'));
 const TeamProfileScreen = lazyScreen(() => import('../screens/TeamProfileScreen'));
 const SquadScreen = lazyScreen(() => import('../screens/SquadScreen'));
 const ClubsScreen = lazyScreen(() => import('../screens/ClubsScreen'));
@@ -107,7 +111,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'CompetitionRules', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'SwissRound', 'Team', 'TeamJourney', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -336,6 +340,11 @@ export default function RootNavigator() {
       options={{ ...stackScreenOpts, title: 'Bracket' }}
         />
       <Stack.Screen
+      name="TeamJourney"
+      component={TeamJourneyScreen}
+      options={{ ...stackScreenOpts, title: 'Journey' }}
+        />
+      <Stack.Screen
       name="Team"
       component={TeamProfileScreen}
       options={{ ...stackScreenOpts, title: 'Team' }}
@@ -417,6 +426,11 @@ export default function RootNavigator() {
               name="GenerateFixtures"
               component={GenerateFixturesScreen}
               options={{ ...stackScreenOpts, title: 'Auto-generate Fixtures' }}
+            />
+            <Stack.Screen
+              name="SwissRound"
+              component={SwissRoundScreen}
+              options={{ ...stackScreenOpts, title: 'Swiss round' }}
             />
             <Stack.Screen
               name="ImportSchedule"
@@ -515,6 +529,11 @@ export default function RootNavigator() {
               name="MeetEntries"
               component={MeetEntriesScreen}
               options={{ ...stackScreenOpts, title: 'Meet entries' }}
+            />
+            <Stack.Screen
+              name="CompetitionRules"
+              component={CompetitionRulesScreen}
+              options={{ ...stackScreenOpts, title: 'Competition rules' }}
             />
             <Stack.Screen
               name="MeetTimetable"

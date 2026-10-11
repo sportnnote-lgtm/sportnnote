@@ -14,7 +14,7 @@ Chess is scored once per game: who won, or a draw, and how it ended. The app wri
 
 ## Before you start
 - You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
-- In a Swiss, the pairing already gives each game its colours. See [Run a chess tournament](/guides/run-a-chess-tournament/).
+- In a Swiss, the pairing already gives each game its colours. See [Run a chess tournament](/guides/run-a-chess-tournament/). An arbiter can enter a whole round on one screen instead: see [Run Swiss rounds](/guides/run-swiss-rounds-as-arbiter/).
 
 ## Step by step
 1. Open the game → **Scoring** tab and tap **▶ Start the match**.

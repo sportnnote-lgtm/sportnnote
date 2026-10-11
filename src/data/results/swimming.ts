@@ -201,10 +201,11 @@ export function heatAssignment(n: number, lanes: number, opts: { heats?: number;
  * the next fastest on their left (the next lane up), then alternating right
  * and left. 8 lanes: 4 5 3 6 2 7 1 8 · 10 lanes: 4 5 3 6 2 7 1 8 0 9.
  */
-export function swimLaneOrder(lanes: number): number[] {
-  const first = lanes === 10 ? 0 : 1;
+export function swimLaneOrder(lanes: number, zero: boolean = lanes === 10): number[] {
+  // SD-141: a 10-lane pool numbered 1–10 (the organiser's choice) — centre lane 5
+  const first = zero ? 0 : 1;
   const last = first + lanes - 1;
-  const centre = lanes === 10 ? 4 : lanes % 2 ? (lanes + 1) / 2 : lanes / 2;
+  const centre = zero ? (lanes === 10 ? 4 : lanes / 2 - 1) : lanes % 2 ? (lanes + 1) / 2 : lanes / 2;
   const out = [centre];
   for (let d = 1; out.length < lanes; d++) {
     if (centre + d <= last) out.push(centre + d);
@@ -219,7 +220,7 @@ export function swimLaneOrder(lanes: number): number[] {
  * SW 3.2.1 (alternating, the fastest in the last semi), a final or a timed
  * final fastest-heat-last; lanes per SW 3.1.2 inside every heat.
  */
-export function swimSeed(rankedIds: string[], phase: PhaseKind, heats: number, lanes: number, discipline: string): Seeded[] {
+export function swimSeed(rankedIds: string[], phase: PhaseKind, heats: number, lanes: number, discipline: string, zero: boolean = lanes === 10): Seeded[] {
   const n = rankedIds.length;
   let groups: number[][];
   if (phase === 'semi') {
@@ -232,7 +233,7 @@ export function swimSeed(rankedIds: string[], phase: PhaseKind, heats: number, l
   } else {
     groups = heatAssignment(n, lanes, { heats, consecutive: phase === 'final', distance: swimEventOf(discipline)?.distance });
   }
-  const pattern = swimLaneOrder(lanes);
+  const pattern = swimLaneOrder(lanes, zero);
   const out: Seeded[] = [];
   groups.forEach((ranks, h) => {
     [...ranks].sort((a, b) => a - b).forEach((rank, i) => {

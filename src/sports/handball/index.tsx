@@ -40,6 +40,7 @@ import { handballTickerDetail, handballTickerFlash } from './ticker';
 import { handballFormation, HandballCourt } from './court';
 import { usePendingEdit } from '../usePendingEdit';
 import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
+import { handballVoice, handballVoiceEnds } from '../voiceParsers';
 
 const opp = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -693,6 +694,8 @@ export const handballPlugin: SportPlugin<HandballState> = {
   statTotals: handballTotals,
   tickerDetail: handballTickerDetail,
   tickerFlash: handballTickerFlash,
+  // SD-137a — voice scoring (period / match ends ask first)
+  voice: { hints: ['goal {name}', 'wing goal {name} assist {name}', '7 m saved {name}', 'two minutes {name}', 'time-out home', 'end half'], parse: handballVoice, ends: handballVoiceEnds },
   ScoringControls,
   LiveClock,
   Scoreboard: HandballScoreboard,

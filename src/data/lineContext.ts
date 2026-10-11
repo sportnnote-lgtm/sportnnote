@@ -147,6 +147,8 @@ function formatFor(sport: SportId, cfg: Cfg, state: Cfg): SplitValue | undefined
       return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
     }
     case 'football': {
+      // SD-137a: futsal is its own format (FIFA Futsal Laws), not "5-a-side"
+      if (cfg.futsal === true || strOf(cfg.preset) === 'futsal' || state.futsal === true) return v('futsal', 'Futsal');
       const n = numOf(cfg.playersPerSide);
       return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
     }

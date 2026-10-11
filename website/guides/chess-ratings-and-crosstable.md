@@ -45,6 +45,9 @@ On a phone the names stay in place and the grid scrolls sideways. Tap a player t
 
 A round-robin crosstable has one column per opponent, by rank. Each cell is the row player's result against that opponent: 1, ½, 0, + or −.
 
+## Category prizes
+Below the wall chart, hosts can set category prizes (U-11, best girl, best unrated, rating bands) from the same ratings and profiles. See [Category prizes and golf divisions](/guides/category-prizes-and-divisions/).
+
 ## How ARO and TPR are worked out
 - **ARO** (average rating of opponents) is the average rating of the opponents the player actually played, rounded to the nearest whole number.
 - Byes, forfeits and double forfeits are left out, and so are opponents with no rating on the event's list.

@@ -46,6 +46,11 @@ The higher handicap gets the difference between the two playing handicaps, at 10
 
 To change the course or handicaps later, tap **⚙ Change strokes / course**. **Stop entering strokes** goes back to tapping results only. Holes already played keep their result.
 
+## Score by voice
+Tap **🎤 Voice scoring** and say "hole home", "Asha wins the hole" or "halved". With strokes set up, say both scores, such as "Rao 4 Khan 5": the hole goes to the better net score. A hole that closes out the match asks first. See [Score by voice](/guides/score-by-voice/).
+
+Finished matches feed the tournament's records: biggest wins (such as 5&4), most holes won and most birdies. See [See a tournament's records](/guides/tournament-records/).
+
 ## Common questions
 ### Do strokes in match play count on my profile?
 Yes. Each hole you enter strokes for adds a birdie, par, bogey and so on to your golf stats, alongside holes won.

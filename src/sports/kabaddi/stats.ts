@@ -12,6 +12,8 @@ export const kabaddiStats: SportStatSchema<'kabaddi'> = {
   sport: 'kabaddi',
   /** SD-25 — career split chips (line context) */
   splits: ['format', 'tournament', 'season', 'opponent'],
+  /** SD-137a — tournament / hub leaderboard + awards chips (the style) */
+  leaderSplits: ['format'],
   stats: [
     // SD-27: a level total goes to the better per-match figure (fewer matches), then the milestones
     { key: 'raidPoints', label: 'Raid pts', short: 'raid pts', abbr: 'RAID', group: 'raiding', weight: 2, matchSummary: true,

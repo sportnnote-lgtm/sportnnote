@@ -29,6 +29,8 @@ import { teamPerGame, teamAverages, teamLeaders, teamRecords, teamMatchFilters, 
 import { formatDay } from '../core/dates';
 import { getTeamEventResults, type TeamEventResults as TeamEventData } from '../data/teamEventResults';
 import { TeamEventResults } from '../components/TeamEventResults';
+import { TournamentJourneyList } from '../components/TournamentHistory';
+import { journeysOf } from '../data/tournamentHistory';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -277,6 +279,14 @@ export default function TeamProfileScreen() {
                   ? <Stat value={`${stats.scored - stats.conceded >= 0 ? '+' : ''}${stats.scored - stats.conceded}`} label={perGame?.diffLabel ?? 'Difference'} />
                   : <Stat value={nrr === undefined ? '—' : `${nrr >= 0 ? '+' : ''}${nrr.toFixed(2)}`} label="Net run rate" />}
               </View>
+              {/* SD-140 — walkovers won / given (this sport, tournament and season
+                  chips apply); their forfeit score is in the team's for / against */}
+              {(stats.walkoversWon > 0 || stats.walkoversGiven > 0) && (
+                <View style={st.statGrid} accessibilityLabel={`Walkovers: ${stats.walkoversWon} won, ${stats.walkoversGiven} given`}>
+                  <Stat value={String(stats.walkoversWon)} label="Walkovers won" />
+                  <Stat value={String(stats.walkoversGiven)} label="Walkovers given" />
+                </View>
+              )}
               {/* SD-46 — per game in the sport's unit, then the team's per-game figures */}
               {perGame && (
                 <Card style={{ gap: theme.spacing(2) }}>
@@ -374,6 +384,13 @@ export default function TeamProfileScreen() {
             ))}
           </>
         )}
+
+        {/* SD-138 — each tournament: group finish → knockout rounds → place */}
+        <TournamentJourneyList
+          entries={journeysOf(rawMatches, [team.id])}
+          matches={rawMatches}
+          onOpen={(e) => nav.navigate('TeamJourney', { tournamentId: e.tournamentId, teamId: e.teamId, sport: e.sport })}
+        />
 
         <SectionHeader
           title={`Squad (${squad.length})`}

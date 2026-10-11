@@ -73,6 +73,11 @@ export interface CarromState {
    *  the board editor can replay a corrected list with its credits. Absent
    *  until a credited board; not part of the score. */
   boardBy?: CarromCredit[][];
+  /** SD-134 — doubles: each side's two players in break order (the first
+   *  breaks that side's first board; then they alternate — A1 → B1 → A2 → B2,
+   *  ICF doubles rotation, verify). Absent = not recorded (every older match):
+   *  only the side's break is shown, as before. */
+  breakOrder?: { home?: CarromCredit[]; away?: CarromCredit[] };
 }
 
 /** SD-117c — one board as the editor replays it (EDIT_LOG). */
@@ -156,7 +161,9 @@ export function reducer(s: CarromState, a: { type: string; side?: Side; payload?
   if (a.type === 'FIRST_BREAK') {
     const side = (a.payload?.side ?? a.side) as Side | undefined;
     if (s.ended || (side !== 'home' && side !== 'away')) return s;
-    return { ...s, firstBreak: side };
+    // SD-134 — optional doubles break order (a new payload key: old logs carry none)
+    const order = readBreakOrder(a.payload?.order);
+    return { ...s, firstBreak: side, ...(order ? { breakOrder: order } : {}) };
   }
   if (a.type !== 'BOARD' || s.ended || (a.side !== 'home' && a.side !== 'away')) return s;
   const side = a.side;
@@ -263,6 +270,50 @@ export function boardBreakers(s: CarromState): Array<Side | null> {
   });
 }
 
+/** SD-134 — a doubles break order from a payload: up to two players a side. */
+function readBreakOrder(v: unknown): CarromState['breakOrder'] | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const side = (x: unknown, sd: Side): CarromCredit[] | undefined => {
+    if (!Array.isArray(x)) return undefined;
+    const list: CarromCredit[] = [];
+    for (const c of x) {
+      if (!c || typeof c !== 'object') continue;
+      const { id, name } = c as { id?: unknown; name?: unknown };
+      if ((typeof id !== 'string' || !id) && (typeof name !== 'string' || !name)) continue;
+      list.push({ side: sd, ...(typeof id === 'string' && id ? { id } : {}), ...(typeof name === 'string' && name ? { name } : {}) });
+    }
+    return list.length >= 2 ? list.slice(0, 2) : undefined;
+  };
+  const home = side(o.home, 'home');
+  const away = side(o.away, 'away');
+  return home || away ? { ...(home ? { home } : {}), ...(away ? { away } : {}) } : undefined;
+}
+
+/** SD-134 — the PLAYER who broke each board (doubles with a recorded break
+ *  order): each side's breaks alternate between its two players, counted
+ *  over the whole match. null where the side or its order is unknown. */
+export function breakerPlayers(s: CarromState): Array<CarromCredit | null> {
+  const breakers = boardBreakers(s);
+  const n = { home: 0, away: 0 };
+  return breakers.map((side) => {
+    if (!side) return null;
+    const order = s.breakOrder?.[side];
+    const i = n[side]++;
+    return order?.length === 2 ? order[i % 2] : null;
+  });
+}
+
+/** SD-134 — who breaks the next board, by name (doubles with an order). */
+export function nextBreakerPlayer(s: CarromState): CarromCredit | null {
+  const side = nextBreaker(s);
+  if (!side) return null;
+  const order = s.breakOrder?.[side];
+  if (order?.length !== 2) return null;
+  const done = boardBreakers(s).filter((x) => x === side).length;
+  return order[done % 2];
+}
+
 /** Who breaks the next board (null = the toss isn't recorded). */
 export const nextBreaker = (s: CarromState): Side | null =>
   s.ended ? null : breakerAt(s, s.games.length + 1, s.boardsInGame);
@@ -354,6 +405,8 @@ export interface SheetRow {
   n: number;
   /** who broke it (null = the toss wasn't recorded) */
   breaker: Side | null;
+  /** SD-134 — the player who broke it (doubles with a break order) */
+  breakerBy?: CarromCredit;
   winner: Side;
   /** opponent's coins left (0 on a penalty board) */
   coins: number;
@@ -386,6 +439,7 @@ export interface SheetGame {
 export function scoreSheet(s: CarromState): SheetGame[] {
   const capped = creditedPoints(s);
   const breakers = boardBreakers(s);
+  const byPlayer = s?.breakOrder ? breakerPlayers(s) : [];
   const out: SheetGame[] = [];
   (s?.boards ?? []).forEach((b, i) => {
     let g = out.find((x) => x.game === b.game);
@@ -394,7 +448,7 @@ export function scoreSheet(s: CarromState): SheetGame[] {
     const total = { ...prev, [b.winner]: prev[b.winner] + capped[i] };
     const queen: QueenBy | undefined = b.queenBy ?? (b.queen ? 'winner' : undefined);
     g.rows.push({
-      n: g.rows.length + 1, breaker: breakers[i], winner: b.winner, coins: b.coins,
+      n: g.rows.length + 1, breaker: breakers[i], ...(byPlayer[i] ? { breakerBy: byPlayer[i]! } : {}), winner: b.winner, coins: b.coins,
       ...(queen ? { queen } : {}), queenCounted: b.queen && b.points > b.coins,
       ...(b.slam ? { slam: b.slam } : {}), ...(b.penalty ? { penalty: true as const } : {}),
       pts: capped[i], total, tieBreak: g.rows.length >= s.maxBoards,

@@ -30,8 +30,10 @@ Score a handball match on one phone. You run the clock and tap what happens; the
 4. **⚠️ Turnover**: tap **⚠️ Technical fault** or **🖐 Ball stolen**, then the player. For a stolen ball, also tap the defender who stole it.
 5. **🔁 Sub**: tap who comes off, then who comes on. If the keeper comes off, the player coming on goes in goal.
 
+> **Tip:** Hands busy? Tap **🎤 Voice scoring** and say "wing goal Rao", "7 m saved Khan" or "two minutes Rao". See [Score by voice](/guides/score-by-voice/).
+
 ## Time-outs
-Tap **⏸ Time-out** for the team that asks; the clock stops. IHF limits: 3 a match, at most 2 a half, 1 in the last 5 minutes, none in extra time. When a team can't take one, the button is off and a line says why.
+Tap **⏸ Time-out** for the team that asks; the clock stops. IHF limits: 3 a match, at most 2 a half, 1 in the last 5 minutes, none in extra time.
 
 ## Sanctions
 1. Tap **🟨 Card**, then **🟨 Warning**, **⏱ 2 minutes**, **🟥 Disqualify** or **🟥🟦 + report** (a disqualification with a written report, the blue card), then the player. Bench players can be sanctioned too.
@@ -46,7 +48,7 @@ When it is still level and there is no more extra time, you see "Level — the m
 2. For each throw, tap the thrower (optional), then **✓ Scored** or **✗ Missed / saved**. "Next:" tells you whose turn it is.
 3. Still level after five each? Tap who throws first in sudden death, then one throw each until one team leads.
 
-The result keeps the playing-time score and adds the throws, for example "28–28" and "SO 4–3". Shoot-out goals aren't counted as goals in player stats.
+Shoot-out goals aren't counted as goals in player stats.
 
 ## Fix a mistake
 1. Tap **✎ Correct the timeline** under the buttons.

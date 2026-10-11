@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { CompetitionRulesCard } from '../components/results/CompetitionRulesCard';
 import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
@@ -22,6 +23,7 @@ import {
   ARCH_ROUNDS, ARCH_AGES, BOW_LABEL, categoryLabel, eligibleFor, defaultRound, defaultBracket, bracketSize, roundLine, matchFormatOf,
   type ArchAge, type Bow, type Category, type PlannedPhase,
 } from '../data/results';
+import { sportRule } from '../data/results/competitionRules';
 import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
@@ -89,7 +91,9 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
   const entrants = picks.length;
 
   const [bracketN, setBracketN] = useState<number | null>(null);
-  const field = Math.min(bracketN ?? defaultBracket(entrants), entrants);
+  // SD-141: the meet's bracket size (Competition rules), else the biggest that fits
+  const ruleN = sportRule(tournament?.formats?.archery as Record<string, unknown> | undefined, 'archBracket');
+  const field = Math.min(bracketN ?? (ruleN === 'auto' ? defaultBracket(entrants) : Number(ruleN) || 0), entrants);
   const withMatches = field >= 2 && entrants >= 2;
   const choices = [...new Set([0, 4, 8, 16, 32, 64].filter((k) => k <= entrants).concat(entrants >= 3 && entrants <= 64 ? [entrants] : []))].sort((a, b) => a - b);
 
@@ -121,6 +125,8 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="🏹 New archery event" subtitle={tournament?.name} />
+        {/* SD-141: the meet's competition rules, checked before the meet starts */}
+        <CompetitionRulesCard tournament={tournament} sport={'archery'} />
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Bow & round</Text>

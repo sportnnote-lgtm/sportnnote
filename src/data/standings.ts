@@ -10,6 +10,7 @@ import { rankPlayers, statDefIn, qualifierOf, qualifierText, type Qualifier, typ
 import { fideTieBreaks, type FideTieBreaks, type XRound } from './swissTiebreaks.ts';
 import { effectiveQualifier, withLineResults, type LeaderMins } from './leaderMinimums.ts';
 import { collapseTies, isTieMatch, TIE_POINTS, tournamentTieSpec, type TieMatch } from './teamTie.ts';
+import { swissOpsOf, swissExtraRounds, type SwissExtraRound } from './swissOps.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -80,6 +81,9 @@ export interface GameRecord {
   unplayed: boolean;
   /** absent for a bye */
   opponentId?: string;
+  /** SD-134 — a bye the player ASKED for (or a late entry's missed round):
+   *  'hpb' / 'zpb' (FIDE C.07) — absent on a pairing-allocated bye */
+  requested?: 'hpb' | 'zpb';
   matchId?: string;
   /** the fixture's stage, e.g. 'swiss3' */
   stage?: string;
@@ -206,6 +210,9 @@ export interface StandingsConfig {
   /** compute sets / games / rally points / fair play for every row even when
    *  no tie-breaker asks for them (for columns, SD-18). */
   withUnits?: boolean;
+  /** SD-134 — Swiss requested byes and late entries' missed rounds (the
+   *  format's `swissOps`): unplayed rounds that score. Absent = none. */
+  swissExtras?: SwissExtraRound[];
 }
 
 /** Points for a Swiss bye: the organiser's `byePoints`, else the sport default —
@@ -646,7 +653,8 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
     ...(has('lossBonusMargin') && has('lossBonusPoints') && (fmt.lossBonusPoints as number) !== 0
       ? { lossBonus: { margin: fmt.lossBonusMargin as number, points: fmt.lossBonusPoints as number } } : {}),
     ...(has('soWinPoints') ? { shootout: { win: fmt.soWinPoints as number, loss: num('soLossPoints', num('lossPoints', d.loss)) } } : {}),
-    ...(has('forfeitLossPoints') ? { forfeitLoss: fmt.forfeitLossPoints as number } : {}) };
+    ...(has('forfeitLossPoints') ? { forfeitLoss: fmt.forfeitLossPoints as number } : {}),
+    ...(fmt.swissOps != null ? (() => { const x = swissExtraRounds(swissOpsOf(fmt)); return x.length ? { swissExtras: x } : {}; })() : {}) };
 }
 
 /** DI so `standings.ts` can compute NRR without importing the sport registry
@@ -937,6 +945,30 @@ export function teamStandings(
       }
     }
   }
+  // SD-134 — requested byes / a late entry's missed rounds (½ or 0): once the
+  // round has been drawn, and never for someone who also has a game in it.
+  if (cfg.swissExtras?.length) {
+    const swiss = matches.filter((m) => m.sport === sport && m.status !== 'cancelled' && swissRoundOf(m.stage) !== undefined);
+    const drawn = Math.max(0, ...swiss.map((m) => swissRoundOf(m.stage) ?? 0));
+    const inRound = new Set(swiss.flatMap((m) => [`${swissRoundOf(m.stage)}|${m.homeTeam.id}`, `${swissRoundOf(m.stage)}|${m.awayTeam.id}`]));
+    const pab = new Set(swiss.flatMap((m) => (m.byes ?? []).map((b) => `${swissRoundOf(m.stage)}|${b}`)));
+    const names = new Map<string, { name: string; colorHex?: string }>();
+    for (const t of teams ?? []) names.set(t.id, { name: t.name, colorHex: t.colorHex });
+    for (const m of swiss) {
+      names.set(m.homeTeam.id, { name: m.homeTeam.name, colorHex: m.homeTeam.colorHex });
+      names.set(m.awayTeam.id, { name: m.awayTeam.name, colorHex: m.awayTeam.colorHex });
+    }
+    const seen = new Set<string>();
+    for (const x of cfg.swissExtras) {
+      const key = `${x.round}|${x.id}`;
+      if (x.round > drawn || seen.has(key) || inRound.has(key) || pab.has(key)) continue;
+      seen.add(key);
+      const n = names.get(x.id);
+      const t = ensure(x.id, n?.name ?? x.name ?? 'Entrant', n?.colorHex);
+      t.points += x.points;
+      log(t, { kind: 'bye', requested: x.kind, unplayed: true, stage: `swiss${x.round}`, round: x.round, result: resultOf(x.points), points: x.points });
+    }
+  }
   for (const t of table.values()) {
     t.diff = t.for - t.against;
     if (t.forUnits > 0 && t.againstUnits > 0) t.nrr = t.for / t.forUnits - t.against / t.againstUnits;
@@ -1008,7 +1040,7 @@ function fideFor(rows: TeamStanding[], matches: Match[], sport: SportId, cfg: St
   for (const t of rows) {
     records.set(t.teamId, (t.games ?? []).map((g, i): XRound => ({
       round: swiss ? g.round ?? 0 : i + 1,
-      kind: g.kind === 'bye' ? 'pab' : g.kind === 'forfeit' ? (g.result === 'win' ? 'forfeitWin' : 'forfeitLoss') : g.result === 'nr' ? 'nr' : 'played',
+      kind: g.kind === 'bye' ? g.requested ?? 'pab' : g.kind === 'forfeit' ? (g.result === 'win' ? 'forfeitWin' : 'forfeitLoss') : g.result === 'nr' ? 'nr' : 'played',
       opponentId: g.opponentId, points: g.points, result: g.result, colour: g.colour,
     })).filter((r) => r.round > 0));
   }

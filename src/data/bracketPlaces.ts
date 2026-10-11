@@ -97,7 +97,10 @@ export function sportPlaces(
 
   // League only: the table order, exactly as the medal table always did.
   if (!rounds.length && !hasDc && !de) {
-    if (opts.shape === 'knockout' || opts.shape === 'groups') return { basis: 'pending', places: [], fieldSize: sides.size, plateWinnerId };
+    // SD-138: groups waiting on a knockout stay unplaced too when no structure
+    // was saved (an imported schedule) — two or more groups are never one league.
+    const groupNames = new Set(ms.map((m) => m.group).filter(Boolean));
+    if (opts.shape === 'knockout' || opts.shape === 'groups' || (!opts.shape && groupNames.size >= 2)) return { basis: 'pending', places: [], fieldSize: sides.size, plateWinnerId };
     const table = teamStandings(matches, sport, cfg);
     return {
       basis: 'league',

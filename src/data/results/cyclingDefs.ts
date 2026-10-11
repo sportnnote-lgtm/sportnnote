@@ -76,9 +76,10 @@ export const SPRINT_POINTS = [5, 3, 2, 1];
 /** UCI points race (and omnium): +20 for gaining a lap on the main field, −20 for losing one. */
 export const LAP_POINTS = 20;
 
-/** Points for `place` (1-based) in sprint `n` of `total` (the last sprint is the finish, double). */
-export const sprintPoints = (place: number | undefined, n: number, total: number): number =>
-  place == null || place < 1 ? 0 : (SPRINT_POINTS[place - 1] ?? 0) * (n === total ? 2 : 1);
+/** Points for `place` (1-based) in sprint `n` of `total` (the last sprint is the finish, double).
+ *  SD-141: `table` / `double` = the meet's points per sprint and final-sprint rule (competitionRules.ts). */
+export const sprintPoints = (place: number | undefined, n: number, total: number, table: number[] = SPRINT_POINTS, double = true): number =>
+  place == null || place < 1 ? 0 : (table[place - 1] ?? 0) * (n === total && double ? 2 : 1);
 
 /* --------------------------------- ranges ---------------------------------- */
 
