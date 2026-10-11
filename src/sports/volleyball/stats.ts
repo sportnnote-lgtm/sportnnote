@@ -26,9 +26,13 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
     // (older matches) stays out of the per-set figures. Display is SD-27 / SD-81.
     { key: 'setsPlayed', label: 'Sets played', short: 'sets', one: 'set', abbr: 'SP', group: 'record', coverage: 'present' },
     // SD-23 — team-level (the comparison panel): points the side got from the
-    // opponent's errors, and its own service errors
+    // opponent's errors
     { key: 'oppErrors', label: 'Opp. errors', short: 'opp. errors', one: 'opp. error', source: 'team' },
-    { key: 'serveErrors', label: 'Serve errors', short: 'serve errors', one: 'serve error', source: 'team', format: { unit: 'count', better: 'lower' } },
+    // Service errors: the side's on the comparison panel (team figure, SD-23);
+    // SD-58 / SD-81 — and the SERVER's on a player line once serve tracking
+    // names who missed (keyed: only a match that named one; older matches and
+    // matches without the toss read "not tracked", never 0).
+    { key: 'serveErrors', label: 'Serve errors', short: 'serve errors', one: 'serve error', abbr: 'SE', group: 'serve', coverage: 'keyed', format: { unit: 'count', better: 'lower' } },
     // SD-117b — faults the player committed (an "Opp. fault" that named the
     // erring player). Optional detail: tracked only in a match that named one
     // (statTotals writes it on every line then), "not tracked" elsewhere.
@@ -44,7 +48,7 @@ export const volleyballStats: SportStatSchema<'volleyball'> = {
   // SD-24 (VB-08) — FIVB per-set figures over the sets the player was on court
   sections: [
     { id: 'attack', title: 'Attack', rows: [{ stat: 'points' }, { stat: 'pointsPerSet' }, { stat: 'attackPoints' }, { stat: 'highPoints' }] },
-    { id: 'serve', title: 'Serve', rows: [{ stat: 'aces' }, { stat: 'acesPerSet' }] },
+    { id: 'serve', title: 'Serve', rows: [{ stat: 'aces' }, { stat: 'acesPerSet' }, { stat: 'serveErrors' }] },
     { id: 'block', title: 'Block', rows: [{ stat: 'blocks' }, { stat: 'blocksPerSet' }] },
     { id: 'errors', title: 'Errors', rows: [{ stat: 'errors' }] },
     { id: 'record', title: 'Sets', rows: [{ stat: 'setsPlayed' }, { stat: 'setsWL' }, { stat: 'setsPct' }] },

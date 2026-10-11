@@ -8,10 +8,10 @@
  *    summed over the log. Edits (EDIT_LOG + STAT_ADJUST), undos and a retried
  *    upload can't drift. Older lines heal: before SD-04 an ace / block didn't
  *    also credit `points` live; the re-sync (D2) sets the line to the log.
- *  - Serve errors / errors are NOT player keys: SD-04 credits an opponent's
- *    error (OPP_ERROR / SERVE_ERROR) to nobody and the engine never keeps a
- *    player on one, so they stay team-level (`oppErrors` / `serveErrors`,
- *    src/sports/boxSources.ts). Nothing to own until a player is recorded.
+ *  - Errors / serve errors are player keys only when the scorer named the
+ *    erring opponent (SD-117b "Opp. fault" → `errors`; SD-58 a missed serve
+ *    pre-filled with the opponent's server → `serveErrors`), keyed coverage.
+ *    The team figures stay in src/sports/boxSources.ts.
  *  - `setsPlayed` (SD-29, fieldTime.ts) and `setsWon` / `setsLost` (SD-19,
  *    racketTotals.ts) are merged in.
  *
@@ -71,12 +71,13 @@ export function volleyballBoxTotals(s: VolleyballState, ctx?: StatTotalsContext)
 }
 
 /** SD-117b — `errors` per player id: each "Opp. fault" that names the erring
- *  opponent charges them one. Written only for a match that named at least one
- *  (coverage 'keyed': every other match reads "not tracked", never 0) — then on
- *  every line of the match, 0 for the rest. Left out whole when a named player
- *  can't be resolved (the same safeguard as the box keys). */
-export function volleyballErrorTotals(s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>): Record<string, StatTotalsEntry> {
-  const faults = (s?.events ?? []).filter((e) => e.kind === 'opperror' && e.oe?.playerName && (e.side === 'home' || e.side === 'away'));
+ *  opponent charges them one. SD-58 — `serveErrors` the same way: each missed
+ *  serve that names the opponent's server. Written only for a match that named
+ *  at least one (coverage 'keyed': every other match reads "not tracked",
+ *  never 0) — then on every line of the match, 0 for the rest. Left out whole
+ *  when a named player can't be resolved (the same safeguard as the box keys). */
+function chargedTotals(kind: 'opperror' | 'serveerror', key: string, s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>): Record<string, StatTotalsEntry> {
+  const faults = (s?.events ?? []).filter((e) => e.kind === kind && e.oe?.playerName && (e.side === 'home' || e.side === 'away'));
   if (!faults.length) return {};
   const idx = nameIndex(s, ctx);
   const count = new Map<string, { side: Side; n: number }>();
@@ -89,15 +90,23 @@ export function volleyballErrorTotals(s: VolleyballState, ctx: StatTotalsContext
     count.set(id, c);
   }
   const out: Record<string, StatTotalsEntry> = {};
-  for (const [id, e] of Object.entries(lines)) out[id] = { side: e.side, stats: { [VOLLEYBALL_ERROR_KEY]: 0 } };
-  for (const [id, c] of count) out[id] = { side: out[id]?.side ?? c.side, stats: { [VOLLEYBALL_ERROR_KEY]: c.n } };
+  for (const [id, e] of Object.entries(lines)) out[id] = { side: e.side, stats: { [key]: 0 } };
+  for (const [id, c] of count) out[id] = { side: out[id]?.side ?? c.side, stats: { [key]: c.n } };
   return out;
 }
+export const volleyballErrorTotals = (s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>) =>
+  chargedTotals('opperror', VOLLEYBALL_ERROR_KEY, s, ctx, lines);
+/** SD-58 / SD-81 — `serveErrors` per player id (keyed coverage). */
+export const volleyballServeErrorTotals = (s: VolleyballState, ctx: StatTotalsContext | undefined, lines: Record<string, StatTotalsEntry>) =>
+  chargedTotals('serveerror', VOLLEYBALL_SERVE_ERROR_KEY, s, ctx, lines);
+export const VOLLEYBALL_SERVE_ERROR_KEY = 'serveErrors';
 export const VOLLEYBALL_ERROR_KEY = 'errors';
 
 /** The plugin's `statTotals`: box keys, SD-29 sets played, SD-19 set record,
- *  SD-117b errors (only for a match that named an erring player). */
+ *  SD-117b errors (only for a match that named an erring player), SD-58
+ *  serve errors (only for a match that named a server who missed). */
 export const volleyballStatTotals = (s: VolleyballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> => {
   const base = mergeTotals(mergeTotals(volleyballBoxTotals(s, ctx), volleyballTotals(s)), volleyballSetRecord(s, ctx));
-  return mergeTotals(base, volleyballErrorTotals(s, ctx, base));
+  const withErrors = mergeTotals(base, volleyballErrorTotals(s, ctx, base));
+  return mergeTotals(withErrors, volleyballServeErrorTotals(s, ctx, withErrors));
 };

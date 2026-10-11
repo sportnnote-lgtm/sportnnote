@@ -17,6 +17,7 @@ import type { LiveEvent } from '../liveEvents';
 import type { Attribution, ScoreAction } from '../types';
 import { replayPoints, type PointCredits, type PointInput, type PointKind } from '../rallyEdit.ts';
 import { pointsLineScore, type LineScore } from '../scoreline.ts';
+import { serveReducer, serveTracked, firstServer, type VbSub } from './rotation.ts';
 
 const TARGET = 25;
 const DECIDER_TARGET = 15; // the final set is a shorter race to 15 (real-world rule)
@@ -47,6 +48,15 @@ export interface VolleyballState {
   /** SD-117b: beach rules (Beach preset / 2 a side) — court switch every 7 points
    *  (5 in the decider) and the technical timeout at 21. Only stamped when true. */
   beach?: true;
+  /** SD-58: first server per set (the toss) — `SET_SERVE`. Absent on older
+   *  logs: the serving side is then derived from the rallies (SD-117b). */
+  serve?: Record<string, 'home' | 'away'>;
+  /** SD-58: starting rotation per set, positions I–VI (I = server) — `SET_ROTATION`. */
+  rotation?: Record<string, { home?: CourtPlayer[]; away?: CourtPlayer[]; homeAt?: number; awayAt?: number }>;
+  /** SD-71: up to 2 liberos per side (FIVB 19.1.1) — stamped with the rotation. */
+  liberos?: { home?: CourtPlayer[]; away?: CourtPlayer[] };
+  /** SD-71: substitutions and libero replacements — `SUB` (see ./rotation.ts). */
+  subs?: VbSub[];
 }
 
 export interface CourtPlayer { id: string; name: string }
@@ -135,6 +145,8 @@ export const errorTypeLabel = (k?: string) => (k ? ERROR_LABEL[k] ?? k : undefin
 
 /** SD-117b — the player stat an erring opponent is charged with. */
 export const VB_ERROR_STAT = 'errors';
+/** SD-58 / SD-81 — the player stat the opponent's server is charged with on a missed serve. */
+export const VB_SERVE_ERROR_STAT = 'serveErrors';
 
 /** Timeline icon/label per scored kind (legacy 'point' keeps its 🏐 "Point"). */
 const KIND_OF: Record<string, { kind: PointKind; icon: string; label: string }> = {
@@ -176,6 +188,7 @@ export function outcomeAttribution(kind: VbOutcome | 'point', player?: { id: str
 }
 
 /** The scoring action for one outcome (player optional; ignored for errors).
+ *  SD-58: a missed serve may name the opponent's server (`fault.by`). 
  *  SD-117b: an "Opp. fault" may say what went wrong (`err`, VB_ERROR_TYPES)
  *  and who erred — an OPPONENT, charged one `errors` (attribution2: a stat
  *  line only, no follower alert). Both are new optional keys. */
@@ -187,6 +200,8 @@ export const outcomeAction = (
   const a: ScoreAction = { type: def.type, side, attribution: def.credited ? outcomeAttribution(kind, player) : undefined };
   if (kind === 'opperror' && fault?.err) a.payload = { err: fault.err };
   if (kind === 'opperror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_ERROR_STAT, playerName: fault.by.fullName };
+  // SD-58 / SD-81: the opponent's server who missed (pre-filled from the rotation)
+  if (kind === 'serveerror' && fault?.by) a.attribution2 = { playerId: fault.by.id, stat: VB_SERVE_ERROR_STAT, playerName: fault.by.fullName };
   return a;
 };
 
@@ -201,9 +216,14 @@ export function servingSide(s: VolleyballState): 'home' | 'away' | null {
   const pts = (n: number) => s.events.filter((e) => e.set === n && SCORED.has(e.kind ?? '') && (e.side === 'home' || e.side === 'away'));
   const cur = pts(setNo);
   if (cur.length) return cur[cur.length - 1].side!;
+  // SD-58: the toss / FIVB 7.1 order when serve tracking is on
+  const explicit = serveTracked(s) ? firstServer(s, setNo) : null;
+  if (explicit) return explicit;
   if (isDecider(s)) return null;
   const first = (n: number): 'home' | 'away' | null => {
     if (n < 1) return null;
+    const ex = s.serve?.[n];
+    if (ex === 'home' || ex === 'away') return ex;
     const p = pts(n)[0];
     if (p?.kind === 'ace') return p.side!;
     if (p?.kind === 'serveerror') return p.side === 'home' ? 'away' : 'home';
@@ -253,6 +273,9 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
     const setNo = s.setsWon.home + s.setsWon.away + 1;
     return { ...s, seq: s.seq + 1, events: [...s.events, { id: s.seq + 1, stamp: `Set ${setNo}`, icon: '⏱️', label: 'Timeout', detail: undefined, side: a.side, kind: 'timeout', set: setNo }] };
   }
+  // SD-58 / SD-71: toss, rotation, substitutions — state stamps (./rotation.ts)
+  const stamped = serveReducer(s, a);
+  if (stamped) return stamped;
   if (a.type === 'LINEUP') {
     // SD-29: the court at the start (a state stamp, not a timeline event — it
     // survives an EDIT_LOG replay). The latest stamp for a side wins.
@@ -279,7 +302,8 @@ export const reducer = (s: VolleyballState, a: ScoreAction): VolleyballState => 
   const pid = who && s.lineup && a.attribution?.playerId ? { playerId: a.attribution.playerId } : {};
   // SD-117b: an "Opp. fault" may carry what went wrong + the erring opponent
   // (new optional keys — older OPP_ERRORs carry neither and replay unchanged).
-  const oe = kind === 'opperror' ? faultOf(a) : undefined;
+  // SD-58: a missed serve may name the opponent's server (charged `serveErrors`)
+  const oe = kind === 'opperror' || kind === 'serveerror' ? faultOf(a) : undefined;
   const oeText = oe ? [errorTypeLabel(oe.type), oe.playerName].filter(Boolean).join(' · ') : '';
   events.push({ id: ++seq, stamp: `Set ${setNo}`, icon, label, detail: `${current.home}-${current.away}${who ? ` · ${who}` : ''}${oeText ? ` · ${oeText}` : ''}`, side: a.side, kind, playerName: who, ...pid, set: setNo, points: 1, ...(oe ? { oe } : {}) });
 

@@ -24,6 +24,9 @@ import {
   servingSide, switchSidesDue, technicalTimeoutDue, timeoutsPerSet, type VolleyballState, type VbOutcome,
 } from './engine';
 import { pointPressure, pressureText } from '../pointStatus';
+import { trackCourt, liberoCue, setNoOf, type VbTrack } from './rotation';
+import { ServePanel, asPlayer } from './ServePanel';
+import { MatchStatsPanel } from '../MatchStatsPanel';
 
 export { isDecider, setTarget } from './engine';
 export type { VolleyballState } from './engine';
@@ -37,11 +40,15 @@ export type { VolleyballState } from './engine';
  *  team colour, Ace is offered only to the serving side (🏐) and a missed serve
  *  only to the receiving side, and an "Opp. fault" can say what went wrong and
  *  which opponent erred (both optional — "Not named" still scores it). */
-function SidePoints({ side, name, color, court, bench, opponents, oppColor, serving, icon, blocks, dispatch }: {
+function SidePoints({ side, name, color, court, bench, opponents, oppColor, serving, server, oppServer, icon, blocks, dispatch }: {
   side: 'home' | 'away'; name: string; color: string; court: Player[]; bench: Player[];
   opponents: Player[]; oppColor: string;
   /** true = this side serves, false = it receives, null = not known */
   serving: boolean | null;
+  /** SD-58: this side's server (when it serves and the rotation is known) — pre-fills Ace */
+  server?: Player | null;
+  /** SD-58: the opponent's server (when they serve) — a missed serve is charged to them */
+  oppServer?: Player | null;
   icon: string; blocks: boolean;
   dispatch: (a: ScoreAction) => void;
 }) {
@@ -53,16 +60,23 @@ function SidePoints({ side, name, color, court, bench, opponents, oppColor, serv
     && !(o.kind === 'serveerror' && serving === true)); // your own missed serve isn't your point
   const roster = [...court, ...bench];
   const reset = () => { setHow('attack'); setErr(undefined); };
-  const score = (kind: VbOutcome, p?: Player) => { dispatch(outcomeAction(kind, side, kind === 'opperror' ? undefined : p, kind === 'opperror' ? { err, by: p } : undefined)); reset(); };
-  const modes = outcomes.filter((o) => o.credited || o.kind === 'opperror');
+  const score = (kind: VbOutcome, p?: Player) => {
+    const fault = kind === 'opperror' ? { err, by: p } : kind === 'serveerror' && oppServer ? { by: oppServer } : undefined;
+    dispatch(outcomeAction(kind, side, kind === 'opperror' ? undefined : p, fault));
+    reset();
+  };
+  // SD-58: with the server known, an ace is one tap on the server
+  const aceTap = serving === true && server ? server : null;
+  const modes = outcomes.filter((o) => (o.credited || o.kind === 'opperror') && !(aceTap && o.kind === 'ace'));
   const oneTap = outcomes.filter((o) => !o.credited && o.kind !== 'opperror');
+  const tapLabel = (o: typeof VB_OUTCOMES[number]) => (o.kind === 'serveerror' && oppServer ? `${outcomeChip(o)} · ${oppServer.fullName}` : outcomeChip(o));
   const effHow = modes.some((o) => o.kind === how) ? how : 'attack';
   const chip = (p: Player, dot: string, onPress: () => void) => <SelectChip key={p.id} label={p.fullName} active={false} dotColor={dot} onPress={onPress} />;
   return (
     <View style={[ctrl.sideBox, { borderLeftColor: color }]}>
       <View style={ctrl.headRow}>
         <Text style={ctrl.label}>{icon} Point — {name}</Text>
-        {serving === true && <Text style={[ctrl.serveBadge, { backgroundColor: color }]} accessibilityLabel={`${name} serving`}>🏐 Serving</Text>}
+        {serving === true && <Text style={[ctrl.serveBadge, { backgroundColor: color }]} accessibilityLabel={`${server ? server.fullName : name} serving`}>🏐 {server ? `${server.fullName} serves` : 'Serving'}</Text>}
       </View>
       {roster.length > 0 ? (
         <>
@@ -97,7 +111,8 @@ function SidePoints({ side, name, color, court, bench, opponents, oppColor, serv
             </>
           )}
           <View style={ctrl.chips}>
-            {oneTap.map((o) => <SelectChip key={o.kind} label={outcomeChip(o)} active={false} onPress={() => score(o.kind)} />)}
+            {aceTap && <SelectChip label={`🎯 Ace · ${aceTap.fullName}`} active={false} dotColor={color} onPress={() => score('ace', aceTap)} />}
+            {oneTap.map((o) => <SelectChip key={o.kind} label={tapLabel(o)} active={false} onPress={() => score(o.kind)} />)}
           </View>
         </>
       ) : (
@@ -125,7 +140,7 @@ function splitCourt(roster: Player[], lineup: { playerId?: string }[], stamped?:
 /** Point / timeout controls — volleyball's, parameterised so a future set-based
  *  net sport without blocks can reuse them. `timeoutsPerSet` is the fallback
  *  when the state doesn't carry the format's (SD-117b). */
-export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet?: number }): SportPlugin<VolleyballState>['ScoringControls'] {
+export function makeSetScoringControls(opts: { icon: string; blocks: boolean; timeoutsPerSet?: number; serve?: boolean }): SportPlugin<VolleyballState>['ScoringControls'] {
   const Controls: SportPlugin<VolleyballState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [], homeLineup = [], awayLineup = [] }) => {
     const s = state as VolleyballState;
     // SD-29: before the first point, stamp who is on court (the lineup's court
@@ -144,23 +159,34 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
       .map((o) => ({ kind: o.kind, label: outcomeChip(o), credited: o.credited }));
     const hc = homeColor ?? theme.colors.home;
     const ac = awayColor ?? theme.colors.away;
-    const home = splitCourt(homeRoster, homeLineup, s.lineup?.home);
-    const away = splitCourt(awayRoster, awayLineup, s.lineup?.away);
+    // SD-58 / SD-71: the six on court now (rotation + subs) when tracked
+    const track = trackCourt(s);
+    const home = trackedCourt(track, 'home', homeRoster, s) ?? splitCourt(homeRoster, homeLineup, s.lineup?.home);
+    const away = trackedCourt(track, 'away', awayRoster, s) ?? splitCourt(awayRoster, awayLineup, s.lineup?.away);
     const server = servingSide(s);
     const servingOf = (side: 'home' | 'away') => (server ? server === side : null);
+    const srvPlayer = track.server && track.serving ? asPlayer(track.server, track.serving === 'home' ? homeRoster : awayRoster) : null;
+    const serverOf = (side: 'home' | 'away') => (srvPlayer && track.serving === side ? srvPlayer : null);
+    const libCues = (['home', 'away'] as const).map((sd) => liberoCue(s, sd, track)).filter((x): x is string => !!x);
     const perSet = s.timeoutsPerSet ?? opts.timeoutsPerSet ?? timeoutsPerSet(s);
     const switchCue = switchSidesDue(s);
     const tto = technicalTimeoutDue(s);
     return (
       <View style={{ gap: theme.spacing(4) }}>
-        {(switchCue || tto) && (
+        {(switchCue || tto || libCues.length > 0) && (
           <View style={ctrl.cue} accessibilityLiveRegion="polite">
             {switchCue && <Text style={ctrl.cueText}>↔ {switchCue}</Text>}
             {tto && <Text style={ctrl.cueText}>⏱️ Technical timeout — 21 points played (sets 1–2)</Text>}
+            {libCues.map((c) => <Text key={c} style={ctrl.cueText}>⚠ {c}</Text>)}
           </View>
         )}
-        <SidePoints side="home" name={homeName} color={hc} court={home.court} bench={home.bench} opponents={away.court.length ? away.court : awayRoster} oppColor={ac} serving={servingOf('home')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
-        <SidePoints side="away" name={awayName} color={ac} court={away.court} bench={away.bench} opponents={home.court.length ? home.court : homeRoster} oppColor={hc} serving={servingOf('away')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        {opts.serve && (homeRoster.length > 0 || awayRoster.length > 0 || s.serve) && (
+          <ServePanel s={s} track={track} dispatch={dispatch}
+            home={{ side: 'home', name: homeName, color: hc, roster: homeRoster, lineup: homeLineup, court: subCourt(track, 'home', homeRoster, home.court, homeRoster.length) }}
+            away={{ side: 'away', name: awayName, color: ac, roster: awayRoster, lineup: awayLineup, court: subCourt(track, 'away', awayRoster, away.court, awayRoster.length) }} />
+        )}
+        <SidePoints side="home" name={homeName} color={hc} court={home.court} bench={home.bench} opponents={away.court.length ? away.court : awayRoster} oppColor={ac} serving={servingOf('home')} server={serverOf('home')} oppServer={serverOf('away')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
+        <SidePoints side="away" name={awayName} color={ac} court={away.court} bench={away.bench} opponents={home.court.length ? home.court : homeRoster} oppColor={hc} serving={servingOf('away')} server={serverOf('away')} oppServer={serverOf('home')} icon={opts.icon} blocks={opts.blocks} dispatch={dispatch} />
         {perSet > 0 && (() => {
           const setNo = s.setsWon.home + s.setsWon.away + 1;
           const used = (side: 'home' | 'away') => s.events.filter((e) => e.kind === 'timeout' && e.side === side && e.set === setNo).length;
@@ -185,6 +211,26 @@ export function makeSetScoringControls(opts: { icon: string; blocks: boolean; ti
   return Controls;
 }
 
+/** SD-58 / SD-71: the court from the tracker — when a rotation is stamped or a
+ *  sub was made for this side (else null: the SD-117b split stands). */
+function trackedCourt(t: VbTrack, side: 'home' | 'away', roster: Player[], s: VolleyballState): { court: Player[]; bench: Player[] } | null {
+  const c = t.court[side];
+  if (!c || !c.length || !(t.ordered[side] || s.subs?.some((x) => x.side === side && x.set === setNoOf(s)))) return null;
+  const court = c.map((p) => asPlayer(p, roster));
+  const on = new Set(court.map((p) => p.id));
+  return { court, bench: roster.filter((p) => !on.has(p.id)) };
+}
+
+/** Who can be substituted: the tracked court, else the lineup's court when
+ *  it's smaller than the squad (a real six). Null = not known. */
+function subCourt(t: VbTrack, side: 'home' | 'away', roster: Player[], court: Player[], squad: number): Player[] | null {
+  if (t.court[side]?.length) {
+    const list = t.court[side]!.map((p) => asPlayer(p, roster));
+    return list.length < squad ? list : null;
+  }
+  return court.length && court.length < squad ? court : null;
+}
+
 /** SD-29: the court at the start — lineup slots with a player, else the squad. */
 function courtPlayers(roster: Player[], lineup: { playerId?: string; playerName?: string }[]): { id: string; name: string }[] {
   const byId = new Map(roster.map((p) => [p.id, p]));
@@ -194,7 +240,7 @@ function courtPlayers(roster: Player[], lineup: { playerId?: string; playerName?
 }
 
 // Timeouts per set come from the format (2 indoor, 1 beach — SD-117b).
-const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true });
+const ScoringControls = makeSetScoringControls({ icon: '🏐', blocks: true, serve: true });
 
 const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as VolleyballState;
@@ -210,11 +256,30 @@ const LiveExtras: NonNullable<SportPlugin<VolleyballState>['LiveExtras']> = ({ s
       </View>
       <Text style={ctrl.label}>Player stats</Text>
       <MatchBoxScore sport="volleyball" source={volleyballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} onPlayer={onPlayer} />
+      {/* SD-58: serve / side-out figures once the toss is recorded (null otherwise) */}
+      <MatchStatsPanel sport="volleyball" state={s} homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster} homeColor={homeColor} awayColor={awayColor} />
+      {(s.subs?.length ?? 0) > 0 && (
+        <>
+          <Text style={ctrl.label}>Substitutions</Text>
+          {subLines(s, homeName, awayName).map((l, i) => <Text key={i} style={textStyles.muted}>{l}</Text>)}
+        </>
+      )}
       <Text style={ctrl.label}>Point log</Text>
       <LiveTimeline events={s.events} homeColor={homeColor} awayColor={awayColor} emptyText="No points yet." homeRoster={homeRoster} awayRoster={awayRoster} onPlayer={onPlayer} />
     </View>
   );
 };
+
+/** SD-71 — "Set 2 · 8-6 · Home: ⬇ Asha ⬆ Bela (libero)" per sub. */
+function subLines(s: VolleyballState, homeName: string, awayName: string): string[] {
+  const KIND: Record<string, string> = { exceptional: ' (exceptional — injury)', libero: ' (libero)' };
+  return (s.subs ?? []).map((x) => {
+    const pts = s.events.filter((e) => e.set === x.set && e.side && ['point', 'attack', 'block', 'ace', 'opperror', 'serveerror'].includes(e.kind ?? '')).slice(0, x.at);
+    const h = pts.filter((e) => e.side === 'home').length;
+    const a = pts.length - h;
+    return `Set ${x.set} · ${h}-${a} · ${x.side === 'home' ? homeName : awayName}: ⬇ ${x.off.name} ⬆ ${x.on.name}${KIND[x.kind] ?? ''}`;
+  });
+}
 
 /** Broadcast-style board: SETS won + a column of points per set, the live set
  *  highlighted — the layout volleyball TV graphics use. */

@@ -15,6 +15,8 @@ const QUIET: Record<string, string> = {
   SET_START_RIGHT: 'right-court pick',
   SET_SERVE_ORDER: 'serving-order pick',
   FIRST_BREAK: 'break pick', // SD-117c carrom toss
+  SET_SERVE: 'serve pick', // SD-58 volleyball toss
+  SET_ROTATION: 'rotation', // SD-58
   SET_DETAIL: 'point-detail setting',
   POINT_DETAIL: 'point detail',
   EDIT_LOG: 'timeline correction',
@@ -37,7 +39,8 @@ export function undoLabel(
   if (QUIET[step.type]) return QUIET[step.type];
   const before = eventsOf(step.prev);
   const after = eventsOf(step.next);
-  if (!before || !after || after.length <= before.length) return null;
+  // SD-71 — a volleyball SUB is a state stamp (no timeline event)
+  if (!before || !after || after.length <= before.length) return step.type === 'SUB' ? 'substitution' : null;
   const added = after.slice(before.length);
   const p = added[0];
   const name = (s?: Side) => (s === 'home' ? names.home : s === 'away' ? names.away : '');

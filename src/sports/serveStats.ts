@@ -13,8 +13,10 @@
  *   squash / pickleball, rally scoring   the last rally winner
  *   side-out scoring (pickleball side-out, squash English)  the side holding
  *                   serve (`state.serving`), server 1 / 2 in doubles
- * Volleyball joins once SD-58 stores who serves (first server + rotation);
- * until then its serve side isn't derivable — add a 'volleyball' adapter here.
+ *   volleyball      SD-58: the toss (SET_SERVE) + the rally winner; the
+ *                   serving player from the rotation (position I, rotating on
+ *                   every side-out — volleyball/rotation.ts). Only for a match
+ *                   that recorded the toss (older ones: null — no panel).
  *
  * Per side, per set/game and for the whole match:
  *   rallies won · points scored · service / return points played + won ·
@@ -43,8 +45,11 @@ import { ttServer } from './tabletennis/serve.ts';
 import * as tennis from './tennis/engine.ts';
 import * as padel from './padel/engine.ts';
 import * as badminton from './badminton/engine.ts';
+import * as volleyball from './volleyball/engine.ts';
+import { rallyServers, serveTracked as vbServeTracked } from './volleyball/rotation.ts';
 
-export type ServeSport = 'tennis' | 'padel' | 'badminton' | 'tabletennis' | 'squash' | 'pickleball';
+type RacketServeSport = 'tennis' | 'padel' | 'badminton' | 'tabletennis' | 'squash' | 'pickleball';
+export type ServeSport = RacketServeSport | 'volleyball';
 type Side = 'home' | 'away';
 const SIDES: Side[] = ['home', 'away'];
 const opp = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -158,7 +163,7 @@ const zeroBlock = (): ServeBlock => ({ rallies: 0, home: zeroSide(), away: zeroS
 // The rally engine's scoring doesn't depend on the plugin's labels.
 const RALLY = makeRallyEngine({ icon: '', sideOutValue: '__n/a__', sideOutLabel: '', defaults: { playersPerSide: 1, target: 11, winBy: 2, gamesToWin: 3 } });
 
-type AnyState = tennis.TennisState | padel.PadelState | badminton.BadmintonState | RallyState;
+type AnyState = tennis.TennisState | padel.PadelState | badminton.BadmintonState | RallyState | volleyball.VolleyballState;
 /** 0 none · 1 game · 2 set · 3 match */
 type Level = 0 | 1 | 2 | 3;
 
@@ -282,7 +287,33 @@ function rallyAdapter(sport: 'tabletennis' | 'squash' | 'pickleball'): Adapter {
   };
 }
 
-const ADAPTERS: Record<ServeSport, Adapter> = {
+// ------------------------------------------------------------ volleyball --
+
+type VbState = volleyball.VolleyballState;
+const vbSetsDone = (s: AnyState) => ((s as VbState).sets ?? []).length;
+
+/** SD-58 — per match: the server of every rally is derived up front from the
+ *  full log (toss + rotation + subs), then handed out in rally order. */
+function volleyballAdapter(s0: VbState): Adapter {
+  const seq = rallyServers(s0);
+  let i = 0;
+  return {
+    family: 'game',
+    clear: (s) => ({ ...(s as VbState), current: { home: 0, away: 0 }, setsWon: { home: 0, away: 0 }, sets: [], events: [], seq: 0, ended: false }),
+    inputs: (s) => pointInputs(s.events ?? []),
+    reduce: (s, a) => volleyball.reducer(s as VbState, a),
+    server: (_s, w) => {
+      const r = seq[i++];
+      return { side: r?.side ?? w ?? 'home', id: r?.serverId, tb: false };
+    },
+    period: (s) => vbSetsDone(s) + 1,
+    level: (a, b) => ((b as VbState).ended && !(a as VbState).ended ? 3 : vbSetsDone(b) > vbSetsDone(a) ? 1 : 0),
+    total: (s) => { const x = s as VbState; return x.sets.reduce((n, g) => n + g[0] + g[1], 0) + x.current.home + x.current.away; },
+    key: (s) => { const x = s as VbState; return JSON.stringify([x.sets ?? [], x.current, !!x.ended]); },
+  };
+}
+
+const ADAPTERS: Record<RacketServeSport, Adapter> = {
   tennis: setAdapter(tennis as never),
   padel: setAdapter(padel as never),
   badminton: badmintonAdapter,
@@ -291,8 +322,8 @@ const ADAPTERS: Record<ServeSport, Adapter> = {
   pickleball: rallyAdapter('pickleball'),
 };
 
-export const SERVE_SPORTS = Object.keys(ADAPTERS) as ServeSport[];
-export const isServeSport = (s: string): s is ServeSport => s in ADAPTERS;
+export const SERVE_SPORTS = Object.keys(ADAPTERS) as RacketServeSport[];
+export const isServeSport = (s: string): s is RacketServeSport => s in ADAPTERS;
 
 /** Lead after the rally: points in the game (the finished game's final score
  *  when it just ended), or games in the set for tennis / padel. Null = no lead
@@ -300,7 +331,9 @@ export const isServeSport = (s: string): s is ServeSport => s in ADAPTERS;
 function leadAfter(fam: 'set' | 'game', prev: AnyState, next: AnyState, lvl: Level, matchTb: boolean): { home: number; away: number } | null {
   if (fam === 'game') {
     const y = next as GameState;
-    if (lvl >= 1) { const g = y.games[y.games.length - 1]; return g ? { home: g[0], away: g[1] } : null; }
+    // volleyball keeps its finished sets in `sets`
+    const done = (y.games ?? (next as VbState).sets) as Array<[number, number]>;
+    if (lvl >= 1) { const g = done[done.length - 1]; return g ? { home: g[0], away: g[1] } : null; }
     return y.current;
   }
   if (lvl === 0) return null; // games only move when a game ends
@@ -320,8 +353,10 @@ function leadAfter(fam: 'set' | 'game', prev: AnyState, next: AnyState, lvl: Lev
  */
 export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRosters = {}): ServeStats | null {
   const s0 = state as AnyState | null;
-  const ad = ADAPTERS[sport];
-  if (!s0 || !ad || !Array.isArray((s0 as { events?: unknown }).events)) return null;
+  if (!s0 || !Array.isArray((s0 as { events?: unknown }).events)) return null;
+  // SD-58 — volleyball only once the toss is recorded (older matches: no panel)
+  const ad = sport === 'volleyball' ? (vbServeTracked(s0 as VbState) ? volleyballAdapter(s0 as VbState) : null) : ADAPTERS[sport];
+  if (!ad) return null;
   const fam = ad.family;
   const inputs = ad.inputs(s0);
   let cur = ad.clear(s0);
@@ -372,6 +407,8 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
       if (ps) { ps.srvPlayed += 1; if (W === S) ps.srvWon += 1; }
       if (p.kind === 'ace') b[W].aces += 1;
       if (p.df) b[S].dfs += 1;
+      // SD-58 — volleyball: a missed serve is the server's error
+      if (sport === 'volleyball' && p.kind === 'serveerror') b[S].dfs += 1;
       // SD-107 — 1st / 2nd serve, on tracked points only (a double fault is a 2nd-serve point lost)
       if (p.serve) {
         const won = W === S;
@@ -496,6 +533,19 @@ export function serveRows(st: ServeStats, block: ServeBlock): ServeRow[] {
     if (d(h) + d(a) > 0) ratio(key, label, n, d);
   };
   const leadUnit = st.unit === 'set' ? 'Biggest lead (games)' : 'Biggest lead';
+  if (st.sport === 'volleyball') {
+    // SD-58 — FIVB VIS style: side-out % = points won on receive
+    ratio('tot', 'Total points won', (x) => x.won, () => block.rallies);
+    ratio('srv', 'Points won on serve', (x) => x.srvWon, (x) => x.srvPlayed);
+    ratio('rcv', 'Side-out % (won on receive)', (x) => x.rcvWon, (x) => x.rcvPlayed);
+    count('aces', 'Aces', (x) => x.aces);
+    count('se', 'Serve errors', (x) => x.dfs);
+    count('run', 'Most points in a row', (x) => x.run);
+    count('lead', leadUnit, (x) => x.maxLead);
+    saved('sps', 'Set points saved', (x) => x.gpSaved, (x) => x.gpFaced);
+    saved('mps', 'Match points saved', (x) => x.mpSaved, (x) => x.mpFaced);
+    return rows;
+  }
   if (st.unit === 'set') {
     if (st.sport === 'tennis') count('aces', 'Aces', (x) => x.aces);
     if (st.sport === 'tennis' && h.dfs + a.dfs > 0) count('dfs', 'Double faults', (x) => x.dfs);

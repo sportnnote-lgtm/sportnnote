@@ -8,7 +8,7 @@ order: 55
 updated: 2026-10-11
 ---
 
-Every rally ends with a point for one team. You record each rally once, and the app keeps the serve, the sets and each player's stats.
+Every rally ends with a point for one team. Record each rally once; the app keeps the serve, the sets and each player's stats.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -25,18 +25,19 @@ Every rally ends with a point for one team. You record each rally once, and the 
 7. Not sure who scored? Tap **No player**. The team still gets the point.
 
 ## Who is serving
-The team that wins a rally serves the next one, so the app works out the serve for you. The serving team gets a 🏐 on the scoreboard and a **🏐 Serving** badge on its panel. Only that team is offered **Ace**, and only the other team is offered **Opp. missed serve**.
+The team that wins a rally serves the next one. The serving team gets a 🏐 on the scoreboard and a badge on its panel. Only that team is offered **Ace**, and only the other team is offered **Opp. missed serve**.
 
-At the start of a set the serve is known only if the previous set began with an ace or a missed serve; until then both teams see every option. The decider starts with a new toss.
+For the server's name, record the toss and the rotation. The app then shows "🏐 Rohan serves", turns Ace into one tap on the server and charges a missed serve to the player who missed. See [Volleyball toss, rotation and substitutions](/guides/volleyball-lineups-rotation-and-subs/).
 
 ## What each point gives a player
 - Attack: 1 point and 1 attack point to the attacker.
 - Block: 1 point and 1 block to the blocker.
 - Ace: 1 point and 1 ace to the server.
 - Opp. fault with a player named: the team's point, and 1 error for the player who erred.
-- Opp. missed serve, or a fault with nobody named: the team's point, but nobody's stat.
+- Opp. missed serve with the server known: the team's point, and 1 serve error for the server who missed.
+- Opp. missed serve or a fault with nobody named: the team's point, but nobody's stat.
 
-Points include aces and blocks. **Errors** count only in matches where the scorer named who erred; other matches read "not tracked", never 0.
+Points include aces and blocks. **Errors** and **Serve errors** count only in matches where a player was named; other matches read "not tracked", never 0.
 
 ## Sets, timeouts and the end of the match
 - A set ends by itself at the target with a two-point lead (unless the organiser chose first to the target). The decider is a shorter race, to 15.
@@ -46,14 +47,14 @@ Points include aces and blocks. **Errors** count only in matches where the score
 - To stop a match early, use **🏁 End match…**. See [End a match early](/guides/end-a-match-early/).
 
 ## Reading the board and the stats
-"Player stats" and "Team stats" are on the **Score** and **Summary** tabs; tap **Set 1**, **Set 2** … to filter. The point log lists every rally with how it was won, the score and the player. A fault also shows its type and who erred, for example "1-1 · Net touch · Rohan".
+"Player stats" and "Team stats" are on the **Score** and **Summary** tabs; tap **Set 1**, **Set 2** … to filter. The point log lists every rally with how it was won, the score and the player, for example "1-1 · Net touch · Rohan".
 
 ## Sets played
-At the first point the app notes who is on court (the lineup, else the matchday squad). **Sets played** counts each set a player was on court or scored in; per-set figures divide by it, as the FIVB does.
+At the first point the app notes who is on court (the lineup, else the matchday squad). **Sets played** counts each set a player was on court or scored in, including substitutes and liberos who came on. Per-set figures divide by it, as the FIVB does.
 
 ## Fix a mistake
 - Tapped the wrong team or player just now? Tap **Undo**. It also takes the stats back off the player.
-- To fix an older point, tap **Edit** next to "Correct the timeline" on the **Scoring** tab.
+- To fix an older point, tap **Edit** next to "Correct the timeline".
 1. Find the point and tap ✎. Change who won the rally, the point type or the player.
 2. Tap **Save**. The score, the sets and every player's stats recalculate, even if the fix moves the end of a set.
 3. To delete a point, tap ✕ and confirm. To add a missed point, tap ＋ on the point before it.
@@ -64,4 +65,4 @@ At the first point the app notes who is on court (the lineup, else the matchday 
 No. The type and the player are optional. Naming them builds each player's error count.
 
 ### Can I score by voice?
-Yes. Open **🎤 Voice scoring** and say things like "attack Rohan" or "ace Rohan". Each call waits for you to tap Apply.
+Yes. Open **🎤 Voice scoring** and say "attack Rohan" or "ace Rohan", then tap Apply.

@@ -55,6 +55,9 @@ export interface PointInput {
 
 /** SD-117b — the stat an erring volleyball opponent is charged with. */
 const FAULT_STAT = 'errors';
+/** SD-58 — a volleyball missed serve: the opponent's server is charged this. */
+const SERVE_FAULT_STAT = 'serveErrors';
+const faultStatOf = (k: PointKind) => (k === 'serveerror' ? SERVE_FAULT_STAT : FAULT_STAT);
 
 /** Every scored-point kind (skip game/set/match banner rows). Must match the
  *  editor's displayed rows so their indices stay aligned. */
@@ -123,6 +126,10 @@ function replayAction(p: PointInput): ScoreAction {
       attribution2: p.oe.playerName ? { playerId: p.oe.playerId ?? '', stat: FAULT_STAT, playerName: p.oe.playerName } : undefined,
     };
   }
+  // SD-58 — a missed serve keeps the opponent's server who missed it
+  if (p.kind === 'serveerror' && p.oe?.playerName) {
+    return { type: 'SERVE_ERROR', side: p.side, attribution2: { playerId: p.oe.playerId ?? '', stat: SERVE_FAULT_STAT, playerName: p.oe.playerName } };
+  }
   return {
     type: ACTION_OF[p.kind],
     side: p.side,
@@ -176,13 +183,15 @@ export function reconcileStatActions(
       cur.n += 1;
       m.set(key, cur);
     }
-    // SD-117b — a volleyball fault charges the erring opponent's errors.
+    // SD-117b — a volleyball fault charges the erring opponent's errors;
+    // SD-58 — a missed serve the opponent's server's serveErrors.
     for (const p of pts) {
-      if (p.kind !== 'opperror' || !p.oe?.playerName) continue;
+      if ((p.kind !== 'opperror' && p.kind !== 'serveerror') || !p.oe?.playerName) continue;
       const id = p.oe.playerId || resolveId(p.oe.playerName);
       if (!id) continue;
-      const key = `${id}|${FAULT_STAT}`;
-      const cur = m.get(key) ?? { playerId: id, stat: FAULT_STAT, name: p.oe.playerName, n: 0 };
+      const stat = faultStatOf(p.kind);
+      const key = `${id}|${stat}`;
+      const cur = m.get(key) ?? { playerId: id, stat, name: p.oe.playerName, n: 0 };
       cur.n += 1;
       m.set(key, cur);
     }
