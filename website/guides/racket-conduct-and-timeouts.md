@@ -20,9 +20,9 @@ When the umpire gives a warning, a card or a penalty, or a player calls a timeou
 3. Tap the side that offended. In doubles you can also tap the player (optional).
 4. The app shows its suggestion in bold, for example "2nd code violation → point penalty (1 so far)". That level is already picked; tap another one if the umpire gave something else.
 5. Tap a reason if you like, for example **Racket abuse**.
-6. Read the line above the button, for example "Point to Rafael Nadal.", then tap **Apply: Point penalty**.
+6. Read the line above the button, for example "Point to Aarav Mehta.", then tap **Apply: Point penalty**.
 
-The violation goes into the point log, for example "Code violation · point penalty · Racket abuse". The Undo bar names it too: "↶ Undo: code violation · point penalty · Roger Federer (30-0)".
+The violation goes into the point log, for example "Code violation · point penalty · Racket abuse". The Undo bar names it too: "↶ Undo: code violation · point penalty · Ishaan Verma (30-0)".
 
 ## What each sport's schedule suggests
 - **Tennis** (ITF Point Penalty Schedule): **Warning**, then **Point penalty**, then **Game penalty** for the 3rd violation and every one after that. A **Default** is the Referee's call.
@@ -38,7 +38,7 @@ A point penalty is scored for the opponent like a normal point, so games, sets a
 Tap **Time violation** in Quick options. The first is a **Warning**. After that, the app suggests **Fault · loss of serve** if the offender is serving, or **Point penalty** if they are receiving. A fault doesn't change the score. If it came on the 2nd serve, also tap the **Double fault** button. Time violations are counted separately from code violations.
 
 ## Default or disqualification
-Pick **Default** (or **Disqualified**, **Conduct match**, **Forfeit**) and tap the red **Apply** button. The app asks "Default — Roger Federer?" with a green **No, keep playing** and a red **Yes, end the match**. Tap Yes and the match closes with the other side winning by default, the same as **🏁 End match…** → **Default**. See [End a match early](/guides/end-a-match-early/).
+Pick **Default** (or **Disqualified**, **Conduct match**, **Forfeit**) and tap the red **Apply** button. The app asks "Default — Ishaan Verma?" with a green **No, keep playing** and a red **Yes, end the match**. Tap Yes and the match closes with the other side winning by default, the same as **🏁 End match…** → **Default**. See [End a match early](/guides/end-a-match-early/).
 
 ## Timeouts and breaks
 1. In **☰ Quick options**, tap **Timeout**, **Medical timeout** or **Toilet break**.

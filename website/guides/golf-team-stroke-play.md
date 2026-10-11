@@ -22,7 +22,7 @@ Most school and club golf team events work the same way: each team sends a few p
 3. Under **Best**, tap how many scores count (1 to 5).
 4. Tap **Per round** or **Per hole (best ball)**.
 5. In stroke play, tap **Gross** or **Net**. Stableford teams always add points.
-6. Under **Teams in this round**, tap the teams taking part. To add one, type its name, for example `DPS Hyderabad`, and tap **＋ Add**.
+6. Under **Teams in this round**, tap the teams taking part. To add one, type its name, for example `Green Valley School`, and tap **＋ Add**.
 7. Each player now has a team chip next to their Handicap Index. Tap it to cycle through the teams until it shows the right one. **No team** means the player plays for themselves only.
 8. Tap **⛳ Create round**. If a team has fewer players than the scores that count, the app tells you before it creates the round.
 

@@ -51,7 +51,7 @@ Minutes count the FIFA way: 10 minutes 30 seconds in is 11', and added time is 4
 2. Choose extra time if offered, or tap **Penalty shootout →**.
 3. The referee tosses a coin and the winning captain chooses. Tap **Red House first** or the other team's button.
 4. For each kick, optionally tap who takes it. Players who have already kicked are marked "kicked" and listed last. The keeper facing it is filled in; tap **Change** if another player went in goal.
-5. Tap **✓ Scored**, **🧤 Saved** or **✗ Missed**. The kick list under each team grows ("Messi ✓ · Salah ✗ saved (Martinez)") and the app stops once it is decided.
+5. Tap **✓ Scored**, **🧤 Saved** or **✗ Missed**. The kick list under each team grows ("Arjun ✓ · Kabir ✗ saved (Rohan)") and the app stops once it is decided.
 
 ## Clean sheets and the Golden Glove
 - A clean sheet goes to the goalkeeper on the pitch longest for a team that let in no goal (penalty shootouts don't count). Defenders don't get one.
