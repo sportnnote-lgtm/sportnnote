@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-48 team ties, SD-51 match records — DONE (cdf0168, 2026-10-11)
+- See DEVLOG. No migration. **Live step:** redeploy `notify-followers` (edge function edited; not type-checked — no Deno locally). Until then every rubber still sends "Full time" to followers.
+- Check (from memory): ITTF team ranking clauses; BWF team tie-breaks and dead rubbers in groups; Davis Cup Finals tie-breaks; squash team order; FIDE team tie-breaks simplified; chess KO board count is a house choice; carrom team format generic.
+- Not done: captain-entered lineups (RLS); settleTie from a non-host scorer may be RLS-blocked (host's tie page settles on open); team page averages don't include rubber lines; GF-16 golf team match play; home feed lists rubbers individually; team page records don't read state.matchRecords; live completion write of matchRecords not watched in the UI.
+- SD-55 dropped (founder).
+
 ## SD-39 / SD-46 / SD-47 / SD-49 / SD-68 / SD-78 / SD-81 — DONE (0fdf364, 2026-10-11)
 - See DEVLOG. Check: carrom penalty board vs ICF Laws (counts toward 8-board limit + break order = house choice); volleyball efficiency counts blocked attacks against the attacker, 10-attempt minimum (house).
 - Not done: corners/possession in team averages; mixed outfield/keeper minutes in one match; pre-match player H2H path not demoed; carrom doubles per-player break order; volleyball format-level detail default + voice; golf position-points table UI; golf Player of the Tournament still weighted.
