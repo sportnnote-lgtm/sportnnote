@@ -43,7 +43,7 @@ Athletics:
 
 Swimming: false starts (disqualified, or the first one recalled), 50 m splits, and whether a 10-lane pool is numbered 0–9 or 1–10.
 
-Archery: whether 10s or Xs break a tie, how a level shoot-off arrow is settled, and the bracket size.
+Archery: whether 10s or Xs break a tie, how a level shoot-off arrow is settled, and the bracket sizes. Team events (archery, shooting, cycling, mixed relays) have their own choices — see [team events](/guides/team-events-in-meets/).
 
 Shooting: the tie-break, the final size, and whether equal medal places with no final are shot off or shared.
 

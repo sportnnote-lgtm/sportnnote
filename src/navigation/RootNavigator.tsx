@@ -17,6 +17,7 @@ import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
 import '../data/teamTieDemoSeed'; // SD-48: __sportnnoteDemo.seedTeamTies() — demo mode (no backend) only
 import '../data/sd134DemoSeed'; // SD-134: __sportnnoteDemo.seedChessSwiss() / seedGolfDivisions() — demo mode only
+import '../data/sd137bDemoSeed'; // SD-137b: __sportnnoteDemo.seedTeamEvents() — demo mode only
 import '../data/matchRecordsBackfill'; // SD-51: registers __sportnnoteAdmin.backfillMatchRecords (console only)
 import { OnboardingOverlay } from '../components/OnboardingOverlay';
 import HomeScreen from '../screens/HomeScreen';

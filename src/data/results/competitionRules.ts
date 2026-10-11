@@ -195,6 +195,12 @@ export const COMPETITION_RULES: RuleDef[] = [
     source: 'World Athletics TR 55.2 / CR 31',
   },
   {
+    key: 'mixedOrder', sports: ['athletics'], group: 'Relays', label: 'Mixed relay leg order', kind: 'choice', default: 'team',
+    choices: [{ value: 'team', label: 'The team chooses (2 men + 2 women, any order)' }, { value: 'MWMW', label: 'Fixed: man, woman, man, woman' }],
+    help: 'Mixed 4 × 400 m and 4 × 100 m relays are always 2 men and 2 women. Some meets also fix the order of the legs.',
+    source: 'World Athletics mixed relay as remembered: the team sets the order (verify — some championships fix it)',
+  },
+  {
     key: 'ceTie', sports: ['athletics'], group: 'Combined events', label: 'Equal totals', kind: 'choice', phase: true, default: 'tr39',
     choices: [{ value: 'tr39', label: 'More events won head-to-head, then best single score (TR 39.12)' }, { value: 'share', label: 'Share the place' }],
     help: 'How two athletes on the same total are separated.',
@@ -246,6 +252,18 @@ export const COMPETITION_RULES: RuleDef[] = [
     help: 'How many archers the ranking round sends to match play. New events start with this.',
     source: 'house choice',
   },
+  {
+    key: 'archTeamBracket', sports: ['archery'], group: 'Team events', label: 'Team bracket size', kind: 'choice', default: 'auto',
+    choices: [{ value: 'auto', label: 'Biggest that fits (4–16)' }, { value: 8, label: '8' }, { value: 16, label: '16' }, { value: 0, label: 'No team match play' }],
+    help: 'How many teams the team ranking (the members’ ranking-round scores added) sends to team match play. With no match play the team ranking decides the medals.',
+    source: 'World Archery championships: 16 teams as remembered (verify); smaller = house choice',
+  },
+  {
+    key: 'teamPick', sports: ['archery', 'shooting'], group: 'Team events', label: 'Team members', kind: 'choice', default: 'declared',
+    choices: [{ value: 'declared', label: 'Named by each team before the event' }, { value: 'best', label: 'Each house’s best scorers in the individual event' }],
+    help: 'Who makes a team. "Named" teams are entered by the organiser; "best scorers" fills every house’s team with its best 3 (mixed: best man and best woman) from the individual event when the team event is added — you can still change them.',
+    source: 'World Archery / ISSF: teams are named before the event as remembered (verify); best scorers = school practice',
+  },
 
   /* --------------------------------- shooting --------------------------------- */
   {
@@ -265,6 +283,12 @@ export const COMPETITION_RULES: RuleDef[] = [
     choices: [{ value: 'shoot-off', label: 'Shoot-off' }, { value: 'share', label: 'Share the place' }],
     help: 'A match with no final that ends level for a medal place.',
     source: 'house choice',
+  },
+  {
+    key: 'shootMixedFinal', sports: ['shooting'], group: 'Team events', label: 'Mixed team medals', kind: 'choice', default: 'matches',
+    choices: [{ value: 'matches', label: 'Medal matches: 1st v 2nd for gold, 3rd v 4th for bronze, first to 16 (ISSF)' }, { value: 'total', label: 'The qualification total decides' }],
+    help: '10 m mixed team events. Medal matches need at least 4 teams; with fewer, the qualification total decides.',
+    source: 'ISSF mixed team rules as remembered — rule numbers not checked (verify)',
   },
 
   /* ---------------------------------- cycling ---------------------------------- */
@@ -291,6 +315,12 @@ export const COMPETITION_RULES: RuleDef[] = [
     choices: yesNo('Double points (UCI)', 'Same points'),
     help: 'Whether the sprint at the finish is worth double.',
     source: 'UCI points race',
+  },
+  {
+    key: 'cycTeamFinals', sports: ['cycling'], group: 'Team pursuit & team sprint', label: 'Rounds', kind: 'choice', default: 'finals',
+    choices: [{ value: 'finals', label: 'Qualifying, then finals for gold and bronze (4+ teams)' }, { value: 'times', label: 'One round: the times decide' }],
+    help: 'Team pursuit and team sprint. The UCI also rides a first round between qualifying and the finals — not run here.',
+    source: 'UCI track rules as remembered (verify)',
   },
 
   /* ------------------------------- rowing / canoe ------------------------------- */

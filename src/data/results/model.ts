@@ -16,10 +16,10 @@
  */
 
 import type { RecordMark } from './records.ts';
-import { SHOOT_EVENTS } from './shootingDefs.ts';
-import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
+import { SHOOT_EVENTS, shootTeamOf } from './shootingDefs.ts';
+import { ARCH_ROUNDS, archTeamOf, type Arrow } from './archeryDefs.ts';
 import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
-import { CYC_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
+import { CYC_EVENTS, CYC_TEAM_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
 import { ROAD_EVENTS, roadEventOf, type RoadEvent, type RoadFormat } from './roadDefs.ts';
 import { combinedEventOf, type CombinedFormat } from './combinedDefs.ts';
 import { zeroLanes, type CompRules } from './competitionRules.ts';
@@ -238,6 +238,28 @@ export interface PhaseFormat {
   /** SD-141: heats in which a false start has been charged to the race (a
    *  one-false-start-per-race meet; combined events keep theirs on `combined`) */
   fsWarned?: number[];
+  /** SD-137b: a team event ranked on its members' scores in individual events
+   *  (archery ranking round, shooting qualification) — those events' keys, for
+   *  "Take the members' scores" on the team ranking */
+  teamFrom?: { eventKeys: string[] };
+  /** SD-137b: an ISSF mixed team event whose qualification sends the best 4
+   *  teams to the medal matches (gold 1 v 2, bronze 3 v 4, first to 16 points) */
+  shootMatch?: boolean;
+}
+
+/** SD-137b: one team member's score in the individual event the team is ranked
+ *  on (archery ranking round / shooting qualification), in member order. */
+export interface MemberScore {
+  playerId?: string;
+  mark?: number;
+  /** archery 10s (X included) */
+  tens?: number;
+  /** archery X / shooting inner tens */
+  xs?: number;
+  /** shooting series totals (team countback) */
+  series?: number[];
+  /** typed by the official rather than taken from the individual event */
+  typed?: boolean;
 }
 
 /** SD-129: a meet session — morning / afternoon / evening. */
@@ -437,6 +459,9 @@ export interface EntryResult {
   scratch?: { reason: string; at: string };
   /** SD-128: added after the start list was made (late entry) */
   late?: boolean;
+  /** SD-137b: a team ranked on its members' individual scores — one per member
+   *  (same order as `members`); `mark` / `tens` / `xs` / `series` are their sums */
+  ms?: MemberScore[];
 }
 
 /** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,
@@ -534,6 +559,9 @@ export const DISCIPLINES: DisciplineDef[] = [
   track('400mh', '400 m hurdles'),
   track('4x100', '4 × 100 m relay', { teamSize: 4 }),
   track('4x400', '4 × 400 m relay', { teamSize: 4 }),
+  // SD-137b: 4 × 200 m (World Athletics Relays; a school-meet favourite). Mixed
+  // 4 × 400 / 4 × 100 m are these relays with a Mixed category (2 men + 2 women).
+  track('4x200', '4 × 200 m relay', { teamSize: 4 }),
   horizontal('lj', 'Long jump', true),
   horizontal('tj', 'Triple jump', true),
   horizontal('sp', 'Shot put', false),
@@ -576,6 +604,8 @@ export const DISCIPLINES: DisciplineDef[] = [
   ...CYC_EVENTS.map((e): DisciplineDef => (ORDER_KINDS.includes(e.kind)
     ? { key: e.key, label: e.label, sport: 'cycling', unit: e.kind === 'points' ? 'points' : 'time', better: e.kind === 'points' ? 'higher' : 'lower', dp: 0, capture: 'order', tie: 'cycling' }
     : { key: e.key, label: e.label, sport: 'cycling', unit: 'time', better: 'lower', dp: e.setting === 'track' ? 3 : 2, capture: 'single', tie: 'photo' })),
+  // SD-137b: team pursuit / team sprint — a team's time (to 1/1000), riders by seat
+  ...CYC_TEAM_EVENTS.map((e): DisciplineDef => ({ key: e.key, label: e.label, sport: 'cycling', unit: 'time', better: 'lower', dp: 3, capture: 'single', tie: 'photo', teamSize: e.riders })),
   // SD-92 athletics road races and race walks (standard distances; a custom
   // distance or a cross-country course is parsed by disciplineOf)
   ...ROAD_EVENTS.map(roadDiscipline),
@@ -593,6 +623,11 @@ export const disciplineOf = (key: string): DisciplineDef | undefined => {
   // SD-92: any road / walk / XC distance ('ath.road.7500', 'ath.xc.4000')
   const r = roadEventOf(key);
   if (r) return roadDiscipline(r);
+  // SD-137b: archery team / mixed team ('arch.r70.team') and shooting teams of 3 ('shoot.10mar.team')
+  const at = archTeamOf(key);
+  if (at) return { key, label: at.label, sport: 'archery', unit: 'points', better: 'higher', dp: 0, capture: 'target', tie: 'inner-count', teamSize: at.size };
+  const stm = shootTeamOf(key);
+  if (stm) return { key, label: stm.label, sport: 'shooting', unit: 'points', better: 'higher', dp: stm.scoring === 'decimal' ? 1 : 0, capture: 'target', tie: 'issf', teamSize: stm.teamSize };
   // SD-93: a combined event's total ('ath.ce_dec', 'ath.ce_x_100m_lj_sp') — points, higher wins
   const c = combinedEventOf(key);
   return c ? { key: c.key, label: c.label, sport: 'athletics', unit: 'points', better: 'higher', dp: 0, capture: 'single', tie: 'combined' } : undefined;

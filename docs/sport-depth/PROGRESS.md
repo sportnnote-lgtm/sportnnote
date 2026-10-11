@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-137b team events — DONE (2026-10-12)
+- See DEVLOG. Check (from memory): World Archery team match play, ISSF mixed team format + team-of-3 ties, UCI team pursuit timing/caught + junior distance, UCI women's team sprint, mixed relay order. Not done: UCI first round, madison/omnium, weightlifting team classification, team-event late entries untested.
+
 ## Wave D batch 2 — SD-134 / SD-137a / SD-138 / SD-140 / SD-141 — DONE (72a1804, 2026-10-11)
 - See DEVLOG. No live steps.
 - **Decide:** native speech for voice scoring (needs a native module → APK 38) — today voice is typed-only on phones.

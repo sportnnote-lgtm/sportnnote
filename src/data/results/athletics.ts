@@ -121,6 +121,18 @@ export function trackEventsFor(cat: Category): ProgrammeItem[] {
   return out;
 }
 
+/**
+ * SD-137b — relays offered besides the D9 programme: 4 × 200 m (World
+ * Athletics Relays; many school meets) for every age, and for a Mixed category
+ * the mixed 4 × 400 m (World Athletics championships) and 4 × 100 m (World
+ * Relays) — 2 men + 2 women, the team choosing the order unless the meet's
+ * competition rules fix it (`mixedOrder`).
+ */
+export function relayExtrasFor(cat: Category): (ProgrammeItem & { optional?: boolean })[] {
+  const out: (ProgrammeItem & { optional?: boolean })[] = [{ ...item('4x200', 'relay'), optional: true }];
+  return out;
+}
+
 /** World Athletics hurdle heights (U18, U20, senior). Younger groups follow the
  *  national federation / school board — no height is shown for them. */
 export function hurdleHeight(discipline: string, cat: Category): string | undefined {

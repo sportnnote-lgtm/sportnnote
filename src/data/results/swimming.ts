@@ -263,12 +263,19 @@ export function legLabels(discipline: string): string[] {
   return ['Leg 1', 'Leg 2', 'Leg 3', 'Leg 4'];
 }
 
-/** SW 10.11: a mixed relay is two men and two women. Unknown genders aren't held against it. */
-export function mixedRelayError(genders: (string | undefined)[]): string | null {
+/** SW 10.11: a mixed relay is two men and two women. Unknown genders aren't held against it.
+ *  SD-137b: athletics mixed relays too (`ref` 'World Athletics'); `order` 'MWMW' = the
+ *  meet fixes the leg order man, woman, man, woman (else the team chooses). */
+export function mixedRelayError(genders: (string | undefined)[], ref = 'SW 10.11', order: 'team' | 'MWMW' = 'team'): string | null {
   const g = genders.slice(0, 4).map((x) => (x ?? '').trim().toLowerCase());
-  const men = g.filter((x) => /^(m|male|man|boy)/.test(x)).length;
-  const women = g.filter((x) => /^(f|female|woman|girl)/.test(x)).length;
-  if (men > 2 || women > 2) return `A mixed relay is 2 men and 2 women (SW 10.11) — this team has ${men} and ${women}.`;
+  const isM = (x: string) => /^(m|male|man|boy)/.test(x), isF = (x: string) => /^(f|female|woman|girl)/.test(x);
+  const men = g.filter(isM).length;
+  const women = g.filter(isF).length;
+  if (men > 2 || women > 2) return `A mixed relay is 2 men and 2 women (${ref}) — this team has ${men} and ${women}.`;
+  if (order === 'MWMW') {
+    const bad = g.findIndex((x, i) => (i % 2 === 0 ? isF(x) : isM(x)));
+    if (bad >= 0) return `This meet runs mixed relays man, woman, man, woman — leg ${bad + 1} should be a ${bad % 2 === 0 ? 'man' : 'woman'}.`;
+  }
   return null;
 }
 

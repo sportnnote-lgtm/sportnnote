@@ -17,8 +17,8 @@ import { askConfirm } from '../ConfirmSheet';
 import {
   endsOf, endSum, endText, parseEnd, archRowText, setEnd, sortEnd,
   bracketState, staleMatchData, outcomeText, roundShort, setMatchEnd, setMatchSo, setCloser, setWalkover, clearMatches,
-  MATCH_ARROWS, MATCH_ENDS, arrowValue,
-  type Arrow, type ArchRoundDef, type ArchMatchFormat, type BMatch, type EntryResult, type ResultEntry, type CompRules, archMatch,
+  matchSpecOf, setMatchSoRound,
+  type Arrow, type ArchRoundDef, type ArchMatchFormat, type BMatch, type EntryResult, type ResultEntry, type CompRules, type MatchSpec, archMatch,
 } from '../../data/results';
 
 type Save = (entryId: string, next: EntryResult, undoLabel?: string) => void;
@@ -168,8 +168,10 @@ export function EndCard({ entries, round, editable, onSave }: { entries: ResultE
 
 /* -------------------------------- match play ------------------------------- */
 
-export function BracketCard({ entries, round, fmt, editable, onSave, rules }: { entries: ResultEntry[]; round: ArchRoundDef; fmt: ArchMatchFormat; editable: boolean; onSave: Save; /** SD-141: the meet's shoot-off rule */ rules?: CompRules }) {
-  const match = useMemo(() => archMatch(fmt, rules), [fmt, rules]);
+export function BracketCard({ entries, round, fmt, editable, onSave, rules, discipline }: { entries: ResultEntry[]; round: ArchRoundDef; fmt: ArchMatchFormat; editable: boolean; onSave: Save; /** SD-141: the meet's shoot-off rule */ rules?: CompRules; /** SD-137b: the bracket's discipline (a team / mixed team key → team matches) */ discipline?: string }) {
+  const spec = matchSpecOf(discipline);
+  const teamWord = spec.so > 1;
+  const match = useMemo(() => archMatch(fmt, rules, discipline), [fmt, rules, discipline]);
   const state = useMemo(() => bracketState(entries, fmt, match), [entries, fmt, match]);
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const nm = (id?: string) => (id ? byId.get(id)?.name ?? '' : '');
@@ -189,10 +191,10 @@ export function BracketCard({ entries, round, fmt, editable, onSave, rules }: { 
   return (
     <Card style={st.card}>
       <View style={st.headRow}>
-        <Text style={[textStyles.h3, { flex: 1 }]}>🏹 Match play</Text>
+        <Text style={[textStyles.h3, { flex: 1 }]}>🏹 {teamWord ? 'Team match play' : 'Match play'}</Text>
         <Text style={textStyles.muted}>{state.done ? 'complete' : `bracket of ${state.size}`}</Text>
       </View>
-      <Text style={textStyles.muted}>{fmt === 'sets' ? 'Set system: ends of 3 arrows, 2 set points for the higher end, 1 each for a tie, first to 6. 5–5: one-arrow shoot-off.' : 'Cumulative: 5 ends of 3 arrows, the higher total wins. Level: one-arrow shoot-off.'}</Text>
+      <Text style={textStyles.muted}>{matchRuleText(fmt, spec)}</Text>
       {groups.map(([label, ms]) => (
         <View key={label} style={{ gap: theme.spacing(1) }}>
           <Text style={st.head}>{label.toUpperCase()}</Text>
@@ -212,13 +214,23 @@ export function BracketCard({ entries, round, fmt, editable, onSave, rules }: { 
         </View>
       ))}
       {sel && sel.known && !sel.bye && sel.a && sel.b ? (
-        <MatchScorer key={`${sel.key}:${sel.slot}:${sel.a}:${sel.b}`} m={sel} rounds={state.rounds} entries={entries} fmt={fmt} editable={editable} onSave={onSave} match={match} />
+        <MatchScorer key={`${sel.key}:${sel.slot}:${sel.a}:${sel.b}`} m={sel} rounds={state.rounds} entries={entries} fmt={fmt} editable={editable} onSave={onSave} match={match} spec={spec} />
       ) : null}
     </Card>
   );
 }
 
-function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: BMatch; rounds: number; entries: ResultEntry[]; fmt: ArchMatchFormat; editable: boolean; onSave: Save; match?: ReturnType<typeof archMatch> }) {
+/** "Set system: ends of 3 arrows … first to 6; 5–5: one-arrow shoot-off." (SD-137b: team / mixed team shapes) */
+export function matchRuleText(fmt: ArchMatchFormat, spec: MatchSpec): string {
+  const so = spec.so > 1 ? `a ${spec.so}-arrow shoot-off (one each), the higher total, then the arrow closest to the centre` : 'one-arrow shoot-off';
+  const per = spec.so > 1 ? ` (${spec.arrows / spec.so} per archer)` : '';
+  return fmt === 'sets'
+    ? `Set system: sets of ${spec.arrows} arrows${per}, 2 set points for the higher set, 1 each for a tie, first to ${spec.win}. ${spec.win - 1}–${spec.win - 1}: ${so}.`
+    : `Cumulative: ${spec.ends} ends of ${spec.arrows} arrows${per}, the higher total wins. Level: ${so}.`;
+}
+
+function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match, spec }: { m: BMatch; rounds: number; entries: ResultEntry[]; fmt: ArchMatchFormat; editable: boolean; onSave: Save; match?: ReturnType<typeof archMatch>; spec: MatchSpec }) {
+  const MATCH_ARROWS = spec.arrows, MATCH_ENDS = spec.ends, SO = spec.so;
   const ea = entries.find((e) => e.id === m.a)!, eb = entries.find((e) => e.id === m.b)!;
   const A = ea.result.mp?.[m.key], B = eb.result.mp?.[m.key];
   const out = m.out!;
@@ -235,7 +247,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
   // a shoot-off arrow each (round j)
   const soRound = out.soNeed ? out.soNeed.round - 1 + (again ? 1 : 0) : null;
   const soArrows = out.soNeed?.kind === 'arrows' || again;
-  const per = soRound != null && soArrows && idx == null ? 1 : MATCH_ARROWS;
+  const per = soRound != null && soArrows && idx == null ? SO : MATCH_ARROWS;
 
   const startEdit = (k: number) => {
     setEdit(k); setBufA(A?.ends?.[k] ?? []); setBufB(B?.ends?.[k] ?? []); setSide('a'); setErr(null);
@@ -271,7 +283,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
 
   const saveEnd = async () => {
     if (idx == null || busy) return;
-    if (bufA.length !== MATCH_ARROWS || bufB.length !== MATCH_ARROWS) { setErr(`Both archers need ${MATCH_ARROWS} arrows.`); return; }
+    if (bufA.length !== MATCH_ARROWS || bufB.length !== MATCH_ARROWS) { setErr(`Both ${SO > 1 ? 'teams' : 'archers'} need ${MATCH_ARROWS} arrows.`); return; }
     setBusy(true);
     try {
       const ra = setMatchEnd(ea.result, m.key, idx, bufA), rb = setMatchEnd(eb.result, m.key, idx, bufB);
@@ -281,10 +293,12 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
   };
   const saveSo = async () => {
     if (soRound == null || busy) return;
-    if (bufA.length !== 1 || bufB.length !== 1) { setErr('One shoot-off arrow each.'); return; }
+    if (bufA.length !== SO || bufB.length !== SO) { setErr(SO > 1 ? `${SO} shoot-off arrows a team (one per archer).` : 'One shoot-off arrow each.'); return; }
     setBusy(true);
     try {
-      const ok = await apply(setMatchSo(ea.result, m.key, soRound, bufA[0]), setMatchSo(eb.result, m.key, soRound, bufB[0]), `Shoot-off ${bufA[0]}–${bufB[0]}`);
+      const ok = SO > 1
+        ? await apply(setMatchSoRound(ea.result, m.key, soRound, bufA, SO), setMatchSoRound(eb.result, m.key, soRound, bufB, SO), `Shoot-off ${endSum(bufA)}–${endSum(bufB)}`)
+        : await apply(setMatchSo(ea.result, m.key, soRound, bufA[0]), setMatchSo(eb.result, m.key, soRound, bufB[0]), `Shoot-off ${bufA[0]}–${bufB[0]}`);
       if (ok) { setBufA([]); setBufB([]); setSide('a'); setAgain(false); }
     } finally { setBusy(false); }
   };
@@ -315,7 +329,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
         {ea.result.seed}. {ea.name} {out.walkover ? 'v' : `${out.a}–${out.b}`} {eb.name} .{eb.result.seed}
       </Text>
       <Text style={textStyles.muted}>
-        {out.done ? `${nm(m.winner)} wins${out.walkover ? ' (walkover)' : out.soWon ? ` in the shoot-off${out.soWon.closer ? ' (closest to the centre)' : ''}` : ''}.` : out.soNeed ? 'Level — one-arrow shoot-off.' : `End ${(out.nextEnd ?? 1)} of ${MATCH_ENDS} · ${ptsLabel}${fmt === 'cumulative' ? ` ${out.ta}–${out.tb}` : ''}`}
+        {out.done ? `${nm(m.winner)} wins${out.walkover ? ' (walkover)' : out.soWon ? ` in the shoot-off${out.soWon.closer ? ' (closest to the centre)' : ''}` : ''}.` : out.soNeed ? (SO > 1 ? `Level — shoot-off: ${SO} arrows a team, one per archer.` : 'Level — one-arrow shoot-off.') : `${SO > 1 && fmt === 'sets' ? 'Set' : 'End'} ${(out.nextEnd ?? 1)} of ${MATCH_ENDS} · ${ptsLabel}${fmt === 'cumulative' ? ` ${out.ta}–${out.tb}` : ''}`}
       </Text>
       {out.ends.map((x, k) => (
         <TouchableOpacity key={k} accessibilityRole="button" accessibilityLabel={`Correct end ${k + 1}`} disabled={!editable} onPress={() => startEdit(k)} style={[st.endRow, edit === k && st.rowOn]}>
@@ -329,7 +343,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
 
       {editable && out.soNeed?.kind === 'closer' && !again && idx == null && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Text style={st.name}>Both scored {arrowValue(A!.so![out.soNeed.round - 1])} — which arrow is closer to the centre?</Text>
+          <Text style={st.name}>Both scored {endSum((A!.so ?? []).slice((out.soNeed.round - 1) * SO, out.soNeed.round * SO))} — {SO > 1 ? 'whose arrow is closest to the centre?' : 'which arrow is closer to the centre?'}</Text>
           <View style={st.wrap}>
             <SelectChip label={first(ea.name)} active={false} onPress={() => void closer('a')} />
             <SelectChip label={first(eb.name)} active={false} onPress={() => void closer('b')} />
@@ -340,7 +354,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
 
       {editable && (idx != null || (soRound != null && soArrows)) && !wo && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Text style={st.name}>{idx != null ? `${edit != null ? 'Correct' : ''} end ${idx + 1}`.trim() : `Shoot-off arrow${soRound! > 0 ? ` ${soRound! + 1}` : ''} — one each`}</Text>
+          <Text style={st.name}>{idx != null ? `${edit != null ? 'Correct' : ''} end ${idx + 1}`.trim() : SO > 1 ? `Shoot-off${soRound! > 0 ? ` round ${soRound! + 1}` : ''} — ${SO} arrows a team, one per archer` : `Shoot-off arrow${soRound! > 0 ? ` ${soRound! + 1}` : ''} — one each`}</Text>
           {(['a', 'b'] as const).map((s) => (
             <TouchableOpacity key={s} accessibilityRole="button" accessibilityLabel={`Enter for ${s === 'a' ? ea.name : eb.name}`} onPress={() => setSide(s)} style={[st.row, side === s && st.rowOn]}>
               <Text style={[st.name, { width: 92 }]} numberOfLines={1}>{first(s === 'a' ? ea.name : eb.name)}</Text>
@@ -352,7 +366,7 @@ function MatchScorer({ m, rounds, entries, fmt, editable, onSave, match }: { m: 
             ? <Button label={busy ? 'Saving…' : `Save end ${idx + 1}${bufA.length === MATCH_ARROWS && bufB.length === MATCH_ARROWS ? ` (${endSum(bufA)}–${endSum(bufB)})` : ''}`} onPress={() => void saveEnd()} disabled={busy} />
             : <Button label={busy ? 'Saving…' : 'Save shoot-off arrows'} onPress={() => void saveSo()} disabled={busy} />}
           {edit != null && <SelectChip label="Cancel correction" active={false} onPress={() => { setEdit(null); setBufA([]); setBufB([]); }} />}
-          <Text style={st.hint}>{idx != null ? 'Tap the arrows for one archer, then the other. Tap an end above to correct it.' : 'The higher arrow wins; if both score the same, the judge says which arrow is closer to the centre.'}</Text>
+          <Text style={st.hint}>{idx != null ? `Tap the arrows for one ${SO > 1 ? 'team' : 'archer'}, then the other. Tap an end above to correct it.` : SO > 1 ? 'The higher total wins; if level, the judge says which team’s arrow is closest to the centre.' : 'The higher arrow wins; if both score the same, the judge says which arrow is closer to the centre.'}</Text>
         </View>
       )}
       {err ? <Text style={st.bad}>{err}</Text> : null}

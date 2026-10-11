@@ -28,6 +28,7 @@ import {
   combinedStandings, combinedAwards, combinedLines, combinedEventLines, combinedRanked, combinedSeed, combinedBar, continuing, nextCombinedFormat,
   combinedKey, markKey, type CombinedKind, type CombinedTable, type CombinedPhaseInput,
   plannedSlot, type PhaseSched,
+  shootMatchEntrant, SHOOT_MATCH_TEAMS, memberLookup, type MemberScore,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { applyRecordOps, recordOpsFor, bestRecords, type RecordOp } from './results/recordBook';
@@ -56,8 +57,9 @@ export interface NewEntrant {
   /** seed mark (season best / entry time) — better first */
   seed?: number;
   bib?: string;
-  /** SD-97: start-list fields known at entry (bodyweight, opening declarations) */
-  start?: Pick<EntryResult, 'bodyweight' | 'lifts'>;
+  /** SD-97: start-list fields known at entry (bodyweight, opening declarations)
+   *  SD-137b: a team's member scores (and their sums) from the individual event */
+  start?: Pick<EntryResult, 'bodyweight' | 'lifts' | 'ms' | 'mark' | 'tens' | 'xs' | 'series'>;
 }
 
 export interface NewResultsEvent {
@@ -97,6 +99,10 @@ export interface NewResultsEvent {
   road?: RoadFormat;
   /** SD-129: the timetable slots for the event's rounds (round 1 = this phase) */
   sched?: PhaseSched;
+  /** SD-137b: a team event ranked on its members' scores in these individual events */
+  teamFrom?: { eventKeys: string[] };
+  /** SD-137b: an ISSF mixed team event — the best 4 teams go on to the medal matches */
+  shootMatch?: boolean;
 }
 
 // SD-95: archery phases read "Ranking round" / "Match play"
@@ -204,6 +210,8 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     ...(input.road ? { road: input.road } : {}),
     ...(input.sched?.rounds.length ? { sched: input.sched } : {}),
     ...(rules ? { rules } : {}),
+    ...(input.teamFrom?.eventKeys.length ? { teamFrom: input.teamFrom } : {}),
+    ...(input.shootMatch ? { shootMatch: true } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -330,8 +338,10 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   }
   // SD-99 / SD-100: rowing / canoe — places routed to the repechage, semis or lettered finals
   if (f.progression.routes?.length) return advanceCrewPhase(phase, f, def, entries, byHeat, next);
-  // SD-95: archery — the ranking round seeds a match-play bracket
+  // SD-95: archery — the ranking round seeds a match-play bracket (SD-137b: the team ranking a team bracket)
   if (def.sport === 'archery' && next.phase === 'final') return advanceToBracket(phase, f, def, entries, [...byHeat.values()].flat(), next);
+  // SD-137b: ISSF mixed team — the best 4 teams go to the gold / bronze medal matches
+  if (def.sport === 'shooting' && f.shootMatch && next.phase === 'final') return advanceToShootMatches(phase, f, def, entries, [...byHeat.values()].flat(), next);
   const q = qualify(byHeat, def, f.progression);
   if (!q.marks.size) throw new Error('Nobody has qualified yet — enter the results first.');
   if (isEventSport(def.sport)) {
@@ -390,6 +400,57 @@ async function advanceToBracket(phase: FieldEvent, f: PhaseFormat, def: Discipli
   }));
   await setPhaseStatus(phase.id, 'completed');
   return ev;
+}
+
+/**
+ * SD-137b — close an ISSF mixed team qualification: the best 4 teams are
+ * seeded 1–4 into the medal matches (gold 1 v 2, bronze 3 v 4). A tie across
+ * 4th / 5th is shot off first (the decider field), as for a final.
+ */
+async function advanceToShootMatches(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], ranked: RankedEntry[], next: PlannedPhase): Promise<FieldEvent> {
+  const { ids, tieAtCut } = bracketSeeds(ranked, SHOOT_MATCH_TEAMS);
+  if (ids.length < 2) throw new Error('The medal matches need at least two teams with a qualification score — enter the series first.');
+  if (tieAtCut.length) {
+    const names = ranked.filter((r) => tieAtCut.includes(r.id)).map((r) => r.entry.name).join(', ');
+    throw new Error(`${names} are level for the last medal-match place — enter the shoot-off place (1 = through) for each, then close the qualification.`);
+  }
+  await writePhaseLines(phase, f, shootLines(f, ranked, 'qual'));
+  const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: 1, progression: undefined };
+  const ev = await insertPhase({
+    tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: fmt.phaseNo,
+    startsAt: new Date().toISOString(), format: { results: fmt }, hostIds: phase.hostIds ?? [],
+  });
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  await insertEntries(ev.id, ids.map((id, i) => {
+    const old = byId.get(id)!;
+    const r = (old.result ?? {}) as EntryResult;
+    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: 1, result: { bib: r.bib, team: r.team, name: r.name, members: r.members, ...shootMatchEntrant(r, i + 1) } };
+  }));
+  await setPhaseStatus(phase.id, 'completed');
+  return ev;
+}
+
+/** SD-137b — the individual events a team event can take its members' scores
+ *  from: this tournament's events of `discipline` (first phase), newest first. */
+export async function teamSourceEvents(tournamentId: string | undefined, discipline: string): Promise<{ eventKey: string; title: string; category?: Category; phaseId: string; entries: number }[]> {
+  if (!tournamentId) return [];
+  const all = await getResultsPhases({ tournamentId });
+  const firsts = all.filter((p) => { const f = phaseOf(p); return !!f && f.discipline === discipline && f.phaseNo === 1; });
+  const counts = firsts.length ? await getFieldEntries(firsts.map((p) => p.id)) : [];
+  return firsts.map((p) => {
+    const f = phaseOf(p)!;
+    return { eventKey: f.eventKey, title: f.eventTitle ?? p.title, category: f.category, phaseId: p.id, entries: counts.filter((e) => e.eventId === p.id).length };
+  });
+}
+
+/** SD-137b — each player's score in those individual events (their first phase:
+ *  the archery ranking round / the shooting qualification), by player id. */
+export async function memberScoresFrom(eventKeys: string[]): Promise<Map<string, MemberScore>> {
+  const phases = (await Promise.all(eventKeys.map((k) => getResultsPhases({ eventKey: k })))).flat()
+    .filter((p) => phaseOf(p)?.phaseNo === 1);
+  if (!phases.length) return new Map();
+  const rows = await getFieldEntries(phases.map((p) => p.id));
+  return memberLookup(rows.map((e) => toResultEntry(e, () => '')));
 }
 
 /**

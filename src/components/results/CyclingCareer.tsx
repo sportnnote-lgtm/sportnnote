@@ -11,7 +11,7 @@ import { theme } from '../../core/theme';
 import { Card, Pill, textStyles } from '../ui';
 import { formatDay } from '../../core/dates';
 import { getPhaseInfos } from '../../data/resultsStore';
-import { cyclingCareer, type PhaseInfo } from '../../data/results';
+import { cyclingCareer, type PhaseInfo, teamCareerText } from '../../data/results';
 import type { StatLine } from '../../core/types';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -51,6 +51,8 @@ export function CyclingCareer({ lines }: { lines: StatLine[] }) {
         ].filter(Boolean).join(' · ')}.</Text>
       )}
 
+      {/* SD-137b: team events (archery / shooting teams, team pursuit / sprint) */}
+      {teamCareerText({ events: c.teamEvents, golds: c.teamGolds, silvers: c.teamSilvers, bronzes: c.teamBronzes }) ? <Text style={textStyles.muted}>{teamCareerText({ events: c.teamEvents, golds: c.teamGolds, silvers: c.teamSilvers, bronzes: c.teamBronzes })}</Text> : null}
       <Text style={st.section}>Best times</Text>
       {c.bests.length === 0 ? <Text style={textStyles.muted}>No times yet — each time trial, pursuit and the sprint’s flying 200 m keep their own best, per distance.</Text> : (
         <Card style={{ gap: theme.spacing(2) }}>

@@ -24,7 +24,7 @@
  *   - 'cyc.elim'      elimination race — the last rider every 2 laps is out.
  */
 
-export type CycKind = 'itt' | 'rr' | 'stage' | 'ip' | 'tt' | 'sprint' | 'keirin' | 'scratch' | 'points' | 'elim';
+export type CycKind = 'itt' | 'rr' | 'stage' | 'ip' | 'tt' | 'sprint' | 'keirin' | 'scratch' | 'points' | 'elim' | 'tp' | 'ts';
 export type CycSetting = 'road' | 'track';
 
 export interface CycEvent {
@@ -38,6 +38,8 @@ export interface CycEvent {
   metres?: number;
   /** timed against the clock (one mark per rider, records / PBs) */
   timed: boolean;
+  /** SD-137b: a team event — riders per team (team pursuit 4, team sprint 3) */
+  riders?: number;
 }
 
 export const ITT_KM = [5, 10, 15, 20, 25, 30, 40];
@@ -61,7 +63,31 @@ export const CYC_EVENTS: CycEvent[] = [
   { key: 'cyc.elim', kind: 'elim', setting: 'track', label: 'Elimination race', short: 'Elimination', timed: false },
 ];
 
-export const cycEventOf = (key?: string | null): CycEvent | undefined => CYC_EVENTS.find((e) => e.key === key);
+/**
+ * SD-137b — UCI track team events (Part 3, as remembered — verify):
+ *  - team pursuit: 4 riders from a standing start on opposite sides of the
+ *    track, 4000 m (elite, U23, junior men and women); the time is taken on the
+ *    third rider's front wheel; qualifying on time, then the two fastest teams
+ *    race for gold and 3rd–4th for bronze; a team that is caught (the other
+ *    team reaches its third rider) loses the race. 3000 m is offered as a
+ *    school / youth distance (a house choice).
+ *  - team sprint: 3 riders, 3 laps of a 250 m track (750 m), each leading one
+ *    lap and pulling off; the time is taken on the last rider; qualifying, then
+ *    finals for gold and bronze.
+ * The UCI's first round (1st v 4th, 2nd v 3rd … deciding who rides for gold)
+ * is not built: qualifying goes straight to the finals.
+ */
+export const CYC_TEAM_EVENTS: CycEvent[] = [
+  { key: 'cyc.tp.4000', kind: 'tp', setting: 'track', label: 'Team pursuit 4000 m', short: 'Team pursuit 4000 m', metres: 4000, timed: true, riders: 4 },
+  { key: 'cyc.tp.3000', kind: 'tp', setting: 'track', label: 'Team pursuit 3000 m', short: 'Team pursuit 3000 m', metres: 3000, timed: true, riders: 4 },
+  { key: 'cyc.ts.750', kind: 'ts', setting: 'track', label: 'Team sprint', short: 'Team sprint 750 m', metres: 750, timed: true, riders: 3 },
+];
+
+export const cycEventOf = (key?: string | null): CycEvent | undefined => CYC_EVENTS.find((e) => e.key === key) ?? CYC_TEAM_EVENTS.find((e) => e.key === key);
+/** SD-137b: team pursuit / team sprint. */
+export const isCycTeamKind = (k?: CycKind | null): boolean => k === 'tp' || k === 'ts';
+/** Pursuit-style rounds: qualifying on time, then finals for gold and bronze (a catch ends a pursuit). */
+export const isPursuitKind = (k?: CycKind | null): boolean => k === 'ip' || k === 'tp';
 export const isCycKey = (key?: string | null): boolean => !!key && key.startsWith('cyc.');
 export const cycKind = (key?: string | null): CycKind | undefined => cycEventOf(key)?.kind;
 
@@ -97,6 +123,9 @@ export function cycRange(key: string): { min: number; max: number } | null {
   if (e.kind === 'sprint') return { min: 9, max: 20 };
   if (e.kind === 'tt') return e.metres === 1000 ? { min: 55, max: 120 } : { min: 32, max: 75 };
   if (e.kind === 'ip') return e.metres === 4000 ? { min: 238, max: 480 } : e.metres === 3000 ? { min: 180, max: 390 } : { min: 120, max: 270 };
+  // SD-137b: team pursuit (4000 m elite world best ≈ 3:40) / team sprint (750 m ≈ 41 s)
+  if (e.kind === 'tp') return e.metres === 4000 ? { min: 218, max: 420 } : { min: 163, max: 330 };
+  if (e.kind === 'ts') return { min: 40, max: 75 };
   return null;
 }
 
@@ -109,6 +138,6 @@ export function cycPhaseName(f: { discipline: string; phase: string; plan?: { ph
   if (kind === 'stage') return f.phaseNo ? `Stage ${f.phaseNo}` : 'Stage';
   const multi = (f.plan?.length ?? 1) > 1;
   if (kind === 'sprint' && multi) return f.phase === 'qualification' ? 'Qualifying (flying 200 m)' : 'Match play';
-  if ((kind === 'ip' || kind === 'tt') && multi) return f.phase === 'qualification' ? 'Qualifying' : 'Finals (gold / bronze)';
+  if ((kind === 'ip' || kind === 'tt' || kind === 'tp' || kind === 'ts') && multi) return f.phase === 'qualification' ? 'Qualifying' : 'Finals (gold / bronze)';
   return null;
 }

@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-12 — Team events for the results-engine sports (SD-137b)
+- **Archery:** team of 3 and mixed team (1 + 1) — team score from members' ranking rounds (or typed), team bracket (6-arrow sets / first to 5 / 3-arrow shoot-off; mixed 4 arrows / 2-arrow shoot-off; compound teams 4 ends added up).
+- **Shooting:** team of 3 (members' match scores added; ties inner tens then series); mixed-team medal matches (top 4, gold 1 v 2, bronze 3 v 4, 2/1/0 per series, first to 16, repeated shoot-off at 16–16).
+- **Cycling:** team pursuit (4000 m; 3000 m house option) and team sprint (750 m) — riders picked seat by seat, qualifying → gold/bronze finals, Caught rule.
+- **Relays:** athletics 4 × 200 m; mixed 4 × 400 / 4 × 100 with the 2 men + 2 women check and an optional fixed M-W-M-W order (swimming mixed relays already existed).
+- **Credit:** every member gets a team-event line (place, medals, points), never as an individual PB; careers show 👥 Team events; the house gets medal-table points; records per team discipline. New competition-rules options with defaults (team pick, bracket, mixed-team final, cycling finals, mixed order).
+- **Verified:** `tests/sd137b-team-events.test.mts`, suite 2983 pass / 0 fail; demo (static export, no live keys) — archery team + mixed, shooting team + mixed medal matches with a 16–16 shoot-off, team pursuit with a catch, mixed relay check. No migration. Guide: team-events-in-meets.
+
+---
+
 ### 2026-10-11 — Wave D batch 2: chess/carrom/golf ops (SD-134), consistency sweep (SD-137a), tournament history (SD-138), walkovers team-only (SD-140), competition rules (SD-141)
 - **Chess / carrom / golf (SD-134):** Swiss field management — withdraw, bring back, absent for a round, requested ½/0 byes (organiser limit, default 2), late entries; a cancelled game no longer blocks the next round; team-Swiss bye points; 🧾 "Who plays round N" panel; Swiss round results sheet (numbered boards, one-tap results, one confirm, share/print pairings); category prizes (age / girls / unrated / rating band) and golf divisions in one field; carrom doubles break rotation A1 → B1 → A2 → B2.
 - **Consistency (SD-137a):** every voice call that ends a period or the match asks first (all sports, incl. auto mode); voice scoring for hockey, handball, carrom, golf match play and kabaddi cards/technical points; hockey backfill bar; carrom + golf match-play records; leaderboard split chips for every match sport (format / singles-doubles / time control; futsal its own format). Note: voice on phones is typed-only (native speech not registered).

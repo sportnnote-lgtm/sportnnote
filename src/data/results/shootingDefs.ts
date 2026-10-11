@@ -77,7 +77,30 @@ export const SHOOT_EVENTS: ShootEventDef[] = [
   { key: 'shoot.skeet', label: 'Skeet', short: 'Skeet', gun: 'shotgun', scoring: 'hits', shots: 125, seriesOf: 25, shotOptions: [125, 75, 50], rules: 'ISSF Shotgun rules · rounds of 25 targets' },
 ];
 
-export const shootEventOf = (key?: string): ShootEventDef | undefined => SHOOT_EVENTS.find((e) => e.key === key);
+export const shootEventOf = (key?: string): ShootEventDef | undefined => SHOOT_EVENTS.find((e) => e.key === key) ?? shootTeamOf(key);
+
+/**
+ * SD-137b — ISSF team events of 3 (GTR team events, as remembered — verify):
+ * three shooters of one country / club / house shoot the individual match; the
+ * team's score is the sum of their three scores (no separate team firing).
+ * Ties: the same order as individuals on the team's added scores — inner tens
+ * (integer scoring), then the last series of all three added, back series by
+ * series (ISSF GTR team ties as remembered — verify). No final.
+ * Key: the individual event's key + '.team' ('shoot.10mar.team').
+ */
+export const SHOOT_TEAM_SIZE = 3;
+export const shootTeamKey = (base: string): string => `${base}.team`;
+export function shootTeamOf(key?: string | null): ShootEventDef | undefined {
+  if (!key || !key.endsWith('.team')) return undefined;
+  const base = SHOOT_EVENTS.find((e) => e.key === key.slice(0, -5));
+  if (!base || base.teamSize) return undefined;
+  return {
+    ...base, key, label: `${base.label} Team`, short: `${base.short} Team`, final: undefined, teamSize: SHOOT_TEAM_SIZE,
+    rules: `${base.rules} · team of 3: the members' match scores added`,
+  };
+}
+/** The individual event behind a team-of-3 key. */
+export const shootTeamBase = (key?: string | null): string | undefined => (shootTeamOf(key) ? key!.slice(0, -5) : undefined);
 
 /** The most a shot / target scores: 10.9 (decimal), 10 (integer), 1 (a hit). */
 export const maxShot = (s: ShotScoring): number => (s === 'decimal' ? 10.9 : s === 'hits' ? 1 : 10);

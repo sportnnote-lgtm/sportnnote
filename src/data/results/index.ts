@@ -25,3 +25,5 @@ export * from './teamResults.ts';
 export * from './recordBook.ts';
 export * from './champions.ts';
 export * from './competitionRules.ts';
+export * from './teamEvents.ts';
+export * from './shootMatch.ts';

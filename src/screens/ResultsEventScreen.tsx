@@ -20,7 +20,8 @@ import { Button, Card, FormError, LoadingState, SelectChip, textStyles } from '.
 import { ResultsSheet, Flags, windText } from '../components/results/ResultsSheet';
 import { WeighInCard, NextLiftCard, LiftGrid } from '../components/results/LiftingPanel';
 import { SeriesCard, FinalCard } from '../components/results/ShootingPanel';
-import { EndCard, BracketCard } from '../components/results/ArcheryPanel';
+import { EndCard, BracketCard, matchRuleText } from '../components/results/ArcheryPanel';
+import { TeamScoresCard, ShootMatchCard } from '../components/results/TeamEventPanel';
 import { FinishOrderCard, StageCard, PointsRaceCard, SprintBracketCard, cycHeader } from '../components/results/CyclingPanel';
 import { RoadFinishCard, TeamTable, roadHeader } from '../components/results/RoadPanel';
 import { CombinedStandingsCard, CombinedSheet } from '../components/results/CombinedPanel';
@@ -53,6 +54,7 @@ import {
   isRoadDiscipline, phaseTeams, teamAwards, roadRecordsAllowed, teamText,
   combinedStandings, combinedRanked, combinedAwards, combinedHeader, combinedText, falseStartStep, ruleOf, archMatch, combinedPhaseName, phasePoints, blankWarning,
   type CombinedPhaseInput, type ResultFlag,
+  archTeamOf, shootTeamOf, isShootMatchRows, shootMatchState, matchSpecOf, memberScoresText, isTeamRow, isPursuitKind, scoreText,
 } from '../data/results';
 import { isEventSport, eventWords } from '../sports/eventSports';
 import { useAuth } from '../core/auth';
@@ -252,6 +254,9 @@ export default function ResultsEventScreen() {
   // SD-96: shooting — the ISSF event, and whether this phase is its elimination final
   const shoot = shootEvent(def);
   const shootFinalPhase = !!shoot && isFinalRows(resEntries);
+  // SD-137b: the ISSF mixed team medal matches; a team of 3 / archery team ranked on its members' scores
+  const shootMatches = !!shoot && isShootMatchRows(resEntries);
+  const teamRank = !!def && (!!archTeamOf(def.key) || !!shootTeamOf(def.key)) && !isBracketRows(resEntries);
   // SD-95: archery — the round, and whether this phase is match play (the bracket)
   const arch = def?.sport === 'archery' ? archRound(def) : undefined;
   const archBracket = !!arch && isBracketRows(resEntries);
@@ -311,7 +316,7 @@ export default function ResultsEventScreen() {
   // SD-95: "Ranking round" / "Match play" for archery; the usual labels elsewhere
   // SD-98: a stage race's phases are all 'stage' — this phase reads "Stage 2"
   // SD-93: a combined event's phase reads as its event ("3. Shot put")
-  const pName = (k: typeof f.phase) => comb && k === f.phase ? combinedPhaseName(f) : phaseNameOf({ discipline: f.discipline, phase: k, plan: f.plan, ...(k === f.phase ? { phaseNo: f.phaseNo } : {}) });
+  const pName = (k: typeof f.phase) => comb && k === f.phase ? combinedPhaseName(f) : phaseNameOf({ discipline: f.discipline, phase: k, plan: f.plan, shootMatch: f.shootMatch, ...(k === f.phase ? { phaseNo: f.phaseNo } : {}) });
   const orderFor = (list: FieldEntry[]) => {
     if (def.capture === 'attempts') {
       const ids = attemptOrder(list.map((e) => toResultEntry(e, nameOf)), def, round).map((e) => e.id);
@@ -366,7 +371,7 @@ export default function ResultsEventScreen() {
     // SD-98: a sprint bracket's record is the riders' flying 200 m times
     const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : arch || sprintBr ? rankEntries(archQualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
     for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
-    const unfinished = (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def), archMatch(bracketFormat(def), f.rules)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
+    const unfinished = (shootMatches && !shootMatchState(resEntries).done) || (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def), archMatch(bracketFormat(def), f.rules, def.key)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
     const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
       unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length,
@@ -619,8 +624,9 @@ export default function ResultsEventScreen() {
         {roadEv ? <Text style={textStyles.muted}>{roadHeader(def, f.road)}</Text> : null}
         {comb ? <Text style={textStyles.muted}>{combinedHeader(f, def)}</Text> : null}
         {fieldNote ? <Text style={textStyles.muted}>{fieldNote}</Text> : null}
-        {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ruleOf(f.rules, 'shootTie') === 'inner' ? ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${ruleOf(f.rules, 'shootOff') === 'share' ? 'shared' : 'shared (a medal place: shoot-off)'} (meet rule)` : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
-        {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]} · {archBracket ? (matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') + (ruleOf(f.rules, 'archShootOff') === 'repeat' ? ' (level arrows shoot again — meet rule)' : '') : `${roundLine(arch)} · ties: ${ruleOf(f.rules, 'archTie') === 'xs' ? 'most X, then most 10s (meet rule)' : 'most 10s (X included), then most X'}${f.progression ? ' · the best go to match play' : ' · no match play: the ranking round decides the medals'}`}</Text> : null}
+        {shoot ? <Text style={textStyles.muted}>{shoot.rules} · {shotsOf(shoot, f.category)} shots{shootFinalPhase ? ` · final from zero: ${shoot.final?.stage ?? 'single shots'}, eliminations from the bottom` : f.shootFinal ? ' · the best go to an elimination final' : f.shootMatch ? '' : ' · no final: the match decides the medals'}{shootFinalPhase ? ' · a tie for an elimination or for gold: shoot-off' : ruleOf(f.rules, 'shootTie') === 'inner' ? ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${ruleOf(f.rules, 'shootOff') === 'share' ? 'shared' : 'shared (a medal place: shoot-off)'} (meet rule)` : ` · ties: ${shoot.scoring === 'integer' ? 'inner tens, then ' : ''}${shoot.positions ? 'standing, kneeling, prone, then ' : ''}the last series back`}</Text> : null}
+        {arch ? <Text style={textStyles.muted}>World Archery · {BOW_LABEL[arch.bow]}{archTeamOf(def.key) ? ` · ${archTeamOf(def.key)!.kind === 'team' ? 'team of 3' : 'mixed team (a man and a woman)'}` : ''} · {archBracket ? (archTeamOf(def.key) ? matchRuleText(matchFormatOf(arch.bow), matchSpecOf(def.key)) : matchFormatOf(arch.bow) === 'sets' ? 'set system: ends of 3, 2 points an end, first to 6; 5–5 → one-arrow shoot-off' : 'cumulative: 5 ends of 3, higher total; level → one-arrow shoot-off') + (ruleOf(f.rules, 'archShootOff') === 'repeat' ? ' (level arrows shoot again — meet rule)' : '') : `${teamRank ? `team score = the members’ ${roundLine(arch).split(' · ')[0]} ranking scores added` : roundLine(arch)} · ties: ${ruleOf(f.rules, 'archTie') === 'xs' ? 'most X, then most 10s (meet rule)' : 'most 10s (X included), then most X'}${f.progression ? ` · the best go to ${teamRank ? 'team ' : ''}match play` : ` · no match play: the ${teamRank ? 'team ranking' : 'ranking round'} decides the medals`}`}</Text> : null}
+        {shootMatches ? <Text style={textStyles.muted}>Medal matches: gold 1st v 2nd, bronze 3rd v 4th · first to 16 points.</Text> : f.shootMatch ? <Text style={textStyles.muted}>The best 4 teams go to the medal matches (gold 1 v 2, bronze 3 v 4, first to 16 points).</Text> : null}
         {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first{f.rules && (ruleOf(f.rules, 'wlStep') !== 1 || ruleOf(f.rules, 'wlRepeat') !== 'same' || ruleOf(f.rules, 'wlOrder') !== 'iwf') ? ` · meet rules: +${ruleOf(f.rules, 'wlStep')} kg after a good lift${ruleOf(f.rules, 'wlRepeat') === 'up' ? ' and after a no lift' : ''}${ruleOf(f.rules, 'wlOrder') === 'simple' ? ', order by bar → attempt → lot' : ''}` : ''} · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
@@ -675,10 +681,14 @@ export default function ResultsEventScreen() {
             {lifts && phase.status !== 'completed' && (
               <WeighInCard entries={heatRes} classes={wlClasses} weightClass={f.category?.weightClass} editable={editable} onSave={saveLift} />
             )}
-            {shoot && !shootFinalPhase && (editable || anyMark) && (
+            {teamRank && (editable || anyMark) && (
+              <TeamScoresCard entries={heatRes} discipline={def.key} sport={arch ? 'archery' : 'shooting'} eventKeys={f.teamFrom?.eventKeys} editable={editable} onSave={saveLift} />
+            )}
+            {shootMatches && <ShootMatchCard entries={resEntries} discipline={def.key} editable={editable} onSave={saveLift} />}
+            {shoot && !shootFinalPhase && !shootMatches && !teamRank && (editable || anyMark) && (
               <SeriesCard entries={heatRes} ev={shoot} shots={shotsOf(shoot, f.category)} mode={f.shootEntry ?? 'series'} editable={editable} onSave={saveLift} />
             )}
-            {arch && !archBracket && (editable || anyMark) && <EndCard entries={heatRes} round={arch} editable={editable} onSave={saveLift} />}
+            {arch && !archBracket && !teamRank && (editable || anyMark) && <EndCard entries={heatRes} round={arch} editable={editable} onSave={saveLift} />}
             {/* SD-98 cycling: the order on the line, a stage, a points race, sprint match play */}
             {orderEv && cycK && cycK !== 'points' && cycK !== 'stage' && (editable || anyMark) && (
               <FinishOrderCard def={def} kind={cycK} entries={heatRes} editable={editable} onSave={saveLift} statuses={statusesFor(def)} />
@@ -693,7 +703,7 @@ export default function ResultsEventScreen() {
             {sprintBr && <SprintBracketCard entries={resEntries} editable={editable} onSave={saveLift} />}
             {/* SD-92: road / walk / XC — tap (or bib) in finish order, times optional */}
             {roadEv && (editable || anyMark) && <RoadFinishCard def={def} entries={heatRes} editable={editable} onSave={saveLift} road={f.road} age={f.category?.age} />}
-            {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} rules={f.rules} />}
+            {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} rules={f.rules} discipline={def.key} />}
             {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
             {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} rules={f.rules} />}
             {def.capture === 'attempts' && editable && (
@@ -723,7 +733,7 @@ export default function ResultsEventScreen() {
               <BarHeights def={def} bar={f.bar ?? []} current={curBar} onPick={setBar} editable={editable} onAdd={addBar} />
             )}
 
-            {(shootFinalPhase || archBracket || sprintBr || orderEv ? [] : orderFor(heatEntries)).map((e) => {
+            {(shootFinalPhase || shootMatches || archBracket || sprintBr || orderEv ? [] : orderFor(heatEntries)).map((e) => {
               const r = resultOf(e);
               const re = toResultEntry({ ...e, result: r }, nameOf);
               const row = heatRows.find((x) => x.id === e.id);
@@ -747,7 +757,10 @@ export default function ResultsEventScreen() {
                       {r.fsWarn && (r.status ?? 'ok') === 'ok' ? <Text style={st.badTxt}>⚠ FS warned</Text> : null}
                     </View>
                   </View>
-                  {arch ? (
+                  {teamRank && isTeamRow(re) ? (
+                    // SD-137b: a team ranked on its members' scores
+                    <Text style={textStyles.muted} numberOfLines={2}>{memberScoresText(r, (v) => (shoot ? scoreText(v, shoot.scoring) : String(v)))}</Text>
+                  ) : arch ? (
                     <Text style={textStyles.muted} numberOfLines={2}>{archRowText(r, arch) || 'No ends yet'}</Text>
                   ) : shoot ? (
                     <Text style={textStyles.muted} numberOfLines={2}>{r.mark != null ? `${(r.series ?? []).length} series · ${totalText(r.mark, shoot.scoring === 'integer' ? r.xs : undefined, shoot.scoring)}` : 'No series yet'}{r.members?.length ? ` · ${r.members.map((m) => m.name).join(' / ')}` : ''}</Text>
@@ -776,7 +789,7 @@ export default function ResultsEventScreen() {
                       : <SelectChip label="＋ Splits" active={false} onPress={() => setOpenSplits((cur) => new Set(cur).add(e.id))} />
                   )}
                   {/* SD-98: a pursuit final ends when one rider catches the other */}
-                  {cycK === 'ip' && raceFinal && editable && (r.status ?? 'ok') === 'ok' && (
+                  {isPursuitKind(cycK) && raceFinal && editable && (r.status ?? 'ok') === 'ok' && (
                     <SelectChip label={r.caught ? '✓ Caught (loses the race)' : 'Caught'} active={!!r.caught} onPress={() => void save(e, { ...r, caught: !r.caught || undefined })} />
                   )}
                   {f.reaction && def.unit === 'time' && editable && (

@@ -47,6 +47,7 @@ const ATHLETICS: Record<string, [number, number]> = {
   'ath.400mh': [45, 120],
   'ath.4x100': [36, 120],
   'ath.4x400': [170, 480],
+  'ath.4x200': [78, 240],
   'ath.lj': [1, 9.2],
   'ath.tj': [3, 18.8],
   'ath.sp': [1.5, 26],
@@ -219,7 +220,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.sport === 'rowing' || def.sport === 'canoe' ? (n === 1 ? 'crew' : 'crews') : def.sport === 'cycling' ? (n === 1 ? 'rider' : 'riders') : def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
+  def.sport === 'rowing' || def.sport === 'canoe' ? (n === 1 ? 'crew' : 'crews') : def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'cycling' ? (n === 1 ? 'rider' : 'riders') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {

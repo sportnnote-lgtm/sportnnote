@@ -13,6 +13,7 @@ import { shootEventOf, sumTenths, fromTenths } from './shootingDefs.ts';
 import { isBracketRows, rankArcheryBracket } from './archeryBracket.ts';
 import { archRoundOf, endsOf } from './archeryDefs.ts';
 import { isCyclingRanked, rankCycling } from './cyclingRank.ts';
+import { isShootMatchRows, rankShootMatches } from './shootMatch.ts';
 import { rankRoad } from './road.ts';
 import { ruleOf } from './competitionRules.ts';
 
@@ -160,6 +161,8 @@ export const betterMark = (a: number, b: number, def: Pick<DisciplineDef, 'bette
 export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): RankedEntry[] {
   // SD-96: an ISSF elimination final ranks by elimination, not by a mark
   if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
+  // SD-137b: ISSF mixed team medal matches (gold 1 v 2, bronze 3 v 4)
+  if (def.tie === 'issf' && isShootMatchRows(entries)) return rankShootMatches(entries, def);
   // SD-95: archery match play ranks by the bracket
   if (def.sport === 'archery' && isBracketRows(entries)) return rankArcheryBracket(entries, def);
   // SD-92: athletics road / race walk / cross-country — the order of finish

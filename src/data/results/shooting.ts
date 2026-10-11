@@ -17,6 +17,9 @@ import type { Category, DisciplineDef, EntryResult, PhaseFormat, RankedEntry, Re
 import { categoryLabel, disciplineOf } from './model.ts';
 import type { Award } from './medals.ts';
 import { finalState, isFinalRows, type FinalState } from './shootingRank.ts';
+import { isShootMatchRows, shootMatchState } from './shootMatch.ts';
+import { isTeamRow, teamLines, teamCareer } from './teamEvents.ts';
+import { shootTeamOf } from './shootingDefs.ts';
 import { maxShot, seriesCount, shootEventOf, sumTenths, fromTenths, tenths, positionOf, POSITION_LABEL, type ShootEventDef, type ShotScoring } from './shootingDefs.ts';
 
 export * from './shootingDefs.ts';
@@ -167,7 +170,8 @@ export function addShootOff(r: EntryResult, after: number, round: number, v: num
 
 /** For records / PBs: a final's rows read as their qualification scores. */
 export function qualView(entries: ResultEntry[]): ResultEntry[] {
-  if (!isFinalRows(entries)) return entries;
+  // SD-137b: the mixed team medal matches read as their qualification scores too
+  if (!isFinalRows(entries) && !isShootMatchRows(entries)) return entries;
   return entries.map((e) => ({ ...e, result: { status: e.result.status, order: e.result.order, mark: e.result.qual?.mark, xs: e.result.qual?.xs, series: e.result.qual?.series } }));
 }
 
@@ -210,13 +214,34 @@ export interface ShootLine { playerId: string; stats: Record<string, number>; wo
  *   final: finals, place, fpts (final score), golds / silvers / bronzes, posPoints.
  * `kind`: 'qual' (a qualification with a final after it), 'match' (no final), 'final'.
  */
-export function shootLines(f: Pick<PhaseFormat, 'discipline' | 'category'>, ranked: RankedEntry[], kind: 'qual' | 'match' | 'final', awards: Award[] = []): ShootLine[] {
+export function shootLines(f: Pick<PhaseFormat, 'discipline' | 'category'> & Partial<Pick<PhaseFormat, 'shootMatch'>>, ranked: RankedEntry[], kind: 'qual' | 'match' | 'final', awards: Award[] = []): ShootLine[] {
   const ev = shootEventOf(f.discipline);
   if (!ev) return [];
   const byEntry = new Map(awards.map((a) => [a.entryId, a]));
   const out: ShootLine[] = [];
+  // SD-137b: a team of 3, or a mixed team event with medal matches — each
+  // member gets a team line (place, medal, points, team matches) at the end;
+  // the team's qualification writes nothing (the team score is not a member's PB)
+  const rows = ranked.map((r) => r.entry);
+  const matches = isShootMatchRows(rows) ? shootMatchState(rows) : null;
+  const teamEvent = !!shootTeamOf(f.discipline) || !!matches || !!f.shootMatch;
   for (const r of ranked) {
     if (r.status === 'DNS' || r.status === 'WD') continue;
+    if (teamEvent && isTeamRow(r.entry)) {
+      if (kind === 'qual') continue;
+      const extra: Record<string, number> = {};
+      if (matches) {
+        let w = 0, l = 0;
+        for (const m of matches.matches) {
+          if (!m.out || m.out.walkover || !m.decided) continue;
+          if (m.winner === r.id) w += 1; else if (m.loser === r.id) l += 1;
+        }
+        extra.tmW = w; extra.tmL = l;
+      }
+      if (r.status === 'DQ') extra.dq = 1;
+      out.push(...teamLines(r, extra, byEntry.get(r.id)));
+      continue;
+    }
     const s: Record<string, number> = {};
     const res = r.entry.result ?? {};
     if (r.status === 'DQ') s.dq = 1;
@@ -258,6 +283,8 @@ export interface ShootingCareer {
   /** best match score per event + match length, with the average per 10 shots */
   bests: { key: string; label: string; pb: ShootBest; sb?: ShootBest; avg10?: number; avgText?: string; matches: number }[];
   history: { eventId: string; title: string; date: string; text: string; place?: number; medal?: 'gold' | 'silver' | 'bronze'; flags: string[] }[];
+  /** SD-137b: team events (teams of 3, mixed team medal matches), their medals (also counted above) and team matches */
+  team: { events: number; golds: number; silvers: number; bronzes: number; won: number; lost: number };
 }
 
 const ord = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][n % 100] ?? 'th'}`;
@@ -268,7 +295,7 @@ export function shootingCareer(
   phases: Map<string, { discipline: string; title: string; date: string; category?: Category; eventTitle?: string; phase?: string }>,
   seasonFrom: string,
 ): ShootingCareer {
-  const c: ShootingCareer = { comps: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, innerRate: null, xs: 0, xShots: 0, bests: [], history: [] };
+  const c: ShootingCareer = { comps: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, innerRate: null, xs: 0, xShots: 0, bests: [], history: [], team: teamCareer(lines) };
   const bests = new Map<string, ShootingCareer['bests'][number] & { ptsSum: number; shotSum: number; scoring: ShotScoring }>();
   const sorted = [...lines].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const pbSoFar = new Map<string, number>();
@@ -302,7 +329,9 @@ export function shootingCareer(
     if (s.qualified) flags.push('final');
     const medal = s.golds ? 'gold' : s.silvers ? 'silver' : s.bronzes ? 'bronze' : undefined;
     const sc = ev?.scoring ?? 'integer';
-    const text = s.finals
+    const text = s.teamEv
+      ? ['team', s.place ? ord(s.place) : '', s.tmW != null ? `medal match ${s.tmW ? 'won' : 'lost'}` : ''].filter(Boolean).join(' · ')
+      : s.finals
       ? [s.place ? `${ord(s.place)} in the final` : 'final', s.fpts != null ? scoreText(s.fpts, 'decimal') : ''].filter(Boolean).join(' · ')
       : [s.place ? ord(s.place) : s.qPlace ? `${ord(s.qPlace)} in qualification` : s.dq ? 'DQ' : '', s.pts != null ? totalText(s.pts, sc === 'integer' ? s.xs : undefined, sc) : '', s.shots ? `${s.shots} shots` : ''].filter(Boolean).join(' · ');
     c.history.push({ eventId: l.eventId ?? '', title: info?.title ?? l.opponent ?? 'Shooting', date, text, place: s.place, medal, flags });

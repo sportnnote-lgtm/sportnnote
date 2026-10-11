@@ -10,7 +10,7 @@ import { theme } from '../../core/theme';
 import { Card, Pill, textStyles } from '../ui';
 import { formatDay } from '../../core/dates';
 import { getPhaseInfos } from '../../data/resultsStore';
-import { shootingCareer, type PhaseInfo } from '../../data/results';
+import { shootingCareer, type PhaseInfo, teamCareerText } from '../../data/results';
 import type { StatLine } from '../../core/types';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -41,6 +41,8 @@ export function ShootingCareer({ lines }: { lines: StatLine[] }) {
         <Text style={st.medals}>{c.golds} 🥇  {c.silvers} 🥈  {c.bronzes} 🥉{c.points ? `  ·  ${c.points} points` : ''}</Text>
       )}
 
+      {/* SD-137b: team events (archery / shooting teams, team pursuit / sprint) */}
+      {teamCareerText(c.team) ? <Text style={textStyles.muted}>{teamCareerText(c.team)}</Text> : null}
       <Text style={st.section}>Personal bests</Text>
       {c.bests.length === 0 ? <Text style={textStyles.muted}>No complete match yet.</Text> : (
         <Card style={{ gap: theme.spacing(2) }}>

@@ -10,7 +10,7 @@ import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
   shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, archMatch, bracketRowText, isCrewSport, crewMembersText,
-  cycRowText, cycKind, sprintBracket, isRoadDiscipline, roadRowText,
+  cycRowText, cycKind, sprintBracket, isRoadDiscipline, roadRowText, memberScoresText, scoreText,
   type DisciplineDef, type RankedEntry, type ResultFlag, type RoadFormat,
 } from '../../data/results';
 
@@ -52,6 +52,8 @@ export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat
   }
   // SD-96 shooting: a finalist's final shots (+ the qualification score), or the series and the ISSF total ("586-24x")
   const shoot = def.tie === 'issf' ? shootEventOf(def.key) : undefined;
+  // SD-137b: a team ranked on its members' scores — each member's score
+  if (res.ms?.length && !r.entry.athleteId) return memberScoresText(res, (v) => (shoot ? scoreText(v, shoot.scoring) : String(v)));
   if (shoot) {
     if (Array.isArray(res.fshots)) return [res.fshots.length ? `${res.fshots.length} shot${res.fshots.length === 1 ? '' : 's'}: ${res.fshots.slice(-5).map((v) => v.toFixed(1)).join(' ')}${res.fshots.length > 5 ? ' …' : ''}` : '', res.qual ? `Q ${totalText(res.qual.mark, res.qual.xs, shoot.scoring)}` : ''].filter(Boolean).join(' · ');
     const members = res.members?.length ? res.members.map((m) => m.name).join(' / ') : '';
@@ -63,7 +65,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat
   if (arch) return res.mp != null ? (res.seed != null ? `Seed ${res.seed}${res.qual ? ` (${res.qual.mark})` : ''}` : '') : archRowText(res, arch);
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
   // SD-98 cycling: points-race sprints, a stage's place / bonus / points, laps, "caught"
-  if (def.sport === 'cycling') return cycRowText(r, def);
+  if (def.sport === 'cycling') return [def.teamSize && res.members?.length ? res.members.map((m) => m.name).join(', ') : '', cycRowText(r, def)].filter(Boolean).join(' · ');
   // SD-99 / SD-100 rowing / canoe: the crew by seat, the photo-finish reading, the splits
   if (isCrewSport(def.sport)) {
     return [
@@ -103,7 +105,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   const many = heats.size > 1;
   // SD-95: archery match play — each archer's matches ("QF W 6–4 · SF L 5–6 (SO 9–10)")
   const allRows = [...heats.values()].flat().map((r) => r.entry);
-  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def), archMatch(bracketFormat(def), def.rules)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
+  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def), archMatch(bracketFormat(def), def.rules, def.key)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
   // SD-98: an order event's column — time / gap (road), points (points race), nothing (keirin, scratch, elimination)
   const cycK = def.sport === 'cycling' ? cycKind(def.key) : undefined;
   // SD-92: road / walk / XC — the bib column (the detail line drops it)
@@ -124,7 +126,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt, roadEv && st.bib]}>{lanes ? 'Ln' : roadEv ? 'Bib' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.sport === 'cycling' ? 'Rider' : isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.sport === 'cycling' ? (def.teamSize ? 'Team' : 'Rider') : isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
             <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : cycK === 'points' ? 'Points' : cycK === 'stage' ? 'Time' : cycK === 'keirin' || cycK === 'scratch' || cycK === 'elim' ? '' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {

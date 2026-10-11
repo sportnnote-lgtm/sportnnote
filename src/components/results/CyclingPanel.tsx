@@ -516,6 +516,9 @@ export function cycHeader(kind: CycKind | undefined, def: DisciplineDef, f: { cy
   if (kind === 'elim') bits.push('the last rider every 2 laps is out');
   if (kind === 'keirin') bits.push('paced laps, then the sprint — order on the line');
   if (kind === 'ip' || kind === 'tt' || kind === 'sprint') bits.push('times to 1/1000');
+  // SD-137b: team pursuit / team sprint
+  if (kind === 'tp') bits.push(`teams of ${cycEventOf(def.key)?.riders ?? 4}`, 'time on the third rider', 'times to 1/1000');
+  if (kind === 'ts') bits.push(`teams of ${cycEventOf(def.key)?.riders ?? 3}`, '3 laps, time on the last rider', 'times to 1/1000');
   if (f.handTimed) bits.push('hand timing');
   return bits.filter(Boolean).join(' · ');
 }

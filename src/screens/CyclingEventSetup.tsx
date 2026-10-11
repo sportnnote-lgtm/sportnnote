@@ -22,9 +22,11 @@ import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
-  CYC_EVENTS, categoryLabel, eligibleFor, cycPlan, describeCycPlan, sprintFields, defaultSprintField, sprintCount, cycMeetSettings,
+  CYC_EVENTS, CYC_TEAM_EVENTS, isCycTeamKind, categoryLabel, eligibleFor, cycPlan, describeCycPlan, sprintFields, defaultSprintField, sprintCount, cycMeetSettings,
   type CycKind, type Category, type CycFormat,
 } from '../data/results';
+import { sportRule } from '../data/results/competitionRules';
+import { TeamBuilder, type TeamDraft } from '../components/results/TeamBuilder';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -40,10 +42,10 @@ const AGES: { key: string; label: string; note: string }[] = [
   { key: 'Masters', label: 'Masters', note: 'UCI masters (30+)' },
 ];
 const ROAD: CycKind[] = ['itt', 'rr', 'stage'];
-const TRACK: CycKind[] = ['ip', 'tt', 'sprint', 'keirin', 'scratch', 'points', 'elim'];
+const TRACK: CycKind[] = ['ip', 'tt', 'sprint', 'keirin', 'scratch', 'points', 'elim', 'tp', 'ts'];
 const KIND_LABEL: Record<CycKind, string> = {
   itt: 'Time trial (ITT)', rr: 'Road race', stage: 'Stage race', ip: 'Individual pursuit', tt: 'Time trial (500 m / kilo)', sprint: 'Sprint',
-  keirin: 'Keirin', scratch: 'Scratch race', points: 'Points race', elim: 'Elimination race',
+  keirin: 'Keirin', scratch: 'Scratch race', points: 'Points race', elim: 'Elimination race', tp: 'Team pursuit', ts: 'Team sprint',
 };
 const KIND_NOTE: Record<CycKind, string> = {
   itt: 'Riders start alone at intervals; the fastest time wins (to 1/100, a transponder / photo reading to 1/1000 splits a tie).',
@@ -56,6 +58,8 @@ const KIND_NOTE: Record<CycKind, string> = {
   scratch: 'Everyone starts together; first over the line after the set laps wins. A rider who gains a lap ranks ahead of the bunch.',
   points: 'Sprints every N laps score 5-3-2-1 (the finish double: 10-6-4-2); a lap gained +20, a lap lost −20. Most points wins.',
   elim: 'Every second lap the last rider over the line is out, until two sprint for the win.',
+  tp: 'Teams of 4 start on opposite sides of the track; the time is taken on the third rider. Qualifying on time; the two fastest teams ride for gold, 3rd and 4th for bronze. A team that is caught loses.',
+  ts: 'Teams of 3, three laps: each rider leads one lap and pulls off; the time is taken on the last rider. Qualifying on time, then finals for gold and bronze.',
 };
 
 export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
@@ -80,7 +84,13 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
   const cat: Category = { age, gender };
   const adult = ['Junior', 'U23', 'Senior', 'Masters'].includes(age);
 
-  const ev = CYC_EVENTS.find((e) => e.kind === kind && (e.metres == null || kind === 'sprint' || e.metres === (kind === 'itt' ? (dist.itt ?? 10) * 1000 : dist[kind]))) ?? CYC_EVENTS.find((e) => e.kind === kind)!;
+  // SD-137b: team pursuit / team sprint (teams picked seat by seat)
+  const teamKind = isCycTeamKind(kind);
+  const ev = teamKind
+    ? CYC_TEAM_EVENTS.find((e) => e.kind === kind && (kind === 'ts' || e.metres === (dist.tp ?? 4000))) ?? CYC_TEAM_EVENTS.find((e) => e.kind === kind)!
+    : CYC_EVENTS.find((e) => e.kind === kind && (e.metres == null || kind === 'sprint' || e.metres === (kind === 'itt' ? (dist.itt ?? 10) * 1000 : dist[kind]))) ?? CYC_EVENTS.find((e) => e.kind === kind)!;
+  const [teams, setTeams] = useState<TeamDraft[]>([]);
+  useEffect(() => { setTeams([]); }, [kind]);
 
   // Teams / houses (as the other event setups)
   const [sources, setSources] = useState<Source[]>([]);
@@ -125,11 +135,13 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
   }, [filter, query, sources, players, playerById, eligibleOnly, gender, age]);
   const toggle = (pid: string) => setPicks((ps) => (ps.includes(pid) ? ps.filter((x) => x !== pid) : [...ps, pid]));
   const nameOf = (pid: string) => playerById.get(pid)?.fullName ?? 'Rider';
-  const n = picks.length;
+  const n = teamKind ? teams.length : picks.length;
 
   const [field, setField] = useState<number | null>(null);
   const sprintField = Math.min(field ?? defaultSprintField(n), Math.max(n, 2));
-  const plan = cycPlan(kind, n, { field: sprintField, stages });
+  // SD-141 / SD-137b: the meet may run team events as one round on time
+  const oneRound = teamKind && sportRule(tournament?.formats?.cycling as Record<string, unknown> | undefined, 'cycTeamFinals') === 'times';
+  const plan = oneRound ? cycPlan(kind, Math.min(n, 3)) : cycPlan(kind, n, { field: sprintField, stages });
   const lapsN = Number(laps) || (kind === 'points' ? 40 : kind === 'scratch' ? 20 : undefined);
   const everyN = Number(every) || 10;
   const handTimed = cycMeetSettings(tournament?.formats?.cycling as Record<string, unknown> | undefined).handTimed;
@@ -139,10 +151,21 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
   const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
-    if (!n) { setError('Add at least one rider.'); return; }
+    if (!n) { setError(teamKind ? 'Add at least one team.' : 'Add at least one rider.'); return; }
     if (kind === 'sprint' && n < 2) { setError('A sprint needs at least two riders.'); return; }
     if (kind === 'points' && lapsN && everyN > lapsN) { setError('The sprint interval is longer than the race.'); return; }
-    const list: NewEntrant[] = picks.map((pid) => ({ playerId: pid, name: nameOf(pid), team: teamOf(pid) }));
+    if (teamKind) {
+      const open = teams.find((t) => t.seats.some((x) => !x));
+      if (open) { setError(`${open.name}: pick all ${ev.riders} riders.`); return; }
+      const twice = teams.flatMap((t) => t.seats).find((x, i, all) => all.indexOf(x) !== i);
+      if (twice) { setError(`${nameOf(twice)} is in two teams.`); return; }
+    }
+    const list: NewEntrant[] = teamKind
+      ? teams.map((t) => {
+        const src = sources.find((s) => s.key === t.source) ?? sources.find((s) => s.playerIds.includes(t.seats[0]!));
+        return { name: t.name.trim() || src?.name || 'Team', team: src ? { id: src.teamId, name: src.name, colorHex: src.colorHex } : undefined, members: t.seats.map((pid) => ({ playerId: pid!, name: nameOf(pid!) })) };
+      })
+      : picks.map((pid) => ({ playerId: pid, name: nameOf(pid), team: teamOf(pid) }));
     const cyc: CycFormat = {
       ...(kind === 'itt' ? { interval } : {}),
       ...(kind === 'points' || kind === 'scratch' ? { laps: lapsN } : {}),
@@ -195,6 +218,13 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
               <Text style={textStyles.muted}>{kind === 'ip' ? 'UCI: 4000 m elite and U23, 3000 m juniors (men) / 2000 m junior women; schools often ride 2000 m.' : 'UCI: 1000 m (the kilo) for men, 500 m for women and juniors.'} Each distance keeps its own records and PBs.</Text>
             </>
           )}
+          {kind === 'tp' && (
+            <>
+              <Text style={st.label}>Distance</Text>
+              <View style={st.wrap}>{CYC_TEAM_EVENTS.filter((e) => e.kind === 'tp').map((e) => <SelectChip key={e.key} label={`${e.metres} m`} active={ev.key === e.key} onPress={() => setDist({ ...dist, tp: e.metres ?? 4000 })} />)}</View>
+              <Text style={textStyles.muted}>UCI: 4000 m for elite, U23 and junior teams; 3000 m is a school / youth distance (a house choice). Each distance keeps its own records.</Text>
+            </>
+          )}
           {(kind === 'itt' || kind === 'stage') && (
             <>
               <Text style={st.label}>Start interval{kind === 'stage' ? ' (time-trial stages)' : ''}</Text>
@@ -239,7 +269,17 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
           <Text style={textStyles.muted}>Event: {ev.label} {categoryLabel(cat)}.</Text>
         </Card>
 
-        <Card style={st.card}>
+        {teamKind ? (
+          <Card style={st.card}>
+            <Text style={textStyles.h3}>3 · Teams ({teams.length})</Text>
+            <AgeBasisNote tournament={tournament} sport={'cycling'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
+            <TeamBuilder sources={sources} playerById={playerById} players={players} seatNames={Array.from({ length: ev.riders ?? 4 }, (_, i) => `Rider ${i + 1}`)}
+              fits={(p) => !eligibleOnly || gender === 'X' || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })} teams={teams} onChange={setTeams}
+              hint={`Add a team from a house, then pick its ${ev.riders} riders in starting order — or “Fill empty seats”.`} />
+          </Card>
+        ) : null}
+
+        {!teamKind ? <Card style={st.card}>
           <Text style={textStyles.h3}>3 · Riders ({n})</Text>
           <View style={st.wrap}>
             <SelectChip label="All" active={filter == null} onPress={() => setFilter(null)} />
@@ -255,7 +295,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
             })}
             {!pool.length && <Text style={textStyles.muted}>No riders match. Players without a gender or date of birth are always shown.</Text>}
           </View>
-        </Card>
+        </Card> : null}
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>4 · Rounds</Text>
@@ -271,10 +311,11 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
           )}
           <Text style={textStyles.muted}>{n ? describeCycPlan(kind, plan, stages) : 'Add riders to see the rounds.'}</Text>
           {kind === 'ip' && n > 0 && n < 4 ? <Text style={textStyles.muted}>Fewer than 4 riders: one race on time, no finals.</Text> : null}
+          {teamKind && n > 0 && (n < 4 || oneRound) ? <Text style={textStyles.muted}>{oneRound ? 'Meet rule: one round, the times decide.' : 'Fewer than 4 teams: one round on time, no finals.'}</Text> : null}
           {handTimed ? <Text style={textStyles.muted}>Hand timing is on for this meet (Points & timing).</Text> : null}
         </Card>
 
-        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev.key} plan={plan} stage={kind === 'stage'} athleteIds={picks} />
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev.key} plan={plan} stage={kind === 'stage'} athleteIds={teamKind ? teams.flatMap((t) => t.seats.filter((x): x is string => !!x)) : picks} />
         <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create race & start list'} onPress={() => void create()} disabled={busy || !n} />

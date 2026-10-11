@@ -19,7 +19,7 @@ import type { Award } from './medals.ts';
 import { formatMark } from './marks.ts';
 import { betterMark } from './rank.ts';
 import { bracketState, isBracketRows } from './archeryBracket.ts';
-import { cycEventOf, cycKind, CYC_EVENTS, sprintPoints, LAP_POINTS, SPRINT_POINTS, type CycKind } from './cyclingDefs.ts';
+import { cycEventOf, cycKind, CYC_EVENTS, sprintPoints, LAP_POINTS, SPRINT_POINTS, isCycTeamKind, type CycKind } from './cyclingDefs.ts';
 import { pointsTotal, sprintMatch, sprintBo, stageTimes, gcAfter, roadTimes, sprintRule, finishPoints } from './cyclingRank.ts';
 import { ruleOf, type CompRules } from './competitionRules.ts';
 
@@ -70,7 +70,8 @@ export function cycPlan(kind: CycKind, n: number, o: CycPlanOpts = {}): PlannedP
     const stages = o.stages?.length ? o.stages : ['road' as const];
     return stages.map((_, i): PlannedPhase => (i < stages.length - 1 ? { phase: 'stage', heats: 1, progression: { stage: true } } : { phase: 'final', heats: 1 }));
   }
-  if (kind === 'ip' && n >= 4) {
+  // SD-137b: team pursuit / team sprint ride the same qualifying → finals as the individual pursuit
+  if ((kind === 'ip' || kind === 'tp' || kind === 'ts') && n >= 4) {
     return [
       { phase: 'qualification', heats: 1, progression: { routes: [{ from: 1, to: 2, phase: 2, race: 1 }, { from: 3, to: 4, phase: 2, race: 2 }] } },
       { phase: 'final', heats: 2, races: ['A', 'B'] },
@@ -92,6 +93,7 @@ export function describeCycPlan(kind: CycKind, plan: PlannedPhase[], stages?: ('
   if (kind === 'stage') return (stages ?? ['road']).map((t, i) => `Stage ${i + 1} ${t === 'itt' ? '(time trial)' : '(road)'}`).join(' → ') + ' · GC on cumulative time';
   if (plan.length === 1) return kind === 'keirin' || kind === 'scratch' || kind === 'elim' || kind === 'points' || kind === 'rr' ? 'One race — the order on the line decides' : 'One race against the clock';
   if (kind === 'ip' || kind === 'tt') return 'Qualifying → the two fastest ride for gold, 3rd and 4th for bronze';
+  if (kind === 'tp' || kind === 'ts') return 'Qualifying → the two fastest teams ride for gold, 3rd and 4th for bronze';
   if (kind === 'sprint') return `Flying 200 m qualifying → the best ${plan[0].progression?.fillTo ?? 2} seeded into match play (1 v ${plan[0].progression?.fillTo ?? 2} …), semi-final losers race for bronze`;
   if (kind === 'keirin') return `${plan[0].heats} heats (first ${plan[0].progression?.byPlace ?? 1} of each) → Final`;
   return '';
@@ -249,9 +251,11 @@ export function cycLines(f: Pick<PhaseFormat, 'discipline' | 'phase' | 'rules'>,
   const bracket = isBracketRows(rows) ? bracketState(rows, 'sets', sprintMatch(sprintBo(rows))) : null;
   const stage = kind === 'stage' ? stageTimes(rows, f.rules) : null;
   const out: CycLine[] = [];
+  const team = isCycTeamKind(kind);
   for (const r of ranked) {
-    if (r.status === 'DNS' || r.status === 'WD' || !r.entry.athleteId) continue;
-    const s: Record<string, number> = { races: 1 };
+    // SD-137b: a team pursuit / team sprint row credits each of its riders
+    if (r.status === 'DNS' || r.status === 'WD' || (!r.entry.athleteId && !(team && r.entry.result?.members?.length))) continue;
+    const s: Record<string, number> = { races: 1, ...(team ? { teamEv: 1 } : {}) };
     const res = r.entry.result ?? {};
     const a = byEntry.get(r.id);
     if (r.position != null) s.place = r.position;
@@ -287,7 +291,9 @@ export function cycLines(f: Pick<PhaseFormat, 'discipline' | 'phase' | 'rules'>,
     }
     if (kind !== 'stage' && r.position === 1 && (f.phase === 'final' || kind === 'rr' || kind === 'itt')) s.raceWins = 1;
     if (kind === 'stage' && f.phase === 'final' && r.position === 1) s.raceWins = 1;
-    out.push({ playerId: r.entry.athleteId, stats: s, won: a?.medal === 'gold' || s.raceWins === 1 });
+    const won = a?.medal === 'gold' || s.raceWins === 1;
+    if (r.entry.athleteId) out.push({ playerId: r.entry.athleteId, stats: s, won });
+    else for (const m of res.members ?? []) if (m.playerId) out.push({ playerId: m.playerId, stats: { ...s }, won });
   }
   return out;
 }
@@ -299,13 +305,15 @@ export interface CycBest { key: string; label: string; value: number; text: stri
 export interface CyclingCareer {
   races: number; wins: number; finals: number; golds: number; silvers: number; bronzes: number; points: number;
   stages: number; stageWins: number; prPts: number; sprintW: number; sprintL: number; dnf: number;
+  /** SD-137b: team pursuit / team sprint races ridden and the team medals won */
+  teamEvents: number; teamGolds: number; teamSilvers: number; teamBronzes: number;
   bests: { key: string; label: string; pb: CycBest; sb?: CycBest }[];
   history: { eventId: string; title: string; date: string; text: string; place?: number; medal?: 'gold' | 'silver' | 'bronze'; flags: string[] }[];
 }
 
 /** A rider's career from their cycling lines (oldest first for "PB at the time"; history newest first). */
 export function cyclingCareer(lines: { eventId?: string; stats: Record<string, number>; date?: string; opponent?: string }[], phases: Map<string, CycPhaseInfo>, seasonFrom: string): CyclingCareer {
-  const c: CyclingCareer = { races: 0, wins: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, stages: 0, stageWins: 0, prPts: 0, sprintW: 0, sprintL: 0, dnf: 0, bests: [], history: [] };
+  const c: CyclingCareer = { races: 0, wins: 0, finals: 0, golds: 0, silvers: 0, bronzes: 0, points: 0, stages: 0, stageWins: 0, prPts: 0, sprintW: 0, sprintL: 0, dnf: 0, teamEvents: 0, teamGolds: 0, teamSilvers: 0, teamBronzes: 0, bests: [], history: [] };
   const bests = new Map<string, CyclingCareer['bests'][number]>();
   const pbSoFar = new Map<string, number>();
   for (const l of [...lines].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))) {
@@ -314,6 +322,11 @@ export function cyclingCareer(lines: { eventId?: string; stats: Record<string, n
     c.golds += s.golds ?? 0; c.silvers += s.silvers ?? 0; c.bronzes += s.bronzes ?? 0; c.points += s.posPoints ?? 0;
     c.stages += s.stages ?? 0; c.stageWins += s.stageWins ?? 0; c.prPts += s.prPts ?? 0;
     c.sprintW += s.sprintW ?? 0; c.sprintL += s.sprintL ?? 0; c.dnf += (s.dnf ?? 0) + (s.otl ?? 0);
+    // SD-137b: a team race counts once — its final's line (qualifying lines carry no medal)
+    if (s.teamEv && s.finals) {
+      c.teamEvents += 1;
+      c.teamGolds += s.golds ?? 0; c.teamSilvers += s.silvers ?? 0; c.teamBronzes += s.bronzes ?? 0;
+    }
     const info = l.eventId ? phases.get(l.eventId) : undefined;
     const key = Object.keys(s).find((k) => cycKeyDiscipline(k));
     const discipline = info?.discipline ?? (key ? cycKeyDiscipline(key)! : undefined);
@@ -332,6 +345,7 @@ export function cyclingCareer(lines: { eventId?: string; stats: Record<string, n
     }
     const medal = s.golds ? 'gold' : s.silvers ? 'silver' : s.bronzes ? 'bronze' : undefined;
     const text = [
+      s.teamEv ? 'team' : '',
       s.place ? ordinal(s.place) : s.stagePlace ? `stage ${ordinal(s.stagePlace)}` : s.dnf ? 'DNF' : s.otl ? 'OTL' : s.dq ? 'DQ' : '',
       def && s.mark != null ? formatMark(s.mark, def) : '',
       s.prPts != null ? `${s.prPts} pts` : '',

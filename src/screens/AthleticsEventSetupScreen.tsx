@@ -26,7 +26,7 @@ import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, getMarkHistory, type NewEntrant } from '../data/resultsStore';
 import {
-  AGE_GROUPS, trackEventsFor, eligibleFor, roundPresets, describePlan, hurdleHeight, meetSettings, digitsToTime,
+  AGE_GROUPS, trackEventsFor, relayExtrasFor, sportRule, eligibleFor, roundPresets, describePlan, hurdleHeight, meetSettings, digitsToTime,
   disciplineOf, parseMark, formatMark, personalBests, categoryLabel,
   fieldEventsFor, isFieldDiscipline, implementSpec, implementNote, defaultBoard, TJ_BOARDS, defaultBar, barPlan, barProgressionError, minBarStep,
   swimMeetSettings, swimEventsFor, phaseDiscipline, legLabels, mixedRelayError, COURSES, courseLabel,
@@ -96,6 +96,8 @@ function TrackSwimEventSetup() {
     ? swimEventsFor({ age, gender }, course).map((e) => ({ ...e, optional: false }))
     : [
       ...trackEventsFor({ age, gender }).map((e) => ({ ...e, optional: false })),
+      // SD-137b: 4 × 200 m (optional) — mixed relays are the 4 × 100 / 4 × 400 m with "Mixed"
+      ...relayExtrasFor({ age, gender }),
       ...fieldEventsFor({ age, gender }).map((e) => ({ ...e, optional: !!e.optional })),
     ]), [age, gender, swim, course]);
   const [discipline, setDiscipline] = useState(params?.discipline ?? (swim ? 'swim.50free' : 'ath.100m'));
@@ -242,9 +244,11 @@ function TrackSwimEventSetup() {
     setError(null);
     if (!n) { setError(relay ? 'Add at least one relay team.' : 'Add at least one athlete.'); return; }
     if (relay && relays.some((r) => r.members.length < 4)) { setError(`Each relay team needs its 4 ${swim ? 'swimmers' : 'runners'} (up to 2 reserves) — tap the team to pick them.`); return; }
-    if (relay && swim && gender === 'X') {
+    if (relay && gender === 'X') {
+      // SD-137b: athletics mixed relays too — 2 men + 2 women; the meet may fix the order (M, W, M, W)
+      const order = !swim && sportRule(tournament?.formats?.athletics as Record<string, unknown> | undefined, 'mixedOrder') === 'MWMW' ? 'MWMW' : 'team';
       for (const r of relays) {
-        const bad = mixedRelayError(r.members.slice(0, 4).map((id) => playerById.get(id)?.gender));
+        const bad = mixedRelayError(r.members.slice(0, 4).map((id) => playerById.get(id)?.gender), swim ? 'SW 10.11' : 'World Athletics', order);
         if (bad) { setError(`${r.label}: ${bad}`); return; }
       }
     }
@@ -320,14 +324,14 @@ function TrackSwimEventSetup() {
               ? `${vertical ? ' · bar heights, 3 tries a height' : ` · ${def.attempts?.count ?? 3} trials, then ${def.attempts?.extra ?? 3} more for the best ${def.attempts?.finalists ?? 8}`}${spec ? ` · ${implementNote(spec, cat)}` : ''}`
               : `${def.wind ? ' · wind gauge' : ''}${def.lanes ? ' · in lanes' : ' · no lanes'}${hurdles ? ` · hurdles ${hurdles}` : ''}`}
           </Text>
-          {events.find((e) => e.discipline === discipline)?.optional ? <Text style={textStyles.muted}>Optional event: needs a {def.key === 'ath.pv' ? 'pole-vault landing bed and poles' : 'hammer cage'}.</Text> : null}
+          {events.find((e) => e.discipline === discipline)?.optional && (def.key === 'ath.pv' || def.key === 'ath.ht') ? <Text style={textStyles.muted}>Optional event: needs a {def.key === 'ath.pv' ? 'pole-vault landing bed and poles' : 'hammer cage'}.</Text> : null}
         </Card>
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>3 · {relay ? 'Relay teams' : swim ? 'Swimmers' : 'Athletes'} ({n})</Text>
           {relay ? (
             <>
-              <Text style={textStyles.muted}>Add a team per house; tap it to pick its {swim ? 'swimmers in order' : 'runners in leg order'} (4, plus up to 2 reserves).{swim && gender === 'X' ? ' Mixed: 2 boys + 2 girls.' : ''}</Text>
+              <Text style={textStyles.muted}>Add a team per house; tap it to pick its {swim ? 'swimmers in order' : 'runners in leg order'} (4, plus up to 2 reserves).{gender === 'X' ? ` Mixed: 2 boys + 2 girls${!swim && sportRule(tournament?.formats?.athletics as Record<string, unknown> | undefined, 'mixedOrder') === 'MWMW' ? ', legs in the order boy, girl, boy, girl (meet rule)' : ', in any order the team chooses'}.` : ''}</Text>
               <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : 'Showing everyone'} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
               <AgeBasisNote tournament={tournament} sport={swim ? 'swimming' : 'athletics'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
               <View style={st.wrap}>{sources.map((s) => <SelectChip key={s.key} label={`＋ ${s.name}`} dotColor={s.colorHex} active={false} onPress={() => addRelay(s)} />)}</View>

@@ -76,7 +76,36 @@ export const ARCH_ROUNDS: ArchRoundDef[] = [
   ind('B', 18, '40 cm face', 'wa', 'WA indoor'),
 ];
 
-export const archRoundOf = (key?: string): ArchRoundDef | undefined => ARCH_ROUNDS.find((r) => r.key === key);
+export const archRoundOf = (key?: string): ArchRoundDef | undefined =>
+  ARCH_ROUNDS.find((r) => r.key === key) ?? (key && TEAM_SUFFIX.test(key) ? ARCH_ROUNDS.find((r) => r.key === key.replace(TEAM_SUFFIX, '')) : undefined);
+
+/* ----------------------------- SD-137b team events ----------------------------- */
+
+/**
+ * World Archery team events (Book 3 team match play, as remembered — verify):
+ *  - team (3 archers of one gender): the team's ranking score is the sum of its
+ *    three archers' ranking-round scores (10s and X added too, for ties); team
+ *    matches — recurve / barebow: sets of 6 arrows (2 per archer), 2 set points
+ *    for the higher set, 1 each for a tie, the first to 5 wins (4 sets at most);
+ *    4–4 → a shoot-off of 3 arrows (one each), the higher total wins, then the
+ *    arrow closest to the centre. Compound: 4 ends of 6 arrows, cumulative.
+ *  - mixed team (1 man + 1 woman): the same with 4 arrows a set (2 each), first
+ *    to 5; shoot-off 2 arrows (one each).
+ * The discipline key is the round's key + '.team' / '.mixed' ('arch.r70.team'),
+ * so records, PBs and medals are kept per team discipline.
+ */
+export type ArchTeamKind = 'team' | 'mixed';
+export const TEAM_SUFFIX = /\.(team|mixed)$/;
+export interface ArchTeamDef { key: string; round: ArchRoundDef; kind: ArchTeamKind; size: number; label: string }
+export const archTeamKey = (roundKey: string, kind: ArchTeamKind): string => `${roundKey}.${kind}`;
+export function archTeamOf(key?: string | null): ArchTeamDef | undefined {
+  const m = key ? TEAM_SUFFIX.exec(key) : null;
+  if (!m || !key) return undefined;
+  const round = ARCH_ROUNDS.find((r) => r.key === key.replace(TEAM_SUFFIX, ''));
+  if (!round) return undefined;
+  const kind = m[1] as ArchTeamKind;
+  return { key, round, kind, size: kind === 'team' ? 3 : 2, label: `${round.label} ${kind === 'team' ? 'team' : 'mixed team'}` };
+}
 
 /** Ends in the ranking round: 12 outdoor, 20 indoor. */
 export const endsOf = (r: ArchRoundDef): number => Math.ceil(r.arrows / r.perEnd);
@@ -88,6 +117,18 @@ export const endMax = (perEnd: number): number => perEnd * 10;
 export const MATCH_ARROWS = 3;
 export const MATCH_ENDS = 5;
 export const SET_WIN = 6;
+
+/** SD-137b: the shape of a match — arrows an end (both sides), ends at most,
+ *  set points to win (set system), arrows per shoot-off round. */
+export interface MatchSpec { arrows: number; ends: number; win: number; so: number }
+export const INDIVIDUAL_SPEC: MatchSpec = { arrows: MATCH_ARROWS, ends: MATCH_ENDS, win: SET_WIN, so: 1 };
+/** WA team match (6 arrows, 4 sets, first to 5, 3-arrow shoot-off) / mixed team (4 arrows, 2-arrow shoot-off). */
+export const TEAM_SPEC: MatchSpec = { arrows: 6, ends: 4, win: 5, so: 3 };
+export const MIXED_SPEC: MatchSpec = { arrows: 4, ends: 4, win: 5, so: 2 };
+export const matchSpecOf = (key?: string | null): MatchSpec => {
+  const t = archTeamOf(key);
+  return !t ? INDIVIDUAL_SPEC : t.kind === 'team' ? TEAM_SPEC : MIXED_SPEC;
+};
 
 /* ---------------------------------- arrows --------------------------------- */
 
