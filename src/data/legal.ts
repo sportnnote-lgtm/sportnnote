@@ -11,7 +11,7 @@
  * (docs/company/COMPANY_SETUP.md).
  */
 
-export const LEGAL_VERSION = '2026-10-12';
+export const LEGAL_VERSION = '2026-10-13';
 export const LEGAL_CONTACT = 'sportnnote@gmail.com';
 
 export const PRIVACY_POLICY = `## Privacy Policy
@@ -28,6 +28,7 @@ export const PRIVACY_POLICY = `## Privacy Policy
 - **Messages** you send and receive in the app, and reports you make about messages.
 - **Device data:** a notification token if you allow notifications.
 - **Usage and error data:** which screens are opened, actions such as "match completed", the app version and platform, and error reports when something breaks. We don't record what you type, and we strip emails and phone numbers out of error reports.
+- **Website visits:** when you visit sportnnote.in we count page visits using Cloudflare Web Analytics: the page, the site you came from, your country and your type of device and browser. It sets no cookies, stores nothing on your device and doesn't track you across sites.
 
 ## Why we use it
 
@@ -37,6 +38,7 @@ export const PRIVACY_POLICY = `## Privacy Policy
 - To keep people safe: guardian controls, blocking and reporting, and moderation.
 - To send notifications you've asked for, such as match reminders and live scores.
 - To fix bugs and improve the app, using usage and error data.
+- To see which website pages and guides are useful, using website visit counts.
 
 We do **not** sell your data, show ads, or build advertising profiles.
 
@@ -69,6 +71,7 @@ We use these service providers to run SportnNote. Each processes data only on ou
 - **Google Firebase:** sending SMS verification codes (it receives your mobile number).
 - **Resend:** sending emails (it receives your email address).
 - **Meta (WhatsApp):** if WhatsApp codes are used, it receives your mobile number.
+- **Cloudflare:** website hosting and website visit counts.
 
 Their servers may be outside India. We will share data with authorities only when Indian law requires it.
 
@@ -250,7 +253,7 @@ We use these service providers. Each processes data only on our instructions:
 - **Google Firebase** (SMS verification codes, Android notifications): United States and worldwide.
 - **Apple, Google and Mozilla push services** (web and phone notifications): worldwide.
 - **Resend** (emails): United States.
-- **Cloudflare** (website hosting and network): worldwide.
+- **Cloudflare** (website hosting, network and website visit counts): worldwide.
 - **Anthropic** (the in-app help assistant reads the questions you type there): United States.
 - **Meta (WhatsApp)**: only if WhatsApp codes are switched on (not yet).
 
@@ -268,7 +271,7 @@ We share data with authorities only when the law requires it.
 
 ## Cookies and similar technologies
 
-The app stores your sign-in and settings on your device; these are needed for it to work. The analytics device ID is stored only if you choose **Allow analytics**. The SportnNote website sets no cookies and runs no analytics.
+The app stores your sign-in and settings on your device; these are needed for it to work. The analytics device ID is stored only if you choose **Allow analytics**. The SportnNote website sets no cookies. It counts page visits with Cloudflare Web Analytics, which stores nothing on your device and doesn't track you across sites or for advertising.
 
 ## Your rights
 
