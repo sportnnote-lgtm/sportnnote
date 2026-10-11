@@ -56,6 +56,17 @@ export interface BasketballState {
    *  Only on the state when the stored config has the key (old matches keep
    *  their exact state shape); absent / false = not tracked (D8). */
   trackMisses?: boolean;
+  /** SD-57 (BK-11): how timeouts are allowed (format key `timeoutRule`).
+   *  'fiba' = 2 in the first half, 3 in the second (at most 2 of them once the
+   *  last regulation period shows 2:00 or less), 1 per overtime, unused ones
+   *  never carry over (FIBA Art. 18.2.5). 'nba' = 7 in regulation (at most 4 in
+   *  the last period, at most 2 in its last 3 minutes), 2 per overtime. Only on
+   *  the state when the stored config carries 'fiba' / 'nba'; absent = the
+   *  legacy whole-game count in `timeouts` (3×3: 1 per team). */
+  toRule?: 'fiba' | 'nba';
+  /** SD-57: the format lets a level game end as a draw (league / friendly
+   *  option, format key `allowDraw`). Absent / false = level ⇒ overtime. */
+  allowDraw?: boolean;
 }
 
 /** SD-29: merge name → id pairs into the state (only when a payload has any,
@@ -81,6 +92,9 @@ export const init = (config?: Record<string, unknown>): BasketballState => ({
   ...(config?.techIsTeamFoul != null ? { techIsTeamFoul: config.techIsTeamFoul === true } : {}),
   ...(config?.otFoulsCarry != null ? { otFoulsCarry: config.otFoulsCarry === true } : {}),
   ...(config?.trackMisses != null ? { trackMisses: config.trackMisses === true } : {}),
+  // SD-57 — present only when the stored config carries the key.
+  ...(config?.timeoutRule === 'fiba' || config?.timeoutRule === 'nba' ? { toRule: config.timeoutRule } : {}),
+  ...(config?.allowDraw != null ? { allowDraw: config.allowDraw === true } : {}),
 });
 
 /** Q1..Qn (or H1/H2 for a two-half game), then OT, OT2… for overtime periods. */
@@ -126,6 +140,61 @@ export const teamFoulsByPeriod = (s: BasketballState, side: 'home' | 'away'): nu
 /** Timeouts a side has used so far (whole game). */
 export const timeoutsUsed = (s: BasketballState, side: 'home' | 'away'): number =>
   s.events.filter((e) => e.type === 'timeout' && e.side === side).length;
+/** SD-57 — a side's timeout allowance at a moment (default: now).
+ *  `left` = how many it may still take in the current window (null = not
+ *  tracked); `window` names the window ("1st half", "2nd half", "OT", "game");
+ *  `late` = the last-minutes cap is what limits it right now. */
+export interface TimeoutStatus { left: number | null; allowance: number; used: number; window: string; late: boolean }
+export function timeoutStatus(
+  s: BasketballState, side: 'home' | 'away',
+  at: { quarter: number; minute: number } = { quarter: s.quarter, minute: currentMinute(s) },
+): TimeoutStatus {
+  const tos = s.events.filter((e) => e.type === 'timeout' && e.side === side);
+  const count = (f: (q: number, m: number) => boolean) => tos.filter((e) => f(e.quarter, e.minute)).length;
+  const reg = s.regPeriods;
+  const q = at.quarter;
+  if (s.toRule === 'fiba' || s.toRule === 'nba') {
+    const fiba = s.toRule === 'fiba';
+    if (q > reg) {
+      // overtime: a fresh allowance each period, nothing carried over
+      const allowance = fiba ? 1 : 2;
+      const used = count((eq) => eq === q);
+      return { left: Math.max(0, allowance - used), allowance, used, window: q === reg + 1 ? 'OT' : `OT${q - reg}`, late: false };
+    }
+    const lateMin = fiba ? 2 : 3;
+    const lateCap = 2;
+    const isLate = (eq: number, em: number) => eq === reg && em >= s.periodMinutes - lateMin;
+    const lateNow = isLate(q, at.minute);
+    if (fiba) {
+      const half = Math.floor(reg / 2);
+      if (reg >= 2 && q <= half) {
+        const used = count((eq) => eq <= half);
+        return { left: Math.max(0, 2 - used), allowance: 2, used, window: '1st half', late: false };
+      }
+      const used = count((eq) => eq > half && eq <= reg);
+      const left = Math.max(0, 3 - used);
+      const lateLeft = Math.max(0, lateCap - count(isLate));
+      return { left: lateNow ? Math.min(left, lateLeft) : left, allowance: 3, used, window: reg >= 2 ? '2nd half' : 'game', late: lateNow && lateLeft < left };
+    }
+    // NBA: 7 in regulation, at most 4 in the last period, 2 in its last 3 minutes
+    const used = count((eq) => eq <= reg);
+    let left = Math.max(0, 7 - used);
+    let late = false;
+    if (q === reg) {
+      const lastLeft = Math.max(0, 4 - count((eq) => eq === reg));
+      if (lastLeft < left) { left = lastLeft; late = true; }
+      if (lateNow) {
+        const lateLeft = Math.max(0, lateCap - count(isLate));
+        if (lateLeft < left) { left = lateLeft; late = true; }
+      }
+    }
+    return { left, allowance: 7, used, window: 'game', late };
+  }
+  // legacy / per-game count (3×3: 1 per team); 0 = not tracked
+  const used = tos.length;
+  return { left: s.timeouts > 0 ? Math.max(0, s.timeouts - used) : null, allowance: s.timeouts, used, window: 'game', late: false };
+}
+
 /** Who is on court for a side right now, given the set starting five and every
  *  substitution since (each sub swaps the player off for the one coming on). */
 export const onCourtNames = (s: BasketballState, side: 'home' | 'away'): string[] => {

@@ -71,6 +71,7 @@ import { HostsCard } from '../components/HostsCard';
 import { LogoPicker } from '../components/LogoPicker';
 import { MatchHeader } from '../components/MatchHeader';
 import { MatchBoxScore } from '../components/BoxScore';
+import { GameFlowCard } from '../components/GameFlowCard';
 import { matchBoxSource } from '../sports/boxSources';
 import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchPotm, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -2327,6 +2328,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                     onPlayer={(pid) => navigation.navigate('PlayerProfile', { playerId: pid })}
                   />
                 </View>
+              ) : null}
+              {/* SD-50: game flow (lead changes, times tied, runs, bench points) —
+                  running-score sports only; renders nothing otherwise. */}
+              {started ? (
+                <GameFlowCard sport={sport} state={state} homeName={homeName} awayName={awayName}
+                  homeColor={homeColor} awayColor={awayColor} homeLineup={homeLineup} awayLineup={awayLineup} />
               ) : null}
               {canChangePotm && (homeRoster.length > 0 || awayRoster.length > 0) ? (
                 <Button variant="ghost" label="Change Player of the Match" onPress={() => setPotmOpen(true)} />

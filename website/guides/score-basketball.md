@@ -57,8 +57,8 @@ Under **🔀 Substitutions**, tap **Manage**, then **Set five** for each team. T
 ## Player profiles
 At the end, every figure is recounted from the play-by-play, so edits can't leave stats wrong. A profile shows FG and 3P made-attempted, FG% and 3P% over games with misses tracked (a ☁ shows how many), efficiency per game and career highs. Tournament leaders and Player of the Tournament rank by efficiency per game.
 
-## Overtime
-Level after the last quarter? Tap the "Start Overtime" button. Under FIBA rules, overtime team fouls carry on from the 4th quarter. When a team is ahead at the end, tap **🏁 End Match**.
+## Timeouts, overtime and game flow
+Each team's "Timeouts left" shows above the timeout buttons. Level after the last quarter? Tap "Start Overtime". When a team is ahead at the end, tap **🏁 End Match**. See [Basketball timeouts, overtime and game flow](/guides/basketball-timeouts-overtime-and-game-flow/).
 
 ## Fix a mistake
 - Tap **Undo** to step back one action, stats included.
