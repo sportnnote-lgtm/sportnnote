@@ -10,8 +10,8 @@ import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
   shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText, isCrewSport, crewMembersText,
-  cycRowText, cycKind, sprintBracket,
-  type DisciplineDef, type RankedEntry, type ResultFlag,
+  cycRowText, cycKind, sprintBracket, isRoadDiscipline, roadRowText,
+  type DisciplineDef, type RankedEntry, type ResultFlag, type RoadFormat,
 } from '../../data/results';
 
 const FLAG_COLOR: Partial<Record<ResultFlag, string>> = {
@@ -36,8 +36,10 @@ export function Flags({ flags }: { flags: ResultFlag[] }) {
 }
 
 /** The detail line under a name: attempts / bar progression / lifts / relay legs. */
-export function seriesText(r: RankedEntry, def: DisciplineDef): string {
+export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat): string {
   const res = r.entry.result;
+  // SD-92 road / walk / XC: the bib and a walker's red cards
+  if (isRoadDiscipline(def)) return roadRowText(r, { discipline: def.key, road });
   if (def.capture === 'attempts') return (res.attempts ?? []).map((a) => attemptText(a, def) + (def.wind === 'attempt' && a.mark != null && a.wind != null ? ` (${windText(a.wind)})` : '')).filter(Boolean).join('  ');
   if (def.capture === 'heights') return [...(res.heights ?? [])].sort((a, b) => a.height - b.height).filter((h) => h.tries).map((h) => `${formatMark(h.height, def)} ${h.tries}`).join(' · ');
   if (def.capture === 'lifts') {
@@ -80,7 +82,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   return [members, splits].filter(Boolean).join(' · ');
 }
 
-export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatLabel, notes }: {
+export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatLabel, notes, road }: {
   def: DisciplineDef;
   title: string;
   subtitle?: string;
@@ -94,6 +96,8 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   heatLabel?: (heat: number) => string;
   /** SD-99 / SD-100: where each crew goes next ("→ Final A") */
   notes?: Map<string, string>;
+  /** SD-92: a road / walk / XC race's settings (red-card rule on the detail line) */
+  road?: RoadFormat;
 }) {
   const lanes = usesLanes(def);
   const many = heats.size > 1;
@@ -122,7 +126,7 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
             <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : cycK === 'points' ? 'Points' : cycK === 'stage' ? 'Time' : cycK === 'keirin' || cycK === 'scratch' || cycK === 'elim' ? '' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
-            const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');
+            const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def, road)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>

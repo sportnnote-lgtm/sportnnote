@@ -24,6 +24,7 @@ import {
   rowsForRecords, recordsFor, rollbackRecords, reopenVerdict, recordDefsFor, liftLines, shootLines, finalistResult, qualView,
   phaseNameOf, archLines, archQualView, bracketEntrant, bracketSeeds, hasMatchData, advanceCrews, crewLines, isCrewSport,
   cycLines, cycKind, sprintEntrant, stageFinishers, type CycFormat,
+  roadLines, phaseTeams, teamAwards, roadRecordsAllowed, type RoadFormat,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
@@ -79,6 +80,8 @@ export interface NewResultsEvent {
   shootFinal?: boolean;
   /** SD-98 cycling: laps, sprints, start interval, sprint heats per match, the stages */
   cyc?: CycFormat;
+  /** SD-92 road / race walk / cross-country: certified course, timing, team scoring, walk rules */
+  road?: RoadFormat;
 }
 
 // SD-95: archery phases read "Ranking round" / "Match play"
@@ -152,6 +155,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     ...(input.shootEntry ? { shootEntry: input.shootEntry } : {}), ...(input.shootFinal ? { shootFinal: true } : {}),
     // SD-98: a stage race's first stage carries its type ('road' / 'itt')
     ...(input.cyc ? { cyc: { ...input.cyc, ...(input.cyc.stages?.length ? { stageType: input.cyc.stages[0] } : {}) } } : {}),
+    ...(input.road ? { road: input.road } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -431,6 +435,10 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   } else if (def.sport === 'cycling') {
     // SD-98: places, medals, points; times under m_cyc_*; points-race points; sprint matches; stages
     await writePhaseLines(phase, f, cycLines(f, rows, eventAwards(rows, points ?? {})));
+  } else if (def.tie === 'road') {
+    // SD-92: road / walk / XC — place, time (PB key, not XC), red cards, medals, points; the team score
+    const teams = phaseTeams(f, rows);
+    await writePhaseLines(phase, f, roadLines(f, rows, eventAwards(rows, points ?? {}), teams, f.road?.team?.points === false ? [] : teamAwards(teams, points ?? {})));
   } else if (isCrewSport(def.sport)) {
     // SD-99 / SD-100: every rower / paddler and the cox gets the crew's line
     let awards = eventAwards(rows, points ?? {});
@@ -446,7 +454,8 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   // SD-112: an out-of-range mark nobody confirmed never sets a record.
   // SD-97: a weightlifting session sets snatch, C&J and total records.
   let next = book;
-  for (const d of recordDefsFor(def)) {
+  // SD-92: a road / walk time sets a record only on a certified course (gun time); cross-country never
+  for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) {
     // SD-96: a shooting final's rows read as their qualification scores (a final score is no record)
     // SD-95: an archery bracket's rows read as their ranking-round scores (a match is no record)
     // SD-98: a sprint bracket's rows read as their flying 200 m times

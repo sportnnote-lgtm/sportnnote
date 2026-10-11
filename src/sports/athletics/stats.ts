@@ -39,6 +39,29 @@ const pbStats: StatDef[] = TRACK_EVENTS.map((e) => ({
   agg: { kind: 'best', over: `m_${e.key}`, by: [{ key: `m_${e.key}`, better: 'lower' }], render: (s) => fmtTime(s[`m_${e.key}`] ?? 0) },
 }));
 
+/** SD-92 — road races and race walks (standard distances; times to the whole
+ *  second, a track walk to 1/100). Cross-country keeps places, not times. */
+export const ROAD_STAT_EVENTS: { key: string; disc: string; label: string }[] = [
+  { key: 'road_5000', disc: 'ath.road.5000', label: '5 km road' }, { key: 'road_10000', disc: 'ath.road.10000', label: '10 km road' },
+  { key: 'road_15000', disc: 'ath.road.15000', label: '15 km road' }, { key: 'road_hm', disc: 'ath.road.hm', label: 'Half marathon' },
+  { key: 'road_mar', disc: 'ath.road.mar', label: 'Marathon' },
+  { key: 'walk_t3000', disc: 'ath.walk.t3000', label: '3000 m walk' }, { key: 'walk_t5000', disc: 'ath.walk.t5000', label: '5000 m walk' },
+  { key: 'walk_t10000', disc: 'ath.walk.t10000', label: '10,000 m walk' },
+  { key: 'walk_5000', disc: 'ath.walk.5000', label: '5 km walk' }, { key: 'walk_10000', disc: 'ath.walk.10000', label: '10 km walk' },
+  { key: 'walk_20000', disc: 'ath.walk.20000', label: '20 km walk' },
+];
+const roadFmt = (k: string) => ({ unit: 'time' as const, dp: k.startsWith('walk_t') ? 2 : 0 });
+const roadMarkStats: StatDef[] = ROAD_STAT_EVENTS.map((e) => ({ key: `m_${e.key}`, label: e.label, short: e.label, group: 'marks', format: roadFmt(e.key) }));
+const roadPbStats: StatDef[] = ROAD_STAT_EVENTS.map((e) => ({
+  key: `pb_${e.key}`, label: `${e.label} PB`, leaderLabel: `Fastest ${e.label}`, source: 'derived', group: 'bests', format: roadFmt(e.key),
+  agg: { kind: 'best', over: `m_${e.key}`, by: [{ key: `m_${e.key}`, better: 'lower' }], render: (s) => fmtRoad(s[`m_${e.key}`] ?? 0, e.key) },
+}));
+function fmtRoad(v: number, key: string): string {
+  if (key.startsWith('walk_t')) return fmtTime(v);
+  const t = Math.round(v), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 const fieldFmt = (unit: 'distance' | 'height') => ({ unit, dp: 2, better: 'higher' as const });
 const fieldMarkStats: StatDef[] = FIELD_EVENTS.map((e) => ({ key: `m_${e.key}`, label: e.label, short: e.label, group: 'marks', format: fieldFmt(e.unit) }));
 const fieldPbStats: StatDef[] = FIELD_EVENTS.map((e) => ({
@@ -51,12 +74,23 @@ export const athleticsStats: SportStatSchema<'athletics'> = {
   events: [
     ...TRACK_EVENTS.map((e): MeasuredEventDef => ({ key: `ath.${e.key}`, label: e.label, format: timeFmt })),
     ...FIELD_EVENTS.map((e): MeasuredEventDef => ({ key: `ath.${e.key}`, label: e.label, format: fieldFmt(e.unit), ...(e.unit === 'distance' ? { attempts: 6 } : {}) })),
+    ...ROAD_STAT_EVENTS.map((e): MeasuredEventDef => ({ key: e.disc, label: e.label, format: roadFmt(e.key) })),
   ],
-  filters: Object.fromEntries([...TRACK_EVENTS, ...FIELD_EVENTS].map((e) => [`m_${e.key}`, (l: StatLine) => l.stats?.[`m_${e.key}`] != null])),
+  filters: Object.fromEntries([...TRACK_EVENTS, ...FIELD_EVENTS, ...ROAD_STAT_EVENTS].map((e) => [`m_${e.key}`, (l: StatLine) => l.stats?.[`m_${e.key}`] != null])),
   stats: [
     { key: 'races', label: 'Races', short: 'races', one: 'race', group: 'racing' },
     { key: 'field', label: 'Field events', short: 'field events', one: 'field event', group: 'racing' },
     { key: 'relays', label: 'Relay legs', short: 'relay legs', one: 'relay leg', group: 'racing' },
+    // SD-92: road races, race walks, cross-country; team scoring by placings
+    { key: 'road', label: 'Road races', short: 'road races', one: 'road race', group: 'racing' },
+    { key: 'walks', label: 'Race walks', short: 'race walks', one: 'race walk', group: 'racing' },
+    { key: 'xc', label: 'Cross-country races', short: 'XC races', one: 'XC race', group: 'racing' },
+    { key: 'teamScorer', label: 'Scored for the team', short: 'team scorer', group: 'racing' },
+    { key: 'teamPlace', label: 'Team place', short: 'team place', group: 'line', format: { unit: 'count', better: 'lower' }, agg: { kind: 'min' } },
+    { key: 'teamGolds', label: 'Team golds', short: 'team golds', one: 'team gold', group: 'medals' },
+    { key: 'teamSilvers', label: 'Team silvers', short: 'team silvers', one: 'team silver', group: 'medals' },
+    { key: 'teamBronzes', label: 'Team bronzes', short: 'team bronzes', one: 'team bronze', group: 'medals' },
+    { key: 'walkCards', label: 'Red cards (race walk)', short: 'walk red cards', one: 'walk red card', group: 'line', format: { unit: 'count', better: 'lower' } },
     { key: 'finals', label: 'Finals', short: 'finals', one: 'final', group: 'racing' },
     { key: 'qualified', label: 'Rounds qualified from', short: 'qualified', group: 'racing' },
     // golds / silvers keep the shared labels (sharedStats.ts)
@@ -75,10 +109,12 @@ export const athleticsStats: SportStatSchema<'athletics'> = {
     ...pbStats,
     ...fieldMarkStats,
     ...fieldPbStats,
+    ...roadMarkStats,
+    ...roadPbStats,
   ],
   sections: [
-    { id: 'bests', title: 'Personal bests', rows: [...pbStats, ...fieldPbStats].map((s) => ({ stat: s.key, hideZero: true })) },
-    { id: 'medals', title: 'Medals', rows: [{ stat: 'golds' }, { stat: 'silvers' }, { stat: 'bronzes' }, { stat: 'finals' }] },
+    { id: 'bests', title: 'Personal bests', rows: [...pbStats, ...fieldPbStats, ...roadPbStats].map((s) => ({ stat: s.key, hideZero: true })) },
+    { id: 'medals', title: 'Medals', rows: [{ stat: 'golds' }, { stat: 'silvers' }, { stat: 'bronzes' }, { stat: 'finals' }, { stat: 'teamGolds', hideZero: true }, { stat: 'teamSilvers', hideZero: true }, { stat: 'teamBronzes', hideZero: true }] },
   ],
   careerView: 'measured',
   history: ['golds', 'silvers', 'bronzes'],
