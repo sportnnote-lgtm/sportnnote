@@ -80,14 +80,14 @@ P2 items are parked (PLAN.md §6.2).
 | SD-47 | Individual head-to-head and form (player vs player) | generic (individual sports) | GEN-16; SQ-11 | READY | Wave 3a · M |
 | SD-48 | Team ties: one fixture of N rubbers, lineups/order, stop at majority, ½-point rubbers, tie-aware group standings | TT, chess, carrom, badminton, tennis, squash | GEN-17; TT-05, CH-11, CR-08, BD-09 | READY | Wave 3a · L · migration TBD at spec (prefer formats jsonb) |
 | SD-49 | Golf (field results) in tournament leaders and award slots; medal-table loader wiring for field events | golf (+ future field sports) | GEN-18; GF-08 | READY | Wave 3a · M · needs SD-42 · PARTIAL: medal table accepts field results, golf positions / cut on the engine — delivered by SD-28 (ff88a73) |
-| SD-50 | Game-flow stats: biggest lead, lead changes, times tied, largest run, bench points | basketball, football, kabaddi | GEN-20; BK-09 | IN-PROGRESS | Wave 3a · S |
+| SD-50 | Game-flow stats: biggest lead, lead changes, times tied, largest run, bench points | basketball, football, kabaddi | GEN-20; BK-09 | DONE | 72950ce · Wave 3a · S |
 | SD-51 | Match-records hook persisted in the snapshot (partnerships, team totals, team highs) → tournament Records card | generic | GEN-21; CK-07 | READY | Wave 3a · M · one-off backfill replay |
 | SD-52 | Optional point-outcome tag (winner / forced / unforced / fault / kitchen / smash) with coverage | racket sports | GEN-22; PD-05, PB-05 (P1); TN-12, BD-06, TT-11, SQ-10 (P2) | READY | Wave 3a · M · D8 · optional `how` payload |
 | SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | DONE | 133422a · Wave 3a · M · additive actions |
 | SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | DONE | 133422a · Wave 3a · S · new TIMEOUT action |
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
 | SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | DONE | 6ab6a1a · Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
-| SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | IN-PROGRESS | Wave 3b R1 · S |
+| SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | DONE | 72950ce · Wave 3b R1 · S |
 | SD-58 | Volleyball serve tracking (first server, rotation) → pre-fills Ace / Serve error, feeds SD-22 | volleyball | VB-05 | DONE | a4b28ee · Wave 3b R1 · M · new SET_SERVE / SET_ROTATION |
 | SD-59 | Kabaddi technical points and line-outs | kabaddi | KB-05 | DONE | 3e2bc8d · Wave 3b R1 · S · new TECH_POINT |
 | SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | READY | Wave 3b R1 · M · new FAULT · D8 |

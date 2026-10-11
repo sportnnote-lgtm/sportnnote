@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-57 basketball timeouts, SD-50 game flow — DONE (72950ce, 2026-10-11)
+- See DEVLOG. Check: FIBA OBR Art. 18.2.5 (timeouts) and 8.7 (overtime) numbers vs the 2024 edition; 3x3 Art. 11; NBA limits from memory; "last 2 minutes" approximate (count-up minute). Not done: NCAA carry-over, game flow on football's own Stats tab, bench goals for hockey/handball, player-level flow.
+
 ## SD-99 rowing, SD-100 canoe, SD-56/70/80 football — DONE (6ab6a1a, 2026-10-11)
 - See DEVLOG. No migration.
 - **Rowing/canoe — check:** World Rowing progression tables (13–18 crews) and ICF 10–18 boat table from memory; ICF 9-lane order may be mirrored; ICF official times are 1/1000 (app shows 1/100, keeps thousandths for order); ranges approximate. Not built: quarter-finals, lightweight weigh-in, para canoe, slalom, marathon, 5000 m mass start; "Best rowers (points)" counts singles only.
