@@ -88,11 +88,12 @@ describe('SD-104 · tennis double faults are marked and follow corrections', () 
     const s = tRun(tennis.init(), [stored]);
     assert.deepEqual(s.events.at(-1)!.df, { playerId: 'h1', playerName: 'Hana' });
   });
-  test('old double faults (no df flag) replay exactly as before — no marker, same events', () => {
+  test('old double faults (no df flag) — SD-34: re-labelled on replay, same score', () => {
     const old: ScoreAction = { type: 'POINT', side: 'away', attribution2: { playerId: 'h1', stat: 'doubleFaults', playerName: 'Hana' } };
     const s = tRun(tennis.init(), [old]);
-    assert.equal(s.events.at(-1)!.df, undefined);
-    assert.equal(s.events.at(-1)!.label, 'Point');
+    assert.deepEqual(s.events.at(-1)!.df, { playerId: 'h1', playerName: 'Hana' });
+    assert.equal(s.events.at(-1)!.label, 'Double fault');
+    assert.deepEqual(s.pts, tRun(tennis.init(), [{ type: 'POINT', side: 'away' }]).pts);
   });
   test('the edit list carries the marker; an EDIT_LOG replay keeps it', () => {
     const s = tRun(tennis.init(), [P('home'), DF('home', 'h1', 'Hana'), P('home')]);

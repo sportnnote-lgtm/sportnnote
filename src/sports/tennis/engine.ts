@@ -247,7 +247,14 @@ const core = (s: TennisState, a: ScoreAction): TennisState => {
   // SD-107: the 1st / 2nd serve — given on a replayed point, else 1 (2 for a
   // double fault) while tracking is on; untracked points carry none.
   const given = a.payload?.serve === 1 || a.payload?.serve === 2 ? a.payload.serve : undefined;
-  const isDf = a.type === 'POINT' && a.payload?.df === true;
+  // SD-34: a double fault scored before SD-104 (no `df` flag — a plain POINT to
+  // the receiver crediting the server's doubleFaults via attribution2 / the
+  // persisted `_attr2`, nobody credited a point) is re-labelled as one on
+  // replay, so the timeline, DF column and editor see it. Same side, same
+  // score; only the event's label / marker change.
+  const a2 = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);
+  const legacyDf = a.type === 'POINT' && a.payload?.df === undefined && !a.attribution && a2?.stat === 'doubleFaults';
+  const isDf = a.type === 'POINT' && (a.payload?.df === true || legacyDf);
   const serve: 1 | 2 | undefined = given ?? (s.serveDetail ? (isDf ? 2 : 1) : undefined);
   if (isDf) {
     const f = a.attribution2 ?? (a.payload?._attr2 as ScoreAction['attribution2']);

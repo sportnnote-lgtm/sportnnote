@@ -36,6 +36,8 @@ import { rallyTotals } from './racketTotals';
 import { SetLineBoard } from './SetLineBoard';
 import { durationLine, stampDispatch, withDuration } from './conduct';
 import { makeRacketQuickOptions } from './RacketQuickOptions';
+import { ttDoublesTurn, ttGameStartOrder } from './doublesOrder';
+import { DoublesOrderPicker } from './DoublesOrderPicker';
 import { makeRallyEngine, rallySummary, rallyScoreLine, rallyLineScore, rallyServingSide, rallyRows, rallyInputs, serveSpot, serverId, startPair, type RallyState } from './rallyEngine';
 
 export type { RallyState } from './rallyEngine';
@@ -156,7 +158,9 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
       <ServeFirstPicker
         icon={opts.icon} homeName={homeName} awayName={awayName} started={!noPlayYet} canFix={!s.sideOut}
         picked={s.serverPicked || !noPlayYet ? s.opening ?? 'home' : null}
-        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side } })}
+        // SD-65 — pickleball: new matches alternate the first serve by game
+        // (USA Pickleball 5.B.1); the flag rides on the toss pick (`alt`).
+        onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side, ...(opts.id === 'pickleball' ? { alt: true } : {}) } })}
       />
     ) : null;
     const blocked = needsServer || needsStart;
@@ -221,13 +225,35 @@ export function makeRallyPlugin(opts: RallyOpts): SportPlugin<RallyState> {
     // SD-117c (table tennis) — the change-ends cue and where the server is in
     // their turn ("2nd serve of 2"), flagging the switch to 1 each at deuce.
     const isTT = opts.serveRule === 'tt';
+    // SD-62 — table tennis doubles (ITTF 2.13): "A serves to X" by name, from
+    // the per-game serving / receiving order (roster order until picked).
+    const nameOfId = (id?: string) => byId(id)?.fullName ?? '';
+    const ttDbl = isTT && s.doubles && !blocked ? ttDoublesTurn(s, ids) : null;
+    const ttStart = isTT && s.doubles ? ttGameStartOrder(s, ids) : null;
+    const gameNo = s.games.length + 1;
+    const ttPicker = ttStart && !blocked && !s.ended ? (
+      <DoublesOrderPicker
+        icon={opts.icon} gameNo={gameNo} atGameStart={atGameStart}
+        servingSide={ttServer(0, 0, s.games.length, s.opening ?? 'home', s.target)}
+        homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster}
+        server={ttStart.server} receiver={ttStart.receiver} receiverPick={s.games.length === 0}
+        receiverNote={`Receives first: ${nameOfId(ttStart.receiver)} — who served to ${nameOfId(ttStart.server)} in the last game (ITTF 2.13.3).`}
+        dispatch={dispatch}
+      />
+    ) : null;
     return (
       <View style={{ gap: theme.spacing(4) }}>
         {isTT && <CueBanner cue={tableTennisCue(s)} />}
         {firstPicker}
-        {!blocked && <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>}
+        {ttDbl ? (
+          <View style={{ gap: theme.spacing(1) }}>
+            <Text style={ctrl.headline}>{opts.icon} {nameOfId(ttDbl.server)} serves to {nameOfId(ttDbl.receiver)}</Text>
+            {ttDbl.switched ? <Text style={ctrl.meta}>Deciding game: the receivers switched order at {Math.floor(s.target / 2)}.</Text> : null}
+          </View>
+        ) : !blocked && <Text style={ctrl.serve}>{opts.icon} Serving: {serverName}{s.doubles && serverName !== serverSideName ? `  ·  ${serverSideName}` : ''}</Text>}
         {!blocked && isTT && !s.ended && <Text style={ctrl.meta}>{ttServeHint(s.current.home, s.current.away, s.target)}</Text>}
         {startPicker}
+        {ttPicker}
         {/* SD-115 — two big team-coloured point buttons, one layout for every
             scoring system; singles auto-credits, doubles credit is optional. */}
         <PointButtons

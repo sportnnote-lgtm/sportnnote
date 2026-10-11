@@ -9,6 +9,7 @@ import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } fr
 import { pointRows, type EditRow, type PointInput } from './rallyEdit.ts';
 import { applyPointDetail, detailFlags, initDetailFlags } from './pointDetail.ts';
 import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from './conduct.ts';
+import { withDoublesOrder, type DoublesOrder } from './doublesOrder.ts';
 
 export interface RallyState {
   current: { home: number; away: number };
@@ -45,6 +46,14 @@ export interface RallyState {
   /** SD-107 — optional point detail (how each rally was won) is being
    *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
   pointDetail?: boolean;
+  /** SD-62 — table tennis doubles: per game, the picked first server /
+   *  receiver (player ids, SET_SERVE_ORDER). Absent → roster order. */
+  dblOrder?: DoublesOrder;
+  /** SD-65 — pickleball (USA Pickleball 5.B.1, "teams change ends and initial
+   *  service upon the completion of each game"): the first serve alternates by
+   *  game. Set by the toss pick of matches scored from SD-65 on (`alt: true` on
+   *  SET_FIRST_SERVER); absent (every older match) → the game winner serves first. */
+  altGames?: boolean;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -109,7 +118,9 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
     events.push({ id: ++seq, stamp: 'Game', icon: '🎉', label: `Game ${gameNo} won`, detail: `${current.home}-${current.away}`, side: winner });
     if (ended) events.push({ id: ++seq, stamp: 'Match', icon: '🏆', label: 'Match won', detail: `${gamesWon.home}-${gamesWon.away} games`, side: winner });
     // New game: the winner serves first, again under the start-of-game exception.
-    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: winner, serverNo: 2, srvStarter: true, events, seq, ended };
+    // SD-65: pickleball matches with `altGames` alternate the first serve by game.
+    const next = s.altGames ? (games.length % 2 === 0 ? s.opening ?? 'home' : other(s.opening ?? 'home')) : winner;
+    return { ...s, current: { home: 0, away: 0 }, games, gamesWon, serving: next, serverNo: 2, srvStarter: true, events, seq, ended };
   };
 
   // SD-53 — a penalty point goes straight onto `side`'s score (also in side-out
@@ -163,10 +174,18 @@ export function makeRallyEngine(opts: RallyEngineOpts) {
         // can score, so a wrong opener is fixed by correcting the timeline.
         if (a.payload?.v !== 2 || s.sideOut) return s;
         const anyPoint = s.events.some((e) => e.kind === 'point');
+        // SD-65: with alternating first serves, a game at 0-0 re-derives its opener
+        if (s.altGames && s.current.home === 0 && s.current.away === 0) {
+          return { ...s, opening: side, serving: s.games.length % 2 === 0 ? side : other(side), serverPicked: true };
+        }
         return { ...s, opening: side, serving: anyPoint ? s.serving : side, serverPicked: true };
       }
-      return { ...s, opening: side, serving: side, serverPicked: true };
+      return { ...s, opening: side, serving: side, serverPicked: true, ...(a.payload?.alt === true ? { altGames: true } : {}) };
     }
+    // SD-62 — table tennis doubles: who serves / receives first in this game
+    // (player ids). New payload on the SET_SERVE_ORDER type; other rally sports
+    // ignore it. No score effect, no timeline event; mid-game only with v:2.
+    if (a.type === 'SET_SERVE_ORDER') return opts.id === 'tabletennis' ? withDoublesOrder(s, a.payload) : s;
     // SD-107 — capture setting (from the next point) and a point's detail
     // (annotates the last point; allowed after the match point too).
     if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
@@ -238,6 +257,8 @@ export const rallyInputs = (events: LiveEvent[]): PointInput[] => rallyRows(even
 /** Rally scoring with the "rally winner serves" rule: who serves next. */
 export function rallyServingSide(s: RallyState): 'home' | 'away' {
   if (s.sideOut) return s.serving;
+  // SD-65: alternating first serves — a new game at 0-0 is opened by `serving`
+  if (s.altGames && s.games.length > 0 && s.current.home === 0 && s.current.away === 0) return s.serving;
   for (let i = (s.events?.length ?? 0) - 1; i >= 0; i--) {
     const e = s.events[i];
     if (e.kind === 'point') return e.side as 'home' | 'away';

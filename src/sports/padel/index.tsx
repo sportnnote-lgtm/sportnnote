@@ -1,8 +1,10 @@
 /**
  * Padel plugin — archetype: set-game-point. Padel uses tennis scoring, with the
  * common club/tour variations all optional (defaults = classic tennis rules):
- *   • Deuce        — Advantage (classic, default) or Golden point (sudden death
- *                    at 40-40, the World Padel Tour rule, great for fast games).
+ *   • Deuce        — Advantage (classic, default), Golden point (sudden death
+ *                    at 40-40, the World Padel Tour rule, great for fast games)
+ *                    or Star Point (SD-64, FIP 2026: two advantages, then the
+ *                    next point at the third deuce wins).
  *   • Games/set    — 6 (standard, default) or 4 (short sets).
  *   • Match length — best of 3 (default) / best of 5 / single set.
  *   • Deciding set — full set (default) or a Match tiebreak to 10 instead.
@@ -30,7 +32,8 @@ import type { Player } from '../../core/types';
 import type { SportPlugin } from '../types';
 import { pointVoice } from '../voiceParsers';
 import { courtFormation, makeCourt } from '../courts';
-import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, padelCue, other, type PadelState } from './engine';
+import { init, reducer, disp, inTiebreak, matchTbActive, serveInfo, gamesPlayed, summary, scoreLine, lineScore, standingsUnits, padelCue, other, decidingPoint, deuceNo, type PadelState } from './engine';
+import { setSportGameLabels } from '../gameLabels';
 import { padelTotals } from '../racketTotals';
 import { cellText } from '../scoreline';
 import { durationLine, stampDispatch, withDuration } from '../conduct';
@@ -45,6 +48,9 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
   const act = (side: 'home' | 'away', p?: Player) =>
     dispatch({ type: 'POINT', side, attribution: p ? { playerId: p.id, stat: 'points', playerName: p.fullName } : undefined });
   const deucePoint = s.goldenPoint && !inTiebreak(s) && s.pts.home >= 3 && s.pts.away >= 3;
+  // SD-64 — Star Point: which deuce we're at, and the deciding point at the 3rd
+  const starDeuce = s.starPoint && !s.ended ? deuceNo(s) : 0;
+  const starNow = decidingPoint(s) === 'star';
   // Serve: who serves first is set before the first point, then alternates each
   // game (and, in doubles, rotates through the pair).
   const serve = serveInfo(s);
@@ -79,6 +85,8 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
       )}
       {matchTbActive(s) && <Text style={ctrl.serve}>🟡 Match tiebreak — first to 10 (win by 2).</Text>}
       {deucePoint && <Text style={ctrl.serve}>⚡ Golden point — next point wins the game.</Text>}
+      {starNow ? <Text style={ctrl.serve}>⭐ Star point — 3rd deuce: the next point wins the game. The receiving pair chooses who receives.</Text>
+        : starDeuce > 0 ? <Text style={ctrl.serve}>Deuce {starDeuce} of 3 · Star Point: {starDeuce === 1 ? 'two advantages' : 'one more advantage'} before the deciding point.</Text> : null}
       {/* SD-115 — two big team-coloured point buttons; doubles credit optional */}
       <PointButtons
         homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor}
@@ -107,7 +115,11 @@ const ScoringControls: SportPlugin<PadelState>['ScoringControls'] = ({ state, di
 const LiveExtras: NonNullable<SportPlugin<PadelState>['LiveExtras']> = ({ state, homeName, awayName, homeColor, awayColor, homeRoster, awayRoster, onPlayer }) => {
   const s = state as PadelState;
   // SD-117c — change-ends markers on the point log (derived, display only)
-  const timeline = useCueTimeline(reducer, s, pointInputs, padelCue);
+  const cued = useCueTimeline(reducer, s, pointInputs, padelCue);
+  // SD-75 — "Hold · Lions" / "Break · Tigers", sets and match with team names (display only)
+  const timeline = React.useMemo(() => setSportGameLabels(cued, s, { home: homeName, away: awayName }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cued, s.firstServer, homeName, awayName]);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>Sets</Text>
@@ -139,7 +151,7 @@ const PadelScoreboard: NonNullable<SportPlugin<PadelState>['Scoreboard']> = ({ s
   return (
     <SetLineBoard
       ls={lineScore(s)} homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} closed={closed}
-      status={matchTbActive(s) ? 'Match tiebreak' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}${s.goldenPoint ? ' · golden pt' : ''}`}
+      status={matchTbActive(s) ? 'Match tiebreak' : `Set ${setNo}${inTiebreak(s) ? ' · Tiebreak' : ''}${s.goldenPoint ? ' · golden pt' : decidingPoint(s) === 'star' ? ' · ⭐ STAR POINT' : s.starPoint ? ' · star pt' : ''}`}
       bestOf={s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}
       leadLabel="POINTS" lead={{ home: disp(s, 'home'), away: disp(s, 'away') }}
       serving={s.ended || (!s.serverPicked && s.events.length === 0) ? null : serveInfo(s).side} serveIcon="🟡"
@@ -188,7 +200,9 @@ export const padelPlugin: SportPlugin<PadelState> = {
     {
       key: 'preset', label: 'Format', type: 'preset', default: 'premier',
       options: [
-        { value: 'premier', label: 'Premier Padel / WPT (golden pt)', set: { deuce: 'golden', gamesPerSet: 6, setsToWin: 2, decider: 'set' } },
+        { value: 'premier', label: 'Golden point (WPT style)', set: { deuce: 'golden', gamesPerSet: 6, setsToWin: 2, decider: 'set' } },
+        // SD-64 — FIP / Premier Padel from 2026 (Rules of Padel, Rule 1 option 2)
+        { value: 'star', label: 'Star Point (FIP / Premier Padel 2026)', set: { deuce: 'star', gamesPerSet: 6, setsToWin: 2, decider: 'set' } },
         { value: 'classic', label: 'Classic (advantage)', set: { deuce: 'advantage', gamesPerSet: 6, setsToWin: 2, decider: 'set' } },
         { value: 'short', label: 'Short (to 4, match TB)', set: { deuce: 'golden', gamesPerSet: 4, setsToWin: 2, decider: 'match10' } },
         { value: 'custom', label: 'Custom' },
@@ -207,6 +221,7 @@ export const padelPlugin: SportPlugin<PadelState> = {
       options: [
         { value: 'advantage', label: 'Advantage (classic)' },
         { value: 'golden', label: 'Golden point' },
+        { value: 'star', label: 'Star Point (2 advantages, then deciding point)' },
       ],
     },
     {

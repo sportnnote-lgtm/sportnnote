@@ -45,6 +45,7 @@ import { ttServer } from './tabletennis/serve.ts';
 import * as tennis from './tennis/engine.ts';
 import * as padel from './padel/engine.ts';
 import * as badminton from './badminton/engine.ts';
+import { badmintonDoublesTurn, ttDoublesTurn } from './doublesOrder.ts';
 import * as volleyball from './volleyball/engine.ts';
 import { rallyServers, serveTracked as vbServeTracked } from './volleyball/rotation.ts';
 
@@ -131,6 +132,8 @@ export interface ServeStats {
   doubles: boolean;
   /** padel golden point / tennis no-ad: deciding points exist */
   golden: boolean;
+  /** SD-64 — padel Star Point: the deciding point is the 3rd deuce's */
+  star?: boolean;
   match: ServeBlock;
   /** index = period - 1 (set / game number) */
   periods: ServeBlock[];
@@ -173,7 +176,7 @@ interface Adapter {
   inputs: (s: AnyState) => PointInput[];
   reduce: (s: AnyState, a: ScoreAction) => AnyState;
   /** who serves the next rally (+ doubles slot / named player) */
-  server: (s: AnyState, lastWinner: Side | undefined, rosters: ServeRosters) => { side: Side; id?: string; tb: boolean };
+  server: (s: AnyState, lastWinner: Side | undefined, rosters: ServeRosters, gamePts?: Side[]) => { side: Side; id?: string; tb: boolean };
   period: (s: AnyState) => number;
   /** what winning a rally from `a` to `b` completed */
   level: (a: AnyState, b: AnyState) => Level;
@@ -240,12 +243,18 @@ const badmintonAdapter: Adapter = {
   clear: (s) => ({ ...(s as badminton.BadmintonState), current: { home: 0, away: 0 }, games: [], gamesWon: { home: 0, away: 0 }, events: [], seq: 0, ended: false }),
   inputs: (s) => pointInputs(s.events ?? []),
   reduce: (s, a) => badminton.reducer(s as badminton.BadmintonState, a),
-  server: (s, w, rosters) => {
+  server: (s, w, rosters, gamePts) => {
     const side = w ?? (s as badminton.BadmintonState).firstServer ?? 'home';
     const roster = rosters[side] ?? [];
-    // BWF doubles: who of the pair serves depends on the receiving positions,
-    // which aren't captured (BD-05) — side only.
-    return { side, id: !(s as badminton.BadmintonState).doubles && roster.length === 1 ? roster[0] : undefined, tb: false };
+    // BWF doubles: who of the pair serves depends on the receiving positions —
+    // named (SD-74) only on matches where the scorer picked the order
+    // (`dblOrder`); older doubles matches stay side only (D8).
+    const x = s as badminton.BadmintonState;
+    if (x.doubles && x.dblOrder?.length) {
+      const t = badmintonDoublesTurn(x, { home: rosters.home ?? [], away: rosters.away ?? [] }, gamePts);
+      if (t && t.serverSide === side) return { side, id: t.server, tb: false };
+    }
+    return { side, id: !x.doubles && roster.length === 1 ? roster[0] : undefined, tb: false };
   },
   period: (s) => ((s as GameState).games ?? []).length + 1,
   level: gameLevel,
@@ -262,7 +271,7 @@ function rallyAdapter(sport: 'tabletennis' | 'squash' | 'pickleball'): Adapter {
     },
     inputs: (s) => rallyInputs(s.events ?? []),
     reduce: (s, a) => RALLY.reducer(s as RallyState, a),
-    server: (s, w, rosters) => {
+    server: (s, w, rosters, gamePts) => {
       const x = s as RallyState;
       const side: Side = x.sideOut ? x.serving
         : sport === 'tabletennis' ? ttServer(x.current.home, x.current.away, x.games.length, x.opening ?? 'home', x.target)
@@ -277,7 +286,12 @@ function rallyAdapter(sport: 'tabletennis' | 'squash' | 'pickleball'): Adapter {
         const isStarter = x.sideOut ? (x.srvStarter ?? true) : x.current[side] % 2 === 0;
         id = isStarter ? starter : partner;
       }
-      // TT doubles (ITTF 2.14 order) and squash doubles: the pair's server isn't named — side only.
+      // SD-62 — TT doubles: named from the ITTF order on matches where the
+      // scorer picked it (`dblOrder`); older ones and squash doubles: side only.
+      else if (sport === 'tabletennis' && x.dblOrder?.length) {
+        const t = ttDoublesTurn(x, { home: rosters.home ?? [], away: rosters.away ?? [] }, gamePts);
+        if (t && t.serverSide === side) id = t.server;
+      }
       return { side, id, tb: false };
     },
     period: (s) => ((s as GameState).games ?? []).length + 1,
@@ -364,7 +378,9 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
   const periods: ServeBlock[] = [];
   const doubles = !!(s0 as { doubles?: boolean }).doubles;
   const sideOut = fam === 'game' && !!(s0 as RallyState).sideOut;
-  const golden = sport === 'padel' ? !!(s0 as padel.PadelState).goldenPoint : sport === 'tennis' ? !!(s0 as tennis.TennisState).noAd : false;
+  // SD-64 — a Star Point match has deciding points too (at the 3rd deuce)
+  const star = sport === 'padel' && !(s0 as padel.PadelState).goldenPoint && !!(s0 as padel.PadelState).starPoint;
+  const golden = sport === 'padel' ? !!(s0 as padel.PadelState).goldenPoint || star : sport === 'tennis' ? !!(s0 as tennis.TennisState).noAd : false;
   let lastWinner: Side | undefined;
   let serverKnown = true;
   let serveTracked = false;
@@ -374,20 +390,29 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
   let lastPeriod = 0;
   let lastTurn: Side | null = null;
 
+  // SD-62 / SD-74 — the current game's point winners (TT / badminton doubles
+  // name the server from them; the replay keeps no log)
+  let gamePts: Side[] = [];
+  let gpPeriod = 0;
+  const trackGame = (s: AnyState) => { if (fam === 'game') { const p = ad.period(s); if (p !== gpPeriod) { gamePts = []; gpPeriod = p; } } };
   for (const p of inputs) {
     // SD-53 — a conduct penalty point is no rally: replay it (the score moves)
     // but leave it out of every serve / return figure.
     if (p.pen) {
+      trackGame(cur);
+      const before = ad.total(cur);
       cur = ad.reduce({ ...cur, events: [] } as AnyState, { type: 'PENALTY_POINT', side: p.side, payload: { pen: p.pen } });
+      if (ad.total(cur) > before) gamePts = [...gamePts, p.side];
       lastWinner = p.side;
       continue;
     }
+    trackGame(cur);
     const base = { ...cur, events: [] } as AnyState;
     const per = ad.period(base);
     if (per !== lastPeriod) { run.pSide = null; run.pn = 0; lastTurn = null; lastPeriod = per; }
     const blk = (periods[per - 1] ??= zeroBlock());
     const both = (fn: (b: ServeBlock) => void) => { fn(match); fn(blk); };
-    const srv = ad.server(base, lastWinner, rosters);
+    const srv = ad.server(base, lastWinner, rosters, gamePts);
     const S = srv.side, R = opp(S);
     // What each side would complete by winning this rally (the engine's own rules).
     const lv: Record<Side, Level> = {
@@ -440,7 +465,7 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
           if (ps) { ps.bpFaced += 1; if (W === S) ps.bpSaved += 1; }
         }
         const pts = (base as SetState).pts;
-        if (golden && pts.home >= 3 && pts.home === pts.away) { b.home.golden += 1; b.away.golden += 1; b[W].goldenWon += 1; }
+        if (golden && pts.home >= (star ? 5 : 3) && pts.home === pts.away) { b.home.golden += 1; b.away.golden += 1; b[W].goldenWon += 1; }
         // a finished service game
         if (lv[W] >= 1) {
           b[S].svcGames += 1; b[R].rtnGames += 1;
@@ -474,11 +499,12 @@ export function serveStats(sport: ServeSport, state: unknown, rosters: ServeRost
     last = { server: S, winner: W };
     lastWinner = W; // rally scoring: the rally winner serves next (side-out reads state.serving)
     cur = next;
+    if (scored) gamePts = [...gamePts, scorer ?? W];
   }
   // A period with no rally yet (the next game at 0-0) isn't listed.
   for (let i = 0; i < periods.length; i++) periods[i] ??= zeroBlock();
   const consistent = ad.key(cur) === ad.key({ ...s0, events: [] } as AnyState);
-  return { sport, unit: fam === 'set' ? 'set' : 'game', sideOut, doubles, golden, match, periods, serverKnown, consistent, serveTracked, ...(last ? { last } : {}) };
+  return { sport, unit: fam === 'set' ? 'set' : 'game', sideOut, doubles, golden, ...(star ? { star } : {}), match, periods, serverKnown, consistent, serveTracked, ...(last ? { last } : {}) };
 }
 
 // -------------------------------------------------- career keys (SD-19) --
@@ -569,7 +595,7 @@ export function serveRows(st: ServeStats, block: ServeBlock): ServeRow[] {
     ratio('brk', 'Return games won', (x) => x.breaks, (x) => x.rtnGames);
     ratio('bps', 'Break points saved', (x) => x.bpSaved, (x) => x.bpFaced);
     ratio('bpc', 'Break points converted', (x) => x.bpWon, (x) => x.bpOpps);
-    if (st.golden) ratio('gold', st.sport === 'padel' ? 'Golden points won' : 'Deciding points won', (x) => x.goldenWon, (x) => x.golden);
+    if (st.golden) ratio('gold', st.star ? 'Star points won' : st.sport === 'padel' ? 'Golden points won' : 'Deciding points won', (x) => x.goldenWon, (x) => x.golden);
     saved('sps', 'Set points saved', (x) => x.spSaved, (x) => x.spFaced);
     saved('mps', 'Match points saved', (x) => x.mpSaved, (x) => x.mpFaced);
     count('run', 'Most points in a row', (x) => x.run);

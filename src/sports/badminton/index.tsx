@@ -27,6 +27,8 @@ import { pointInputs } from '../rallyEdit';
 import { badmintonTotals } from '../racketTotals';
 import { durationLine, stampDispatch, withDuration } from '../conduct';
 import { makeRacketQuickOptions } from '../RacketQuickOptions';
+import { badmintonDoublesTurn } from '../doublesOrder';
+import { DoublesOrderPicker } from '../DoublesOrderPicker';
 export { serve, type BadmintonState } from './engine';
 
 const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state, dispatch: rawDispatch, homeName, awayName, homeColor, awayColor, homeRoster = [], awayRoster = [] }) => {
@@ -45,16 +47,32 @@ const ScoringControls: SportPlugin<BadmintonState>['ScoringControls'] = ({ state
   const noPlayYet = s.current.home === 0 && s.current.away === 0 && s.games.length === 0;
   // SD-115: no silent default — the point buttons wait for the toss.
   const needsServer = noPlayYet && !s.serverPicked;
+  // SD-74 — doubles (BWF Law 11): "A serves from the right to X", from the
+  // game's serving / receiving pick (roster order until picked) + the rallies.
+  const ids = { home: homeRoster.map((p) => p.id), away: awayRoster.map((p) => p.id) };
+  const nameOfId = (id?: string) => [...homeRoster, ...awayRoster].find((p) => p.id === id)?.fullName ?? '';
+  const dbl = s.doubles && !needsServer ? badmintonDoublesTurn(s, ids) : null;
+  const atGameStart = s.current.home === 0 && s.current.away === 0;
+  const start = s.doubles ? badmintonDoublesTurn({ ...s, current: { home: 0, away: 0 }, events: [] }, ids) : null;
   return (
     <View style={{ gap: theme.spacing(4) }}>
       {/* SD-117c — derived interval / change-ends cue (BWF) */}
       <CueBanner cue={badmintonCue(s)} />
-      {!noPlayYet && <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>}
+      {dbl ? (
+        <Text style={ctrl.serveBanner}>🏸 {nameOfId(dbl.server)} serves from the {dbl.court} to {nameOfId(dbl.receiver)}</Text>
+      ) : !noPlayYet && <Text style={ctrl.serveBanner}>🏸 Serving: {serverName}  ·  {sv.court} court</Text>}
       <ServeFirstPicker
         icon="🏸" homeName={homeName} awayName={awayName} started={!noPlayYet}
         picked={s.serverPicked || !noPlayYet ? s.firstServer : null}
         onPick={(side, fix) => dispatch({ type: 'SET_FIRST_SERVER', payload: fix ? { side, v: 2 } : { side } })}
       />
+      {start && !needsServer && !s.ended ? (
+        <DoublesOrderPicker
+          icon="🏸" gameNo={s.games.length + 1} atGameStart={atGameStart} servingSide={start.serverSide}
+          homeName={homeName} awayName={awayName} homeRoster={homeRoster} awayRoster={awayRoster}
+          server={start.server} receiver={start.receiver} dispatch={dispatch}
+        />
+      ) : null}
       {/* SD-115 (extends SD-61) — two big team-coloured buttons; singles
           auto-credits, doubles credit is optional (long-press / "credit a player") */}
       <PointButtons

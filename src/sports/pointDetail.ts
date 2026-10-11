@@ -84,6 +84,9 @@ export const STROKES: Record<string, { label: string; chip: string }> = {
   out: { label: 'Out', chip: 'Out' },
   tin: { label: 'Tin', chip: 'Tin' },
   fault: { label: 'Fault (touch / double hit)', chip: 'Fault' },
+  // SD-52 — pickleball (PB-05): non-volley-zone ("kitchen") fault, foot fault
+  kitchen: { label: 'Kitchen (non-volley zone) fault', chip: 'Kitchen' },
+  foot: { label: 'Foot fault', chip: 'Foot fault' },
 };
 
 const WINNER = (strokes: string[]): HowDef => ({ how: 'winner', label: 'Winner', chip: 'Winner', credit: 'winner', strokes });
@@ -108,7 +111,7 @@ export const DETAIL_HOWS: Record<DetailSport, HowDef[]> = {
     { how: 'nolet', label: 'No let', chip: 'No let', credit: 'loser' },
   ],
   padel: [ACE, SW, WINNER(['smash', 'x3', 'volley', 'bandeja', 'vibora', 'drop', 'lob']), FE, UE(['net', 'out'])],
-  pickleball: [WINNER(['drive', 'dink', 'volley', 'overhead', 'erne', 'atp', 'lob']), FE, UE(['net', 'out']), SF],
+  pickleball: [WINNER(['drive', 'dink', 'volley', 'overhead', 'erne', 'atp', 'lob']), FE, UE(['net', 'out', 'kitchen', 'foot']), SF],
 };
 
 export const isDetailSport = (s: string): s is DetailSport => s in DETAIL_HOWS;

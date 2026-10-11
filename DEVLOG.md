@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Racket doubles serve order by name, padel Star Point + Hold/Break labels, racket backlog close-out (SD-62 / SD-74 / SD-64 / SD-75 / SD-34 / SD-52 / SD-65)
+- **Table tennis doubles (ITTF 2.13):** "🏓 Anil serves to Xavi" — A→X→B→Y order, next game's first receiver from the rule, deciding-game receiver switch at 5 (10 in 21-point games). Picks per game via `DoublesOrderPicker` (fixable mid-game, v:2); derived, never stored as server state (`doublesOrder.ts`).
+- **Badminton doubles (BWF Law 11):** "🏸 Arun serves from the right to Chitra" — court by score parity, only the serving side switches on winning a rally; BWF worked example replayed exactly in tests.
+- **Serve stats** name the doubles server on matches with a pick (older doubles stay side-only).
+- **Padel:** optional Star Point deuce (FIP Rule 1 option 2, from 2026; text not read directly) — "Deuce 1 of 3", "⭐ Star point" banner/board, Star points won stat; the old 'premier' preset relabelled "Golden point (WPT style)". Timeline reads "✅ Hold · team" / "💥 Break · team" (`gameLabels.ts`, display only).
+- **Close-out:** SD-34 old (pre-SD-104) tennis double faults now display as Double fault (score unchanged); SD-52 pickleball Kitchen and Foot fault under unforced errors; SD-65 pickleball first serve alternates each game on new matches (USA Pickleball 5.B.1; older matches keep winner-serves). SD-60 (via SD-107 2nd-serve chip) and SD-61 (SD-115 buttons) confirmed delivered.
+- **Verified:** `tests/sd62-74-doubles-order.test.mts` (28), racket fingerprints unchanged; demo 8093 — TT doubles across 3 games incl. the switch at 5, badminton doubles Law 11 sequence, padel Star Point. Guides: score-table-tennis, score-badminton, score-padel.
+
+---
+
 ### 2026-10-11 — Cricket career, captaincy, keeper and records leaders; format/ball filter on leaders + awards (SD-38 / SD-43 / SD-69 / SD-79)
 - **Career (SD-79):** balls faced, ducks (0 and out — retired-hurt 0 isn't), bowling innings, 4w / 5w — derived at read time from existing #19 keys (no re-sync needed for #19 lines; pre-#19 lines read "not tracked"; mixed careers show ☁ "tracked in 3 of 4" via new `coverOf`).
 - **Captain + keeper (SD-69):** statTotals writes `capt`, `wk`, `wkCatches` from the toss/setup captains and keepers; career Fielding adds "Ct as keeper" / "Keeper dismissals"; new Captaincy section (matches, W-L(-T), win %). Only the final keeper is flagged after a mid-match change (stumpings already credit the keeper at the time). Backfill helper (not run live): `await __sportnnoteAdmin.backfillCricketCaptainKeeper({ dryRun: true })` — keys-only resync (`resyncSportLines(..., { keys })`).

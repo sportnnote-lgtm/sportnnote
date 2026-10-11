@@ -25,6 +25,10 @@ export interface PadelState {
   gamesPerSet: number;
   /** golden point: at 40-40 the next point wins the game (no advantage) */
   goldenPoint: boolean;
+  /** SD-64 — Star Point (FIP Rules of Padel 2026, Rule 1 option 2): advantage
+   *  is played at most twice; at the third deuce (5-5 in points) the next point
+   *  wins the game. Absent / false on every older match. Format `deuce: 'star'`. */
+  starPoint?: boolean;
   /** decider: play the last set as a normal set, or a match tiebreak to 10 */
   matchTbDecider: boolean;
   /** SD-01 per completed set: tiebreak points [home, away] when it ended in a
@@ -57,6 +61,7 @@ export const init = (config?: Record<string, unknown>): PadelState => ({
   setsToWin: Number(config?.setsToWin ?? SETS_TO_WIN),
   gamesPerSet: Number(config?.gamesPerSet ?? 6),
   goldenPoint: (config?.deuce ?? 'advantage') === 'golden',
+  ...(config?.deuce === 'star' ? { starPoint: true } : {}),
   matchTbDecider: (config?.decider ?? 'set') === 'match10',
   tb: [],
   doubles: Number(config?.playersPerSide ?? 2) >= 2,
@@ -135,8 +140,9 @@ function scorePoint(s: PadelState, side: 'home' | 'away', who: string | undefine
     return winSet(s, side, games, events, seq, [pts.home, pts.away]);
   }
 
-  // Game won: win by 2, OR — under golden point — the sudden-death point at 40-40.
-  const gameWon = pts[side] >= 4 && (pts[side] - pts[o] >= 2 || (s.goldenPoint && pts[o] >= 3));
+  // Game won: win by 2, OR — under golden point — the sudden-death point at 40-40,
+  // OR (SD-64 Star Point) the deciding point at the third deuce (5-5 in points).
+  const gameWon = pts[side] >= 4 && (pts[side] - pts[o] >= 2 || (s.goldenPoint && pts[o] >= 3) || (!!s.starPoint && pts[o] >= 5 && pts[side] > pts[o]));
   if (!gameWon) return { ...s, pts, events, seq };
 
   const games = { ...s.games, [side]: s.games[side] + 1 };
@@ -264,7 +270,7 @@ export function summary(s: PadelState): ScoreSummary {
     statusLine: matchTbActive(s)
       ? 'Match tiebreak'
       : `Set ${s.setsWon.home + s.setsWon.away + 1}${inTiebreak(s) ? ' · TIEBREAK' : ''} · ${s.setsToWin === 1 ? 'single set' : `best of ${s.setsToWin * 2 - 1}`}`,
-    detailLine: `Games ${s.games.home}-${s.games.away}${s.goldenPoint ? ' · golden pt' : ''}${line ? ' · ' + line : ''}`,
+    detailLine: `Games ${s.games.home}-${s.games.away}${s.goldenPoint ? ' · golden pt' : s.starPoint ? ' · star pt' : ''}${line ? ' · ' + line : ''}`,
   };
 }
 
@@ -293,3 +299,19 @@ export function standingsUnits(s: PadelState): { games: { home: number; away: nu
 /** SD-117c — "Change ends" due after the last point (FIP, as tennis; derived). */
 export const padelCue = (s: PadelState): Cue | null =>
   setSportCue({ ended: s.ended, pts: s.pts, games: s.games, sets: s.sets, matchGames: standingsUnits(s)?.games ?? { home: 0, away: 0 }, inTiebreak: inTiebreak(s) });
+
+// ------------------------------------------------ SD-64 · Star Point --
+
+/** SD-64 — which deuce the game is at (1st = 40-40, 2nd, 3rd…), 0 if none. */
+export const deuceNo = (s: PadelState): number =>
+  !inTiebreak(s) && s.pts.home >= 3 && s.pts.home === s.pts.away ? s.pts.home - 2 : 0;
+
+/** SD-64 — the next point decides the game: golden point at 40-40, or the
+ *  Star Point at the third deuce. */
+export const decidingPoint = (s: PadelState): 'golden' | 'star' | null => {
+  const d = deuceNo(s);
+  if (!d || s.ended) return null;
+  if (s.goldenPoint) return 'golden';
+  if (s.starPoint && d >= 3) return 'star';
+  return null;
+};

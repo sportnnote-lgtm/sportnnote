@@ -10,6 +10,7 @@ import { applyPointDetail, detailFlags, initDetailFlags } from '../pointDetail.t
 import { scoreLine as lineOf, finalSummary, pointsLineScore, type LineScore } from '../scoreline.ts';
 import { badmintonCue as cueOf, type Cue } from '../courtCues.ts';
 import { applyRacketExtras, replayKeepingMarks, withStamps, type ConductOps } from '../conduct.ts';
+import { withDoublesOrder, type DoublesOrder } from '../doublesOrder.ts';
 
 const TARGET = 21;
 const CAP = 30;
@@ -37,6 +38,9 @@ export interface BadmintonState {
   /** SD-107 — optional point detail (how each point was won) is being
    *  captured; absent / false = off (D8). Format key / SET_DETAIL. */
   pointDetail?: boolean;
+  /** SD-74 — doubles: per game, who serves first / receives first (player ids,
+   *  SET_SERVE_ORDER; BWF Law 11.5–11.6). Absent → roster order. */
+  dblOrder?: DoublesOrder;
   events: LiveEvent[];
   seq: number;
   ended: boolean;
@@ -117,6 +121,9 @@ const core = (s: BadmintonState, a: ScoreAction): BadmintonState => {
     if (played && (a.payload?.v !== 2 || s.ended)) return s;
     return { ...s, firstServer: side, serverPicked: true };
   }
+  // SD-74 — doubles: who serves / receives first in this game (player ids).
+  // No score effect, no timeline event; mid-game only with v:2 (a fix).
+  if (a.type === 'SET_SERVE_ORDER') return withDoublesOrder(s, a.payload);
   // SD-107 — capture setting (from the next point) and a point's detail
   // (annotates the last point; allowed after the match point too).
   if (a.type === 'SET_DETAIL') { const f = detailFlags(a.payload, s); return f ? { ...s, ...f } : s; }
