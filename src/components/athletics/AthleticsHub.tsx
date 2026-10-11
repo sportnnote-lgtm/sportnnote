@@ -16,6 +16,7 @@ import { medalStandings } from '../../data/medalStandings';
 import {
   categoryKey, categoryLabel, disciplineOf, eventLeaders, eventStatus, formatMark, meetFieldResults, meetSettings, topAthletes,
   swimMeetSettings, courseLabel, courseShort, eventMeetSettings, wlMeetSettings, sinclairTotal, summarizeLifts, fmtKg, SINCLAIR, pointsLabel,
+  isCrewSport, crewMeetSettings,
   type MeetEvent, type RecordMark,
 } from '../../data/results';
 import { eventWords, eventPrefix, type EventSport } from '../../sports/eventSports';
@@ -39,7 +40,10 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
   const swimSettings = swim ? swimMeetSettings(fmt) : null;
   const wl = sport === 'weightlifting';
   const wlSettings = wl ? wlMeetSettings(fmt) : null;
-  const settings = swimSettings ?? (wl ? eventMeetSettings(sport, fmt) : meetSettings(fmt));
+  // SD-99 / SD-100: a regatta (rowing / canoe sprint) — lanes, points, crew-boat factor
+  const crew = isCrewSport(sport);
+  const crewSettings = crew ? crewMeetSettings(sport, fmt) : null;
+  const settings = swimSettings ?? crewSettings ?? (wl ? eventMeetSettings(sport, fmt) : meetSettings(fmt));
   const points = { positionPoints: settings.positionPoints, relayFactor: settings.relayFactor, liftMedals: wlSettings?.liftMedals };
   const table = useMemo(() => medalStandings([], [], { mode: 'position' }, undefined, meetFieldResults(events, points)), [events, settings.positionPoints.join(), settings.relayFactor]); // eslint-disable-line react-hooks/exhaustive-deps
   const leaders = useMemo(() => eventLeaders(events), [events]);
@@ -84,12 +88,15 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
     <View style={{ gap: theme.spacing(3) }}>
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
-          <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
+          <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
+          <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : crew ? '⚙ Lanes, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}
       {swimSettings ? (
         <Text style={textStyles.muted}>{courseLabel(swimSettings.course)} · {swimSettings.lanes} lanes{swimSettings.manual ? ' · manual timing' : ''} · World Aquatics seeding (fastest heat last, fastest in the centre lane).</Text>
+      ) : null}
+      {crewSettings ? (
+        <Text style={textStyles.muted}>{crewSettings.lanes} lanes{crewSettings.handTimed ? ' · hand timing' : ' · photo finish (thousandths decide the order)'} · {sport === 'rowing' ? 'World Rowing progression: heats → repechage → (semi-finals →) Finals A / B' : 'ICF progression: heats → semi-finals → Finals A / B'}; places run on from Final A into Final B.</Text>
       ) : null}
       {wlSettings ? (
         <Text style={textStyles.muted}>IWF rules: snatch then clean & jerk, 3 attempts each; equal totals go to whoever lifted the total first. Medals for {wlSettings.liftMedals ? 'the snatch, the clean & jerk and the total' : 'the total'}.</Text>
@@ -126,7 +133,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
 
       {leaders.length > 0 && (
         <>
-          <SectionHeader title={wl ? '⚡ Best total by category' : sport === 'shooting' ? '⚡ Best match score by event' : sport === 'archery' ? '⚡ Best ranking round by event' : '⚡ Best by event'} count={leaders.length} />
+          <SectionHeader title={wl ? '⚡ Best total by category' : sport === 'shooting' ? '⚡ Best match score by event' : sport === 'archery' ? '⚡ Best ranking round by event' : crew ? '⚡ Fastest by event' : '⚡ Best by event'} count={leaders.length} />
           <Card style={{ gap: theme.spacing(2) }}>
             {leaders.map((l) => (
               <TouchableOpacity key={l.eventKey} accessibilityRole="button" disabled={!l.athleteId} onPress={() => l.athleteId && nav.navigate('PlayerProfile', { playerId: l.athleteId })}>
@@ -157,7 +164,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                 </View>
               </TouchableOpacity>
             ))}
-            <Text style={textStyles.muted}>{wl ? 'Position points from every category.' : sport === 'shooting' ? 'Position points from every event (the final, or the match where there is none).' : sport === 'archery' ? 'Position points from every event (match play, or the ranking round where there is none); archers out in the same round share a place.' : 'Position points from individual finals; relays count for the house.'}</Text>
+            <Text style={textStyles.muted}>{wl ? 'Position points from every category.' : sport === 'shooting' ? 'Position points from every event (the final, or the match where there is none).' : sport === 'archery' ? 'Position points from every event (match play, or the ranking round where there is none); archers out in the same round share a place.' : crew ? `Position points from single-boat finals (${sport === 'rowing' ? '1x' : 'K1 / C1'}); crew boats score for the house.` : 'Position points from individual finals; relays count for the house.'}</Text>
           </Card>
         </>
       )}
@@ -183,7 +190,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
         </>
       )}
 
-      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : 'Set by the first final of each event.'} />
+      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : crew ? 'Set by the first final of each boat class and distance (lightweight and para categories kept apart).' : 'Set by the first final of each event.'} />
       {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={eventPrefix(sport)} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
     </View>
   );

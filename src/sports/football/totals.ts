@@ -70,8 +70,32 @@ export const FOOTBALL_EVENT_KEYS = [
   'goals', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget',
   'yellowCards', 'redCards', 'sinBins',
 ] as const;
+/** SD-80 (FB-14): shootout figures — kept apart from match goals / saves and
+ *  only on the lines of a kick's taker / keeper (keyed coverage: a line without
+ *  the key didn't take part). New logs only (`ShootoutKick` ids). */
+export const SHOOTOUT_KEYS = ['penKicksTaken', 'penKicksScored', 'shootoutSaves'] as const;
+
+/** Each shootout kick's taker (taken / scored) and the keeper facing it
+ *  (`shootoutSaves`, 0 included). */
+export function shootoutTotals(s: FootballState): Record<string, StatTotalsEntry> {
+  const out: Record<string, StatTotalsEntry> = {};
+  const line = (id: string, side: Side) => out[id] ?? (out[id] = { side, stats: {} });
+  for (const k of s.shootout?.kicks ?? []) {
+    if (k.takerId) {
+      const l = line(k.takerId, k.side).stats;
+      l.penKicksTaken = (l.penKicksTaken ?? 0) + 1;
+      l.penKicksScored = (l.penKicksScored ?? 0) + (k.scored ? 1 : 0);
+    }
+    if (k.keeperId) {
+      const l = line(k.keeperId, other(k.side)).stats;
+      l.shootoutSaves = (l.shootoutSaves ?? 0) + (k.outcome === 'saved' ? 1 : 0);
+    }
+  }
+  return out;
+}
+
 /** Owned here but never credited live. */
-export const FOOTBALL_DERIVED_KEYS = ['headedGoals', 'ownGoals', 'minutes', 'cleanSheets', 'goalsConceded'] as const;
+export const FOOTBALL_DERIVED_KEYS = ['headedGoals', 'ownGoals', 'minutes', 'cleanSheets', 'goalsConceded', ...SHOOTOUT_KEYS] as const;
 
 /** name → id per side, from every id / name pair the state and ctx hold. A
  *  name seen with two different ids on one side is ambiguous (no id). */
@@ -99,7 +123,7 @@ function nameIndex(s: FootballState, ctx?: StatTotalsContext): Record<Side, Map<
   return idx;
 }
 
-/** The box keys + own goals per player id. */
+/** The box keys + own goals (+ SD-80 shootout keys) per player id. */
 export function footballBoxTotals(s: FootballState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> {
   const idx = nameIndex(s, ctx);
   const resolve = (side: Side, id?: string, name?: string): string | undefined => id || (name ? idx[side].get(name) ?? undefined : undefined);
@@ -165,6 +189,11 @@ export function footballBoxTotals(s: FootballState, ctx?: StatTotalsContext): Re
       const line = out[id] ?? (out[id] = { side: l.side, stats: {} });
       line.stats.ownGoals = (line.stats.ownGoals ?? 0) + (l.stats.ownGoals ?? 0);
     }
+  }
+  // SD-80: shootout takers / keepers (ids always on the kick)
+  for (const [id, l] of Object.entries(shootoutTotals(s))) {
+    const line = out[id] ?? (out[id] = { side: l.side, stats: {} });
+    Object.assign(line.stats, l.stats);
   }
   return out;
 }

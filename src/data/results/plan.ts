@@ -42,7 +42,7 @@ export function toResultEntry(fe: FieldEntry, nameOf: (playerId: string) => stri
 const PHASE_LABEL: Record<PhaseKind, string> = { heat: 'Heats', repechage: 'Repechage', semi: 'Semi-finals', qualification: 'Qualification', final: 'Final' };
 export const phaseLabel = (k: PhaseKind) => PHASE_LABEL[k];
 
-export interface PlannedPhase { phase: PhaseKind; heats: number; progression?: Progression }
+export interface PlannedPhase { phase: PhaseKind; heats: number; progression?: Progression; /** SD-99 / SD-100: lettered finals ('A', 'B' …), one per heat */ races?: string[] }
 
 /**
  * The rounds for a field of `entrants` (a sensible default an official can

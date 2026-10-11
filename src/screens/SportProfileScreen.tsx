@@ -28,6 +28,7 @@ import { AthleticsCareer } from '../components/athletics/AthleticsCareer';
 import { LiftingCareer } from '../components/results/LiftingCareer';
 import { ShootingCareer } from '../components/results/ShootingCareer';
 import { ArcheryCareer } from '../components/results/ArcheryCareer';
+import { CrewCareer } from '../components/results/CrewCareer';
 import { getMyPlayerId, getPlayerEditAccess, getTournaments, getStatLinesForMatches, getPlayerNames } from '../data/repos';
 import type { StatLine, Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
@@ -229,7 +230,7 @@ export default function SportProfileScreen() {
             {schema?.careerView === 'measured' ? (
               // SD-90 — a timed / measured career: PB / SB per event, medals,
               // finals and the results history (it renders its own history).
-              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : sport === 'shooting' ? <ShootingCareer lines={history} /> : sport === 'archery' ? <ArcheryCareer lines={history} /> : <AthleticsCareer lines={history} />
+              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : sport === 'shooting' ? <ShootingCareer lines={history} /> : sport === 'archery' ? <ArcheryCareer lines={history} /> : sport === 'rowing' || sport === 'canoe' ? <CrewCareer lines={history} sport={sport} /> : <AthleticsCareer lines={history} />
             ) : sport === 'golf' ? (() => {
               // Golf reads in rounds, scoring average and percentages — not
               // matches/wins or raw counters.

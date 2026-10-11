@@ -18,7 +18,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
-import { Button, TextField } from '../../components/ui';
+import { Button, TextField, SelectChip } from '../../components/ui';
 import { confirmMatchAction } from '../../components/ConfirmSheet';
 import { Pitch } from './Pitch';
 import { LineupView } from './LineupView';
@@ -43,10 +43,11 @@ import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 
 /** How a level result at full time is settled. */
 import {
-  type Decider, type FootballState, type TrackConfig, type TeamStatTotals, type PlayerStatLine,
+  type Decider, type FootballState, type TrackConfig, type TeamStatTotals,
   init, reducer, decideShootout, penScore, HALF_NAME, currentMinute, halfBase, startOffset,
   clockLabel, clockTime, possessionPct, cardCount, FOOTBALL_LIVE_SETTINGS,
   minuteText, halfOfMinute, eventHalf, byMatchTimeDesc, fairPlayScore, pairedSecondYellowRed, type XiStamp,
+  footballDetailLine, halfTimeText, kickText,
 } from "./engine";
 
 /* ------------------------------- Controls ---------------------------------- */
@@ -685,7 +686,12 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
   // Level knockout tie: after full time offer extra time (following the 2nd half)
   // or penalties; once the shootout is under way, the shootout controls take over.
   if (state.ended) {
-    if (state.shootout) return <ShootoutControls state={state} dispatch={dispatch} homeName={homeName} awayName={awayName} />;
+    if (state.shootout) {
+      // SD-80 (FB-14, Law 10): takers = the players on the pitch at the end; the
+      // keeper facing the kick defaults to the other side's goalkeeper.
+      return <ShootoutControls state={state} dispatch={dispatch} homeName={homeName} awayName={awayName}
+        takers={{ home: xi('home'), away: xi('away') }} keepers={{ home: gkOf('home'), away: gkOf('away') }} />;
+    }
     // Extra time is only offered when it's the chosen decider and we're at the end
     // of normal time; "penalties straightaway" jumps direct to the shootout.
     const canET = state.half === 2 && state.decider === 'extra_time';
@@ -1217,12 +1223,22 @@ function FirstKicker({ homeName, awayName, homeColor, awayColor, onPick, onCance
   );
 }
 
-/** Penalty shootout panel — shown when a knockout tie is level at full time. */
+/** Penalty shootout panel — shown when a knockout tie is level at full time.
+ *  SD-80 (FB-14): each kick records who took it (optional), the outcome —
+ *  scored / saved / missed — and the keeper facing it (defaults to the
+ *  other side's goalkeeper), for the FIFA-style kick list and the stats. */
 function ShootoutControls({
-  state, dispatch, homeName, awayName,
+  state, dispatch, homeName, awayName, takers = { home: [], away: [] }, keepers = {},
 }: {
   state: FootballState; dispatch: (a: ScoreAction) => void; homeName: string; awayName: string;
+  takers?: { home: Player[]; away: Player[] }; keepers?: { home?: Player; away?: Player };
 }) {
+  const [taker, setTaker] = useState<Player | null>(null);
+  const [keeper, setKeeper] = useState<Player | null>(null);
+  const [pickKeeper, setPickKeeper] = useState(false);
+  const kicksSoFar = (state.shootout?.home.length ?? 0) + (state.shootout?.away.length ?? 0);
+  // a new kick starts with nobody picked
+  useEffect(() => { setTaker(null); setKeeper(null); setPickKeeper(false); }, [kicksSoFar]);
   if (!state.knockout || state.home !== state.away) {
     return <Text style={ctrl.meta}>✅ Full time — final score saved.</Text>;
   }
@@ -1240,20 +1256,67 @@ function ShootoutControls({
   const first = state.shootout.first ?? 'home';
   const second = first === 'home' ? 'away' : 'home';
   const nextSide: 'home' | 'away' = state.shootout[first].length <= state.shootout[second].length ? first : second;
+  const otherSide = nextSide === 'home' ? 'away' : 'home';
   const nextName = nextSide === 'home' ? homeName : awayName;
+  const kicks = state.shootout.kicks ?? [];
   const dot = (scored: boolean, i: number) => (
     <Text key={i} style={[ctrl.penDot, { color: scored ? theme.colors.primary : theme.colors.textMuted }]}>{scored ? '●' : '○'}</Text>
   );
+  // Law 10: nobody kicks twice until every eligible team-mate has — those with
+  // the fewest kicks are listed first.
+  const taken = new Map<string, number>();
+  for (const k of kicks) if (k.side === nextSide && k.takerId) taken.set(k.takerId, (taken.get(k.takerId) ?? 0) + 1);
+  const minTaken = Math.min(...takers[nextSide].map((p) => taken.get(p.id) ?? 0), Infinity);
+  const takerList = [...takers[nextSide]].sort((a, b) => (taken.get(a.id) ?? 0) - (taken.get(b.id) ?? 0));
+  const facing = keeper ?? keepers[otherSide] ?? null;
+  const kick = (outcome: 'scored' | 'saved' | 'missed') => dispatch({
+    type: 'PEN', side: nextSide,
+    payload: {
+      scored: outcome === 'scored', outcome,
+      ...(taker ? { takerId: taker.id, takerName: taker.fullName } : {}),
+      ...(facing ? { keeperId: facing.id, keeperName: facing.fullName } : {}),
+    },
+  });
+  const list = (side: 'home' | 'away') => kicks.filter((k) => k.side === side).map(kickText).join(' · ');
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <Text style={ctrl.label}>🥅 Penalty shootout — {pens.home} : {pens.away}</Text>
       <View style={ctrl.penRow}><Text style={ctrl.penTeam}>{homeName}</Text><View style={ctrl.row}>{state.shootout.home.map(dot)}</View></View>
+      {list('home') ? <Text style={ctrl.meta}>{list('home')}</Text> : null}
       <View style={ctrl.penRow}><Text style={ctrl.penTeam}>{awayName}</Text><View style={ctrl.row}>{state.shootout.away.map(dot)}</View></View>
-      <Text style={ctrl.meta}>{nextName} to take the next kick</Text>
+      {list('away') ? <Text style={ctrl.meta}>{list('away')}</Text> : null}
+      {state.shootoutWinner ? (
+        <Text style={ctrl.label}>🏆 {state.shootoutWinner === 'home' ? homeName : awayName} win {Math.max(pens.home, pens.away)}–{Math.min(pens.home, pens.away)} on penalties</Text>
+      ) : (<>
+      <Text style={ctrl.label}>{nextName} — kick {state.shootout[nextSide].length + 1}</Text>
+      {takerList.length > 0 && (
+        <>
+          <Text style={ctrl.meta}>Who takes it? (optional)</Text>
+          <View style={ctrl.chips}>
+            {takerList.map((p) => {
+              const n = taken.get(p.id) ?? 0;
+              return <SelectChip key={p.id} label={`${p.jerseyNo != null ? `${p.jerseyNo} ` : ''}${p.fullName}${n > minTaken ? ' · kicked' : ''}`} active={taker?.id === p.id} onPress={() => setTaker(taker?.id === p.id ? null : p)} />;
+            })}
+          </View>
+        </>
+      )}
+      {(facing || takers[otherSide].length > 0) && (
+        <View style={ctrl.addedRow}>
+          <Text style={[ctrl.meta, ctrl.flex]}>🧤 Keeper: {facing?.fullName ?? 'not set'}</Text>
+          {takers[otherSide].length > 0 && <Text style={ctrl.editLink} accessibilityRole="button" onPress={() => setPickKeeper((v) => !v)}>{pickKeeper ? 'Done' : 'Change'}</Text>}
+        </View>
+      )}
+      {pickKeeper && (
+        <View style={ctrl.chips}>
+          {takers[otherSide].map((p) => <SelectChip key={p.id} label={p.fullName} active={facing?.id === p.id} onPress={() => { setKeeper(p); setPickKeeper(false); }} />)}
+        </View>
+      )}
       <View style={ctrl.row}>
-        <Button label="✓ Scored" variant={nextSide} style={ctrl.flex} onPress={() => dispatch({ type: 'PEN', side: nextSide, payload: { scored: true } })} />
-        <Button label="✗ Missed" variant="ghost" style={ctrl.flex} onPress={() => dispatch({ type: 'PEN', side: nextSide, payload: { scored: false } })} />
+        <Button label="✓ Scored" variant={nextSide} style={ctrl.flex} onPress={() => kick('scored')} />
+        <Button label="🧤 Saved" variant="ghost" style={ctrl.flex} onPress={() => kick('saved')} />
+        <Button label="✗ Missed" variant="ghost" style={ctrl.flex} onPress={() => kick('missed')} />
       </View>
+      </>)}
     </View>
   );
 }
@@ -1321,7 +1384,7 @@ const LiveExtras: NonNullable<SportPlugin<FootballState>['LiveExtras']> = ({
   }
   if (view === 'stats') {
     // SD-23: the team comparison + each side's player box score (FB-09)
-    return <MatchBoxScore sport="football" source={footballBox(s, { homeRoster, awayRoster })} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onPlayer={onPlayer} />;
+    return <MatchBoxScore sport="football" source={footballBox(s, { homeRoster, awayRoster, homeName, awayName })} homeName={homeName} awayName={awayName} homeColor={hc} awayColor={ac} onPlayer={onPlayer} />;
   }
   return (
     <LineupView
@@ -1382,11 +1445,14 @@ export const footballPlugin: SportPlugin<FootballState> = {
         : s.ended
         ? 'Full Time'
         : s.half === 1 ? '1st Half' : s.half === 2 ? '2nd Half' : s.half === 3 ? 'Extra Time (1st)' : 'Extra Time (2nd)',
-      detailLine: s.shootout ? `Shootout · ${pens.home}–${pens.away}` : undefined,
+      // SD-56: "HT 1-0" once the 2nd half is reached (+ "FT 2-2" after extra time)
+      detailLine: footballDetailLine(s),
       homeReds: s.events.filter((e) => e.type === 'red' && e.side === 'home' && !e.official).length,
       awayReds: s.events.filter((e) => e.type === 'red' && e.side === 'away' && !e.official).length,
     };
   },
+  // SD-56: the match card's line under the score ("HT 1-0")
+  cardLine: (s) => halfTimeText(s),
   ScoringControls,
   LiveExtras,
   LiveClock,

@@ -167,7 +167,8 @@ describe('SD-23 · schemas declare the box', () => {
     assert.deepEqual(h('basketball'), ['MIN', 'PTS', 'FGM-A', 'FG%', '3PM-A', '3P%', 'FTM-A', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-', 'EFF']);
     assert.deepEqual(h('volleyball'), ['PTS', 'ATK', 'ACE', 'BLK']);
     assert.deepEqual(h('kabaddi'), ['RAID', 'TKL', 'PTS']);
-    assert.deepEqual(h('football'), ['MIN', 'G', 'A', 'SH', 'SOT', 'SV', 'GA', 'FC', 'YC', 'RC']);
+    // SD-80: OG / shootout columns are occasional (only when a row carries them)
+    assert.deepEqual(h('football'), ['MIN', 'G', 'A', 'SH', 'SOT', 'SV', 'GA', 'FC', 'YC', 'RC', 'OG', 'SO', 'SOS']);
     assert.deepEqual(h('carrom'), ['PTS', 'Boards', 'Queens']);
     assert.equal(matchBoxSource('cricket', {}), undefined); // cricket keeps InningsCard
   });

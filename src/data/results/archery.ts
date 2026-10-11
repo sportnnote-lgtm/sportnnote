@@ -39,7 +39,9 @@ export const archRound = (def?: { key: string } | null): ArchRoundDef | undefine
 export const endText = (arrows?: Arrow[]): string => (arrows ?? []).map(String).join(' ');
 
 /** The ranking-round phase is "Ranking round", match play "Match play"; other sports keep their labels. */
-export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[] }): string {
+export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[]; races?: string[] }): string {
+  // SD-99 / SD-100: a final run as lettered races reads "Finals A/B"
+  if (f.phase === 'final' && (f.races?.length ?? 0) > 1) return `Finals ${f.races!.join('/')}`;
   if (!archRoundOf(f.discipline)) return phaseLabel(f.phase);
   if (f.phase === 'final' && (f.plan?.length ?? 1) > 1) return 'Match play';
   return 'Ranking round';

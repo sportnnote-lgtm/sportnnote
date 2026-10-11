@@ -23,6 +23,7 @@ import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER, swimMeetSett
 import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
 import { shootMeetSettings } from './shooting.ts';
 import { archMeetSettings, phaseNameOf } from './archery.ts';
+import { crewMeetSettings, describeCrewPlan } from './crews.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -46,6 +47,7 @@ export function eventMeetSettings(sport: string, fmt?: Record<string, unknown>):
   if (sport === 'weightlifting') return wlMeetSettings(fmt);
   if (sport === 'shooting') return shootMeetSettings(fmt);
   if (sport === 'archery') return archMeetSettings(fmt);
+  if (sport === 'rowing' || sport === 'canoe') return crewMeetSettings(sport, fmt);
   return meetSettings(fmt);
 }
 
@@ -216,7 +218,9 @@ export function roundPresets(def: DisciplineDef, n: number): RoundsPreset[] {
 }
 
 /** "2 heats (first 3 + 2 fastest) → Final" */
-export function describePlan(plan: { phase: PhaseKind; heats: number; progression?: Progression }[]): string {
+export function describePlan(plan: { phase: PhaseKind; heats: number; progression?: Progression; races?: string[] }[]): string {
+  // SD-99 / SD-100: a rowing / canoe progression routes places to later rounds
+  if (plan.some((p) => p.progression?.routes?.length || (p.races?.length ?? 0) > 1)) return describeCrewPlan(plan);
   return plan.map((p) => {
     if (p.phase === 'final') return p.heats > 1 ? `Timed final in ${p.heats} heats (places on time across heats)` : 'Final';
     if (p.phase === 'qualification') {

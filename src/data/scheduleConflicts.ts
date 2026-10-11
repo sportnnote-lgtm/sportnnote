@@ -35,6 +35,8 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   handball: 90, // 2 × 30 + half-time + time-outs + turnaround
   shooting: 150, // a qualification relay (60 shots) + the final
   archery: 240, // a 72-arrow ranking round (~2.5 h) + match play
+  rowing: 120, // a session of races (2000 m ≈ 6–8 min, 10–15 min apart)
+  canoe: 120, // a session of sprint races (heats every few minutes)
   weightlifting: 150, // one bodyweight category's session (snatch + C&J) + turnaround
 };
 

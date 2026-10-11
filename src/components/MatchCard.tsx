@@ -13,6 +13,11 @@ import { formatShort, useUserTimeZone } from '../core/time';
 import type { Match } from '../core/types';
 import { matchLine, resultWords } from '../sports/matchLine';
 
+/** A stored snapshot from an older engine must never break a card. */
+function safeLine(f: () => string): string {
+  try { return f() || ''; } catch { return ''; }
+}
+
 /** A small dot that gently pulses — the universal "live" signal. */
 function LiveBadge() {
   const pulse = useRef(new Animated.Value(1)).current;
@@ -52,6 +57,8 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
   // sets/games score ("21-18, 19-21, 21-15"; tennis "6-4, 3-6, 7-6(4)"; closed by
   // hand "6-4, 3-2 ret."). A walkover already reads W/O in the middle.
   const setLine = done && showScore ? matchLine(match) : '';
+  // SD-56: football's half-time score ("HT 1-0") under a live / final score.
+  const cardLine = showScore && !setLine && match.state && plugin.cardLine ? safeLine(() => plugin.cardLine!(match.state as never)) : '';
 
   return (
     // The start button sits beside (not inside) the card's touchable — a button
@@ -60,7 +67,7 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${plugin.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}${
-        showScore ? `, ${match.score!.home} to ${match.score!.away}${setLine ? ` (${setLine})` : ''}` : ''
+        showScore ? `, ${match.score!.home} to ${match.score!.away}${setLine ? ` (${setLine})` : ''}${cardLine ? ` (${cardLine})` : ''}` : ''
       }, ${onBreak ? 'on a break' : live ? 'live now' : done ? 'final' : time}`}
       style={s.body}
       activeOpacity={0.85}
@@ -111,6 +118,7 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
       </View>
 
       {setLine ? <Text style={s.setLine} numberOfLines={1}>{setLine}</Text> : null}
+      {cardLine ? <Text style={s.setLine} numberOfLines={1}>{cardLine}</Text> : null}
 
       {/* Footer: call-to-action / kickoff, plus venue */}
       <Text style={s.foot}>

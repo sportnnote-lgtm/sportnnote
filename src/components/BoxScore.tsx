@@ -80,7 +80,7 @@ export function MatchBoxScore({
           <TeamTable title={homeName} color={homeColor} table={table} side="home" emptyText={source.emptyText} onPlayer={onPlayer} />
           <TeamTable title={awayName} color={awayColor} table={table} side="away" emptyText={source.emptyText} onPlayer={onPlayer} />
           <Text style={st.legend}>
-            {table.columns.map((c) => `${c.abbr} ${c.label}`).join(' · ')}{starters ? ' · * starter' : ''}
+            {table.numbers ? '# shirt number · ' : ''}{table.columns.map((c) => `${c.abbr} ${c.label}`).join(' · ')}{starters ? ' · * starter' : ''}
           </Text>
           {(source.notes?.() ?? []).map((n) => <Text key={n} style={st.legend}>{n}</Text>)}
           {hasBench && (
@@ -102,6 +102,8 @@ function TeamTable({ title, color, table, side, emptyText = 'No players.', onPla
   const t = table[side];
   const layout = useMemo(() => boxLayout(table, w || 320), [table, w]);
   const players = t.rows;
+  // SD-56: the shirt number column, when the squad has numbers
+  const num = (r?: BoxTableRow) => (table.numbers ? <Text style={st.num} numberOfLines={1}>{r?.number ?? ''}</Text> : null);
   const nameCell = (r: BoxTableRow, extra?: object) => (
     <Text
       style={[st.name, r.team && st.teamName, r.dnp && st.muted, extra]}
@@ -131,11 +133,11 @@ function TeamTable({ title, color, table, side, emptyText = 'No players.', onPla
         // Pinned names on the left; the numbers scroll sideways on the right.
         <View style={{ flexDirection: 'row' }}>
           <View style={{ width: layout.nameWidth }}>
-            <View style={[st.row, st.headRow]}><Text style={[st.head, { textAlign: 'left' }]}>Player</Text></View>
+            <View style={[st.row, st.headRow]}>{table.numbers ? <Text style={[st.head, st.num]}>#</Text> : null}<Text style={[st.head, { textAlign: 'left' }]}>Player</Text></View>
             {players.map((r) => (
-              <View key={r.name} style={st.row} accessibilityLabel={rowLabel(table.columns, r)}>{nameCell(r)}</View>
+              <View key={r.name} style={st.row} accessibilityLabel={rowLabel(table.columns, r)}>{num(r)}{nameCell(r, { flex: 1 })}</View>
             ))}
-            <View style={[st.row, st.totalsRow]}>{totalsName}</View>
+            <View style={[st.row, st.totalsRow]}>{num()}{totalsName}</View>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator style={{ flex: 1 }} contentContainerStyle={{ minWidth: '100%' }}>
             <View>
@@ -150,16 +152,19 @@ function TeamTable({ title, color, table, side, emptyText = 'No players.', onPla
       ) : (
         <View>
           <View style={[st.row, st.headRow]}>
+            {table.numbers ? <Text style={[st.head, st.num]}>#</Text> : null}
             <Text style={[st.head, st.nameHead]}>Player</Text>
             {heads}
           </View>
           {players.map((r) => (
             <View key={r.name} style={st.row} accessibilityLabel={rowLabel(table.columns, r)}>
+              {num(r)}
               {nameCell(r, { flex: 1 })}
               {nums(r.cells)}
             </View>
           ))}
           <View style={[st.row, st.totalsRow]}>
+            {num()}
             <View style={{ flex: 1 }}>{totalsName}</View>
             {nums(t.totals, true)}
           </View>
@@ -239,6 +244,7 @@ const st = StyleSheet.create({
   empty: { color: theme.colors.textMuted, fontSize: theme.font.small },
   legend: { color: theme.colors.textMuted, fontSize: theme.font.tiny },
   onDot: { fontSize: theme.font.tiny },
+  num: { width: 24, color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700', textAlign: 'left' },
 });
 
 const sv = StyleSheet.create({

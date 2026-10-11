@@ -293,6 +293,9 @@ export interface SportPlugin<S = unknown> {
    *  one in play, sets/games won) → the LineScoreboard grid and a retirement's
    *  "6-4, 3-2 ret." (`matchScoreLine` in scoreline.ts). Tolerates old snapshots. */
   lineScore?: (state: S) => import('./scoreline').LineScore | null;
+  /** SD-56 — a short line under the score on the match card for a live or
+   *  finished match (football "HT 1-0"). '' = none. Tolerates old snapshots. */
+  cardLine?: (state: S) => string;
   /** SD-20 — mark a match closed by hand the ITF / BWF / ITTF way: "ret." (retired
    *  = Conceded), "def." (default = Awarded), "w/o", "abandoned"; and label the
    *  End-match chips Retired / Default. Racket sports. */

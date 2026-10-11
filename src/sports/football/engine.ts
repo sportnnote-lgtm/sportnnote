@@ -33,7 +33,7 @@ export interface FootballState {
   /** penalty shootout kicks (true = scored); null until the shootout starts.
    *  `first` (SD-117, F12 — Law 10 toss): who kicks first; absent on older logs
    *  (home kicked first). */
-  shootout: { home: boolean[]; away: boolean[]; first?: 'home' | 'away' } | null;
+  shootout: { home: boolean[]; away: boolean[]; first?: 'home' | 'away'; kicks?: ShootoutKick[] } | null;
   /** who won the shootout, once decided */
   shootoutWinner?: 'home' | 'away';
   /** minutes per half (format: halfMinutes) — editable last-minute */
@@ -65,6 +65,21 @@ export interface FootballState {
   /** SD-29: a grassroots sin-bin of this many minutes (format `sinBinMinutes`;
    *  absent = no sin-bin — older matches and the default). */
   sinBinMinutes?: number;
+}
+
+/** SD-80 (FB-14): one shootout kick with who took it, how it went and the
+ *  keeper facing it. Only on new logs — a PEN carrying `outcome` (or a taker /
+ *  keeper) starts the list; older shootouts keep just the scored/missed dots.
+ *  In kick order; aligned with `home` / `away` (each side's kicks in turn). */
+export interface ShootoutKick {
+  side: 'home' | 'away';
+  scored: boolean;
+  /** saved by the keeper / missed (wide, post, over); absent on a kick backfilled from the dots */
+  outcome?: 'scored' | 'saved' | 'missed';
+  takerId?: string;
+  takerName?: string;
+  keeperId?: string;
+  keeperName?: string;
 }
 
 /** A side's starting keeper and players, plus the squad's keepers (so a
@@ -184,6 +199,55 @@ export function decideShootout(h: boolean[], a: boolean[]): 'home' | 'away' | un
   if (h.length === a.length && h.length >= 5 && hs !== as) return hs > as ? 'home' : 'away';
   return undefined;
 }
+/** SD-80: the kicks taken before the first detailed one, rebuilt from the
+ *  dots in the alternating order (the side kicking first, then the other). */
+export function backfillKicks(so: { home: boolean[]; away: boolean[]; first?: 'home' | 'away' }): ShootoutKick[] {
+  const first = so.first ?? 'home';
+  const second = first === 'home' ? 'away' : 'home';
+  const out: ShootoutKick[] = [];
+  for (let i = 0; i < Math.max(so.home.length, so.away.length); i++) {
+    if (i < so[first].length) out.push({ side: first, scored: so[first][i] });
+    if (i < so[second].length) out.push({ side: second, scored: so[second][i] });
+  }
+  return out;
+}
+
+/** SD-56 (FB-09): the score at half-time — goals (and own goals) of the first
+ *  half — once the second half is reached; `ft` = the score after 90 minutes
+ *  when the match went to extra time. null before half-time. */
+export function halfTimeScores(s: FootballState): { ht: { home: number; away: number }; ft?: { home: number; away: number } } | null {
+  if (!s || s.half < 2) return null;
+  const f = { halfMinutes: s.halfMinutes, etMinutes: s.etMinutes };
+  const upTo = (h: number) => {
+    const out = { home: 0, away: 0 };
+    for (const e of s.events ?? []) if ((e.type === 'goal' || e.type === 'owngoal') && eventHalf(e, f) <= h) out[e.side] += 1;
+    return out;
+  };
+  return { ht: upTo(1), ...(s.half >= 3 ? { ft: upTo(2) } : {}) };
+}
+
+/** "HT 1-0" · "HT 1-0 · FT 2-2" (extra time) — '' before half-time. */
+export function halfTimeText(s: FootballState): string {
+  const r = halfTimeScores(s);
+  if (!r) return '';
+  return `HT ${r.ht.home}-${r.ht.away}${r.ft ? ` · FT ${r.ft.home}-${r.ft.away}` : ''}`;
+}
+
+/** The scoreboard's detail line: half-time (SD-56) and the shootout. */
+export function footballDetailLine(s: FootballState): string | undefined {
+  const pens = penScore(s);
+  const parts = [halfTimeText(s), s.shootout ? `Shootout · ${pens.home}–${pens.away}` : ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
+/** SD-80: a shootout kick as read in the list — "Rahul ✓", "Dev ✗ saved (Kumar)". */
+export const kickText = (k: ShootoutKick): string => {
+  const who = k.takerName ?? 'Kick';
+  if (k.scored) return `${who} ✓`;
+  const how = k.outcome === 'saved' ? ` saved${k.keeperName ? ` (${k.keeperName})` : ''}` : k.outcome === 'missed' ? ' missed' : '';
+  return `${who} ✗${how}`;
+};
+
 /** Goals scored in the shootout (for tallies). */
 export const penScore = (s: FootballState) => ({
   home: s.shootout?.home.filter(Boolean).length ?? 0,
@@ -470,8 +534,20 @@ export const reducer = (s: FootballState, a: ScoreAction): FootballState => {
       return { ...s, shootout: { home: [], away: [], ...(a.payload?.first === 'home' || a.payload?.first === 'away' ? { first: a.payload.first } : {}) } };
     case 'PEN': {
       if (!s.shootout || s.shootoutWinner || (a.side !== 'home' && a.side !== 'away')) return s;
-      const scored = Boolean(a.payload?.scored);
-      const shootout = { ...s.shootout, [a.side]: [...s.shootout[a.side], scored] };
+      // SD-80 (FB-14): new logs carry `outcome` (scored / saved / missed) and the
+      // taker / keeper; old ones only `scored` (read exactly as before).
+      const p = a.payload ?? {};
+      const outcome = p.outcome === 'scored' || p.outcome === 'saved' || p.outcome === 'missed' ? p.outcome : undefined;
+      const scored = outcome ? outcome === 'scored' : Boolean(p.scored);
+      const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+      const who = { takerId: str(p.takerId), takerName: str(p.takerName), keeperId: str(p.keeperId), keeperName: str(p.keeperName) };
+      const detailed = !!outcome || Object.values(who).some(Boolean);
+      const shootout: NonNullable<FootballState['shootout']> = { ...s.shootout, [a.side]: [...s.shootout[a.side], scored] };
+      if (detailed || s.shootout.kicks) {
+        const kick: ShootoutKick = { side: a.side, scored, ...(outcome ? { outcome } : {}) };
+        for (const [k, v] of Object.entries(who)) if (v) (kick as unknown as Record<string, string>)[k] = v;
+        shootout.kicks = [...(s.shootout.kicks ?? backfillKicks(s.shootout)), kick];
+      }
       return { ...s, shootout, shootoutWinner: decideShootout(shootout.home, shootout.away) };
     }
     default:
@@ -527,7 +603,7 @@ export const blankTotals = (): TeamStatTotals => ({
   tackles: 0, interceptions: 0, saves: 0, passes: 0, passesComplete: 0, crosses: 0, dribbles: 0, handballs: 0,
   attackContributions: 0, defenceContributions: 0,
 });
-export interface PlayerStatLine { id: string; name: string; side: 'home' | 'away'; goals: number; shots: number; shotsOnTarget: number; fouls: number; tackles: number; interceptions: number; saves: number; }
+export interface PlayerStatLine { id: string; name: string; side: 'home' | 'away'; shots: number; shotsOnTarget: number; fouls: number; tackles: number; interceptions: number; saves: number; }
 
 /** Aggregate the granular stats into FIFA-style team totals + per-player lines.
  *  A goal counts as a shot on target (so the scorer logs Shot only for attempts
@@ -537,7 +613,7 @@ export function footballStats(s: FootballState, nowMs: number) {
   const players = new Map<string, PlayerStatLine>();
   const line = (id: string, name: string | undefined, side: 'home' | 'away') => {
     let p = players.get(id);
-    if (!p) { p = { id, name: name ?? 'Player', side, goals: 0, shots: 0, shotsOnTarget: 0, fouls: 0, tackles: 0, interceptions: 0, saves: 0 }; players.set(id, p); }
+    if (!p) { p = { id, name: name ?? 'Player', side, shots: 0, shotsOnTarget: 0, fouls: 0, tackles: 0, interceptions: 0, saves: 0 }; players.set(id, p); }
     return p;
   };
   for (const e of s.stats) {

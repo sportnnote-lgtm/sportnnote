@@ -17,6 +17,9 @@ import { getLineup, setLineup, getRoster, getMatchSquads, setMatchSquad, getMatc
 import { formationSlots, formationNamesFor, defaultFormationFor } from '../sports/football/formation';
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
+import { askConfirm } from '../components/ConfirmSheet';
+import { useMatchSuspensions } from '../data/useSuspensions';
+import { isSuspended, suspendedPickCopy } from '../sports/football/discipline';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -38,6 +41,8 @@ export default function LineupEditorScreen() {
   const [side, setSide] = useState<'home' | 'away'>(allowedSides[0]);
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  // SD-70: suspended players (football tournament rule) — flagged, asked, never blocked
+  const suspensions = useMatchSuspensions(matchId, sport);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,8 +90,11 @@ export default function LineupEditorScreen() {
     setSelected(null);
   };
 
-  const assign = (p: Player) => {
+  const banOf = (p: Player) => isSuspended(suspensions[side], p);
+  const assign = async (p: Player) => {
     if (selected == null) return;
+    const ban = banOf(p);
+    if (ban && !assignedIds.has(p.id) && !(await askConfirm(suspendedPickCopy(p.fullName, ban.reason)))) return;
     const next = slots.map((s, i) => {
       if (s.playerId === p.id) return { ...s, playerId: undefined, playerName: undefined }; // remove dup
       if (i === selected) return { ...s, playerId: p.id, playerName: p.fullName };
@@ -101,8 +109,12 @@ export default function LineupEditorScreen() {
   const clearSlot = (i: number) =>
     updateSlots(slots.map((s, idx) => (idx === i ? { ...s, playerId: undefined, playerName: undefined } : s)));
 
-  const toggleSub = (id: string) =>
+  const toggleSub = async (id: string) => {
+    const p = roster.find((x) => x.id === id);
+    const ban = p ? banOf(p) : undefined;
+    if (ban && p && !subs[side].includes(id) && !(await askConfirm(suspendedPickCopy(p.fullName, ban.reason)))) return;
     setSubs((sb) => ({ ...sb, [side]: sb[side].includes(id) ? sb[side].filter((x) => x !== id) : [...sb[side], id] }));
+  };
 
   const save = async () => {
     setBusy(true);
@@ -158,7 +170,7 @@ export default function LineupEditorScreen() {
             <View style={st.chips}>
               {roster.length === 0 && <EmptyState icon="👥" title="No players for this team yet" compact />}
               {roster.map((p) => (
-                <SelectChip key={p.id} label={p.fullName} active={assignedIds.has(p.id)} onPress={() => assign(p)} />
+                <SelectChip key={p.id} label={`${banOf(p) ? '🟥 ' : ''}${p.fullName}${banOf(p) ? ' (suspended)' : ''}`} active={assignedIds.has(p.id)} onPress={() => void assign(p)} />
               ))}
             </View>
           </View>
@@ -191,7 +203,7 @@ export default function LineupEditorScreen() {
             roster
               .filter((p) => !assignedIds.has(p.id))
               .map((p) => (
-                <SelectChip key={p.id} label={p.fullName} active={subs[side].includes(p.id)} onPress={() => toggleSub(p.id)} />
+                <SelectChip key={p.id} label={`${banOf(p) ? '🟥 ' : ''}${p.fullName}${banOf(p) ? ' (suspended)' : ''}`} active={subs[side].includes(p.id)} onPress={() => void toggleSub(p.id)} />
               ))
           )}
         </View>

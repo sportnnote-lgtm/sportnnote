@@ -32,6 +32,7 @@ import { ageOf } from '../core/age';
 import { WeightliftingEventSetup } from './WeightliftingEventSetup';
 import { ShootingEventSetup } from './ShootingEventSetup';
 import { ArcheryEventSetup } from './ArcheryEventSetup';
+import { CrewEventSetup } from './CrewEventSetup';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -54,6 +55,7 @@ export default function AthleticsEventSetupScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'AthleticsEventSetup'>>();
   if (params?.sport === 'shooting') return <ShootingEventSetup tournamentId={params.tournamentId} />; // SD-96
   if (params?.sport === 'archery') return <ArcheryEventSetup tournamentId={params.tournamentId} />; // SD-95
+  if (params?.sport === 'rowing' || params?.sport === 'canoe') return <CrewEventSetup tournamentId={params.tournamentId} sport={params.sport} />; // SD-99 / SD-100
   return params?.sport === 'weightlifting' ? <WeightliftingEventSetup tournamentId={params.tournamentId} /> : <TrackSwimEventSetup />;
 }
 

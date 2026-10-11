@@ -18,6 +18,7 @@
 import type { RecordMark } from './records.ts';
 import { SHOOT_EVENTS } from './shootingDefs.ts';
 import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
+import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -104,7 +105,8 @@ export const categoryKey = (c?: Category): string =>
 export const categoryLabel = (c?: Category): string => {
   // SD-97: senior / junior weightlifting categories read "Men 79 kg" / "Women 58 kg"
   // SD-96: senior / junior shooting too ("10 m Air Rifle Junior Men")
-  const adult = /^(Senior|Junior)$/.test(c?.age ?? '');
+  // SD-99 / SD-100: U23 and masters rowers / paddlers read "Men" / "Women" too
+  const adult = /^(Senior|Junior|U23|Masters)$/.test(c?.age ?? '');
   const g = c?.gender === 'M' ? (adult ? 'Men' : 'Boys') : c?.gender === 'F' ? (adult ? 'Women' : 'Girls') : c?.gender === 'X' ? 'Mixed' : '';
   const base = [c?.age, g, c?.weightClass].filter(Boolean).join(' ') || 'Open';
   return c?.shots ? `${base} · ${c.shots} shots` : base;
@@ -121,6 +123,37 @@ export interface Progression {
   standard?: number;
   /** field qualification: fill with q until this many qualifiers */
   fillTo?: number;
+  /** SD-99 / SD-100 rowing / canoe progression: where each place of every heat
+   *  goes — a later round (repechage, semi-final, a lettered final) by its
+   *  phase number. Places no route covers are out. */
+  routes?: Route[];
+}
+
+/** SD-99 / SD-100: places `from`…`to` (inclusive, 1-based within each heat;
+ *  `to` absent = every place after `from`) go to phase `phase` of the plan —
+ *  into race `race` (1 = Final A, 2 = Final B …) when that phase is a set of
+ *  lettered finals, else seeded across its heats. */
+export interface Route { from: number; to?: number; phase: number; race?: number }
+
+/** SD-99 / SD-100: a crew that goes straight to a round after the next one
+ *  (a heat winner to Final A, past the repechage). It waits on the next
+ *  phase's format until its round is seeded. */
+export interface CarriedCrew {
+  /** the crew's entry id in the round it came from */
+  ref: string;
+  playerId?: string;
+  teamId?: string;
+  result: Pick<EntryResult, 'bib' | 'team' | 'name' | 'members'>;
+  /** its place in its heat and its time — the seeding keys */
+  place: number;
+  mark?: number;
+  /** where it goes */
+  phase: number;
+  race?: number;
+  /** "Heat 2 · 1st" */
+  from: string;
+  /** the crew's / sculler's name as shown */
+  label?: string;
 }
 
 /** What `field_events.format.results` holds for one phase. */
@@ -137,7 +170,7 @@ export interface PhaseFormat {
   /** the event this phase belongs to (all phases share it) */
   eventKey: string;
   /** the whole event's rounds, in order (this phase is plan[phaseNo - 1]) */
-  plan?: { phase: PhaseKind; heats: number; progression?: Progression }[];
+  plan?: { phase: PhaseKind; heats: number; progression?: Progression; races?: string[] }[];
   /** the event's title without the phase ("100 m U14 Boys") */
   eventTitle?: string;
   /** SD-90: a hand-timed meet (stopwatches, usually no wind gauge) — hand
@@ -167,6 +200,11 @@ export interface PhaseFormat {
   shootEntry?: 'series' | 'shot';
   /** SD-96: the event ends in an ISSF elimination final (the plan's final phase) */
   shootFinal?: boolean;
+  /** SD-99 / SD-100: a final run as lettered races — heat n is Final races[n-1]
+   *  (Final A decides the medals, Final B places 7th–12th …) */
+  races?: string[];
+  /** SD-99 / SD-100: crews already through to a later round (see CarriedCrew) */
+  carry?: CarriedCrew[];
 }
 
 /** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
@@ -267,8 +305,12 @@ export interface EntryResult {
   lane?: number;
   order?: number;
   bib?: string;
-  /** relay / crew members, in leg / seat order */
-  members?: { playerId?: string; name: string }[];
+  /** relay / crew members, in leg / seat order (SD-99: bow first; the cox last, `cox: true`) */
+  members?: { playerId?: string; name: string; cox?: boolean }[];
+  /** SD-99 / SD-100: the lettered final this crew races in ('A', 'B' …) —
+   *  present on every row of a final run as Finals A / B; places run on
+   *  from one final to the next (Final B's winner is 7th after a 6-boat A) */
+  race?: string;
   /** snapshot of the team the entry scores for (school / house / relay team) —
    *  kept in the row so a sheet survives the team being renamed or deleted */
   team?: { id?: string; name: string; colorHex?: string };
@@ -407,6 +449,12 @@ export const DISCIPLINES: DisciplineDef[] = [
   ...SHOOT_EVENTS.map((e): DisciplineDef => ({
     key: e.key, label: e.label, sport: 'shooting', unit: 'points', better: 'higher', dp: e.scoring === 'decimal' ? 1 : 0, capture: 'target', tie: 'issf',
     ...(e.teamSize ? { teamSize: e.teamSize } : {}),
+  })),
+  // SD-99 rowing (World Rowing) / SD-100 canoe sprint (ICF): times to 1/100 with
+  // the photo-finish reading (1/1000) deciding the order; lanes; crews of 2–9.
+  ...CREW_EVENTS.map((e): DisciplineDef => ({
+    key: e.key, label: e.label, sport: e.sport, unit: 'time', better: 'lower', dp: 2, capture: 'single', tie: 'photo', lanes: CREW_LANES[e.sport],
+    ...(crewSize(e.boat) > 1 ? { teamSize: crewSize(e.boat) } : {}),
   })),
 ];
 

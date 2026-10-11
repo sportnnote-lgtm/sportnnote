@@ -20,6 +20,9 @@ import { matchEligibility, canFieldPlayer, TESTING_ALLOW_UNVERIFIED } from '../c
 import type { LineupSlot, MatchLineup, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
+import { askConfirm } from '../components/ConfirmSheet';
+import { useMatchSuspensions } from '../data/useSuspensions';
+import { isSuspended, suspendedPickCopy } from '../sports/football/discipline';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Role = 'start' | 'sub' | 'out';
@@ -69,6 +72,8 @@ export default function MatchSquadScreen() {
   const [lastSquad, setLastSquad] = useState<{ starters: string[]; subs: string[] } | null>(null);
   const [rosterNonce, setRosterNonce] = useState(0); // bumped after adding/inviting a player
   const [busy, setBusy] = useState(false);
+  // SD-70: players suspended for this match (football tournament rule) — a warning
+  const suspended = useMatchSuspensions(matchId, sport)[side];
 
   useFocusEffect(
     useCallback(() => {
@@ -109,11 +114,11 @@ export default function MatchSquadScreen() {
       let starts = Object.values(next).filter((x) => x === 'start').length;
       for (const id of lastSquad.starters) {
         const p = roster.find((x) => x.id === id);
-        if (p && pickable(p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
+        if (p && pickable(p) && !isSuspended(suspended, p) && starts < playersPerSide) { next[id] = 'start'; starts++; }
       }
       for (const id of lastSquad.subs) {
         const p = roster.find((x) => x.id === id);
-        if (p && pickable(p) && next[id] !== 'start' && !locked.has(id)) next[id] = 'sub';
+        if (p && pickable(p) && !isSuspended(suspended, p) && next[id] !== 'start' && !locked.has(id)) next[id] = 'sub';
       }
       return next;
     });
@@ -124,6 +129,13 @@ export default function MatchSquadScreen() {
   const subCount = Object.values(roles).filter((r) => r === 'sub').length;
   const xiFull = startCount >= playersPerSide;
 
+  // SD-70: picking a suspended player asks first (never blocks)
+  const pickRole = async (id: string, role: Role) => {
+    const p = roster.find((x) => x.id === id);
+    const ban = p ? isSuspended(suspended, p) : undefined;
+    if (ban && p && (roles[id] ?? 'out') === 'out' && !(await askConfirm(suspendedPickCopy(p.fullName, ban.reason)))) return;
+    setRole(id, role);
+  };
   const setRole = (id: string, role: Role) =>
     setRoles((r) => {
       const p = roster.find((x) => x.id === id);
@@ -140,6 +152,7 @@ export default function MatchSquadScreen() {
       let count = Object.values(next).filter((x) => x === 'start').length;
       for (const p of eligible) {
         if (count >= playersPerSide) break;
+        if (isSuspended(suspended, p)) continue; // SD-70: never auto-picked
         if (next[p.id] !== 'start') { next[p.id] = 'start'; count++; }
       }
       return next;
@@ -236,6 +249,7 @@ export default function MatchSquadScreen() {
             const overridden = !elig.ok && canField; // fieldable only because of the override
             const played = locked.has(p.id) && role !== 'out';
             const disableStart = !canField || (role !== 'start' && xiFull);
+            const ban = isSuspended(suspended, p);
             return (
               <View key={p.id} style={[st.row, !canField && st.rowLocked, role !== 'out' && st.rowActive]}>
                 <View style={{ flex: 1 }}>
@@ -243,6 +257,7 @@ export default function MatchSquadScreen() {
                     {p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}
                   </Text>
                   {p.invited && !elsewhere ? <RemindInstall playerId={p.id} name={p.fullName} phone={p.phone} teamName={teamName} /> : null}
+                  {ban ? <Text style={st.lockReason}>🟥 Suspended for this match · {ban.reason}</Text> : null}
                   {elsewhere ? (
                     <Text style={st.lockReason}>Playing for {otherName} in this match</Text>
                   ) : !elig.ok ? (
@@ -255,8 +270,8 @@ export default function MatchSquadScreen() {
                   <Text style={st.playedTag} accessibilityLabel={`${p.fullName} has played — can't be removed`}>✓ played</Text>
                 ) : canField ? (
                   <View style={st.toggles}>
-                    <Toggle label="Start" active={role === 'start'} disabled={disableStart} color={theme.colors.primary} onPress={() => setRole(p.id, 'start')} />
-                    <Toggle label="Bench" active={role === 'sub'} color={theme.colors.accent} onPress={() => setRole(p.id, 'sub')} />
+                    <Toggle label="Start" active={role === 'start'} disabled={disableStart} color={theme.colors.primary} onPress={() => void pickRole(p.id, 'start')} />
+                    <Toggle label="Bench" active={role === 'sub'} color={theme.colors.accent} onPress={() => void pickRole(p.id, 'sub')} />
                   </View>
                 ) : (
                   <Text style={st.lockTag}>{elsewhere ? 'Other side' : 'Not eligible'}</Text>

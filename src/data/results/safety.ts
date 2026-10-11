@@ -23,6 +23,7 @@ import { disciplineOf } from './model.ts';
 import { digitsToTime, handTime } from './athletics.ts';
 import { WL_RANGE, outOfRange } from './weightlifting.ts';
 import { hasMatchData } from './archeryBracket.ts';
+import { crewRange } from './crewDefs.ts';
 
 export interface MarkRange { min: number; max: number }
 
@@ -70,6 +71,9 @@ export function markRange(discipline: string, course?: Category['course']): Mark
   if (a) return { min: a[0], max: a[1] };
   // SD-97: weightlifting — kg per lift / total (and bodyweight, see weightlifting.ts)
   if (WL_RANGE[discipline]) return { ...WL_RANGE[discipline] };
+  // SD-99 / SD-100: rowing / canoe per boat class and distance
+  const crew = crewRange(discipline);
+  if (crew) return crew;
   if (discipline.startsWith('swim.')) {
     const base = SWIM_LCM_MIN[discipline.slice(5)];
     if (base == null) return null;
@@ -199,7 +203,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
+  def.sport === 'rowing' || def.sport === 'canoe' ? (n === 1 ? 'crew' : 'crews') : def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {

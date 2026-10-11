@@ -17,6 +17,7 @@ import type { Category, DisciplineDef, PhaseKind } from './model.ts';
 import { DISCIPLINES, disciplineOf } from './model.ts';
 import type { PlannedPhase } from './plan.ts';
 import type { Seeded } from './progression.ts';
+import { crewSplitDistances } from './crewDefs.ts';
 
 /* ------------------------------ events ------------------------------------ */
 
@@ -345,7 +346,8 @@ export function officialManualTime(watches: (number | undefined | null)[]): numb
  *  across the legs — each leg's end is a split). 50 m events have none. */
 export function splitDistances(discipline: string): number[] {
   const e = swimEventOf(discipline);
-  if (!e) return [];
+  // SD-99 / SD-100: rowing every 500 m, canoe sprint every 250 m (crewDefs.ts)
+  if (!e) return crewSplitDistances(discipline);
   const out: number[] = [];
   for (let d = 50; d < e.distance; d += 50) out.push(d);
   return out;

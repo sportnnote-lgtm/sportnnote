@@ -46,6 +46,11 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'headedGoals', label: 'Headed goals', short: 'headers', one: 'header', group: 'attack', coverage: 'present' },
     { key: 'ownGoals', label: 'Own goals', short: 'own goals', one: 'own goal', group: 'discipline', coverage: 'present' },
     { key: 'passes', label: 'Passes', short: 'passes', one: 'pass', group: 'passing', ...opt('passes') },
+    // SD-80 (FB-14): penalty shootouts, apart from match goals / saves — keyed:
+    // only a kick's taker / keeper carries them (written by statTotals)
+    { key: 'penKicksTaken', label: 'Shootout kicks taken', short: 'shootout kicks', one: 'shootout kick', compact: 'SO kicks', group: 'attack', coverage: 'keyed' },
+    { key: 'penKicksScored', label: 'Shootout kicks scored', short: 'shootout goals', one: 'shootout goal', compact: 'SO scored', group: 'attack', coverage: 'keyed' },
+    { key: 'shootoutSaves', label: 'Shootout saves', short: 'shootout saves', one: 'shootout save', compact: 'SO saves', group: 'goalkeeping', coverage: 'keyed' },
     // SD-09 keeper lines (statTotals): goals let in
     { key: 'goalsConceded', label: 'Goals conceded', short: 'conceded', group: 'goalkeeping', format: { unit: 'count', better: 'lower' }, coverage: 'present' },
     // SD-29: minutes on the pitch for every player (statTotals; regulation
@@ -81,12 +86,12 @@ export const footballStats: SportStatSchema<'football'> = {
     keeper: (l) => l.stats != null && 'goalsConceded' in l.stats,
   },
   sections: [
-    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed']
-      .map((stat) => (stat === 'headedGoals' ? { stat, hideZero: true } : { stat })) },
+    { id: 'attack', title: 'Attack', rows: ['goals', 'goalsPerGame', 'goalsPer90', 'openPlayGoals', 'penaltyGoals', 'freekickGoals', 'headedGoals', 'assists', 'shots', 'shotsOnTarget', 'shotAccuracy', 'conversion', 'attackingContributions', 'crosses', 'dribbles', 'penaltiesWon', 'penaltiesMissed', 'penKicksTaken', 'penKicksScored']
+      .map((stat) => (stat === 'headedGoals' || stat.startsWith('penKicks') ? { stat, hideZero: true } : { stat })) },
     { id: 'passing', title: 'Passing', rows: [{ stat: 'passes' }, { stat: 'passesComplete' }] },
     { id: 'defence', title: 'Defence', rows: [{ stat: 'tackles' }, { stat: 'interceptions' }, { stat: 'blocks' }, { stat: 'defensiveContributions' }] },
     { id: 'playing', title: 'Playing time', rows: [{ stat: 'minutes' }] },
-    { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'savePct' }, { stat: 'concededPerGame' }] },
+    { id: 'goalkeeping', title: 'Goalkeeping', rows: [{ stat: 'cleanSheets' }, { stat: 'saves' }, { stat: 'goalsConceded' }, { stat: 'savePct' }, { stat: 'concededPerGame' }, { stat: 'shootoutSaves', hideZero: true }] },
     { id: 'bests', title: 'Bests', rows: [{ stat: 'mostGoals', label: 'Most goals (match)', hideZero: true }, { stat: 'hatTricks', hideZero: true }] },
     { id: 'discipline', title: 'Discipline', rows: [{ stat: 'fouls' }, { stat: 'offsides' }, { stat: 'handballs' }, { stat: 'yellowCards' }, { stat: 'redCards' }, { stat: 'sinBins' }, { stat: 'ownGoals', hideZero: true }] },
   ],
@@ -103,6 +108,10 @@ export const footballStats: SportStatSchema<'football'> = {
     { key: 'fouls', abbr: 'FC', label: 'Fouls committed' },
     { key: 'yellowCards', abbr: 'YC', label: 'Yellow cards' },
     { key: 'redCards', abbr: 'RC', label: 'Red cards' },
+    // SD-80: only when the match had one (an own goal) / a shootout with takers
+    { key: 'ownGoals', abbr: 'OG', label: 'Own goals', occasional: true },
+    { key: 'penKicks', abbr: 'SO', label: 'Shootout kicks scored-taken', pair: ['penKicksScored', 'penKicksTaken'], overallOnly: true, occasional: true },
+    { key: 'shootoutSaves', abbr: 'SOS', label: 'Shootout saves', overallOnly: true, occasional: true },
   ] }],
   // the Stats tab's team comparison (labels as the match report reads them)
   compare: [

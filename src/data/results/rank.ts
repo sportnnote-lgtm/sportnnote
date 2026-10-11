@@ -146,6 +146,8 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
   if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
   // SD-95: archery match play ranks by the bracket
   if (def.sport === 'archery' && isBracketRows(entries)) return rankArcheryBracket(entries, def);
+  // SD-99 / SD-100: Finals A / B … rank race by race, places running on
+  if (isRaceRows(entries)) return rankRaces(entries, def, o);
   const prefix = o.tiePrefix ?? '=';
   const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt, o.handLegal) }));
   levelKeys(rows.map((x) => x.p));
@@ -185,4 +187,33 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
 export function rankByHeat(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): Map<number, RankedEntry[]> {
   const heats = [...new Set(entries.map((e) => e.heat))].sort((a, b) => a - b);
   return new Map(heats.map((h) => [h, rankEntries(entries.filter((e) => e.heat === h), def, o)]));
+}
+
+/* ------------------------- SD-99 / SD-100 lettered finals ------------------------- */
+
+/** The rows of a final run as lettered races (Final A, Final B …): more than one race letter. */
+export const isRaceRows = (entries: ResultEntry[]): boolean => new Set(entries.map((e) => e.result?.race).filter(Boolean)).size > 1;
+
+/**
+ * Rank a final run as Finals A, B, C …: each race on its own (the crew that
+ * wins Final B can't place above Final A's last however fast it was), places
+ * running on from one race to the next — after a six-boat Final A, Final B's
+ * winner is 7th (World Rowing / ICF results). A race's DNF / DNS / DQ rows stay
+ * with their race.
+ */
+export function rankRaces(entries: ResultEntry[], def: DisciplineDef, o: RankOptions = {}): RankedEntry[] {
+  const letters = [...new Set(entries.map((e) => e.result?.race ?? 'A'))].sort();
+  const out: RankedEntry[] = [];
+  let offset = 0;
+  const prefix = o.tiePrefix ?? '=';
+  for (const L of letters) {
+    const rows = entries.filter((e) => (e.result?.race ?? 'A') === L);
+    for (const r of rankEntries(rows.map((e) => ({ ...e, result: { ...e.result, race: undefined } })), def, o)) {
+      const entry = rows.find((e) => e.id === r.id)!;
+      const position = r.position != null ? r.position + offset : null;
+      out.push({ ...r, entry, position, label: position != null ? `${r.tie ? prefix : ''}${position}` : r.label });
+    }
+    offset += rows.length;
+  }
+  return out;
 }

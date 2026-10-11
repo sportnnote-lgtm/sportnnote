@@ -355,6 +355,13 @@ export default function ScheduleMatchScreen() {
             </Text>
             <Button label="🏊 Set up a swimming event →" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport: 'swimming' })} />
           </>
+        ) : sport === 'rowing' || sport === 'canoe' ? (
+          <>
+            <Text style={textStyles.muted}>
+              {sport === 'rowing' ? '🚣 Rowing isn’t a match: each race (1x, 2x, 4+, 8+ …) is an event with heats, a repechage and Finals A / B. Add the boat class, the crews seat by seat, the progression and lanes, then enter finish times race by race.' : '🛶 Canoe sprint isn’t a match: each race (K1 … C4, 200 / 500 / 1000 m) is an event with heats, semi-finals and Finals A / B. Add the boat, the paddlers, the progression and lanes, then enter finish times race by race.'}
+            </Text>
+            <Button label={sport === 'rowing' ? '🚣 Set up a rowing race →' : '🛶 Set up a canoe sprint race →'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId, sport })} />
+          </>
         ) : sport === 'archery' ? (
           <>
             <Text style={textStyles.muted}>

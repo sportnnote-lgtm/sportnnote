@@ -32,6 +32,7 @@ import { LeaderMinimums } from '../components/LeaderMinimums';
 import { readLeaderMins, leaderMinsPatch, type LeaderMins } from '../data/leaderMinimums';
 import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournamentLogo, setTournamentBanner, getTournamentBanner, setTournamentReminderLeads, requestJoinTournament, setTournamentTeamStatus, transferTournamentOwnership, getOwnershipEvents, getTournamentOfficials, assignTournamentOfficial, unassignTournamentOfficial, getTournamentAwards } from '../data/repos';
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
+import { DisciplineTable } from '../components/DisciplineTable';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
 import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole, TournamentAwards } from '../core/types';
@@ -702,7 +703,7 @@ export default function TournamentProfileScreen() {
                   <React.Fragment key={sp}>
                     <HubRow icon={eventWords(sp).icon} title={`${name} — events`} status={n ? `${n} event${n === 1 ? '' : 's'} · add, enter results` : 'None yet — add the first event'}
                       onPress={() => nav.navigate('SportHub', { tournamentId: tournament.id, sport: sp, tournamentName: tournament.name })} />
-                    <HubRow icon="⚙" title={`${name} — ${sw ? 'pool, points & timing' : sp === 'weightlifting' ? 'medals & points' : sp === 'shooting' || sp === 'archery' ? 'points' : 'points & timing'}`} status={`${sw ? `${courseShort(sw.course)} · ${sw.lanes} lanes · ` : ''}${sp === 'weightlifting' && fmt?.liftMedals === true ? 'snatch, C&J & total medals · ' : ''}${pointsLabel(ms.positionPoints)}${ms.relayFactor !== 1 ? ` · relays ×${ms.relayFactor}` : ''}${ms.handTimed ? (sw ? ' · manual timing' : ' · hand-timed') : ''}`}
+                    <HubRow icon="⚙" title={`${name} — ${sw ? 'pool, points & timing' : sp === 'weightlifting' ? 'medals & points' : sp === 'shooting' || sp === 'archery' ? 'points' : sp === 'rowing' || sp === 'canoe' ? 'lanes, points & timing' : 'points & timing'}`} status={`${sw ? `${courseShort(sw.course)} · ${sw.lanes} lanes · ` : ''}${sp === 'weightlifting' && fmt?.liftMedals === true ? 'snatch, C&J & total medals · ' : ''}${pointsLabel(ms.positionPoints)}${ms.relayFactor !== 1 ? ` · relays ×${ms.relayFactor}` : ''}${ms.handTimed ? (sw ? ' · manual timing' : ' · hand-timed') : ''}`}
                       onPress={() => nav.navigate('SportSettings', { sport: sp, tournamentId: tournament.id })} />
                   </React.Fragment>
                 );
@@ -997,6 +998,11 @@ export default function TournamentProfileScreen() {
               </>
             )}
             {activeSport && !isEventSport(activeSport) ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}
+            {/* SD-70 (FB-12): cards per player / team and who sits out next */}
+            {activeSport === 'football' ? (
+              <DisciplineTable matches={matches} format={tournament.formats?.football as Record<string, unknown> | undefined}
+                onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+            ) : null}
           </>
         )}
 

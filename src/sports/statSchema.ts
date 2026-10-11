@@ -247,6 +247,9 @@ export interface BoxColumnSpec {
   emphasis?: boolean;
   /** only on the Overall view, never per period (MIN, +/-: whole-game figures) */
   overallOnly?: boolean;
+  /** SD-80 — an occasional column (football OG, shootout kicks): drawn only
+   *  when a row carries it, and never listed as "not tracked" when absent */
+  occasional?: boolean;
 }
 
 /** A box-score block: ordered columns, optionally titled ("Batting"). A column

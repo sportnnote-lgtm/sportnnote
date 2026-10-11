@@ -66,7 +66,7 @@ const pick = <T,>(o: Record<string, T>) => Object.fromEntries(KEPT.map((sp) => [
 
 describe('SD-15 — every sport has a valid schema', () => {
   test('14 sports, one schema each, keyed by its own sport', () => {
-    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS, 'athletics', 'hockey', 'swimming', 'weightlifting', 'handball', 'shooting', 'archery'].sort()); // SD-90 athletics, SD-101 hockey, SD-94 swimming, SD-97 weightlifting, SD-102 handball, SD-96 shooting, SD-95 archery went live after the golden snapshot
+    assert.deepEqual([...STAT_SPORTS].sort(), [...SPORTS, 'athletics', 'hockey', 'swimming', 'weightlifting', 'handball', 'shooting', 'archery', 'rowing', 'canoe'].sort()); // SD-90 athletics, SD-101 hockey, SD-94 swimming, SD-97 weightlifting, SD-102 handball, SD-96 shooting, SD-95 archery, SD-99 rowing, SD-100 canoe went live after the golden snapshot
     for (const sp of STAT_SPORTS) assert.equal(STAT_SCHEMAS[sp].sport, sp);
   });
   test('every reference resolves (sections, box, leaders, headline, awards, aggregations)', () => {

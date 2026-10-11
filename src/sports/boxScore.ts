@@ -42,6 +42,8 @@ export interface BoxRowInput {
   on?: boolean;
   /** did not play — listed only with `showDnp` */
   dnp?: boolean;
+  /** SD-56: shirt number (the "#" column, shown when any row has one) */
+  number?: number;
 }
 
 export interface BoxSideInput {
@@ -158,6 +160,8 @@ export interface BoxTableRow {
   dnp?: boolean;
   /** the side's unattributed row ("Team", "Opp. errors") */
   team?: boolean;
+  /** SD-56: shirt number */
+  number?: number;
   cells: string[];
 }
 
@@ -171,6 +175,8 @@ export interface BoxTable {
   columns: BoxColumn[];
   /** schema columns hidden because the match didn't track them (labels) */
   hidden: string[];
+  /** SD-56: some row has a shirt number → the "#" column is drawn */
+  numbers?: boolean;
   home: BoxTableSide;
   away: BoxTableSide;
 }
@@ -193,7 +199,7 @@ export function buildBoxTable<S extends string>(schema: SportStatSchema<S>, data
   const scope = opts.scope ?? 'all';
   const all = boxColumns(schema).filter((c) => scope === 'all' || !c.spec.overallOnly);
   const columns = all.filter((c) => trackedIn(c, data));
-  const hidden = all.filter((c) => !columns.includes(c)).map((c) => c.label);
+  const hidden = all.filter((c) => !columns.includes(c) && !c.spec.occasional).map((c) => c.label);
   const side = (s: BoxSideInput): BoxTableSide => {
     const players = s.rows.filter((r) => opts.showDnp || !r.dnp);
     const rows: BoxTableRow[] = players.map((r) => ({
@@ -202,6 +208,7 @@ export function buildBoxTable<S extends string>(schema: SportStatSchema<S>, data
       ...(r.starter ? { starter: true } : null),
       ...(r.on ? { on: true } : null),
       ...(r.dnp ? { dnp: true } : null),
+      ...(r.number != null ? { number: r.number } : null),
       cells: columns.map((c) => cellText(schema, c, r.stats)),
     }));
     const teamHasAny = s.team && Object.values(s.team.stats).some((n) => Number(n) !== 0);
@@ -210,7 +217,9 @@ export function buildBoxTable<S extends string>(schema: SportStatSchema<S>, data
     const totals = columns.map((c) => (c.spec.total === false ? '' : cellText(schema, c, tot)));
     return { rows, totals };
   };
-  return { columns, hidden, home: side(data.home), away: side(data.away) };
+  const home = side(data.home), away = side(data.away);
+  const numbers = [...home.rows, ...away.rows].some((r) => r.number != null);
+  return { columns, hidden, home, away, ...(numbers ? { numbers: true } : null) };
 }
 
 /* ------------------------------- comparison -------------------------------- */

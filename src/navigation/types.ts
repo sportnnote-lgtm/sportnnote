@@ -79,7 +79,7 @@ export type RootStackParamList = {
   /** Results engine (SD-28): one phase of a timed / measured event — entry + sheet. */
   ResultsEvent: { phaseId: string; tab?: 'enter' | 'sheet' };
   /** SD-90 / SD-91: add a track or field event (category, entrants, rounds, lanes / order, bar heights) to a meet. */
-  AthleticsEventSetup: { tournamentId?: string; sport?: 'athletics' | 'swimming' | 'weightlifting' | 'shooting' | 'archery' } | undefined;
+  AthleticsEventSetup: { tournamentId?: string; sport?: 'athletics' | 'swimming' | 'weightlifting' | 'shooting' | 'archery' | 'rowing' | 'canoe' } | undefined;
   /** Hidden dev entry point for the results engine (URL /ResultsLab only). */
   ResultsLab: undefined;
   TryNewSport: { sports?: SportId[] } | undefined;

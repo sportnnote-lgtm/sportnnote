@@ -9,7 +9,7 @@ import { theme } from '../../core/theme';
 import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
-  shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText,
+  shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText, isCrewSport, crewMembersText,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -59,6 +59,14 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   const arch = def.sport === 'archery' ? archRoundOf(def.key) : undefined;
   if (arch) return res.mp != null ? (res.seed != null ? `Seed ${res.seed}${res.qual ? ` (${res.qual.mark})` : ''}` : '') : archRowText(res, arch);
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
+  // SD-99 / SD-100 rowing / canoe: the crew by seat, the photo-finish reading, the splits
+  if (isCrewSport(def.sport)) {
+    return [
+      crewMembersText(def.key, res.members),
+      res.thousandths != null && r.position != null ? `photo ${formatMark(res.thousandths, { ...def, dp: 3 })}` : '',
+      splitsText(res.splits, (v) => formatMark(v, def), def.key),
+    ].filter(Boolean).join(' · ');
+  }
   // SD-94 swimming: medley legs by stroke, then the 50 m splits
   const swim = def.sport === 'swimming';
   const legs = swim ? legLabels(def.key) : [];
@@ -69,7 +77,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   return [members, splits].filter(Boolean).join(' · ');
 }
 
-export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
+export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatLabel, notes }: {
   def: DisciplineDef;
   title: string;
   subtitle?: string;
@@ -79,6 +87,10 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
   wind?: Map<number, number | undefined>;
   /** SD-94: a timed final's one overall table (each row shows its heat) */
   overall?: boolean;
+  /** SD-99 / SD-100: "Final A", "Repechage 2" … instead of "Heat n" */
+  heatLabel?: (heat: number) => string;
+  /** SD-99 / SD-100: where each crew goes next ("→ Final A") */
+  notes?: Map<string, string>;
 }) {
   const lanes = usesLanes(def);
   const many = heats.size > 1;
@@ -95,17 +107,17 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall }: {
         <Card key={heat} style={{ gap: theme.spacing(1), padding: theme.spacing(3) }}>
           {(many || overall || (def.wind === 'race' && wind?.get(heat) != null)) && (
             <Text style={st.heatHead}>
-              {overall ? 'Overall' : many ? `Heat ${heat}` : 'Result'}{def.wind === 'race' && wind?.get(heat) != null ? `  ·  wind ${windText(wind.get(heat))} m/s` : ''}
+              {overall ? 'Overall' : many ? (heatLabel ? heatLabel(heat) : `Heat ${heat}`) : 'Result'}{def.wind === 'race' && wind?.get(heat) != null ? `  ·  wind ${windText(wind.get(heat))} m/s` : ''}
             </Text>
           )}
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
+            <Text style={[st.name, st.headTxt]}>{isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
             <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
-            const detail = [overall ? `Heat ${r.entry.heat}` : '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');
+            const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>

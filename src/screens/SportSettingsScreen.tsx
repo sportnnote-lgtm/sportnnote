@@ -15,6 +15,7 @@ import { Button, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } fr
 import { SportFormatEditor } from '../components/FormatEditor';
 import { StructureEditor } from '../components/StructureEditor';
 import { PointsEditor } from '../components/PointsEditor';
+import { readDisciplineRule, disciplineRuleText } from '../sports/football/discipline';
 import { getSport } from '../sports/registry';
 import { structureFromFormat, mergeStructure, shapeForStructure } from '../data/structureConfig';
 import { tournamentDraft } from '../data/tournamentDraft';
@@ -118,6 +119,35 @@ export default function SportSettingsScreen() {
         )}
 
         <PointsEditor sport={sport} value={value} onChange={set} />
+
+        {/* SD-70 (FB-12): the suspension rule — warns on the squad pickers */}
+        {isFootball && (() => {
+          const rule = readDisciplineRule(value);
+          return (
+            <View style={st.card}>
+              <FieldLabel hint={disciplineRuleText(rule)}>Discipline & suspensions</FieldLabel>
+              <FieldLabel>A direct red card means</FieldLabel>
+              <View style={st.chips}>
+                {[0, 1, 2, 3].map((n) => <SelectChip key={n} label={n === 0 ? 'No ban' : `${n} match${n === 1 ? '' : 'es'} out`} active={rule.banRed === n} onPress={() => set('banRed', n)} />)}
+              </View>
+              <FieldLabel>Yellow cards that add up to a 1-match ban</FieldLabel>
+              <View style={st.chips}>
+                {[0, 2, 3, 4, 5].map((n) => <SelectChip key={n} label={n === 0 ? 'Off' : `${n} yellows`} active={rule.banYellows === n} onPress={() => set('banYellows', n)} />)}
+              </View>
+              {rule.banYellows > 0 && (
+                <>
+                  <FieldLabel>Wipe the yellow count</FieldLabel>
+                  <View style={st.chips}>
+                    <SelectChip label="Never" active={rule.yellowReset === 'never'} onPress={() => set('yellowReset', 'never')} />
+                    <SelectChip label="When the knockouts start" active={rule.yellowReset === 'groups'} onPress={() => set('yellowReset', 'groups')} />
+                    <SelectChip label="After the quarter-finals" active={rule.yellowReset === 'qf'} onPress={() => set('yellowReset', 'qf')} />
+                  </View>
+                </>
+              )}
+              <Text style={textStyles.muted}>A red for a second yellow is always 1 match. A ban is served in the team’s next matches. Picking a suspended player only shows a warning.</Text>
+            </View>
+          );
+        })()}
 
         <Text style={textStyles.muted}>These apply only to {plugin.name} in this tournament.</Text>
         {params.tournamentId ? (

@@ -23,7 +23,7 @@ import { boxFieldByName } from './basketball/fieldTime.ts';
 import { tally as volleyballTally, type VolleyballState } from './volleyball/engine.ts';
 import { tally as kabaddiTally, isShootoutEvent, type KabaddiState } from './kabaddi/engine.ts';
 import { kabaddiMatchCentre, KABADDI_COUNT_KEYS } from './kabaddi/totals.ts';
-import { footballStats, type FootballState, type TrackConfig } from './football/engine.ts';
+import { footballStats, kickText, type FootballState, type TrackConfig } from './football/engine.ts';
 import { footballFieldLog, liveClockMinutes } from './football/fieldTime.ts';
 import { keeperTotals, position } from './football/keepers.ts';
 import { trackField } from './onField.ts';
@@ -56,6 +56,11 @@ const idIn = (name: string, roster: Player[]) => roster.find((p) => p.fullName =
 const withId = (row: BoxRowInput, roster: Player[]): BoxRowInput => {
   const id = row.playerId ?? idIn(row.name, roster);
   return id ? { ...row, playerId: id } : row;
+};
+/** SD-56: a row with the player's shirt number (from the squad), when known. */
+const numberedRow = (row: BoxRowInput, roster: Player[]): BoxRowInput => {
+  const n = row.playerId ? roster.find((p) => p.id === row.playerId)?.jerseyNo : undefined;
+  return n != null && Number.isFinite(n) ? { ...row, number: n } : row;
 };
 const numbered = (n: number, word: string) => Array.from({ length: n }, (_, i) => ({ value: i + 1, label: `${word} ${i + 1}` }));
 
@@ -282,6 +287,14 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
     emptyText: 'No players yet.',
     tickMs: s.startedAt ? 2000 : undefined,
     untrackedHint: 'turn on in Scoring settings (Info tab).',
+    // SD-80 (FB-14): the FIFA-style shootout list, kick by kick
+    ...(s.shootout?.kicks?.length ? {
+      notes: () => (['home', 'away'] as const).map((sd) => {
+        const ks = (s.shootout?.kicks ?? []).filter((k) => k.side === sd);
+        const name = (sd === 'home' ? ctx.homeName : ctx.awayName) ?? (sd === 'home' ? 'Home' : 'Away');
+        return ks.length ? `Shootout · ${name}: ${ks.map(kickText).join(', ')}` : '';
+      }).filter(Boolean),
+    } : null),
     data: (scope) => {
       const now = ctx.now ?? Date.now();
       const inScope = (h?: number) => scope === 'all' || h === scope;
@@ -290,11 +303,14 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
       const minutes = scope === 'all' ? footballMinutes(s, now) : new Map<string, number>();
       const conceded = new Map<string, number>(); // keeper id → goals let in (whole match)
       if (scope === 'all') for (const [id, k] of Object.entries(keeperTotals(s))) conceded.set(`${k.side}|${id}`, k.stats.goalsConceded);
+      const anyOg = scoped.events.some((e) => e.type === 'owngoal' && !!e.playerName);
       const side = (sd: Side): BoxSideInput => {
         const roster = rosterOf(ctx, sd);
         const rows = new Map<string, BoxRowInput>();
         const blank = (): Record<string, number> => ({
           goals: 0, assists: 0,
+          // SD-80: an OG column only when the match (this scope) had an own goal
+          ...(anyOg ? { ownGoals: 0 } : null),
           ...(t?.shots !== false ? { shots: 0, shotsOnTarget: 0 } : null),
           ...(t?.saves !== false ? { saves: 0 } : null),
           ...(t?.fouls !== false ? { fouls: 0 } : null),
@@ -312,6 +328,12 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
         for (const p of xi?.players ?? (xi?.gk ? [xi.gk] : [])) row(p.name, p.id).starter = true;
         for (const e of s.events) if (e.side === sd && e.type === 'sub' && e.secondName) row(e.secondName, e.secondId);
         for (const e of scoped.events) {
+          // SD-80 (FB-13): an own goal counts for the other side; the player who
+          // put it in his own net gets OG, never a goal
+          if (e.type === 'owngoal') {
+            if (other(e.side) === sd && e.playerName) { const r = row(e.playerName, e.playerId); r.stats.ownGoals = (r.stats.ownGoals ?? 0) + 1; }
+            continue;
+          }
           if (e.side !== sd || !e.playerName || e.official) continue; // SD-117: an official's card is no player's
           if (e.type === 'goal') {
             const r = row(e.playerName);
@@ -326,6 +348,22 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
           else if (e.kind === 'save') bump(row(e.playerName, e.playerId), 'saves');
           else if (e.kind === 'foul') bump(row(e.playerName, e.playerId), 'fouls');
         }
+        // SD-80 (FB-14): shootout takers (scored-taken) and keepers (saves)
+        if (scope === 'all') {
+          // by id first (a row from the XI / a sub may carry another spelling)
+          const byId = (id: string | undefined, name: string) => (id ? [...rows.values()].find((r) => r.playerId === id) : undefined) ?? row(name, id);
+          for (const k of s.shootout?.kicks ?? []) {
+            if (k.side === sd && (k.takerId || k.takerName)) {
+              const r = byId(k.takerId, k.takerName ?? rosterOf(ctx, sd).find((p) => p.id === k.takerId)?.fullName ?? 'Player');
+              r.stats.penKicksTaken = (r.stats.penKicksTaken ?? 0) + 1;
+              r.stats.penKicksScored = (r.stats.penKicksScored ?? 0) + (k.scored ? 1 : 0);
+            }
+            if (k.side !== sd && (k.keeperId || k.keeperName)) {
+              const r = byId(k.keeperId, k.keeperName ?? rosterOf(ctx, sd).find((p) => p.id === k.keeperId)?.fullName ?? 'Keeper');
+              r.stats.shootoutSaves = (r.stats.shootoutSaves ?? 0) + (k.outcome === 'saved' ? 1 : 0);
+            }
+          }
+        }
         for (const r of rows.values()) {
           const m = minutes.get(`${sd}|${r.name}`);
           if (m !== undefined) r.stats.minutes = m;
@@ -337,7 +375,8 @@ export function footballBox(s: FootballState, ctx: BoxContext = {}): MatchBoxSou
         for (const p of roster) if (!rows.has(p.fullName)) rows.set(p.fullName, { name: p.fullName, playerId: p.id, stats: {}, dnp: true });
         const tt = totals[sd];
         return {
-          rows: [...rows.values()].map((r) => withId(r, roster)),
+          // SD-56: the shirt number, where the squad has one
+          rows: [...rows.values()].map((r) => numberedRow(withId(r, roster), roster)),
           teamStats: {
             shots: tt.shots, shotsOnTarget: tt.shotsOnTarget, blockedShots: tt.blockedShots, possession: possession[sd],
             passes: tt.passes, passAccuracy: passAcc[sd], fouls: tt.fouls, yellowCards: tt.yellow, redCards: tt.red,
