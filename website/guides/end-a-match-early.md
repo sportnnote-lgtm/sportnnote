@@ -52,7 +52,7 @@ In tennis, padel, badminton, table tennis, squash and pickleball, **Retired** me
 In cricket, **Awarded**, **Conceded** or **Tie** shows a **Count in NRR (all overs)** chip. It's on by default, so both teams are charged their full overs. Turn it off if your rules say a shortened match shouldn't affect NRR. The points are awarded either way. Rain-cut overs: see [Rain, fewer overs and DLS targets](/guides/cricket-rain-and-dls/).
 
 ## What it does to the points table
-- **Awarded**, **Conceded** or a walkover: the winner gets the normal win points.
+- **Awarded**, **Conceded** or a walkover: the winner gets the normal win points. The table may also count a forfeit score: see [Walkover and forfeit scores](/guides/walkover-and-forfeit-scores/).
 - **Draw** or **Tie**: both teams get the draw points.
 - **No result** or **Abandoned**: the match counts as played, and each team gets the "no result" points (1 each in cricket by default, 0 in other sports). Goals, runs and run rate from the match don't count. The table shows an **NR** column.
 
@@ -67,7 +67,7 @@ For a team that doesn't turn up or can't play.
 
 Before the match has started, you can also do it from the **Info** tab: in the **Match scorers** card, tap **🏳 Award a walkover**, tap the team, then confirm.
 
-The card shows **W/O** and no score; the winner gets the normal win points. If play had started, use **Conceded** instead so the score stays on the record.
+The card shows **W/O** and no score. If play had started, use **Conceded** instead so the score stays on the record.
 
 ## Common questions
 

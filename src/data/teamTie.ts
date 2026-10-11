@@ -23,6 +23,7 @@
  */
 import type { Match, SportFormat, SportId } from '../core/types';
 import { SERIES_KEYS, seriesLegFormat, readSeriesMeta, deriveSeries, resolveSeries, type Series } from './series.ts';
+import { isEliminationStage } from './bracket.ts';
 
 /* --------------------------------- spec ---------------------------------- */
 
@@ -50,6 +51,13 @@ export interface TieSpec {
   preset: string;
   rubbers: RubberSpec[];
   dead: DeadRubbers;
+  /** SD-127 — pick `dead` from the stage when the tie is created: group /
+   *  league ties play every rubber (they count for the rubbers / games / points
+   *  tie-breaks — BWF, Davis Cup Finals groups), knockout ties stop at the
+   *  majority. `dead` is the stage-less fallback. Set by the presets for new
+   *  ties; an organiser's explicit Stop / Play clears it. Absent (every tie and
+   *  tournament saved before SD-127) = `dead` as stored, unchanged. */
+  deadByStage?: boolean;
   /** a drawn rubber counts ½ to each side (chess) */
   half: boolean;
   /** the side that plays the ABC letters (ITTF: decided by a draw before the
@@ -137,11 +145,38 @@ export const tiePresetsFor = (sport: SportId): TiePreset[] => TIE_PRESETS.filter
 
 /** A spec from a preset (the ABC side is home until the draw says otherwise). */
 export function specFromPreset(p: TiePreset, abc: 'home' | 'away' = 'home'): TieSpec {
-  return { v: 1, preset: p.id, abc, ...JSON.parse(JSON.stringify(p.spec)) };
+  const spec: TieSpec = { v: 1, preset: p.id, abc, ...JSON.parse(JSON.stringify(p.spec)) };
+  // SD-127: dead rubbers follow the stage (chess boards are always all played)
+  return spec.boards ? spec : { ...spec, deadByStage: true };
+}
+
+/** SD-127 — the organiser's dead-rubber choice: by stage (the default), or an
+ *  explicit Stop / Play for every tie. */
+export type DeadRule = 'stage' | DeadRubbers;
+export const deadRuleOf = (spec: TieSpec): DeadRule => (spec.deadByStage ? 'stage' : spec.dead);
+export function withDeadRule(spec: TieSpec, rule: DeadRule): TieSpec {
+  const { deadByStage: _drop, ...rest } = spec;
+  return rule === 'stage' ? { ...rest, deadByStage: true } : { ...rest, dead: rule };
+}
+
+/** Is a tie at this stage a knockout one (stop at the majority)? Elimination
+ *  stages are; group, Super Four, Swiss and league fixtures aren't. A tie with
+ *  no stage and no tournament is a one-off contest — knockout style. */
+export function isKnockoutTie(ctx: { stage?: string | null; tournamentId?: string | null }): boolean {
+  if (isEliminationStage(ctx.stage)) return true;
+  return !ctx.stage && !ctx.tournamentId;
+}
+
+/** The spec a NEW tie is created with: a "by stage" spec gets its concrete
+ *  `dead` (group → play, knockout → stop). Explicit specs pass through. */
+export function specForStage(spec: TieSpec, ctx: { stage?: string | null; tournamentId?: string | null }): TieSpec {
+  if (!spec.deadByStage || spec.boards) return spec;
+  const { deadByStage: _drop, ...rest } = spec;
+  return { ...rest, dead: isKnockoutTie(ctx) ? 'stop' : 'play' };
 }
 
 /** A custom tie: nominated rubbers (no positions), as the organiser listed them. */
-export function customSpec(sport: SportId, kinds: RubberKind[], dead: DeadRubbers = 'stop'): TieSpec {
+export function customSpec(sport: SportId, kinds: RubberKind[], dead: DeadRule = 'stage'): TieSpec {
   const chess = sport === 'chess';
   if (chess) {
     const b = boardsOf(kinds.length);
@@ -150,7 +185,8 @@ export function customSpec(sport: SportId, kinds: RubberKind[], dead: DeadRubber
   let s = 0, d = 0, x = 0;
   const ord = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
   const rubbers = kinds.map((k) => N(k, k === 'S' ? `${ord(++s)} singles` : k === 'D' ? `${ord(++d)} doubles` : `${ord(++x)} mixed`));
-  return { v: 1, preset: 'custom', rubbers, dead, half: false, abc: 'home', gap: 45 };
+  const base: TieSpec = { v: 1, preset: 'custom', rubbers, dead: 'stop', half: false, abc: 'home', gap: 45 };
+  return withDeadRule(base, dead);
 }
 
 /* ------------------------------ format keys ------------------------------ */
@@ -220,7 +256,8 @@ export function tieSpecFromFormat(f?: Record<string, unknown> | null): TieSpec |
   try {
     const s = JSON.parse(raw) as TieSpec;
     if (!s || s.v !== 1 || !Array.isArray(s.rubbers)) return null;
-    return { ...s, abc: s.abc === 'away' ? 'away' : 'home', dead: s.dead === 'play' ? 'play' : 'stop', half: !!s.half };
+    const { deadByStage, ...rest } = s;
+    return { ...rest, abc: s.abc === 'away' ? 'away' : 'home', dead: s.dead === 'play' ? 'play' : 'stop', half: !!s.half, ...(deadByStage === true ? { deadByStage: true } : {}) };
   } catch {
     return null;
   }
@@ -345,16 +382,8 @@ export function resolveTie(s: Series): TieStanding {
   const half = s.legs.some((m) => (m.format as Record<string, unknown> | undefined)?.[TIE_KEYS.half] === true);
   // more than half of all the rubbers: 3 of 5, 2½ of 4 boards (3 of 4 without ½s)
   const needed = half ? n / 2 + 0.5 : Math.floor(n / 2) + 1;
-  let decidedAt = -1;
   // Walk the rubbers in order to know which came after the decision (dead).
-  let a = 0, b = 0;
-  s.legs.forEach((m, i) => {
-    if (m.status !== 'completed') return;
-    const aHome = m.homeTeam?.id === s.teamAId;
-    if (m.winner === 'draw') { if (half && !isNoResult(m) && !isDoubleForfeit(m)) { a += 0.5; b += 0.5; } }
-    else if (m.winner) { if ((m.winner === 'home') === aHome) a += 1; else b += 1; }
-    if (decidedAt < 0 && (a > n / 2 || b > n / 2)) decidedAt = i;
-  });
+  const decidedAt = majorityIndex(s);
   const rubbers = s.legs.map((m, i) => {
     const dead = decidedAt >= 0 && i > decidedAt;
     const state: RubberState = isDeadUnplayed(m) ? 'unplayed'
@@ -379,22 +408,89 @@ const isNoResult = (m: Match) => m.result?.kind === 'no_result' || m.result?.kin
 /** chess 0-0 double forfeit: recorded as a draw, worth nothing to either side */
 const isDoubleForfeit = (m: Match) => (m.state as { method?: unknown } | null | undefined)?.method === 'double-forfeit';
 
+/** SD-127 — a rubber's points to team A and team B: 1 for a win, ½ each for
+ *  a drawn ½-point (chess) rubber unless it ended without a game. Mirrored in
+ *  SQL by settle_team_tie (supabase/migrations/*_team_tie_ops.sql). */
+function rubberPoints(m: Match, teamAId: string): [number, number] {
+  if (m.status !== 'completed') return [0, 0];
+  if (m.winner === 'draw') {
+    const halfLeg = (m.format as Record<string, unknown> | undefined)?.[TIE_KEYS.half] === true;
+    return halfLeg && !isNoResult(m) && !isDoubleForfeit(m) ? [0.5, 0.5] : [0, 0];
+  }
+  if (m.winner !== 'home' && m.winner !== 'away') return [0, 0];
+  const aHome = m.homeTeam?.id === teamAId;
+  return (m.winner === 'home') === aHome ? [1, 0] : [0, 1];
+}
+
+/** The index (in rubber order) of the rubber that took a side past half of
+ *  all the rubbers, or -1 while no side has a majority. Rubbers after it are
+ *  dead. */
+export function majorityIndex(s: Series): number {
+  const n = s.legsPlanned || s.legs.length || 1;
+  let a = 0, b = 0;
+  for (let i = 0; i < s.legs.length; i++) {
+    const [x, y] = rubberPoints(s.legs[i], s.teamAId);
+    a += x; b += y;
+    if (a > n / 2 || b > n / 2) return i;
+  }
+  return -1;
+}
+
+/** SD-127 — what settling the tie changes, by rubber id. `stop`: "stop at
+ *  the majority" mode, a side has a majority, and rubbers after the deciding
+ *  one are still to play (scheduled / postponed) → set aside (cancelled +
+ *  `__tieDead`). `restore`: no side has a majority (a correction undid it) →
+ *  rubbers set aside earlier come back. Applying the plan and planning again
+ *  gives an empty plan (idempotent). Restoring keys on the majority, not on
+ *  "decided": a 3–1 corrected to 2–2 with rubber 5 set aside must play rubber
+ *  5, not stand as a 2–2 draw. The server (settle_team_tie) runs the same rule. */
+export interface TieSettlePlan { stop: string[]; restore: string[] }
+export function tieSettlePlan(s: Series, spec: TieSpec): TieSettlePlan {
+  const at = majorityIndex(s);
+  if (at < 0) return { stop: [], restore: s.legs.filter(isDeadUnplayed).map((m) => m.id) };
+  if (spec.dead !== 'stop') return { stop: [], restore: [] };
+  return { stop: s.legs.filter((m, i) => i > at && (m.status === 'scheduled' || m.status === 'postponed')).map((m) => m.id), restore: [] };
+}
+
 /** The rubbers to set aside once the tie is decided in "stop" mode: still to
  *  play (scheduled / postponed), after the decision. Empty otherwise. */
 export function rubbersToStop(s: Series, spec: TieSpec): Match[] {
-  if (spec.dead !== 'stop') return [];
-  const t = resolveTie(s);
-  if (!t.decided) return [];
-  return t.rubbers.filter((r) => r.state === 'dead' && (r.m.status === 'scheduled' || r.m.status === 'postponed')).map((r) => r.m);
+  const ids = new Set(tieSettlePlan(s, spec).stop);
+  return s.legs.filter((m) => ids.has(m.id));
 }
 
 /** Rubbers set aside earlier that must come back (a correction undid the
- *  decision). */
+ *  majority). */
 export function rubbersToRestore(s: Series): Match[] {
-  const t = resolveTie(s);
-  if (t.decided) return [];
-  return s.legs.filter(isDeadUnplayed);
+  return majorityIndex(s) < 0 ? s.legs.filter(isDeadUnplayed) : [];
 }
+
+/** Apply a settle plan to a local copy of the rubbers (demo mode / tests). */
+export function applySettlePlan(legs: Match[], plan: TieSettlePlan): Match[] {
+  const stop = new Set(plan.stop), back = new Set(plan.restore);
+  return legs.map((m) => (stop.has(m.id) ? { ...m, status: 'cancelled' as const, format: { ...(m.format ?? {}), [TIE_KEYS.dead]: true } }
+    : back.has(m.id) ? { ...m, status: 'scheduled' as const, format: { ...(m.format ?? {}), [TIE_KEYS.dead]: false } } : m));
+}
+
+/* ------------------------- who may enter a lineup ------------------------ */
+
+/** SD-127 — may this person save `side`'s lineup? Mirrors save_tie_lineup.
+ *  A tie host (match host / tournament manager) enters either side until that
+ *  side's rubbers start. A side's captain / vice-captain / team admin enters
+ *  their own side — sealed: once BOTH lineups are in they are exchanged and
+ *  only the host can change them (no changing yours after seeing theirs). */
+export type LineupRefusal = 'not_allowed' | 'exchanged' | 'started';
+export function lineupEntryRule(ctx: { isHost: boolean; managesSide: boolean; sideIn: boolean; otherIn: boolean; started: boolean }): { ok: true } | { ok: false; reason: LineupRefusal } {
+  if (!ctx.isHost && !ctx.managesSide) return { ok: false, reason: 'not_allowed' };
+  if (ctx.started && ctx.sideIn) return { ok: false, reason: 'started' };
+  if (!ctx.isHost && ctx.sideIn && ctx.otherIn) return { ok: false, reason: 'exchanged' };
+  return { ok: true };
+}
+export const LINEUP_REFUSAL_TEXT: Record<LineupRefusal, string> = {
+  not_allowed: 'Only this team’s captain, vice-captain, a team admin or the tie host can enter this lineup.',
+  exchanged: 'Both lineups are in — ask the tie host to make a change.',
+  started: 'The tie has started — the lineup can’t change now.',
+};
 
 /** Did THIS rubber's result decide the tie? (decided now, not decided with
  *  this rubber taken back to unfinished) — the one moment to announce the tie. */

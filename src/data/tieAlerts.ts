@@ -3,7 +3,8 @@
  * only the followers of its players (server: notify-followers); when the
  * rubber that decides the tie is sent, team and tournament followers get one
  * "🏆 Riverside beat Hilltop 3–1" alert. Rubbers still to play are set aside
- * in "stop at the majority" mode (settleTie). Runs after the SD-111 hold has
+ * in "stop at the majority" mode (settleTie → the settle_team_tie RPC,
+ * which any scorer of the tie may call — SD-127). Runs after the SD-111 hold has
  * sent the result, so a mis-tap undone inside the hold never announces a tie.
  */
 import { afterRubberResult } from './repos';

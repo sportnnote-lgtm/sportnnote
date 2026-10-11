@@ -96,7 +96,7 @@ export default function SeriesScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
         <ScreenTitle title={series.name || `${teamAName} v ${teamBName}`} subtitle={isTie ? `Team tie · ${series.legsPlanned} rubbers` : FORMAT_LABEL[series.format](series.legsPlanned)} />
-        {isTie ? <TeamTieView initial={series} canManage={canManage} tz={tz} onOpen={openLeg} /> : (<>
+        {isTie ? <TeamTieView initial={series} canManage={canManage} tz={tz} onOpen={openLeg} me={{ playerId: myId, profileId: profile?.id, role: profile?.role }} /> : (<>
 
         {/* Standing */}
         <View style={st.board}>

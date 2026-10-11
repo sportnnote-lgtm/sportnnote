@@ -29,6 +29,7 @@ Places follow how the sport was actually played, not just who won the most games
 - **Knockout:** the final winner is 1st and the loser 2nd. If a 3rd-place match is scheduled, its winner is 3rd and its loser 4th. If there isn't one, both semi-final losers share 3rd and both get bronze.
 - **Earlier rounds:** teams out in the same round share a place. The four quarter-final losers are all =5th, and round-of-16 losers are all =9th.
 - **Groups, then a knockout:** knockout places come first. Teams that didn't reach the knockout come next, grouped by where they finished in their group: every group's 3rd-placed team shares the next place, then every 4th, and so on.
+- **Double elimination:** the grand-final winner is 1st and the loser 2nd. The losers'-final loser is 3rd, the losers' semi-final loser 4th, and earlier losers' rounds share a place. A plate draw never gives medals.
 - **IPL-style playoff:** the final gives 1st and 2nd, the Qualifier 2 loser is 3rd and the Eliminator loser is 4th. The rest follow the league table.
 - **League only:** the league table order, using the sport's own points and tie-breaks.
 - **Athletics, swimming and other timed or measured events:** places come from each event's results. For golf, see [Golf leaders, awards and the medal table](/guides/golf-leaders-awards-and-medal-table/).

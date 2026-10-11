@@ -41,6 +41,7 @@ import { Pill, textStyles } from '../components/ui';
 import { undoLabel } from '../sports/undoLabel';
 import { useLiveMatch } from '../data/useLiveMatch';
 import { matchOutbox } from '../data/matchOutbox';
+import { forfeitFor, forfeitNote } from '../data/walkover';
 import { getRoster, getPlayers, getLineup, getMatch, getTournaments, getMatchSquads, getMatchStatLines, getMyPlayerId, setMatchScorers, setMatchHosts, setMatchLogo, setMatchFormat, setMatchStream, setMatchManagers, getOrganizations, getTeamLeaders, getMatchDisputes, raiseDispute, updateDispute, dismissDispute, resolveDispute, escalateDispute, createReplacementPlayer, retireMatch, walkoverMatch, rescheduleMatch, getMatchKickoffAt, getScoringLock, claimScoring, handoverScoring, endMatchManually, getScoreEdits, getMatchEvents, getTournamentOfficials, joinMatchAsScorer, getMatchOfficials, setMatchOfficials, deleteMatch, resetMatch, setMatchBreak, getMatchLastActivityAt, getMatchPotm, setMatchPotm, stampAggregatePrior, AWARDS_DB_MESSAGE } from '../data/repos';
 import { matchRatings as genericRatings, type PotmProp } from '../data/ratings';
 import { AwardPickerSheet, type PickerRow } from '../components/AwardPickerSheet';
@@ -962,7 +963,18 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       : endKind === 'draw' || endKind === 'tie'
       ? `both teams +${cfg.draw}`
       : `${draftResult.winner === 'home' ? fullHome : fullAway} +${cfg.win}`;
-    return `${line} · Points table: ${table}`;
+    // SD-126: a conceded / awarded match counts the federation forfeit score
+    let ff: string | null = null;
+    if (draftResult.winner && (endKind === 'conceded' || endKind === 'awarded')) {
+      try {
+        const won = plugin.lineScore?.(state)?.won;
+        const sm = plugin.summary(state);
+        const h = won ? won.home : parseInt(String(sm.homeScore), 10), a = won ? won.away : parseInt(String(sm.awayScore), 10);
+        const f = forfeitFor({ sport, kind: endKind, winner: draftResult.winner, board: Number.isFinite(h) && Number.isFinite(a) ? { home: h, away: a } : null, state, format: meta.config as Record<string, unknown> | undefined });
+        ff = forfeitNote({ forfeit: f }, fullHome, fullAway);
+      } catch { ff = null; }
+    }
+    return `${line} · Points table: ${table}${ff ? ` · ${ff}` : ''}`;
   })();
   const closeEnd = () => { setRetireOpen(false); setEndKind(null); setEndWinner(null); setEndReason(''); setEndNrr(true); setEndWo(false); };
   const endMatch = async () => {

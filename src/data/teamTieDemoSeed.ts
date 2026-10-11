@@ -17,7 +17,7 @@ import {
   getTieRubbers, appendMatchEvent, updateMatchSnapshot, matchStatTotals, syncMatchStatLines, settleTie, getTournaments,
   getMyPlayerId,
 } from './repos';
-import { TIE_PRESETS, TIE_POINTS, specFromPreset, type TieLineup, type TieSpec } from './teamTie';
+import { TIE_PRESETS, TIE_POINTS, specFromPreset, withDeadRule, type TieLineup, type TieSpec } from './teamTie';
 import { readSeriesMeta } from './series';
 import type { MatchEventRecord, Player, SportId, Team } from '../core/types';
 
@@ -77,8 +77,11 @@ export async function seedTeamTies(): Promise<string> {
   const myId = await getMyPlayerId().catch(() => null);
   const hosts = myId ? [myId] : [];
   const preset = (id: string) => TIE_PRESETS.find((p) => p.id === id)!;
+  // SD-127: the two finished ties keep their story (stopped at the majority);
+  // the group tie still to play follows the stage default (group → play all).
   const tt = specFromPreset(preset('tt-swaythling'));
-  const sud = specFromPreset(preset('bd-sudirman'));
+  const ttStop = withDeadRule(tt, 'stop');
+  const sud = withDeadRule(specFromPreset(preset('bd-sudirman')), 'stop');
   const ch = specFromPreset(preset('ch-4boards'));
   const day = (d: number, h = 9) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, 0, 0, 0); return x.toISOString(); };
 
@@ -123,7 +126,7 @@ export async function seedTeamTies(): Promise<string> {
   await addTournamentTeams(tour.id, houses.map((h) => h.t.id));
   const pos = (ps: Player[], letters: string[]): TieLineup => ({ pos: Object.fromEntries(letters.map((l, i) => [l, ps[i].id])), pairs: {} });
   const ttTie = async (h: number, a: number, startsIn: number, results: ([number, number][] | null)[], abc: 'home' | 'away' = 'home') => {
-    const spec: TieSpec = { ...tt, abc };
+    const spec: TieSpec = { ...(results.length ? ttStop : tt), abc };
     const H = houses[h], A = houses[a];
     const t = await createTeamTie({ tournamentId: tour.id, sport: 'tabletennis', teamAId: H.t.id, teamBId: A.t.id, spec, group: 'A', stage: 'group', startsAt: day(startsIn, 9), hostIds: hosts, matchFormat: { pointsPerGame: 11, gamesToWin: 3 } });
     const hl = pos(H.p, abc === 'home' ? ['A', 'B', 'C'] : ['X', 'Y', 'Z']);

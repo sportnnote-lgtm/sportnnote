@@ -13,6 +13,7 @@ import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
 import { ChessCrosstable } from '../components/ChessCrosstable';
+import { stageLabel } from '../data/bracket';
 import { columnsConfig } from '../data/standingsColumns';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
@@ -35,6 +36,7 @@ import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournament
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
 import { LeaderSplitChips, useLeaderSplits } from '../components/LeaderSplitChips';
 import { DisciplineTable } from '../components/DisciplineTable';
+import { hasDiscipline } from '../sports/discipline';
 import { TournamentRecords } from '../components/TournamentRecords';
 import { collapseTies, isTieMatch } from '../data/teamTie';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
@@ -295,7 +297,7 @@ export default function TournamentProfileScreen() {
     away: m.awayTeam.name,
     sportIcon: (tournament?.sports.length ?? 0) > 1 ? getSport(m.sport).icon : undefined,
     venue: m.venueName,
-    stage: m.group ? `Group ${m.group}` : m.stage ? String(m.stage) : undefined,
+    stage: m.group ? `Group ${m.group}` : m.stage ? stageLabel(m.stage) : undefined,
   }));
   const zone = zoneAbbrev().replace('GMT+5:30', 'IST');
   const shareFixtures = () => {
@@ -1072,9 +1074,9 @@ export default function TournamentProfileScreen() {
               </>
             )}
             {activeSport && !isEventSport(activeSport) ? <LeaderMinimums sport={activeSport} mins={mins} canManage={canManageHosts} onSave={saveMins} /> : null}
-            {/* SD-70 (FB-12): cards per player / team and who sits out next */}
-            {activeSport === 'football' ? (
-              <DisciplineTable matches={matches} format={tournament.formats?.football as Record<string, unknown> | undefined}
+            {/* SD-70 (FB-12) / SD-126: cards per player / team and who sits out next — every sport with cards */}
+            {activeSport && hasDiscipline(activeSport) ? (
+              <DisciplineTable sport={activeSport} matches={matches} format={tournament.formats?.[activeSport] as Record<string, unknown> | undefined}
                 onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
             ) : null}
             {/* SD-51: tournament records (top 5 per type, from each match's records block) */}

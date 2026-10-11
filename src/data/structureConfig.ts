@@ -30,6 +30,15 @@ export interface StructureConfig {
   manualStandings: boolean;
   /** number of rounds for a Swiss-system competition (shape = 'swiss') */
   swissRounds: number;
+  /** SD-125: the knockout is single (default) or double elimination */
+  bracket?: 'single' | 'double';
+  /** SD-125: double elimination — a losers'-side grand-final win forces a reset match (default on) */
+  gfReset?: boolean;
+  /** SD-125: a plate (consolation) draw for first-round losers — no medals */
+  plate?: boolean;
+  /** SD-124: how a knockout is drawn — 'standard' seeding (default for new
+   *  rounds: cross-over from groups, 1 v N positions) or the old 'draw' order */
+  seeding?: 'standard' | 'draw';
 }
 
 const KEYS = {
@@ -41,6 +50,10 @@ const KEYS = {
   superPhase: 'structSuper',
   manualStandings: 'structManual',
   swissRounds: 'structRounds',
+  bracket: 'structBracket',
+  gfReset: 'structReset',
+  plate: 'structPlate',
+  seeding: 'structSeeding',
 } as const;
 
 const isShape = (s: unknown): s is StructureShape => s === 'league' || s === 'knockout' || s === 'groups' || s === 'swiss' || s === 'americano';
@@ -63,6 +76,10 @@ export function structureFromFormat(fmt?: Record<string, unknown> | null): Struc
     superPhase: fmt[KEYS.superPhase] === true,
     manualStandings: fmt[KEYS.manualStandings] === true,
     swissRounds: Math.max(3, num(KEYS.swissRounds, 5)),
+    ...(fmt[KEYS.bracket] === 'double' || fmt[KEYS.bracket] === 'single' ? { bracket: fmt[KEYS.bracket] as 'single' | 'double' } : {}),
+    ...(typeof fmt[KEYS.gfReset] === 'boolean' ? { gfReset: fmt[KEYS.gfReset] as boolean } : {}),
+    ...(typeof fmt[KEYS.plate] === 'boolean' ? { plate: fmt[KEYS.plate] as boolean } : {}),
+    ...(fmt[KEYS.seeding] === 'standard' || fmt[KEYS.seeding] === 'draw' ? { seeding: fmt[KEYS.seeding] as 'standard' | 'draw' } : {}),
   };
 }
 
@@ -77,6 +94,11 @@ export function structureToFormat(cfg: StructureConfig): SportFormat {
     [KEYS.superPhase]: cfg.superPhase,
     [KEYS.manualStandings]: cfg.manualStandings,
     [KEYS.swissRounds]: cfg.swissRounds,
+    // SD-124/125 knockout options — written only once chosen (old configs unchanged)
+    ...(cfg.bracket ? { [KEYS.bracket]: cfg.bracket } : {}),
+    ...(cfg.gfReset !== undefined ? { [KEYS.gfReset]: cfg.gfReset } : {}),
+    ...(cfg.plate !== undefined ? { [KEYS.plate]: cfg.plate } : {}),
+    ...(cfg.seeding ? { [KEYS.seeding]: cfg.seeding } : {}),
   };
 }
 
@@ -105,13 +127,19 @@ export function describeStructure(cfg: StructureConfig): string {
   if (cfg.shape === 'swiss') return `Swiss system — ${cfg.swissRounds} rounds, paired on form, ranked on points`;
   const rr = cfg.doubleRound ? 'home & away round-robin' : 'round-robin';
   if (cfg.shape === 'league') return `Single league — ${rr}, ranked on points`;
-  if (cfg.shape === 'knockout') return 'Straight knockout — win or go home';
+  const plate = cfg.plate && cfg.bracket !== 'double' ? ', plus a plate for first-round losers' : '';
+  if (cfg.shape === 'knockout') {
+    return cfg.bracket === 'double'
+      ? `Double elimination — lose twice and you're out (winners' and losers' brackets, grand final${cfg.gfReset === false ? '' : ' with a reset'})`
+      : `Straight knockout — win or go home${plate}`;
+  }
   const advance =
     cfg.advanceBest > 0
       ? `top ${cfg.advanceTopN} + the ${cfg.advanceBest} best ${ordinal(cfg.advanceTopN + 1)}-placed`
       : `top ${cfg.advanceTopN}`;
-  const then = cfg.superPhase ? 'a Super round-robin, then the knockout' : 'the knockout';
-  return `${cfg.groupCount} groups (${rr}) → ${advance} advance to ${then}`;
+  const ko = cfg.bracket === 'double' ? 'a double-elimination bracket' : 'the knockout';
+  const then = cfg.superPhase ? `a Super round-robin, then ${ko}` : ko;
+  return `${cfg.groupCount} groups (${rr}) → ${advance} advance to ${then}${plate}`;
 }
 
 function ordinal(n: number): string {

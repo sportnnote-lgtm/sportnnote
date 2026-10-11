@@ -16,7 +16,7 @@ A group match can end level. A knockout match can't: someone has to go through. 
 
 ## How the stage sets the rule
 - **League and group matches:** the draw stands, whatever the tournament's **If level at full time** says. The points table scores it as a draw. Hockey's **FIH + shoot-out bonus** table is the exception: every level match there still has a shoot-out for the 2 / 1 points.
-- **Knockout matches** (any knockout round, the third-place match, a play-in or a Qualifier / Eliminator): if you left the decider at "draw stands", the match uses the sport's standard one instead.
+- **Knockout matches** (any knockout round, the third-place match, a play-in, a Qualifier / Eliminator, or a double-elimination or plate match): if you left the decider at "draw stands", the match uses the sport's standard one instead.
 - Football: extra time, then penalties.
 - Hockey: a shoot-out.
 - Handball: extra time 2 × 5, again if level, then 7-metre throws (IHF).
@@ -42,7 +42,9 @@ Sometimes scoring can't settle a knockout: a match was abandoned or called off, 
 3. Type the reason, for example "Abandoned at 1–1 after a floodlight failure; Red House won the toss".
 4. Tap **Confirm: Red House advance**, then **Yes, Red House advance**.
 
-The bracket marks the tie "Organiser decision" with your reason, the next round unlocks, and the decision goes in the tournament's activity log. A result from the match itself always beats a pick.
+The bracket marks the tie "Organiser decision" with your reason, the next round unlocks, and the decision goes in the tournament's activity log. A result from the match itself always beats a pick. Picks work the same way in double-elimination brackets and plate draws.
+
+For how the draw itself is seeded, see [Seed a knockout draw so the best meet last](/guides/seed-a-knockout-draw/).
 
 ## Common questions
 ### Our knockout ended level and the app didn't offer penalties. Why?

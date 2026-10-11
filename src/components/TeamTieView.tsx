@@ -1,8 +1,10 @@
 /** SD-48 — the tie page: one team-v-team fixture of N rubbers. The running
- *  score (½ for a drawn chess board), both lineups (entered by the tie host
- *  from the captains' cards; names stay hidden until both are in), and every
- *  rubber with its players and live status. Tapping a rubber opens the normal
- *  scoring screen. */
+ *  score (½ for a drawn chess board), both lineups, and every rubber with its
+ *  players and live status. Tapping a rubber opens the normal scoring screen.
+ *  SD-127: each team's captain / vice-captain / team admin enters their own
+ *  side's lineup (the tie host can still enter both). Lineups are sealed:
+ *  names stay hidden until both are in (live: kept on the server, not just
+ *  hidden here), and after the exchange only the host can change one. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,28 +12,34 @@ import { theme } from '../core/theme';
 import { Button, FieldLabel, FormError, SelectChip, textStyles } from './ui';
 import { PODIUM } from './Rank';
 import { formatShort } from '../core/time';
-import { getRoster, getTieRubbers, saveTieLineup, settleTie, setTieAbc } from '../data/repos';
+import { canManageTeam, getRoster, getTieLineups, getTieRubbers, saveTieLineup, settleTie, setTieAbc, type TieLineupView } from '../data/repos';
 import { deriveSeries, type Series } from '../data/series';
 import {
   resolveTie, tieSpecOf, lineupOf, rubberPlayers, rubberLabel, sideLetters, lineupProblems, boardsByRating,
-  fmtPts, rubberSize, type TieLineup, type TieSpec, type RubberState,
+  fmtPts, rubberSize, lineupEntryRule, LINEUP_REFUSAL_TEXT, type TieLineup, type TieSpec, type RubberState,
 } from '../data/teamTie';
 import { chessRatingsOf, ratingListFor, ratingOn } from '../data/chessRatings';
 import { matchLine } from '../sports/matchLine';
-import type { Match, Player } from '../core/types';
+import type { Match, Player, Role } from '../core/types';
 
 const STATE_TEXT: Record<RubberState, string> = {
   scheduled: '', live: '● LIVE', won: 'FT', drawn: '½–½', unplayed: 'Not played', dead: 'Dead rubber', cancelled: 'Cancelled',
 };
 
-export function TeamTieView({ initial, canManage, tz, onOpen }: {
+export function TeamTieView({ initial, canManage, tz, onOpen, me }: {
   initial: Series;
   canManage: boolean;
   tz?: string;
   onOpen: (m: Match) => void;
+  /** who is looking — for the captain's "Enter our lineup" (demo / old database) */
+  me?: { playerId?: string | null; profileId?: string; role?: Role };
 }) {
   const [rubbers, setRubbers] = useState<Match[]>(initial.legs);
-  const reload = useCallback(() => getTieRubbers(initial.id).then((r) => { if (r.length) setRubbers(r); }), [initial.id]);
+  const [view, setView] = useState<TieLineupView | null>(null);
+  const reload = useCallback(() => getTieRubbers(initial.id).then(async (r) => {
+    if (r.length) setRubbers(r);
+    setView(await getTieLineups(initial.id, r.length ? r : undefined).catch(() => null));
+  }), [initial.id]);
   // Settle on open (stop-mode rubbers set aside / restored) — the host's
   // device can always write them, whoever scored the deciding rubber.
   useFocusEffect(useCallback(() => {
@@ -56,8 +64,26 @@ export function TeamTieView({ initial, canManage, tz, onOpen }: {
   }, [A?.id, B?.id, series.sport]); // eslint-disable-line react-hooks/exhaustive-deps
   const nameOf = (id?: string) => [...rosters.home, ...rosters.away].find((p) => p.id === id)?.fullName ?? 'Player';
 
-  const lineups = { home: lineupOf(rubbers, 'home'), away: lineupOf(rubbers, 'away') };
-  const bothIn = !!lineups.home && !!lineups.away;
+  // The captains' rights: the server says (get_tie_lineups); demo / an older
+  // database asks canManageTeam per side.
+  const [mgrLocal, setMgrLocal] = useState<{ home: boolean; away: boolean }>({ home: false, away: false });
+  useEffect(() => {
+    let on = true;
+    if (!A || !B || view?.can) return;
+    const ctx = { profileId: me?.profileId, myPlayerId: me?.playerId, role: me?.role };
+    Promise.all([canManageTeam(A.id, ctx).catch(() => false), canManageTeam(B.id, ctx).catch(() => false)])
+      .then(([h, a]) => on && setMgrLocal({ home: h, away: a }));
+    return () => { on = false; };
+  }, [A?.id, B?.id, view?.can, me?.playerId, me?.profileId, me?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isHost = view?.can ? view.can.host : canManage;
+  const manages = (side: 'home' | 'away') => (view?.can ? view.can[side] : mgrLocal[side]);
+
+  const lineups = {
+    home: view ? view.home.lineup : lineupOf(rubbers, 'home'),
+    away: view ? view.away.lineup : lineupOf(rubbers, 'away'),
+  };
+  const isIn = { home: view ? view.home.in : !!lineups.home, away: view ? view.away.in : !!lineups.away };
+  const bothIn = isIn.home && isIn.away;
   const [editing, setEditing] = useState<'home' | 'away' | null>(null);
 
   if (!spec || !A || !B) return null;
@@ -79,9 +105,14 @@ export function TeamTieView({ initial, canManage, tz, onOpen }: {
       <Text style={st.summary}>{tie.summary}</Text>
       {winnerName ? <View style={st.champ}><Text style={st.champText}>🏆 {winnerName} win the tie</Text></View> : null}
       {tie.drawn ? <View style={st.champ}><Text style={st.champText}>🤝 Tie drawn — 1 match point each</Text></View> : null}
+      {!spec.boards ? (
+        <Text style={textStyles.muted}>
+          {spec.dead === 'play' ? '▶️ Every rubber is played — dead rubbers count for the tie-breaks.' : '⏹ Rubbers after the decision are not played.'}
+        </Text>
+      ) : null}
 
       {/* ITTF draw: who plays ABC — before any lineup is in */}
-      {canManage && !started && !lineups.home && !lineups.away && spec.pos && !spec.boards && /^[A-Z]$/.test(spec.pos.p[0] ?? '') && (
+      {canManage && !started && !isIn.home && !isIn.away && spec.pos && !spec.boards && /^[A-Z]$/.test(spec.pos.p[0] ?? '') && (
         <View style={{ gap: theme.spacing(1) }}>
           <FieldLabel hint="Drawn before the lineups (ITTF)">Who plays ABC?</FieldLabel>
           <View style={st.chips}>
@@ -97,24 +128,27 @@ export function TeamTieView({ initial, canManage, tz, onOpen }: {
       {(['home', 'away'] as const).map((side) => {
         const team = side === 'home' ? A : B;
         const l = lineups[side];
-        const show = bothIn || canManage;
+        const inNow = isIn[side];
+        const mine = manages(side);
+        const rule = lineupEntryRule({ isHost, managesSide: mine, sideIn: inNow, otherIn: isIn[side === 'home' ? 'away' : 'home'], started });
         const letters = sideLetters(spec, side);
         return (
           <View key={side} style={st.card}>
             <View style={st.rowBetween}>
               <Text style={st.teamName} numberOfLines={1}>{team.name}{letters.length && !spec.boards && /^[A-Z]$/.test(letters[0]) ? ` · ${letters.join('')}` : ''}</Text>
-              <Text style={[st.pill, l ? st.pillOk : null]}>{l ? '✓ In' : 'Not entered'}</Text>
+              <Text style={[st.pill, inNow ? st.pillOk : null]}>{inNow ? '✓ In' : 'Not entered'}</Text>
             </View>
-            {l && show ? (
+            {l ? (
               <Text style={st.lineText}>
                 {letters.length
                   ? letters.map((x) => `${spec.boards ? `B${x}` : /^\d+$/.test(x) ? `No.${x}` : x} ${nameOf(l.pos[x])}`).join(' · ')
                   : spec.rubbers.map((r, i) => (r.p.length ? null : `${rubberLabel(spec, i)}: ${(l.pairs[String(i)] ?? []).map(nameOf).join(' / ')}`)).filter(Boolean).join(' · ')}
               </Text>
-            ) : l ? <Text style={textStyles.muted}>Names show once both lineups are in.</Text> : null}
-            {canManage && editing !== side && !(started && l) && (
-              <Button label={l ? 'Change lineup' : `Enter ${team.shortName || team.name}'s lineup`} variant="ghost" onPress={() => setEditing(side)} />
+            ) : inNow ? <Text style={textStyles.muted}>Names show once both lineups are in.</Text> : null}
+            {rule.ok && editing !== side && (
+              <Button label={inNow ? 'Change lineup' : mine && !isHost ? 'Enter our lineup' : `Enter ${team.shortName || team.name}'s lineup`} variant="ghost" onPress={() => setEditing(side)} />
             )}
+            {!rule.ok && rule.reason === 'exchanged' && mine ? <Text style={textStyles.muted}>{LINEUP_REFUSAL_TEXT.exchanged}</Text> : null}
             {editing === side && (
               <LineupEditor spec={spec} side={side} roster={side === 'home' ? rosters.home : rosters.away} initial={l}
                 onCancel={() => setEditing(null)}

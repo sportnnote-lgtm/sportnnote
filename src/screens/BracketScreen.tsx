@@ -33,7 +33,10 @@ import {
   thirdPlacePair, THIRD_PLACE_STAGE, pairingWinnerId, type KnockoutPairing, isEliminationStage,
   pairingNeedsOrganiser, advanceTargetMatch, pairingAdvanceOverride,
   isDoubleChanceStage, doubleChanceNext, doubleChanceChampion, DC_STAGE_LABEL, DOUBLE_CHANCE_STAGES, type DoubleChanceStage,
+  stageLabel, KO_SLOT_KEY,
 } from '../data/bracket';
+import { doubleElimState, plateState, plateEntrants, plateOpeners, type DrawRound, type DrawNode, type DrawSide } from '../data/elimDraws';
+import { structureFromFormat } from '../data/structureConfig';
 import { resolveSeries, advancePatch, type SeriesFormat } from '../data/series';
 import type { Match, SportId } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -143,7 +146,8 @@ export default function BracketScreen() {
     return createRound(dcNext, base);
   };
 
-  async function createRound(pairs: { homeId: string; awayId: string; stage: string }[], baseTimeMs: number) {
+  /** `slot` (SD-124) and `extra` (SD-125 draw keys) ride on each new match's format. */
+  async function createRound(pairs: { homeId: string; awayId: string; stage: string; slot?: number; extra?: Record<string, string | number | boolean> }[], baseTimeMs: number) {
     if (!tournamentId) return;
     setError(null); setBusy(true);
     try {
@@ -153,7 +157,9 @@ export default function BracketScreen() {
       const sportDefaults = defaultsFor(getSport(activeSport).formatFields ?? [], 'tournament');
       for (let i = 0; i < pairs.length; i++) {
         // SD-120: a knockout round always resolves — the sport's decider is set.
-        const format = tieSpec ? rawFormat : matchFormatFor(tournament, activeSport, isEliminationStage(pairs[i].stage), sportDefaults);
+        const baseFormat = tieSpec ? rawFormat : matchFormatFor(tournament, activeSport, isEliminationStage(pairs[i].stage), sportDefaults);
+        const drawKeys = { ...(pairs[i].extra ?? {}), ...(pairs[i].slot !== undefined ? { [KO_SLOT_KEY]: pairs[i].slot } : {}) };
+        const format = Object.keys(drawKeys).length ? { ...(baseFormat ?? {}), ...drawKeys } : baseFormat;
         if (tieSpec) {
           await createTeamTie({
             tournamentId, sport: activeSport, stage: pairs[i].stage, spec: tieSpec,
@@ -194,7 +200,7 @@ export default function BracketScreen() {
       await setMatchFormat(target.id, advancePatch(teamId, reason, profile?.fullName ?? undefined));
       await logActivity({
         scope: 'tournament', refId: tournamentId, action: 'knockout_advance',
-        detail: `${winner} advance past ${loser} (${KO_STAGE_LABEL[p.stage as keyof typeof KO_STAGE_LABEL] ?? p.stage}) — organiser decision: ${reason.trim()}`,
+        detail: `${winner} advance past ${loser} (${stageLabel(p.stage)}) — organiser decision: ${reason.trim()}`,
         byPlayerId: myId ?? undefined, byName: profile?.fullName ?? undefined,
       });
       setNonce((n) => n + 1);
@@ -213,8 +219,36 @@ export default function BracketScreen() {
   const createNextRound = () => {
     if (!pendingNext || !lastRound) return;
     const base = Math.max(...lastRound.matches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
-    return createRound(pendingNext, base);
+    // SD-124: index i is the new round's bracket slot.
+    return createRound(pendingNext.map((p, i) => ({ ...p, slot: i })), base);
   };
+
+  // ── SD-125: double elimination (takes over the view) and the plate draw.
+  const de = useMemo(() => doubleElimState(sportMatches), [sportMatches]);
+  const plateSt = useMemo(() => plateState(sportMatches), [sportMatches]);
+  const savedStruct = structureFromFormat(tournament?.formats?.[activeSport] as Record<string, unknown> | undefined);
+  const plateFrom = useMemo(() => (!de && !plateSt && koRounds.length ? plateEntrants(koRounds[0]) : null), [de, plateSt, koRounds]);
+  const latestStart = () => Math.max(Date.now(), ...sportMatches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
+  const createReady = (ready: { stage: string; slot: number; homeId: string; awayId: string }[]) => createRound(ready, latestStart());
+  const createPlate = async () => {
+    if (!plateFrom || plateFrom.length < 2) return;
+    const ok = await askConfirm({
+      title: 'Start the plate?',
+      message: `The ${plateFrom.length} first-round losers play their own knockout. It gives no medals; the winner is named the plate winner.`,
+      yesLabel: 'Yes, create the plate', noLabel: 'Not now', tone: 'caution',
+    });
+    if (ok) await createRound(plateOpeners(plateFrom), latestStart());
+  };
+  const sideName = (s: DrawSide) => (s.kind === 'team' ? nameOf(s.id) : s.kind === 'bye' ? 'Bye' : 'TBD');
+  const sideColor = (s: DrawSide) => (s.kind === 'team' ? nameColor.get(s.id)?.color : undefined);
+  const drawPickers = (rounds: DrawRound[]) => rounds.flatMap((r) => r.nodes
+    .filter((n) => n.pairing && (pairingNeedsOrganiser(n.pairing) || pairingAdvanceOverride(n.pairing)))
+    .map((n) => (
+      <View key={`${n.stage}#${n.slot}`} style={{ gap: theme.spacing(1) }}>
+        <Text style={st.pickHead}>{r.label}: {sideName(n.home)} v {sideName(n.away)}</Text>
+        {pickerFor(n.pairing!)}
+      </View>
+    )));
   const createThirdPlace = () => {
     if (!pendingThird || !sfRound) return;
     const base = Math.max(...sfRound.matches.map((m) => new Date(m.startsAt ?? Date.now()).getTime()));
@@ -249,10 +283,10 @@ export default function BracketScreen() {
   };
   const slotState = (winner: string | undefined, name: string): SlotState => (!winner ? 'neutral' : winner === name ? 'won' : 'lost');
 
-  const champId = dcActive ? dcChampId : stagedChampionId;
+  const champId = de ? de.championId : dcActive ? dcChampId : stagedChampionId;
   const champName = champId ? nameColor.get(champId)?.name : previewChampion?.name;
   const champColor = champId ? nameColor.get(champId)?.color : previewChampion?.color;
-  const subtitle = dcActive ? 'Double-chance playoff' : isStaged ? `${koRounds.reduce((n, r) => n + r.matches.length, 0)} knockout matches` : `${previewTeams.length} teams`;
+  const subtitle = de ? `Double elimination · ${de.seeds.length} entrants` : dcActive ? 'Double-chance playoff' : isStaged ? `${koRounds.reduce((n, r) => n + r.matches.length, 0)} knockout matches` : `${previewTeams.length} teams`;
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -276,7 +310,30 @@ export default function BracketScreen() {
           </View>
         )}
 
-        {dcActive ? (
+        {de ? (
+          <>
+            <Text style={textStyles.muted}>Lose twice and you're out. A first loss drops a team into the losers' bracket. Swipe sideways to see every round.</Text>
+            <Text style={textStyles.h3}>Winners' bracket</Text>
+            <DrawColumns rounds={de.winners} sideName={sideName} sideColor={sideColor} />
+            {de.losers.length > 0 && <Text style={textStyles.h3}>Losers' bracket</Text>}
+            {de.losers.length > 0 && <DrawColumns rounds={de.losers} sideName={sideName} sideColor={sideColor} />}
+            <Text style={textStyles.h3}>Grand final</Text>
+            <DrawColumns
+              rounds={[{ stage: 'gf', label: 'Grand final', nodes: [de.final] }, ...(de.reset2 ? [{ stage: 'gf2', label: 'Grand final (reset)', nodes: [de.reset2] }] : [])]}
+              sideName={sideName} sideColor={sideColor}
+            />
+            {de.reset && !de.reset2 && <Text style={textStyles.muted}>If the losers'-bracket team wins the grand final, a reset match decides it.</Text>}
+            {drawPickers([...de.winners, ...de.losers, { stage: 'gf', label: 'Grand final', nodes: [de.final, ...(de.reset2 ? [de.reset2] : [])] }])}
+            {canManage && de.ready.length > 0 && (
+              <Button
+                label={busy ? 'Creating…' : `▶ Create ${de.ready.length} match${de.ready.length === 1 ? '' : 'es'} ready to play`}
+                onPress={() => createReady(de.ready)}
+                disabled={busy}
+              />
+            )}
+            <FormError message={error} />
+          </>
+        ) : dcActive ? (
           <>
             <Text style={textStyles.muted}>The top two get a second life: lose Qualifier 1 and you drop to Qualifier 2, not out.</Text>
             {dcMatches.map(({ stage, m }) => (
@@ -340,6 +397,31 @@ export default function BracketScreen() {
             )}
             {canManage && lastRound && lastRound.pairings.length > 1 && !pendingNext && (
               <Text style={textStyles.muted}>Finish every {lastRound.label} tie to unlock the next round.</Text>
+            )}
+            {/* SD-125 — the plate: a consolation knockout for first-round losers (no medals). */}
+            {plateSt && (
+              <View style={{ gap: theme.spacing(2) }}>
+                <Text style={textStyles.h3}>🍽️ Plate (first-round losers)</Text>
+                {plateSt.winnerId && <Text style={st.plateWinner}>🍽️ Plate winner: {nameOf(plateSt.winnerId)}</Text>}
+                <DrawColumns rounds={plateSt.rounds} sideName={sideName} sideColor={sideColor} />
+                {drawPickers(plateSt.rounds)}
+                {canManage && plateSt.ready.length > 0 && (
+                  <Button
+                    label={busy ? 'Creating…' : `▶ Create ${plateSt.ready.length} plate match${plateSt.ready.length === 1 ? '' : 'es'}`}
+                    variant="ghost"
+                    onPress={() => createReady(plateSt.ready)}
+                    disabled={busy}
+                  />
+                )}
+              </View>
+            )}
+            {canManage && savedStruct?.plate && plateFrom && plateFrom.length >= 2 && (
+              <Button
+                label={busy ? 'Creating…' : `🍽️ Create the plate (${plateFrom.length} first-round losers)`}
+                variant="ghost"
+                onPress={createPlate}
+                disabled={busy}
+              />
             )}
             <FormError message={error} />
           </>
@@ -405,6 +487,38 @@ function AdvanceNote({ p, canManage, busy, nameOf, onPick }: {
         disabled={busy || !pick || reason.trim().length < 3}
         onPress={() => { if (pick) void onPick(pick, reason).then((ok) => { if (ok) { setPick(null); setReason(''); } }); }}
       />
+    </View>
+  );
+}
+
+/** SD-125 — a draw as side-by-side round columns. Only this area scrolls
+ *  sideways (the page stays put at 375 px). */
+function DrawColumns({ rounds, sideName, sideColor }: {
+  rounds: DrawRound[]; sideName: (s: DrawSide) => string; sideColor: (s: DrawSide) => string | undefined;
+}) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled contentContainerStyle={st.cols}>
+      {rounds.map((r) => (
+        <View key={r.stage} style={st.col}>
+          <Text style={st.colHead} numberOfLines={1}>{r.label}</Text>
+          <View style={st.colBody}>
+            {r.nodes.map((n) => <DrawNodeCard key={n.slot} n={n} sideName={sideName} sideColor={sideColor} />)}
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function DrawNodeCard({ n, sideName, sideColor }: { n: DrawNode; sideName: (s: DrawSide) => string; sideColor: (s: DrawSide) => string | undefined }) {
+  if (n.pairing) return <PairingCard p={n.pairing} />;
+  if (n.home.kind === 'bye' && n.away.kind === 'bye') return <View style={[st.matchCard, st.nodeEmpty]}><Text style={st.vs}>—</Text></View>;
+  const bye = n.home.kind === 'bye' || n.away.kind === 'bye';
+  return (
+    <View style={[st.matchCard, bye && st.nodeEmpty]}>
+      <Slot slot={{ name: sideName(n.home), color: sideColor(n.home), bye: n.home.kind === 'bye', tbd: n.home.kind === 'tbd' }} />
+      <View style={st.vsRow}><Text style={st.vs}>{bye ? 'bye' : 'vs'}</Text></View>
+      <Slot slot={{ name: sideName(n.away), color: sideColor(n.away), bye: n.away.kind === 'bye', tbd: n.away.kind === 'tbd' }} />
     </View>
   );
 }
@@ -512,4 +626,10 @@ const st = StyleSheet.create({
   },
   pickHead: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
   pickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  cols: { gap: theme.spacing(3), paddingBottom: theme.spacing(2) },
+  col: { width: 210, gap: theme.spacing(2) },
+  colHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  colBody: { flex: 1, justifyContent: 'space-around', gap: theme.spacing(2) },
+  nodeEmpty: { opacity: 0.6 },
+  plateWinner: { color: theme.colors.accent, fontSize: theme.font.body, fontWeight: '800' },
 });

@@ -8,7 +8,7 @@ order: 65
 updated: 2026-10-11
 ---
 
-In a football tournament, cards follow a player from match to match. The app keeps a discipline table from every finished match. It works out who must sit out the team's next match, and warns you if you pick that player.
+In a football tournament, cards follow a player from match to match. For hockey, handball, basketball and kabaddi, see [Suspensions in hockey, handball, basketball and kabaddi](/guides/team-sport-discipline-and-suspensions/). The app keeps a discipline table from every finished match. It works out who must sit out the team's next match, and warns you if you pick that player.
 
 ## Before you start
 - You need a tournament with football in it. The table builds itself from the cards scorers log during matches. See [How to score a football match](/guides/score-football/).

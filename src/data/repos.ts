@@ -21,6 +21,7 @@ import { planStatSync, applyStatWrites, onlyKeys, changedKeys, type MatchTotals 
 import { planAppearances, sideResults, subsCameOn, type AppearanceWrite } from './appearances';
 import { matchSideOf, planOpponentRepair } from './lineOpponent';
 import { mergeSportFormat } from './formatPatch';
+import { forfeitFor } from './walkover';
 import { isLiveTournament } from './tournamentForm';
 import {
   orSafe, parseVsQuery, rankByName, filterByName, capIds, collapseTeams, liveOnly, selectMatchHits, matchNames, narrowBySports,
@@ -73,8 +74,8 @@ import { mergeMatchConfig } from '../core/matchConfig';
 import { seriesLegFormat, readSeriesMeta, deriveSeries, aggregatePriorFor, type SeriesFormat } from './series';
 import { aggregateLegFormat } from './matchFormat';
 import {
-  rubberFormat, rubberPlayers, rubberLabel, lineupOf, lineupKey, rubbersToStop, rubbersToRestore, decidedBy, tieResultText, tieSpecOf,
-  TIE_KEYS, type TieSpec, type TieLineup,
+  rubberFormat, rubberPlayers, rubberLabel, lineupOf, lineupKey, tieSettlePlan, decidedBy, tieResultText, tieSpecOf, specForStage,
+  parseLineup, LINEUP_REFUSAL_TEXT, TIE_KEYS, type TieSpec, type TieLineup, type LineupRefusal,
 } from './teamTie';
 import type {
   Role,
@@ -2596,6 +2597,9 @@ async function flagWinners(matchId: string, winner: 'home' | 'away' | 'draw' | n
  *  the database has no `result` column yet (migration 0040): the outcome is saved
  *  the old way and the reason isn't. */
 export async function endMatchManually(matchId: string, r: MatchResult): Promise<'full' | 'legacy'> {
+  // SD-126: a conceded / awarded match counts its federation forfeit score in the
+  // table (result.forfeit; the board score stays in result.score).
+  if ((r.kind === 'conceded' || r.kind === 'awarded') && r.winner && r.forfeit === undefined) r = await withForfeit(matchId, r, r.kind);
   const winner: 'home' | 'away' | 'draw' | null =
     r.kind === 'draw' || r.kind === 'tie' ? 'draw' : r.kind === 'no_result' || r.kind === 'abandoned' ? null : r.winner ?? null;
   if (!isSupabaseConfigured || !supabase) {
@@ -2633,6 +2637,59 @@ export async function endMatchManually(matchId: string, r: MatchResult): Promise
   await flagWinners(matchId, winner);
   await syncMatchAppearances(matchId);
   return 'full';
+}
+
+/** SD-126 — the match's sport, state and format (its tournament's format for
+ *  the sport under the match's own), for the walkover / forfeit score. */
+async function forfeitContext(matchId: string) {
+  const m = await getMatch(matchId);
+  if (!m) return null;
+  const t = m.tournamentId ? (await getTournaments()).find((x) => x.id === m.tournamentId) : undefined;
+  const format = { ...((t?.formats?.[m.sport] as Record<string, unknown> | undefined) ?? {}), ...((m.format as Record<string, unknown> | undefined) ?? {}) };
+  return { m, format };
+}
+
+/** SD-126 — stamp `result.forfeit` (src/data/walkover.ts) on a walkover /
+ *  conceded / awarded result. Never fails the save: on any error the result
+ *  goes out as before (no table score). */
+async function withForfeit(matchId: string, r: MatchResult, kind: 'walkover' | 'conceded' | 'awarded'): Promise<MatchResult> {
+  if (!r.winner) return r;
+  try {
+    const ctx = await forfeitContext(matchId);
+    if (!ctx) return r;
+    const f = forfeitFor({ sport: ctx.m.sport, kind, winner: r.winner, board: kind === 'walkover' ? null : r.score ?? ctx.m.score ?? null, state: ctx.m.state, format: ctx.format });
+    const { forfeit: _old, ...rest } = r;
+    return f ? { ...rest, forfeit: f } : rest;
+  } catch {
+    return r;
+  }
+}
+
+/** SD-126 — re-score a tournament's past walkovers / forfeits in one sport with
+ *  the rule in force now (the organiser asks first): every completed walkover,
+ *  conceded or awarded match gets its `result.forfeit` set — or removed when the
+ *  rule is off / the board score stands. Returns how many results changed. */
+export async function recalcWalkovers(tournamentId: string, sport: SportId): Promise<number> {
+  const ms = (await getMatches(sport)).filter((m) => m.tournamentId === tournamentId && m.status === 'completed'
+    && (m.winner === 'home' || m.winner === 'away') && (m.walkover || m.result?.kind === 'conceded' || m.result?.kind === 'awarded'));
+  let changed = 0;
+  for (const m of ms) {
+    const winner = m.winner as 'home' | 'away';
+    const base: MatchResult = m.result ?? { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() };
+    const kind = m.walkover ? 'walkover' : (base.kind as 'conceded' | 'awarded');
+    const next = await withForfeit(m.id, { ...base, winner, forfeit: undefined }, kind);
+    if (JSON.stringify(next.forfeit ?? null) === JSON.stringify(m.result?.forfeit ?? null)) continue;
+    if (!isSupabaseConfigured || !supabase) {
+      const dm = demo.matches.find((x) => x.id === m.id);
+      if (dm) dm.result = next;
+    } else {
+      const res = await supabase.from('matches').update({ result: next, updated_at: new Date().toISOString() }).eq('id', m.id).select('id');
+      if (res.error) throw new Error(res.error.message);
+      if (!res.data?.length) continue;
+    }
+    changed += 1;
+  }
+  return changed;
 }
 
 /** End early with a winner (retirement / injury) — an awarded manual result. */
@@ -2799,10 +2856,13 @@ export interface NewTeamTie {
  *  home. No new table — see teamTie.ts. */
 export async function createTeamTie(input: NewTeamTie): Promise<{ seriesId: string; matches: Match[] }> {
   const seriesId = `tie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  // SD-127: a "by stage" spec becomes concrete here — group / league ties
+  // play their dead rubbers, knockout ties stop at the majority.
+  const spec = specForStage(input.spec, { stage: input.stage, tournamentId: input.tournamentId });
   const base = new Date(input.startsAt).getTime();
-  const gapMs = Math.max(0, input.spec.gap ?? 0) * 60_000;
+  const gapMs = Math.max(0, spec.gap ?? 0) * 60_000;
   const matches: Match[] = [];
-  for (let i = 0; i < input.spec.rubbers.length; i++) {
+  for (let i = 0; i < spec.rubbers.length; i++) {
     const m = await createMatch({
       tournamentId: input.tournamentId,
       sport: input.sport,
@@ -2813,7 +2873,7 @@ export async function createTeamTie(input: NewTeamTie): Promise<{ seriesId: stri
       startsAt: new Date(base + i * gapMs).toISOString(),
       hostIds: input.hostIds,
       venueName: input.venueName,
-      format: { ...(input.matchFormat ?? {}), ...rubberFormat(input.spec, i, { seriesId, teamAId: input.teamAId, name: input.name }) },
+      format: { ...(input.matchFormat ?? {}), ...rubberFormat(spec, i, { seriesId, teamAId: input.teamAId, name: input.name }) },
     });
     matches.push(m);
   }
@@ -2844,11 +2904,29 @@ export async function getTieRubbers(seriesId: string): Promise<Match[]> {
   return (data as unknown as MatchRow[]).map(toMatch);
 }
 
-/** Save one team's lineup on every rubber. Once BOTH lineups are in, each
- *  rubber not yet started gets its matchday squads (its 1 or 2 players a
- *  side), so it scores and credits like any singles / doubles match. The tie
- *  host enters it (the captains hand their lineups to the referee). */
+/** A lineup save the server refused (not that side's captain / admin / the
+ *  tie host, lineups already exchanged, or the tie has started). */
+export class TieLineupError extends Error {
+  constructor(public reason: LineupRefusal) { super(LINEUP_REFUSAL_TEXT[reason]); this.name = 'TieLineupError'; }
+}
+
+/** Save one team's lineup. Live (SD-127): the save_tie_lineup RPC — the tie
+ *  host, or that side's captain / vice-captain / team admin. Lineups are
+ *  SEALED: a side's lineup is kept off the public rubbers until both are in;
+ *  then the server writes both onto every rubber and gives each unstarted
+ *  rubber its matchday squads (its 1 or 2 players a side). Before the
+ *  migration (or in demo mode) the host writes the rubbers directly, as
+ *  before. */
 export async function saveTieLineup(seriesId: string, side: 'home' | 'away', lineup: TieLineup): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.rpc('save_tie_lineup', { p_series: seriesId, p_side: side, p_lineup: { pos: lineup.pos, pairs: lineup.pairs } });
+    if (!error) return;
+    if (!isMissingSchema(error)) {
+      const reason = (['not_allowed', 'exchanged', 'started'] as LineupRefusal[]).find((r) => error.message?.includes(r));
+      throw reason ? new TieLineupError(reason) : new Error(error.message);
+    }
+    // the database predates the RPC → the host's direct write below
+  }
   const rubbers = await getTieRubbers(seriesId);
   const spec = rubbers.map(tieSpecOf).find(Boolean);
   if (!spec) throw new Error('This tie could not be found.');
@@ -2859,6 +2937,30 @@ export async function saveTieLineup(seriesId: string, side: 'home' | 'away', lin
     m.format = { ...(m.format ?? {}), [lineupKey(side)]: json };
   }
   await applyTieSquads(rubbers, spec);
+}
+
+/** SD-127 — both sides' lineup state as THIS viewer may see it: `in` for each
+ *  side, the lineup when visible (both in, or the viewer is the tie host or
+ *  manages that side), and which sides the viewer may enter. Live: the
+ *  get_tie_lineups RPC (sealed lineups); otherwise read off the rubbers. */
+export interface TieLineupView {
+  home: { in: boolean; lineup: TieLineup | null };
+  away: { in: boolean; lineup: TieLineup | null };
+  /** null = unknown (demo / old database): the caller falls back to its own rule */
+  can: { home: boolean; away: boolean; host: boolean } | null;
+}
+export async function getTieLineups(seriesId: string, rubbers?: Match[]): Promise<TieLineupView> {
+  const fromRubbers = async (): Promise<TieLineupView> => {
+    const rs = rubbers ?? await getTieRubbers(seriesId);
+    const h = lineupOf(rs, 'home'), a = lineupOf(rs, 'away');
+    return { home: { in: !!h, lineup: h }, away: { in: !!a, lineup: a }, can: null };
+  };
+  if (!isSupabaseConfigured || !supabase) return fromRubbers();
+  const { data, error } = await supabase.rpc('get_tie_lineups', { p_series: seriesId });
+  if (error || !data) return fromRubbers();
+  const d = data as { home?: { in?: boolean; lineup?: unknown }; away?: { in?: boolean; lineup?: unknown }; can?: { home?: boolean; away?: boolean; host?: boolean } };
+  const side = (x?: { in?: boolean; lineup?: unknown }) => ({ in: !!x?.in, lineup: x?.lineup ? parseLineup(JSON.stringify(x.lineup)) : null });
+  return { home: side(d.home), away: side(d.away), can: { home: !!d.can?.home, away: !!d.can?.away, host: !!d.can?.host } };
 }
 
 /** Write each unstarted rubber's squads from the two lineups (both needed). */
@@ -2877,25 +2979,37 @@ async function applyTieSquads(rubbers: Match[], spec: TieSpec): Promise<void> {
 }
 
 /** Keep a tie's unplayed rubbers in step with its result: in "stop at the
- *  majority" mode, rubbers still to play once the tie is decided are set
- *  aside (cancelled + `__tieDead`); if a correction undoes the decision they
- *  come back. Idempotent — safe to call after every rubber result. */
+ *  majority" mode, rubbers still to play once a side has a majority are set
+ *  aside (cancelled + `__tieDead`); if a correction undoes the majority they
+ *  come back (teamTie.tieSettlePlan). Idempotent — safe to call after every
+ *  rubber result. Live (SD-127): the settle_team_tie RPC, which any scorer or
+ *  host of a rubber in the tie (or the tournament's managers) may call — it
+ *  computes the plan on the server, so no device needs write access to the
+ *  other rubbers. Before the migration, and in demo mode, the plan is applied
+ *  from here (the host's device can write every rubber). */
 export async function settleTie(seriesId: string): Promise<{ stopped: number; restored: number }> {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.rpc('settle_team_tie', { p_series: seriesId });
+    if (!error) {
+      const d = (data ?? {}) as { stopped?: number; restored?: number };
+      return { stopped: d.stopped ?? 0, restored: d.restored ?? 0 };
+    }
+    if (!isMissingSchema(error)) return { stopped: 0, restored: 0 }; // not a manager of this tie: nothing to do
+  }
   const rubbers = await getTieRubbers(seriesId);
   const spec = rubbers.map(tieSpecOf).find(Boolean);
   const series = deriveSeries(rubbers)[0];
   if (!spec || !series) return { stopped: 0, restored: 0 };
-  const stop = rubbersToStop(series, spec);
-  for (const m of stop) {
-    await setMatchFormat(m.id, { [TIE_KEYS.dead]: true });
-    await setMatchStatus(m.id, 'cancelled');
+  const plan = tieSettlePlan(series, spec);
+  for (const id of plan.stop) {
+    await setMatchFormat(id, { [TIE_KEYS.dead]: true });
+    await setMatchStatus(id, 'cancelled');
   }
-  const back = rubbersToRestore(series);
-  for (const m of back) {
-    await setMatchFormat(m.id, { [TIE_KEYS.dead]: false });
-    await setMatchStatus(m.id, 'scheduled');
+  for (const id of plan.restore) {
+    await setMatchFormat(id, { [TIE_KEYS.dead]: false });
+    await setMatchStatus(id, 'scheduled');
   }
-  return { stopped: stop.length, restored: back.length };
+  return { stopped: plan.stop.length, restored: plan.restore.length };
 }
 
 /** After a rubber's result has gone out: settle the tie and say whether THIS
@@ -5159,12 +5273,14 @@ export async function setContingentParticipation(tournamentId: string, name: str
 export async function walkoverMatch(matchId: string, winner: 'home' | 'away'): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     const mm = demo.matches.find((x) => x.id === matchId);
-    if (mm) { mm.status = 'completed'; mm.winner = winner; mm.walkover = true; mm.result = { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() }; mm.format = { ...(mm.format ?? {}), __walkover: true }; }
+    // SD-126: the federation walkover score for the table (result.forfeit)
+    const r = mm ? await withForfeit(matchId, { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() }, 'walkover') : null;
+    if (mm && r) { mm.status = 'completed'; mm.winner = winner; mm.walkover = true; mm.result = r; mm.format = { ...(mm.format ?? {}), __walkover: true }; }
     return;
   }
   // The result (with its reason) lives in matches.result; `__walkover` stays only
   // as the marker older builds read to show "w/o" instead of a score.
-  await endMatchManually(matchId, { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() });
+  await endMatchManually(matchId, await withForfeit(matchId, { kind: 'conceded', winner, reason: 'Walkover', at: new Date().toISOString() }, 'walkover'));
   const { data } = await supabase.from('matches').select('format').eq('id', matchId).maybeSingle();
   const format = { ...((data?.format as Record<string, unknown>) ?? {}), __walkover: true };
   await supabase.from('matches').update({ status: 'completed', winner, format }).eq('id', matchId);

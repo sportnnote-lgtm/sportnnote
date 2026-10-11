@@ -81,6 +81,35 @@ export function StructureEditor({ value, onChange, sport }: {
         </View>
       )}
 
+      {/* SD-124/125 — how the knockout is drawn and run. */}
+      {!manual && (shape === 'knockout' || shape === 'groups') && (
+        <View style={st.block}>
+          <View style={st.line}>
+            <Text style={st.label}>Bracket</Text>
+            <SelectChip label="Single elimination" active={cfg.bracket !== 'double'} onPress={() => onChange('structBracket', 'single')} />
+            <SelectChip label="Double elimination" active={cfg.bracket === 'double'} onPress={() => onChange('structBracket', 'double')} />
+          </View>
+          {cfg.bracket === 'double' ? (
+            <SelectChip
+              label={cfg.gfReset !== false ? '✓ Grand-final reset' : 'Grand-final reset'}
+              active={cfg.gfReset !== false}
+              onPress={() => onChange('structReset', cfg.gfReset === false)}
+            />
+          ) : (
+            <SelectChip
+              label={cfg.plate ? '✓ Plate for first-round losers' : 'Plate for first-round losers'}
+              active={!!cfg.plate}
+              onPress={() => onChange('structPlate', !cfg.plate)}
+            />
+          )}
+          <View style={st.line}>
+            <Text style={st.label}>Seeding</Text>
+            <SelectChip label="Standard" active={cfg.seeding !== 'draw'} onPress={() => onChange('structSeeding', 'standard')} />
+            <SelectChip label="Draw order" active={cfg.seeding === 'draw'} onPress={() => onChange('structSeeding', 'draw')} />
+          </View>
+        </View>
+      )}
+
       <Text style={textStyles.muted}>{describeStructure(cfg)}.</Text>
     </View>
   );

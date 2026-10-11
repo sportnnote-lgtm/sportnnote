@@ -16,7 +16,7 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import { useTeams, useTournamentById } from '../data/hooks';
 import { createSeries, createTeamTie, getMyPlayerId } from '../data/repos';
 import { TieSetup } from '../components/TieSetup';
-import { TIE_SPORTS, type TieSpec } from '../data/teamTie';
+import { TIE_SPORTS, withDeadRule, type TieSpec } from '../data/teamTie';
 import { useAuth } from '../core/auth';
 import type { SeriesFormat } from '../data/series';
 import type { SportId } from '../core/types';
@@ -72,7 +72,8 @@ export default function CreateSeriesScreen() {
       if (isTie) {
         if (!tieSpec) { setBusy(false); return setError('Pick how the tie is played.'); }
         const { seriesId } = await createTeamTie({
-          tournamentId, sport, teamAId: teamA, teamBId: teamB, spec: tieSpec,
+          // SD-127: a one-off tie has no stage — "by stage" means stop at the majority
+          tournamentId, sport, teamAId: teamA, teamBId: teamB, spec: tieSpec.deadByStage ? withDeadRule(tieSpec, 'stop') : tieSpec,
           name: name.trim() || undefined, startsAt: when.toISOString(), hostIds: myId ? [myId] : [],
         });
         nav.replace('Series', { seriesId });
@@ -115,7 +116,7 @@ export default function CreateSeriesScreen() {
             </View>
 
             {isTie && (
-              <TieSetup sport={sport} value={tieSpec} onChange={setTieSpec} teamAName={teamName(teamA) || undefined} teamBName={teamName(teamB) || undefined} />
+              <TieSetup sport={sport} value={tieSpec} onChange={setTieSpec} oneOff teamAName={teamName(teamA) || undefined} teamBName={teamName(teamB) || undefined} />
             )}
 
             {format !== 'aggregate' && !isTie && (

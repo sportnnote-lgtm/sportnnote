@@ -834,6 +834,16 @@ export interface MatchResult {
   /** cricket win/tie: count the match in net run rate with all overs (default true) */
   countNrr?: boolean;
   score?: { home: number; away: number };
+  /** SD-126 — a walkover / forfeit's score for the TABLE (federation default or
+   *  the tournament's `walkoverScore`, src/data/walkover.ts). `score` stays the
+   *  board; absent on older results (they count 0-0 until recalculated). */
+  forfeit?: {
+    score: { home: number; away: number };
+    sets?: { home: number; away: number };
+    points?: { home: number; away: number };
+    /** e.g. "FIFA 3-0 (walkover)" */
+    rule: string;
+  };
   byId?: string;
   byName?: string;
   at: string;

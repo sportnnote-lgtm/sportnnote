@@ -25,9 +25,10 @@ import { swissRound1, swissPairRound, suggestedSwissRounds } from '../data/swiss
 import { swissField } from '../data/swissField';
 import { chessRatingsOf, ratingListFor, ratingOn, ratingSeedOrder } from '../data/chessRatings';
 import { entrantPlayers } from '../data/chessCrosstable';
-import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
+import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, seedFromGroups, seededRound, advancementBasis, crossoverFits, type GroupTable } from '../data/groups';
+import { doubleElimOpeners } from '../data/elimDraws';
 import { teamStandings, standingsConfigFromFormat, byePointsFor, FIDE_SWISS_ORDER } from '../data/standings';
-import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners, isEliminationStage } from '../data/bracket';
+import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners, isEliminationStage, stageLabel, KO_SLOT_KEY } from '../data/bracket';
 import { useAuth } from '../core/auth';
 import type { SportId } from '../core/types';
 import type { FormatField } from '../sports/types';
@@ -39,7 +40,20 @@ type Structure = 'league' | 'knockout' | 'groups' | 'swiss' | 'advance';
 
 /** `white` (SD-26): who has White — chess Swiss pairings write it into the
  *  fixture's format (the game opens with it; old fixtures default to home). */
-interface Draft extends GeneratedPairing { when: Date; group?: string; stage?: string; byes?: string[]; white?: 'home' | 'away' }
+interface Draft extends GeneratedPairing {
+  when: Date; group?: string; stage?: string; byes?: string[]; white?: 'home' | 'away';
+  /** SD-124: bracket slot (saved as `__koSlot`) — the next round pairs by it */
+  slot?: number;
+  /** SD-125: extra format keys a draw's opening matches carry (seed list, reset) */
+  extra?: Record<string, string | number | boolean>;
+}
+
+/** Fisher–Yates shuffle (a random knockout draw). */
+function shuffled<T>(xs: T[]): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
 
 // Human labels for the knockout stages seedKnockout/knockoutRoundLabel emit.
 const STAGE_LABEL: Record<string, string> = { final: 'Final', sf: 'Semi-final', qf: 'Quarter-final', r16: 'Round of 16', r32: 'Round of 32' };
@@ -88,6 +102,13 @@ export default function GenerateFixturesScreen() {
   // Advance target when coming from the group stage: a knockout, or a Super
   // round-robin phase (Asia-Cup style). From a Super phase it's always knockout.
   const [advanceTo, setAdvanceTo] = useState<'knockout' | 'super' | 'double_chance'>('knockout');
+  // SD-124/125 — the knockout's draw: single or double elimination (+ grand-final
+  // reset), a plate for first-round losers, and how it is seeded. 'random' is a
+  // straight knockout's random draw; 'draw' keeps the old pairing order.
+  const [bracketKind, setBracketKind] = useState<'single' | 'double'>('single');
+  const [gfReset, setGfReset] = useState(true);
+  const [plate, setPlate] = useState(false);
+  const [seeding, setSeeding] = useState<'standard' | 'random' | 'draw'>('standard');
   const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
   const [gapMin, setGapMin] = useState('90');
   const [venue, setVenue] = useState('');
@@ -135,6 +156,10 @@ export default function GenerateFixturesScreen() {
     setBestPlaced(String(savedStruct.advanceBest));
     setDoubleRound(savedStruct.doubleRound);
     setAdvanceTo(savedStruct.superPhase ? 'super' : 'knockout');
+    setBracketKind(savedStruct.bracket ?? 'single');
+    setGfReset(savedStruct.gfReset !== false);
+    setPlate(!!savedStruct.plate);
+    setSeeding(savedStruct.seeding === 'draw' ? 'draw' : 'standard');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedStruct, sport]);
 
@@ -283,6 +308,20 @@ export default function GenerateFixturesScreen() {
         setDrafts(openers.map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, when: at(i) })));
         return;
       }
+      if (bracketKind === 'double') {
+        // SD-125: pools → double elimination, seeded by the qualifiers' order.
+        if (effectiveQualifiers.length < 3) return setError('Double elimination needs at least 3 teams.');
+        setDrafts(doubleElimOpeners(effectiveQualifiers.map((q) => q.teamId), gfReset)
+          .map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, slot: o.slot, extra: o.extra, when: at(i) })));
+        return;
+      }
+      if (seeding !== 'draw') {
+        // SD-124: cross-over from the groups (A1 v B2 …) or seeded positions,
+        // byes to the top seeds — saved with bracket slots.
+        const sr = seedFromGroups(effectiveQualifiers);
+        setDrafts(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
+        return;
+      }
       if (playIn && !koPlan.clean) {
         const pi = seedPlayIn(koFieldIds);
         setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
@@ -314,6 +353,19 @@ export default function GenerateFixturesScreen() {
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
     setError(null);
+    if (structure === 'knockout' && seeding !== 'draw') {
+      // SD-124: the pick order is the seed list (or a random draw); SD-125:
+      // double elimination starts with the winners' round 1.
+      const seeds = seeding === 'random' ? shuffled(selected) : selected;
+      if (bracketKind === 'double') {
+        if (seeds.length < 3) return setError('Double elimination needs at least 3 teams.');
+        setDrafts(doubleElimOpeners(seeds, gfReset).map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, slot: o.slot, extra: o.extra, when: at(i) })));
+        return;
+      }
+      const sr = seededRound(seeds);
+      setDrafts(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
+      return;
+    }
     if (structure === 'knockout' && playIn && !koPlan.clean) {
       const pi = seedPlayIn(selected);
       setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
@@ -338,7 +390,10 @@ export default function GenerateFixturesScreen() {
       // knockout tie always resolves, a league / group / Swiss game's draw stands.
       const sportDefaults = defaultsFor(getSport(sport).formatFields ?? [], 'tournament');
       for (const d of drafts) {
-        const format = matchFormatFor(tournament, sport, isEliminationStage(d.stage), sportDefaults);
+        const base = matchFormatFor(tournament, sport, isEliminationStage(d.stage), sportDefaults);
+        // SD-124/125: the bracket slot + any draw keys ride on the fixture's format.
+        const drawKeys = { ...(d.extra ?? {}), ...(d.slot !== undefined ? { [KO_SLOT_KEY]: d.slot } : {}) };
+        const format = Object.keys(drawKeys).length ? { ...(base ?? {}), ...drawKeys } : base;
         if (tiesOn && effTie) {
           // SD-48: the pairing becomes one tie (its rubbers share the slot's time)
           await createTeamTie({
@@ -368,6 +423,9 @@ export default function GenerateFixturesScreen() {
           shape: structure === 'groups' ? 'groups' : structure === 'knockout' ? 'knockout' : structure === 'swiss' ? 'swiss' : 'league',
           groupCount, advanceTopN: Math.max(1, parseInt(topK, 10) || 1), advanceBest: Math.max(0, parseInt(bestPlaced, 10) || 0),
           doubleRound, superPhase: advanceTo === 'super', manualStandings: false, swissRounds: swissTargetRounds,
+          ...(structure === 'knockout' || structure === 'groups'
+            ? { bracket: bracketKind, gfReset, plate: bracketKind === 'single' && plate, seeding: seeding === 'draw' ? 'draw' as const : 'standard' as const }
+            : {}),
         };
         const rank = (s?: string) => (s === 'league_knockout' ? 2 : s === 'knockout' ? 1 : 0);
         const field = structureFieldFor(cfg.shape);
@@ -393,6 +451,12 @@ export default function GenerateFixturesScreen() {
           // Keep the coarse label representative in a multi-sport meet (never downgrade).
           structure: rank(field) >= rank(tournament?.structure) ? field : tournament?.structure,
         });
+      }
+      // SD-125: advancing groups into a single-elimination knockout — remember
+      // the plate choice so the bracket offers the plate after round 1.
+      if (structure === 'advance' && target === 'knockout' && bracketKind === 'single' && params.tournamentId) {
+        const before = tournament?.formats?.[sport] as Record<string, unknown> | undefined;
+        if ((before?.structPlate === true) !== plate) await patchTournamentFormat(params.tournamentId, sport, { structPlate: plate });
       }
       nav.goBack();
     } catch (e) {
@@ -560,6 +624,11 @@ export default function GenerateFixturesScreen() {
                 ⚠️ {sourceMatches.filter((m) => m.status === 'completed').length}/{sourceMatches.length} {advanceFromSuper ? 'Super-phase' : 'group'} matches finished — finishing all of them first makes the standings final. You can still preview now.
               </Text>
             )}
+            {!advanceFromSuper && !manualAdvance && (parseInt(bestPlaced, 10) || 0) > 0 && advancementBasis(sourceTables) === 'perGame' && (
+              <Text style={textStyles.muted}>
+                ⓘ The groups are different sizes, so best-placed teams are compared per game played: points per game, then goal (score) difference per game, then scored per game.
+              </Text>
+            )}
             {effectiveQualifiers.length > 0 ? (
               <Text style={textStyles.muted}>
                 {target === 'super'
@@ -590,8 +659,80 @@ export default function GenerateFixturesScreen() {
           </View>
         )}
         {structure === 'advance' && tiesOn && effTie && <Text style={textStyles.muted}>👥 Knockout fixtures are created as team ties ({effTie.rubbers.length} rubbers).</Text>}
-        {/* Play-in round — offered when the knockout field isn't a clean power of two. */}
-        {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && koFieldIds.length >= 3 && !koPlan.clean && (
+        {/* SD-124/125 — the knockout's draw: single / double elimination, plate, seeding. */}
+        {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && (
+          <View style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.muted}>Bracket</Text>
+            <View style={st.chips}>
+              <SelectChip label="🏆 Single elimination" active={bracketKind === 'single'} onPress={() => { setBracketKind('single'); invalidate(); }} />
+              <SelectChip label="🔁 Double elimination" active={bracketKind === 'double'} onPress={() => { setBracketKind('double'); if (seeding === 'draw') setSeeding('standard'); invalidate(); }} />
+            </View>
+            {bracketKind === 'double' ? (
+              <>
+                <SelectChip label={gfReset ? '✓ Grand-final reset' : 'Grand-final reset'} active={gfReset} onPress={() => { setGfReset((v) => !v); invalidate(); }} />
+                <Text style={textStyles.muted}>
+                  Lose twice and you're out: a winners' bracket, a losers' bracket, then a grand final.{' '}
+                  {gfReset ? "If the losers'-bracket team wins the grand final, one more match decides it (the other team hadn't lost yet)." : 'One grand final decides it.'}
+                </Text>
+              </>
+            ) : (
+              <>
+                <SelectChip label={plate ? '✓ Plate for first-round losers' : 'Plate for first-round losers'} active={plate} onPress={() => { setPlate((v) => !v); invalidate(); }} />
+                {plate && <Text style={textStyles.muted}>First-round losers play their own small knockout (the plate). It gives no medals; the bracket names the plate winner. Start it from the bracket once round 1 is done.</Text>}
+              </>
+            )}
+            <Text style={textStyles.muted}>Seeding</Text>
+            <View style={st.chips}>
+              {structure === 'knockout' ? (
+                <>
+                  <SelectChip label="🥇 Seeded (list order)" active={seeding === 'standard'} onPress={() => { setSeeding('standard'); invalidate(); }} />
+                  <SelectChip label="🎲 Random draw" active={seeding === 'random'} onPress={() => { setSeeding('random'); invalidate(); }} />
+                  {bracketKind === 'single' && <SelectChip label="Draw order (1v2, 3v4)" active={seeding === 'draw'} onPress={() => { setSeeding('draw'); invalidate(); }} />}
+                </>
+              ) : (
+                <>
+                  <SelectChip label="🥇 Standard seeding" active={seeding !== 'draw'} onPress={() => { setSeeding('standard'); invalidate(); }} />
+                  {bracketKind === 'single' && <SelectChip label="Draw order (old)" active={seeding === 'draw'} onPress={() => { setSeeding('draw'); invalidate(); }} />}
+                </>
+              )}
+            </View>
+            <Text style={textStyles.muted}>
+              {seeding === 'draw'
+                ? 'Old order: teams are paired as listed, with no seeding.'
+                : seeding === 'random' && structure === 'knockout'
+                  ? 'Every place in the draw is drawn at random.'
+                  : structure === 'advance' && bracketKind === 'single' && crossoverFits(effectiveQualifiers)
+                    ? 'Cross-over: A1 v B2, B1 v A2 … Group winners meet runners-up, and two teams from one group can only meet in the final.'
+                    : structure === 'advance'
+                      ? 'Seeded: group winners first (best record first), then runners-up, then best-placed. Seeds 1 and 2 are in opposite halves; teams from one group are kept apart in round 1 where possible.'
+                      : `Seed 1 plays the lowest seed, and seed 2 starts at the bottom of the draw, so 1 and 2 can only meet in the final.`}
+              {seeding !== 'draw' && bracketKind === 'single' && koFieldIds.length >= 3 && !koPlan.clean
+                ? ` ${koFieldIds.length} isn't a full bracket, so the top ${koPlan.byes} get a bye into the ${KO_STAGE_LABEL[koPlan.mainStage]}.`
+                : ''}
+            </Text>
+            {structure === 'knockout' && seeding === 'standard' && selected.length >= 2 && (
+              <View style={st.seedList}>
+                {selected.map((id, i) => (
+                  <View key={id} style={st.rowBetween}>
+                    <Text style={[textStyles.body, st.flex]} numberOfLines={1}>{i + 1}. {teamName[id] ?? id}</Text>
+                    {i > 0 && (
+                      <Text
+                        style={st.link}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Move ${teamName[id] ?? 'team'} up to seed ${i}`}
+                        onPress={() => { invalidate(); setTouchedSel(true); setSelected((p) => { const a = [...p]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; return a; }); }}
+                      >▲ Up</Text>
+                    )}
+                  </View>
+                ))}
+                <Text style={textStyles.muted}>The order you pick teams in is the seed order. Tap ▲ to move a team up.</Text>
+              </View>
+            )}
+          </View>
+        )}
+        {/* Play-in round — offered when the knockout field isn't a clean power of two (old draw order only;
+            standard seeding gives the top seeds byes on its own). */}
+        {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && seeding === 'draw' && bracketKind === 'single' && koFieldIds.length >= 3 && !koPlan.clean && (
           <View style={{ gap: theme.spacing(2) }}>
             <View style={st.chips}>
               <SelectChip label="⚖️ Play-in round" active={playIn} onPress={() => { setPlayIn((v) => !v); invalidate(); }} />
@@ -610,7 +751,7 @@ export default function GenerateFixturesScreen() {
               ? `⚖️ If level at full time: ${tournament.knockoutFormat.decider === 'extra_time'
                   ? `extra time (2×${tournament.knockoutFormat.extraTimeMinutes ?? 15}′), then penalties`
                   : 'penalties straightaway'} — from the tournament's knockout format.`
-              : '⚖️ No knockout format set on this tournament — level games will stand as a draw. Set it in the tournament to add extra time / penalties.'}
+              : '⚖️ No knockout format set — level knockout games go to extra time, then penalties. Set it in the tournament to change this.'}
           </Text>
         )}
 
@@ -651,7 +792,7 @@ export default function GenerateFixturesScreen() {
                     )}
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
-                  <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? d.stage.toUpperCase() : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
+                  <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? stageLabel(d.stage) : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
                 </View>
               ))}
               <Button label={busy ? 'Creating…' : `✅ Create ${drafts.length} match${drafts.length === 1 ? '' : 'es'}`} onPress={create} disabled={busy} />
@@ -674,5 +815,6 @@ const st = StyleSheet.create({
   draftCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
   notCertified: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
+  seedList: { gap: theme.spacing(1), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
   groupHead: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
 });

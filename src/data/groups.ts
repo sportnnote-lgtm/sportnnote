@@ -12,7 +12,8 @@
 import type { Match, SportId, TournamentEntry } from '../core/types.ts';
 import { teamStandings, defaultStandingsConfig, seedKey, type TeamStanding, type StandingsConfig } from './standings.ts';
 import type { GeneratedPairing } from './fixtures.ts';
-import { isEliminationStage } from './bracket.ts';
+import { isEliminationStage, bracketSeedOrder, seedPlayIn, planKnockout, stageForTeams, type KoStage } from './bracket.ts';
+import type { TieBreaker } from './standings.ts';
 
 /** One group's ranked table. */
 export interface GroupTable { name: string; rows: TeamStanding[] }
@@ -34,17 +35,38 @@ export interface Qualifier {
  *  teams from different groups never met (`seedKey`: h2h skipped, ITTF games /
  *  points ratio → overall ratios; chess Sonneborn-Berger and wins as they are)
  *  — then name. */
-function seedCmp(cfg: StandingsConfig) {
+function seedCmp(cfg: StandingsConfig, perGame = false) {
+  const pts = (t: TeamStanding) => (perGame ? perGameOf(t, t.points) : t.points);
   return (x: TeamStanding, y: TeamStanding): number => {
-    if (y.points !== x.points) return y.points - x.points;
+    if (pts(y) !== pts(x)) return pts(y) - pts(x);
     for (const t of cfg.order) {
-      const kx = seedKey(x, t);
-      const ky = seedKey(y, t);
-      if (kx === null || ky === null || kx === ky) continue;
+      let kx = seedKey(x, t);
+      let ky = seedKey(y, t);
+      if (kx === null || ky === null) continue;
+      // SD-124: counting keys (difference, scored, wins…) per game played;
+      // ratios and rates are already size-free.
+      if (perGame && PER_GAME_KEYS.has(t)) { kx = perGameOf(x, kx); ky = perGameOf(y, ky); }
+      if (kx === ky) continue;
       return ky > kx ? 1 : -1;
     }
     return x.name.localeCompare(y.name);
   };
+}
+
+/** Tie-breakers that grow with every game played — compared per game when the
+ *  groups are different sizes (ratios / percentages / NRR are left as they are). */
+const PER_GAME_KEYS = new Set<TieBreaker>(['diff', 'for', 'wins', 'sb', 'gamesDiff', 'pointsDiff', 'rubbersDiff', 'boardPoints', 'fairPlay'] as TieBreaker[]);
+const perGameOf = (t: TeamStanding, v: number): number => (t.played > 0 ? v / t.played : 0);
+
+/**
+ * SD-124 — how teams from different groups are compared. Equal groups: the
+ * totals (points, then the sport's chain). Groups of different sizes (22 teams
+ * in 4 groups → 6, 6, 5, 5): a team in a bigger group has played more, so the
+ * comparison is **per game played** — points per game, then goal (score)
+ * difference per game, scored per game … — the size-neutral average.
+ */
+export function advancementBasis(tables: GroupTable[]): 'total' | 'perGame' {
+  return new Set(tables.map((t) => t.rows.length)).size > 1 ? 'perGame' : 'total';
 }
 
 /** Per-group tables for a sport: partition the tournament's matches by their
@@ -115,7 +137,7 @@ export function standingsPhases(
  * `seedKnockout` pairs into a bracket.
  */
 export function advancement(tables: GroupTable[], topPerGroup: number, bestPlacedSlots = 0, cfg: StandingsConfig = defaultStandingsConfig('football')): Qualifier[] {
-  const cmp = seedCmp(cfg);
+  const cmp = seedCmp(cfg, advancementBasis(tables) === 'perGame');
   const direct: { q: Qualifier; row: TeamStanding }[] = [];
   const bestPool: { row: TeamStanding; group: string }[] = [];
   for (const t of tables) {
@@ -161,6 +183,118 @@ export function seedKnockout(qualified: Qualifier[]): GeneratedPairing[] {
   return ties.map(([h, a]) => ({ homeId: h.teamId, awayId: a.teamId, round: 1 }));
 }
 
+/* ------------------------ SD-124: standard seeding ------------------------ */
+
+/** One first-round tie with its bracket slot (0 = top of the draw). */
+export interface SeededTie extends GeneratedPairing { slot: number }
+/** A seeded first round: the ties (in bracket order), the teams that bye into
+ *  the next round (top seeds), the stage the ties are tagged with, and how it
+ *  was seeded (for the note under the preview). */
+export interface SeededRound {
+  ties: SeededTie[];
+  byeIds: string[];
+  stage: KoStage;
+  method: 'crossover' | 'seeded';
+}
+
+const isPow2 = (n: number) => n >= 1 && (n & (n - 1)) === 0;
+
+/** Every group sends exactly its winner and runner-up, and the number of groups
+ *  is 2, 4, 8 or 16 — the shape the fixed cross-over table covers. */
+export function crossoverFits(q: Qualifier[]): boolean {
+  if (q.length < 4 || !isPow2(q.length)) return false;
+  const groups = new Map<string, number[]>();
+  for (const x of q) {
+    if (x.via !== 'direct' || (x.rank !== 1 && x.rank !== 2)) return false;
+    groups.set(x.group, [...(groups.get(x.group) ?? []), x.rank]);
+  }
+  if (groups.size * 2 !== q.length || !isPow2(groups.size)) return false;
+  return [...groups.values()].every((r) => r.length === 2 && r.includes(1) && r.includes(2));
+}
+
+/**
+ * The fixed cross-over draw (FIFA World Cup / UEFA EURO shape): groups paired
+ * in letter order (A–B, C–D, …); the top half is A1 v B2, C1 v D2, …, the
+ * bottom half B1 v A2, D1 v C2, …. So a group winner always meets another
+ * group's runner-up, the two teams from one group are in opposite halves (they
+ * can only meet in the final), and so are A1 and B1. With 8 groups this is
+ * exactly the FIFA 2018/2022 Round of 16 (49 A1–B2, 50 C1–D2, 53 E1–F2,
+ * 54 G1–H2 | 51 B1–A2, 52 D1–C2, 55 F1–E2, 56 H1–G2); with 4 it is EURO
+ * 1996–2012's quarter-finals (A1–B2, C1–D2 | B1–A2, D1–C2).
+ */
+export function crossoverTies(q: Qualifier[]): SeededTie[] {
+  const names = [...new Set(q.map((x) => x.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const at = (g: string, rank: number) => q.find((x) => x.group === g && x.rank === rank)!.teamId;
+  const top: [string, string][] = [];
+  const bottom: [string, string][] = [];
+  for (let i = 0; i + 1 < names.length; i += 2) {
+    top.push([at(names[i], 1), at(names[i + 1], 2)]);
+    bottom.push([at(names[i + 1], 1), at(names[i], 2)]);
+  }
+  return [...top, ...bottom].map(([homeId, awayId], slot) => ({ homeId, awayId, round: 1, slot }));
+}
+
+/**
+ * Seeded draw from a seed list (best → worst; a power-of-two field): standard
+ * bracket positions (1 v N, 4 v N−3, 2 v N−1 … — `bracketSeedOrder`), so seeds
+ * 1 and 2 are in opposite halves and can only meet in the final. With group
+ * tags, a first-round tie between two teams of the same group swaps its lower
+ * seed with another tie's (same half first) — best effort.
+ */
+export function seededTies(seedIds: string[], groupOf?: (id: string) => string | undefined): SeededTie[] {
+  const n = seedIds.length;
+  const pos = bracketSeedOrder(n);
+  const ties: [string, string][] = [];
+  for (let i = 0; i + 1 < pos.length; i += 2) ties.push([seedIds[pos[i] - 1], seedIds[pos[i + 1] - 1]]);
+  if (groupOf) {
+    const g = (id: string) => groupOf(id);
+    const clash = (a: string, b: string) => !!g(a) && g(a) === g(b);
+    const half = (i: number) => (i < ties.length / 2 ? 0 : 1);
+    for (let i = 0; i < ties.length; i++) {
+      if (!clash(ties[i][0], ties[i][1])) continue;
+      const order = [...ties.keys()].filter((j) => j !== i).sort((a, b) => Number(half(a) !== half(i)) - Number(half(b) !== half(i)) || Math.abs(a - i) - Math.abs(b - i));
+      for (const j of order) {
+        if (!clash(ties[i][0], ties[j][1]) && !clash(ties[j][0], ties[i][1])) {
+          const tmp = ties[i][1]; ties[i][1] = ties[j][1]; ties[j][1] = tmp;
+          break;
+        }
+      }
+    }
+  }
+  return ties.map(([homeId, awayId], slot) => ({ homeId, awayId, round: 1, slot }));
+}
+
+/**
+ * A seeded first round for any field from a seed list. A power-of-two field is
+ * drawn in standard positions; any other field gives the top seeds byes — the
+ * bottom 2·(N−P) seeds play round 1 (seed k v seed 2P+1−k, exactly their places
+ * in the full 2P draw) and the byes join the winners in the next round.
+ */
+export function seededRound(seedIds: string[], groupOf?: (id: string) => string | undefined): SeededRound {
+  const n = seedIds.length;
+  if (isPow2(n)) return { ties: seededTies(seedIds, groupOf), byeIds: [], stage: stageForTeams(n), method: 'seeded' };
+  const pi = seedPlayIn(seedIds);
+  return {
+    ties: pi.ties.map((t, slot) => ({ ...t, round: 1, slot })),
+    byeIds: pi.byeIds,
+    stage: planKnockout(n).playInStage,
+    method: 'seeded',
+  };
+}
+
+/**
+ * SD-124 — the knockout from group qualifiers (seed order from `advancement`
+ * / `qualifiersFromSelection`): the fixed cross-over table when every group
+ * sends its top two and there are 2/4/8/16 groups; otherwise seeded positions
+ * (group winners first, then runners-up, then the best-placed) with byes for
+ * the top seeds when the field isn't a power of two.
+ */
+export function seedFromGroups(q: Qualifier[]): SeededRound {
+  if (crossoverFits(q)) return { ties: crossoverTies(q), byeIds: [], stage: stageForTeams(q.length), method: 'crossover' };
+  const group = new Map(q.map((x) => [x.teamId, x.group]));
+  return seededRound(q.map((x) => x.teamId), (id) => group.get(id));
+}
+
 /** Label the knockout round for N teams (drives Match.stage / the bracket UI). */
 export function knockoutRoundLabel(teams: number): string {
   if (teams <= 2) return 'final';
@@ -189,7 +323,7 @@ export function superPhaseLabel(teams: number): string {
  * ignored. `via` is 'direct' for every manual pick (no best-placed distinction).
  */
 export function qualifiersFromSelection(tables: GroupTable[], selectedTeamIds: string[], cfg: StandingsConfig = defaultStandingsConfig('football')): Qualifier[] {
-  const cmp = seedCmp(cfg);
+  const cmp = seedCmp(cfg, advancementBasis(tables) === 'perGame');
   const sel = new Set(selectedTeamIds);
   const picks: { q: Qualifier; row: TeamStanding }[] = [];
   for (const t of tables) {
@@ -214,4 +348,4 @@ export function matchesInDivision(matches: Match[], entries: TournamentEntry[], 
 }
 
 // Test/inspection hook (parity with the other engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, standingsPhases, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision };
+(globalThis as unknown as Record<string, unknown>).__sportfolioGroups = { groupTables, standingsPhases, advancement, seedKnockout, seedFromGroups, seededRound, advancementBasis, knockoutRoundLabel, qualifiersFromSelection, matchesInDivision };

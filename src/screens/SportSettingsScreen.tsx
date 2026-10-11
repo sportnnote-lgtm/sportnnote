@@ -16,6 +16,7 @@ import { SportFormatEditor } from '../components/FormatEditor';
 import { StructureEditor } from '../components/StructureEditor';
 import { PointsEditor } from '../components/PointsEditor';
 import { readDisciplineRule, disciplineRuleText } from '../sports/football/discipline';
+import { SportDisciplineSettings, WalkoverScoreSettings } from '../components/DisciplineSettings';
 import { getSport } from '../sports/registry';
 import { structureFromFormat, mergeStructure, shapeForStructure } from '../data/structureConfig';
 import { tournamentDraft } from '../data/tournamentDraft';
@@ -148,6 +149,11 @@ export default function SportSettingsScreen() {
             </View>
           );
         })()}
+
+        {/* SD-126: suspensions for hockey / handball / basketball / kabaddi, and the walkover score */}
+        <SportDisciplineSettings sport={sport} value={value} onChange={set} />
+        <WalkoverScoreSettings sport={sport} value={value} onChange={set} tournamentId={params.tournamentId}
+          savedFormat={params.tournamentId ? (tournament?.formats?.[sport] as Record<string, unknown> | undefined) ?? {} : undefined} />
 
         <Text style={textStyles.muted}>These apply only to {plugin.name} in this tournament.</Text>
         {params.tournamentId ? (

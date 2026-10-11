@@ -25,6 +25,8 @@ import { deriveSeries, readSeriesMeta } from './series.ts';
 import { standingsPhases } from './groups.ts';
 import { teamStandings, type StandingsConfig } from './standings.ts';
 import type { StructureShape } from './structureConfig.ts';
+import { doubleElimState, plateState } from './elimDraws.ts';
+import { isPlateStage } from './bracket.ts';
 
 /** How the two semi-final losers are placed. 'playoff' (default): a 3rd-place
  *  match decides 3rd/4th when one is scheduled, else both share 3rd. 'shared':
@@ -48,6 +50,8 @@ export interface SportPlaces {
   places: EntrantPlace[];
   /** entrants in the sport (for "3rd of 7" and the N-down-to-1 points fallback) */
   fieldSize: number;
+  /** SD-125: the plate (consolation) winner — an award, never a medal place */
+  plateWinnerId?: string;
 }
 
 type Side = { id: string; name: string; colorHex?: string };
@@ -75,7 +79,11 @@ export function sportPlaces(
   matches: Match[], sport: SportId, cfg: StandingsConfig,
   opts: { bronze?: BronzeRule; shape?: StructureShape | null } = {},
 ): SportPlaces {
-  const ms = matches.filter((m) => m.sport === sport);
+  const all = matches.filter((m) => m.sport === sport);
+  // SD-125: the plate is a separate consolation draw — it never moves a place.
+  const plateWinnerId = plateState(all)?.winnerId;
+  const ms = all.filter((m) => !isPlateStage(m.stage));
+  const de = doubleElimState(ms);
   const sides = new Map<string, Side>();
   for (const m of ms) {
     sides.set(m.homeTeam.id, { id: m.homeTeam.id, name: m.homeTeam.name, colorHex: m.homeTeam.colorHex });
@@ -88,13 +96,14 @@ export function sportPlaces(
   const third = at('third');
 
   // League only: the table order, exactly as the medal table always did.
-  if (!rounds.length && !hasDc) {
-    if (opts.shape === 'knockout' || opts.shape === 'groups') return { basis: 'pending', places: [], fieldSize: sides.size };
+  if (!rounds.length && !hasDc && !de) {
+    if (opts.shape === 'knockout' || opts.shape === 'groups') return { basis: 'pending', places: [], fieldSize: sides.size, plateWinnerId };
     const table = teamStandings(matches, sport, cfg);
     return {
       basis: 'league',
       places: table.map((t, i) => ({ teamId: t.teamId, name: t.name, colorHex: t.colorHex, position: i + 1, shared: 1, played: t.played })),
       fieldSize: table.length,
+      plateWinnerId,
     };
   }
 
@@ -148,6 +157,13 @@ export function sportPlaces(
     put(losers, start, r.pairings.length);
   }
 
+  if (de) {
+    // SD-125 double elimination: grand final W/L, losers' final loser 3rd,
+    // losers' semi loser 4th, then each earlier losers' round shares a band.
+    for (const id of de.seeds) inKo.add(id);
+    for (const p of de.places) put([p.teamId], p.position, p.shared);
+  }
+
   if (hasDc) {
     // Qualifier 2 loser 3rd, Eliminator loser 4th (Qualifier 1's loser plays on).
     const q2 = pairingsOf(dc.q2, 'q2')[0];
@@ -176,5 +192,5 @@ export function sportPlaces(
     .filter(([id]) => sides.has(id))
     .map(([id, p]) => ({ teamId: id, name: sides.get(id)!.name, colorHex: sides.get(id)!.colorHex, ...p, played: playedBy.get(id) ?? 0 }))
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  return { basis: 'structure', places, fieldSize: sides.size };
+  return { basis: 'structure', places, fieldSize: sides.size, plateWinnerId };
 }

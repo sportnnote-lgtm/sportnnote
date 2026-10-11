@@ -9,14 +9,14 @@ import { theme } from '../core/theme';
 import { FieldLabel, SelectChip, textStyles } from './ui';
 import { CHESS_TEAM_KO_BREAKS, koBreakOf } from '../sports/chess/teamKo';
 import {
-  tiePresetsFor, specFromPreset, customSpec, rubberLabel,
-  type TieSpec, type RubberKind, type DeadRubbers,
+  tiePresetsFor, specFromPreset, customSpec, rubberLabel, deadRuleOf, withDeadRule,
+  type TieSpec, type RubberKind, type DeadRule,
 } from '../data/teamTie';
 import type { SportId } from '../core/types';
 
 const KIND_LABEL: Record<RubberKind, string> = { S: 'Singles', D: 'Doubles', XD: 'Mixed' };
 
-export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDraw = true }: {
+export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDraw = true, oneOff = false }: {
   sport: SportId;
   value: TieSpec | null;
   onChange: (spec: TieSpec) => void;
@@ -24,6 +24,8 @@ export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDra
   teamAName?: string;
   teamBName?: string;
   showDraw?: boolean;
+  /** a single tie outside a tournament's stages ("New series / tie") */
+  oneOff?: boolean;
 }) {
   const presets = useMemo(() => tiePresetsFor(sport), [sport]);
   const chess = sport === 'chess';
@@ -34,13 +36,15 @@ export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDra
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sport]);
   const isCustom = value?.preset === 'custom';
+  // SD-127: the dead-rubber choice survives a change of preset / rubbers
+  const rule: DeadRule = value ? deadRuleOf(value) : 'stage';
   const pickPreset = (id: string) => {
     const p = presets.find((x) => x.id === id);
-    if (p) onChange(specFromPreset(p, value?.abc ?? 'home'));
+    if (p) onChange(chess ? specFromPreset(p, value?.abc ?? 'home') : withDeadRule(specFromPreset(p, value?.abc ?? 'home'), rule));
   };
   const pickCustom = (kinds: RubberKind[]) => {
     setCustom(kinds);
-    onChange(customSpec(sport, kinds, value?.dead ?? 'stop'));
+    onChange(customSpec(sport, kinds, rule));
   };
   const hasLetters = !!value?.pos && !value.boards && /^[A-Z]$/.test(value.pos.p[0] ?? '');
 
@@ -99,12 +103,19 @@ export function TieSetup({ sport, value, onChange, teamAName, teamBName, showDra
         <>
           <FieldLabel hint={`More than half wins the tie (${Math.floor(value.rubbers.length / 2) + 1} of ${value.rubbers.length})`}>Once the tie is decided</FieldLabel>
           <View style={st.chips}>
-            {([['stop', '⏹ Stop — rest not played'], ['play', '▶️ Play the dead rubbers']] as [DeadRubbers, string][]).map(([k, l]) => (
-              <SelectChip key={k} label={l} active={value.dead === k} onPress={() => onChange({ ...value, dead: k })} />
+            {([
+              ...(oneOff ? [] : [['stage', '🔀 By stage (default)']]),
+              ['stop', '⏹ Always stop'],
+              ['play', '▶️ Always play them'],
+            ] as [DeadRule, string][]).map(([k, l]) => (
+              <SelectChip key={k} label={l} active={(oneOff && rule === 'stage' ? 'stop' : rule) === k} onPress={() => onChange(withDeadRule(value, k))} />
             ))}
           </View>
           <Text style={textStyles.muted}>
-            {value.dead === 'stop' ? 'Knockout style: rubbers after the decision are set aside as "not played".' : 'Group style: every rubber is played and counts towards rubbers / games tie-breaks.'}
+            {rule === 'stage' && !oneOff
+              ? 'Group and league ties play every rubber — dead rubbers count towards the rubbers / games / points tie-breaks. Knockout ties stop once a team has won.'
+              : rule === 'play' ? 'Every rubber is played, even after the tie is decided, and counts towards the tie-breaks.'
+              : 'Rubbers after the decision are set aside as "not played".'}
           </Text>
         </>
       )}

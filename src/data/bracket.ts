@@ -23,7 +23,39 @@ export const isKoStage = (s?: string | null): s is KoStage => !!s && (KO_STAGES 
 /** Every stage where a match MUST produce a winner (knockouts, third place,
  *  playoff qualifiers/eliminator, play-ins) — not group, Super Four or Swiss. */
 export const isEliminationStage = (s?: string | null): boolean =>
-  isKoStage(s) || ['third', 'q1', 'q2', 'eliminator', 'playin', 'play-in'].includes(s ?? '');
+  isKoStage(s) || ['third', 'q1', 'q2', 'eliminator', 'playin', 'play-in'].includes(s ?? '') || isExtraDrawStage(s);
+
+/* SD-125 — double elimination (winners' bracket wb1…, losers' bracket lb1…,
+ * grand final gf + reset gf2) and the plate draw for first-round losers
+ * (pl1…). They sit outside the size-based KO_STAGES, so a straight knockout and
+ * every existing bracket are unaffected; elimDraws.ts runs them. */
+export const isDoubleElimStage = (s?: string | null): boolean => !!s && (/^(wb|lb)\d+$/.test(s) || s === 'gf' || s === 'gf2');
+export const isPlateStage = (s?: string | null): boolean => !!s && /^pl\d+$/.test(s);
+export const isExtraDrawStage = (s?: string | null): boolean => isDoubleElimStage(s) || isPlateStage(s);
+
+/** SD-124 — a knockout match's position in its round (0 = top of the bracket),
+ *  saved on the match format so the next round pairs the right winners however
+ *  the kickoffs are rescheduled. Old matches have none (kickoff order, as before). */
+export const KO_SLOT_KEY = '__koSlot';
+export function koSlotOf(m: Match): number | undefined {
+  const v = (m.format as Record<string, unknown> | undefined)?.[KO_SLOT_KEY];
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** A readable name for any stage tag (fixture lists, draft cards, logs). */
+export function stageLabel(s?: string | null): string {
+  if (!s) return '';
+  if (isKoStage(s)) return KO_STAGE_LABEL[s];
+  const fixed: Record<string, string> = {
+    third: 'Third-place playoff', q1: 'Qualifier 1', q2: 'Qualifier 2', eliminator: 'Eliminator',
+    group: 'Group stage', super: 'Super round', league: 'League', gf: 'Grand final', gf2: 'Grand final (reset)',
+    playin: 'Play-in', 'play-in': 'Play-in',
+  };
+  if (fixed[s]) return fixed[s];
+  const m = /^(wb|lb|pl|swiss)(\d+)$/.exec(s);
+  if (m) return `${{ wb: "Winners' round", lb: "Losers' round", pl: 'Plate round', swiss: 'Swiss round' }[m[1]]} ${m[2]}`;
+  return s.toUpperCase();
+}
 /** Order index — larger = later round (closer to the final). */
 export const koStageRank = (s: KoStage): number => KO_STAGES.indexOf(s);
 /** The stage a round of N teams belongs to (2 → final, 4 → sf, …). */
@@ -108,7 +140,12 @@ export interface BracketRound {
   matches: BracketMatch[];
 }
 
-/** Standard seed positions for a bracket of `size` (power of two). */
+/** Standard seed positions for a bracket of `size` (power of two): read in
+ *  pairs, top to bottom — 8 → 1v8, 4v5, 2v7, 3v6 — so seeds 1 and 2 are in
+ *  opposite halves, 1–4 in different quarters (BWF / ITF / FIFA draw sheets). */
+export function bracketSeedOrder(size: number): number[] {
+  return seedOrder(size);
+}
 function seedOrder(size: number): number[] {
   let seeds = [1, 2];
   while (seeds.length < size) {
@@ -185,7 +222,8 @@ export function bracketChampion(rounds: BracketRound[], decide?: DecideFn): Brac
  *  match's sides). */
 export interface KnockoutPairing {
   key: string;
-  stage: KoStage;
+  /** a KoStage for a single-elimination bracket; SD-125 draws use wb1 / lb2 / gf / pl1… */
+  stage: KoStage | (string & {});
   homeId: string;
   awayId: string;
   /** set when the pairing is one game */
@@ -195,9 +233,10 @@ export interface KnockoutPairing {
 }
 
 /** Collapse a stage's matches into pairings — series legs (shared `__seriesId`)
- *  fold into one tie; every other match is its own pairing. Ordered by earliest
- *  kickoff so bracket order (and adjacent-winner pairing) is preserved. */
-function pairingsInStage(stage: KoStage, matches: Match[]): KnockoutPairing[] {
+ *  fold into one tie; every other match is its own pairing. Ordered by bracket
+ *  slot (SD-124, `__koSlot`) when the matches carry one, else by earliest
+ *  kickoff, so bracket order (and adjacent-winner pairing) is preserved. */
+export function pairingsInStage(stage: KnockoutPairing['stage'], matches: Match[]): KnockoutPairing[] {
   const seriesLegs = new Map<string, Match[]>();
   const pairings: KnockoutPairing[] = [];
   for (const m of matches) {
@@ -225,8 +264,18 @@ function pairingsInStage(stage: KoStage, matches: Match[]): KnockoutPairing[] {
     const ms = p.series ? p.series.legs : p.match ? [p.match] : [];
     return ms.reduce((min, m) => (m.startsAt && (!min || m.startsAt < min) ? m.startsAt : min), '') || '';
   };
-  return pairings.sort((a, b) => earliest(a).localeCompare(earliest(b)) || a.key.localeCompare(b.key));
+  return pairings.sort((a, b) => slotRank(a) - slotRank(b) || earliest(a).localeCompare(earliest(b)) || a.key.localeCompare(b.key));
 }
+
+/** The bracket slot a pairing sits in (any of its matches), or Infinity. */
+export function pairingSlot(p: KnockoutPairing): number | undefined {
+  for (const m of pairingMatches(p)) {
+    const s = koSlotOf(m);
+    if (s !== undefined) return s;
+  }
+  return undefined;
+}
+const slotRank = (p: KnockoutPairing): number => pairingSlot(p) ?? Number.POSITIVE_INFINITY;
 
 /** A round's pairings — using the precomputed ones, or deriving them from its
  *  matches when a caller built the round by hand (matches only). */
@@ -348,7 +397,8 @@ export function thirdPlacePair(sf: KnockoutRound): { homeId: string; awayId: str
 }
 
 /**
- * The next round's pairings from a completed round: winners in bracket order,
+ * The next round's pairings from a completed round, in bracket order (index i
+ * = the new round's slot i — save it as `__koSlot`): winners in bracket order,
  * paired adjacently (match 0 winner v match 1 winner, …). Returns null unless
  * every match in the round is decided and there are ≥2 winners to pair — i.e.
  * the round is ready to advance. A trailing unpaired winner (odd count) byes.

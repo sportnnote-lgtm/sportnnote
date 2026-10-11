@@ -352,7 +352,7 @@ const BODY_PRESETS: Record<string, PointsPreset[]> = {
   ],
   volleyball: [
     preset('fivb', 'FIVB 3-3-2-1', 'Wins first; 3-0 / 3-1 → 3 pts, 3-2 → 2 and 1; ties: set ratio, point ratio, head-to-head',
-      { winPoints: 3, drawPoints: 0, lossPoints: 0, setPoints: FIVB_SETS, rankBy: 'wins', tieBreak: 'setRatio,pointRatio,h2h,lots' }),
+      { winPoints: 3, drawPoints: 0, lossPoints: 0, forfeitLossPoints: 0, setPoints: FIVB_SETS, rankBy: 'wins', tieBreak: 'setRatio,pointRatio,h2h,lots' }),
   ],
   kabaddi: [
     preset('pkl', 'PKL 5-3-1', '5 a win, 3 a tie, +1 for a loss by 7 or fewer; ties: score difference, wins, head-to-head',
@@ -664,12 +664,14 @@ export const isNoResultMatch = (m: Match): boolean =>
  *  the sport's table crediting (SD-13), else the match score. */
 function tableScore(m: Match): { home: number; away: number } | null {
   if (isTieMatch(m)) return m.score ?? null; // SD-48: rubbers won
-  return m.result?.score ?? (m.result ? null : scoreProvider?.(m.sport, m.state)) ?? m.score ?? null;
+  // SD-126: a walkover / forfeit counts its federation score (absent on older results)
+  return m.result?.forfeit?.score ?? m.result?.score ?? (m.result ? null : scoreProvider?.(m.sport, m.state)) ?? m.score ?? null;
 }
 
 /** Rally / board points won by each side (the sport's points provider). */
 function pointsOf(m: Match): { home: number; away: number } | null {
   if (isTieMatch(m)) return tieSum(m, pointsOf);
+  if (m.result?.forfeit?.points) return m.result.forfeit.points; // SD-126 (FIVB 0-25 a set)
   const u = m.state != null ? unitsProvider?.(m.sport, m.state) ?? null : null;
   return u?.points ?? pointsProvider?.(m.sport, m.state) ?? null;
 }
@@ -689,6 +691,18 @@ export function matchUnits(m: Match): StandingsUnits {
   const score = tableScore(m) ?? undefined;
   const unit = scoreUnit(m.sport);
   const points = u?.points ?? pointsProvider?.(m.sport, m.state) ?? undefined;
+  // SD-126: a forfeit's completed sets / points (FIVB 6.4) replace the partial ones.
+  const ff = m.result?.forfeit;
+  if (ff) {
+    const sets = ff.sets ?? (unit === 'sets' ? ff.score : u?.sets);
+    const pts = ff.points ?? points;
+    return {
+      ...(sets ? { sets } : {}),
+      ...(u?.games ?? (unit === 'games' ? score : undefined) ? { games: u?.games ?? score } : {}),
+      ...(pts ? { points: pts } : {}),
+      ...(u?.fairPlay ? { fairPlay: u.fairPlay } : {}),
+    };
+  }
   return {
     ...(u?.sets ?? (unit === 'sets' ? score : undefined) ? { sets: u?.sets ?? score } : {}),
     ...(u?.games ?? (unit === 'games' ? score : undefined) ? { games: u?.games ?? score } : {}),
