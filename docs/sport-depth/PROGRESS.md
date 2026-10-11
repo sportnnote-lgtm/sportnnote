@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-38 / SD-43 / SD-69 / SD-79 cricket stats — DONE (67849fa, 2026-10-11)
+- See DEVLOG. Founder action (optional): run `await __sportnnoteAdmin.backfillCricketCaptainKeeper({ dryRun: true })` in the live web console, then without dryRun, to flag captains/keepers on past matches. Visual check of chips / Captaincy / keeper rows still needed on a real cricket match with captains set. Keeper flag = final keeper only after a mid-match change.
+
 ## SD-57 basketball timeouts, SD-50 game flow — DONE (72950ce, 2026-10-11)
 - See DEVLOG. Check: FIBA OBR Art. 18.2.5 (timeouts) and 8.7 (overtime) numbers vs the 2024 edition; 3x3 Art. 11; NBA limits from memory; "last 2 minutes" approximate (count-up minute). Not done: NCAA carry-over, game flow on football's own Stats tab, bench goals for hockey/handball, player-level flow.
 
