@@ -69,5 +69,5 @@ A cycling day is a list of races, such as the U16 Boys time trial 10 km. Time tr
 ### Why does the 10th rider show s.t.?
 They finished in the winner’s group, so they share its time; the order on the line sets the place.
 
-### Can I run a team pursuit or madison?
-Not yet. Team pursuit, team sprint, madison and omnium are coming later.
+### Can I run a team pursuit?
+Yes, and team sprint: see [Team events in meets](/guides/team-events-in-meets/).

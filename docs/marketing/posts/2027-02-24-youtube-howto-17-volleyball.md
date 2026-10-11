@@ -18,7 +18,7 @@ How to score a volleyball match: rallies, rotation, subs, libero and attack effi
 ```text
 Score a volleyball match on your phone, one rally at a time. Tap who won the rally and how (attack, block, ace or the other team's fault), and SportnNote keeps the serve, the sets, set and match point, timeouts and every player's stats. Record the toss and the rotation and it names every server. Substitutions and libero swaps are checked against the FIVB limits. And for the big matches, Detailed stats counts every attack swing for attack efficiency and a Best attacker award.
 
-Volleyball is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
+Volleyball is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

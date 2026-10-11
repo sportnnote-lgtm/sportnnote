@@ -9,7 +9,7 @@
 | Status | Draft – copy ready (awaiting founder approval) |
 | Presenter | AI presenter (picture-in-picture, bottom right) + AI voice, over real screen recordings |
 
-Unnumbered sport how-to (like archery and handball), so #7–#21 keep their numbers. It takes the free Monday slot in the first week after launch, one week before the Republic Day inter-house meets (25–31 Jan), so organisers have time to plan a house pentathlon. It follows how-to #4 "Run an athletics sports day" (12 Jan), which covers single events. Combined events are part of athletics: the sport count stays 24.
+Unnumbered sport how-to (like archery and handball), so #7–#21 keep their numbers. It takes the free Monday slot in the first week after launch, one week before the Republic Day inter-house meets (25–31 Jan), so organisers have time to plan a house pentathlon. It follows how-to #4 "Run an athletics sports day" (12 Jan), which covers single events. Combined events are part of athletics: the sport count stays 27.
 
 ## Title
 Run a decathlon, heptathlon or school pentathlon: World Athletics points, scored as you go | SportnNote
@@ -18,7 +18,7 @@ Run a decathlon, heptathlon or school pentathlon: World Athletics points, scored
 ```text
 Run a combined event from one phone. Pick a decathlon, a heptathlon, an indoor pentathlon or a school pentathlon or tetrathlon, enter each event on the usual track and field screens, and SportnNote turns every mark into points on the World Athletics Scoring Tables. A running total and places after every event, the next event seeded by total, false starts, DNS and ties handled by the rules, then medals and house points on the total.
 
-Athletics is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
+Athletics is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

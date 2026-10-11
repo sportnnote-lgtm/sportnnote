@@ -3,7 +3,7 @@ title: Score a match by voice
 description: Call the play out loud (or type it) and the app logs it. Every call can wait for your tap, and ending a period or the match always asks first.
 category: Live scoring
 audience: Scorers
-sports: football, cricket, basketball, volleyball, kabaddi, hockey, handball, tennis, badminton, table tennis, squash, padel, pickleball, carrom, golf
+sports: football, cricket, basketball, volleyball, kabaddi, hockey, handball, netball, rugby, ice hockey, tennis, badminton, table tennis, squash, padel, pickleball, carrom, golf
 order: 35
 updated: 2026-10-11
 ---
@@ -32,13 +32,16 @@ The same goes for any call that would finish the match, such as a badminton matc
 Football's own voice panel asks back ("who scored?"); its "end half" and "full time" ask on screen first too.
 
 ## What to say, sport by sport
-- **Football**: "goal", then the scorer and assist when asked; "yellow card Rao", "corner home", "substitution", "kick off", "end half", "full time".
+- **Football**: "goal" (it asks the scorer), "yellow card Rao", "corner home", "end half".
 - **Cricket**: "four", "six", "dot", "two runs", "wide", "no ball", "leg bye", "wicket caught".
 - **Basketball**: "two Rao", "three Rao", "free throw Rao", "rebound Rao", "foul Rao".
 - **Volleyball**: "attack Rao", "ace Rao", "block Rao", "point home".
-- **Kabaddi**: "raid Rao", "tackle Rao", "green card Rao", "yellow card Rao", "technical point home". A red card stays on the **Card** button, which asks first and adds the technical point.
-- **Hockey**: "goal Rao", "PC goal Rao assist Khan", "penalty corner home", "shot saved Rao", "green card Rao", "yellow 10 Rao", "circle home", "end quarter".
-- **Handball**: "goal Rao" (9 m unless you say "wing", "6 m", "7 m", "fast break" or "breakthrough"), "7 m saved Rao", "two minutes Rao", "red Rao", "time-out home", "end half".
+- **Kabaddi**: "raid Rao", "tackle Rao", "yellow card Rao", "technical point home". Red cards stay on the **Card** button.
+- **Hockey**: "PC goal Rao assist Khan", "penalty corner home", "yellow 10 Rao", "end quarter".
+- **Handball**: "goal Rao" (9 m unless you say "wing", "7 m"…), "7 m saved Rao", "two minutes Rao", "end half".
+- **Netball**: "goal GS", "miss GA", "intercept Rao", "centre home", "end quarter".
+- **Rugby**: "try Rao", "conversion good", "penalty goal Khan", "yellow Rao", "end half".
+- **Ice hockey**: "goal Rao assist Khan", "penalty two minutes tripping Rao", "save home", "end period".
 - **Tennis, badminton, table tennis, squash, padel, pickleball**: "point home", "Rao scores", "ace Rao", "double fault Rao" (tennis).
 - **Carrom**: the board winner and the coins left, for example "board home 5" or "Rao 3 queen". "Penalty home" gives a penalty board.
 - **Golf match play**: "hole home", "halved", or with handicap strokes both scores ("Rao 4 Khan 5").
@@ -51,8 +54,7 @@ Football's own voice panel asks back ("who scored?"); its "end half" and "full t
 
 ## Good to know
 - Stats go to the player you name, the same way the buttons credit them.
-- In hockey and handball, a call is stamped at the game-clock time you said it, not when you tap **Apply**.
-- "Full time" in hockey and handball only works in the last period. Earlier, say "end quarter" or "end half".
+- In clock sports, a call is stamped at the game-clock time you said it, and "full time" only works in the last period.
 
 ## Common questions
 

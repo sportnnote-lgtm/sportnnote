@@ -18,7 +18,7 @@ Run a cycling event: time trials, road races, stage races and track, the UCI way
 ```text
 Run a cycling event from one phone. Time trials go by the clock, road races by the order on the line, stage races by general classification, and track sprints run as a bracket. Enter results on a phone, and the app works out places, same-time groups, GC, points races, medals, house points and records.
 
-Cycling is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
+Cycling is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -94,7 +94,7 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 | 7:15 | Elimination: tap riders as they're eliminated; places fill from the back; the last two settle 1st and 2nd. | Places fill from the back | In an elimination race, tap each rider as they're pulled. Places fill from the back, and the last two decide first and second. |
 | 7:35 | **🏁 Finish & lock results**; the confirm lists a new meet record. Point at reopen. | Lock · records | Tap Finish and lock results. The confirm lists any new meet record. An organiser can reopen a round until the next has results, or reopen the final, and its records and points roll back. |
 | 7:50 | Cycling page: **House table**, **Meet records** (time trials, pursuits, flying 200 m). A rider profile: races, wins, medals, PB and SB per distance. | House table · records · profiles | The house table updates, meet records are kept for time trials, pursuits and the flying two hundred, and every rider gets a career: races, wins, medals, and bests per distance. |
-| 8:05 | Text card. | Not yet: team pursuit, team sprint, madison, omnium | Team pursuit, team sprint, madison and omnium aren't in yet. They're coming later. |
+| 8:05 | Text card. | Team pursuit and team sprint: see Run team events · Not yet: madison, omnium | Team pursuit and team sprint have their own guide, Run team events. Madison and omnium aren't in yet. |
 | 8:15 | Presenter full frame. End screen: two video cards (Run a rowing regatta or a canoe sprint, #2 Create a tournament) + Subscribe. | sportnnote.in/guides | That's cycling on SportnNote: time trials, bunch finishes, stage races and the track, the UCI way. The written steps are at sportnnote dot in slash guides. Open app dot sportnnote dot in. Free while we're new; a small fee later, announced well in advance, with thirty days' notice. See you there. |
 | 8:45 | End. | | |
 
@@ -118,6 +118,6 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 ## Pre-post checks
 - **Build:** cycling shipped on 11 Oct 2026 (SD-98). Recheck every label against the frozen launch build (23 Nov–6 Dec): **Cycling basics**, **Hand timing**, **Cycling — events**, **＋ Add a race**, **Road** / **Track (velodrome)**, **Start interval**, **Sprint every … laps**, **Create race & start list**, the start offsets, **Next ›**, **Check this mark**, **.000**, **DNS / DNF / OTL / DQ**, **↑**, **✕**, **s.t.**, **Not classified**, **Bonus s**, **Points**, **KOM**, **GC after stage n**, **Close stage 1 → start stage 2**, **Final for gold**, **Final for bronze**, **Caught**, **Close qualifying (flying 200 m) → seed the match play**, **Sprint — match play**, **+ lap**, **S1**, **Finish**, **🏁 Finish & lock results**, **House table**, **Meet records**.
 - **Age group label:** the guide says "U12 to Elite and Masters". Confirm **Elite** is the label shown; adjust the screen notes if not.
-- **Limits stated in the video:** no team pursuit, team sprint, madison or omnium yet (guide's Common questions).
-- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93): they don't change the count, and the list says "athletics" for them.
+- **Limits stated in the video:** no madison or omnium yet. Team pursuit and team sprint are live since 12 Oct 2026 (team-events-in-meets guide, SD-137b). Note: the run-a-cycling-event guide's Common questions still says team pursuit is "not yet"; check it has been updated before recording.
+- **"Every sport" list:** matches the live list (27 sports, 12 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93): they don't change the count, and the list says "athletics" for them.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

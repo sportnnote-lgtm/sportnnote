@@ -1,4 +1,4 @@
-# The newest four, 2 of 4: rowing
+# Four more sports, 2 of 4: rowing
 
 | Field | Value |
 |---|---|
@@ -13,7 +13,7 @@ Second of the four first-season spotlights (archery 30 Jan, canoe sprint 27 Feb,
 
 ## Caption (post exactly)
 ```
-The newest four, 2 of 4: rowing 🚣
+Four more sports, 2 of 4: rowing 🚣
 
 Run a regatta the World Rowing way:
 🪑 Pick each crew seat by seat: bow, 2, 3, stroke and cox. "Fill empty seats" does the rest.
@@ -45,7 +45,7 @@ Tag your rowing club.
 | 0:08–0:11 | Two scullers on 7:22.10: **.000** → `722104`. Order settled. | Photo finish? Thousandths |
 | 0:11–0:15 | The crew cards: **→ Final A**, **→ Repechage**, **out**. | Who goes where: done |
 | 0:15–0:18 | Finals: Final B's winner shows **7th**. | Final A decides the medals |
-| 0:18–0:20 | End card. | The newest four · 2 of 4 · SportnNote |
+| 0:18–0:20 | End card. | Four more sports · 2 of 4 · SportnNote |
 
 **Audio:** licensed track with a steady stroke rhythm.
 

@@ -1,4 +1,4 @@
-# The newest four, 1 of 4: archery
+# Four more sports, 1 of 4: archery
 
 | Field | Value |
 |---|---|
@@ -13,9 +13,9 @@ First of four first-season spotlights for the sports that didn't fit the ten pre
 
 ## Caption (post exactly)
 ```
-The newest four, 1 of 4: archery 🏹
+Four more sports, 1 of 4: archery 🏹
 
-One of four sports we added just before launch. Scored the World Archery way:
+One of the sports we added just before launch. Scored the World Archery way:
 🎯 Tap each end on a keypad: X, 10 to 1, M. A full end saves itself and the next archer comes up.
 ✅ Type "X 10 9 9 8 7 = 53" and the app checks your scorecard total
 ⚖️ Ties: more 10s, then more Xs. A tie for the last bracket place? Shoot-off.
@@ -45,7 +45,7 @@ Tag your archery team.
 | 0:06–0:09 | Two archers level for 8th: the **Shoot-off place** boxes. Tap **Close ranking round → seed match play**: the bracket 1 v 8, 4 v 5… | Tie for the last place? Shoot-off |
 | 0:09–0:13 | A match: tap three arrows each → **Save end**. Set points **4–2**. | 2 set points an end |
 | 0:13–0:17 | The match at **5–5**: one shoot-off arrow each, both 9. Tap the archer closer to the centre. | 5–5? One arrow |
-| 0:17–0:20 | End card. | The newest four · 1 of 4 · SportnNote |
+| 0:17–0:20 | End card. | Four more sports · 1 of 4 · SportnNote |
 
 **Audio:** licensed track; a soft "thunk" on each arrow tapped.
 
@@ -57,5 +57,5 @@ Tag your archery team.
 
 ## Pre-post checks
 - **Build:** recheck in the frozen launch build: **End 1 of 12**, the keypad, the "= total" check, **Shoot-off place**, **Close ranking round → seed match play**, **Save end**, the 5–5 shoot-off prompt.
-- **Don't promise:** team or mixed team events (not in yet).
-- **Count:** if this post mentions the total anywhere (it doesn't by default), use the live count (24 as of 11 Oct 2026).
+- **Team events:** archery team (3) and mixed team (1 + 1) are live since 12 Oct 2026 (team-events-in-meets guide). The Reel doesn't show them; the founder may add "Team and mixed team events too" as a caption line.
+- **Count:** if this post mentions the total anywhere (it doesn't by default), use the live count (27 as of 12 Oct 2026).

@@ -1,4 +1,4 @@
-# The newest four, 3 of 4: canoe sprint
+# Four more sports, 3 of 4: canoe sprint
 
 | Field | Value |
 |---|---|
@@ -13,7 +13,7 @@ Third of the four first-season spotlights (archery 30 Jan, rowing 20 Feb, cyclin
 
 ## Caption (post exactly)
 ```
-The newest four, 3 of 4: canoe sprint 🛶
+Four more sports, 3 of 4: canoe sprint 🛶
 
 K1 to C4, over 200, 500 or 1000 m, the ICF way:
 🛶 Kayak or canoe, singles to fours. In a crew boat, seat 1 is the front.
@@ -45,7 +45,7 @@ Tag your paddling club.
 | 0:07–0:11 | **Heat 1**: type `13802` → "1:38.02" → **Next ›**. | Type the time |
 | 0:11–0:15 | Two boats on 1:35.13: **.000** → `135124`; the sheet shows "photo 1:35.124". | Photo finish? Thousandths |
 | 0:15–0:18 | **Close heats → seed the final**: Final A lanes drawn 5, 6, 4, 7… | Fastest in the centre lanes |
-| 0:18–0:20 | End card. | The newest four · 3 of 4 · SportnNote |
+| 0:18–0:20 | End card. | Four more sports · 3 of 4 · SportnNote |
 
 **Audio:** licensed track; a start-horn sound at 0:00.
 

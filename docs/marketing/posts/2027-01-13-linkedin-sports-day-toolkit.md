@@ -71,6 +71,7 @@ Read the entries guide (one link; the other guides are linked from it and from s
 - A small "Demo data" label in a corner of every screenshot slide.
 
 ## Pre-post checks
+- **APK 38 (batch 7):** APK 38 (SD-142) is built with phone PDF printing. The meet-timetable-and-printing guide still says Android printing "needs the next app update" (12 Oct 2026). Once the guide is updated and APK 38 is the download on sportnnote.in, change the phone-printing line to "print from your phone or a computer"; until then keep it as written.
 - **Build:** recheck in the frozen launch build: **📋 Entries (athletes × events)**, **School rule: 3 individual + 1 relay**, **📥 Bulk add — paste a list**, **🗂 Entries**, **＋ Late entry**, **✕ Scratch**, **🗓 Timetable & print sheets**, **NOW / NEXT**, **+10 min / +15 min / +30 min**, **Doubling up**, **Print sheets**, **Field-event cards**, **📖 Record board — add your school’s records**, **Paste a list**, **🏆 Champions by category**, **↗ Share all champions**, **Event officials (optional)**.
 - **Migration:** the atomic record book (two finals locking at once, school records across meets) needs `20261019124330_field_record_book.sql` run on the live project. If it hasn't been run, keep the record-board bullet but don't claim "school records across every meet".
 - **Printing on phones:** printing from the Android app needs APK 38 (until then the phone shares a WhatsApp text). The post says "printed from any computer", which is true today. If APK 38 is out before 13 Jan, the founder can change it to "from a computer or the app".

@@ -1,4 +1,4 @@
-# The newest four, 4 of 4: cycling
+# Four more sports, 4 of 4: cycling
 
 | Field | Value |
 |---|---|
@@ -13,7 +13,7 @@ Last of the four first-season spotlights (archery 30 Jan, rowing 20 Feb, canoe s
 
 ## Caption (post exactly)
 ```
-The newest four, 4 of 4: cycling 🚴
+Four more sports, 4 of 4: cycling 🚴
 
 Road and track, the UCI way:
 ⏱️ Time trials with start intervals, timed to the hundredth (track to the thousandth)
@@ -22,7 +22,7 @@ Road and track, the UCI way:
 🏟️ Track: pursuit finals, the sprint as a best-of-3 bracket, keirin, scratch, points and elimination races
 🏅 House table, meet records and every rider's bests per distance
 
-That's all four. 24 sports on SportnNote. Tag your cycling club 👇
+That's all four. 27 sports on SportnNote. Tag your cycling club 👇
 
 #SportnNote #Cycling #TrackCycling #RoadCycling #CyclingIndia #CollegeSports
 ```
@@ -45,7 +45,7 @@ Tag your cycling club.
 | 0:07–0:11 | Time trial start list: **+0:00**, **+1:00**, **+2:00**… Type `131811` → "13:18.11" → **Next ›**. | Time trials to 1/100 |
 | 0:11–0:15 | **Sprint — match play**: tap a match, tap the winner of heat 1 and heat 2. The rider goes through. | Sprint: best of 3 |
 | 0:15–0:18 | Points race: **S1** → tap the first four (5, 3, 2, 1). | Points races, scored for you |
-| 0:18–0:20 | End card. | The newest four · 4 of 4 · 24 sports |
+| 0:18–0:20 | End card. | Four more sports · 4 of 4 · 27 sports |
 
 **Audio:** licensed track; a bell lap sound at 0:15.
 
@@ -56,6 +56,6 @@ Tag your cycling club.
 
 ## Pre-post checks
 - **Build:** recheck in the frozen launch build: **s.t.**, the "+0:28" gap, the start offsets, **Next ›**, **Sprint — match play**, **S1**.
-- **Don't promise:** team pursuit, team sprint, madison and omnium (not in yet).
-- **Count:** "24 sports" must match the live list on the day (24 as of 11 Oct 2026).
+- **Don't promise:** madison and omnium (not in yet). Team pursuit and team sprint are live since 12 Oct 2026 (team-events-in-meets guide); the caption may name them.
+- **Count:** "27 sports" must match the live list on the day (27 as of 12 Oct 2026).
 - **Federation name:** UCI as plain text only, no logo.

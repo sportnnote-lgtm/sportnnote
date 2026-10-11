@@ -48,7 +48,7 @@ What each sheet shows:
 - **Results:** places, marks, wind and the trials of a field event. They also show the **Q** / **q**, PB, SB and record markers, and a list of the records set. A sheet printed before the round is locked says "unofficial".
 - **House table:** gold, silver, bronze and points for each house.
 
-> **Note:** On the Android app, printing needs the next app update. Until then, an event's print button and the timetable share as a WhatsApp message instead. You can always print from a computer at app.sportnnote.in.
+> **Note:** Android printing needs the latest app version; older versions share the sheet as a message.
 
 ## Common questions
 ### Why does my old event show "Time to be announced"?
