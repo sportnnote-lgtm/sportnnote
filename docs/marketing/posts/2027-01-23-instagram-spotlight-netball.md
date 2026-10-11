@@ -66,4 +66,4 @@ Tag your netball team.
 - **Rules to keep exact (PROGRESS.md "Verify" list):** suspension length, extra-time format, goal % tie-break and the 20-0 walkover are still marked for checking. The caption says "2-minute suspension" (the default; organisers can change it) and "World Netball 2-1-0"; don't add the tie-break order or the walkover score.
 - **Not in yet, don't imply:** Fast5 and two-legged ties.
 - **Minors:** the post is for girls' school teams, but shows no players. Never add a team photo without written guardian consent plus the school's permission.
-- **Count:** the caption gives no total. If added, use the live count (27 as of 12 Oct 2026; baseball, softball and American football are being built and aren't announced).
+- **Count:** the caption gives no total. If added, use the live count (29 as of 12 Oct 2026, with baseball & softball and American football).

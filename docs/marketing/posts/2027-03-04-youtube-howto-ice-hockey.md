@@ -18,7 +18,7 @@ How to score an ice hockey game: penalty box, power plays, shoot-out | SportnNot
 ```text
 Score an ice hockey game on one phone, the IIHF way. Stop and start the clock at every whistle, log goals with two assists, shots and saves, and every penalty from a minor to a match penalty. The live penalty box works out power plays, 4-on-4 and who comes out when a power-play goal goes in. Pull the goalie, play sudden-death overtime and run a shoot-out with the order you choose. You get a box score, goalie save % and GAA, and IIHF 3-2-1-0 or NHL-style standings.
 
-Ice hockey is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Ice hockey is one of 29 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -115,5 +115,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Rules still marked "verify" (PROGRESS.md, SD-145):** IIHF play-off OT, shoot-out order, PIM for GM/MP, coincident penalties, tie-break orders, NFHS OT and the 5-0 walkover. The VO follows the guide and gives no walkover score or tie-break order; re-read the guide if any change before recording.
 - **Not in yet, don't imply:** delayed penalties, face-off stats, time on ice; goalie goals only by editing.
 - **Field hockey stays "hockey":** this video always says "ice hockey". In the US the app shows ice hockey as "Hockey" (guide); the video doesn't mention it.
-- **"Every sport" list:** matches the live list (27 sports, 12 Oct 2026). Don't name baseball, softball or American football.
+- **"Every sport" list:** matches the live list (29 sports, 12 Oct 2026; baseball and softball count as one sport, American football covers flag and tackle).
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

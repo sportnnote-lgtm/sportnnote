@@ -18,7 +18,7 @@ How to score a rugby match: tries, conversions, sin-bins, sevens | SportnNote
 ```text
 Score a rugby union or sevens match on one phone, the World Rugby way. Run the referee's clock, log a try and the conversion straight after it, penalty and drop goals, penalty tries, yellow and red cards with a sin-bin timed on playing time, and replacements including HIA and blood. Knockouts get extra time, sudden death and a kicking competition. The app builds the box score, goal-kicking %, try-scorer leaderboards and a bonus-point table.
 
-Rugby is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Rugby is one of 29 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -120,5 +120,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Rules still marked "verify" (PROGRESS.md, SD-143):** sevens final length, tens sin-bin, age-grade halves, KO deciders, bonus-point model, the 28-0 walkover and ban defaults. The VO follows the guide's wording and gives no walkover score; re-read the guide if any of these change before recording.
 - **Not in yet, don't imply:** an HIA timer and yellow-card citing.
 - **20-minute red:** it's a World Rugby trial and an organiser option, off by default. The VO says "if your competition uses" it; keep that.
-- **"Every sport" list:** matches the live list (27 sports, 12 Oct 2026). Don't name baseball, softball or American football.
+- **"Every sport" list:** matches the live list (29 sports, 12 Oct 2026; baseball and softball count as one sport, American football covers flag and tackle).
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

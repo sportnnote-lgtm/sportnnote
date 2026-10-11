@@ -8,7 +8,7 @@ Ready-to-post drafts for SportnNote's social channels (@sportnnote, handles not 
 
 | Path | What it is |
 |---|---|
-| `content-calendar.md` | Every planned post from 7 Dec 2026 to 14 Mar 2027: date, IST time, platform, format, title, pillar, status and a link to its file. Then the Next season backlog and the International launch track (a proposal, not scheduled) |
+| `content-calendar.md` | Every planned post from 7 Dec 2026 to 14 Mar 2027: date, IST time, platform, format, title, pillar, status and a link to its file. Then the Next season backlog and the International launch track (approved 12 Oct 2026; Gulf and UK rows in local time, gated on company/store accounts, .com, Firebase SMS countries and lawyer review) |
 | `posts/YYYY-MM-DD-platform-slug.md` | One file per post. YouTube Shorts and Reel-to-Short cuts sit inside the file of the video they're cut from, under `## YouTube Short` |
 | `README.md` | This file |
 
@@ -41,16 +41,19 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - never full name + school + face together;
   - without both consents, show hands, phone screens and scoreboards only.
 - **No competitor names.**
-- **Every sport is equal.** 27 sports are live: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics (track and field, road, race walks, cross-country and combined events), swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby (union and sevens) and ice hockey (the site's sport list in `scripts/build-website.mjs`, 12 Oct 2026). Baseball, softball and American football are being built: never announce or count them before they ship. Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 and can be announced, as part of athletics: they never add to the count. Cricket is never the lead by default.
+- **Every sport is equal.** 29 sports are live: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics (track and field, road, race walks, cross-country and combined events), swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby (union and sevens), ice hockey, baseball & softball (one sport in the count, as on the site) and American football (flag and tackle) (the site's sport list in `scripts/build-website.mjs`, 12 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 and can be announced, as part of athletics: they never add to the count. Cricket is never the lead by default.
 - **Children's privacy:** describe how the app protects children today (guardian consent, initials for strangers, no direct messages to children, data export). Never imply a past exposure, never say "now" or "fixed", never claim legal compliance or certification.
 - **Bug fixes aren't features.** Don't market a fix (e.g. SD-119, stat lines that named the wrong opponent) as new. At most one optional "your history is right" trust line.
 - **One call to action per post.**
+
+- **International posts** (the approved International launch track): local time first (GST/BST) with IST in brackets; local school words (houses, sports day, fixtures, gala, "Year 7", Grade or Year as the school uses); no India-only wording (Republic Day, Class X, the Hyderabad pilot); no prices in local currencies; no "now available in" or office claims; nothing scheduled until the market's gates in the calendar are met.
 
 ## Demo data for recordings
 - **Account:** record only on a dedicated marketing demo account, with the tournament **SportnNote Demo Meet 2026** (Hyderabad).
   - Houses: **Red, Blue, Green and Yellow House**.
   - Players: fictional adults (e.g. Ravi, Arjun, Kabir, Dev, Veer, Rahul, Imran, Asha Rao, Priya, Meera).
   - No photos of real people.
+- **International recordings:** a second tournament on the same account, **SportnNote Demo Meet 2027**, region and time zone UAE (a UK copy later), the same four houses, fictional adult players (e.g. Omar, Yusuf, Hamad, Daniel, Sara, Mariam, plus the names above). Students on school-setup screens are placeholders ("Demo Student A").
 - **Never record the dev seed's FIFA World Cup replay data:** it uses real footballers' names.
 - **On screen:** a small "Demo data" label for the whole clip. Do Not Disturb on, and demo phone numbers only.
 
@@ -115,3 +118,11 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - Totals: 203 rows (33 LinkedIn, 85 Instagram, 85 YouTube: 36 long, 49 Shorts), 118 copy-ready in 90 files.
 
 - **Founder decisions 2026-10-12 (batch 7):** international launch track approved; Friday LinkedIn (12 Mar) and the extra Instagram posts in the weeks of 23 Jan and 23 Feb approved. APK 38 is the sportnnote.in download; privacy migrations and guardian-consent are live; team levels + feeders migration is live.
+
+- **2026-10-12:** eighth batch: baseball & softball and American football (29 sports live), International launch track approved.
+  - **Sport count:** 27 → 29 everywhere (README, calendar, and every post that gives the count or the list): baseball & softball (SD-144, WBSC; one sport in the count) and American football incl. flag (SD-147). The "Name a sport" Reel runs 29 icons at ~0.31 s, the trailer grid has 29 tiles, the launch-day Short is 40 s, the 29 Dec grid is 6 × 5 (logo as the last tile). Renamed with `git mv`: `2026-12-29-linkedin-27-sports-one-standard` → `2026-12-29-linkedin-29-sports-one-standard` (federation line adds WBSC and IFAF) and `2027-01-14-linkedin-27-sports-four-field-sports` → `2027-01-14-linkedin-29-sports-four-field-sports` (names five team sports as coming spotlights); calendar links updated. The 9 Jan shooting reveal names nine sports outside the reveals. Every "don't name baseball, softball or American football" check now says baseball and softball count as one sport.
+  - **New sports, first season ("Two more sports, N of 2", American football first, flag leading):** YouTube how-tos with full transcripts in the free Thursday long-video slots, Thu 18 Feb (flag and American football) and Thu 25 Feb (baseball and softball), with their Shorts on Fri 19 and Fri 26 Feb 18:00 (the Thursday Shorts slots were taken). Instagram spotlights upgrade two outlines that repeated earlier posts: Mon 22 Feb (was "Run a high jump with the O/X grid") and Mon 1 Mar (was "Livestream a college match with the overlay"); both ideas moved to the backlog.
+  - **International launch track:** now the approved plan, not a proposal. Gates kept and linked to `docs/international/go-live-checklist.md` (company and store accounts, .com, Firebase SMS countries, lawyer review; feeders and privacy migrations marked done). New Gulf row: Sat 10 Apr flag football re-cut for American-curriculum schools. New "Later markets" idea table (Singapore/Malaysia, Australia, US) where baseball & softball and flag football lead. Full post files for the first eight rows (Gulf, two shared with the UK).
+  - 12 new post files with full copy: `2027-02-18-youtube-howto-american-football`, `2027-02-22-instagram-spotlight-american-football`, `2027-02-25-youtube-howto-baseball-softball`, `2027-03-01-instagram-spotlight-baseball-softball`, `2027-03-17-linkedin-gulf-one-app-both-curricula`, `2027-03-18-instagram-gulf-venue-time-zones`, `2027-03-21-instagram-gulf-netball`, `2027-03-24-linkedin-gulf-new-school-year-april`, `2027-03-27-youtube-howto-set-up-your-school` (full transcript, en-GB voice), `2027-03-31-instagram-gulf-sports-day-move-a-session`, `2027-04-07-linkedin-gulf-uk-childrens-data`, `2027-04-08-instagram-gulf-swimming-gala`.
+  - **Other updates:** the 12 Mar "Built for schools everywhere" post keeps its feeder-league sentence (migration live) and points to the approved track.
+  - Totals: India calendar 207 rows (33 LinkedIn, 85 Instagram, 89 YouTube: 38 long, 51 Shorts), 124 copy-ready in 94 files; International launch track 17 rows (+ 6 later-market ideas), 8 copy-ready in 8 files; 102 post files in all.

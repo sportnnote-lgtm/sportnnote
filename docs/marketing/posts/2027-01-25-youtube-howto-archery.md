@@ -18,7 +18,7 @@ Run an archery competition: ranking round, match play and shoot-offs, the World 
 ```text
 Run an archery competition from one phone. Add an event like Recurve 70 m, tap each end on a keypad (X, 10 to 1, M), and let the app rank the archers with the World Archery tie rules. Then run the seeded bracket: set points, a one-arrow shoot-off at 5–5, the bronze and the gold medal matches. Medals, the house table, meet records and every archer's PBs update when you lock the results.
 
-Archery is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Archery is one of 29 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -115,5 +115,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 ## Pre-post checks
 - **Build:** archery shipped on 11 Oct 2026 (SD-95). Recheck every label against the frozen launch build (23 Nov–6 Dec): **Archery basics**, **Archery — events**, **＋ Add an archery event**, **Recurve / Compound / Barebow**, **Outdoor (72 arrows)**, **Indoor 18 m (60 arrows)**, **(WA)**, **Top 8**, **No match play**, **Create event & start list**, **End 1 of 12**, the keypad (**X**, **10**…**1**, **M**), **Undo**, **E1**, **Shoot-off place**, **Coin-toss place (seed)**, **Close ranking round → seed match play**, **Save end**, **Can't separate — shoot again**, **… absent (w/o)**, **Bronze medal match**, **🏁 Finish & lock results**, **Best archers (points)**, **Meet records**, **↺ Reopen match play**.
 - **Limits stated in the video:** team and mixed team events are live since 12 Oct 2026 (team-events-in-meets guide); the close points to that guide instead of saying "not yet" (updated in batch 7). Still in: the ranking round can be reopened only while match play has no scores. Both are in the guide's Common questions.
-- **"Every sport" list:** matches the live list (27 sports, 12 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93): they don't change the count, and the list says "athletics" for them.
+- **"Every sport" list:** matches the live list (29 sports, 12 Oct 2026). Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93): they don't change the count, and the list says "athletics" for them.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

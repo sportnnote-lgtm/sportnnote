@@ -9,7 +9,7 @@
 | Status | Draft – copy ready (awaiting founder approval) |
 | AI | None. The image is a designed graphic (no people). |
 
-Every Tue/Thu LinkedIn slot is taken, so this takes a Friday 09:30 slot in the last week of the first season (the only other Friday LinkedIn post is "Launch week in numbers", 15 Jan). It's the bridge from the India-first season to the proposed international track (after 14 Mar; see the calendar). It describes what the app already does; it doesn't announce a market launch, a date or a store listing. The founder should edit it into their own voice.
+Every Tue/Thu LinkedIn slot is taken, so this takes a Friday 09:30 slot in the last week of the first season (the only other Friday LinkedIn post is "Launch week in numbers", 15 Jan). It's the bridge from the India-first season to the approved International launch track (Gulf from 17 Mar, then the UK; see the calendar). It describes what the app already does; it doesn't announce a market launch, a date or a store listing. The founder should edit it into their own voice.
 
 Audience: heads of PE, sports coordinators and school leaders, in India and at international and British-curriculum schools abroad (many Indian-curriculum schools in the Gulf, too).
 
@@ -26,7 +26,7 @@ School sport looks the same everywhere, but the details don't. So the details ar
 • Your class list. Import a whole year group or squad from a spreadsheet or your school system's CSV, with parents' contacts saved on the parent, never the child.
 • Everyone on the team. Scoring screens built to WCAG 2.1 AA: screen readers read every button and announce each score, the web app works by keyboard, and text grows without cutting off. Our accessibility page says honestly what's done and what isn't yet.
 
-27 sports, one standard, any school calendar.
+29 sports, one standard, any school calendar.
 
 Open it at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -46,8 +46,8 @@ Open the app (app.sportnnote.in).
 ## Pre-post checks
 - **Facts against the guides:** region and time zone settings and the "GST" example (region-and-time-zone); the eight school systems, graduating class, 31 August and "Year 14" (set-up-a-school-and-graduation); yards never converted (swim-meet-in-yards); feet and inches stored in metres (field-marks-in-feet-and-inches); weekly rounds, half-term and holidays (weekly-fixtures-across-a-term); "Qualifies to another tournament" (feeder-tournaments); contacts on the guardian (import-a-roster); the accessibility list (the /accessibility/ page).
 - **Accessibility claim:** say "built to WCAG 2.1 AA" and point to the page. Never "fully compliant" or "certified": the page's own table marks several criteria "Partially supports".
-- **Feeder tournaments migration:** `20261021120000_team_levels_feeders.sql` was "to run" on 12 Oct 2026 (PROGRESS.md). Confirm it's run on live; if not, drop the "A league can feed its qualifiers…" sentence.
-- **No market launch claims:** no dates, prices in other currencies, store listings or "now available in" lines. The international track is a proposal pending the founder's approval and company/store accounts.
+- **Feeder tournaments migration:** `20261021120000_team_levels_feeders.sql` is live (founder, 12 Oct 2026), so the "A league can feed its qualifiers…" sentence stays.
+- **No market launch claims:** no dates, prices in other currencies, store listings or "now available in" lines. The International launch track is approved (founder, 12 Oct 2026) but every market post waits for its gates (company and store accounts, Firebase SMS countries, lawyer review; `docs/international/go-live-checklist.md`), so this post still announces no market.
 - **School-system names:** the post names no third-party school software. Keep it that way.
-- **Count:** 27 as of 12 Oct 2026. Don't name baseball, softball or American football.
+- **Count:** 29 as of 12 Oct 2026 (baseball and softball count as one sport).
 - Check that "free" sits with the full "small fee later, 30 days' notice" line.

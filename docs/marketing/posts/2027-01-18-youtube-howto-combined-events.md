@@ -18,7 +18,7 @@ Run a decathlon, heptathlon or school pentathlon: World Athletics points, scored
 ```text
 Run a combined event from one phone. Pick a decathlon, a heptathlon, an indoor pentathlon or a school pentathlon or tetrathlon, enter each event on the usual track and field screens, and SportnNote turns every mark into points on the World Athletics Scoring Tables. A running total and places after every event, the next event seeded by total, false starts, DNS and ties handled by the rules, then medals and house points on the total.
 
-Athletics is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Athletics is one of 29 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -116,5 +116,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Points:** don't say a number on the VO. Any points shown come from the screen. Don't claim a specific mark equals a specific score.
 - **Age group in the recording:** the demo athletes are adults, so record an open or senior group even though the preset is called "school". If the build doesn't offer the school preset for that group, record **Heptathlon** instead and change the 0:55 VO.
 - **Rule wording:** keep the rules as the guide says them; no rule numbers on screen or in the VO.
-- **Count:** combined events are part of athletics, not a new sport. The list stays 24.
+- **Count:** combined events are part of athletics, not a new sport. The list stays 29.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

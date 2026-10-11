@@ -18,7 +18,7 @@ Run your sports day from entries to champions: entries, timetable, printed sheet
 ```text
 Your sports day, from the first entry slip to the champions at assembly, in one app. In this walkthrough we run a demo inter-house meet on SportnNote: enter every athlete on one grid (or paste a house's list), set a school event limit, make the start lists, plan the timetable by day and session, move a session when you run late, print A4 start lists, field cards and results, enter your school's old record board, lock finals that set records properly, and crown the champion house and individual champion in every category.
 
-It works for athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling. SportnNote scores 27 sports, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+It works for athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling. SportnNote scores 29 sports, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

@@ -18,7 +18,7 @@ Run a team tie: Thomas Cup, Davis Cup, table tennis and chess team matches, one 
 ```text
 In a team event, one fixture is several matches: five singles in table tennis, three singles and two doubles in the Thomas and Uber Cups, four boards in chess. SportnNote runs it as one team tie. Pick a federation format or build your own, let each captain enter their own lineup (sealed until both are in), score each rubber like any match, and the tie settles itself the moment a team has the majority: knockout ties stop there, group ties play every rubber, or you choose. Tables count the tie once, with the federation's tie-breakers, and followers get one alert for the tie, not one per rubber.
 
-Team ties work for table tennis, badminton, tennis, squash, chess, carrom, padel and pickleball. SportnNote scores 27 sports, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Team ties work for table tennis, badminton, tennis, squash, chess, carrom, padel and pickleball. SportnNote scores 29 sports, each by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

@@ -18,7 +18,7 @@ How to score a netball match: centre pass, held time, suspensions | SportnNote
 ```text
 Score a whole netball match on one phone, the World Netball way. Set the seven positions once, then every goal is one tap on the GS or GA. The app counts misses for shooting %, shows whose centre pass it is, stops the clock for held time, times a 2-minute suspension on playing time, and settles a knockout with extra time and play-on to a 2-goal lead. You get a box score, every player's shooting % and positions played, and the World Netball 2-1-0 table.
 
-Netball is one of 27 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby and ice hockey.
+Netball is one of 29 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint, cycling, netball, rugby, ice hockey, baseball and softball, and American football.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -120,5 +120,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Rules still marked "verify" (PROGRESS.md, SD-146):** suspension length, coach time-outs, the extra-time format, goal % vs goal difference tie-break, and the 20-0 walkover. The VO says "two halves of seven minutes" and "World Netball two-one-zero points" (both in the guide); it gives no tie-break order and no walkover score. If any of the verify items change before recording, re-read the guide.
 - **Not in yet, don't imply:** Fast5 and two-legged ties.
 - **Voice (6:30):** the voice guide lists sports by name and doesn't yet list netball, though the netball guide's tip shows the calls and DEVLOG lists voice for netball. Try "goal GS home" on the recording build; if it doesn't work, cut the 6:30 card.
-- **"Every sport" list:** matches the live list (27 sports, 12 Oct 2026). Baseball, softball and American football are being built: don't name them.
+- **"Every sport" list:** matches the live list (29 sports, 12 Oct 2026; baseball and softball count as one sport).
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

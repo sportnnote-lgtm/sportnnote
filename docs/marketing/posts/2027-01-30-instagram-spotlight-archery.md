@@ -58,4 +58,4 @@ Tag your archery team.
 ## Pre-post checks
 - **Build:** recheck in the frozen launch build: **End 1 of 12**, the keypad, the "= total" check, **Shoot-off place**, **Close ranking round → seed match play**, **Save end**, the 5–5 shoot-off prompt.
 - **Team events:** archery team (3) and mixed team (1 + 1) are live since 12 Oct 2026 (team-events-in-meets guide). The Reel doesn't show them; the founder may add "Team and mixed team events too" as a caption line.
-- **Count:** if this post mentions the total anywhere (it doesn't by default), use the live count (27 as of 12 Oct 2026).
+- **Count:** if this post mentions the total anywhere (it doesn't by default), use the live count (29 as of 12 Oct 2026).

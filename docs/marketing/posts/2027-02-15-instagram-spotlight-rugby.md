@@ -61,4 +61,4 @@ Tag your rugby team.
 - **Claims from the guide only:** "sudden death in sevens" (5-minute sudden-death periods) and "a kicking competition in 15s" (after extra time and sudden death) are the **Standard knockout** defaults; organisers can pick another option.
 - **Known issue (PROGRESS.md, SD-156):** a profile once showed "0W 0D 0L" for a new rugby team while the sport page showed 1-0-0 (possibly demo roster ids). Don't show the W-D-L line on the profile shot unless it's right on the recording build.
 - **Not in yet, don't imply:** an HIA timer, yellow-card citing.
-- **Count:** no total in the caption. If added: 27 as of 12 Oct 2026.
+- **Count:** no total in the caption. If added: 29 as of 12 Oct 2026.

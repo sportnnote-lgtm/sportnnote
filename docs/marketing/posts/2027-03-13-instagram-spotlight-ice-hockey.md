@@ -23,7 +23,7 @@ Scored the IIHF way, on one phone:
 🎯 Sudden-death overtime, then a shoot-out in the order you pick
 📊 Goalie save % and GAA, and IIHF 3-2-1-0 standings
 
-That's all three: netball, rugby and ice hockey. 27 sports on SportnNote.
+That's all three: netball, rugby and ice hockey. 29 sports on SportnNote.
 Full how-to on our YouTube. Tag your hockey club 👇
 
 #SportnNote #IceHockey #Hockey #ClubSport
@@ -47,7 +47,7 @@ Tag your hockey club.
 | 0:08–0:11 | Red House scores: "PP". Sameer comes out; 5 v 5. | PP goal? He's out |
 | 0:11–0:14 | **🥅 Pull goalie** for Blue House; an empty-net goal marked "EN". | Pull the goalie |
 | 0:14–0:17 | **🏁 Final horn** → "RH first" → a shoot-out goal; it stops when decided. | Shoot-out, your order |
-| 0:17–0:20 | End card. | Three new team sports · 3 of 3 · 27 sports |
+| 0:17–0:20 | End card. | Three new team sports · 3 of 3 · 29 sports |
 
 **Audio:** licensed track; a goal horn on the first goal.
 
@@ -58,5 +58,5 @@ Tag your hockey club.
 ## Pre-post checks
 - **Build:** recheck in the frozen launch build: **🚨 Goal**, the EV/PP/SH/EN chips, **⏱ Penalty**, **Minor 2′**, the penalty-box line, **🥅 Pull goalie**, **🏁 Final horn**, the "… first" shoot-out chips.
 - **Rules:** the guide's penalty-box rules only (a PP goal ends the earliest minor of the short team; double minors lose only the 2 minutes being served; majors run in full). Don't add delayed penalties, face-offs or time on ice (not in yet).
-- **Count:** "27 sports" must match the live list on the day (27 as of 12 Oct 2026). If baseball, softball or American football have shipped and been announced by 13 Mar, update the count; if they've shipped but aren't announced yet, ask the founder before changing it.
+- **Count:** "29 sports" must match the live list on the day (29 as of 12 Oct 2026, including baseball & softball and American football, whose spotlights ran on 22 Feb and 1 Mar).
 - **Hashtag #Hockey:** in India "hockey" means field hockey. The caption says "ice hockey" in full every time.
