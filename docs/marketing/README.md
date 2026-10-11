@@ -8,7 +8,7 @@ Ready-to-post drafts for SportnNote's social channels (@sportnnote, handles not 
 
 | Path | What it is |
 |---|---|
-| `content-calendar.md` | Every planned post from 7 Dec 2026 to 14 Mar 2027: date, IST time, platform, format, title, pillar, status and a link to its file. Then the Next season backlog and the International launch track (approved 12 Oct 2026; Gulf and UK rows in local time, gated on company/store accounts, .com, Firebase SMS countries and lawyer review) |
+| `content-calendar.md` | Every planned post from 7 Dec 2026 to 14 Mar 2027: date, IST time, platform, format, title, pillar, status and a link to its file. Then the Next season backlog and the International launch track (approved 12 Oct 2026; Gulf and UK rows in local time, all 18 copy-ready since batch 9, gated on company/store accounts, .com, Firebase SMS countries and lawyer review) |
 | `posts/YYYY-MM-DD-platform-slug.md` | One file per post. YouTube Shorts and Reel-to-Short cuts sit inside the file of the video they're cut from, under `## YouTube Short` |
 | `README.md` | This file |
 
@@ -53,9 +53,42 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - Houses: **Red, Blue, Green and Yellow House**.
   - Players: fictional adults (e.g. Ravi, Arjun, Kabir, Dev, Veer, Rahul, Imran, Asha Rao, Priya, Meera).
   - No photos of real people.
-- **International recordings:** a second tournament on the same account, **SportnNote Demo Meet 2027**, region and time zone UAE (a UK copy later), the same four houses, fictional adult players (e.g. Omar, Yusuf, Hamad, Daniel, Sara, Mariam, plus the names above). Students on school-setup screens are placeholders ("Demo Student A").
+- **International recordings:** a second tournament on the same account, **SportnNote Demo Meet 2027**, region and time zone UAE, plus a UK copy, **SportnNote Demo Meet 2027 (UK)** (region United Kingdom, Europe/London, hosted by the fictional **SportnNote Demo School** on the United Kingdom school system), the same four houses, fictional adult players (e.g. Omar, Yusuf, Hamad, Daniel, Sara, Mariam, plus the names above). Students on school-setup screens are placeholders ("Demo Student A").
 - **Never record the dev seed's FIFA World Cup replay data:** it uses real footballers' names.
 - **On screen:** a small "Demo data" label for the whole clip. Do Not Disturb on, and demo phone numbers only.
+
+## Up next: handles, then paid promotion
+
+**Founder, 13 Oct 2026:** the next session starts with **creating the social handles** (the priority task), followed by a **discussion on paid promotion** for the international posts. The content agent doesn't create accounts; the founder does, from the company's own email. This checklist is ready so that session can start fast.
+
+### Handle checklist (draft)
+
+| Platform | What to create | Handle / URL (first choice) | Notes |
+|---|---|---|---|
+| Instagram | Professional account → Business, category "App page" | @sportnnote | Turn on the "AI info" label workflow before the first AI-voiced Reel. Link a Facebook Page so posts can be scheduled from Meta Business Suite. |
+| Facebook | Page (needed by Instagram's business tools; light posting) | facebook.com/sportnnote | Owned by a Meta Business portfolio in the company's name, not a personal profile. |
+| LinkedIn | Company page (the founder's own profile is the admin and posts the founder pieces) | linkedin.com/company/sportnnote | Add a second admin when there is one. Company pages reshare the founder's posts (7 Apr, 14/21/28 Apr). |
+| YouTube | Channel on a Brand Account (so ownership can be shared or transferred) | @sportnnote | Verify the channel (phone) for custom thumbnails and videos over 15 minutes. "Altered or synthetic content" is set per video. |
+| Reserve only (no posting plan yet) | Threads (comes with Instagram), X, TikTok (not available in India; for later markets), WhatsApp Channel | @sportnnote | Reserve the name so nobody else takes it; leave them empty or point to sportnnote.in. |
+
+- **One name everywhere:** **@sportnnote**, display name **SportnNote**. If it's taken anywhere, use the same fallback on every platform, in this order: **@sportnnote.app** (Instagram, Threads, TikTok allow dots) or **@sportnnoteapp** (where dots aren't allowed), then **@getsportnnote**. Don't mix fallbacks across platforms. One handle serves every market; posts are targeted by region, not by separate handles (roadmap proposal, still the plan).
+- **Profile picture:** the S:N logo on the brand background, the same file on every platform. Banner: the 29-sport grid from the 29 Dec post (LinkedIn, YouTube).
+- **Link in bio:** **https://sportnnote.in** everywhere (it links to the app and the guides). Switch to the .com when the domain move is done (`docs/international/domain-move-com.md`). No link shorteners, no tracking parameters.
+- **Bio lines** (draft; no "free" in bios, because the free-while-new line doesn't fit):
+  - Instagram (≤150 characters): `Live scores, results and records for school and club sport 🏅 29 sports, each by its own international rules. Guides 👇`
+  - LinkedIn tagline (≤120): `Live scoring, results and records for school sport: 29 sports, each by its own international rules.`
+  - LinkedIn About (first line): `SportnNote helps schools, clubs and organisers score every sport the way its federation does, and keeps every result, record and career page in one place.`
+  - YouTube description: `How-tos for scoring 29 sports and running sports days, leagues and tournaments on SportnNote. Some videos use an AI presenter and voice; we always say so in the description. Guides: sportnnote.in/guides`
+- **Account hygiene:** sign up with a company address (e.g. a shared social@ mailbox on the company domain), not a personal one; two-factor authentication on every account; record who holds admin access in the company's own password manager (never in this repo or in chat).
+- **Category and contact:** "Software" / "App page"; contact button = the support email on sportnnote.in/support/. No phone number on public profiles.
+- **Before the first post:** the handles are reserved and the profiles complete, but nothing is posted until a post is Approved (see Approval flow). Update "@sportnnote (handles not created yet)" at the top of this README and in the calendar once they exist.
+
+### Paid promotion: points for the discussion
+- Which posts: the international how-tos and trust posts are the evergreen candidates; launch-week India posts are organic.
+- Where: Meta (Instagram) and LinkedIn first; YouTube in-feed for the how-tos.
+- Who: adults only (PE staff, organisers, parents). Never target or build audiences of under-18s; check each platform's teen-ad rules.
+- Gates: no paid reach in a market before its International launch track gates are met; every ad keeps the house rules (free-while-new line with "free", AI disclosure, no competitor names, no prices in local currencies).
+- Budget, test size and who approves spend: founder to decide.
 
 ## Changelog
 - **2026-10-11:** first batch.
@@ -126,3 +159,18 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - 12 new post files with full copy: `2027-02-18-youtube-howto-american-football`, `2027-02-22-instagram-spotlight-american-football`, `2027-02-25-youtube-howto-baseball-softball`, `2027-03-01-instagram-spotlight-baseball-softball`, `2027-03-17-linkedin-gulf-one-app-both-curricula`, `2027-03-18-instagram-gulf-venue-time-zones`, `2027-03-21-instagram-gulf-netball`, `2027-03-24-linkedin-gulf-new-school-year-april`, `2027-03-27-youtube-howto-set-up-your-school` (full transcript, en-GB voice), `2027-03-31-instagram-gulf-sports-day-move-a-session`, `2027-04-07-linkedin-gulf-uk-childrens-data`, `2027-04-08-instagram-gulf-swimming-gala`.
   - **Other updates:** the 12 Mar "Built for schools everywhere" post keeps its feeder-league sentence (migration live) and points to the approved track.
   - Totals: India calendar 207 rows (33 LinkedIn, 85 Instagram, 89 YouTube: 38 long, 51 Shorts), 124 copy-ready in 94 files; International launch track 17 rows (+ 6 later-market ideas), 8 copy-ready in 8 files; 102 post files in all.
+
+- **Founder decisions 2026-10-13 (batch 8 questions):** (1) the two new-sport spotlights get new Instagram rows and the outlines they replaced come back; (2) "Set up your school" moves to Sat 3 Apr 10:00 BST; (3) the 7 Apr children's-data LinkedIn post stays at 06:30 BST with a company-page reshare at 08:00 BST; (4) Gulf American-curriculum schools pick **United States** as their school system, and that wording stays; (5) next content: the Gulf flag football re-cut and the UK files; (6) next session: create the handles first, then discuss paid promotion.
+
+- **2026-10-13:** ninth batch: founder answers applied, Gulf flag football, the whole UK leg written.
+  - **India calendar:** new Instagram rows **Sun 21 Feb 19:00** (American football, "Two more sports, 1 of 2") and **Sun 28 Feb 19:00** (baseball & softball, 2 of 2), in the free Sunday-evening Reel slot three days after each how-to (the Sundays' 12:30 posts are consent-gated stories). Renamed with `git mv`: `2027-02-22-instagram-spotlight-american-football` → `2027-02-21-instagram-spotlight-american-football`, `2027-03-01-instagram-spotlight-baseball-softball` → `2027-02-28-instagram-spotlight-baseball-softball`; links and date mentions updated in the calendar and in six posts (29 Dec, 9 Jan, 14 Jan, 18 Feb, 25 Feb, 13 Mar). The outlines "Run a high jump with the O/X grid" (Mon 22 Feb) and "Livestream a college match with the overlay" (Mon 1 Mar) are restored and out of the backlog.
+  - **International launch track:**
+    - "Set up your school" moved from Sat 27 Mar 10:00 GST (07:00 GMT) to **Sat 3 Apr 10:00 BST** (13:00 GST, 14:30 IST), Short 18:00 BST; renamed `2027-03-27-youtube-howto-set-up-your-school` → `2027-04-03-youtube-howto-set-up-your-school` with the times inside updated; the 24 Mar Gulf post's pointer updated; the 31 Mar carousel is now row 5.
+    - 7 Apr trust post: stays 09:30 GST / 06:30 BST, company-page reshare 08:00 BST, in the file and the row.
+    - "United States" for Gulf American-curriculum schools recorded in the calendar gates, the 17 Mar post, the 3 Apr video and the 10 Apr Reel.
+    - **10 new post files with full copy:** `2027-04-10-instagram-gulf-flag-football`, `2027-04-14-linkedin-uk-summer-term-sports-day-toolkit`, `2027-04-15-instagram-uk-year-groups-31-august`, `2027-04-17-youtube-howto-uk-sports-day-entries-to-champions` (full transcript, en-GB, + Short), `2027-04-21-linkedin-uk-accessibility-wcag`, `2027-04-22-instagram-uk-childrens-data`, `2027-04-24-instagram-uk-swimming-gala`, `2027-04-28-linkedin-uk-wednesday-leagues-term-fixtures`, `2027-04-29-instagram-uk-tennis-athletics-summer-term`, `2027-05-01-youtube-short-uk-record-board`.
+    - **One new UK row:** Sat 24 Apr 18:00 BST swimming gala (UK edition of 8 Apr): swimming is a UK lead sport and that week had two rows. The UK leg is now Wed LinkedIn / Thu Instagram / Sat post for three weeks.
+    - **One UK row changed:** Sat 1 May is now the record-board Short (18:00 BST, the Shorts slot) instead of "Long jump in feet and inches": UK school athletics is metric; feet and inches moved to the US "Later markets" row.
+    - UK posts use houses, Year groups, sports day, fixtures, terms and half-term, BST with IST in brackets, the UK demo copy **SportnNote Demo Meet 2027 (UK)**, and keep every international gate. LinkedIn company-page reshares at 12:30 BST.
+  - **Up next** section added (handles first, then paid promotion) with a draft handle checklist; the same note is in the calendar gates and the roadmap doc.
+  - Totals: India calendar 209 rows (33 LinkedIn, 87 Instagram, 89 YouTube: 38 long, 51 Shorts), 124 copy-ready in 94 files; International launch track 18 rows, all copy-ready in 18 files (+ 6 later-market ideas); 112 post files in all.

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Publish | Wed 7 Apr 2027, 09:30 GST (11:00 IST; 06:30 BST) |
+| Publish | Wed 7 Apr 2027, 09:30 GST / 06:30 BST (11:00 IST), founder's profile · company page reshare 08:00 BST / 11:00 GST (12:30 IST) |
 | Market | Gulf + UK — International launch track, row 7 |
 | Platform / format | LinkedIn text post, founder's profile; the company page reshares it |
 | Pillar | Pilot and community (trust) |
@@ -10,7 +10,7 @@
 | Status | Draft – copy ready (awaiting founder approval; gated: international launch gates, especially lawyer review) |
 | AI | None. Text only. |
 
-The trust post for both first markets, a week before the UK leg starts (14 Apr). Audience: heads of school, safeguarding and data leads, heads of PE and parents. 09:30 GST is early for UK readers (06:30 BST); the company page reshares it at 08:00 BST the same day. The founder should edit it into their own voice.
+The trust post for both first markets, a week before the UK leg starts (14 Apr). Audience: heads of school, safeguarding and data leads, heads of PE and parents. **Timing (founder decision, 13 Oct 2026):** the post stays at 09:30 GST, which is 06:30 BST, and the company page reshares it at **08:00 BST** (11:00 GST, 12:30 IST) the same day for UK readers. Queue both in the scheduler. The founder should edit it into their own voice.
 
 **Tone rule (founder):** how we protect children, said plainly and positively. No compliance or certification claims (the international privacy policy and terms are a lawyer's draft until reviewed), no "now", "new" or "we fixed", no security-change talk.
 
@@ -37,6 +37,7 @@ If your school has questions about how this works, my messages are open.
 Message the founder with questions.
 
 ## Pre-post checks
+- **Two scheduled items:** the founder's post at 09:30 GST / 06:30 BST and the company-page reshare at 08:00 BST. Check the scheduler shows both, in the right time zones (UK clocks are on BST from 28 Mar).
 - **Gates (International launch track):** company and store accounts; Firebase SMS for AE, QA and GB; and above all the **lawyer review** of the international privacy policy and terms (`docs/international/legal-draft.md`, go-live checklist). This post must not go out before that review is done; if the lawyer changes how consent or analytics work, rewrite the bullets to match.
 - **Wording against the guides, line by line:**
   - Bullet 1: email confirmation outside India, the limits until confirmed (parent-guardian-consent).

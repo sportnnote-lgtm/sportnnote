@@ -46,7 +46,7 @@ Open the app (app.sportnnote.in); comments for how their season works.
 ## Pre-post checks
 - **Gates (International launch track):** company formed and store accounts live; Firebase SMS region policy allows AE and QA; international privacy policy and terms through lawyer review (`docs/international/go-live-checklist.md`, "Before opening to other countries"). Until all are met, hold the post.
 - **Facts against the guides:** the school systems and "Year 14" (set-up-a-school-and-graduation); 31 August for British-curriculum hosts and 1 September for US meets (sports-day-champions-and-age-groups); "Sat, 4:00 pm GST" style times when the venue zone isn't yours (region-and-time-zone); parent confirmation by email outside India and no direct messages to under-18s (parent-guardian-consent).
-- **"Gulf (American curriculum)"** isn't its own school system: an American-curriculum school picks **United States**. The post says "US" on purpose.
+- **"Gulf (American curriculum)"** isn't its own school system: an American-curriculum school picks **United States**. The post says "US" on purpose. **Founder decision (13 Oct 2026):** this is fine; keep the wording.
 - **Cut-off rule:** the guide says meets hosted by a UK or British-curriculum school start on 31 August, US meets on 1 September, others 31 December, and organisers can change it. Don't claim the app mixes cut-offs inside one meet.
 - **Domain:** if the .com is live by then (`docs/international/domain-move-com.md`), swap the link to the .com app address; .in keeps working.
 - **Don't:** name real schools, school groups or associations; mention AED/QAR prices; imply a local office; say "compliant".

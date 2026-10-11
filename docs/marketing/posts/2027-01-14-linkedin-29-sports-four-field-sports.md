@@ -44,7 +44,7 @@ Open the app (app.sportnnote.in).
 ## Pre-post checks
 - **Count and list:** check the live sport list on sportnnote.in (`scripts/build-website.mjs`) on the day: 29 as of 12 Oct 2026. Combined events (decathlon, heptathlon, school pentathlon and tetrathlon) are live since 11 Oct 2026 as part of athletics (SD-93), not a new sport: the count stays 29. The founder may add "and combined events" after athletics if the line has room.
 - **Facts against the guides:** archery keypad and set system (run-an-archery-competition), rowing seats and progressions (run-a-rowing-regatta), canoe lanes 9 and centre-out lanes (run-a-canoe-sprint), cycling events and "s.t." (run-a-cycling-event). Team pursuit and team sprint are live since 12 Oct 2026 (team-events-in-meets guide, SD-137b); archery team and mixed team too, but this post doesn't claim them. Not covered, don't imply them: canoe slalom, madison and omnium.
-- **Baseball & softball and American football** are live since 12 Oct 2026 (SD-144, SD-147). Baseball and softball count as one sport (the site lists "Baseball & softball"); American football covers flag and tackle. The post only names them; their spotlights are 22 Feb and 1 Mar.
+- **Baseball & softball and American football** are live since 12 Oct 2026 (SD-144, SD-147). Baseball and softball count as one sport (the site lists "Baseball & softball"); American football covers flag and tackle. The post only names them; their spotlights are 21 Feb and 28 Feb.
 - **Federation names:** plain text only, no logos.
 - **Launch status:** post only if the app actually opened to everyone on 11 Jan. If launch slipped, hold it.
 - Check that "free" sits with the full "small fee later, 30 days' notice" line.

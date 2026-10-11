@@ -9,7 +9,7 @@
 | Status | Draft – copy ready (awaiting founder approval) |
 | Presenter | AI presenter (picture-in-picture, bottom right) + AI voice, over real screen recordings |
 
-Unnumbered sport how-to. "Sports-day season" week, in the free Thursday long-video slot (that week now has four long videos: Mon, Wed, Thu, Sat). The Thursday Shorts slot is taken by the "Check this mark" Short, so this video's Short goes out on Friday at 18:00. The Instagram spotlight follows on Mon 1 Mar ("Two more sports, 2 of 2"). Softball is played in Indian schools and colleges, so the video names both games every time and shows the **School 7 inn** format. Evergreen: reused in the International launch track (Australia and the US, American-curriculum schools in the Gulf).
+Unnumbered sport how-to. "Sports-day season" week, in the free Thursday long-video slot (that week now has four long videos: Mon, Wed, Thu, Sat). The Thursday Shorts slot is taken by the "Check this mark" Short, so this video's Short goes out on Friday at 18:00. The Instagram spotlight follows on Sun 28 Feb ("Two more sports, 2 of 2"). Softball is played in Indian schools and colleges, so the video names both games every time and shows the **School 7 inn** format. Evergreen: reused in the International launch track (Australia and the US, American-curriculum schools in the Gulf).
 
 ## Title
 How to score baseball and softball: one tap a pitch, the line score, AVG and ERA | SportnNote

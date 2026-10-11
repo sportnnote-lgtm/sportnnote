@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Publish | Mon 22 Feb 2027, 19:00 IST |
+| Publish | Sun 21 Feb 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 20 s, 9:16 |
 | Pillar | Sport spotlight + New feature (American football incl. flag went live on 12 Oct 2026, SD-147) |
 | Guide | https://sportnnote.in/guides/score-american-football/ |
 | Status | Draft – copy ready (awaiting founder approval) |
 | AI | None. Real screen recording, text and music. |
 
-First of two first-season spotlights for the two newest sports (baseball & softball follows on Mon 1 Mar). They're numbered "N of 2", apart from the "Three new team sports" (netball, rugby, ice hockey) and "Four more sports" (archery, rowing, canoe sprint, cycling) series. American football goes first, and flag leads: it's the version schools and colleges can start with, no tackling, no kicking, no pads. It **upgrades the outline "Run a high jump with the O/X grid"** (Mon 22 Feb Reel), which repeated the 12 Jan Short "A high jump, settled by the O/X grid"; that idea moves to the backlog. No new Instagram row this week. The YouTube how-to went out on Thu 18 Feb.
+First of two first-season spotlights for the two newest sports (baseball & softball follows on Sun 28 Feb). They're numbered "N of 2", apart from the "Three new team sports" (netball, rugby, ice hockey) and "Four more sports" (archery, rowing, canoe sprint, cycling) series. American football goes first, and flag leads: it's the version schools and colleges can start with, no tackling, no kicking, no pads. **Its own Instagram row (founder decision, 13 Oct 2026):** batch 8 had put it in the Mon 22 Feb outline slot "Run a high jump with the O/X grid"; that outline is restored on its date, and this Reel moved to the free Sunday-evening Reel slot, three days after the how-to. Sun 21 Feb's 12:30 post is the consent-gated coach story, so the two never share a slot. The YouTube how-to went out on Thu 18 Feb.
 
 Audience: PE teachers and college sports committees starting a flag team, and club players. The Reel shows phone screens only: no players, no school names.
 

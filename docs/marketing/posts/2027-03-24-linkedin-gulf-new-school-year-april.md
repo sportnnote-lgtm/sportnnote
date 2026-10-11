@@ -10,7 +10,7 @@
 | Status | Draft – copy ready (awaiting founder approval; gated: international launch gates) |
 | AI | None. Two real app screenshots (demo data). |
 
-Indian-curriculum schools in the Gulf start their year in April, so late March is when PE departments rebuild class lists. Spring break in the UAE (≈ late Mar–early Apr) means fewer readers that week; it's a planning post they can come back to. The YouTube how-to on Sat 27 Mar shows the same steps. The founder should edit it into their own voice.
+Indian-curriculum schools in the Gulf start their year in April, so late March is when PE departments rebuild class lists. Spring break in the UAE (≈ late Mar–early Apr) means fewer readers that week; it's a planning post they can come back to. The YouTube how-to "Set up your school" shows the same steps; it moved to Sat 3 Apr 10:00 BST (13:00 GST) in batch 9, still in the first days of the April school year. The founder should edit it into their own voice.
 
 ## Post text (post exactly)
 ```

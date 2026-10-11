@@ -9,7 +9,7 @@
 | Status | Draft – copy ready (awaiting founder approval) |
 | Presenter | AI presenter (picture-in-picture, bottom right) + AI voice, over real screen recordings |
 
-Unnumbered sport how-to (like netball, rugby and ice hockey), so #7–#21 keep their numbers. "Careers and records" week, in the free Thursday long-video slot (that week now has four long videos: Mon, Wed, Thu, Sat). The Thursday Shorts slot is taken by the carrom Short, so this video's Short goes out on Friday at 18:00. The Instagram spotlight follows on Mon 22 Feb ("Two more sports, 1 of 2").
+Unnumbered sport how-to (like netball, rugby and ice hockey), so #7–#21 keep their numbers. "Careers and records" week, in the free Thursday long-video slot (that week now has four long videos: Mon, Wed, Thu, Sat). The Thursday Shorts slot is taken by the carrom Short, so this video's Short goes out on Friday at 18:00. The Instagram spotlight follows on Sun 21 Feb ("Two more sports, 1 of 2").
 
 **Flag first.** Flag football (IFAF 5v5) leads the video: it's the version schools and colleges can start with (no tackling, no kicking, no pads), and it's the one most school leagues outside the US play. Tackle (NFL, college, US high school) follows as the second half. Evergreen: reused in the International launch track (American-curriculum schools in the Gulf, later Australia and the US, where the app shows the sport as "Football" and football as "Soccer").
 

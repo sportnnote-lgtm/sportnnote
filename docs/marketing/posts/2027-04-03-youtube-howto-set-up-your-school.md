@@ -2,13 +2,15 @@
 
 | Field | Value |
 |---|---|
-| Publish | Sat 27 Mar 2027, 10:00 GST (11:30 IST; 07:00 GMT — UK clocks go forward the next day) · Short: same day, 18:00 GST (19:30 IST) |
-| Market | Gulf + UK — International launch track, row 5 |
+| Publish | Sat 3 Apr 2027, 10:00 BST (13:00 GST; 14:30 IST) · Short: same day, 18:00 BST (21:00 GST; 22:30 IST) |
+| Market | Gulf + UK — International launch track, row 6 |
 | Platform / format | YouTube long video, ~6 min, 16:9 + one Short (9:16) |
 | Pillar | How-to (SD-150 region and time zones, SD-153 school systems, SD-154 roster import; live since 12 Oct 2026) |
 | Guides it mirrors | [Set your region, time zone and date format](https://sportnnote.in/guides/region-and-time-zone/) · [Set up a school, its classes and graduation](https://sportnnote.in/guides/set-up-a-school-and-graduation/) · [Champions, age cut-offs and event officials](https://sportnnote.in/guides/sports-day-champions-and-age-groups/) · [Import a school or squad roster from a CSV](https://sportnnote.in/guides/import-a-roster/) |
 | Status | Draft – copy ready (awaiting founder approval; gated: international launch gates) |
 | Presenter | AI presenter (picture-in-picture, bottom right) + AI voice (en-GB), over real screen recordings |
+
+**Moved (founder decision, 13 Oct 2026):** from Sat 27 Mar 10:00 GST (07:00 GMT, the day before UK clocks change) to **Sat 3 Apr 10:00 BST**, so UK viewers get it at a normal Saturday-morning hour; Gulf viewers get it at 13:00 GST. It lands in the UAE spring break and the Saturday before the UK leg opens (14 Apr), so UK heads of PE can set up before the summer term. The file was renamed from `2027-03-27-youtube-howto-set-up-your-school.md`.
 
 One video for both first markets: it shows a British-curriculum school (the system UK schools and many Gulf schools share) and points at the Gulf Indian-curriculum and US options. It's the "start here" video the Gulf and UK posts link to. The voice is British English, matching the app's en-GB voice for these regions. Unnumbered (international series).
 
@@ -91,7 +93,7 @@ Times are targets for the edit. "VO" is the AI voice-over (en-GB), word for word
 5. **Phone:** Do Not Disturb on; "Demo data" label throughout.
 
 ## YouTube Short
-- **Publish:** Sat 27 Mar, 18:00 GST. 9:16, 30 s, cut from 1:20–2:45.
+- **Publish:** Sat 3 Apr, 18:00 BST (21:00 GST; 22:30 IST). 9:16, 30 s, cut from 1:20–2:45.
 - **Title:** Year 13, ages on 31 August: your school, set up right #shorts
 - **On-screen text:** "School system: UK · Gulf · US…" … "Graduating class: Year 13" … "Ages on 31 August".
 - **VO (AI, en-GB):** "Pick your school system, and your classes, your graduating year and your age cut-off are right from the start. UK and British-curriculum schools count ages on the thirty-first of August. Next year? One button moves everyone up, and nobody ends up in Year fourteen. SportnNote."
@@ -101,8 +103,9 @@ Times are targets for the edit. "VO" is the AI voice-over (en-GB), word for word
 ## Pre-post checks
 - **Gates (International launch track):** company and store accounts; Firebase SMS region policy allows AE, QA and GB; lawyer review of the international policy and terms (`docs/international/go-live-checklist.md`). Hold until met.
 - **Labels against the guides:** **Region & time zone**, **Country**, **Time zone**, **Change**, **Other countries and zones…**, **Typed dates**, **Clock**, **Week starts on**, **School year and units**, **🏛️ New community**, **School system**, **Change…** and the eight systems, **Graduating class (students leave after this)**, **Create community**, **Save cut-off**, **📥 Import CSV**, **Template**, **Choose CSV file**, **Preview**, **New**, **Already here — skipped**, **Import N people**, **🎓 Promote year**, **🎓 Graduate**, **Keep on**.
+- **American-curriculum schools (founder decision, 13 Oct 2026):** there's no separate Gulf American option; they pick **United States**. The 1:20 VO says so; keep that wording.
 - **School software names:** the guide lists third-party school systems by name; the video says "your school's system" and names none.
 - **Spelling:** the app tab is **Organize** (US spelling in the UI); the en-GB VO says "Organise". Fine as speech; on-screen text quotes the UI.
 - **Children:** placeholder students only, no realistic names, faces or dates of birth in close-up; Open category athletes for the meet clip.
-- **Time:** 10:00 GST is 07:00 GMT on 27 Mar (UK clocks change on 28 Mar). If the UK audience matters more for this video, move it to 10:00 BST Sat 3 Apr (13:00 GST); see the calendar note.
+- **Time:** 10:00 BST on Sat 3 Apr is 13:00 GST and 14:30 IST (UK clocks went forward on 28 Mar, so the UK is on BST). Schedule it in BST, not GST. The Short at 18:00 BST is 21:00 GST.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

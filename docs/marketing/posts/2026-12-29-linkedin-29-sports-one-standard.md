@@ -9,7 +9,7 @@
 | Status | Draft – copy ready (awaiting founder approval) |
 | AI | None. The image is a designed grid of sport icons (no people). |
 
-Reveal phase, in the free Tuesday LinkedIn slot. It sets up the last three reveals (handball 5 Jan, weightlifting 7 Jan, shooting 9 Jan), names the nine sports that get first-season spotlights instead (archery, rowing, canoe sprint and cycling, see the 14 Jan LinkedIn post; netball, rugby and ice hockey, spotlights from 23 Jan; American football and baseball & softball, spotlights on 22 Feb and 1 Mar), and repeats the founder principle from "Every sport deserves a scorecard" (15 Dec) with the live count. The founder should edit it into their own voice.
+Reveal phase, in the free Tuesday LinkedIn slot. It sets up the last three reveals (handball 5 Jan, weightlifting 7 Jan, shooting 9 Jan), names the nine sports that get first-season spotlights instead (archery, rowing, canoe sprint and cycling, see the 14 Jan LinkedIn post; netball, rugby and ice hockey, spotlights from 23 Jan; American football and baseball & softball, spotlights on 21 Feb and 28 Feb), and repeats the founder principle from "Every sport deserves a scorecard" (15 Dec) with the live count. The founder should edit it into their own voice.
 
 ## Post text (post exactly)
 ```

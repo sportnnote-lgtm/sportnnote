@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Publish | Wed 31 Mar 2027, 12:30 GST (14:00 IST) |
-| Market | Gulf (UAE, Qatar) — International launch track, row 6 |
+| Market | Gulf (UAE, Qatar) — International launch track, row 5 |
 | Platform / format | Instagram carousel, 7 slides, 4:5 |
 | Pillar | New feature (meet timetable and printing, live since 12 Oct 2026) |
 | Guide | https://sportnnote.in/guides/meet-timetable-and-printing/ |

@@ -58,5 +58,5 @@ Tag your hockey club.
 ## Pre-post checks
 - **Build:** recheck in the frozen launch build: **🚨 Goal**, the EV/PP/SH/EN chips, **⏱ Penalty**, **Minor 2′**, the penalty-box line, **🥅 Pull goalie**, **🏁 Final horn**, the "… first" shoot-out chips.
 - **Rules:** the guide's penalty-box rules only (a PP goal ends the earliest minor of the short team; double minors lose only the 2 minutes being served; majors run in full). Don't add delayed penalties, face-offs or time on ice (not in yet).
-- **Count:** "29 sports" must match the live list on the day (29 as of 12 Oct 2026, including baseball & softball and American football, whose spotlights ran on 22 Feb and 1 Mar).
+- **Count:** "29 sports" must match the live list on the day (29 as of 12 Oct 2026, including baseball & softball and American football, whose spotlights ran on 21 Feb and 28 Feb).
 - **Hashtag #Hockey:** in India "hockey" means field hockey. The caption says "ice hockey" in full every time.

@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Publish | Mon 1 Mar 2027, 19:00 IST |
+| Publish | Sun 28 Feb 2027, 19:00 IST |
 | Platform / format | Instagram Reel, 20 s, 9:16 |
 | Pillar | Sport spotlight + New feature (baseball & softball went live on 12 Oct 2026, SD-144) |
 | Guide | https://sportnnote.in/guides/score-baseball/ |
 | Status | Draft – copy ready (awaiting founder approval) |
 | AI | None. Real screen recording, text and music. |
 
-Second of the two first-season spotlights for the newest sports (American football, flag first, was 22 Feb). "Exam season, college and club sport" week: softball and baseball in India are mostly college, club and school-team sport. It **upgrades the outline "Livestream a college match with the overlay"** (Mon 1 Mar Reel), which repeated the 8 Jan overlay Reel and how-to #5; that idea moves to the backlog. No new Instagram row this week. The YouTube how-to went out on Thu 25 Feb.
+Second of the two first-season spotlights for the newest sports (American football, flag first, was Sun 21 Feb). Last day of "sports-day season" week, the evening before "exam season, college and club sport" week: softball and baseball in India are mostly college, club and school-team sport. **Its own Instagram row (founder decision, 13 Oct 2026):** batch 8 had put it in the Mon 1 Mar outline slot "Livestream a college match with the overlay"; that outline is restored on its date, and this Reel moved to the free Sunday-evening Reel slot, three days after the how-to and a week after the American football spotlight. Sun 28 Feb's 12:30 post is the consent-gated parent story, so the two never share a slot. The YouTube how-to went out on Thu 25 Feb.
 
 Audience: PE teachers, college sports committees and club coaches. The Reel shows phone screens only: no players, no school names.
 
