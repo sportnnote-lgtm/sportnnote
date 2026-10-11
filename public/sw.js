@@ -1,7 +1,9 @@
 /* SportnNote service worker.
  *  • Web push (iPhone Home Screen app / browsers): payload { title, body, url?, tag? }.
  *  • Works on poor signal at the ground:
- *      – pages: network first, else the last saved app page (opens offline);
+ *      – pages: network first, else the last saved app page (opens offline). On
+ *        "lie-fi" (a connection that hangs) the saved page is used after 3 s and
+ *        the newer version is still saved in the background for the next open;
  *      – app code (/_expo/static/, /assets/ — hashed, never change): saved on first
  *        use, then served from the phone;
  *      – data reads (Supabase REST GETs): network first, else the last copy we saw,
@@ -11,6 +13,10 @@
 const SHELL = 'sn-shell-v1';
 const API = 'sn-api-v1';
 const MAX_API_ENTRIES = 300;
+/** How long a page load waits for the network before opening the saved app. */
+const NAV_TIMEOUT_MS = 3000;
+/** Bumped by 'clear-data' so a data copy still being written can't land after sign-out. */
+let apiGen = 0;
 
 /** Save the app page AND every script/stylesheet it loads — the main bundle is
  *  requested before this worker controls the page, so it must be fetched here. */
@@ -44,7 +50,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data === 'clear-data') event.waitUntil(caches.delete(API));
+  if (event.data === 'clear-data') { apiGen++; event.waitUntil(caches.delete(API)); }
 });
 
 async function trim(cacheName, max) {
@@ -60,16 +66,28 @@ self.addEventListener('fetch', (event) => {
 
   // App pages (any route is the same single-page app).
   if (req.mode === 'navigate' && url.origin === self.location.origin) {
+    const network = fetch(req);
+    // Save the newest page + its code whenever the network answers — even if the
+    // saved copy was already shown because the network was too slow (perf F-14).
+    // (This handler is attached first, so it clones before the page reads the body.)
+    event.waitUntil(network.then(async (res) => {
+      if (!res.ok) return;
+      const copy = res.clone();
+      const c = await caches.open(SHELL);
+      await c.put('/', copy.clone());
+      await saveShell(await copy.text());
+    }).catch(() => undefined));
     event.respondWith((async () => {
+      let timer;
+      const slow = new Promise((resolve) => { timer = setTimeout(() => resolve(null), NAV_TIMEOUT_MS); });
       try {
-        const res = await fetch(req);
-        if (res.ok) {
-          const c = await caches.open(SHELL);
-          const copy = res.clone();
-          event.waitUntil((async () => { await c.put('/', copy.clone()); await saveShell(await copy.text()); })());
-        }
-        return res;
+        const first = await Promise.race([network, slow]);
+        if (first) { clearTimeout(timer); return first; }
+        const saved = await caches.match('/');
+        if (saved) return saved;
+        return await network; // nothing saved yet — keep waiting for the network
       } catch (e) {
+        clearTimeout(timer);
         return (await caches.match('/')) || Response.error();
       }
     })());
@@ -95,9 +113,17 @@ self.addEventListener('fetch', (event) => {
       try {
         const res = await fetch(req);
         if (res.ok) {
-          const c = await caches.open(API);
-          await c.put(req, res.clone());
-          if (Math.random() < 0.05) trim(API, MAX_API_ENTRIES);
+          // Hand the response to the app at once; save the copy alongside (perf
+          // F-13 — the read used to wait for the full body plus the cache write).
+          const copy = res.clone();
+          const gen = apiGen;
+          event.waitUntil((async () => {
+            if (gen !== apiGen) return;
+            const c = await caches.open(API);
+            if (gen !== apiGen) return;
+            await c.put(req, copy);
+            if (Math.random() < 0.05) await trim(API, MAX_API_ENTRIES);
+          })().catch(() => undefined));
         }
         return res;
       } catch (e) {

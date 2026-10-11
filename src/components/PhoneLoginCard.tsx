@@ -3,7 +3,7 @@
  * Number → SMS code → signed in. A new number gets a short sign-up form (name,
  * DOB, role, guardian for under-18s, terms). See core/phoneLogin.ts.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,7 +13,7 @@ import { DateField } from './DateTimeField';
 import { ageFromDob } from '../core/age';
 import { isValidPhone, normalizePhone, formatPhone } from '../core/phone';
 import { PhoneField } from './PhoneField';
-import { completePhoneSignup, confirmPhoneLogin, sendPhoneCode } from '../core/phoneLogin';
+import { completePhoneSignup, confirmPhoneLogin, sendPhoneCode, prewarmPhoneSdk, prewarmPhoneCode, releasePrewarmedPhoneCode } from '../core/phoneLogin';
 import type { Role } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -41,6 +41,18 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
   const age = ageFromDob(dob.trim());
   const minor = age !== undefined && age < 18;
 
+  // Perf F-01: load Firebase when the card appears, and the invisible reCAPTCHA
+  // once the number is being typed, so "Send code" only has to run the check
+  // and send the SMS.
+  useEffect(() => {
+    prewarmPhoneSdk();
+    return releasePrewarmedPhoneCode;
+  }, []);
+  const onPhoneChange = (v: string) => {
+    setPhone(v);
+    if (v.trim()) prewarmPhoneCode();
+  };
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null);
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Something went wrong — try again.'); }
@@ -49,7 +61,12 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
 
   const send = () => run(async () => {
     if (!isValidPhone(phone)) throw new Error('Enter your mobile number — check the country code.');
-    await sendPhoneCode(normalizePhone(phone));
+    try {
+      await sendPhoneCode(normalizePhone(phone));
+    } catch (e) {
+      prewarmPhoneCode(); // a retry gets a ready reCAPTCHA too
+      throw e;
+    }
     setCode('');
     setStep('code');
   });
@@ -91,7 +108,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
       {step === 'phone' && (
         <>
           <Text style={textStyles.muted}>We’ll text you a code — no password needed.</Text>
-          <PhoneField label="Mobile number" value={phone} onChange={setPhone} />
+          <PhoneField label="Mobile number" value={phone} onChange={onPhoneChange} />
           <FormError message={error} />
           <Button label={busy ? 'Sending…' : 'Send code'} onPress={() => void send()} disabled={busy} />
         </>

@@ -5,6 +5,7 @@
  * navigation stays instant. On native everything is in one bundle anyway.
  */
 import React from 'react';
+import { Platform } from 'react-native';
 import { isStaleVersionError, reloadForNewVersion } from '../core/staleVersion';
 
 const loaders: Array<() => Promise<unknown>> = [];
@@ -20,10 +21,22 @@ export function lazyScreen<T extends React.ComponentType<any>>(load: () => Promi
 }
 
 let prefetched = false;
-/** Warm every lazy screen's chunk (idempotent; failures are retried on open). */
+/** Warm every lazy screen's chunk (idempotent; failures are retried on open).
+ *  Web only: on native every screen is already in the single bundle, so a
+ *  "prefetch" would just evaluate ~80 screen modules at once on the JS thread
+ *  right as the user starts tapping (perf audit F-11). On the web it waits for
+ *  an idle moment so the chunks don't compete with the first data reads. */
 export function prefetchScreens(): void {
-  if (prefetched) return;
+  if (prefetched || Platform.OS !== 'web') return;
   prefetched = true;
+  const ric = typeof globalThis !== 'undefined'
+    ? (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => unknown }).requestIdleCallback
+    : undefined;
+  if (typeof ric === 'function') ric.call(globalThis, warmAll, { timeout: 5000 });
+  else warmAll();
+}
+
+function warmAll(): void {
   // Metro's dev loader may hand back a bare thenable — normalise to a Promise.
   for (const load of loaders) {
     try { void Promise.resolve(load()).catch(() => undefined); } catch { /* retried on open */ }

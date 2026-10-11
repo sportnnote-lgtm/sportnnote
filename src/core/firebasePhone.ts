@@ -16,7 +16,7 @@
  * that's live). Configure with EXPO_PUBLIC_FIREBASE_* — see docs/firebase-phone-setup.md.
  */
 import { Platform } from 'react-native';
-import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
+import type { Auth, ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
 import { toE164 } from './phone';
 
 // Expo inlines EXPO_PUBLIC_* only for direct `process.env.X` references.
@@ -35,13 +35,117 @@ export const firebasePhoneAvailable = (): boolean =>
 export { toE164 };
 
 let confirmation: ConfirmationResult | null = null;
-let verifier: RecaptchaVerifier | null = null;
 
-async function authInstance() {
-  const { initializeApp, getApps } = await import('firebase/app');
-  const { getAuth } = await import('firebase/auth');
-  const app = getApps()[0] ?? initializeApp(config as Required<typeof config>);
-  return getAuth(app);
+/** An invisible reCAPTCHA and the DOM node it lives in. */
+interface Captcha { v: RecaptchaVerifier; host: HTMLElement }
+/** The verifier used by the latest send. */
+let active: Captcha | null = null;
+/** A verifier rendered ahead of time (perf F-01), never used yet. */
+let warm: Captcha | null = null;
+let warming: Promise<void> | null = null;
+
+let authP: Promise<Auth> | null = null;
+/** Firebase app + auth, initialised once (the SDK chunks load on first call). */
+function authInstance(): Promise<Auth> {
+  if (!authP) {
+    authP = (async () => {
+      const { initializeApp, getApps } = await import('firebase/app');
+      const { getAuth } = await import('firebase/auth');
+      const app = getApps()[0] ?? initializeApp(config as Required<typeof config>);
+      return getAuth(app);
+    })();
+    authP.catch(() => { authP = null; }); // a failed chunk download is retried next time
+  }
+  return authP;
+}
+
+/** The invisible reCAPTCHA needs a DOM node — a FRESH one each time: reusing a
+ *  node that already rendered a widget fails ("already been rendered"), which
+ *  broke a second "Send code" (e.g. after changing the number). */
+function newCaptcha(Verifier: typeof RecaptchaVerifier, auth: Auth): Captcha {
+  const host = document.createElement('div');
+  host.setAttribute('data-sn-recaptcha', '');
+  document.body.appendChild(host);
+  return { v: new Verifier(auth, host, { size: 'invisible' }), host };
+}
+
+function dispose(c: Captcha | null): void {
+  if (!c) return;
+  try { c.v.clear(); } catch { /* already gone */ }
+  try { c.host.remove(); } catch { /* already gone */ }
+}
+
+/** Open connections to Google's sign-in hosts early (idempotent). */
+function preconnect(): void {
+  if (document.querySelector('link[data-sn-preconnect]')) return;
+  for (const [href, cors] of [
+    ['https://www.google.com', false],
+    ['https://www.gstatic.com', false],
+    ['https://identitytoolkit.googleapis.com', true],
+  ] as const) {
+    const l = document.createElement('link');
+    l.rel = 'preconnect';
+    l.href = href;
+    if (cors) l.crossOrigin = 'anonymous';
+    l.setAttribute('data-sn-preconnect', '');
+    document.head.appendChild(l);
+  }
+}
+
+/**
+ * Perf F-01, step 1 (when the phone card appears): load the Firebase SDK chunks,
+ * initialise auth and open connections to Google — nothing visible changes.
+ */
+export function prewarmPhoneSdk(): void {
+  if (!firebasePhoneAvailable()) return;
+  try { preconnect(); } catch { /* no <head> — fine */ }
+  void Promise.all([authInstance(), import('firebase/auth')]).catch(() => undefined);
+}
+
+/**
+ * Perf F-01, step 2 (once the person starts typing their number): render the
+ * invisible reCAPTCHA ahead of time (its scripts and site key loaded), so the
+ * "Send code" tap only runs the challenge and sends the SMS. Rendering is what
+ * shows Google's small reCAPTCHA badge, so it waits for the phone flow to be
+ * chosen rather than appearing on the sign-in page at once. Safe to call
+ * repeatedly; a failure is silent and the send does the work itself, as before.
+ */
+export function prewarmPhoneCode(): void {
+  if (!firebasePhoneAvailable() || warm || warming) return;
+  try { preconnect(); } catch { /* no <head> — fine */ }
+  const run = async (): Promise<void> => {
+    const auth = await authInstance();
+    const { RecaptchaVerifier: Verifier } = await import('firebase/auth');
+    const c = newCaptcha(Verifier, auth);
+    try {
+      await c.v.render();
+    } catch (e) {
+      dispose(c);
+      throw e;
+    }
+    if (warming === p) warm = c; // still wanted
+    else dispose(c);             // released while it was loading
+  };
+  const p: Promise<void> = Promise.resolve().then(run);
+  warming = p;
+  p.catch(() => undefined).then(() => { if (warming === p) warming = null; });
+}
+
+/** Drop the pre-rendered reCAPTCHA if it was never used (the card went away). */
+export function releasePrewarmedPhoneCode(): void {
+  warming = null;
+  dispose(warm);
+  warm = null;
+}
+
+/** The pre-rendered verifier, if one is ready (or becomes ready within a few seconds). */
+async function takeWarm(): Promise<Captcha | null> {
+  if (!warm && warming) {
+    await Promise.race([warming.catch(() => undefined), new Promise((r) => setTimeout(r, 5000))]);
+  }
+  const c = warm;
+  warm = null;
+  return c;
 }
 
 /** Friendly text for Firebase error codes. */
@@ -64,22 +168,17 @@ export async function sendPhoneCode(phone: string): Promise<void> {
   try {
     const auth = await authInstance();
     const { RecaptchaVerifier: Verifier, signInWithPhoneNumber } = await import('firebase/auth');
-    // The invisible reCAPTCHA needs a DOM node — a FRESH one each time: reusing a
-    // node that already rendered a widget fails ("already been rendered"), which
-    // broke a second "Send code" (e.g. after changing the number).
-    try { verifier?.clear(); } catch { /* already gone */ }
-    verifier = null;
-    document.getElementById('sn-recaptcha')?.remove();
-    const host = document.createElement('div');
-    host.id = 'sn-recaptcha';
-    document.body.appendChild(host);
-    verifier = new Verifier(auth, host, { size: 'invisible' });
+    // Every send uses a verifier that has never been used: the pre-rendered one
+    // (F-01) if it's ready, otherwise a fresh one on a fresh node, as before.
+    dispose(active);
+    active = null;
+    active = (await takeWarm()) ?? newCaptcha(Verifier, auth);
     const e164 = toE164(phone);
     if (!e164) throw Object.assign(new Error('invalid'), { code: 'auth/invalid-phone-number' });
-    confirmation = await signInWithPhoneNumber(auth, e164, verifier);
+    confirmation = await signInWithPhoneNumber(auth, e164, active.v);
   } catch (e) {
-    try { verifier?.clear(); } catch { /* ignore */ }
-    verifier = null;
+    dispose(active);
+    active = null;
     // Unexpected Firebase failures go to our error reports (with the code).
     const code = (e as { code?: string })?.code ?? '';
     if (!/invalid-phone-number|too-many-requests|quota-exceeded|network-request-failed/.test(code)) {

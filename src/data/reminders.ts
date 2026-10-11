@@ -1,6 +1,6 @@
 /**
  * Scorer-reminder engine. Without a backend cron we approximate scheduled
- * pushes by polling: on app focus (and every minute) we check upcoming matches
+ * pushes by polling: when the app opens or returns (and every 5 minutes) we check upcoming matches
  * and fire any reminder whose time window has arrived.
  *
  *  - If a match has NO scorer, its hosts (match hosts + tournament hosts) are
@@ -13,7 +13,9 @@
  * `computeDueReminders` is pure (no I/O) so the windowing logic is testable.
  */
 import { useEffect } from 'react';
-import { getMatches, getTournaments, getOrganizations, getMatchSquads, getTeamLeaders, getPlayers, getMyPlayerId } from './repos';
+import { AppState } from 'react-native';
+import { getUpcomingMatches, getTournaments, getOrganizations, getMatchSquadsMany, getTeamLeadersMany, getPlayers, getMyPlayerId } from './repos';
+import { gatherReminderInputsWith, startReminderTicker, type ReminderInputs, type ReminderReads } from './reminderInputs';
 import { reminderPrefsStore, shortByMinutes } from './reminderPrefs';
 import { followStore } from './followStore';
 import { notify, syncScheduledLocal } from '../core/notifications';
@@ -298,33 +300,31 @@ export function computeScheduledReminders(
 // Reminders already delivered this session (keeps each window firing once).
 const sent = new Set<string>();
 
-/** Fetch everything the reminder computations need, once, so the "due now" (feed)
- *  and "schedule ahead" (OS) passes share the same snapshot. */
-async function gatherReminderInputs(now: number) {
-  const [matches, tournaments, orgs] = await Promise.all([getMatches(), getTournaments(), getOrganizations()]);
-  // Only genuinely-scheduled future games get prep reminders — a postponed or
-  // cancelled match shouldn't nag the host to line up a scorer.
-  const upcoming = matches.filter((m) => m.status === 'scheduled' && new Date(m.startsAt).getTime() > now);
-  const teamIds = Array.from(new Set(upcoming.flatMap((m) => [m.homeTeam.id, m.awayTeam.id])));
-  const leadersByTeam: Record<string, TeamLeadership> = {};
-  const squadsByMatch: Record<string, MatchSquads> = {};
-  await Promise.all([
-    ...teamIds.map(async (id) => { leadersByTeam[id] = await getTeamLeaders(id); }),
-    ...upcoming.map(async (m) => { squadsByMatch[m.id] = await getMatchSquads(m.id); }),
-  ]);
-  const players = await getPlayers();
-  const playerNameById = Object.fromEntries(players.map((p) => [p.id, p.fullName]));
+/** The live/demo reads behind gatherReminderInputsWith (reminderInputs.ts). */
+const reminderReads: ReminderReads = {
+  upcomingMatches: (now) => getUpcomingMatches(now),
+  tournaments: () => getTournaments(),
+  organizations: () => getOrganizations(),
+  teamLeaders: (ids) => getTeamLeadersMany(ids),
+  matchSquads: (ids) => getMatchSquadsMany(ids),
+  players: () => getPlayers(),
   // The viewer's followed players (follow keys look like "player:<id>") who
   // still want "Before they play" reminders (#23 alert choices).
-  const followedPlayerIds = new Set(
+  followedPlayerIds: () => new Set(
     followStore.getSnapshot().filter((k) => k.startsWith('player:')).map((k) => k.slice('player:'.length))
       .filter((id) => followStore.wants('player', id, 'reminder')),
-  );
-  return { matches, tournaments, orgs, leadersByTeam, squadsByMatch, players, playerNameById, followedPlayerIds };
+  ),
+};
+
+/** Fetch everything the reminder computations need, once, so the "due now" (feed)
+ *  and "schedule ahead" (OS) passes share the same snapshot. */
+function gatherReminderInputs(now: number): Promise<ReminderInputs> {
+  return gatherReminderInputsWith(reminderReads, now);
 }
 
-export async function runReminderCheck(now: number = Date.now(), viewerId?: string | null): Promise<number> {
-  const g = await gatherReminderInputs(now);
+/** `inputs`: a snapshot already gathered this tick (shared with syncDeviceReminders). */
+export async function runReminderCheck(now: number = Date.now(), viewerId?: string | null, inputs?: ReminderInputs): Promise<number> {
+  const g = inputs ?? await gatherReminderInputs(now);
   const due = computeDueReminders(
     g.matches, g.tournaments, g.orgs, g.leadersByTeam, g.squadsByMatch, now, sent,
     reminderPrefsStore.get(), viewerId, g.followedPlayerIds, g.playerNameById,
@@ -340,9 +340,9 @@ export async function runReminderCheck(now: number = Date.now(), viewerId?: stri
 
 /** Phase E: schedule the viewer's upcoming personal reminders as dated OS
  *  notifications so they arrive even when the app is closed. No-op on web. */
-export async function syncDeviceReminders(now: number = Date.now(), viewerId?: string | null): Promise<number> {
+export async function syncDeviceReminders(now: number = Date.now(), viewerId?: string | null, inputs?: ReminderInputs): Promise<number> {
   if (!viewerId) return 0;
-  const g = await gatherReminderInputs(now);
+  const g = inputs ?? await gatherReminderInputs(now);
   const scheduled = computeScheduledReminders(
     g.matches, g.tournaments, g.squadsByMatch, now, viewerId,
     reminderPrefsStore.get(), g.followedPlayerIds, g.playerNameById,
@@ -362,24 +362,31 @@ export async function syncDeviceReminders(now: number = Date.now(), viewerId?: s
   playersInSide,
 };
 
-/** Run the reminder check on mount and every minute while signed in. Resolves the
- *  signed-in player so player reminders in the shared demo feed are theirs only. */
+/** First check a few seconds after launch, so Home's own reads go first (F-08b). */
+export const REMINDER_FIRST_DELAY_MS = 10_000;
+/** Then every 5 minutes while the app is open (F-08e, founder-approved Q3 — was 60 s). */
+export const REMINDER_INTERVAL_MS = 5 * 60_000;
+/** Coming back to the app re-checks, but not more than once a minute. */
+export const REMINDER_RESUME_GAP_MS = 60_000;
+
+/** Run the reminder check shortly after the app opens, every 5 minutes, and when
+ *  it returns to the foreground, while signed in. Resolves the signed-in player
+ *  so player reminders in the shared demo feed are theirs only. Each tick
+ *  gathers the data ONCE for both passes (F-08a). */
 export function useReminderEngine() {
   const { profile } = useAuth();
   useEffect(() => {
-    let viewerId: string | null = null;
-    let cancelled = false;
-    const tick = () => {
+    const viewer = getMyPlayerId(profile?.id).catch(() => null);
+    const ticker = startReminderTicker(async () => {
+      const viewerId = await viewer;
       const now = Date.now();
-      void runReminderCheck(now, viewerId);       // in-app feed (while open)
-      void syncDeviceReminders(now, viewerId);    // OS notifications ahead of time (native; no-op on web)
-    };
-    getMyPlayerId(profile?.id).then((id) => {
-      if (cancelled) return;
-      viewerId = id;
-      tick();
-    });
-    const iv = setInterval(tick, 60_000);
-    return () => { cancelled = true; clearInterval(iv); };
+      const g = await gatherReminderInputs(now);
+      await Promise.all([
+        runReminderCheck(now, viewerId, g),       // in-app feed (while open)
+        syncDeviceReminders(now, viewerId, g),    // OS notifications ahead of time (native; no-op on web)
+      ]);
+    }, { firstDelayMs: REMINDER_FIRST_DELAY_MS, intervalMs: REMINDER_INTERVAL_MS, minGapMs: REMINDER_RESUME_GAP_MS });
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') ticker.kick(); });
+    return () => { sub.remove(); ticker.stop(); };
   }, [profile?.id]);
 }

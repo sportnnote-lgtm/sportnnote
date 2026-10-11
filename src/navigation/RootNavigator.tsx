@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect, useRef } from 'react';
 import { Text, View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
 import { navRef } from './navRef';
@@ -271,6 +271,15 @@ export default function RootNavigator() {
     return () => clearTimeout(t);
   }, [authed]);
 
+  // A sign-in (or a switch to another account) starts the navigator afresh, as it
+  // always did when the profile load showed a spinner first. Now that a sign-in
+  // can render at once (perf F-05) and a same-user refresh shows no spinner
+  // (F-07), that fresh start is keyed explicitly: new signed-in user → new key.
+  // Signing out keeps the navigator (it never remounted on sign-out before).
+  const navKey = useRef({ id: null as string | null, n: 0 });
+  if (!profile) navKey.current.id = null;
+  else if (profile.id !== navKey.current.id) navKey.current = { id: profile.id, n: navKey.current.n + 1 };
+
   // Warm the on-demand screens once the app has settled, so later taps are instant.
   useEffect(() => {
     if (loading || IS_OVERLAY) return;
@@ -377,6 +386,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer
+      key={navKey.current.n}
       theme={navTheme}
       linking={linking}
       ref={navRef}

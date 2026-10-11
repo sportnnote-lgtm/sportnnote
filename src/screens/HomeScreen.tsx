@@ -19,7 +19,7 @@ import { SPORT_LIST, getSport } from '../sports/registry';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { isSupabaseConfigured } from '../core/supabase';
 import { matchEligibility } from '../core/eligibility';
-import { useMyTournaments, useScopedMatches, useNotifications, usePlayerProfile } from '../data/hooks';
+import { useMyTournaments, useScopedMatches, useNotifications, usePlayerLite } from '../data/hooks';
 import { getMyPlayerId } from '../data/repos';
 import { useAuth } from '../core/auth';
 import { canScoreByRole } from '../core/roles';
@@ -72,7 +72,7 @@ export default function HomeScreen() {
       };
     }, [profile?.id])
   );
-  const { player } = usePlayerProfile(playerId);
+  const { player } = usePlayerLite(playerId); // perf F-09: no stats reads on Home
   // Post-login nudge: prompt the user to finish verifying so they can be added to
   // matches (the eligibility gate needs a verified mobile + email; guardian for
   // minors). Email auto-verifies from the confirmed login; mobile is the usual

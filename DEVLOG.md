@@ -13,6 +13,15 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-13 — Speed Wave 1 (docs/perf/audit.md)
+- **Phone sign-in (web):** Firebase and the "I'm not a robot" check load when the phone card opens (invisible reCAPTCHA pre-rendered on the first digit; each send still uses a fresh one); `phone-login` is woken as soon as the code is sent; sign-in shows Home from session details while the profile fills in; no extra `getUser` call.
+- **No spinner flashes / keeps place:** auth events (token refresh, returning to the web app) no longer reload the profile behind a full-screen spinner (`core/authEvents.ts`); the navigator resets only when a different user signs in.
+- **Lighter launch:** reminders gather once per tick, batched, first run 10 s after launch, then every 5 minutes and on return to the app (founder OK); `getMyPlayerId` memoised (cleared on sign-out/switch); Home reads just the player row; no screen prefetch on native; service worker serves data without waiting for its cache write and falls back to the saved page after 3 s.
+- **Migration `20261022100000_perf_indexes_players_view.sql`:** `players(profile_id)` index, `players_view` evaluates the viewer once per query (identical output: 51 PGlite checks), 7 FK indexes. Don't re-run the older protect_minors migration after it (it recreates the slow view).
+- Verified: 3383 pass / 0 fail, tsc clean, demo + live guest in the browser. Founder answers: no instant code box, no cached feed, no APK phone sign-in.
+
+---
+
 ### 2026-10-12 — New sports: baseball + softball (SD-144), American football incl. flag (SD-147)
 - **Baseball & softball (WBSC):** presets baseball 9 inn, softball fastpitch 7, slow pitch 7, youth 6, school 7 — run rules, extra-inning runners, DH, order size all organiser-editable. One tap per pitch (ball / strike / swinging / foul / HBP); "In play" sheet with the usual runner advances pre-picked, RBI and optional fielder notation (6-3, E5); runner events (steal, CS, WP, PB, balk, pick-off); subs incl. pinch hitter/runner and pitching changes; OBR run rules (no run on a third-out force; walk-off counts only the winning run unless a home run); live diamond, count, outs, pitch counts; line score by inning; batting (AVG/OBP/SLG/OPS) and pitching (IP, ERA scaled to the format's innings, WHIP, W-L-SV) with ER/UER override; WBSC standings (win %, H2H, TQB, ER-TQB, AVG); walkover 9-0 / 7-0; records (no-hitter, perfect game, cycle, grand slam).
 - **American football:** flag football first (IFAF 5v5 2×20, school 2×15 — 50-yard field, 3 downs to midfield, conversions from the 5 or 12, no kicking) and tackle (NFL / college / NFHS). Score-only mode by default (touchdown → try, field goal, safety, timeout); optional play-by-play with down & distance, ball spot and a quick play sheet (run, pass, sack, INT, fumble, punt, FG, penalties). Stoppable clock, timeouts per half, two-minute warning; overtime presets (flag conversion rounds, Kansas, NFL regular season / playoffs) with scorer-picked coin toss; passer rating (new `formula` aggregation); win % standings with ties as half; US display name "Football".

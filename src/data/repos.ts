@@ -24,6 +24,8 @@ import { matchSideOf, planOpponentRepair } from './lineOpponent';
 import { mergeSportFormat } from './formatPatch';
 import { forfeitFor, walkoverFormatFor, isWalkover, WALKOVER_SCORE_SPORTS } from './walkover';
 import { isLiveTournament } from './tournamentForm';
+import { myPlayerIdMemo } from './myPlayerIdMemo';
+import { shareInflight } from './shareInflight';
 import {
   orSafe, parseVsQuery, rankByName, filterByName, capIds, collapseTeams, liveOnly, selectMatchHits, matchNames, narrowBySports,
   isSearchable, SEARCH_LIMIT, SEARCH_ID_CAP, type TeamHit, type SearchResults, type SearchKind,
@@ -334,11 +336,22 @@ async function withTournamentCols<T>(build: (cols: string) => PromiseLike<{ data
 /** Every tournament, newest first. */
 export async function getTournaments(opts: { includeDeleted?: boolean } = {}): Promise<Tournament[]> {
   if (!isSupabaseConfigured || !supabase) return opts.includeDeleted ? demo.tournaments : demo.tournaments.filter(isLiveTournament);
+  const all = await sharedTournamentsRead();
+  return opts.includeDeleted ? all : all.filter(isLiveTournament);
+}
+
+// Perf F-09: Home asks for every tournament twice at once (the feed and the
+// switcher). Calls that START within a moment of each other share one read —
+// the same answer two parallel requests would get; later calls read afresh.
+const tournamentsRead = shareInflight(async (): Promise<Tournament[]> => {
   const { data, error } = await withTournamentCols<any[]>((cols) =>
     supabase!.from('tournaments').select(cols).order('start_date', { ascending: false }));
   if (error || !data) return [];
-  const all = data.map(toTournament);
-  return opts.includeDeleted ? all : all.filter(isLiveTournament);
+  return data.map(toTournament);
+}, 50);
+async function sharedTournamentsRead(): Promise<Tournament[]> {
+  // a fresh array per caller, so one caller's sort/splice can't touch another's
+  return [...(await tournamentsRead())];
 }
 
 /** Tournaments the user plays in or follows (organizer-owned + followed). In
@@ -371,21 +384,39 @@ const visibleAfterDelete = (deleted: Set<string>) => (m: Match) =>
   !(m.tournamentId && deleted.has(m.tournamentId) && m.status !== 'completed');
 
 export async function getMatches(filter?: SportId): Promise<Match[]> {
-  const deleted = await deletedTournamentIds();
+  return readMatches({ sport: filter });
+}
+
+/** Matches that start after `now` (any status) — the reminder engine only looks
+ *  ahead, so it needn't download the whole history every minute (perf F-08d). */
+export async function getUpcomingMatches(now: number = Date.now()): Promise<Match[]> {
+  return readMatches({ after: now });
+}
+
+async function readMatches(opts: { sport?: SportId; after?: number }): Promise<Match[]> {
+  const { sport, after } = opts;
   if (!isSupabaseConfigured || !supabase) {
+    const deleted = await deletedTournamentIds();
     // SD-154: a team's level lives on the team row (live reads embed it) — mirror that in demo
     const lv = new Map(demo.teams.filter((t) => t.level).map((t) => [t.id, t.level!] as const));
     const withLv = (m: Match): Match => (lv.has(m.homeTeam.id) || lv.has(m.awayTeam.id)
       ? { ...m, homeTeam: lv.has(m.homeTeam.id) ? { ...m.homeTeam, level: lv.get(m.homeTeam.id) } : m.homeTeam, awayTeam: lv.has(m.awayTeam.id) ? { ...m.awayTeam, level: lv.get(m.awayTeam.id) } : m.awayTeam }
       : m);
-    const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).filter(visibleAfterDelete(deleted)).map(withLv);
-    return filter ? all.filter((m) => m.sport === filter) : all;
+    let all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).filter(visibleAfterDelete(deleted)).map(withLv);
+    if (after !== undefined) all = all.filter((m) => new Date(m.startsAt).getTime() > after);
+    return sport ? all.filter((m) => m.sport === sport) : all;
   }
-  const { data, error } = await withMatchCols<unknown[]>((cols) => {
-    let q = supabase!.from('matches').select(cols).order('starts_at', { ascending: true });
-    if (filter) q = q.eq('sport', filter);
-    return q;
-  });
+  // Perf F-09: the deleted-tournament ids and the matches are read in parallel
+  // (they were two sequential round trips).
+  const [deleted, { data, error }] = await Promise.all([
+    deletedTournamentIds(),
+    withMatchCols<unknown[]>((cols) => {
+      let q = supabase!.from('matches').select(cols).order('starts_at', { ascending: true });
+      if (sport) q = q.eq('sport', sport);
+      if (after !== undefined) q = q.gt('starts_at', new Date(after).toISOString());
+      return q;
+    }),
+  ]);
   if (error || !data) return [];
   return (data as unknown as MatchRow[]).map(toMatch).filter(visibleAfterDelete(deleted));
 }
@@ -511,6 +542,40 @@ export async function getTeams(sport?: SportId): Promise<Team[]> {
   const { data, error } = res;
   if (error || !data) return [];
   return (data as unknown as TeamRow[]).map(toTeam);
+}
+
+/** `in()` lists are chunked so a long id list never makes an oversized URL. */
+const ID_CHUNK = 100;
+const chunked = <T,>(xs: T[]): T[][] => { const out: T[][] = []; for (let i = 0; i < xs.length; i += ID_CHUNK) out.push(xs.slice(i, i + ID_CHUNK)); return out; };
+
+/** getTeamLeaders for many teams in one read (perf F-08c: the reminder engine
+ *  made one request per team every minute). Same value per id as getTeamLeaders,
+ *  including for ids that don't resolve. */
+export async function getTeamLeadersMany(teamIds: string[]): Promise<Record<string, TeamLeadership>> {
+  const ids = [...new Set(teamIds)];
+  const out: Record<string, TeamLeadership> = {};
+  if (!ids.length) return out;
+  if (!isSupabaseConfigured || !supabase) {
+    for (const id of ids) out[id] = await getTeamLeaders(id);
+    return out;
+  }
+  type Row = { id: string; captain_id: string | null; vice_captain_id: string | null; admin_ids?: string[] | null };
+  const rows: Row[] = [];
+  let withAdmins = true;
+  for (const part of chunked(ids)) {
+    // admin_ids arrives with migration 0042 — before it, adminIds stays undefined.
+    let res: { data: unknown; error: unknown } | null = withAdmins ? await supabase.from('teams').select('id, captain_id, vice_captain_id, admin_ids').in('id', part) : null;
+    if (!res || res.error) { withAdmins = false; res = await supabase.from('teams').select('id, captain_id, vice_captain_id').in('id', part); }
+    rows.push(...((res.data ?? []) as Row[]));
+  }
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const id of ids) {
+    const d = byId.get(id);
+    out[id] = withAdmins
+      ? { captainId: d?.captain_id ?? undefined, viceCaptainId: d?.vice_captain_id ?? undefined, adminIds: d ? (d.admin_ids ?? []) : undefined }
+      : { captainId: d?.captain_id ?? undefined, viceCaptainId: d?.vice_captain_id ?? undefined };
+  }
+  return out;
 }
 
 /** A team's captain & vice-captain (responsible for the matchday squad). */
@@ -3172,6 +3237,27 @@ export async function getMatchSquads(matchId: string): Promise<MatchSquads> {
   return out;
 }
 
+/** getMatchSquads for many matches in one read (perf F-08c). Every requested id
+ *  gets an entry (blank when no squad is saved), exactly like getMatchSquads. */
+export async function getMatchSquadsMany(matchIds: string[]): Promise<Record<string, MatchSquads>> {
+  const ids = [...new Set(matchIds)];
+  const out: Record<string, MatchSquads> = {};
+  if (!ids.length) return out;
+  if (!isSupabaseConfigured || !supabase) {
+    for (const id of ids) out[id] = await getMatchSquads(id);
+    return out;
+  }
+  for (const id of ids) out[id] = blankSquads();
+  for (const part of chunked(ids)) {
+    const { data } = await supabase.from('match_squads').select('match_id, side, starters, subs, keeper_id').in('match_id', part);
+    for (const r of data ?? []) {
+      const sq = out[r.match_id as string];
+      if (sq) sq[r.side as 'home' | 'away'] = { starters: r.starters ?? [], subs: r.subs ?? [], keeperId: r.keeper_id ?? undefined };
+    }
+  }
+  return out;
+}
+
 export async function setMatchSquad(matchId: string, side: 'home' | 'away', squad: MatchSquad): Promise<void> {
   if (!isSupabaseConfigured || !supabase) {
     setDemoMatchSquad(matchId, side, squad);
@@ -3843,8 +3929,12 @@ export async function deleteListing(id: string): Promise<void> {
 export async function getMyPlayerId(profileId?: string): Promise<string | null> {
   if (!isSupabaseConfigured || !supabase) return demo.players[0]?.id ?? null;
   if (!profileId) return null;
-  const { data } = await supabase.from('players').select('id').eq('profile_id', profileId).single();
-  return data?.id ?? null;
+  // Perf F-10: memoised per profile (cleared on sign-out / account switch, set by
+  // createMyPlayer) — it was a fresh read 6–8 times at launch.
+  return myPlayerIdMemo.get(profileId, async (pid) => {
+    const { data } = await supabase!.from('players').select('id').eq('profile_id', pid).single();
+    return data?.id ?? null;
+  });
 }
 
 /** Create the signed-in account's own player profile (once), linked via
@@ -3895,7 +3985,7 @@ export async function createMyPlayer(profileId: string): Promise<string> {
         .is('profile_id', null) // guard against a race — only claim if still unclaimed
         .select('id')
         .maybeSingle();
-      if (!claimErr && claimed) return claimed.id as string;
+      if (!claimErr && claimed) { myPlayerIdMemo.set(profileId, claimed.id as string); return claimed.id as string; }
       // else fall through and create a fresh player
     }
   }
@@ -3906,6 +3996,7 @@ export async function createMyPlayer(profileId: string): Promise<string> {
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create your profile');
+  myPlayerIdMemo.set(profileId, data.id as string);
   return data.id as string;
 }
 

@@ -4,13 +4,30 @@
  * proven number into a SportnNote session.
  */
 import { supabase } from './supabase';
-import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from './firebasePhone';
+import { firebasePhoneAvailable, sendPhoneCode as sendFirebaseCode, confirmPhoneCode, prewarmPhoneSdk, prewarmPhoneCode, releasePrewarmedPhoneCode } from './firebasePhone';
 import { LEGAL_VERSION } from '../data/legal';
 import type { GuardianContact, Role } from './types';
 
 export const phoneLoginAvailable = (): boolean => !!supabase && firebasePhoneAvailable();
 
-export { sendPhoneCode };
+export { prewarmPhoneSdk, prewarmPhoneCode, releasePrewarmedPhoneCode };
+
+/** Perf F-02: `phone-login` is rarely called, so it is nearly always cold
+ *  (2–2.6 s measured). While the person reads the SMS, poke it with a GET — it
+ *  answers 405 before touching the database — so the real call lands on a warm
+ *  worker. Fire-and-forget; any failure is ignored. */
+export function warmPhoneLogin(): void {
+  if (!supabase) return;
+  try {
+    void Promise.resolve(supabase.functions.invoke('phone-login', { method: 'GET' })).catch(() => undefined);
+  } catch { /* never let a warm-up break sign-in */ }
+}
+
+/** Step 1: text the code to `phone` (Firebase), then warm up the sign-in function. */
+export async function sendPhoneCode(phone: string): Promise<void> {
+  await sendFirebaseCode(phone);
+  warmPhoneLogin();
+}
 
 export interface PhoneSignup {
   fullName: string;

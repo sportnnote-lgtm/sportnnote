@@ -567,6 +567,27 @@ export function useCities() {
   return cities;
 }
 
+/** Just the player row (no stats) — refetched on focus like usePlayerProfile.
+ *  Home only needs `sports` and the eligibility fields, so it skips the stats
+ *  reads (all matches, field events, stat lines) that usePlayerProfile makes (perf F-09). */
+export function usePlayerLite(playerId: string | null) {
+  const [player, setPlayer] = useState<Player | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      if (!playerId) {
+        setPlayer(null);
+        return;
+      }
+      getPlayer(playerId).then((p) => { if (on) setPlayer(p); });
+      return () => {
+        on = false;
+      };
+    }, [playerId])
+  );
+  return { player };
+}
+
 /** A player plus their rolled-up stats. */
 export function usePlayerProfile(playerId: string | null) {
   const [player, setPlayer] = useState<Player | null>(null);

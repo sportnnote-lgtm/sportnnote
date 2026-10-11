@@ -4,13 +4,16 @@
  * a demo user so the whole app stays explorable offline.
  */
 import { startProfileZoneSync, stopProfileZoneSync } from '../data/profileRegion';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { setReminderPrefsUser } from '../data/reminderPrefs';
 import { normalizePhone, rememberCountryFromPhone } from './phone';
 import { legalVersionFor } from '../data/legal';
 import { privacyCountry, US_UNDER_13_MESSAGE } from './privacyRegion';
 import { analyticsChoice } from './analyticsConsent';
+import { planAuthEvent, profileFromSession, confirmedLoginEmail } from './authEvents';
+import { clearMyPlayerIdCache } from '../data/myPlayerIdMemo';
 import type { GuardianContact, Profile, Role } from './types';
 
 /** Turn a raw Supabase/network error into a plain, actionable message. Users
@@ -38,15 +41,11 @@ const isUnconfirmed = (raw?: string) => (raw ?? '').toLowerCase().includes('emai
  *  email is already proven, so it counts as a verified contact email — no need to
  *  re-verify it in the profile, and the eligibility gate credits the channel the
  *  user logged in with. Runs on login; idempotent; never overwrites a different,
- *  user-set contact email. */
-async function syncConfirmedEmailToPlayer(profileId: string): Promise<void> {
+ *  user-set contact email. The address comes from the session (perf F-06: no
+ *  `getUser()` round trip; mobile sign-ups' placeholder is skipped before any read). */
+async function syncConfirmedEmailToPlayer(profileId: string, email: string): Promise<void> {
   if (!supabase) return;
   try {
-    const { data: authData } = await supabase.auth.getUser();
-    const email = authData.user?.email;
-    if (!email || !authData.user?.email_confirmed_at) return;
-    // Mobile sign-ups carry an internal placeholder address — never a contact email.
-    if (/@phone\.sportnnote\.in$/i.test(email)) return;
     const { data: pl } = await supabase
       .from('players_view') // email is a private column — read our own via the view
       .select('id, email, email_verified')
@@ -116,6 +115,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isSupabaseConfigured ? null : DEMO_PROFILE
   );
 
+  // Perf F-05/F-07: who is shown / loading, read from inside the auth listener
+  // (its closure is created once). See core/authEvents.ts for the rules.
+  const st = useRef({ userId: null as string | null, loadingProfile: false, seq: 0, bootDone: false });
+  const profileRef = useRef<Profile | null>(profile);
+  const setProf = (p: Profile | null) => { profileRef.current = p; setProfile(p); };
+  // F-06: the confirmed login email is copied to the player once per user+address per app run.
+  const emailSynced = useRef(new Set<string>());
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
@@ -123,31 +130,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     // Hydrate any existing session, then react to future auth changes.
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) loadProfile(data.session.user.id);
-      else setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) loadProfile(session.user.id);
-      else {
-        setProfile(null);
-        setLoading(false);
-        void setReminderPrefsUser(null); // stop cross-device sync on sign-out
-        stopProfileZoneSync();
-      }
+      if (data.session) onAuth('BOOT', data.session.user);
+      else if (!st.current.userId) setLoading(false);
+    }).catch(() => {
+      // never leave the launch spinner up when storage / the network fails
+      if (!st.current.userId) setLoading(false);
+    }).finally(() => { st.current.bootDone = true; });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      onAuth(event, session?.user ?? null);
     });
     return () => sub.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadProfile(userId: string) {
+  function onAuth(event: string, user: User | null) {
+    const s = st.current;
+    const shown = profileRef.current;
+    const plan = planAuthEvent(event, user?.id, {
+      userId: s.userId,
+      hasProfile: !!shown && shown.id === s.userId,
+      loadingProfile: s.loadingProfile,
+    });
+    if (plan === 'ignore') return;
+    if (plan === 'signed-out' || !user) {
+      s.userId = null;
+      s.loadingProfile = false;
+      s.seq++; // drop any profile read still in flight
+      clearMyPlayerIdCache(); // F-10: never hand the next account this one's player id
+      emailSynced.current.clear();
+      setProf(null);
+      setLoading(false);
+      void setReminderPrefsUser(null); // stop cross-device sync on sign-out
+      stopProfileZoneSync();
+      return;
+    }
+    if (plan === 'switch') {
+      s.userId = user.id;
+      clearMyPlayerIdCache(); // a different account (or the first) — re-resolve its player
+      // F-05: a fresh sign-in renders Home at once from the sign-up metadata while
+      // `profiles` loads. Launch (BOOT) keeps waiting for the stored profile.
+      const quick = s.bootDone && event === 'SIGNED_IN' ? profileFromSession(user) : null;
+      if (quick) { setProf(quick); setLoading(false); }
+      else { setProf(null); setLoading(true); }
+      void loadProfile(user, true);
+      return;
+    }
+    if (plan === 'retry') {
+      setLoading(true);
+      void loadProfile(user, true);
+      return;
+    }
+    void loadProfile(user, false); // 'silent' — same user, profile on screen: no spinner
+  }
+
+  async function loadProfile(user: User, blocking: boolean) {
     if (!supabase) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, handle, avatar_url, role, school_id, time_zone')
-      .eq('id', userId)
-      .single();
+    const s = st.current;
+    const seq = ++s.seq;
+    if (blocking) s.loadingProfile = true;
+    let data: { id: string; full_name: string; handle: string; avatar_url: string | null; role: Role; school_id: string | null; time_zone: string | null } | null = null;
+    try {
+      const res = await supabase
+        .from('profiles')
+        .select('id, full_name, handle, avatar_url, role, school_id, time_zone')
+        .eq('id', user.id)
+        .single();
+      data = res.data;
+    } catch { /* treated like "no row" below */ }
+    if (seq !== s.seq || s.userId !== user.id) return; // superseded (sign-out / other account)
+    if (blocking) s.loadingProfile = false;
     if (data) {
-      setProfile({
+      setProf({
         id: data.id,
         fullName: data.full_name,
         handle: data.handle,
@@ -157,13 +210,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       void setReminderPrefsUser(data.id); // pull this user's reminder timers across devices
       startProfileZoneSync(data.id, data.time_zone); // SD-150: reminder emails use the app's zone
-      void syncConfirmedEmailToPlayer(data.id); // confirmed login email ⇒ verified contact email
+      const email = confirmedLoginEmail(user);
+      if (email && !emailSynced.current.has(`${data.id}|${email}`)) {
+        emailSynced.current.add(`${data.id}|${email}`);
+        void syncConfirmedEmailToPlayer(data.id, email); // confirmed login email ⇒ verified contact email
+      }
       // Your own number's country becomes the default dial code for numbers you type.
       void Promise.resolve(supabase.rpc('my_profile_private'))
         .then(({ data: priv }) => rememberCountryFromPhone((priv as { phone?: string | null }[] | null)?.[0]?.phone))
         .catch(() => { /* default stays the device region */ });
+    } else if (blocking) {
+      // No profile row (or the read failed): same end state as before — signed-out
+      // UI — rather than leaving the quick sign-up-metadata profile on screen.
+      setProf(null);
     }
-    setLoading(false);
+    if (blocking) setLoading(false);
   }
 
   const value: AuthState = {
@@ -240,6 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     signOut: async () => {
+      clearMyPlayerIdCache();
       if (supabase) await supabase.auth.signOut();
       // Web: wipe the offline copies of data the service worker kept (public/sw.js).
       try {
