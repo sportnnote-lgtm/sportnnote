@@ -18,7 +18,7 @@ export function phaseOf(ev: Pick<FieldEvent, 'format' | 'roundNo'>): PhaseFormat
  *  the precise status lives in result.status). */
 export function fieldStatusFor(status: ResultStatus | undefined, hasMark: boolean): FieldEntryStatus {
   switch (status) {
-    case 'DNF': case 'NM': return 'dnf';
+    case 'DNF': case 'NM': case 'OTL': return 'dnf';
     case 'DQ': case 'FS': return 'dq';
     case 'DNS': case 'WD': return 'wd';
     default: return hasMark ? 'finished' : 'playing';
@@ -39,7 +39,7 @@ export function toResultEntry(fe: FieldEntry, nameOf: (playerId: string) => stri
   };
 }
 
-const PHASE_LABEL: Record<PhaseKind, string> = { heat: 'Heats', repechage: 'Repechage', semi: 'Semi-finals', qualification: 'Qualification', final: 'Final' };
+const PHASE_LABEL: Record<PhaseKind, string> = { heat: 'Heats', repechage: 'Repechage', semi: 'Semi-finals', qualification: 'Qualification', final: 'Final', stage: 'Stage' };
 export const phaseLabel = (k: PhaseKind) => PHASE_LABEL[k];
 
 export interface PlannedPhase { phase: PhaseKind; heats: number; progression?: Progression; /** SD-99 / SD-100: lettered finals ('A', 'B' …), one per heat */ races?: string[] }

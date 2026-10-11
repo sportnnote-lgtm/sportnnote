@@ -29,6 +29,7 @@ import { shootingStats } from './shooting/stats.ts';
 import { archeryStats } from './archery/stats.ts';
 import { rowingStats } from './rowing/stats.ts';
 import { canoeStats } from './canoe/stats.ts';
+import { cyclingStats } from './cycling/stats.ts';
 import { handballStats } from './handball/stats.ts';
 
 export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
@@ -54,6 +55,7 @@ export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   archery: archeryStats,
   rowing: rowingStats,
   canoe: canoeStats,
+  cycling: cyclingStats,
   handball: handballStats,
 };
 

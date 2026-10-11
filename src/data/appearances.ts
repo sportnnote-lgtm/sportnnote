@@ -35,6 +35,8 @@ export interface OutcomeMatch {
   status?: string;
   winner?: 'home' | 'away' | 'draw' | null;
   result?: { kind: string; winner?: Side } | null;
+  /** the scoring state (SD-67: a chess double forfeit is a loss for both) */
+  state?: unknown;
 }
 
 /** Each side's result for a match, or null while it isn't decided (scheduled /
@@ -50,6 +52,8 @@ export function sideResults(m: OutcomeMatch): { home: LineResult; away: LineResu
   if (m.status !== 'completed') return null;
   if (kind === 'tie') return both('T');
   if (kind === 'draw') return both('D');
+  // SD-67 — a chess double forfeit (0-0): neither played, both lose (FIDE)
+  if (!kind && m.sport === 'chess' && (m.state as { method?: unknown } | null | undefined)?.method === 'double-forfeit') return both('L');
   const awarded = kind === 'awarded' || kind === 'conceded';
   const w = awarded ? (m.result?.winner ?? m.winner) : m.winner;
   if (w === 'home') return { home: 'W', away: 'L' };

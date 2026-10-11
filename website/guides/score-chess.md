@@ -18,12 +18,14 @@ Chess is scored once per game: who won, or a draw, and how it ended. The app wri
 1. Open the game → **Scoring** tab and tap **▶ Start the match**.
 2. Check the colours. The panel says "♔ White pieces:" with a name, and under it who has Black.
 3. Under **Result (White first)**, tap **1-0** (White wins), **½-½** (Draw) or **0-1** (Black wins). Each box shows the names under it, for example "Aarav beat Ishaan", so you can check the side.
-4. Optionally, under **How (optional)**, tap how it ended. For a win: **Checkmate**, **Resignation**, **On time**, **Illegal move** or **Forfeit**. For a draw: **Draw agreed**, **Stalemate**, **Threefold repetition**, **50-move rule**, **Insufficient material**, **Time out vs insufficient material**, **Fivefold repetition** or **75-move rule**. You can also type the number of moves.
+4. Optionally, under **How (optional)**, tap how it ended. For a win: **Checkmate**, **Resignation**, **On time**, **Illegal move**, **Forfeit**, **Adjudicated** or **Arbiter's decision**. For a draw: **Draw agreed**, **Stalemate**, **Threefold repetition**, **50-move rule**, **Insufficient material**, **Time out vs insufficient material**, **Fivefold repetition**, **75-move rule**, **Dead position**, **Adjudicated** or **Arbiter's decision**. You can also type the number of moves.
 5. Optionally, fill in **Time left on the clocks** for White and Black. Type `4:07`, `1:05:30` or just the minutes. These fields appear once you pick a result, but not for a forfeit. The scoreboard then shows them under the result, for example "⏱ White 4:07 · Black 1:05".
 6. Tap **✓ Record 1-0…** (the button shows the result you picked).
 7. A sheet asks, for example, "Record 0-1: Ishaan beat Aarav by Resignation?". Tap **Yes, record result** to save it, or **No, go back** to change something.
 
-Once saved, the game closes, the table updates and followers get the result.
+Once saved, the game closes, the table updates and followers get the result. The scoreboard names who had White, for example "♔ Aarav has White".
+
+A win's method also feeds the player's profile: **Wins by method** (checkmate, resignation, on time, other) and **Unbeaten run** (games in a row without a loss).
 
 ## If the colours were swapped at the board
 The colour is locked so a stray tap can't change the pairing. If the players really did swap, tap **Colours wrong? Change…**, then tap the player who had White. The note "Saved with the result" means nothing changes until you record the result. The 1-0 and 0-1 boxes follow the new colours.
@@ -32,6 +34,8 @@ The colour is locked so a stray tap can't change the pairing. If the players rea
 
 ## If a player doesn't turn up
 A host can tap **🏳 Award a walkover**, or record the result with the **Forfeit** method. A forfeit scores the full point in the table, but it is not a game played: on the players' profiles it counts as a forfeit win or a forfeit loss, not as a game.
+
+If neither player came, tap **0-0 Double forfeit** under the result boxes. Both get 0 points and a forfeit loss, and no game is credited. The wall chart shows it as `−` for both.
 
 ## Fix a mistake
 - Just recorded the wrong result? Tap **↶ Undo** on the Scoring tab.
@@ -43,6 +47,9 @@ Recording a result closes the game, updates the table and tells followers at onc
 
 ### Can I record a tie-break game, like Armageddon?
 Not yet. Mini-match and Armageddon tie-break games are not available.
+
+### Can I record the exact time control, like 90+30?
+Yes. In the event's format, set **Clock: minutes each** (90) and **Clock: seconds added per move** (30). The scoreboard then reads, for example, "Classical 90+30 · in play".
 
 ### Why is the result 0-1 when the home player won?
 The home player had Black. Chess results are always written White first.

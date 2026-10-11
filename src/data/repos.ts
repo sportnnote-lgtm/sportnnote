@@ -1851,7 +1851,7 @@ export async function syncMatchAppearances(matchId: string, stateArg?: unknown):
   try {
     const m = await getMatch(matchId);
     if (!m) return 0;
-    const outcome = sideResults({ sport: m.sport, status: m.status, winner: m.winner ?? null, result: m.result ?? null });
+    const outcome = sideResults({ sport: m.sport, status: m.status, winner: m.winner ?? null, result: m.result ?? null, state: stateArg ?? m.state });
     if (!outcome) return 0;
     const state = stateArg ?? m.state;
     const plugin = getSport(m.sport);

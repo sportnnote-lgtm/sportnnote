@@ -218,7 +218,16 @@ export function isChessForfeit(m: Match): boolean {
   if (m.sport !== 'chess') return false;
   if (m.walkover) return true;
   const st = m.state as { method?: unknown } | null | undefined;
-  return !!st && typeof st === 'object' && st.method === 'forfeit';
+  return !!st && typeof st === 'object' && (st.method === 'forfeit' || st.method === 'double-forfeit');
+}
+
+/** SD-67 — a chess double forfeit (neither player came): 0-0, an unplayed
+ *  loss for both (FIDE C.07 16.4: each is a forfeit loss — a voluntary
+ *  unplayed round). Recorded as winner 'draw' + method 'double-forfeit'. */
+export function isChessDoubleForfeit(m: Pick<Match, 'sport' | 'state' | 'result'>): boolean {
+  if (m.sport !== 'chess' || m.result) return false;
+  const st = m.state as { method?: unknown } | null | undefined;
+  return !!st && typeof st === 'object' && st.method === 'double-forfeit';
 }
 const BUILTIN_TB: BuiltinTieBreaker[] = [
   'h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints',
@@ -661,6 +670,7 @@ export function matchUnits(m: Match): StandingsUnits {
  *  With none of those rules set, exactly the legacy win / draw / loss. */
 export function matchPoints(m: Match, cfg: StandingsConfig): { home: number; away: number } {
   if (isNoResultMatch(m)) { const n = noResultPoints(m.sport, cfg); return { home: n, away: n }; }
+  if (isChessDoubleForfeit(m)) return { home: cfg.loss, away: cfg.loss };
   if (m.winner === 'draw') return { home: cfg.draw, away: cfg.draw };
   let w = cfg.win;
   let l = cfg.loss;
@@ -781,7 +791,12 @@ export function teamStandings(
     // SD-26: the colours over the board (chess, played games only).
     const white = sport === 'chess' && !forfeit ? chessWhiteSide(m) : undefined;
     const col = (side: 'home' | 'away') => (white ? { colour: side === white ? 'white' as const : 'black' as const } : {});
-    if (m.winner === 'draw') {
+    if (forfeit && isChessDoubleForfeit(m)) {
+      // SD-67: two forfeit losses, 0 points each
+      h.forfeitLosses = (h.forfeitLosses ?? 0) + 1; a.forfeitLosses = (a.forfeitLosses ?? 0) + 1;
+      log(h, { ...base, kind, unplayed: true, opponentId: a.teamId, result: 'loss', points: mp.home });
+      log(a, { ...base, kind, unplayed: true, opponentId: h.teamId, result: 'loss', points: mp.away });
+    } else if (m.winner === 'draw') {
       if (!forfeit) { h.drawn += 1; a.drawn += 1; }
       log(h, { ...base, kind, unplayed: forfeit, opponentId: a.teamId, result: 'draw', points: mp.home, ...col('home') });
       log(a, { ...base, kind, unplayed: forfeit, opponentId: h.teamId, result: 'draw', points: mp.away, ...col('away') });

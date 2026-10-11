@@ -37,6 +37,7 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   archery: 240, // a 72-arrow ranking round (~2.5 h) + match play
   rowing: 120, // a session of races (2000 m ≈ 6–8 min, 10–15 min apart)
   canoe: 120, // a session of sprint races (heats every few minutes)
+  cycling: 180, // a road race / a track session (a school road race ≈ 1–2 h)
   weightlifting: 150, // one bodyweight category's session (snatch + C&J) + turnaround
 };
 

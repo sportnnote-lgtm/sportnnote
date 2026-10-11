@@ -16,7 +16,9 @@ import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, Card, FieldLabel, FormError, textStyles } from '../components/ui';
 import { DateField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
-import { SPORT_SIDE_FIELDS, POSITION_HINT } from '../data/sportProfileFields';
+import { SPORT_SIDE_FIELDS, POSITION_HINT, SPORT_RATING_FIELDS } from '../data/sportProfileFields';
+import { cleanRatings, parseRating, validFideId } from '../data/chessRatings';
+import { parseIndex, showIndex } from '../data/golfLeaderboard';
 import { getPlayer, updatePlayer } from '../data/repos';
 import { LogoPicker } from '../components/LogoPicker';
 import { adminPatch } from '../core/playerEditAccess';
@@ -55,6 +57,8 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   const [jersey, setJersey] = useState('');
   const [sports, setSports] = useState<SportId[]>([]);
   const [details, setDetails] = useState<Partial<Record<SportId, SportDetail>>>({});
+  // SD-84 — the golf Handicap Index as typed (null = untouched)
+  const [hiText, setHiText] = useState<string | null>(null);
   // Original contact + verification, to reset a channel's verified flag if edited.
   const [loaded, setLoaded] = useState<{ phone: string; email: string; phoneVerified: boolean; emailVerified: boolean; guardian?: Player['guardian']; name: string; photoUrl: string }>(
     { phone: '', email: '', phoneVerified: false, emailVerified: false, name: '', photoUrl: '' }
@@ -117,16 +121,23 @@ export default function EditProfileScreen({ route, navigation }: Props) {
   const removeTeam = (s: SportId, i: number) =>
     patchDetail(s, { teams: (details[s]?.teams ?? []).filter((_, j) => j !== i) });
 
+  // SD-84 — the typed Handicap Index (blank / invalid → dropped)
+  const golfIndexOf = (d: SportDetail) => {
+    const v = hiText != null ? parseIndex(hiText) : d.handicapIndex;
+    return v != null ? { handicapIndex: v } : {};
+  };
   // Keep details only for sports still selected; drop blank teams.
   function keptDetails(): Partial<Record<SportId, SportDetail>> {
     const kept: Partial<Record<SportId, SportDetail>> = {};
     for (const s of sports) {
-      const d = details[s];
+      const d = details[s] ?? (s === 'golf' && hiText != null ? {} : undefined); // SD-84: an index typed on its own
       if (!d) continue;
       const teams = (d.teams ?? [])
         .map((t) => ({ name: t.name.trim(), jersey: t.jersey, since: t.since, until: t.until }))
         .filter((t) => t.name.length > 0);
-      kept[s] = { position: d.position?.trim() || undefined, sides: d.sides, teams: teams.length ? teams : undefined };
+      // SD-85: typed ratings (chess) — invalid / blank values are dropped
+      const ratings = SPORT_RATING_FIELDS[s] ? cleanRatings(d.ratings as Record<string, unknown> | undefined) : undefined;
+      kept[s] = { position: d.position?.trim() || undefined, sides: d.sides, teams: teams.length ? teams : undefined, ...(ratings ? { ratings } : {}), ...(s === 'golf' ? golfIndexOf(d) : {}) };
     }
     return kept;
   }
@@ -377,6 +388,43 @@ export default function EditProfileScreen({ route, navigation }: Props) {
                 </View>
               ))}
 
+              {/* SD-85 — chess ratings, typed by hand (no FIDE lookup) */}
+              {(SPORT_RATING_FIELDS[s] ?? []).length > 0 && (
+                <View style={{ gap: theme.spacing(1) }}>
+                  <FieldLabel>Ratings</FieldLabel>
+                  <View style={st.ratingGrid}>
+                    {(SPORT_RATING_FIELDS[s] ?? []).map((f) => {
+                      const raw = (d.ratings as Record<string, unknown> | undefined)?.[f.key];
+                      const v = raw == null ? '' : String(raw);
+                      const bad = !!v.trim() && (f.key === 'fideId' ? !validFideId(v) : parseRating(v) === undefined);
+                      return (
+                        <View key={f.key} style={st.ratingCell}>
+                          <TextField
+                            label={f.label} value={v} placeholder={f.placeholder} autoCapitalize="none"
+                            onChange={(t) => patchDetail(s, { ratings: { ...(d.ratings ?? {}), [f.key]: t.replace(/[^0-9]/g, '') } as never })}
+                          />
+                          {bad ? <Text style={st.ratingBad}>{f.key === 'fideId' ? '4–10 digits' : '100–3500'}</Text> : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <Text style={textStyles.muted}>Type them from ratings.fide.com — the app doesn't look them up. Used to seed Swiss round 1 and for the unofficial performance rating.</Text>
+                </View>
+              )}
+
+              {/* SD-84 — golf: the player's own WHS Handicap Index */}
+              {s === 'golf' && (() => {
+                const v = hiText ?? showIndex(d.handicapIndex);
+                const bad = !!v.trim() && parseIndex(v) == null;
+                return (
+                  <View style={{ gap: theme.spacing(1) }}>
+                    <TextField label="Handicap Index (WHS)" value={v} onChange={setHiText} placeholder="e.g. 12.4 or +1.2" autoCapitalize="none" />
+                    {bad ? <Text style={{ color: theme.colors.danger, fontSize: theme.font.small }}>A number up to 54.0, one decimal (+ for a plus handicap)</Text> : null}
+                    <Text style={textStyles.muted}>The index your club or the IGU gives you — the app never issues one. It fills in round setup and match-play shots.</Text>
+                  </View>
+                );
+              })()}
+
               <View style={{ marginTop: theme.spacing(1) }}><FieldLabel>Teams represented</FieldLabel></View>
               {teams.map((t, i) => (
                 <View key={i} style={st.teamRow}>
@@ -420,6 +468,9 @@ function OnFile({ label }: { label: string }) {
 }
 
 const st = StyleSheet.create({
+  ratingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
+  ratingCell: { flexBasis: '47%', flexGrow: 1, minWidth: 130 },
+  ratingBad: { color: theme.colors.danger, fontSize: theme.font.small },
   photoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing(4) },
   onFile: { color: theme.colors.textMuted, paddingVertical: theme.spacing(2) },
   safe: { flex: 1, backgroundColor: theme.colors.bg },

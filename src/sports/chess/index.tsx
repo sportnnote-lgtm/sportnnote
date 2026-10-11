@@ -11,10 +11,12 @@ import { Button, SelectChip, textStyles } from '../../components/ui';
 import { askConfirm } from '../../components/ConfirmSheet';
 import { confirmCopy } from '../../core/matchSafety';
 import type { Attribution, SportPlugin } from '../types';
+import { Scoreboard } from '../../components/Scoreboard';
 import {
-  init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL, isForfeit, clockText, parseClock,
+  init, reducer, points, resultString, resultSentence, scoreFor, DECISIVE, DRAWN, METHOD_LABEL, isForfeit, isDoubleForfeit, clockText, parseClock,
   type ChessMethod, type ChessState, type Side,
 } from './engine';
+import { winMethodKey } from './stats';
 
 const half = (n: number) => (n === 0.5 ? '½' : String(n));
 
@@ -22,7 +24,7 @@ const TIME_CONTROL_LABEL: Record<string, string> = {
   classical: 'Classical', rapid: 'Rapid', blitz: 'Blitz', bullet: 'Bullet', untimed: 'Untimed',
 };
 
-type Pick = 'white' | 'draw' | 'black';
+type Pick = 'white' | 'draw' | 'black' | 'dff';
 
 const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as ChessState;
@@ -46,7 +48,7 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
       <View style={ctrl.box}>
         <Text style={ctrl.big}>{resultString(s)}</Text>
         <Text style={textStyles.body}>
-          {s.winner === 'draw' ? 'Draw' : `${nameOf(s.winner as Side)} won`}{s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}{s.moves ? ` · ${s.moves} moves` : ''}
+          {isDoubleForfeit(s.method) ? 'Neither player played — both lose' : s.winner === 'draw' ? 'Draw' : `${nameOf(s.winner as Side)} won`}{s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}{s.moves ? ` · ${s.moves} moves` : ''}
         </Text>
         <Text style={textStyles.muted}>♔ {nameOf(s.white)} had White</Text>
         {s.clock && (s.clock.white != null || s.clock.black != null) ? (
@@ -58,12 +60,15 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
 
   const white: Side = whiteDraft ?? s.white;
   const black: Side = white === 'home' ? 'away' : 'home';
-  const winner: Side | 'draw' | null = pick === 'draw' ? 'draw' : pick === 'white' ? white : pick === 'black' ? black : null;
+  const dff = pick === 'dff';
+  const winner: Side | 'draw' | null = pick === 'draw' || dff ? 'draw' : pick === 'white' ? white : pick === 'black' ? black : null;
   const colourLocked = !unlockColour;
-  const methods = winner === 'draw' ? DRAWN : winner ? DECISIVE : [];
+  const methods = dff ? [] : winner === 'draw' ? DRAWN : winner ? DECISIVE : [];
+  // SD-67: a double forfeit carries its own method
+  const sentMethod: ChessMethod | undefined = dff ? 'double-forfeit' : method ?? undefined;
   const record = async () => {
     if (!winner || busy) return;
-    const what = resultSentence(white, winner, nameOf(white), nameOf(black), method ?? undefined);
+    const what = resultSentence(white, winner, nameOf(white), nameOf(black), sentMethod);
     setBusy(true);
     const ok = await askConfirm(confirmCopy('recordResult', { what }));
     setBusy(false);
@@ -74,25 +79,29 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
     const credit = (side: Side): Attribution | undefined => {
       const p = (side === 'home' ? homeRoster : awayRoster)[0];
       if (!p) return undefined;
+      // SD-67: a double forfeit — no game, a forfeit loss for each
+      if (dff) return { playerId: p.id, playerName: p.fullName, stat: 'forfeitLosses', by: 1 };
       if (isForfeit(method) && winner !== 'draw') {
         return { playerId: p.id, playerName: p.fullName, stat: winner === side ? 'forfeitWins' : 'forfeitLosses', by: 1 };
       }
       const outcome = winner === 'draw' ? 'draws' : winner === side ? 'wins' : 'losses';
-      return { playerId: p.id, playerName: p.fullName, stat: 'games', by: 1, extra: { [outcome]: 1 } };
+      // SD-36: how the game was won, on the winner's line (a new optional key)
+      const how = winner === side ? winMethodKey(method) : undefined;
+      return { playerId: p.id, playerName: p.fullName, stat: 'games', by: 1, extra: { [outcome]: 1, ...(how ? { [how]: 1 } : {}) } };
     };
-    const w = parseClock(clockW); const b = parseClock(clockB);
+    const w = dff ? null : parseClock(clockW); const b = dff ? null : parseClock(clockB);
     const clock = w != null || b != null ? { ...(w != null ? { white: w } : {}), ...(b != null ? { black: b } : {}) } : undefined;
     // the colour is committed only now, and only if it really changed
     if (white !== s.white) dispatch({ type: 'SET_WHITE', payload: { side: white } });
     dispatch({
       type: 'RESULT',
       side: winner === 'draw' ? undefined : winner,
-      payload: { winner, method: method ?? undefined, moves: Number(moves) || undefined, ...(clock ? { clock } : {}) },
+      payload: { winner, method: sentMethod, moves: dff ? undefined : Number(moves) || undefined, ...(clock ? { clock } : {}) },
       attribution: credit('home'),
       attribution2: credit('away'),
     });
   };
-  const choose = (p: Pick) => { setPick(p); setMethod(null); };
+  const choose = (p: Pick | null) => { setPick(p); setMethod(null); };
   const tile = (p: Pick, score: string, caption: string, names: string) => (
     <TouchableOpacity key={p} onPress={() => choose(p)} activeOpacity={0.8} accessibilityRole="button"
       accessibilityLabel={`${score} ${caption} — ${names}`} accessibilityState={{ selected: pick === p }}
@@ -128,6 +137,11 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
           {tile('draw', '½-½', 'Draw', `${nameOf(white)} · ${nameOf(black)}`)}
           {tile('black', '0-1', 'Black wins', `${nameOf(black)} beat ${nameOf(white)}`)}
         </View>
+        {/* SD-67 — neither player turned up (FIDE: 0-0, two unplayed losses) */}
+        <View style={ctrl.chips}>
+          <SelectChip label="0-0 Double forfeit" active={dff} onPress={() => choose(dff ? null : 'dff')} />
+        </View>
+        {dff && <Text style={ctrl.meta}>Neither player played: 0 points each, no game credited. Both count as losses.</Text>}
       </View>
       {methods.length > 0 && (
         <View style={{ gap: theme.spacing(2) }}>
@@ -161,7 +175,7 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
           {isForfeit(method) && <Text style={ctrl.meta}>A forfeit counts in the table, but no game is credited as played.</Text>}
         </View>
       )}
-      <Button label={winner ? `✓ Record ${scoreFor(white, winner)}…` : '✓ Record result'} onPress={() => void record()} disabled={!winner || busy} />
+      <Button label={winner ? `✓ Record ${scoreFor(white, winner, sentMethod)}…` : '✓ Record result'} onPress={() => void record()} disabled={!winner || busy} />
     </View>
   );
 };
@@ -187,12 +201,14 @@ export const chessPlugin: SportPlugin<ChessState> = {
       awayScore: s.ended ? half(p.away) : '',
       statusLine: s.ended
         ? `${resultString(s)}${s.method ? ` · ${METHOD_LABEL[s.method]}` : ''}`
-        : `${TIME_CONTROL_LABEL[s.timeControl] ?? s.timeControl} · in play`,
+        : `${TIME_CONTROL_LABEL[s.timeControl] ?? s.timeControl}${s.tcExact ? ` ${s.tcExact}` : ''} · in play`,
       // SD-117c — the clock times left, when recorded
       detailLine: `${s.white === 'home' ? 'Home' : 'Away'} has White${s.clock && (s.clock.white != null || s.clock.black != null) ? ` · ⏱ White ${s.clock.white != null ? clockText(s.clock.white) : '–'} · Black ${s.clock.black != null ? clockText(s.clock.black) : '–'}` : ''}`,
     };
   },
   ScoringControls,
+  // SD-67 — the scoreboard names who has White ("♔ Anand has White")
+  Scoreboard: ChessScoreboard,
   formatFields: [
     {
       key: 'timeControl', label: 'Time control', type: 'choice', default: 'rapid',
@@ -205,8 +221,28 @@ export const chessPlugin: SportPlugin<ChessState> = {
         { value: 'untimed', label: 'Untimed' },
       ],
     },
+    // SD-67 — the exact time control, FIDE style (base + increment): 90+30
+    { key: 'tcBase', label: 'Clock: minutes each', type: 'number', default: 0, min: 0, max: 600, advanced: true,
+      hint: 'optional — e.g. 90 for 90+30; 0 = not set' },
+    { key: 'tcInc', label: 'Clock: seconds added per move', type: 'number', default: 0, min: 0, max: 600, advanced: true,
+      hint: 'the increment — e.g. 30 for 90+30' },
   ],
 };
+
+/** "♔ {name} has White" — the generic summary only knows home / away. */
+export function whiteLine(s: ChessState, homeName: string, awayName: string): string {
+  return `♔ ${s.white === 'home' ? homeName : awayName} has White`;
+}
+
+function ChessScoreboard({ state, homeName, awayName, homeColor, awayColor, live }: Parameters<NonNullable<SportPlugin<ChessState>['Scoreboard']>>[0]) {
+  const s = state as ChessState;
+  const sum = chessPlugin.summary(s);
+  const rest = (sum.detailLine ?? '').replace(/^(Home|Away) has White/, '');
+  return (
+    <Scoreboard summary={{ ...sum, detailLine: `${whiteLine(s, homeName, awayName)}${rest}` }}
+      homeName={homeName} awayName={awayName} homeColor={homeColor} awayColor={awayColor} live={live} />
+  );
+}
 
 const ctrl = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },

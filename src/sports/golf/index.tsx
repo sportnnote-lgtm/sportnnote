@@ -14,49 +14,25 @@ import { Button, textStyles } from '../../components/ui';
 import { askConfirm } from '../../components/ConfirmSheet';
 import { confirmCopy } from '../../core/matchSafety';
 import type { SportPlugin } from '../types';
-import { matchState, concededLine, type HoleWinner } from './engine';
+import { concededLine, holeWinner, type HoleWinner } from './engine';
+import { initGolfMatch, golfMatchReducer, golfMatchStateOf, type GolfMatchState } from './match';
+import { matchHole, holeNumber, scoreStatKey, strokesLine } from './matchStrokes';
+import { MatchStrokesSetup } from './MatchStrokesSetup';
 
-export interface GolfMatchState {
-  /** holes in the match (18 or 9) */
-  regulation: number;
-  /** knockout: an all-square match goes to extra holes */
-  extraHoles: boolean;
-  holes: HoleWinner[];
-  /** a side conceded the match */
-  conceded?: 'home' | 'away';
-  ended: boolean;
-  seq: number;
-}
-
-const init = (config?: Record<string, unknown>): GolfMatchState => ({
-  regulation: String(config?.holes ?? '18') === '18' ? 18 : 9,
-  extraHoles: config?.extraHoles === true,
-  holes: [],
-  ended: false,
-  seq: 0,
-});
-
-const reducer = (s: GolfMatchState, a: { type: string; side?: 'home' | 'away'; payload?: Record<string, unknown> }): GolfMatchState => {
-  if (s.ended) return s;
-  if (a.type === 'HOLE') {
-    const w = a.payload?.winner as HoleWinner | undefined;
-    if (w !== 'home' && w !== 'away' && w !== 'halved') return s;
-    const holes = [...s.holes, w];
-    const m = matchState(holes, s.regulation, s.extraHoles);
-    return { ...s, holes, ended: m.decided, seq: s.seq + 1 };
-  }
-  if (a.type === 'CONCEDE' && (a.side === 'home' || a.side === 'away')) {
-    return { ...s, conceded: a.side, ended: true, seq: s.seq + 1 };
-  }
-  return s;
-};
-
-const stateOf = (s: GolfMatchState) => matchState(s.holes, s.regulation, s.extraHoles);
+// The state + reducer live in ./match (pure, unit-tested); SD-87 adds the
+// handicap strokes and per-hole gross strokes as optional keys.
+export type { GolfMatchState };
+const init = initGolfMatch;
+const reducer = golfMatchReducer;
+const stateOf = golfMatchStateOf;
 
 const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const s = state as GolfMatchState;
   const m = stateOf(s);
   const [conceding, setConceding] = useState(false);
+  const [setup, setSetup] = useState(false);
+  // SD-87 — this hole's gross strokes (null = start at par), reset per hole
+  const [gross, setGross] = useState<{ hole: number; home: number | null; away: number | null }>({ hole: -1, home: null, away: null });
   const nm = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster)[0]?.fullName ?? (side === 'home' ? homeName : awayName);
   // SD-117c — a conceded match keeps its hole state ("conceded, 3 down thru 12")
   if (s.ended) return <Text style={textStyles.muted}>Match over{s.conceded ? ` · ${nm(s.conceded)} ${concededLine(s.holes, s.conceded, s.regulation, s.extraHoles)}` : ''}.</Text>;
@@ -67,24 +43,90 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
     setConceding(false);
     if (ok) dispatch({ type: 'CONCEDE', side });
   };
-  const holeNo = m.played + 1;
+  // SD-87 — a back-nine match reads 10–18 (19 for the first extra hole)
+  const holeNo = holeNumber(s.firstHole, m.played);
+  const lastNo = holeNumber(s.firstHole, s.regulation - 1);
   const leaderName = m.leader ? nm(m.leader) : null;
-  const hole = (winner: HoleWinner) => {
+  const ms = s.strokes;
+  const here = ms ? matchHole(ms, m.played) : null;
+  const hole = (winner: HoleWinner, strokes?: { home: number; away: number }) => {
     const side = winner === 'halved' ? undefined : winner;
     const p = side ? (side === 'home' ? homeRoster : awayRoster)[0] : undefined;
-    dispatch({ type: 'HOLE', side, payload: { winner }, attribution: p ? { playerId: p.id, playerName: p.fullName, stat: 'holesWon', by: 1 } : undefined });
+    if (!strokes || !here) {
+      dispatch({ type: 'HOLE', side, payload: { winner }, attribution: p ? { playerId: p.id, playerName: p.fullName, stat: 'holesWon', by: 1 } : undefined });
+      return;
+    }
+    // SD-87 — strokes entered: each player's score on the hole (birdie, par …)
+    // is credited too, beside the hole won
+    const credit = (who: 'home' | 'away') => {
+      const pl = (who === 'home' ? homeRoster : awayRoster)[0];
+      if (!pl) return undefined;
+      const key = scoreStatKey(strokes[who], here.hole.par);
+      return winner === who
+        ? { playerId: pl.id, playerName: pl.fullName, stat: 'holesWon', by: 1, extra: { [key]: 1 } }
+        : { playerId: pl.id, playerName: pl.fullName, stat: key, by: 1 };
+    };
+    dispatch({ type: 'HOLE', side, payload: { winner, home: strokes.home, away: strokes.away }, attribution: credit('home'), attribution2: credit('away') });
   };
+  const cur = gross.hole === m.played ? gross : { hole: m.played, home: null, away: null };
+  const par = here?.hole.par ?? 4;
+  const val = (side: 'home' | 'away') => cur[side] ?? par;
+  const step = (side: 'home' | 'away', by: 1 | -1) => setGross({ ...cur, [side]: Math.max(1, Math.min(20, val(side) + by)) });
+  const netWinner = here ? holeWinner(val('home'), val('away'), here.home, here.away) : null;
+  const shots = (side: 'home' | 'away') => (here ? here[side] : 0);
   return (
     <View style={{ gap: theme.spacing(4) }}>
       <View style={st.box}>
         <Text style={st.big}>{m.status === 'AS' ? 'All square' : `${leaderName} ${m.status}`}</Text>
         <Text style={st.meta}>
-          {holeNo > s.regulation ? `Extra hole · ${holeNo}` : `Hole ${holeNo} of ${s.regulation}`}{m.remaining ? ` · ${m.remaining} to play` : ''}
+          {m.played >= s.regulation ? `Extra hole · ${holeNo}` : `Hole ${holeNo}${s.firstHole ? ` (${m.played + 1} of ${s.regulation})` : ` of ${s.regulation}`}`}{m.remaining ? ` · ${m.remaining} to play` : ''}
         </Text>
+        {here ? <Text style={st.meta}>Par {here.hole.par} · SI {here.hole.si}{shots('home') || shots('away') ? ` · ${(['home', 'away'] as const).filter((x) => shots(x)).map((x) => `${'●'.repeat(Math.abs(shots(x)))} ${nm(x)} ${shots(x) > 0 ? 'gets a shot' : 'gives a shot'}`).join(' · ')}` : ' · no shots'}</Text> : null}
       </View>
+      {ms && here && netWinner ? (
+        // SD-87 — gross strokes for both sides; the hole goes on NET strokes
+        <View style={st.strokeBox}>
+          {(['home', 'away'] as const).map((side) => (
+            <View key={side} style={st.strokeRow}>
+              <Text style={[textStyles.body, st.flex]} numberOfLines={1}>{nm(side)}{shots(side) > 0 ? `  ${'●'.repeat(shots(side))}` : ''}</Text>
+              <Button label="−" variant="ghost" style={st.stepBtn} onPress={() => step(side, -1)} />
+              <View style={st.strokeVal}>
+                <Text style={st.strokeNum}>{val(side)}</Text>
+                {shots(side) ? <Text style={st.meta}>net {val(side) - shots(side)}</Text> : null}
+              </View>
+              <Button label="+" variant="ghost" style={st.stepBtn} onPress={() => step(side, 1)} />
+            </View>
+          ))}
+          <Button
+            label={`Record hole ${holeNo}: ${netWinner === 'halved' ? 'halved' : `${nm(netWinner)} wins`}`}
+            variant={netWinner === 'halved' ? 'ghost' : netWinner}
+            onPress={() => hole(netWinner, { home: val('home'), away: val('away') })}
+          />
+          <Text style={st.meta}>Or tap the result without strokes:</Text>
+        </View>
+      ) : null}
       <Button label={`${nm('home')} wins hole ${holeNo}`} variant="home" onPress={() => hole('home')} />
       <Button label={`Hole ${holeNo} halved`} variant="ghost" onPress={() => hole('halved')} />
       <Button label={`${nm('away')} wins hole ${holeNo}`} variant="away" onPress={() => hole('away')} />
+      {/* SD-87 — handicap strokes (WHS Appendix C: 100% of the difference) */}
+      {setup ? (
+        <MatchStrokesSetup
+          regulation={s.regulation}
+          firstHole={s.firstHole}
+          homeName={nm('home')}
+          awayName={nm('away')}
+          homeIndex={s.strokes?.homeIndex ?? homeRoster[0]?.sportDetails?.golf?.handicapIndex}
+          awayIndex={s.strokes?.awayIndex ?? awayRoster[0]?.sportDetails?.golf?.handicapIndex}
+          onSave={(x) => { dispatch({ type: 'SET_STROKES', payload: x ? { strokes: x } : {} }); setSetup(false); }}
+          onCancel={() => setSetup(false)}
+          hasStrokes={!!ms}
+        />
+      ) : (
+        <View style={{ gap: theme.spacing(1) }}>
+          {ms ? <Text style={st.meta}>⛳ {strokesLine(ms, nm('home'), nm('away'))}{ms.course ? ` · ${ms.course}` : ''}</Text> : null}
+          <Button label={ms ? '⚙ Change strokes / course' : '⛳ Enter strokes · handicap shots'} variant="ghost" onPress={() => setSetup(true)} />
+        </View>
+      )}
       {/* SD-116: conceding the MATCH (not a hole) — at the very end of the
           controls, behind a "who?" step and the confirm sheet. */}
       <View style={st.concede}>
@@ -112,11 +154,17 @@ const LiveExtras: NonNullable<SportPlugin<GolfMatchState>['LiveExtras']> = ({ st
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={st.label}>Hole by hole</Text>
+      {s.strokes ? <Text style={textStyles.muted}>{strokesLine(s.strokes, homeName, awayName)}</Text> : null}
       {s.holes.length === 0 ? <Text style={textStyles.muted}>No holes played yet.</Text> : s.holes.map((w, i) => {
         up += w === 'home' ? 1 : w === 'away' ? -1 : 0;
         const who = w === 'halved' ? 'Halved' : `${w === 'home' ? homeName : awayName} won`;
         const state = up === 0 ? 'AS' : `${up > 0 ? homeName : awayName} ${Math.abs(up)} UP`;
-        return <Text key={i} style={textStyles.body}>Hole {i + 1}: {who} · {state}</Text>;
+        // SD-87 — the gross strokes (● = a shot received there)
+        const sc = s.scores?.[i];
+        const mh = s.strokes ? matchHole(s.strokes, i) : null;
+        const dot = (n: number) => (n > 0 ? '●'.repeat(n) : '');
+        const strokes = sc ? ` (${sc.home}${mh ? dot(mh.home) : ''}–${sc.away}${mh ? dot(mh.away) : ''})` : '';
+        return <Text key={i} style={textStyles.body}>Hole {holeNumber(s.firstHole, i)}: {who}{strokes} · {state}</Text>;
       })}
       {s.conceded ? <Text style={textStyles.body}>🏳 {s.conceded === 'home' ? homeName : awayName} {concededLine(s.holes, s.conceded, s.regulation, s.extraHoles)}</Text> : null}
     </View>
@@ -224,5 +272,10 @@ const st = StyleSheet.create({
   label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '700' },
   box: { gap: theme.spacing(1), alignItems: 'center', padding: theme.spacing(4), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md },
   big: { color: theme.colors.text, fontSize: 24, fontWeight: '800' },
-  meta: { color: theme.colors.textMuted, fontSize: theme.font.small },
+  meta: { color: theme.colors.textMuted, fontSize: theme.font.small, textAlign: 'center' },
+  strokeBox: { gap: theme.spacing(2), padding: theme.spacing(3), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border },
+  strokeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
+  stepBtn: { minWidth: 48, paddingHorizontal: 0 },
+  strokeVal: { width: 56, alignItems: 'center' },
+  strokeNum: { color: theme.colors.text, fontSize: 24, fontWeight: '800' },
 });

@@ -9,6 +9,8 @@ import { theme } from '../../core/theme';
 import { Button, Pill, SelectChip, textStyles } from '../ui';
 import { SectionHeader } from '../SectionHeader';
 import { GolfLeaderboard, type LeaderboardCard } from './GolfLeaderboard';
+import { GolfTeamBoard } from './GolfTeamBoard';
+import { golfTeamFormatOf } from '../../data/golfTeams';
 import { useGolfRounds } from '../../data/useGolf';
 import { buildLeaderboard, golfFormatOf, roundCells, roundContext, cardOf } from '../../data/golf';
 import type { RootStackParamList } from '../../navigation/types';
@@ -17,7 +19,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tournamentId: string; format?: Record<string, unknown>; canOrganize: boolean }) {
   const nav = useNavigation<Nav>();
-  const { events, entries, courses, players, loading } = useGolfRounds({ tournamentId });
+  const { events, entries, courses, players, teams, loading } = useGolfRounds({ tournamentId });
   const rows = useMemo(() => buildLeaderboard(events, entries, courses), [events, entries, courses]);
   const scoring = events.length ? golfFormatOf(events[events.length - 1]).scoring : (format?.competition === 'stableford' ? 'stableford' : 'stroke');
   const last = events[events.length - 1];
@@ -76,6 +78,13 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
       <GolfLeaderboard rows={rows} scoring={scoring} nameOf={nameOf} roundCols={cells} cards={cards}
         cardTitle={cardEv ? `Round ${cardEv.roundNo} card` : undefined} />
       {rows.length > 0 && <Text style={textStyles.muted}>Tap a player for their card{events.length > 1 ? ' (pick the round above)' : ''}. F = round finished · – = not teed off.</Text>}
+      {/* SD-76 — team stroke play: best N of M across the rounds */}
+      {last && golfTeamFormatOf(last) && (
+        <>
+          <SectionHeader title="👥 Team leaderboard" count={new Set(entries.filter((e) => e.teamId).map((e) => e.teamId)).size} />
+          <GolfTeamBoard events={events} entries={entries} courses={courses} nameOf={nameOf} teamName={(id) => teams.get(id)?.name ?? 'Team'} />
+        </>
+      )}
     </View>
   );
 }

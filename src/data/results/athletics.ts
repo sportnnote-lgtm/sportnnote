@@ -24,6 +24,7 @@ import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
 import { shootMeetSettings } from './shooting.ts';
 import { archMeetSettings, phaseNameOf } from './archery.ts';
 import { crewMeetSettings, describeCrewPlan } from './crews.ts';
+import { cycMeetSettings } from './cycling.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -48,6 +49,7 @@ export function eventMeetSettings(sport: string, fmt?: Record<string, unknown>):
   if (sport === 'shooting') return shootMeetSettings(fmt);
   if (sport === 'archery') return archMeetSettings(fmt);
   if (sport === 'rowing' || sport === 'canoe') return crewMeetSettings(sport, fmt);
+  if (sport === 'cycling') return cycMeetSettings(fmt);
   return meetSettings(fmt);
 }
 
@@ -571,7 +573,8 @@ export function eventLeaders(events: MeetEvent[]): EventLeader[] {
   const out: EventLeader[] = [];
   for (const e of events) {
     const def = disciplineOf(e.discipline);
-    if (!def) continue;
+    // SD-98: a cycling order event (road race, stage race GC, keirin …) has no "best mark" across rounds
+    if (!def || def.capture === 'order') continue;
     let best: EventLeader | undefined;
     for (const p of e.phases) {
       for (const r of rankEntries(p.entries, def, { handLegal: looseLegal(p.format) })) {

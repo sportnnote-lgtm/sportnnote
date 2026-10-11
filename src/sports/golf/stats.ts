@@ -42,6 +42,13 @@ export const golfStats: SportStatSchema<'golf'> = {
     { key: 'sandHoles', label: 'Greenside bunkers', short: 'bunkers', one: 'bunker', group: 'shots', ...keyed },
     { key: 'puttsGir', label: 'Putts on greens hit', short: 'putts on GIR', group: 'shots', format: { unit: 'count', better: 'lower' }, ...keyed },
     { key: 'girPutted', label: 'Greens hit with putts', short: 'greens with putts', group: 'shots', ...keyed },
+    // SD-84 — unofficial WHS figures per finished round (written by
+    // completeRound only for 18 complete holes on a tee with a Course Rating +
+    // Slope; hcpIndex = the index the player entered for that round). Never
+    // summed for display — the profile's handicap card reads them per round.
+    { key: 'adjGross', label: 'Adjusted gross (net double bogey)', short: 'adjusted gross', group: 'rounds', format: { unit: 'strokes' }, coverage: 'keyed' as const },
+    { key: 'differential', label: 'Score differential (unofficial)', short: 'differential', group: 'rounds', format: { unit: 'strokes', dp: 1, better: 'lower' }, coverage: 'keyed' as const },
+    { key: 'hcpIndex', label: 'Handicap Index used', short: 'index', group: 'rounds', format: { unit: 'count', dp: 1, better: 'lower' }, coverage: 'keyed' as const },
     // derived figures (the profile's golf block computes these today)
     { key: 'scoringAvg', label: 'Scoring avg', source: 'derived', group: 'rounds', format: { unit: 'strokes', dp: 1 },
       agg: { kind: 'rate', num: 'completeStrokes', den: 'completeRounds', dp: 1 } },

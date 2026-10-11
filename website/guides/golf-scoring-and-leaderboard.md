@@ -8,7 +8,7 @@ order: 80
 updated: 2026-10-11
 ---
 
-A golf event is one leaderboard across one or more rounds. Each group marks its own card on a phone, the leaderboard updates as holes are entered, and after a round the organiser can keep only the leaders for the next round. This guide covers stroke play and Stableford. Match play uses the normal bracket: tap the "wins hole" button for each hole, or **🏳 Concede match…** at the bottom if a player gives up. Withdrawals, handicap changes, the stats row and playoffs are in [Golf entry admin, stats and prizes](/guides/golf-entry-admin-and-stats/).
+A golf event is one leaderboard across one or more rounds. Each group marks its own card on a phone, the leaderboard updates as holes are entered, and after a round the organiser can keep only the leaders for the next round. This guide covers stroke play and Stableford. Match play uses the normal bracket; see [Golf handicaps and match play with strokes](/guides/golf-handicaps-and-match-play/). Withdrawals, handicap changes, the stats row and playoffs are in [Golf entry admin, stats and prizes](/guides/golf-entry-admin-and-stats/).
 
 ## Before you start
 - You need to be a host of the tournament to set up and finish rounds.
@@ -29,7 +29,7 @@ A golf event is one leaderboard across one or more rounds. Each group marks its 
 > **Tip:** No signal on the course? Keep scoring. Cards are saved on the phone and sync when you are back online.
 
 ## Reading the leaderboard
-The **🏆 Leaderboard** tab shows the position, the total (to par, or points for Stableford), **Thru** and **Strk** (total strokes). Thru shows **F** when the player has finished the round, the number of holes while they play, and – before they tee off. Tap a player to see their card hole by hole, with their putts, greens and fairways underneath when those were entered.
+The **🏆 Leaderboard** tab shows the position, the total (to par, or points for Stableford), **Thru** and **Strk** (total strokes). Thru shows **F** when the player has finished the round, the number of holes while they play, and – before they tee off. Tap a player to see their scorecard: Out, In and Tot, par and stroke index rows, a circle for a birdie and a square for a bogey, a Net row when they get shots, and putts when entered. **Share card** sends it as text. On the **📝 Scorecard** tab, **📋 Full card** shows your whole group's card.
 
 In a tournament, the leaderboard on the golf page adds up every round. It also shows **Today** and a column per round (**R1**, **R2**, …): a finished round shows its strokes, a round in play shows its score to par. On a phone, swipe the table sideways to see every column. To see a player's card from an earlier round, tap the round under **Cards:** (for example **R2**), then tap the player.
 

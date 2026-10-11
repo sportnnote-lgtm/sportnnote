@@ -23,6 +23,7 @@ import {
   type ArchRoundDef, type Arrow, type Bow,
 } from './archeryDefs.ts';
 import { bracketState, isBracketRows, outcomeText, roundShort, type BracketState } from './archeryBracket.ts';
+import { cycPhaseName } from './cyclingDefs.ts';
 
 export * from './archeryDefs.ts';
 export {
@@ -39,7 +40,10 @@ export const archRound = (def?: { key: string } | null): ArchRoundDef | undefine
 export const endText = (arrows?: Arrow[]): string => (arrows ?? []).map(String).join(' ');
 
 /** The ranking-round phase is "Ranking round", match play "Match play"; other sports keep their labels. */
-export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[]; races?: string[] }): string {
+export function phaseNameOf(f: { discipline: string; phase: PhaseKind; plan?: { phase: PhaseKind }[]; races?: string[]; phaseNo?: number }): string {
+  // SD-98 cycling: "Stage 2", "Qualifying (flying 200 m)", "Match play", "Finals (gold / bronze)"
+  const cyc = cycPhaseName(f);
+  if (cyc) return cyc;
   // SD-99 / SD-100: a final run as lettered races reads "Finals A/B"
   if (f.phase === 'final' && (f.races?.length ?? 0) > 1) return `Finals ${f.races!.join('/')}`;
   if (!archRoundOf(f.discipline)) return phaseLabel(f.phase);
@@ -362,7 +366,8 @@ export const roundLine = (r: ArchRoundDef): string => `${r.label} · ${r.arrows}
 /** The match line under a bracket row on the results sheet. */
 export function bracketRowText(e: ResultEntry, st: BracketState, entries: ResultEntry[]): string {
   const parts: string[] = [];
-  if (e.result.seed != null) parts.push(`Seed ${e.result.seed}${e.result.qual ? ` (${e.result.qual.mark})` : ''}`);
+  // SD-98: a sprint seed's flying 200 m time to the thousandth
+  if (e.result.seed != null) parts.push(`Seed ${e.result.seed}${e.result.qual ? ` (${e.result.bo != null ? e.result.qual.mark.toFixed(3) : e.result.qual.mark})` : ''}`);
   for (const m of st.matches) {
     if (!m.out || m.bye || (m.a !== e.id && m.b !== e.id) || (!m.out.ends.length && !m.out.walkover)) continue;
     const A = entries.find((x) => x.id === m.a)?.result.mp?.[m.key], B = entries.find((x) => x.id === m.b)?.result.mp?.[m.key];

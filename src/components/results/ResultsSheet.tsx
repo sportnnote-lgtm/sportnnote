@@ -10,6 +10,7 @@ import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
   shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText, isCrewSport, crewMembersText,
+  cycRowText, cycKind, sprintBracket,
   type DisciplineDef, type RankedEntry, type ResultFlag,
 } from '../../data/results';
 
@@ -59,6 +60,8 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   const arch = def.sport === 'archery' ? archRoundOf(def.key) : undefined;
   if (arch) return res.mp != null ? (res.seed != null ? `Seed ${res.seed}${res.qual ? ` (${res.qual.mark})` : ''}` : '') : archRowText(res, arch);
   if (def.capture === 'target') return [res.tens != null ? `10s ${res.tens}` : '', res.xs != null ? `X ${res.xs}` : ''].filter(Boolean).join(' · ');
+  // SD-98 cycling: points-race sprints, a stage's place / bonus / points, laps, "caught"
+  if (def.sport === 'cycling') return cycRowText(r, def);
   // SD-99 / SD-100 rowing / canoe: the crew by seat, the photo-finish reading, the splits
   if (isCrewSport(def.sport)) {
     return [
@@ -96,7 +99,9 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   const many = heats.size > 1;
   // SD-95: archery match play — each archer's matches ("QF W 6–4 · SF L 5–6 (SO 9–10)")
   const allRows = [...heats.values()].flat().map((r) => r.entry);
-  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def)) : null;
+  const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
+  // SD-98: an order event's column — time / gap (road), points (points race), nothing (keirin, scratch, elimination)
+  const cycK = def.sport === 'cycling' ? cycKind(def.key) : undefined;
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <View>
@@ -113,8 +118,8 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
             <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
-            <Text style={[st.name, st.headTxt]}>{isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
-            <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
+            <Text style={[st.name, st.headTxt]}>{def.sport === 'cycling' ? 'Rider' : isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
+            <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : cycK === 'points' ? 'Points' : cycK === 'stage' ? 'Time' : cycK === 'keirin' || cycK === 'scratch' || cycK === 'elim' ? '' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
             const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');

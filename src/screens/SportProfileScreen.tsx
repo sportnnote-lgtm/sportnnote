@@ -18,9 +18,10 @@ import { statCoverage, aggregate } from '../data/stats';
 import { contextsFor, splitOptions, filterLines, type SplitDim, type SplitSelection } from '../data/lineContext';
 import { lineResult, RESULT_PILL } from '../data/appearances';
 import { cricketMatchLine } from '../data/cricketCareer';
+import { chessRatingsOf, ratingsText } from '../data/chessRatings';
 import { statSchema, labelLong } from '../sports/statSchemas';
 import {
-  careerSections, captaincyRecord, recordFigure, winPctText, tileValueIsLong, bestWinRun, titlesAndFinals,
+  careerSections, captaincyRecord, recordFigure, winPctText, tileValueIsLong, bestWinRun, bestUnbeatenRun, titlesAndFinals,
   disciplineRecords, partnerRecords, doublesMatchIds, historyStats, wlText,
 } from '../data/career';
 import { golfProfileSummary, golfDetailSummary } from '../sports/golf/engine';
@@ -29,6 +30,8 @@ import { LiftingCareer } from '../components/results/LiftingCareer';
 import { ShootingCareer } from '../components/results/ShootingCareer';
 import { ArcheryCareer } from '../components/results/ArcheryCareer';
 import { CrewCareer } from '../components/results/CrewCareer';
+import { CyclingCareer } from '../components/results/CyclingCareer';
+import { GolfHandicapCard } from '../components/golf/GolfHandicapCard';
 import { getMyPlayerId, getPlayerEditAccess, getTournaments, getStatLinesForMatches, getPlayerNames } from '../data/repos';
 import type { StatLine, Tournament } from '../core/types';
 import type { EditAccess } from '../core/playerEditAccess';
@@ -176,7 +179,9 @@ export default function SportProfileScreen() {
     });
   };
   const sideFields = SPORT_SIDE_FIELDS[sport];
-  const hasDetails = !!(detail?.position || detail?.sides || detail?.teams?.length);
+  // SD-85 — chess ratings typed on the profile
+  const chessRatings = sport === 'chess' ? ratingsText(chessRatingsOf(player)) : '';
+  const hasDetails = !!(detail?.position || detail?.sides || detail?.teams?.length || chessRatings);
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -224,13 +229,17 @@ export default function SportProfileScreen() {
         )}
 
         {!bySport ? (
-          <EmptyState icon={plugin.icon} title={emptyMsg} compact />
+          <>
+            <EmptyState icon={plugin.icon} title={emptyMsg} compact />
+            {/* SD-84 — the Handicap Index shows before any round */}
+            {sport === 'golf' && <GolfHandicapCard index={player.sportDetails?.golf?.handicapIndex} lines={[]} />}
+          </>
         ) : (
           <>
             {schema?.careerView === 'measured' ? (
               // SD-90 — a timed / measured career: PB / SB per event, medals,
               // finals and the results history (it renders its own history).
-              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : sport === 'shooting' ? <ShootingCareer lines={history} /> : sport === 'archery' ? <ArcheryCareer lines={history} /> : sport === 'rowing' || sport === 'canoe' ? <CrewCareer lines={history} sport={sport} /> : <AthleticsCareer lines={history} />
+              sport === 'weightlifting' ? <LiftingCareer lines={history} /> : sport === 'shooting' ? <ShootingCareer lines={history} /> : sport === 'archery' ? <ArcheryCareer lines={history} /> : sport === 'rowing' || sport === 'canoe' ? <CrewCareer lines={history} sport={sport} /> : sport === 'cycling' ? <CyclingCareer lines={history} /> : <AthleticsCareer lines={history} />
             ) : sport === 'golf' ? (() => {
               // Golf reads in rounds, scoring average and percentages — not
               // matches/wins or raw counters.
@@ -274,6 +283,8 @@ export default function SportProfileScreen() {
                       </View>
                     );
                   })()}
+                  {/* SD-84 — Handicap Index, differentials, unofficial estimate */}
+                  <GolfHandicapCard index={player.sportDetails?.golf?.handicapIndex} lines={stats.recent.filter((l) => l.sport === 'golf')} />
                 </>
               );
             })() : (
@@ -289,8 +300,10 @@ export default function SportProfileScreen() {
               // SD-24 — best winning run, titles / finals (cricket's header stays as it was)
               const framework = sport !== 'cricket';
               const run = framework ? bestWinRun(history) : 0;
+              // SD-36 — chess: the longest unbeaten run (wins + draws)
+              const unbeaten = sport === 'chess' ? bestUnbeatenRun(history) : 0;
               const tf = framework ? titlesAndFinals(history, matchById) : { titles: 0, finals: 0 };
-              const extra = bySport.startsKnown > 0 || bySport.ties > 0 || bySport.noResults > 0 || run >= 2 || tf.finals > 0;
+              const extra = bySport.startsKnown > 0 || bySport.ties > 0 || bySport.noResults > 0 || run >= 2 || tf.finals > 0 || unbeaten >= 2;
               return (
                 <>
                   {/* one font size per row: "100%" (or "12-3") shrinks the whole row */}
@@ -305,6 +318,7 @@ export default function SportProfileScreen() {
                       {bySport.ties > 0 && <Stat value={String(bySport.ties)} label="Ties" tone="neutral" />}
                       {bySport.noResults > 0 && <Stat value={String(bySport.noResults)} label="No result" tone="neutral" />}
                       {run >= 2 && <Stat value={String(run)} label="Best win run" tone="neutral" />}
+                      {unbeaten >= 2 && unbeaten > run && <Stat value={String(unbeaten)} label="Unbeaten run" tone="neutral" />}
                       {tf.finals > 0 && <Stat value={String(tf.titles)} label={tf.titles === 1 ? 'Title' : 'Titles'} tone="neutral" />}
                       {tf.finals > 0 && <Stat value={String(tf.finals)} label={tf.finals === 1 ? 'Final' : 'Finals'} tone="neutral" />}
                     </View>
@@ -419,6 +433,7 @@ export default function SportProfileScreen() {
             <>
               <View style={st.fbMeta}>
                 {detail?.position ? <Pill label={`Position: ${detail.position}`} /> : null}
+                {chessRatings ? <Pill label={`♟️ ${chessRatings}`} /> : null}
                 {sideFields.map((f) =>
                   detail?.sides?.[f.key] ? <Pill key={f.key} label={`${f.label}: ${detail.sides[f.key]}`} /> : null
                 )}

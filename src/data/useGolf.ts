@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import { getFieldEvent, getFieldEvents, getFieldEntries, getGolfCourses } from './golf';
-import { getPlayers } from './repos';
-import type { FieldEntry, FieldEvent, GolfCourse, Player } from '../core/types';
+import { getPlayers, getTeams } from './repos';
+import type { FieldEntry, FieldEvent, GolfCourse, Player, Team } from '../core/types';
 
 export interface GolfData {
   events: FieldEvent[];
   entries: FieldEntry[];
   courses: GolfCourse[];
   players: Map<string, Player>;
+  /** SD-76 — the teams entries score for (team stroke play), by id */
+  teams: Map<string, Team>;
   loading: boolean;
   reload: () => Promise<void>;
 }
@@ -21,6 +23,7 @@ export function useGolfRounds(scope: { eventId?: string; tournamentId?: string }
   const [entries, setEntries] = useState<FieldEntry[]>([]);
   const [courses, setCourses] = useState<GolfCourse[]>([]);
   const [players, setPlayers] = useState<Map<string, Player>>(new Map());
+  const [teams, setTeams] = useState<Map<string, Team>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
@@ -32,6 +35,7 @@ export function useGolfRounds(scope: { eventId?: string; tournamentId?: string }
     setEntries(ens);
     setCourses(cs);
     setPlayers(new Map(ps.map((p) => [p.id, p])));
+    if (ens.some((e) => e.teamId)) setTeams(new Map((await getTeams().catch(() => [] as Team[])).map((t) => [t.id, t])));
     setLoading(false);
   }, [scope.eventId, scope.tournamentId]);
 
@@ -49,5 +53,5 @@ export function useGolfRounds(scope: { eventId?: string; tournamentId?: string }
     return () => { void supabase!.removeChannel(ch); };
   }, [ids, reload]);
 
-  return { events, entries, courses, players, loading, reload };
+  return { events, entries, courses, players, teams, loading, reload };
 }

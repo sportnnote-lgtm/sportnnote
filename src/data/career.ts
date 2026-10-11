@@ -98,6 +98,12 @@ export function careerSections(schema: SportStatSchema<SportId>, lines: StatLine
         const over = def.agg && 'over' in def.agg && def.agg.over ? schema.filters?.[def.agg.over] : undefined;
         const tracked = lines.filter((l) => inputs.every((k) => trackedIn(schema, l, k)) && (!over || over(l))).length;
         if (tracked < lines.length) row.coverage = { tracked, total: lines.length };
+      } else if (def.coverOf) {
+        // SD-36: a figure only some lines can give (chess wins by method —
+        // the wins that recorded how) says over how many of the lines that
+        // should have (all wins)
+        const c = coverageOf(schema, def, lines);
+        if (c) row.coverage = c;
       }
       rows.push(row);
     }
@@ -109,6 +115,20 @@ export function careerSections(schema: SportStatSchema<SportId>, lines: StatLine
 /* ------------------------------ framework figures ------------------------------ */
 
 const byDate = (a: StatLine, b: StatLine) => (a.date ?? '').localeCompare(b.date ?? '') || a.id.localeCompare(b.id);
+
+/** SD-36 (CH-05) — longest unbeaten run (wins and draws), oldest → newest.
+ *  A loss breaks it; a no result or a match in play neither extends nor
+ *  breaks it (as `bestWinRun`). Chess: a forfeit loss is a loss. */
+export function bestUnbeatenRun(lines: StatLine[]): number {
+  let best = 0;
+  let cur = 0;
+  for (const l of [...lines].sort(byDate)) {
+    if (l.pending || !l.result || l.result === 'NR') continue;
+    cur = l.result === 'L' ? 0 : cur + 1;
+    best = Math.max(best, cur);
+  }
+  return best;
+}
 
 /** Longest run of consecutive wins, oldest → newest. A no result or a match
  *  still in play neither extends nor breaks it. */

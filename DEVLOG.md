@@ -13,6 +13,14 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Cycling (SD-98) live; chess ratings, crosstable, more results (SD-36/67/77/85); golf team play, handicaps, match-play strokes, scorecard (SD-76/84/87/88)
+- **Cycling (UCI), results engine:** road ITT (start offsets, 1/100), mass-start road race (tap the finish order; same-time groups "s.t.", new group at ≥ 1 s; DNF/DNS/OTL/DQ), stage race (stages → GC by cumulative time minus bonuses, points + KOM standings, reverse-GC TT starts); track (1/1000) individual pursuit (qualifying → gold/bronze finals, Caught), 500 m / kilo TT, sprint (flying 200 m → best-of-3 bracket, reusing archery's bracket), keirin, scratch, points race (5-3-2-1, double at the finish, ±20 a lap), elimination. Ranges, records/PBs, career, hub. Guide: run-a-cycling-event.
+- **Chess:** wins by method + best unbeaten run on the career; Dead position, Adjudicated, Arbiter's decision, 0-0 double forfeit (both lose); "♔ {name} has White"; exact clock ("RAPID 15+10"). Ratings (FIDE ID, standard/rapid/blitz in sport_details), rating-seeded Swiss R1, Chess-Results-style wall chart / crosstable on the tournament Stats tab with tie-break columns, ARO and TPR (FIDE dp table) — all "Unofficial — not FIDE-rated". Guides: score-chess, run-a-chess-tournament, new chess-ratings-and-crosstable.
+- **Golf:** team stroke play best N of M (per round or best ball, gross/net, countback), team leaderboards; Handicap Index on the profile, WHS adjusted gross (net double bogey) + score differential per round + unofficial index estimate (best 8 of 20) with trend; match play with strokes (100% difference by stroke index, ● dots, net hole results, back-9 numbered 10–18); proper scorecard (Out/In/Tot, ◯ ◎ □ ▣, Net/Pts/Putts rows, text share). Guides: new golf-team-stroke-play, golf-handicaps-and-match-play; golf-scoring-and-leaderboard.
+- **No migration.** Verified: `tests/cycling.test.mts` (32), `tests/chess-sd36-67-77-85.test.mts` (19), `tests/golf-handicap-team-match.test.mts` (17), suite green, tsc clean; demos on 8093 / static exports.
+
+---
+
 ### 2026-10-11 — Racket doubles serve order by name, padel Star Point + Hold/Break labels, racket backlog close-out (SD-62 / SD-74 / SD-64 / SD-75 / SD-34 / SD-52 / SD-65)
 - **Table tennis doubles (ITTF 2.13):** "🏓 Anil serves to Xavi" — A→X→B→Y order, next game's first receiver from the rule, deciding-game receiver switch at 5 (10 in 21-point games). Picks per game via `DoublesOrderPicker` (fixable mid-game, v:2); derived, never stored as server state (`doublesOrder.ts`).
 - **Badminton doubles (BWF Law 11):** "🏸 Arun serves from the right to Chitra" — court by score parity, only the serving side switches on winning a rally; BWF worked example replayed exactly in tests.

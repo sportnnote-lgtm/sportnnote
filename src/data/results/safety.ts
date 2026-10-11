@@ -24,6 +24,7 @@ import { digitsToTime, handTime } from './athletics.ts';
 import { WL_RANGE, outOfRange } from './weightlifting.ts';
 import { hasMatchData } from './archeryBracket.ts';
 import { crewRange } from './crewDefs.ts';
+import { cycRange } from './cyclingDefs.ts';
 
 export interface MarkRange { min: number; max: number }
 
@@ -74,6 +75,9 @@ export function markRange(discipline: string, course?: Category['course']): Mark
   // SD-99 / SD-100: rowing / canoe per boat class and distance
   const crew = crewRange(discipline);
   if (crew) return crew;
+  // SD-98: cycling time trials, pursuits and the flying 200 m
+  const cyc = cycRange(discipline);
+  if (cyc) return cyc;
   if (discipline.startsWith('swim.')) {
     const base = SWIM_LCM_MIN[discipline.slice(5)];
     if (base == null) return null;
@@ -193,6 +197,8 @@ export function blankEntries(entries: ResultEntry[], def: DisciplineDef): Result
     if (def.capture === 'attempts') return !(r.attempts ?? []).some((a) => !!a && (a.mark != null || a.foul || a.pass));
     if (def.capture === 'heights') return !(r.heights ?? []).some((h) => !!h.tries);
     if (def.capture === 'lifts') return !r.lifts?.snatch?.length && !r.lifts?.cj?.length;
+    // SD-98: a cycling order event — not on the line yet (a points-race rider may score 0, see the sprints)
+    if (def.capture === 'order') return def.key !== 'cyc.points' && r.fin == null && !Object.keys(r.spr ?? {}).length && !r.laps && r.mark == null;
     return false;
   });
 }
@@ -203,7 +209,7 @@ export function newRecords(before: RecordMark[], after: RecordMark[]): { rec: Re
 }
 
 const athleteWord = (def: Pick<DisciplineDef, 'teamSize' | 'sport'>, n: number) =>
-  def.sport === 'rowing' || def.sport === 'canoe' ? (n === 1 ? 'crew' : 'crews') : def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
+  def.sport === 'rowing' || def.sport === 'canoe' ? (n === 1 ? 'crew' : 'crews') : def.sport === 'cycling' ? (n === 1 ? 'rider' : 'riders') : def.teamSize ? (n === 1 ? 'team' : 'teams') : def.sport === 'swimming' ? (n === 1 ? 'swimmer' : 'swimmers') : def.sport === 'weightlifting' ? (n === 1 ? 'lifter' : 'lifters') : def.sport === 'shooting' ? (n === 1 ? 'shooter' : 'shooters') : def.sport === 'archery' ? (n === 1 ? 'archer' : 'archers') : (n === 1 ? 'athlete' : 'athletes');
 
 /** "3 athletes have no result (Asha, Riya, Meena) — …" or ''. */
 export function blankWarning(blank: ResultEntry[], def: Pick<DisciplineDef, 'teamSize' | 'sport'>, after: string): string {
@@ -239,7 +245,7 @@ export function finishDetail(opts: {
 
 /** Anything entered on a phase (a mark, a status, a trial, a bar try)? */
 export function hasAnyResult(results: (EntryResult | null | undefined)[]): boolean {
-  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length || !!r.fshots?.length || !!r.series?.length || !!r.ends?.length || hasMatchData(r)));
+  return results.some((r) => !!r && (r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.some((h) => !!h.tries) || !!r.lifts?.snatch?.length || !!r.lifts?.cj?.length || !!r.fshots?.length || !!r.series?.length || !!r.ends?.length || hasMatchData(r) || r.fin != null || !!Object.keys(r.spr ?? {}).length || !!r.laps));
 }
 
 export type ReopenVerdict = { ok: true; kind: 'round' | 'final' } | { ok: false; reason: string };

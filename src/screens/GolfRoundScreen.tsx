@@ -16,6 +16,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, Card, Pill, SelectChip, FormError, textStyles } from '../components/ui';
 import { GolfLeaderboard, type LeaderboardCard } from '../components/golf/GolfLeaderboard';
+import { GolfScorecard } from '../components/golf/GolfScorecard';
+import { GolfTeamBoard } from '../components/golf/GolfTeamBoard';
+import { golfTeamFormatOf } from '../data/golfTeams';
+import { cardShareText } from '../sports/golf/scorecard';
 import { useAuth } from '../core/auth';
 import { shareMessage } from '../core/share';
 import { golfShareText } from '../core/shareText';
@@ -44,7 +48,7 @@ export default function GolfRoundScreen() {
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'GolfRound'>>();
   const { profile } = useAuth();
-  const { events, entries, courses, players, loading, reload } = useGolfRounds({ eventId: params.eventId });
+  const { events, entries, courses, players, teams, loading, reload } = useGolfRounds({ eventId: params.eventId });
   const ev = events[0];
   const fmt = ev ? golfFormatOf(ev) : null;
   const course = ev && fmt ? courses.find((c) => c.id === fmt.courseId) : undefined;
@@ -55,6 +59,9 @@ export default function GolfRoundScreen() {
   const [hole, setHole] = useState(0);
   const [trackPutts, setTrackPutts] = useState(false);
   const [statsRow, setStatsRow] = useState(false);
+  // SD-88 — the group's whole card; SD-76 — players / teams board
+  const [fullCard, setFullCard] = useState(false);
+  const [boardView, setBoardView] = useState<'players' | 'teams'>('players');
   const [adminFor, setAdminFor] = useState<string | null>(null); // SD-35 entry id
   useEffect(() => {
     AsyncStorage.getItem(STATS_ROW_KEY).then((v) => { if (v === '1') setStatsRow(true); }).catch(() => {});
@@ -456,7 +463,13 @@ export default function GolfRoundScreen() {
               <SelectChip label={trackPutts || statsRow ? '✓ Tracking putts' : 'Track putts'} active={trackPutts || statsRow} onPress={() => !statsRow && setTrackPutts(!trackPutts)} />
               {/* SD-45 — remembered on this phone; off by default (D8) */}
               <SelectChip label={statsRow ? '✓ Stats: fairway · bunker · penalties' : 'Stats: fairway · bunker · penalties'} active={statsRow} onPress={toggleStatsRow} />
+              <SelectChip label="📋 Full card" active={fullCard} onPress={() => setFullCard(!fullCard)} />
             </View>
+            {/* SD-88 — the group's scorecard: Out / In / Tot, shapes, net, points, putts */}
+            {fullCard && groupEntries.length > 0 && (
+              <GolfScorecard holes={holes} stableford={fmt.scoring === 'stableford'}
+                players={groupEntries.map((e) => ({ name: nameOf(e.playerId).split(' ')[0], card: cardFor(e, holes.length), received: ctxByEntry.get(e.id)?.received ?? [] }))} />
+            )}
             {hole < holes.length - 1 && <Button label={`Next: hole ${holes[hole + 1].n} ▶`} onPress={() => setHole(hole + 1)} />}
             {ev.status === 'live' && isHost && <Button label={busy ? 'Finishing…' : '🏁 Finish the round'} variant="ghost" onPress={() => void finish()} disabled={busy} />}
           </>
@@ -464,8 +477,20 @@ export default function GolfRoundScreen() {
 
         {tab === 'board' && (
           <>
+            {/* SD-76 — team stroke play: the team board beside the players' */}
+            {golfTeamFormatOf(ev) && (
+              <View style={st.tabs}>
+                <SelectChip label="🏌️ Players" active={boardView === 'players'} onPress={() => setBoardView('players')} />
+                <SelectChip label="👥 Teams" active={boardView === 'teams'} onPress={() => setBoardView('teams')} />
+              </View>
+            )}
+            {golfTeamFormatOf(ev) && boardView === 'teams' ? (
+              <GolfTeamBoard events={[ev]} entries={merged} courses={[course]} nameOf={nameOf} teamName={(id) => teams.get(id)?.name ?? 'Team'} />
+            ) : (
             <GolfLeaderboard rows={board} scoring={fmt.scoring} nameOf={nameOf} cards={lbCards} holesInRound={holes.length}
-              onLongPressRow={isHost ? openAdminForPlayer : undefined} />
+              onLongPressRow={isHost ? openAdminForPlayer : undefined}
+              onShareCard={(pid) => { const c = lbCards.get(pid); if (c) void shareMessage(cardShareText(nameOf(pid), course.name, c.holes, c.card, c.received), 'golf'); }} />
+            )}
             <Text style={textStyles.muted}>
               {fmt.scoring === 'stableford' ? 'Most points wins.' : `Lowest ${fmt.net ? 'net ' : ''}score to par wins.`} Ties: {fmt.tieBreak === 'countback' ? 'countback on the last 9, 6, 3, 1 holes' : fmt.tieBreak === 'playoff' ? 'a playoff for first; other places shared' : 'shared'}. Tap a player to see their card{isHost ? '; long-press for WD / DQ / DNS, handicap or remove' : ''}.
             </Text>

@@ -12,6 +12,7 @@ import type { FieldEntry, FieldEntryStatus, FieldEvent, FieldEventStatus, GolfCo
 import { roundStats, emptyCard, type GolfCard, type Hole } from '../sports/golf/engine';
 import { buildLeaderboard, roundContext, cardOf, entryStatusOf, withAdmin } from './golfLeaderboard';
 import type { EntryAdmin } from '../sports/golf/engine';
+import { roundDifferential } from '../sports/golf/handicap';
 
 // Pure leaderboard/format helpers live in golfLeaderboard.ts (testable in node);
 // re-exported so screens keep importing them from here.
@@ -142,20 +143,22 @@ export async function setFieldEventStatus(id: string, status: FieldEventStatus):
   if (error) throw new Error(error.message);
 }
 
-export interface NewEntry { playerId: string; groupNo: number; teeTime?: string; startHole?: number; handicapIndex?: number }
+export interface NewEntry { playerId: string; groupNo: number; teeTime?: string; startHole?: number; handicapIndex?: number; /** SD-76 — the team the player scores for (team stroke play) */ teamId?: string }
 
 export async function addFieldEntries(eventId: string, entries: NewEntry[], holes: number): Promise<FieldEntry[]> {
   const card = emptyCard(holes);
   if (!live()) {
-    const out = entries.map((e) => ({ id: genId('fen'), eventId, playerId: e.playerId, groupNo: e.groupNo, teeTime: e.teeTime, startHole: e.startHole, handicapIndex: e.handicapIndex, result: card, status: 'playing' as FieldEntryStatus }));
+    const out = entries.map((e) => ({ id: genId('fen'), eventId, playerId: e.playerId, ...(e.teamId ? { teamId: e.teamId } : {}), groupNo: e.groupNo, teeTime: e.teeTime, startHole: e.startHole, handicapIndex: e.handicapIndex, result: card, status: 'playing' as FieldEntryStatus }));
     demo.fieldEntries.push(...out);
     return out;
   }
   const { data, error } = await supabase!.from('field_entries').insert(entries.map((e) => ({
     event_id: eventId, player_id: e.playerId, group_no: e.groupNo, tee_time: e.teeTime ?? null,
     start_hole: e.startHole ?? null, handicap_index: e.handicapIndex ?? null, result: card, status: 'playing',
+    // SD-76 — only sent when set, so individual rounds work before migration 0051
+    ...(e.teamId ? { team_id: e.teamId } : {}),
   }))).select('*');
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(/team_id/i.test(error.message) ? 'Team stroke play needs the latest database update (migration 0051) — ask your administrator to run it.' : error.message);
   return ((data ?? []) as any[]).map(toEntry);
 }
 
@@ -273,7 +276,12 @@ export async function completeRound(ev: FieldEvent, entries: FieldEntry[], cours
   // SD-35 — a player who did not start gets no line (they played no golf)
   const lines = entries.filter((en) => entryStatusOf(en) !== 'dns').map((en) => {
     const ctx = roundContext(ev, course, en);
-    return { playerId: en.playerId, stats: roundStats(cardOf(en, ctx.holes.length), ctx.holes, ctx.received), won: winners.has(en.playerId) };
+    const card = cardOf(en, ctx.holes.length);
+    // SD-84 — the round's unofficial WHS figures (18 complete holes on a rated
+    // tee only; keyed: absent = not worked out)
+    const diff = roundDifferential(card, ctx.holes, ctx.tee, en.handicapIndex);
+    const stats = { ...roundStats(card, ctx.holes, ctx.received), ...(diff ? { adjGross: diff.adjGross, differential: diff.differential } : {}), ...(en.handicapIndex != null ? { hcpIndex: en.handicapIndex } : {}) };
+    return { playerId: en.playerId, stats, won: winners.has(en.playerId) };
   });
   const label = course.name;
   if (!live()) {

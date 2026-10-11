@@ -8,7 +8,7 @@ order: 70
 updated: 2026-10-11
 ---
 
-Most school and open chess events are Swiss: everyone plays every round, nobody is knocked out, and each round pairs players on similar scores. Small events often play a round-robin, where everyone meets everyone. SportnNote runs both, scores 1, ½ and 0, and ranks the table with FIDE tie-breaks.
+Most school and open chess events are Swiss: everyone plays every round, nobody is knocked out, and each round pairs players on similar scores. Small events often play a round-robin. SportnNote runs both, scores 1, ½ and 0, and ranks the table with FIDE tie-breaks.
 
 ## Before you start
 - You must be a host of the tournament.
@@ -18,7 +18,7 @@ Most school and open chess events are Swiss: everyone plays every round, nobody 
 ## Step by step: choose the format
 1. Open the tournament → **⚙ Manage** → **Chess — format & points**.
 2. Under **Structure**, pick **🇨🇭 Swiss** and set the **Rounds**, or pick **🔁 League** for a round-robin.
-3. Pick the **Time control** (for the record only).
+3. Pick the **Time control** (it picks the rating list for seeding). Optionally set **Clock: minutes each** and **Clock: seconds added per move**.
 4. For a Swiss, set the **Swiss bye**: **1** (the usual rule), **½** or **0**.
 5. Under **Points system**, pick **FIDE Swiss** or **FIDE round robin**. To change the order, open **Tie-break order (advanced)**.
 6. Tap **Save**.
@@ -31,21 +31,21 @@ Most school and open chess events are Swiss: everyone plays every round, nobody 
 3. Tap **⚡ Generate preview**. Each Swiss game shows ♔ White first, then ♚ Black.
 4. Tap **✅ Create** to schedule the games. Each game opens with its colours already set.
 
-Generate the next Swiss round once every game in the current round has a result.
+Generate the next Swiss round once the current round has every result.
 
 ## How the Swiss pairing works
-- Round 1 follows your seed order: the top half plays the bottom half (1 v 5, 2 v 6 … with 8 players). A coin toss gives the top seed's colour, and colours alternate down the boards.
+- Round 1 follows your seed order, or [ratings](/guides/chess-ratings-and-crosstable/): the top half plays the bottom half (1 v 5, 2 v 6 … with 8 players). A coin toss gives the top seed's colour, and colours alternate down the boards.
 - Later rounds pair players on the same score: the top half of each score group plays its bottom half. In an odd group, the lowest player moves down to the next group.
 - Nobody plays the same opponent twice.
 - Nobody gets one colour three times in a row, or more than two extra Whites (or Blacks). Otherwise colours alternate where they can.
-- If no pairing keeps every rule, the preview says so.
+- If no rule-keeping pairing exists, the preview says so.
 
-The screen says **In-app Swiss pairing — not FIDE-certified**. It follows the main ideas of FIDE's Dutch system, not every rule. For a rated event, pair in FIDE-endorsed software such as Swiss-Manager.
+The screen says **In-app Swiss pairing — not FIDE-certified**: it follows the main ideas of FIDE's Dutch system, not every rule. For a rated event, use FIDE-endorsed software such as Swiss-Manager.
 
 ## Byes
 With an odd number of players, one player sits out each Swiss round: the lowest-ranked player who has not had a bye (or a forfeit win) yet. The preview names them.
 - The bye points count as soon as the round is drawn.
-- It is not a game played, so it is not in **P**, **W**, **D** or **L**.
+- It is not a game played (not in **P**, **W**, **D** or **L**).
 - For your own tie-breaks, it counts as a game against an imaginary opponent who finished on your score (FIDE 2023 rules). For your opponents' tie-breaks, your bye points count like any others.
 
 ## Step by step: record a result
@@ -66,15 +66,15 @@ Players level on points are split by the **FIDE Swiss** order, one tie-break aft
 6. **Number of wins**, including forfeit wins and a full-point bye.
 7. **Wins with Black (BWG)**.
 
-This is FIDE's order for a Swiss where not everyone is rated, as in most school events. If a player withdraws, the rounds they missed count as draws in their past opponents' Buchholz. A round-robin keeps Sonneborn-Berger, wins, then direct encounter. **Median Buchholz** and **games with Black** are also under **Tie-break order (advanced)**.
+This is FIDE's order for a Swiss where not everyone is rated. If a player withdraws, the rounds they missed count as draws in their past opponents' Buchholz. A round-robin keeps Sonneborn-Berger, wins, then direct encounter. **Median Buchholz** and **games with Black** are also under **Tie-break order (advanced)**.
 
 ## Read the standings
-Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss shows one table called **Swiss**, with a column for each tie-break in use, such as **BH-C1**, **BH** and **SB**. "Not games played (the points count)" lists every bye and forfeit. See [Read the points table and adjust points](/guides/points-table-and-adjustments/).
+Open the tournament → **Stats** tab → **📊 Standings & leaders**. A Swiss shows one table called **Swiss**, with a column for each tie-break in use, such as **BH-C1**, **BH** and **SB**. Under it, the **♟️ Wall chart** shows each player's opponent, colour and result round by round. See [Read the points table and adjust points](/guides/points-table-and-adjustments/).
 
 ## Common questions
 
 ### Our rules give only half a point for a bye.
 Set the **Swiss bye** to **½** in **Chess — format & points**.
 
-### Does a round-robin change?
-Only with forfeits: a forfeit now counts in Sonneborn-Berger as a normal game.
+### Neither player turned up.
+Record **0-0 Double forfeit**: 0 points each, a forfeit loss for both.

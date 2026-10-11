@@ -21,7 +21,7 @@ const legal = await import(join(ROOT, 'src/data/legal.ts'));
 const SPORTS = [
   ['🏏', 'Cricket'], ['⚽', 'Football'], ['🏀', 'Basketball'], ['🏐', 'Volleyball'], ['🤼', 'Kabaddi'],
   ['🎾', 'Tennis'], ['🏸', 'Badminton'], ['🏓', 'Table tennis'], ['⚫', 'Squash'], ['🟡', 'Padel'],
-  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'], ['🏑', 'Hockey'], ['🤾', 'Handball'], ['🏊', 'Swimming'], ['🏋️', 'Weightlifting'], ['🎯', 'Shooting'], ['🏹', 'Archery'], ['🚣', 'Rowing'], ['🛶', 'Canoe sprint'],
+  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'], ['🏑', 'Hockey'], ['🤾', 'Handball'], ['🏊', 'Swimming'], ['🏋️', 'Weightlifting'], ['🎯', 'Shooting'], ['🏹', 'Archery'], ['🚣', 'Rowing'], ['🛶', 'Canoe sprint'], ['🚴', 'Cycling'],
 ];
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

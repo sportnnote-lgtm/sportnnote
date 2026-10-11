@@ -70,6 +70,8 @@ export function resultFor(m: Match, teamId: string): Result | null {
   // A no result / abandoned match (parity #04) is played, like the table counts it (SD-12).
   if (m.result?.kind === 'no_result' || m.result?.kind === 'abandoned') return 'NR';
   if (!m.winner) return null;
+  // SD-67: a chess double forfeit (0-0) is a loss for both
+  if (m.winner === 'draw' && !m.result && m.sport === 'chess' && (m.state as { method?: unknown } | null | undefined)?.method === 'double-forfeit') return 'L';
   // A level cricket match is a tie, not a draw (CK-02).
   if (m.winner === 'draw') return m.sport === 'cricket' ? 'T' : 'D';
   return m.winner === side ? 'W' : 'L';

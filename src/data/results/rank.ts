@@ -12,6 +12,7 @@ import { isFinalRows, qualKeys, rankShootFinal } from './shootingRank.ts';
 import { shootEventOf, sumTenths, fromTenths } from './shootingDefs.ts';
 import { isBracketRows, rankArcheryBracket } from './archeryBracket.ts';
 import { archRoundOf, endsOf } from './archeryDefs.ts';
+import { isCyclingRanked, rankCycling } from './cyclingRank.ts';
 
 export interface Performance {
   status: ResultStatus;
@@ -72,6 +73,9 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       const l = summarizeLifts(r.lifts);
       return { status, best: l.total, bestLegal: l.total, legal: l.total != null, keys: [l.total ?? -Infinity, l.totalSeq != null ? -l.totalSeq : undefined, lot], flags };
     }
+    case 'order':
+      // SD-98: a cycling order event (road race, keirin, points race …) — ranked by cyclingRank.ts; no mark for records / PBs
+      return { status, best: null, bestLegal: null, legal: false, keys: [-Infinity], flags };
     case 'target': {
       const shoot = def.tie === 'issf' ? shootEventOf(def.key) : undefined;
       if (shoot) {
@@ -98,6 +102,8 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
     }
     default: {
       const best = r.mark ?? null;
+      // SD-98: a rider caught in a pursuit final loses the race whatever the clock says
+      const caught = def.sport === 'cycling' && !!r.caught;
       // A hand-timed meet (SD-90) has no wind gauge either: no reading is accepted there.
       const legal = best != null && (!r.hand || !!handLegal) && (def.wind !== 'race' || windLegal(r.wind, def) || (!!handLegal && r.wind == null));
       if (best != null && def.wind === 'race' && aided(r.wind, def)) flags.push('w');
@@ -106,7 +112,7 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       // SD-94: in swimming the tie stands on the sheet (SW 11.2 / 13.4.2) — a
       // swim-off only decides who goes through (SW 3.2.3, see qualify()).
       const dec = def.tie === 'stands' ? undefined : decider;
-      return { status, best, bestLegal: legal ? best : null, wind: r.wind, legal, keys: [best == null ? -Infinity : sign * best, thou, dec], flags };
+      return { status, best, bestLegal: legal && !caught ? best : null, wind: r.wind, legal: legal && !caught, keys: [best == null || caught ? -Infinity : sign * best, caught ? undefined : thou, dec], flags };
     }
   }
 }
@@ -146,20 +152,24 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
   if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
   // SD-95: archery match play ranks by the bracket
   if (def.sport === 'archery' && isBracketRows(entries)) return rankArcheryBracket(entries, def);
+  // SD-98: cycling order events (finish order / points / GC) and sprint match play
+  if (isCyclingRanked(entries, def)) return rankCycling(entries, def, o);
   // SD-99 / SD-100: Finals A / B … rank race by race, places running on
   if (isRaceRows(entries)) return rankRaces(entries, def, o);
   const prefix = o.tiePrefix ?? '=';
   const rows = entries.map((entry) => ({ entry, p: performanceOf(entry, def, o.upToAttempt, o.handLegal) }));
   levelKeys(rows.map((x) => x.p));
   const startOrder = (x: (typeof rows)[number]) => x.entry.result?.lane ?? x.entry.result?.order ?? 999;
-  const ranked = rows.filter((x) => x.p.status === 'ok' && x.p.best != null);
+  // SD-98: a rider caught in a pursuit final is ranked (behind the catcher) without a time
+  const caught = (x: (typeof rows)[number]) => def.sport === 'cycling' && !!x.entry.result?.caught;
+  const ranked = rows.filter((x) => x.p.status === 'ok' && (x.p.best != null || caught(x)));
   ranked.sort((a, b) => compareKeys(a.p.keys, b.p.keys) || startOrder(a) - startOrder(b) || a.entry.name.localeCompare(b.entry.name));
   const tied = (a: (typeof rows)[number], b: (typeof rows)[number]) => compareKeys(a.p.keys, b.p.keys) === 0;
   const places = sharedPositions(ranked, tied);
 
   const make = (x: (typeof rows)[number], position: number | null, label: string, tie: boolean): RankedEntry => ({
     id: x.entry.id, entry: x.entry, position, label, tie, status: x.p.status, best: x.p.best,
-    bestText: formatMark(x.p.best, def), wind: x.p.wind, legal: x.p.legal, bestLegal: x.p.bestLegal, flags: [...x.p.flags],
+    bestText: caught(x) ? `caught${x.p.best != null ? ` (${formatMark(x.p.best, def)})` : ''}` : formatMark(x.p.best, def), wind: x.p.wind, legal: x.p.legal, bestLegal: x.p.bestLegal, flags: [...x.p.flags],
   });
   const out: RankedEntry[] = ranked.map((x, i) => {
     const { position, tie } = places[i];
@@ -175,7 +185,7 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
     }
     return row;
   });
-  const pending = rows.filter((x) => x.p.status === 'ok' && x.p.best == null).sort((a, b) => startOrder(a) - startOrder(b));
+  const pending = rows.filter((x) => x.p.status === 'ok' && x.p.best == null && !caught(x)).sort((a, b) => startOrder(a) - startOrder(b));
   for (const x of pending) out.push(make(x, null, '', false));
   const unranked = rows.filter((x) => x.p.status !== 'ok')
     .sort((a, b) => STATUS_ORDER[a.p.status] - STATUS_ORDER[b.p.status] || startOrder(a) - startOrder(b));

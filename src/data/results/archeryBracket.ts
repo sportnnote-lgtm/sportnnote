@@ -181,8 +181,12 @@ const competing = (e?: ResultEntry) => !!e && !['DNS', 'WD', 'DQ'].includes(e.re
 /** The match format of a bracket's discipline (sets for recurve / barebow, cumulative for compound). */
 export const bracketFormat = (def: Pick<DisciplineDef, 'key'>): ArchMatchFormat => matchFormatOf(archRoundOf(def.key)?.bow ?? 'R');
 
+/** SD-98: how one match is decided — archery by default; the track sprint
+ *  (cycling.ts `sprintMatch`) passes its best-of-three heats. */
+export type MatchFn = (A: ArchSide | undefined, B: ArchSide | undefined, okA: boolean, okB: boolean) => MatchOutcome;
+
 /** Where the bracket stands (pure — from the rows' seeds and match sides). */
-export function bracketState(entries: ResultEntry[], fmt: ArchMatchFormat): BracketState {
+export function bracketState(entries: ResultEntry[], fmt: ArchMatchFormat, match?: MatchFn): BracketState {
   const rows = entries.filter((e) => e.result?.mp != null && e.result.seed != null);
   const bySeed = new Map(rows.map((e) => [e.result.seed!, e]));
   const byId = new Map(rows.map((e) => [e.id, e]));
@@ -199,7 +203,7 @@ export function bracketState(entries: ResultEntry[], fmt: ArchMatchFormat): Brac
       return m;
     }
     const ea = byId.get(a), eb = byId.get(b);
-    m.out = matchOutcome(ea?.result.mp?.[key], eb?.result.mp?.[key], fmt, competing(ea), competing(eb));
+    m.out = match ? match(ea?.result.mp?.[key], eb?.result.mp?.[key], competing(ea), competing(eb)) : matchOutcome(ea?.result.mp?.[key], eb?.result.mp?.[key], fmt, competing(ea), competing(eb));
     if (m.out.done) {
       m.decided = true;
       if (m.out.winner) { m.winner = m.out.winner === 'a' ? a : b; m.loser = m.out.winner === 'a' ? b : a; }
@@ -262,7 +266,7 @@ function participation(st: BracketState): Map<string, Map<string, string>> {
   return out;
 }
 
-const hasData = (s?: ArchSide) => !!s && ((s.ends?.length ?? 0) > 0 || (s.so?.length ?? 0) > 0 || !!s.wo);
+const hasData = (s?: ArchSide) => !!s && ((s.ends?.length ?? 0) > 0 || (s.so?.length ?? 0) > 0 || !!s.wo || (s.heats?.length ?? 0) > 0);
 
 /**
  * After a correction (`entries` = the rows with it applied; `before` = as they
@@ -270,9 +274,9 @@ const hasData = (s?: ArchSide) => !!s && ((s.ends?.length ?? 0) > 0 || (s.so?.le
  * match any more, or now faces a different opponent there (their ends were shot
  * against someone else). Clearing them keeps the bracket honest; the UI asks first.
  */
-export function staleMatchData(entries: ResultEntry[], fmt: ArchMatchFormat, before?: ResultEntry[]): { id: string; keys: string[] }[] {
-  const now = participation(bracketState(entries, fmt));
-  const was = before ? participation(bracketState(before, fmt)) : null;
+export function staleMatchData(entries: ResultEntry[], fmt: ArchMatchFormat, before?: ResultEntry[], match?: MatchFn): { id: string; keys: string[] }[] {
+  const now = participation(bracketState(entries, fmt, match));
+  const was = before ? participation(bracketState(before, fmt, match)) : null;
   const out: { id: string; keys: string[] }[] = [];
   for (const e of entries) {
     const keys = Object.entries(e.result?.mp ?? {}).filter(([k, s]) => {
@@ -292,8 +296,8 @@ export function staleMatchData(entries: ResultEntry[], fmt: ArchMatchFormat, bef
 export const hasMatchData = (r?: { mp?: Record<string, ArchSide> } | null): boolean => !!r?.mp && Object.values(r.mp).some(hasData);
 
 /** Rank match play: places from the bracket, the archers still in (by seed), then DNS / WD / DQ. */
-export function rankArcheryBracket(entries: ResultEntry[], def: DisciplineDef): RankedEntry[] {
-  const st = bracketState(entries, bracketFormat(def));
+export function rankArcheryBracket(entries: ResultEntry[], def: DisciplineDef, match?: MatchFn): RankedEntry[] {
+  const st = bracketState(entries, bracketFormat(def), match);
   const out: RankedEntry[] = [];
   const lastText = (id: string): string => {
     const mine = st.matches.filter((m) => m.out && !m.bye && (m.a === id || m.b === id) && (m.out.ends.length || m.out.walkover || m.out.done));

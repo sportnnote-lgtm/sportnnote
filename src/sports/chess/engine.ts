@@ -11,10 +11,15 @@ export type ChessMethod =
   // standard / rapid, the 1st in blitz loses); a flag fall when the opponent
   // can't mate (Art. 6.9 — a draw); fivefold repetition and the 75-move rule
   // (Art. 9.6 — automatic draws, no claim needed)
-  | 'illegal-move' | 'time-insufficient' | 'fivefold' | 'seventy-five-move';
+  | 'illegal-move' | 'time-insufficient' | 'fivefold' | 'seventy-five-move'
+  // SD-67 — a dead position (Art. 5.2.2: no sequence of legal moves can mate —
+  // a draw); an adjudicated game and the arbiter's decision (Art. 12.9 / a
+  // penalty) — either a win or a draw; a double forfeit (neither player came:
+  // 0-0, both lose — FIDE C.07 treats it as two unplayed losses)
+  | 'dead-position' | 'adjudication' | 'arbiter' | 'double-forfeit';
 
-export const DECISIVE: ChessMethod[] = ['checkmate', 'resignation', 'time', 'illegal-move', 'forfeit'];
-export const DRAWN: ChessMethod[] = ['agreement', 'stalemate', 'repetition', 'fifty-move', 'insufficient', 'time-insufficient', 'fivefold', 'seventy-five-move'];
+export const DECISIVE: ChessMethod[] = ['checkmate', 'resignation', 'time', 'illegal-move', 'forfeit', 'adjudication', 'arbiter'];
+export const DRAWN: ChessMethod[] = ['agreement', 'stalemate', 'repetition', 'fifty-move', 'insufficient', 'time-insufficient', 'fivefold', 'seventy-five-move', 'dead-position', 'adjudication', 'arbiter'];
 
 export const METHOD_LABEL: Record<ChessMethod, string> = {
   checkmate: 'Checkmate', resignation: 'Resignation', time: 'On time', forfeit: 'Forfeit',
@@ -22,7 +27,20 @@ export const METHOD_LABEL: Record<ChessMethod, string> = {
   'fifty-move': '50-move rule', insufficient: 'Insufficient material',
   'illegal-move': 'Illegal move', 'time-insufficient': 'Time out vs insufficient material',
   fivefold: 'Fivefold repetition', 'seventy-five-move': '75-move rule',
+  'dead-position': 'Dead position', adjudication: 'Adjudicated', arbiter: 'Arbiter\'s decision',
+  'double-forfeit': 'Double forfeit',
 };
+
+/** SD-67 — neither player turned up: 0-0, both lose by forfeit (no game). */
+export const isDoubleForfeit = (m?: ChessMethod | null): boolean => m === 'double-forfeit';
+
+/** SD-67 — the exact time control, FIDE style: "90+30" (base minutes +
+ *  increment seconds per move), "15+10", "5+0"; '' when no base is set. */
+export function exactTimeControl(baseMin?: unknown, incSec?: unknown): string {
+  const b = Number(baseMin); const i = Number(incSec);
+  if (!Number.isFinite(b) || b <= 0) return '';
+  return `${Math.round(b)}+${Number.isFinite(i) && i > 0 ? Math.round(i) : 0}`;
+}
 
 /** SD-117c — a forfeit (no game played): the result counts in the table, but
  *  neither player is credited a game played (FIDE: forfeits are excluded from
@@ -57,6 +75,9 @@ export interface ChessState {
   white: Side;
   /** time control label for reference, e.g. 'rapid' (from the format) */
   timeControl: string;
+  /** SD-67 — the exact time control "90+30" from the format (`tcBase`
+   *  minutes + `tcInc` seconds). Absent on older games / when not set. */
+  tcExact?: string;
   winner?: Side | 'draw';
   method?: ChessMethod;
   /** optional move count, for the record */
@@ -73,7 +94,9 @@ export interface ChessState {
  *  still switch it with SET_WHITE before the result. */
 export function init(config?: Record<string, unknown>): ChessState {
   const white: Side = config?.white === 'away' ? 'away' : 'home';
-  return { white, timeControl: String(config?.timeControl ?? 'rapid'), ended: false, seq: 0 };
+  // SD-67 — only when the organiser set one (old fixtures' state is unchanged)
+  const tcExact = exactTimeControl(config?.tcBase, config?.tcInc);
+  return { white, timeControl: String(config?.timeControl ?? 'rapid'), ...(tcExact ? { tcExact } : {}), ended: false, seq: 0 };
 }
 
 /** Actions: SET_WHITE {side}, RESULT {winner, method, moves?}. PLAYED is a no-op
@@ -88,7 +111,9 @@ export function reducer(s: ChessState, a: { type: string; side?: Side; payload?:
     const method = a.payload?.method as ChessMethod | undefined;
     if (winner !== 'home' && winner !== 'away' && winner !== 'draw') return s;
     // A method must be consistent with the outcome (no "draw by checkmate").
-    if (method && (winner === 'draw' ? !DRAWN.includes(method) : !DECISIVE.includes(method))) return s;
+    // SD-67: a double forfeit is recorded as winner 'draw' (no winner) with
+    // this method only — a new value, so no older log carries it.
+    if (method && !(winner === 'draw' && method === 'double-forfeit') && (winner === 'draw' ? !DRAWN.includes(method) : !DECISIVE.includes(method))) return s;
     const moves = typeof a.payload?.moves === 'number' && a.payload.moves > 0 ? Math.round(a.payload.moves as number) : undefined;
     // SD-117c — optional clock times left (a new optional key: old logs carry none)
     const c = a.payload?.clock as { white?: unknown; black?: unknown } | undefined;
@@ -102,6 +127,7 @@ export function reducer(s: ChessState, a: { type: string; side?: Side; payload?:
 /** Game points: 1 / ½ / 0. */
 export function points(s: ChessState): { home: number; away: number } {
   if (!s.ended || !s.winner) return { home: 0, away: 0 };
+  if (isDoubleForfeit(s.method)) return { home: 0, away: 0 };
   if (s.winner === 'draw') return { home: 0.5, away: 0.5 };
   return s.winner === 'home' ? { home: 1, away: 0 } : { home: 0, away: 1 };
 }
@@ -109,6 +135,7 @@ export function points(s: ChessState): { home: number; away: number } {
 /** "1-0", "0-1" or "½-½" (the chess way of writing a result). */
 export function resultString(s: ChessState): string {
   if (!s.ended || !s.winner) return '–';
+  if (isDoubleForfeit(s.method)) return '0-0';
   if (s.winner === 'draw') return '½-½';
   // Written white-first.
   const whiteWon = s.winner === s.white;
@@ -117,7 +144,8 @@ export function resultString(s: ChessState): string {
 
 /** SD-116 — the arbiter's result written White-first for a pending result:
  *  "1-0", "½-½" or "0-1" for `winner` when `white` has the white pieces. */
-export function scoreFor(white: Side, winner: Side | 'draw'): '1-0' | '½-½' | '0-1' {
+export function scoreFor(white: Side, winner: Side | 'draw', method?: ChessMethod | null): '1-0' | '½-½' | '0-1' | '0-0' {
+  if (winner === 'draw' && isDoubleForfeit(method)) return '0-0';
   if (winner === 'draw') return '½-½';
   return winner === white ? '1-0' : '0-1';
 }
@@ -126,9 +154,10 @@ export function scoreFor(white: Side, winner: Side | 'draw'): '1-0' | '½-½' | 
  *  "1-0: Anand beat Carlsen by Resignation", "½-½: Anand drew with Carlsen (Stalemate)".
  *  Names are White first (whiteName has the white pieces). */
 export function resultSentence(white: Side, winner: Side | 'draw', whiteName: string, blackName: string, method?: ChessMethod): string {
-  const sc = scoreFor(white, winner);
+  const sc = scoreFor(white, winner, method);
+  if (winner === 'draw' && isDoubleForfeit(method)) return `0-0: double forfeit — neither ${whiteName} nor ${blackName} played (both lose)`;
   if (winner === 'draw') return `${sc}: ${whiteName} drew with ${blackName}${method ? ` (${METHOD_LABEL[method]})` : ''}`;
   const [w, l] = winner === white ? [whiteName, blackName] : [blackName, whiteName];
-  const how = method ? (method === 'time' ? ' on time' : method === 'forfeit' ? ' by forfeit' : method === 'illegal-move' ? ' (illegal move)' : ` by ${METHOD_LABEL[method]}`) : '';
+  const how = method ? (method === 'time' ? ' on time' : method === 'forfeit' ? ' by forfeit' : method === 'illegal-move' ? ' (illegal move)' : method === 'adjudication' ? ' (adjudicated)' : method === 'arbiter' ? ' (arbiter\'s decision)' : ` by ${METHOD_LABEL[method]}`) : '';
   return `${sc}: ${w} beat ${l}${how}`;
 }

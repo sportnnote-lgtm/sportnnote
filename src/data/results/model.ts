@@ -19,6 +19,7 @@ import type { RecordMark } from './records.ts';
 import { SHOOT_EVENTS } from './shootingDefs.ts';
 import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
 import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
+import { CYC_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -31,7 +32,8 @@ export type MarkCapture =
   | 'attempts' // N attempts, best counts (LJ, TJ, SP, DT, JT, HT)
   | 'heights' // bar progression with O / X / – (HJ, PV)
   | 'lifts' // snatch + clean & jerk, 3 attempts each, good / no lift
-  | 'target'; // a score with 10s / X (inner-ten) counts (archery, shooting)
+  | 'target' // a score with 10s / X (inner-ten) counts (archery, shooting)
+  | 'order'; // SD-98: the order on the line (road race, keirin, scratch, points / elimination race)
 
 /** How equal marks are separated (per discipline / governing body). */
 export type TieRule =
@@ -41,7 +43,8 @@ export type TieRule =
   | 'vertical' // HJ / PV: fewer failures at the tie height, then fewer total failures; jump-off for 1st
   | 'lifted-first' // weightlifting (IWF): the lifter who reached the total first
   | 'inner-count' // SD-95 archery (WA): total → most 10s (incl. X) → most X; then shoot-off / coin toss
-  | 'issf'; // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
+  | 'issf' // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
+  | 'cycling'; // SD-98 (UCI): finish order / points / GC time — cyclingRank.ts
 
 export type ResultStatus =
   | 'ok' // a valid mark (or still competing)
@@ -50,12 +53,13 @@ export type ResultStatus =
   | 'DQ' // disqualified (with a rule reference)
   | 'FS' // false start (a DQ under World Athletics TR 16.8, shown as FS)
   | 'NM' // no valid mark in a field event / no total in weightlifting
-  | 'WD'; // withdrew (golf / multi-day events)
+  | 'WD' // withdrew (golf / multi-day events)
+  | 'OTL'; // SD-98 cycling: outside the time limit (UCI "hors délais") — not classified
 
 /** Unranked statuses, in the order they are listed under the ranked entries. */
-export const STATUS_ORDER: Record<ResultStatus, number> = { ok: 0, NM: 1, DNF: 2, FS: 3, DQ: 4, WD: 5, DNS: 6 };
+export const STATUS_ORDER: Record<ResultStatus, number> = { ok: 0, NM: 1, DNF: 2, OTL: 2.5, FS: 3, DQ: 4, WD: 5, DNS: 6 };
 
-export type PhaseKind = 'heat' | 'repechage' | 'semi' | 'qualification' | 'final';
+export type PhaseKind = 'heat' | 'repechage' | 'semi' | 'qualification' | 'final' | 'stage';
 
 export interface DisciplineDef {
   /** stable key: 'ath.100m', 'ath.lj', 'swim.50free' … */
@@ -127,6 +131,9 @@ export interface Progression {
    *  goes — a later round (repechage, semi-final, a lettered final) by its
    *  phase number. Places no route covers are out. */
   routes?: Route[];
+  /** SD-98 cycling stage race: everyone who finished the stage (in the time
+   *  limit) starts the next one, carrying their GC time */
+  stage?: boolean;
 }
 
 /** SD-99 / SD-100: places `from`…`to` (inclusive, 1-based within each heat;
@@ -205,6 +212,42 @@ export interface PhaseFormat {
   races?: string[];
   /** SD-99 / SD-100: crews already through to a later round (see CarriedCrew) */
   carry?: CarriedCrew[];
+  /** SD-98 cycling: the race set-up (laps, sprints, start interval, match heats, stage type) */
+  cyc?: CycFormat;
+}
+
+/** SD-98 — a cycling phase's set-up (cycling.ts). */
+export interface CycFormat {
+  /** track races: laps (points race 40 / scratch 30 … a school race fewer) */
+  laps?: number;
+  /** points race: a sprint every N laps (the last at the finish, double points) */
+  sprintEvery?: number;
+  /** ITT: seconds between starters (UCI road TT usually 60 s; 30 s at a school event) */
+  interval?: number;
+  /** sprint match play: heats per match — 3 (best of three) or 1 */
+  bo?: 1 | 3;
+  /** stage race: this stage is a mass-start road stage or an individual time trial */
+  stageType?: 'road' | 'itt';
+  /** stage race: the stages in order ('road' / 'itt') */
+  stages?: ('road' | 'itt')[];
+  /** road race / stage: the distance in km (shown, not ranked) */
+  km?: number;
+}
+
+/** SD-98: a stage-race rider's GC so far (the earlier stages), carried on each new stage's row. */
+export interface CycGc {
+  /** cumulative time in whole seconds (time bonuses already taken off) */
+  time: number;
+  /** hundredths / thousandths dropped from ITT stage times (UCI 2.6.015 tie-break) */
+  frac: number;
+  /** sum of stage places (UCI 2.6.015 tie-break) */
+  places: number;
+  /** points / mountains classification points so far */
+  pts: number;
+  kom: number;
+  /** stages ridden / won so far */
+  stages: number;
+  wins: number;
 }
 
 /** SD-91: a jump-off for 1st place in HJ / PV — one try per height (TR 26.9). */
@@ -328,6 +371,24 @@ export interface EntryResult {
   /** SD-112: the official confirmed a mark outside the event's usual range —
    *  without it an out-of-range mark never shows PB / SB / MR or sets a record */
   rangeOk?: boolean;
+  /** SD-98 cycling: the order on the finish line (road race, keirin, scratch,
+   *  elimination; the final-sprint order of a points race) */
+  fin?: number;
+  /** SD-98: laps gained (+) / lost (−) on the main field (points race, scratch) */
+  laps?: number;
+  /** SD-98: placing in each intermediate sprint, keyed by sprint number ("1" … ) */
+  spr?: Record<string, number>;
+  /** SD-98: caught in a pursuit final (the catcher wins the race) */
+  caught?: boolean;
+  /** SD-98 stage race: time bonus (seconds) earned this stage */
+  bonus?: number;
+  /** SD-98 stage race: points / mountains classification points earned this stage */
+  pts?: number;
+  kom?: number;
+  /** SD-98 stage race: the GC before this stage (absent on stage 1) */
+  gc?: CycGc;
+  /** SD-98 sprint bracket rows: heats per match (3 = best of three, 1 = one heat) */
+  bo?: 1 | 3;
 }
 
 /** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,
@@ -339,6 +400,8 @@ export interface ArchSide {
   closer?: boolean[];
   /** didn't shoot this match (absent / withdrew) — the opponent goes through */
   wo?: boolean;
+  /** SD-98 track sprint: each heat of the match — 1 = won it, 0 = lost (or relegated) */
+  heats?: number[];
 }
 
 /** One entry in one phase, as the engine sees it. */
@@ -456,6 +519,11 @@ export const DISCIPLINES: DisciplineDef[] = [
     key: e.key, label: e.label, sport: e.sport, unit: 'time', better: 'lower', dp: 2, capture: 'single', tie: 'photo', lanes: CREW_LANES[e.sport],
     ...(crewSize(e.boat) > 1 ? { teamSize: crewSize(e.boat) } : {}),
   })),
+  // SD-98 cycling (UCI): road time trials to 1/100, track to 1/1000 (photo-finish
+  // / transponder readings); mass-start events are ranked by the order on the line.
+  ...CYC_EVENTS.map((e): DisciplineDef => (ORDER_KINDS.includes(e.kind)
+    ? { key: e.key, label: e.label, sport: 'cycling', unit: e.kind === 'points' ? 'points' : 'time', better: e.kind === 'points' ? 'higher' : 'lower', dp: 0, capture: 'order', tie: 'cycling' }
+    : { key: e.key, label: e.label, sport: 'cycling', unit: 'time', better: 'lower', dp: e.setting === 'track' ? 3 : 2, capture: 'single', tie: 'photo' })),
 ];
 
 export const disciplineOf = (key: string): DisciplineDef | undefined => DISCIPLINES.find((d) => d.key === key);

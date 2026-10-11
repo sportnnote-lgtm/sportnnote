@@ -21,6 +21,8 @@ import { matchFormatFor } from '../data/matchFormat';
 import { roundRobin, knockoutFirstRound, groupStage, drawGroups, type GeneratedPairing } from '../data/fixtures';
 import { swissRound1, swissPairRound, suggestedSwissRounds } from '../data/swiss';
 import { swissField } from '../data/swissField';
+import { chessRatingsOf, ratingListFor, ratingOn, ratingSeedOrder } from '../data/chessRatings';
+import { entrantPlayers } from '../data/chessCrosstable';
 import { groupTables, advancement, seedKnockout, knockoutRoundLabel, qualifiersFromSelection, superPhaseLabel, matchesInDivision, type GroupTable } from '../data/groups';
 import { teamStandings, standingsConfigFromFormat, byePointsFor, FIDE_SWISS_ORDER } from '../data/standings';
 import { stageForTeams, planKnockout, seedPlayIn, KO_STAGE_LABEL, doubleChanceOpeners } from '../data/bracket';
@@ -50,7 +52,7 @@ export default function GenerateFixturesScreen() {
   const [sport, setSport] = useState<SportId>(params.sport ?? tourSports[0] ?? 'football');
   const teams = useTeams(sport);
   const participants = useTournamentTeams(params.tournamentId, sport);
-  const { matches: tourMatches } = useLeagueData(params.tournamentId);
+  const { matches: tourMatches, lines: tourLines, players: allPlayers } = useLeagueData(params.tournamentId);
   // Divisions: generate fixtures within one division (its rostered teams only).
   const { categories: divisions, entries, activeCat, setActiveCat } = useDivisions(params.tournamentId);
   const divTeamIds = useMemo(
@@ -227,8 +229,26 @@ export default function GenerateFixturesScreen() {
   }, [swissMatches]);
   // SD-26: the field for the next round — scores, pairing numbers (the seed
   // list's order), opponents met, colour history and byes.
-  const swissPlayers = useMemo(() => swissField(swissMatches, sport, stCfg, selected), [swissMatches, sport, stCfg, selected]);
   const isChess = sport === 'chess';
+  // SD-85 — chess: seed the Swiss by rating (C.04.2 initial ranking: rating,
+  // then name; unrated last) — the event's list (standard / rapid / blitz),
+  // from the ratings players typed on their profiles. Saved on the format
+  // (`swissSeed: 'rating'`) so later rounds keep the same pairing numbers.
+  const sportFormat = tournament?.formats?.[sport] as Record<string, unknown> | undefined;
+  const [seedByRating, setSeedByRating] = useState<boolean | null>(null);
+  const bySeedRating = isChess && (seedByRating ?? sportFormat?.swissSeed === 'rating');
+  const ratingList = ratingListFor(sportFormat?.timeControl);
+  const ratingOfTeam = useMemo(() => {
+    if (!isChess) return () => undefined;
+    const who = entrantPlayers([...teams, ...participants], tourMatches, tourLines);
+    const byId = new Map(allPlayers.map((p) => [p.id, p]));
+    return (teamId: string) => { const pid = who.get(teamId); return pid ? ratingOn(chessRatingsOf(byId.get(pid)), ratingList) : undefined; };
+  }, [isChess, teams, participants, tourMatches, tourLines, allPlayers, ratingList]);
+  const seedOrder = useMemo(
+    () => (bySeedRating ? ratingSeedOrder(selected, ratingOfTeam, (id) => teamName[id] ?? id) : selected),
+    [bySeedRating, selected, ratingOfTeam, teamName],
+  );
+  const swissPlayers = useMemo(() => swissField(swissMatches, sport, stCfg, seedOrder), [swissMatches, sport, stCfg, seedOrder]);
   const swissTargetRounds = savedStruct?.swissRounds ?? suggestedSwissRounds(selected.length || swissEntrants.size);
   const swissNextNo = swissRoundsPlayed + 1;
   const swissByePts = byePointsFor(sport, stCfg); // SD-10: shown with the drawn bye
@@ -268,7 +288,7 @@ export default function GenerateFixturesScreen() {
         if (selected.length < 2) return setError('Pick at least two entrants.');
         setError(null);
         // Round 1: seed order; a coin toss gives the top seed's colour (chess).
-        const { pairings, byeId } = swissRound1(selected, Math.random() < 0.5 ? 'W' : 'B');
+        const { pairings, byeId } = swissRound1(seedOrder, Math.random() < 0.5 ? 'W' : 'B');
         setPairNote(null);
         setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, when: at(i) })));
         return;
@@ -337,6 +357,11 @@ export default function GenerateFixturesScreen() {
         // Swiss order (Buchholz Cut-1, Buchholz, SB, …); the organiser can
         // change it in the points settings. Round robins keep SB, wins, h2h.
         if (structure === 'swiss' && isChess && !before?.tieBreak) merged.tieBreak = FIDE_SWISS_ORDER.join(',');
+        // SD-85: remember how round 1 was seeded (later rounds' pairing numbers)
+        if (structure === 'swiss' && isChess && swissMatches.length === 0) {
+          if (bySeedRating) merged.swissSeed = 'rating';
+          else if (before?.swissSeed) merged.swissSeed = 'order';
+        }
         await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, merged));
         await updateTournament(params.tournamentId, {
           // Keep the coarse label representative in a multi-sport meet (never downgrade).
@@ -418,6 +443,20 @@ export default function GenerateFixturesScreen() {
                   ? `Round ${swissNextNo} of ${swissTargetRounds} — paired within score groups, top half v bottom half, no rematches${isChess ? ', colours balanced' : ''}.`
                   : `Finish round ${swissRoundsPlayed} before generating round ${swissNextNo}.`}
           </Text>
+        )}
+        {structure === 'swiss' && isChess && swissMatches.length === 0 && (
+          <View style={{ gap: theme.spacing(1) }}>
+            <View style={st.chips}>
+              <SelectChip label="Seed: order picked" active={!bySeedRating} onPress={() => { setSeedByRating(false); invalidate(); }} />
+              <SelectChip label={`Seed by ${ratingList} rating`} active={bySeedRating} onPress={() => { setSeedByRating(true); invalidate(); }} />
+            </View>
+            {bySeedRating && (
+              <Text style={textStyles.muted} numberOfLines={8}>
+                {seedOrder.map((id, i) => `${i + 1}. ${teamName[id] ?? 'Entrant'}${ratingOfTeam(id) ? ` ${ratingOfTeam(id)}` : ' (unrated)'}`).join(' · ')}
+                {'\n'}Highest rating first, unrated last, then by name (FIDE C.04.2). Ratings come from players' chess profiles.
+              </Text>
+            )}
+          </View>
         )}
         {structure === 'swiss' && (
           // Decision D7: say plainly this isn't a certified pairing program.

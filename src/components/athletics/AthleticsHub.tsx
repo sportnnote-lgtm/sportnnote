@@ -88,7 +88,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
     <View style={{ gap: theme.spacing(3) }}>
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
-          <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
+          <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew || sport === 'cycling' ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
           <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : crew ? '⚙ Lanes, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}
@@ -97,6 +97,9 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
       ) : null}
       {crewSettings ? (
         <Text style={textStyles.muted}>{crewSettings.lanes} lanes{crewSettings.handTimed ? ' · hand timing' : ' · photo finish (thousandths decide the order)'} · {sport === 'rowing' ? 'World Rowing progression: heats → repechage → (semi-finals →) Finals A / B' : 'ICF progression: heats → semi-finals → Finals A / B'}; places run on from Final A into Final B.</Text>
+      ) : null}
+      {sport === 'cycling' ? (
+        <Text style={textStyles.muted}>UCI rules: time trials by the clock (track to 1/1000), road races by the order on the line with same-time groups, stage races by GC, track sprint in a seeded bracket. Records and PBs per event and distance.</Text>
       ) : null}
       {wlSettings ? (
         <Text style={textStyles.muted}>IWF rules: snatch then clean & jerk, 3 attempts each; equal totals go to whoever lifted the total first. Medals for {wlSettings.liftMedals ? 'the snatch, the clean & jerk and the total' : 'the total'}.</Text>
@@ -190,7 +193,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
         </>
       )}
 
-      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : crew ? 'Set by the first final of each boat class and distance (lightweight and para categories kept apart).' : 'Set by the first final of each event.'} />
+      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : crew ? 'Set by the first final of each boat class and distance (lightweight and para categories kept apart).' : sport === 'cycling' ? 'Timed events only (time trials, pursuits, the sprint’s flying 200 m), per distance — a road race or bunch race sets no record.' : 'Set by the first final of each event.'} />
       {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={eventPrefix(sport)} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
     </View>
   );

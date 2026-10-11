@@ -12,6 +12,7 @@ import { theme } from '../core/theme';
 import { FollowBell } from '../components/FollowBell';
 import { EmptyState, Card, Pill, Button, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import { LeagueTable } from '../components/LeagueTable';
+import { ChessCrosstable } from '../components/ChessCrosstable';
 import { columnsConfig } from '../data/standingsColumns';
 import { RankBadge, podiumColor } from '../components/Rank';
 import { StatLeaderRail } from '../components/StatLeaderRail';
@@ -984,6 +985,14 @@ export default function TournamentProfileScreen() {
                 <View key={ph.key} style={{ gap: theme.spacing(1) }}>
                   {phases.length > 1 || ph.key !== 'league' ? <Text style={st.groupHead}>{ph.key === 'super' ? '🔁 ' : ''}{ph.title}</Text> : null}
                   <LeagueTable sport={activeSport} cfg={stCfg} teams={ph.rows} onTeam={(teamId) => nav.navigate('Team', { teamId })} emptyLabel="No results yet." />
+                  {/* SD-77 — chess wall chart / crosstable (+ SD-85 ARO / TPR) */}
+                  {activeSport === 'chess' && (ph.key === 'swiss' || ph.key === 'league') ? (
+                    <ChessCrosstable rows={ph.rows} cfg={stCfg} matches={matches.filter((m) => m.sport === 'chess')}
+                      teams={participants} players={allPlayers.length ? allPlayers : players} lines={lines}
+                      timeControl={(tournament.formats?.chess as Record<string, unknown> | undefined)?.timeControl}
+                      swissRounds={ph.key === 'swiss' ? structureFromFormat(tournament.formats?.chess)?.swissRounds : undefined}
+                      onPlayer={(pid, teamId) => (pid ? nav.navigate('PlayerProfile', { playerId: pid }) : nav.navigate('Team', { teamId }))} />
+                  ) : null}
                 </View>
               ))
             ) : activeSport ? (

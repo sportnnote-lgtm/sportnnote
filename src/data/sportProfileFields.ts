@@ -60,6 +60,7 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   archery: [{ key: 'hand', label: 'Shoots', options: ['Right-handed', 'Left-handed'] }],
   rowing: [{ key: 'side', label: 'Rows', options: ['Stroke side', 'Bow side', 'Both sides / sculls', 'Cox'] }],
   canoe: [{ key: 'side', label: 'Paddles', options: ['Left', 'Right', 'Both (kayak)'] }],
+  cycling: [{ key: 'type', label: 'Rides', options: ['Road', 'Track', 'Both'] }],
   // A left-hander is prized on the right side (right back / right wing).
   handball: [{ key: 'hand', label: 'Throwing hand', options: ['Right', 'Left'] }],
 };
@@ -76,9 +77,9 @@ export const POSITION_HINT: Record<SportId, string> = {
   padel: 'e.g. Doubles (left / right)',
   squash: 'e.g. Singles',
   tabletennis: 'e.g. Singles, Doubles',
-  chess: 'e.g. FIDE 1650, Rapid specialist',
+  chess: 'e.g. Rapid specialist, Board 1',
   carrom: 'e.g. Singles, Doubles',
-  golf: 'e.g. Handicap index 12.4, Home club',
+  golf: 'e.g. Home club, School team', // SD-84: the Handicap Index has its own field
   athletics: 'e.g. Sprints (100 / 200 m), Hurdles, Middle distance',
   hockey: 'e.g. Goalkeeper, Defender, Midfielder, Forward, Drag-flicker',
   swimming: 'e.g. Sprint freestyle, Backstroke, Individual medley',
@@ -87,5 +88,23 @@ export const POSITION_HINT: Record<SportId, string> = {
   archery: 'e.g. Recurve, Compound, Barebow',
   rowing: 'e.g. Sculler, Stroke-side sweep, Cox',
   canoe: 'e.g. Kayak (K1 / K2 / K4), Canoe (C1 / C2)',
+  cycling: 'e.g. Time trialist, Sprinter (track), Climber, Endurance (points / scratch)',
   handball: 'e.g. Goalkeeper, Left wing, Left back, Centre back, Right back, Right wing, Pivot',
+};
+
+/** SD-85 — typed rating fields a sport's profile offers (stored under
+ *  `SportDetail.ratings[key]`; no FIDE lookup — the player types them).
+ *  Chess: FIDE ID + one rating per FIDE list. */
+export interface RatingField {
+  key: 'fideId' | 'standard' | 'rapid' | 'blitz';
+  label: string;
+  placeholder: string;
+}
+export const SPORT_RATING_FIELDS: Partial<Record<SportId, RatingField[]>> = {
+  chess: [
+    { key: 'fideId', label: 'FIDE ID', placeholder: 'e.g. 46616543' },
+    { key: 'standard', label: 'Standard rating', placeholder: 'e.g. 1650' },
+    { key: 'rapid', label: 'Rapid rating', placeholder: 'e.g. 1600' },
+    { key: 'blitz', label: 'Blitz rating', placeholder: 'e.g. 1580' },
+  ],
 };

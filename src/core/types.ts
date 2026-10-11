@@ -29,6 +29,7 @@ export type SportId =
   | 'archery'
   | 'rowing'
   | 'canoe'
+  | 'cycling'
   | 'handball';
 
 /** `support` is the internal support/admin role — it can review verification
@@ -67,6 +68,13 @@ export interface SportDetail {
   sides?: Record<string, string>;
   /** teams represented in this sport (each with its own jersey) */
   teams?: TeamStint[];
+  /** SD-85 — chess: FIDE ID + a rating per FIDE list, typed by hand (no FIDE
+   *  lookup); see src/data/chessRatings.ts. Lives in sport_details jsonb. */
+  ratings?: { fideId?: string; standard?: number; rapid?: number; blitz?: number };
+  /** SD-84 — golf: the player's own WHS Handicap Index (−10 plus … 54.0),
+   *  typed by hand — we never issue one. Pre-fills round setup and match
+   *  play strokes. Lives in sport_details jsonb. */
+  handicapIndex?: number;
 }
 
 export interface Player {

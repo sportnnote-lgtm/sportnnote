@@ -6,7 +6,8 @@
  *  line, labelled MC, with their total so far; WD / DQ / DNS show the
  *  organiser's reason. On a phone the numbers scroll sideways. */
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { GolfScorecard } from './GolfScorecard';
 import { theme } from '../../core/theme';
 import { textStyles } from '../ui';
 import { toParLabel, roundStats, cardHasDetail, type GolfCard, type Hole, type RankRow, type GolfScoring } from '../../sports/golf/engine';
@@ -15,7 +16,7 @@ import { thruLabel, type RoundCell } from '../../data/golfLeaderboard';
 export interface LeaderboardCard { holes: Hole[]; card: GolfCard; received: number[] }
 
 export function GolfLeaderboard({
-  rows, scoring, nameOf, cards, holesInRound, cutAfter, emptyLabel = 'No scores yet.', roundCols, onLongPressRow, cardTitle,
+  rows, scoring, nameOf, cards, holesInRound, cutAfter, emptyLabel = 'No scores yet.', roundCols, onLongPressRow, cardTitle, onShareCard,
 }: {
   rows: RankRow[];
   scoring: GolfScoring;
@@ -33,6 +34,8 @@ export function GolfLeaderboard({
   onLongPressRow?: (playerId: string) => void;
   /** a heading over the expanded card ("Round 2 card") */
   cardTitle?: string;
+  /** SD-88 — share a player's card */
+  onShareCard?: (playerId: string) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   if (!rows.length) return <Text style={textStyles.muted}>{emptyLabel}</Text>;
@@ -98,7 +101,7 @@ export function GolfLeaderboard({
                 {open === r.id && c && (
                   <View style={st.detailWrap}>
                     {cardTitle ? <Text style={st.cardTitle}>{cardTitle}</Text> : null}
-                    <CardDetail {...c} />
+                    <CardDetail {...c} name={nameOf(r.id)} stableford={scoring === 'stableford'} onShare={onShareCard ? () => onShareCard(r.id) : undefined} />
                   </View>
                 )}
                 {open === r.id && !c && cards && <Text style={[textStyles.muted, st.noCard]}>Not in this round.</Text>}
@@ -129,24 +132,15 @@ export function cardStatsLine({ holes, card, received }: LeaderboardCard): strin
   return parts.join(' · ');
 }
 
-/** A compact hole-by-hole card: hole, par, score (birdie ◯ / bogey □ style colours). */
-export function CardDetail({ holes, card, received }: LeaderboardCard) {
+/** SD-88 — the player's card as a proper scorecard (Out / In / Tot, par and
+ *  SI rows, birdie ◯ / bogey □ shapes, net / points / putts rows). Sized to
+ *  the screen so it scrolls inside its own box, not the leaderboard's. */
+export function CardDetail({ holes, card, received, name = 'Score', stableford = false, onShare }: LeaderboardCard & { name?: string; stableford?: boolean; onShare?: () => void }) {
   const line = cardStatsLine({ holes, card, received });
+  const { width } = useWindowDimensions();
   return (
-    <View style={st.detail}>
-      <View style={st.cells}>
-        {holes.map((h, i) => {
-          const s = card.strokes[i];
-          const d = typeof s === 'number' ? s - h.par : null;
-          return (
-            <View key={h.n} style={st.cell}>
-              <Text style={st.cellHole}>{h.n}</Text>
-              <Text style={st.cellPar}>P{h.par}{received[i] > 0 ? ` ${'•'.repeat(received[i])}` : ''}</Text>
-              <Text style={[st.cellScore, d != null && d < 0 && st.under, d != null && d > 0 && st.over]}>{s == null ? '·' : s === 'P' ? 'P' : s}</Text>
-            </View>
-          );
-        })}
-      </View>
+    <View style={[st.detail, { width: Math.min(width - theme.spacing(8) - 2, 760) }]}>
+      <GolfScorecard holes={holes} players={[{ name, card, received }]} stableford={stableford} onShare={onShare} />
       {line ? <Text style={st.statsLine}>{line}</Text> : null}
     </View>
   );
@@ -175,14 +169,7 @@ const st = StyleSheet.create({
   cut: { textAlign: 'center', color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '800', paddingVertical: 2 },
   detailWrap: { backgroundColor: theme.colors.surfaceAlt },
   cardTitle: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', paddingHorizontal: theme.spacing(3), paddingTop: theme.spacing(2) },
-  detail: { padding: theme.spacing(3), gap: theme.spacing(2), maxWidth: 360 },
-  cells: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  detail: { padding: theme.spacing(2), gap: theme.spacing(2) },
   statsLine: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '600' },
   noCard: { paddingHorizontal: theme.spacing(3), paddingVertical: theme.spacing(2) },
-  cell: { width: 44, alignItems: 'center', paddingVertical: 4, borderRadius: 6, backgroundColor: theme.colors.surface },
-  cellHole: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '700' },
-  cellPar: { color: theme.colors.textMuted, fontSize: 9 },
-  cellScore: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '800' },
-  under: { color: theme.colors.primary },
-  over: { color: theme.colors.accent },
 });

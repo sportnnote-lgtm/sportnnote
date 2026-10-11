@@ -2,11 +2,32 @@
  *  game: `games` + the outcome key (so the results are 'core': a line without
  *  `losses` is 0 losses, never "not tracked" — SD-24). */
 import type { SportStatSchema } from '../statSchema.ts';
+import type { StatLine } from '../../core/types';
+
+/** SD-36 (CH-05) — how a game was won, as a key on the WINNER's line (new
+ *  results only: older lines carry none, so the rows say over how many wins
+ *  the method was recorded). A forfeit has its own `forfeitWins`. */
+export const WIN_METHOD_KEYS = ['winsMate', 'winsResign', 'winsTime', 'winsOther'] as const;
+export function winMethodKey(method?: string | null): typeof WIN_METHOD_KEYS[number] | undefined {
+  switch (method) {
+    case 'checkmate': return 'winsMate';
+    case 'resignation': return 'winsResign';
+    case 'time': return 'winsTime';
+    case 'illegal-move': case 'adjudication': case 'arbiter': return 'winsOther';
+    default: return undefined;
+  }
+}
+const n = (l: StatLine, k: string) => Number(l.stats?.[k] ?? 0) || 0;
+/** a won game whose method was recorded */
+const winHow = (l: StatLine) => WIN_METHOD_KEYS.some((k) => n(l, k) > 0);
+/** a game won over the board (the wins the method could be recorded for) */
+const wonOtb = (l: StatLine) => n(l, 'wins') > 0;
 
 export const chessStats: SportStatSchema<'chess'> = {
   sport: 'chess',
   /** SD-25 — career split chips (line context) */
   splits: ['colour', 'timeControl', 'tournament', 'season', 'opponent'],
+  filters: { winHow, wonOtb },
   stats: [
     // SD-27: the rating weights are the game score (win 1, draw ½)
     { key: 'wins', label: 'Wins', short: 'wins', one: 'win', leaderLabel: 'Most wins', group: 'results', weight: 1, matchSummary: true, coverage: 'core',
@@ -25,8 +46,18 @@ export const chessStats: SportStatSchema<'chess'> = {
     // games + wins / losses ('keyed': only lines that had one carry the key)
     { key: 'forfeitWins', label: 'Forfeit wins', short: 'forfeit wins', one: 'forfeit win', group: 'results', coverage: 'keyed' },
     { key: 'forfeitLosses', label: 'Forfeit losses', short: 'forfeit losses', one: 'forfeit loss', group: 'results', coverage: 'keyed' },
+    // SD-36 (CH-05) — wins by method: summed over the wins that recorded one
+    // (`winHow`), with a coverage note over all wins (`coverOf: wonOtb`)
+    { key: 'winsMate', label: 'By checkmate', short: 'wins by checkmate', one: 'win by checkmate', group: 'how', coverage: 'core', agg: { kind: 'sum', over: 'winHow' }, coverOf: 'wonOtb' },
+    { key: 'winsResign', label: 'By resignation', short: 'wins by resignation', one: 'win by resignation', group: 'how', coverage: 'core', agg: { kind: 'sum', over: 'winHow' }, coverOf: 'wonOtb' },
+    { key: 'winsTime', label: 'On time', short: 'wins on time', one: 'win on time', group: 'how', coverage: 'core', agg: { kind: 'sum', over: 'winHow' }, coverOf: 'wonOtb' },
+    { key: 'winsOther', label: 'Other', short: 'other wins', one: 'other win', group: 'how', coverage: 'core', agg: { kind: 'sum', over: 'winHow' }, coverOf: 'wonOtb' },
   ],
-  sections: [{ id: 'results', title: 'Results', rows: [{ stat: 'games' }, { stat: 'score' }, { stat: 'scorePct' }, { stat: 'wins' }, { stat: 'draws' }, { stat: 'losses' }, { stat: 'forfeitWins' }, { stat: 'forfeitLosses' }] }],
+  sections: [
+    { id: 'results', title: 'Results', rows: [{ stat: 'games' }, { stat: 'score' }, { stat: 'scorePct' }, { stat: 'wins' }, { stat: 'draws' }, { stat: 'losses' }, { stat: 'forfeitWins' }, { stat: 'forfeitLosses' }] },
+    // SD-36 — shown once any win recorded how it ended
+    { id: 'how', title: 'Wins by method', rows: [{ stat: 'winsMate' }, { stat: 'winsResign' }, { stat: 'winsTime' }, { stat: 'winsOther', label: 'Other (illegal, arbiter)' }] },
+  ],
   careerView: 'sections',
   // the result is the row's pill; the row shows colour · time control instead
   history: [],

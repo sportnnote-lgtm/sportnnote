@@ -466,7 +466,7 @@ export interface MatchState {
  * (18 or 9). With `extraHoles`, an all-square match continues until a hole is won
  * (knockout); otherwise it ends halved.
  */
-export function matchState(holes: HoleWinner[], regulation = 18, extraHoles = false): MatchState {
+export function matchState(holes: HoleWinner[], regulation = 18, extraHoles = false, firstHole = 1): MatchState {
   let up = 0;
   let played = 0;
   let decided = false;
@@ -489,7 +489,8 @@ export function matchState(holes: HoleWinner[], regulation = 18, extraHoles = fa
     if (lead === 0) { winner = 'halved'; result = 'Halved'; }
     else {
       winner = leader;
-      if (played > regulation) result = `Won at the ${ordinal(played)}`;
+      // SD-87 — a back-nine match's first extra hole is the 19th
+      if (played > regulation) result = `Won at the ${ordinal(played + firstHole - 1)}`;
       else if (remaining > 0) result = `${lead}&${remaining}`;
       else result = `${lead} UP`;
     }

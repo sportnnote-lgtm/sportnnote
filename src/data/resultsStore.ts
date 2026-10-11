@@ -23,6 +23,7 @@ import {
   type FieldResultInput, looseLegal, seededRng, phaseDiscipline, swimSeed, timedFinalHeats, laneOrder, type Seeded,
   rowsForRecords, recordsFor, rollbackRecords, reopenVerdict, recordDefsFor, liftLines, shootLines, finalistResult, qualView,
   phaseNameOf, archLines, archQualView, bracketEntrant, bracketSeeds, hasMatchData, advanceCrews, crewLines, isCrewSport,
+  cycLines, cycKind, sprintEntrant, stageFinishers, type CycFormat,
 } from './results';
 import { removeFieldEntry } from './golf';
 import { isEventSport } from '../sports/eventSports';
@@ -76,6 +77,8 @@ export interface NewResultsEvent {
   /** SD-96 shooting: entry by series or shot by shot; an elimination final follows */
   shootEntry?: 'series' | 'shot';
   shootFinal?: boolean;
+  /** SD-98 cycling: laps, sprints, start interval, sprint heats per match, the stages */
+  cyc?: CycFormat;
 }
 
 // SD-95: archery phases read "Ranking round" / "Match play"
@@ -147,6 +150,8 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     ...(input.board ? { board: input.board } : {}), ...(input.noWindGauge ? { noWindGauge: true } : {}),
     ...(venueLanes ? { lanes: venueLanes } : {}), ...(input.splits ? { splits: true } : {}),
     ...(input.shootEntry ? { shootEntry: input.shootEntry } : {}), ...(input.shootFinal ? { shootFinal: true } : {}),
+    // SD-98: a stage race's first stage carries its type ('road' / 'itt')
+    ...(input.cyc ? { cyc: { ...input.cyc, ...(input.cyc.stages?.length ? { stageType: input.cyc.stages[0] } : {}) } } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -226,7 +231,7 @@ export { getFieldEntries as getPhaseEntries };
 
 /** Save one entry's result (offline-safe; returns how many saves are waiting to sync). */
 export function saveEntryResult(entryId: string, result: EntryResult): Promise<number> {
-  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good) || !!result.lifts?.cj?.some((l) => l.good) || !!result.fshots?.length || !!result.ends?.length || hasMatchData(result);
+  const hasMark = result.mark != null || !!result.attempts?.some((a) => a.mark != null) || !!result.heights?.some((h) => h.tries.includes('O')) || !!result.lifts?.snatch?.some((l) => l.good) || !!result.lifts?.cj?.some((l) => l.good) || !!result.fshots?.length || !!result.ends?.length || hasMatchData(result) || result.fin != null || !!Object.keys(result.spr ?? {}).length;
   return saveFieldResult(entryId, result, fieldStatusFor(result.status, hasMark));
 }
 
@@ -261,6 +266,13 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   if (!next || !f.progression) throw new Error('This is the last round.');
   const res = entries.map((e) => toResultEntry(e, nameOf));
   const byHeat = rankByHeat(res, def, { handLegal: looseLegal(f) });
+  // SD-98 cycling: a stage race's next stage, the sprint bracket, pursuit finals (routes), keirin final
+  if (def.sport === 'cycling') {
+    const kind = cycKind(def.key);
+    if (kind === 'stage' && f.progression.stage) return advanceStage(phase, f, def, entries, byHeat, next);
+    if (kind === 'sprint' && next.phase === 'final') return advanceToBracket(phase, f, def, entries, [...byHeat.values()].flat(), next);
+    if (f.progression.routes?.length) return advanceCrewPhase(phase, f, def, entries, byHeat, next, (rows) => cycLines(f, rows));
+  }
   // SD-99 / SD-100: rowing / canoe — places routed to the repechage, semis or lettered finals
   if (f.progression.routes?.length) return advanceCrewPhase(phase, f, def, entries, byHeat, next);
   // SD-95: archery — the ranking round seeds a match-play bracket
@@ -270,7 +282,7 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
   if (isEventSport(def.sport)) {
     const ranked = [...byHeat.values()].flatMap((rows) => withQualification(rows, q));
     // SD-96: a shooting qualification writes the match score, points / shots, inner tens, "made the final"
-    await writePhaseLines(phase, f, def.sport === 'shooting' ? shootLines(f, ranked, 'qual') : phaseLines(f, ranked));
+    await writePhaseLines(phase, f, def.sport === 'shooting' ? shootLines(f, ranked, 'qual') : def.sport === 'cycling' ? cycLines(f, ranked) : phaseLines(f, ranked));
   }
   let seeded = def.sport === 'swimming' ? swimNextRound(byHeat, def, q, next.phase, next.heats) : nextRound(byHeat, def, q, next.heats);
   // SD-91: a field final's order is drawn afresh (TR 25.5); a vertical final keeps the bar heights.
@@ -301,13 +313,15 @@ export async function advancePhase(phase: FieldEvent, entries: FieldEntry[], nam
 async function advanceToBracket(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], ranked: RankedEntry[], next: PlannedPhase): Promise<FieldEvent> {
   const n = f.progression?.fillTo ?? ranked.length;
   const { ids, tieAtCut } = bracketSeeds(ranked, n);
-  if (ids.length < 2) throw new Error('Match play needs at least two archers with a score — enter the ranking round first.');
+  const cyc = def.sport === 'cycling';
+  if (ids.length < 2) throw new Error(cyc ? 'Match play needs at least two riders with a 200 m time — enter the qualifying times first.' : 'Match play needs at least two archers with a score — enter the ranking round first.');
   if (tieAtCut.length) {
     const names = ranked.filter((r) => tieAtCut.includes(r.id)).map((r) => r.entry.name).join(', ');
-    throw new Error(`${names} are level for the last match-play place — a shoot-off decides it (WA). Enter each archer's shoot-off place, then close the ranking round.`);
+    throw new Error(cyc ? `${names} have the same 200 m time for the last match-play place — enter the commissaires' order (1 = through) as the decider, then close qualifying.` : `${names} are level for the last match-play place — a shoot-off decides it (WA). Enter each archer's shoot-off place, then close the ranking round.`);
   }
   const seeded = new Set(ids);
-  await writePhaseLines(phase, f, archLines(f, ranked.map((r) => (seeded.has(r.id) ? { ...r, flags: ['q' as const, ...r.flags] } : r)), 'qual', [], seeded));
+  // SD-98: a sprint qualifying writes the riders' 200 m times
+  await writePhaseLines(phase, f, cyc ? cycLines(f, ranked) : archLines(f, ranked.map((r) => (seeded.has(r.id) ? { ...r, flags: ['q' as const, ...r.flags] } : r)), 'qual', [], seeded));
   const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: 1, progression: undefined };
   const ev = await insertPhase({
     tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: fmt.phaseNo,
@@ -317,7 +331,7 @@ async function advanceToBracket(phase: FieldEvent, f: PhaseFormat, def: Discipli
   await insertEntries(ev.id, ids.map((id, i) => {
     const old = byId.get(id)!;
     const r = (old.result ?? {}) as EntryResult;
-    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: 1, result: { bib: r.bib, team: r.team, name: r.name, members: r.members, ...bracketEntrant(r, i + 1) } };
+    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: 1, result: { bib: r.bib, team: r.team, name: r.name, members: r.members, ...(cyc ? sprintEntrant(r, i + 1, f.cyc?.bo ?? 3) : bracketEntrant(r, i + 1)) } };
   }));
   await setPhaseStatus(phase.id, 'completed');
   return ev;
@@ -330,10 +344,11 @@ async function advanceToBracket(phase: FieldEvent, f: PhaseFormat, def: Discipli
  * round (a heat winner past the repechage to Final A) wait on the new phase's
  * format (`carry`) and join when their round is seeded.
  */
-async function advanceCrewPhase(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], byHeat: Map<number, RankedEntry[]>, next: PlannedPhase): Promise<FieldEvent> {
+async function advanceCrewPhase(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], byHeat: Map<number, RankedEntry[]>, next: PlannedPhase,
+  lines: (rows: RankedEntry[]) => { playerId: string; stats: Record<string, number>; won: boolean }[] = (rows) => crewLines(f, rows)): Promise<FieldEvent> {
   const { seeded, carry } = advanceCrews(byHeat, f, next, def.lanes ?? 6);
-  if (!seeded.length && !carry.length) throw new Error('No crew has a time yet — enter the results first.');
-  await writePhaseLines(phase, f, crewLines(f, [...byHeat.values()].flat()));
+  if (!seeded.length && !carry.length) throw new Error(def.sport === 'cycling' ? 'No rider has a time yet — enter the results first.' : 'No crew has a time yet — enter the results first.');
+  await writePhaseLines(phase, f, lines([...byHeat.values()].flat()));
   const races = next.races && next.races.length > 1 ? next.races : undefined;
   const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: f.phaseNo + 1, heats: next.heats, progression: next.progression, races, carry: carry.length ? carry : undefined, recordsBefore: undefined };
   const ev = await insertPhase({
@@ -345,6 +360,36 @@ async function advanceCrewPhase(phase: FieldEvent, f: PhaseFormat, def: Discipli
     const src = s.carried ? { playerId: s.carried.playerId, teamId: s.carried.teamId, result: s.carried.result as EntryResult } : (() => { const o = byId.get(s.ref)!; return { playerId: o.playerId || undefined, teamId: o.teamId, result: (o.result ?? {}) as EntryResult }; })();
     const r = src.result;
     return { playerId: src.playerId || undefined, teamId: src.teamId, heat: s.heat, result: { lane: s.lane, order: s.order, bib: r.bib, team: r.team, name: r.name, members: r.members, ...(s.race && races ? { race: s.race } : {}) } };
+  }));
+  await setPhaseStatus(phase.id, 'completed');
+  return ev;
+}
+
+/**
+ * SD-98 — close a stage of a stage race: every rider who finished it (in the
+ * time limit) starts the next stage carrying the GC after this one (time,
+ * ITT fractions, stage places, points / KOM, stages and stage wins); DNF /
+ * OTL / DQ / DNS riders are out. The start order is the GC order.
+ */
+async function advanceStage(phase: FieldEvent, f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], byHeat: Map<number, RankedEntry[]>, next: PlannedPhase): Promise<FieldEvent> {
+  const rows = [...byHeat.values()].flat();
+  const on = stageFinishers(rows.map((r) => r.entry));
+  if (!on.length) throw new Error('No rider has finished this stage yet — enter the finish order (and the winner’s time) first.');
+  await writePhaseLines(phase, f, cycLines(f, rows));
+  const no = f.phaseNo + 1;
+  const fmt: PhaseFormat = { ...f, phase: next.phase, phaseNo: no, heats: 1, progression: next.progression, recordsBefore: undefined, cyc: { ...(f.cyc ?? {}), stageType: f.cyc?.stages?.[no - 1] ?? 'road' } };
+  const ev = await insertPhase({
+    tournamentId: phase.tournamentId, sport: phase.sport, title: phaseTitle(f.eventTitle ?? def.label, fmt), roundNo: no,
+    startsAt: new Date().toISOString(), format: { results: fmt }, hostIds: phase.hostIds ?? [],
+  });
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  // a time-trial stage starts in reverse GC order (the leader last); a road stage keeps the GC order
+  const itt = fmt.cyc?.stageType === 'itt';
+  const order = itt ? [...on].reverse() : on;
+  await insertEntries(ev.id, order.map((x, i) => {
+    const old = byId.get(x.id)!;
+    const r = (old.result ?? {}) as EntryResult;
+    return { playerId: old.playerId || undefined, teamId: old.teamId, heat: 1, result: { order: i + 1, bib: r.bib, team: r.team, name: r.name, gc: x.gc } };
   }));
   await setPhaseStatus(phase.id, 'completed');
   return ev;
@@ -383,6 +428,9 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
     // SD-96: an elimination final (finals reached, place, final score) or a match with no final (the score)
     const fin = rows.some((r) => Array.isArray(r.entry.result.fshots));
     await writePhaseLines(phase, f, shootLines(f, rows, fin ? 'final' : 'match', eventAwards(rows, points ?? {})));
+  } else if (def.sport === 'cycling') {
+    // SD-98: places, medals, points; times under m_cyc_*; points-race points; sprint matches; stages
+    await writePhaseLines(phase, f, cycLines(f, rows, eventAwards(rows, points ?? {})));
   } else if (isCrewSport(def.sport)) {
     // SD-99 / SD-100: every rower / paddler and the cox gets the crew's line
     let awards = eventAwards(rows, points ?? {});
@@ -401,7 +449,8 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   for (const d of recordDefsFor(def)) {
     // SD-96: a shooting final's rows read as their qualification scores (a final score is no record)
     // SD-95: an archery bracket's rows read as their ranking-round scores (a match is no record)
-    const view = def.sport === 'shooting' ? qualView : def.sport === 'archery' ? archQualView : null;
+    // SD-98: a sprint bracket's rows read as their flying 200 m times
+    const view = def.sport === 'shooting' ? qualView : def.sport === 'archery' || (def.sport === 'cycling' && rows.some((r) => r.entry.result.mp != null)) ? archQualView : null;
     const dRows = view ? rankEntries(view(entries.map((e) => toResultEntry(e, nameOf))), d) : d === def ? rows : rankEntries(entries.map((e) => toResultEntry(e, nameOf)), d);
     next = updateRecords(rowsForRecords(dRows, d, f.category?.course), d, cat, next, phase.startsAt.slice(0, 10), scopes, f.eventKey);
   }

@@ -27,6 +27,7 @@ import { shootingPlugin } from './shooting';
 import { archeryPlugin } from './archery';
 import { rowingPlugin } from './rowing';
 import { canoePlugin } from './canoe';
+import { cyclingPlugin } from './cycling';
 import { handballPlugin } from './handball';
 import { STAT_SCHEMAS } from './statSchemas';
 
@@ -53,6 +54,7 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
   archery: archeryPlugin,
   rowing: rowingPlugin,
   canoe: canoePlugin,
+  cycling: cyclingPlugin,
   handball: handballPlugin,
 };
 

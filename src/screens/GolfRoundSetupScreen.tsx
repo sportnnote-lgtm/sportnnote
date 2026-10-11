@@ -14,18 +14,19 @@ import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { useAuth } from '../core/auth';
 import { usePlayers } from '../data/hooks';
-import { getMyPlayerId, createReplacementPlayer } from '../data/repos';
+import { getMyPlayerId, createReplacementPlayer, getTeams, createTeam } from '../data/repos';
 import {
   getGolfCourses, createGolfCourse, createFieldEvent, addFieldEntries, autoGroups, getFieldEvent, getFieldEvents,
   getFieldEntries, buildLeaderboard, golfFormatOf, parseIndex, showIndex,
 } from '../data/golf';
 import { getSport } from '../sports/registry';
 import { standardPar72, holesFor, makesCut, type CutRule, type Hole } from '../sports/golf/engine';
-import type { GolfCourse } from '../core/types';
+import type { GolfCourse, Team } from '../core/types';
+import { golfTeamFormatOf, type GolfTeamFormat } from '../data/golfTeams';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-interface Pick { playerId: string; name: string; index: string }
+interface Pick { playerId: string; name: string; index: string; /** SD-76 */ teamId?: string }
 
 // parseIndex / showIndex moved to data/golfLeaderboard (SD-35: the entry-admin
 // sheet edits a handicap too); re-exported for older imports.
@@ -61,6 +62,13 @@ export default function GolfRoundSetupScreen() {
   const [prev, setPrev] = useState<{ ids: string[]; ranked: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // SD-76 — team stroke play (best N of M); teams are real team rows
+  const [teamOn, setTeamOn] = useState(false);
+  const [teamRule, setTeamRule] = useState<GolfTeamFormat>({ count: 3, basis: 'gross', mode: 'round' });
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [roundTeams, setRoundTeams] = useState<string[]>([]);
+  const [newTeam, setNewTeam] = useState('');
+  useEffect(() => { getTeams().then((ts) => setAllTeams([...ts])).catch(() => {}); }, []);
 
   // Quick-create course
   const [newCourse, setNewCourse] = useState(false);
@@ -96,8 +104,15 @@ export default function GolfRoundSetupScreen() {
       const order = rows.filter((r) => r.position != null).map((r) => r.id).reverse();
       setPicks(order.map((pid) => {
         const en = lastEntries.find((e) => e.playerId === pid);
-        return { playerId: pid, name: allPlayers.find((p) => p.id === pid)?.fullName ?? 'Player', index: showIndex(en?.handicapIndex) };
+        return { playerId: pid, name: allPlayers.find((p) => p.id === pid)?.fullName ?? 'Player', index: showIndex(en?.handicapIndex), ...(en?.teamId ? { teamId: en.teamId } : {}) };
       }));
+      // SD-76 — the team rule and teams carry over
+      const tr = golfTeamFormatOf(last);
+      if (tr) {
+        setTeamOn(true);
+        setTeamRule(tr);
+        setRoundTeams([...new Set(lastEntries.map((e) => e.teamId).filter((x): x is string => !!x))]);
+      }
     })();
   }, [params?.nextOf, tournamentId, allPlayers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -106,8 +121,28 @@ export default function GolfRoundSetupScreen() {
   const q = query.trim().toLowerCase();
   const results = q.length >= 3 ? allPlayers.filter((p) => p.fullName.toLowerCase().includes(q) && !picks.some((x) => x.playerId === p.id)).slice(0, 12) : [];
 
+  // SD-84 — the Handicap Index pre-fills from the player's golf profile
+  const profileIndex = (playerId: string) => allPlayers.find((p) => p.id === playerId)?.sportDetails?.golf?.handicapIndex;
   const addPlayer = (playerId: string, name: string, index?: number) =>
-    setPicks((ps) => (ps.some((p) => p.playerId === playerId) ? ps : [...ps, { playerId, name, index: showIndex(index) }]));
+    setPicks((ps) => (ps.some((p) => p.playerId === playerId) ? ps : [...ps, { playerId, name, index: showIndex(index ?? profileIndex(playerId)) }]));
+  const teamLabel = (id?: string) => (id ? allTeams.find((t) => t.id === id)?.shortName || allTeams.find((t) => t.id === id)?.name || 'Team' : 'No team');
+  // tap a player's team chip: no team → each round team in turn → no team
+  const cycleTeam = (playerId: string) => setPicks((ps) => ps.map((p) => {
+    if (p.playerId !== playerId) return p;
+    const order = [undefined, ...roundTeams];
+    const next = order[(order.indexOf(p.teamId) + 1) % order.length];
+    return { ...p, teamId: next };
+  }));
+  const addNewTeam = async () => {
+    const name = newTeam.trim();
+    if (name.length < 2) return;
+    try {
+      const t = await createTeam({ name, shortName: name.slice(0, 12), sport: 'golf', colorHex: '#2E7D32', adhoc: true });
+      setAllTeams((ts) => [...ts.filter((x) => x.id !== t.id), t]);
+      setRoundTeams((ts) => [...ts, t.id]);
+      setNewTeam('');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not add the team'); }
+  };
   const addMe = async () => {
     const id = await getMyPlayerId(profile?.id);
     const p = id ? allPlayers.find((x) => x.id === id) : undefined;
@@ -153,12 +188,17 @@ export default function GolfRoundSetupScreen() {
     if (picks.length < 1) return setError('Add at least one player.');
     const bad = picks.find((p) => p.index.trim() && parseIndex(p.index) == null);
     if (bad) return setError(`${bad.name}: enter a Handicap Index like 12.4 (or +1.2), or leave it blank.`);
+    if (teamOn) {
+      if (!roundTeams.length) return setError('Team stroke play: add at least one team, then tap each player’s team chip.');
+      const shortTeam = roundTeams.find((t) => picks.filter((p) => p.teamId === t).length < teamRule.count);
+      if (shortTeam) return setError(`${teamLabel(shortTeam)} has fewer than ${teamRule.count} players — best ${teamRule.count} need at least ${teamRule.count}.`);
+    }
     setBusy(true);
     try {
       let chosen = picks;
       // The cut is recorded on the new round's format; an inherited one from the
       // previous round's format is dropped unless a cut is applied now.
-      const { cutAfterRound: _ca, cut: _cut, ...baseFormat } = format as Record<string, unknown>;
+      const { cutAfterRound: _ca, cut: _cut, team: _team, ...baseFormat } = format as Record<string, unknown>;
       let cutKeys: Record<string, unknown> = {};
       if (prev && cutPreview) {
         // Cut: top N and ties on the cumulative leaderboard so far.
@@ -174,11 +214,14 @@ export default function GolfRoundSetupScreen() {
       const holes = holesFor(course, String(format.holes ?? '18') as '18' | 'front9' | 'back9');
       const ev = await createFieldEvent({
         tournamentId, sport: 'golf', title: title.trim() || `Round ${roundNo}`, roundNo, startsAt: when.toISOString(),
-        format: { ...baseFormat, ...cutKeys, courseId: course.id, tee: tee ?? course.tees[0]?.name, net: format.netScoring === 'net' },
+        format: { ...baseFormat, ...cutKeys, courseId: course.id, tee: tee ?? course.tees[0]?.name, net: format.netScoring === 'net', ...(teamOn ? { team: teamRule } : {}) },
         hostIds: me ? [me] : [],
       });
       const groups = autoGroups(chosen.map((p) => p.playerId), groupSize, when, interval);
-      await addFieldEntries(ev.id, groups.map((g) => ({ ...g, handicapIndex: parseIndex(chosen.find((p) => p.playerId === g.playerId)?.index ?? '') })), holes.length);
+      await addFieldEntries(ev.id, groups.map((g) => {
+        const p = chosen.find((x) => x.playerId === g.playerId);
+        return { ...g, handicapIndex: parseIndex(p?.index ?? ''), ...(teamOn && p?.teamId ? { teamId: p.teamId } : {}) };
+      }), holes.length);
       nav.replace('GolfRound', { eventId: ev.id });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the round');
@@ -247,6 +290,11 @@ export default function GolfRoundSetupScreen() {
               accessibilityLabel={`${p.name} handicap index`}
               autoCapitalize="none"
             />
+            {teamOn && (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${p.name}'s team: ${teamLabel(p.teamId)}. Tap to change`} onPress={() => cycleTeam(p.playerId)} style={[st.teamChip, !p.teamId && st.teamChipOff]}>
+                <Text style={st.teamChipTxt} numberOfLines={1}>{teamLabel(p.teamId)}</Text>
+              </TouchableOpacity>
+            )}
             <Text style={st.remove} accessibilityRole="button" accessibilityLabel={`Remove ${p.name}`} onPress={() => setPicks((ps) => ps.filter((x) => x.playerId !== p.playerId))}>✕</Text>
           </View>
         ))}
@@ -263,6 +311,47 @@ export default function GolfRoundSetupScreen() {
             <Text style={textStyles.h3}>✂️ Cut (optional)</Text>
             <Text style={textStyles.muted}>Keep the top N on the leaderboard so far, plus ties. Leave blank for no cut.</Text>
             <TextField label="Top N (and ties)" value={cutN} onChange={(v) => setCutN(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 50" autoCapitalize="none" />
+          </Card>
+        )}
+
+        {/* SD-76 — team stroke play: best N of M scores count */}
+        {competition !== 'match' && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <View style={st.chips}>
+              <SelectChip label={teamOn ? '✓ Team competition' : '👥 Team competition (best N of M)'} active={teamOn} onPress={() => setTeamOn(!teamOn)} />
+            </View>
+            {teamOn && (
+              <>
+                <Text style={textStyles.muted}>Each team’s best scores count — the rest are dropped. Everyone still plays on the individual leaderboard too.</Text>
+                <View style={st.chips}>
+                  <Text style={textStyles.muted}>Best</Text>
+                  {[1, 2, 3, 4, 5].map((n) => <SelectChip key={n} label={String(n)} active={teamRule.count === n} onPress={() => setTeamRule((r) => ({ ...r, count: n }))} />)}
+                  <Text style={textStyles.muted}>count</Text>
+                </View>
+                <View style={st.chips}>
+                  <SelectChip label="Per round" active={teamRule.mode === 'round'} onPress={() => setTeamRule((r) => ({ ...r, mode: 'round' }))} />
+                  <SelectChip label="Per hole (best ball)" active={teamRule.mode === 'hole'} onPress={() => setTeamRule((r) => ({ ...r, mode: 'hole' }))} />
+                  {competition !== 'stableford' && (
+                    <>
+                      <SelectChip label="Gross" active={teamRule.basis === 'gross'} onPress={() => setTeamRule((r) => ({ ...r, basis: 'gross' }))} />
+                      <SelectChip label="Net" active={teamRule.basis === 'net'} onPress={() => setTeamRule((r) => ({ ...r, basis: 'net' }))} />
+                    </>
+                  )}
+                </View>
+                <FieldLabel>Teams in this round</FieldLabel>
+                <View style={st.chips}>
+                  {allTeams.filter((t) => t.sport === 'golf' || roundTeams.includes(t.id)).map((t) => (
+                    <SelectChip key={t.id} label={t.name} active={roundTeams.includes(t.id)}
+                      onPress={() => setRoundTeams((ts) => (ts.includes(t.id) ? ts.filter((x) => x !== t.id) : [...ts, t.id]))} />
+                  ))}
+                </View>
+                <View style={st.row}>
+                  <View style={st.flex}><TextField label="" value={newTeam} onChange={setNewTeam} placeholder="New team, e.g. DPS Hyderabad" /></View>
+                  <Button label="＋ Add" variant="ghost" onPress={() => void addNewTeam()} />
+                </View>
+                <Text style={textStyles.muted}>Then tap the team chip on each player below.</Text>
+              </>
+            )}
           </Card>
         )}
 
@@ -294,6 +383,9 @@ const st = StyleSheet.create({
   siInput: { width: 40, textAlign: 'center', color: theme.colors.text, fontSize: theme.font.small, borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingVertical: 2 },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   idxInput: { width: 64, textAlign: 'center', color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: 8, paddingVertical: 6, fontSize: theme.font.body },
+  teamChip: { maxWidth: 96, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, backgroundColor: theme.colors.primary },
+  teamChipOff: { backgroundColor: theme.colors.textMuted },
+  teamChipTxt: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '800' },
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   warn: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
