@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Wave D batch 1 — SD-132 / SD-133 / SD-135 / SD-136 / SD-139 — DONE (3ba9a98, 2026-10-11)
+- See DEVLOG. No live steps.
+- **Check (from memory / secondary sources):** FIBA 3×3 article numbers + classification; IHF sudden-death order (scorer picks); futsal Laws 7/12/13 detail; ICC Super Over eligibility clause; Hundred playing conditions; pickleball rally-doubles positions (USA Pickleball provisional rule — MLP dropped doubles rally scoring 2025); 9-a-side volleyball rules; Beach Pro Tour ranking; FIVB sanction escalation/cards; AKFI school do-or-die.
+- **Not done:** futsal red-card numerical disadvantage; 3×3 shot clock; edit a play's clock second; older basketball matches stay on wall-clock minutes; shot tags can drift after "Edit a past ball"; voice shot tagging; old kabaddi formats show new toggles "On" in the editor until changed; volleyball incomplete team after an expulsion; squash decision buttons are tall at 375 px.
+
 ## Live ops — 2026-10-11 (after Wave C)
 - Founder ran all four migrations: 20261019123220_golf_course_edit, 20261019123500_team_tie_ops, 20261019124330_field_record_book, 20261019124310_event_result_alerts (verified read-only on live). notify-followers redeployed after the alerts migration (deno check passed). APK 38 not built yet (needed for phone PDF printing).
 
