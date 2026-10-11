@@ -10,12 +10,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { theme } from '../core/theme';
-import { Card, SelectChip, ScreenTitle, LoadingState, textStyles } from '../components/ui';
+import { Button, Card, SelectChip, ScreenTitle, LoadingState, TextField, textStyles } from '../components/ui';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { teamLabel, levelRank, levelSuggestions } from '../core/teamLevels';
+import { useRegion } from '../core/region';
 import { getSport } from '../sports/registry';
 import { rolesForSport, sportHasRoles } from '../data/teamRoles';
 import { useAuth } from '../core/auth';
 import {
-  getClub, getClubMembers, getClubTeam, addClubSport, getMyPlayerId,
+  getClub, getClubMembers, getClubTeam, getClubTeams, addClubSport, getMyPlayerId, createTeam, isNeedsDbUpdate,
   getTeamLeaders, setTeamLeaders, setTeamRoster, getTeamPlayerRoles, setTeamPlayerRoles,
 } from '../data/repos';
 import type { Club, ClubMemberView, Team, TeamLeadership, SportId } from '../core/types';
@@ -25,7 +29,12 @@ import { notice } from '../core/confirm';
 
 export default function ClubSportScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'ClubSport'>>();
-  const { clubId, sport } = params;
+  const { clubId, sport, teamId } = params;
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const region = useRegion();
+  // SD-154: every squad this club fields in the sport (Varsity + JV, A + B, U13 …)
+  const [squads, setSquads] = useState<Team[]>([]);
+  const [newLevel, setNewLevel] = useState('');
   const plugin = getSport(sport);
   const { profile } = useAuth();
 
@@ -42,10 +51,25 @@ export default function ClubSportScreen() {
   const load = useCallback(async () => {
     const [c, m, id] = await Promise.all([getClub(clubId), getClubMembers(clubId), getMyPlayerId(profile?.id)]);
     // Ensure the per-sport team row exists (it will, if the club plays this sport).
-    const t = (await getClubTeam(clubId, sport)) ?? (await addClubSport(clubId, sport));
+    const all = (await getClubTeams(clubId)).filter((x) => x.sport === sport).sort((a, b) => levelRank(a.level) - levelRank(b.level));
+    const t = all.find((x) => x.id === teamId) ?? (await getClubTeam(clubId, sport)) ?? (await addClubSport(clubId, sport));
+    setSquads(all.length ? all : [t]);
     const [ld, rl] = await Promise.all([getTeamLeaders(t.id), getTeamPlayerRoles(t.id)]);
     setClub(c); setMembers(m); setTeam(t); setLeaders(ld); setRoles(rl); setMyId(id); setLoading(false);
-  }, [clubId, sport, profile?.id]);
+  }, [clubId, sport, teamId, profile?.id]);
+
+  async function addSquad() {
+    const lv = newLevel.trim();
+    if (!lv || !club) return;
+    setBusy(true);
+    try {
+      const t = await createTeam({ name: club.name, shortName: club.shortName, sport, colorHex: club.colorHex ?? '#2E7D6B', orgId: club.orgId, clubId, level: lv });
+      setNewLevel('');
+      nav.setParams({ teamId: t.id });
+    } catch (e) {
+      failed('add the squad', isNeedsDbUpdate(e) ? new Error('Team levels need the latest database update.') : e);
+    } finally { setBusy(false); }
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -113,7 +137,30 @@ export default function ClubSportScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
-        <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={`${club?.name ?? 'Team'} — ${plugin.name} profile`} />
+        <ScreenTitle title={`${plugin.icon} ${plugin.name}`} subtitle={`${team ? teamLabel(team) : club?.name ?? 'Team'} — ${plugin.name} profile`} />
+
+        {/* SD-154: squads / levels (Varsity, JV, A, B) — each has its own captain and squad */}
+        {(squads.length > 1 || amAdmin) && (
+          <Card style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.h3}>Squads</Text>
+            {squads.length > 1 ? (
+              <View style={st.chips}>
+                {squads.map((q) => <SelectChip key={q.id} label={q.level || 'Main team'} active={q.id === team?.id} onPress={() => nav.setParams({ teamId: q.id })} />)}
+              </View>
+            ) : null}
+            {amAdmin ? (
+              <>
+                <Text style={textStyles.muted}>Field another {plugin.name.toLowerCase()} team — each squad has its own captain, players and fixtures.</Text>
+                <View style={st.chips}>
+                  {levelSuggestions(region.country).filter((l) => !squads.some((q) => (q.level ?? '').toLowerCase() === l.toLowerCase())).slice(0, 5)
+                    .map((l) => <SelectChip key={l} label={l} active={newLevel === l} onPress={() => setNewLevel(l)} />)}
+                </View>
+                <TextField label="Squad level" value={newLevel} onChange={(v) => setNewLevel(v.slice(0, 30))} placeholder="JV, B, U13 A" autoCapitalize="words" />
+                <Button label={busy ? 'Adding…' : `＋ Add ${newLevel.trim() ? teamLabel({ name: club?.name ?? 'team', level: newLevel }) : 'a squad'}`} variant="ghost" disabled={busy || !newLevel.trim()} onPress={() => void addSquad()} />
+              </>
+            ) : null}
+          </Card>
+        )}
 
         {/* Leadership */}
         <Text style={textStyles.h3}>Leadership</Text>

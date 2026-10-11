@@ -1,5 +1,6 @@
 /** Manage teams/houses: list existing + add a new one (name, short code, sport,
  *  colour). Demo mode appends to the local store; live mode inserts to Supabase. */
+import { teamLabel } from '../core/teamLevels';
 import React, { useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -114,7 +115,7 @@ export default function TeamsScreen() {
               >
                 <Card style={st.teamRow}>
                   <View style={[st.dot, { backgroundColor: t.colorHex }]} />
-                  <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
+                  <Text style={[textStyles.body, { flex: 1 }]}>{teamLabel(t)}</Text>
                   <Text style={textStyles.muted}>{t.shortName}</Text>
                   <Text style={st.chev}>›</Text>
                 </Card>
@@ -142,7 +143,7 @@ export default function TeamsScreen() {
               >
                 <Card style={st.teamRow}>
                   <View style={[st.dot, { backgroundColor: t.colorHex }]} />
-                  <Text style={[textStyles.body, { flex: 1 }]}>{t.name}</Text>
+                  <Text style={[textStyles.body, { flex: 1 }]}>{teamLabel(t)}</Text>
                   <Text style={textStyles.muted}>{getSport(t.sport as SportId).icon} {t.shortName}</Text>
                   <Text style={st.chev}>›</Text>
                 </Card>

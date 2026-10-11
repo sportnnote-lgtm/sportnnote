@@ -11,6 +11,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { DateTimeField } from '../components/DateTimeField';
+import { teamLabel } from '../core/teamLevels';
+import { eventZone, useUserTimeZone, zoneShortName } from '../core/time';
+import { useRegion, weekdayOrder, exampleDate } from '../core/region';
+import { defaultKickoff, weeklyTimes, parseSkipDates, readTime, dayText, WEEKDAY_SHORT } from '../data/fixtureSchedule';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivisions } from '../data/hooks';
 import { DivisionTabs } from '../components/DivisionTabs';
@@ -51,6 +55,9 @@ interface Draft extends GeneratedPairing {
   extra?: Record<string, string | number | boolean>;
 }
 
+/** A date-only picker's Date → its calendar day 'YYYY-MM-DD' (device calendar). */
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 /** Fisher–Yates shuffle (a random knockout draw). */
 function shuffled<T>(xs: T[]): T[] {
   const a = [...xs];
@@ -83,8 +90,9 @@ export default function GenerateFixturesScreen() {
   // embedded in this tournament's matches (advance-mode brackets seed from
   // those, whose ids can differ from the team-list ids).
   const teamName = useMemo(() => {
-    const m: Record<string, string> = Object.fromEntries(teams.map((t) => [t.id, t.name]));
-    for (const mt of tourMatches) { m[mt.homeTeam.id] ??= mt.homeTeam.name; m[mt.awayTeam.id] ??= mt.awayTeam.name; }
+    // SD-154: with the squad level ("Greenwood JV")
+    const m: Record<string, string> = Object.fromEntries(teams.map((t) => [t.id, teamLabel(t)]));
+    for (const mt of tourMatches) { m[mt.homeTeam.id] ??= teamLabel(mt.homeTeam); m[mt.awayTeam.id] ??= teamLabel(mt.awayTeam); }
     return m;
   }, [teams, tourMatches]);
 
@@ -112,8 +120,24 @@ export default function GenerateFixturesScreen() {
   const [gfReset, setGfReset] = useState(true);
   const [plate, setPlate] = useState(false);
   const [seeding, setSeeding] = useState<'standard' | 'random' | 'draw'>('standard');
-  const [start, setStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; });
+  // SD-154: the first kickoff defaults to tomorrow 10:00 in the TOURNAMENT's zone (its
+  // venue zone, else the app zone) — not the phone clock
+  const viewerZone = useUserTimeZone();
+  const fixtureZone = eventZone(tournament, viewerZone);
+  const region = useRegion();
+  const [start, setStart] = useState<Date>(() => new Date(defaultKickoff(fixtureZone)));
+  const startTouched = useRef(false);
+  useEffect(() => { if (!startTouched.current) setStart(new Date(defaultKickoff(fixtureZone))); }, [fixtureZone]);
   const [gapMin, setGapMin] = useState('90');
+  // SD-154: "Weekly across a term" — match weekday(s), time, term dates, holidays
+  const [timing, setTiming] = useState<'apart' | 'weekly'>('apart');
+  const [weekdays, setWeekdays] = useState<number[]>([3]);
+  const [weekTime, setWeekTime] = useState('15:30');
+  const [termStart, setTermStart] = useState<Date>(() => new Date());
+  const [termEnd, setTermEnd] = useState<Date | null>(null);
+  const [skipText, setSkipText] = useState('');
+  const skip = useMemo(() => parseSkipDates(skipText, region.dateOrder), [skipText, region.dateOrder]);
+  const [weekNote, setWeekNote] = useState<string | null>(null);
   const [venue, setVenue] = useState('');
   // Exactly one tournament ground → it's the venue (parity #09); still editable.
   const venuePrefilled = useRef(false);
@@ -319,7 +343,24 @@ export default function GenerateFixturesScreen() {
   // SD-134 — the Swiss draft's pairing ids, to name anyone a ✕ left unpaired
   const [swissPool, setSwissPool] = useState<string[]>([]);
 
+  // SD-154: weekly across a term — one round per match day at a set time
+  const placeWeekly = (ds: Draft[]): Draft[] => {
+    const time = readTime(weekTime);
+    const res = weeklyTimes(ds, { weekdays, time: time ?? '15:30', termStart: isoDay(termStart), termEnd: termEnd ? isoDay(termEnd) : undefined, skip: skip.days, gapMin: Math.max(0, parseInt(gapMin, 10) || 0) }, fixtureZone);
+    const rounds = res.roundDays.size + Math.max(0, res.overflow);
+    setWeekNote(res.overflow > 0
+      ? `⚠ Only ${res.roundDays.size} of ${rounds} rounds fit between the term dates — the rest keep the first kickoff time. Add a match day or move the term end.`
+      : `${rounds} round${rounds === 1 ? '' : 's'}: ${[...res.roundDays.values()].map(dayText).join(', ')}${res.skipped.length ? ` · skipping ${res.skipped.length} holiday${res.skipped.length === 1 ? '' : 's'}` : ''}.`);
+    return ds.map((d, i) => (res.times[i] ? { ...d, when: new Date(res.times[i]!) } : d));
+  };
+  const setPlaced = (ds: Draft[] | null) => setDrafts(ds && timing === 'weekly' ? placeWeekly(ds) : (setWeekNote(null), ds));
+
   function generate() {
+    if (timing === 'weekly') {
+      if (!weekdays.length) return setError('Pick at least one match day.');
+      if (!readTime(weekTime)) return setError('Type the kickoff time like 15:30.');
+      if (skip.bad.length) return setError(`Can't read these holiday dates: ${skip.bad.join(', ')} — type them like ${exampleDate(region.dateOrder, '2026-10-26')}.`);
+    }
     const gap0 = Math.max(0, parseInt(gapMin, 10) || 0);
     const at = (i: number) => new Date(start.getTime() + i * gap0 * 60000);
     if (structure === 'advance') {
@@ -328,7 +369,7 @@ export default function GenerateFixturesScreen() {
       if (target === 'super') {
         // Advance the qualifiers into a second round-robin phase (Super Four/Six).
         const rr = roundRobin(effectiveQualifiers.map((q) => q.teamId), doubleRound);
-        setDrafts(rr.map((p, i) => ({ ...p, stage: 'super', when: at(i) })));
+        setPlaced(rr.map((p, i) => ({ ...p, stage: 'super', when: at(i) })));
         return;
       }
       if (target === 'double_chance') {
@@ -336,13 +377,13 @@ export default function GenerateFixturesScreen() {
         // Final are created from the tournament page as results come in.
         if (effectiveQualifiers.length < 4) return setError('A double-chance playoff needs the top 4.');
         const openers = doubleChanceOpeners(effectiveQualifiers.slice(0, 4).map((q) => q.teamId));
-        setDrafts(openers.map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, when: at(i) })));
+        setPlaced(openers.map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, when: at(i) })));
         return;
       }
       if (bracketKind === 'double') {
         // SD-125: pools → double elimination, seeded by the qualifiers' order.
         if (effectiveQualifiers.length < 3) return setError('Double elimination needs at least 3 teams.');
-        setDrafts(doubleElimOpeners(effectiveQualifiers.map((q) => q.teamId), gfReset)
+        setPlaced(doubleElimOpeners(effectiveQualifiers.map((q) => q.teamId), gfReset)
           .map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, slot: o.slot, extra: o.extra, when: at(i) })));
         return;
       }
@@ -350,16 +391,16 @@ export default function GenerateFixturesScreen() {
         // SD-124: cross-over from the groups (A1 v B2 …) or seeded positions,
         // byes to the top seeds — saved with bracket slots.
         const sr = seedFromGroups(effectiveQualifiers);
-        setDrafts(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
+        setPlaced(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
         return;
       }
       if (playIn && !koPlan.clean) {
         const pi = seedPlayIn(koFieldIds);
-        setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
+        setPlaced(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
         return;
       }
       const stage = knockoutRoundLabel(effectiveQualifiers.length);
-      setDrafts(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: at(i) })));
+      setPlaced(seedKnockout(effectiveQualifiers).map((p, i) => ({ ...p, stage, when: at(i) })));
       return;
     }
     if (structure === 'swiss') {
@@ -373,7 +414,7 @@ export default function GenerateFixturesScreen() {
         const { pairings, byeId } = swissRound1(r1, Math.random() < 0.5 ? 'W' : 'B');
         setPairNote(null);
         setSwissPool(r1);
-        setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
+        setPlaced(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: 'swiss1', byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
         return;
       }
       if (!swissAllDone) return setError('Finish the current Swiss round before generating the next.');
@@ -387,7 +428,7 @@ export default function GenerateFixturesScreen() {
       setSwissPool(avail.map((p) => p.id));
       setPairNote(relaxed === 'repeat' ? 'Every pairing left repeats a game — the fewest rematches are shown.'
         : relaxed === 'colours' ? 'No pairing kept every colour rule — someone gets a third colour in a row or a 3-game imbalance.' : null);
-      setDrafts(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
+      setPlaced(pairings.map((p, i) => ({ ...p, white: isChess ? p.white : undefined, stage: `swiss${swissNextNo}`, byes: byeId ? [byeId] : undefined, extra: { [BOARD_KEY]: i + 1 }, when: at(i) })));
       return;
     }
     if (selected.length < 2) return setError('Pick at least two teams.');
@@ -398,16 +439,16 @@ export default function GenerateFixturesScreen() {
       const seeds = seeding === 'random' ? shuffled(selected) : selected;
       if (bracketKind === 'double') {
         if (seeds.length < 3) return setError('Double elimination needs at least 3 teams.');
-        setDrafts(doubleElimOpeners(seeds, gfReset).map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, slot: o.slot, extra: o.extra, when: at(i) })));
+        setPlaced(doubleElimOpeners(seeds, gfReset).map((o, i) => ({ round: 1, homeId: o.homeId, awayId: o.awayId, stage: o.stage, slot: o.slot, extra: o.extra, when: at(i) })));
         return;
       }
       const sr = seededRound(seeds);
-      setDrafts(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
+      setPlaced(sr.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: sr.stage, slot: t.slot, byes: sr.byeIds.length ? sr.byeIds : undefined, when: at(i) })));
       return;
     }
     if (structure === 'knockout' && playIn && !koPlan.clean) {
       const pi = seedPlayIn(selected);
-      setDrafts(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
+      setPlaced(pi.ties.map((t, i) => ({ round: 1, homeId: t.homeId, awayId: t.awayId, stage: pi.playInStage, byes: pi.byeIds, when: at(i) })));
       return;
     }
     const pairings: (GeneratedPairing & { group?: string })[] =
@@ -417,7 +458,7 @@ export default function GenerateFixturesScreen() {
     // Tag a plain knockout's round 1 with its stage (r16/qf/…) so the bracket
     // renders it as a real round and can advance winners to the next one.
     const koStage = structure === 'knockout' ? stageForTeams(selected.length) : undefined;
-    setDrafts(pairings.map((p, i) => ({ ...p, stage: koStage, when: at(i) })));
+    setPlaced(pairings.map((p, i) => ({ ...p, stage: koStage, when: at(i) })));
   }
 
   async function create() {
@@ -812,14 +853,40 @@ export default function GenerateFixturesScreen() {
           </Text>
         )}
 
-        <DateTimeField label="First match kickoff" value={start} onChange={setStart} timeZone={tournament?.timeZone} />
+        <Text style={textStyles.muted}>When are the matches?</Text>
+        <View style={st.chips}>
+          <SelectChip label="Minutes apart" active={timing === 'apart'} onPress={() => setTiming('apart')} />
+          <SelectChip label="Weekly across a term" active={timing === 'weekly'} onPress={() => setTiming('weekly')} />
+        </View>
+        {timing === 'apart' ? (
+          <DateTimeField label="First match kickoff" value={start} onChange={(d) => { startTouched.current = true; setStart(d); }} timeZone={tournament?.timeZone} />
+        ) : (
+          <View style={{ gap: theme.spacing(2) }}>
+            <Text style={textStyles.muted}>Match day{weekdays.length === 1 ? '' : 's'} — one round on each</Text>
+            <View style={st.chips}>
+              {weekdayOrder([0, 1, 2, 3, 4, 5, 6], region.weekStart).map((d) => (
+                <SelectChip key={d} label={WEEKDAY_SHORT[d]} active={weekdays.includes(d)}
+                  onPress={() => setWeekdays((w) => (w.includes(d) ? w.filter((x) => x !== d) : [...w, d].sort()))} />
+              ))}
+            </View>
+            <TextField label={`Kickoff time (${zoneShortName(fixtureZone)})`} value={weekTime} onChange={setWeekTime} placeholder="15:30" autoCapitalize="none" />
+            <View style={st.row}>
+              <View style={st.flex}><DateTimeField label="Term starts" mode="date" value={termStart} onChange={setTermStart} /></View>
+              <View style={st.flex}><DateTimeField label="Term ends (optional)" mode="date" value={termEnd} onChange={setTermEnd} placeholder="No end" /></View>
+            </View>
+            <TextField label="No matches on (holidays, half-term)" value={skipText} onChange={setSkipText} multiline
+              placeholder={`${exampleDate(region.dateOrder, '2026-10-26')} - ${exampleDate(region.dateOrder, '2026-10-30')}, one per line`} autoCapitalize="none" />
+            {skip.days.length ? <Text style={textStyles.muted}>{skip.days.length} day{skip.days.length === 1 ? '' : 's'} skipped: {skip.days.length <= 4 ? skip.days.map(dayText).join(', ') : `${dayText(skip.days[0])} … ${dayText(skip.days[skip.days.length - 1])}`}</Text> : null}
+          </View>
+        )}
         <View style={st.row}>
-          <View style={st.flex}><TextField label="Gap between matches (min)" value={gapMin} onChange={setGapMin} autoCapitalize="none" /></View>
+          <View style={st.flex}><TextField label={timing === 'weekly' ? 'Gap inside a round (min, 0 = same time)' : 'Gap between matches (min)'} value={gapMin} onChange={setGapMin} autoCapitalize="none" /></View>
           <View style={st.flex}><TextField label="Venue (optional)" value={venue} onChange={setVenue} placeholder="Main ground" /></View>
         </View>
 
         <Button label="⚡ Generate preview" variant="ghost" onPress={generate} />
         <FormError message={error} />
+        {drafts && weekNote ? <Text style={textStyles.muted}>🗓 {weekNote}</Text> : null}
 
         {drafts && (
           drafts.length === 0 ? (

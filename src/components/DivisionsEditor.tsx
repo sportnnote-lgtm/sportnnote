@@ -6,18 +6,25 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, FieldLabel } from './ui';
-import { AGE_GROUPS, GENDERS, presetDivision, divisionLabel, divisionKey } from '../core/divisions';
+import { GENDERS, presetDivision, divisionLabel, divisionKey, ageGroupsFor, bandRule } from '../core/divisions';
+import type { MarketId } from '../core/markets';
 import type { CategoryGender, NewTournamentCategory } from '../core/types';
 
 export function DivisionsEditor({
   value,
   onChange,
+  market,
 }: {
   value: NewTournamentCategory[];
   onChange: (list: NewTournamentCategory[]) => void;
+  /** SD-153: the meet's market — its age bands ("12 & Under", "C Division", "Grades 9–12"); India by default */
+  market?: MarketId;
 }) {
   const [open, setOpen] = useState(false);
+  const bands = ageGroupsFor(market);
   const [age, setAge] = useState<string>('U14');
+  const ageNow = bands.includes(age) ? age : (bands.includes('U14') ? 'U14' : bands[0]);
+  const rule = bandRule(ageNow);
   const [gender, setGender] = useState<CategoryGender>('boys');
   const [custom, setCustom] = useState('');
 
@@ -50,18 +57,19 @@ export function DivisionsEditor({
         <Card style={{ gap: theme.spacing(3) }}>
           <Text style={st.muted}>Age group</Text>
           <View style={st.chips}>
-            {AGE_GROUPS.map((a) => <SelectChip key={a} label={a} active={age === a} onPress={() => setAge(a)} />)}
+            {bands.map((a) => <SelectChip key={a} label={a} active={ageNow === a} onPress={() => setAge(a)} />)}
           </View>
+          {rule ? <Text style={st.muted}>{ageNow}: {rule}</Text> : null}
           <Text style={st.muted}>Gender</Text>
           <View style={st.chips}>
             {GENDERS.map((g) => <SelectChip key={g.key} label={g.label} active={gender === g.key} onPress={() => setGender(g.key)} />)}
           </View>
-          <Button label={`+ Add ${divisionLabel(age, gender)}`} variant="ghost" onPress={() => add(presetDivision(age, gender))} />
+          <Button label={`+ Add ${divisionLabel(ageNow, gender)}`} variant="ghost" onPress={() => add(presetDivision(ageNow, gender))} />
 
           <View style={st.divider} />
           <Text style={st.muted}>Or a custom division</Text>
           <View style={st.row}>
-            <View style={st.flex1}><TextField label="" value={custom} onChange={setCustom} placeholder="e.g. Staff, House A" /></View>
+            <View style={st.flex1}><TextField label="" value={custom} onChange={setCustom} placeholder="e.g. Staff, Year 7, House A" /></View>
             <Button label="Add" variant="ghost" onPress={() => { add({ label: custom.trim() }); setCustom(''); }} />
           </View>
         </Card>

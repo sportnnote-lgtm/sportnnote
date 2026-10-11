@@ -71,7 +71,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat
     return [
       crewMembersText(def.key, res.members),
       res.thousandths != null && r.position != null ? `photo ${formatMark(res.thousandths, { ...def, dp: 3 })}` : '',
-      splitsText(res.splits, (v) => formatMark(v, def), def.key),
+      splitsText(res.splits, (v) => formatMark(v, def), def.key, /\d yd\b/.test(def.label) ? 'SCY' : undefined),
     ].filter(Boolean).join(' · ');
   }
   // SD-94 swimming: medley legs by stroke, then the 50 m splits
@@ -80,7 +80,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat
   const members = res.members?.length
     ? res.members.slice(0, def.teamSize ?? 4).map((m, i) => (swim && LEG_SHORT[legs[i]] ? `${LEG_SHORT[legs[i]]} ${m.name}` : m.name)).join(', ')
     : '';
-  const splits = swim ? splitsText(res.splits, (v) => formatMark(v, def), def.key) : '';
+  const splits = swim ? splitsText(res.splits, (v) => formatMark(v, def), def.key, /\d yd\b/.test(def.label) ? 'SCY' : undefined) : '';
   return [members, splits].filter(Boolean).join(' · ');
 }
 

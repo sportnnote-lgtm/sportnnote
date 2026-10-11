@@ -12,8 +12,9 @@ import { Card, SelectChip, textStyles } from '../ui';
 import { useMeet } from '../../data/useAthletics';
 import { useTournamentById } from '../../data/hooks';
 import { timetableSettings } from '../../data/timetableStore';
+import { useMeetZone } from '../../data/useMeetZone';
 import {
-  atOf, buildTimetable, clashesFor, dayKey, dayLabel, defaultArea, disciplineOf, estMinutes, fromDayKey, hhmm, nextFreeSlot,
+  atOf, buildTimetable, clashesFor, dayKey, dayLabel, defaultArea, disciplineOf, estMinutes, hhmm, nextFreeSlot, nextDayKey,
   planLabels, sessionOf, suggestRounds, timetableDays, SESSION_LABEL, type PhaseKind, type PhaseSched,
 } from '../../data/results';
 
@@ -38,8 +39,10 @@ export function ScheduleCard({ state, tournamentId, discipline, plan, combined, 
   athleteIds?: string[];
 }) {
   const tournament = useTournamentById(tournamentId);
+  // SD-154: days and times in the venue's zone (the tournament's), not the phone's
+  const mz = useMeetZone(tournament);
   const { events, loading } = useMeet(tournamentId, undefined, 'all');
-  const items = useMemo(() => buildTimetable(events), [events]);
+  const items = useMemo(() => buildTimetable(events), [events, mz.zone]); // eslint-disable-line react-hooks/exhaustive-deps
   const def = disciplineOf(combined?.events[0] ?? discipline);
   const labels = useMemo(() => planLabels(discipline, plan, combined?.events), [discipline, plan, combined?.events]);
   const n = labels.length;
@@ -48,9 +51,8 @@ export function ScheduleCard({ state, tournamentId, discipline, plan, combined, 
     const ds = timetableDays(items, tournament ? { start: tournament.startDate, end: tournament.endDate } : undefined).map((d) => d.day);
     const today = dayKey(new Date());
     if (!ds.length) ds.push(today);
-    const after = fromDayKey(ds[ds.length - 1]); after.setDate(after.getDate() + 1);
-    return [...ds, dayKey(after)];
-  }, [items, tournament]);
+    return [...ds, nextDayKey(ds[ds.length - 1])];
+  }, [items, tournament, mz.zone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [on, setOn] = useState(true);
   const [area, setArea] = useState(defaultArea(def));
@@ -114,7 +116,7 @@ export function ScheduleCard({ state, tournamentId, discipline, plan, combined, 
           {clash.length ? (
             <Text style={st.warn}>⚠ {clash.slice(0, 4).map((c) => `${c.name}: ${c.other.eventTitle} ${c.other.roundLabel} at ${hhmm(c.other.at)}${c.gap < 0 ? ' (overlaps)' : ` (${c.gap} min apart)`}`).join(' · ')}{clash.length > 4 ? ` · +${clash.length - 4} more` : ''} — less than {clashMins} min between events.</Text>
           ) : null}
-          <Text style={textStyles.muted}>Suggested from the next free slot{area ? ` at the ${area.toLowerCase()}` : ''}; later rounds follow the usual gaps. Each round takes its time when it's created. Change any of it on the Timetable.</Text>
+          <Text style={textStyles.muted}>Times are {mz.short}, the venue's local time. Suggested from the next free slot{area ? ` at the ${area.toLowerCase()}` : ''}; later rounds follow the usual gaps. Each round takes its time when it's created. Change any of it on the Timetable.</Text>
         </>
       ) : <Text style={textStyles.muted}>The event goes under “Time to be announced” on the timetable until you set its time there.</Text>}
     </Card>

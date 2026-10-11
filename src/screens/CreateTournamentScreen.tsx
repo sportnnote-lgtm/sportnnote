@@ -1,6 +1,8 @@
 /** Create a tournament: name, dates, sports, the competition structure, and the
  *  per-sport format (overs, players-a-side, sub rules…) the organizer chooses —
  *  all games in the tournament then follow that format. */
+import { regionFormatDefaults } from '../core/units';
+import { regionStore } from '../core/region';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +35,10 @@ import {
   emptyDetails, detailsPayload, type DetailsValue,
 } from '../components/TournamentDetailsFields';
 import { organizableOrgsForPlayer } from '../core/org';
+import { MARKETS, isMarket, marketForCountry, term, type MarketId } from '../core/markets';
+
+/** SD-153: event sports whose age groups use the meet's cut-off (useMeetAges). */
+const AGE_CUTOFF_SPORTS: SportId[] = ['athletics', 'swimming', 'cycling'];
 import type { SportId, TournamentStructure, TournamentScoring, TournamentParticipation } from '../core/types';
 
 const PARTICIPATION_OPTS: { key: TournamentParticipation; label: string; hint: string }[] = [
@@ -111,6 +117,8 @@ export default function CreateTournamentScreen() {
   // Only communities where you're an Admin or Organizer can host your event.
   const myOrgs = organizableOrgsForPlayer(orgs, myId);
   const hostOrg = hostChoice !== 'self' ? myOrgs.find((o) => o.id === hostChoice) : undefined;
+  // SD-153: the meet's market — the host community's, else the organiser's region.
+  const market: MarketId = isMarket(hostOrg?.market) ? hostOrg!.market as MarketId : marketForCountry(regionStore.get().country);
   React.useEffect(() => {
     setDetails((d) => ({
       ...d,
@@ -124,7 +132,8 @@ export default function CreateTournamentScreen() {
   const [scoring, setScoring] = useState<TournamentScoring | undefined>(undefined);
   const [formats, setFormats] = useState<FormatMap>(
     // A new tournament starts on each sport's international points system (D1).
-    initialSport ? { [initialSport]: withNewTournamentPoints(initialSport, defaultsFor(getSport(initialSport).formatFields ?? [], 'tournament')) } : {}
+    // SD-154: plus the creator's region units (a US swim meet starts in a 25-yard pool)
+    initialSport ? { [initialSport]: { ...withNewTournamentPoints(initialSport, defaultsFor(getSport(initialSport).formatFields ?? [], 'tournament')), ...regionFormatDefaults(initialSport, regionStore.get().units) } } : {}
   );
   // Per-sport settings live on their own screens via the shared draft — seed it
   // once with the initial defaults, and pull edits back when we return.
@@ -144,7 +153,7 @@ export default function CreateTournamentScreen() {
         return prev.filter((x) => x !== s);
       }
       const fields = getSport(s).formatFields ?? [];
-      const seeded = withNewTournamentPoints(s, fields.length ? defaultsFor(fields, 'tournament') : {});
+      const seeded = { ...withNewTournamentPoints(s, fields.length ? defaultsFor(fields, 'tournament') : {}), ...regionFormatDefaults(s, regionStore.get().units) };
       setFormats((f) => ({ ...f, [s]: seeded }));
       tournamentDraft.setFormat(s, seeded);
       return [...prev, s];
@@ -162,6 +171,15 @@ export default function CreateTournamentScreen() {
     try {
       const chosenOrg = hostChoice !== 'self' ? myOrgs.find((o) => o.id === hostChoice) : undefined;
       const finalFormats = { ...tournamentDraft.all() } as FormatMap;
+      // SD-153: a market with a school-year age cut-off (UK / British-curriculum
+      // Gulf: 31 Aug; US: 1 Sep) starts its meets on it — saved explicitly so the
+      // server's meet_ages() and every viewer agree. India: unchanged (31 Dec).
+      const cutoff = MARKETS[market].ageCutoff;
+      if (cutoff !== 'dec31') {
+        for (const sp of sports) {
+          if (AGE_CUTOFF_SPORTS.includes(sp) && !finalFormats[sp]?.ageOn) finalFormats[sp] = { ...(finalFormats[sp] ?? {}), ageOn: cutoff };
+        }
+      }
       const created = await createTournament({
         name: name.trim(),
         hostName: chosenOrg ? chosenOrg.name : (myName || profile?.fullName || 'Organiser'),
@@ -216,7 +234,7 @@ export default function CreateTournamentScreen() {
         <FieldLabel>Contested by</FieldLabel>
         <View style={st.chips}>
           {PARTICIPATION_OPTS.map((o) => (
-            <SelectChip key={o.key} label={o.label} active={participation === o.key} onPress={() => setParticipation(o.key)} />
+            <SelectChip key={o.key} label={o.key === 'inter_house' ? `🏠 ${term(market, 'interHouse')}` : o.label} active={participation === o.key} onPress={() => setParticipation(o.key)} />
           ))}
         </View>
         <Text style={st.hint}>{PARTICIPATION_OPTS.find((o) => o.key === participation)?.hint}</Text>
@@ -231,7 +249,7 @@ export default function CreateTournamentScreen() {
         />
 
         {/* Divisions (age × gender) — school meets run many at once. Optional. */}
-        <DivisionsEditor value={divisions} onChange={setDivisions} />
+        <DivisionsEditor value={divisions} onChange={setDivisions} market={market} />
 
 
         <View style={st.row}>

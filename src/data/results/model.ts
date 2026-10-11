@@ -92,6 +92,9 @@ export interface DisciplineDef {
   lifts?: ('snatch' | 'cj')[];
   /** SD-141: the competition rules of the phase it is raced in (phaseDiscipline) */
   rules?: CompRules;
+  /** SD-154: show and accept distance / height marks in feet and inches
+   *  (a US meet). Marks are always STORED in metres. */
+  displayUnits?: 'imperial';
 }
 
 export interface Category {
@@ -102,8 +105,9 @@ export interface Category {
   weightClass?: string;
   /** SD-94 swimming: the pool length — 'LCM' (50 m, long course) or 'SCM'
    *  (25 m, short course). Part of the key, so records and PBs are kept apart
-   *  per course (World Aquatics SW 12.1 / 12.2); not shown in the label. */
-  course?: 'LCM' | 'SCM';
+   *  per course (World Aquatics SW 12.1 / 12.2); not shown in the label.
+   *  SD-154: 'SCY' (25 yd, US) — its own records and PBs; labels read "yd". */
+  course?: 'LCM' | 'SCM' | 'SCY';
   /** SD-96 shooting: a shorter match than the event's standard (a 40-shot
    *  junior / school 10 m match). Part of the key — a 40-shot score and a
    *  60-shot score are separate records and PBs; shown in the label. */
@@ -572,6 +576,8 @@ export const DISCIPLINES: DisciplineDef[] = [
   vertical('pv', 'Pole vault'),
   // SD-94: the World Aquatics programme (SW 12.1 / 12.2) — 100 m IM is short course only.
   ...(['50', '100', '200', '400', '800', '1500'].map((d) => swim(`${d}free`, `${d} m freestyle`))),
+  // SD-154: the yards-only distances of a 25-yard pool (US school / college short course)
+  ...(['500', '1000', '1650'].map((d) => swim(`${d}free`, `${d} yd freestyle`))),
   ...(['back', 'breast', 'fly'] as const).flatMap((s) => ['50', '100', '200'].map((d) => swim(`${d}${s}`, `${d} m ${s === 'back' ? 'backstroke' : s === 'breast' ? 'breaststroke' : 'butterfly'}`))),
   swim('100im', '100 m individual medley'),
   swim('200im', '200 m individual medley'),
@@ -634,7 +640,7 @@ export const disciplineOf = (key: string): DisciplineDef | undefined => {
 };
 
 /** SD-94: the discipline as raced at this phase's venue (a 6- or 10-lane pool). */
-export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes' | 'combined' | 'rules'> | null): DisciplineDef => {
+export const phaseDiscipline = (def: DisciplineDef, f?: (Pick<PhaseFormat, 'lanes' | 'combined' | 'rules'> & { category?: Category }) | null): DisciplineDef => {
   // SD-93: in a combined event the horizontal jumps and throws have three trials only (TR 39.8, from memory)
   let d = f?.combined && def.attempts ? { ...def, attempts: { count: def.attempts.count } } : def;
   d = f?.lanes && d.lanes ? { ...d, lanes: f.lanes } : d;
@@ -643,6 +649,8 @@ export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes
     d = { ...d, rules: f.rules };
     if (f.rules.windLimit === 'none' && d.wind) d = { ...d, windLimit: Infinity };
   }
+  // SD-154: a 25-yard pool names its events in yards ("50 yd freestyle")
+  if (f?.category?.course === 'SCY' && d.sport === 'swimming') d = { ...d, label: d.label.replace(/(\d) m\b/g, '$1 yd') };
   return d;
 };
 

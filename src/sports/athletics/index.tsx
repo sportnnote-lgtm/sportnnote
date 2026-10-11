@@ -52,6 +52,17 @@ export const athleticsPlugin: SportPlugin<AthleticsMatchState> = {
     },
     { key: 'handTimed', label: 'Hand-timed meet', type: 'toggle', default: false, onCreate: true, hint: 'stopwatches and no wind gauge: hand times count for PBs and meet records (shown "h")' },
     { key: 'reaction', label: 'Reaction times', type: 'toggle', default: false, advanced: true, hint: 'a start-information system reads reaction times' },
+    // SD-154: feet and inches for jumps and throws (US meets) — stored in metres, records metric
+    {
+      key: 'fieldUnits', label: 'Field marks in', type: 'choice', default: 'auto', onCreate: true,
+      hint: 'jumps and throws are always stored in metres; this is how they are shown and typed',
+      options: [{ value: 'auto', label: 'Each viewer’s region' }, { value: 'metric', label: 'Metres' }, { value: 'imperial', label: 'Feet and inches' }],
+    },
+    {
+      key: 'distanceUnits', label: 'Road distances', type: 'choice', default: 'auto', advanced: true,
+      hint: 'road and cross-country distances: kilometres, or kilometres with miles alongside',
+      options: [{ value: 'auto', label: 'Each viewer’s region' }, { value: 'km', label: 'Kilometres' }, { value: 'mi', label: 'Kilometres + miles' }],
+    },
     // SD-130: who is the individual champion when two athletes have the same points
     {
       key: 'champTie', label: 'Champion tie-break', type: 'choice', default: 'medals', advanced: true,

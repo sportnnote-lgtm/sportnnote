@@ -43,6 +43,9 @@ import { CyclingEventSetup } from './CyclingEventSetup';
 import { RoadEventSetup } from './RoadEventSetup';
 import { CombinedEventSetup } from './CombinedEventSetup';
 import type { Player } from '../core/types';
+import { useTournamentMarket } from '../data/useMarket';
+import { MARKETS } from '../core/markets';
+import { bandRule } from '../core/divisions';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -92,6 +95,11 @@ function TrackSwimEventSetup() {
   const [age, setAge] = useState<string>(params?.age ?? (swim ? 'U12' : 'U14'));
   const [gender, setGender] = useState<'M' | 'F' | 'X'>(params?.gender ?? (swim ? 'F' : 'M'));
   const cat: Category = swim ? { age, gender, course } : { age, gender };
+  // SD-153: the meet's market adds its own bands ("12 & Under", "C Division",
+  // "Junior", "Grades 9–12") after the standard U-groups. India: none added.
+  const market = useTournamentMarket(tournament);
+  const marketBands = market === 'in' ? [] : MARKETS[market].ageBands.filter((b) => !(AGE_GROUPS as readonly string[]).includes(b));
+  const ageRule = (AGE_GROUPS as readonly string[]).includes(age) ? undefined : bandRule(age);
   const events = useMemo(() => (swim
     ? swimEventsFor({ age, gender }, course).map((e) => ({ ...e, optional: false }))
     : [
@@ -102,7 +110,8 @@ function TrackSwimEventSetup() {
     ]), [age, gender, swim, course]);
   const [discipline, setDiscipline] = useState(params?.discipline ?? (swim ? 'swim.50free' : 'ath.100m'));
   // SD-94: the pool's lane count (a 6- or 10-lane pool) shapes heats and lanes
-  const def = swim ? phaseDiscipline(disciplineOf(discipline)!, { lanes: sw.lanes }) : disciplineOf(discipline)!;
+  // SD-154: a 25-yard pool names its events in yards
+  const def = swim ? phaseDiscipline(disciplineOf(discipline)!, { lanes: sw.lanes, category: { course } }) : disciplineOf(discipline)!;
   const relay = !!def.teamSize;
   const field = isFieldDiscipline(def);
   const vertical = def.capture === 'heights';
@@ -181,7 +190,7 @@ function TrackSwimEventSetup() {
     if (!picks.length) useEntries();
   }, [entriesDoc, players.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const guestTeam = (pid: string) => { const h = entriesDoc?.athletes?.[pid]?.house ?? playerById.get(pid)?.houseName; const t = matchTeam(h, sources); return t ? { id: t.teamId, name: t.name, colorHex: t.colorHex } : h ? { name: h } : undefined; };
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();
@@ -287,7 +296,8 @@ function TrackSwimEventSetup() {
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Category</Text>
-          <View style={st.wrap}>{AGE_GROUPS.map((a) => <SelectChip key={a} label={a} active={age === a} onPress={() => setAge(a)} />)}</View>
+          <View style={st.wrap}>{[...AGE_GROUPS, ...marketBands].map((a) => <SelectChip key={a} label={a} active={age === a} onPress={() => setAge(a)} />)}</View>
+          {ageRule ? <Text style={textStyles.muted}>{age}: {ageRule}.</Text> : null}
           <View style={st.wrap}>
             <SelectChip label="Boys" active={gender === 'M'} onPress={() => setGender('M')} />
             <SelectChip label="Girls" active={gender === 'F'} onPress={() => setGender('F')} />
@@ -338,7 +348,7 @@ function TrackSwimEventSetup() {
               {!sources.length && <Text style={textStyles.muted}>No teams or houses yet — add the houses as teams in the tournament first.</Text>}
               {relays.map((r) => {
                 const open = openRelay === r.key;
-                const cands = r.source.playerIds.map((id) => playerById.get(id)).filter((p): p is Player => !!p && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })));
+                const cands = r.source.playerIds.map((id) => playerById.get(id)).filter((p): p is Player => !!p && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) })));
                 return (
                   <View key={r.key} style={st.relay}>
                     <TouchableOpacity accessibilityRole="button" onPress={() => setOpenRelay(open ? null : r.key)} style={st.relayHead}>

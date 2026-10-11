@@ -31,6 +31,8 @@ import { cyclingPlugin } from './cycling';
 import { handballPlugin } from './handball';
 import { STAT_SCHEMAS } from './statSchemas';
 import { MATCH_RECORD_HOOKS } from './matchRecordHooks';
+import { regionStore } from '../core/region';
+import { marketForCountry, sportDisplayName } from '../core/markets';
 
 export const SPORTS: Record<SportId, SportPlugin<any>> = {
   football: footballPlugin,
@@ -64,6 +66,17 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
 for (const id of Object.keys(SPORTS) as SportId[]) SPORTS[id].statSchema = STAT_SCHEMAS[id] as SportPlugin<any>['statSchema'];
 // SD-51: the per-match records hook (pure, in matchRecordHooks.ts).
 for (const id of Object.keys(SPORTS) as SportId[]) { const h = MATCH_RECORD_HOOKS[id]; if (h && !SPORTS[id].matchRecords) SPORTS[id].matchRecords = h; }
+
+// SD-153: display names by the viewer's market — "Soccer" and "Field hockey" in
+// the US (where football / hockey mean American football / ice hockey). Ids
+// never change; only `name` is read through the viewer's region.
+for (const id of ['football', 'hockey'] as SportId[]) {
+  const standard = SPORTS[id].name;
+  Object.defineProperty(SPORTS[id], 'name', {
+    get: () => sportDisplayName(id, standard, marketForCountry(regionStore.get().country)),
+    enumerable: true, configurable: true,
+  });
+}
 
 export const SPORT_LIST = Object.values(SPORTS);
 

@@ -8,7 +8,8 @@
  */
 import { formatMark } from './marks.ts';
 import { categoryLabel, type DisciplineDef, type PhaseFormat, type RankedEntry, type ResultEntry, type ResultFlag } from './model.ts';
-import { SESSION_LABEL, hhmm, dayKey, dayLabel, type TimetableDay, type TimetableItem } from './timetable.ts';
+import { SESSION_LABEL, hhmm, dayKey, dayLabel, meetZone, type TimetableDay, type TimetableItem } from './timetable.ts';
+import { zoneShortName } from '../../core/time.ts';
 
 export interface MeetHeader {
   /** the meet / tournament name */
@@ -69,7 +70,9 @@ export function meetHeaderHtml(h: MeetHeader): string {
 /** A whole printable document: one or more sheets, each under the meet header. */
 export function sheetDoc(o: { title: string; header: MeetHeader; sheets: string[]; landscape?: boolean; printedAt?: Date; toolbar?: boolean }): string {
   const at = o.printedAt ?? new Date();
-  const foot = `<footer>Printed ${esc(at.toDateString())} ${esc(hhmm(at))} · SportnNote</footer>`;
+  // SD-154: the print time in the meet's zone, named ("Thu 12 Nov 2026 09:05 GST")
+  const z = meetZone();
+  const foot = `<footer>Printed ${esc(dayLabel(dayKey(at)))} ${esc(dayKey(at).slice(0, 4))} ${esc(hhmm(at))}${z ? ` ${esc(zoneShortName(z, at))}` : ''} · SportnNote</footer>`;
   const body = o.sheets.map((s) => `<section class="sheet page">${meetHeaderHtml(o.header)}${s}${foot}</section>`).join('');
   const bar = o.toolbar === false ? '' : `<div class="bar"><button onclick="window.print()">🖨 Print / Save as PDF</button><span>${esc(o.title)}</span></div>`;
   const land = o.landscape ? '<style>@page { size: A4 landscape; }</style>' : '';
@@ -93,7 +96,7 @@ export interface PhaseInfoForPrint {
 }
 
 const teamCell = (t?: { name: string; colorHex?: string }) => (t ? `${t.colorHex && /^#[0-9a-f]{3,8}$/i.test(t.colorHex) ? `<span class="dot" style="background:${t.colorHex}"></span>` : ''}${esc(t.name)}` : '');
-const whenLine = (p: PhaseInfoForPrint) => [categoryLabel(p.format?.category), p.at ? `${dayLabel(dayKey(p.at))} ${new Date(p.at).getFullYear()} ${hhmm(p.at)}` : '', p.area, p.format?.implement ? `Implement ${p.format.implement}` : '', p.format?.board ? `Board ${p.format.board} m` : ''].filter(Boolean).map(esc).join(' · ');
+const whenLine = (p: PhaseInfoForPrint) => [categoryLabel(p.format?.category), p.at ? `${dayLabel(dayKey(p.at))} ${dayKey(p.at).slice(0, 4)} ${hhmm(p.at)}` : '', p.area, p.format?.implement ? `Implement ${p.format.implement}` : '', p.format?.board ? `Board ${p.format.board} m` : ''].filter(Boolean).map(esc).join(' · ');
 const byHeat = (entries: ResultEntry[]) => {
   const m = new Map<number, ResultEntry[]>();
   for (const e of entries) m.set(e.heat, [...(m.get(e.heat) ?? []), e]);
@@ -200,5 +203,8 @@ export function timetableSheet(days: TimetableDay[], o: { unscheduled?: Timetabl
     s.items.map((i) => `<tr><td class="num">${esc(hhmm(i.at))}</td><td>${esc(i.eventTitle)}</td><td>${esc(i.roundLabel)}${i.heats > 1 ? ` <span class="note">(${i.heats})</span>` : ''}</td><td>${esc(i.area ?? '')}</td></tr>`).join('')
   }</tbody></table>`).join('')}`).join('');
   const un = o.unscheduled?.length ? `<h2>Time to be announced</h2><table><tbody>${o.unscheduled.map((i) => `<tr><td>${esc(i.eventTitle)}</td><td>${esc(i.roundLabel)}</td></tr>`).join('')}</tbody></table>` : '';
-  return `<h1>Timetable</h1>${dayHtml || '<p class="note">Nothing is scheduled yet.</p>'}${un}`;
+  // SD-154: whose clock the times are on (the venue's zone)
+  const z = meetZone();
+  const zoneLine = z && dayHtml ? `<div class="sub">Times are ${esc(zoneShortName(z))} (${esc(z.replace(/_/g, ' '))}), the venue's local time.</div>` : '';
+  return `<h1>Timetable</h1>${zoneLine}${dayHtml || '<p class="note">Nothing is scheduled yet.</p>'}${un}`;
 }

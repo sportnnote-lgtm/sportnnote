@@ -357,6 +357,54 @@ Support hours: ${SUPPORT_HOURS}. ${SUPPORT_REPLY}
 
 Mention the match or tournament name and what you tapped — that saves a back-and-forth.`,
   },
+  // SD-154 (international I-2b)
+  {
+    id: 'weekly-term-fixtures',
+    title: 'Schedule a league one round a week across a term',
+    category: 'Tournaments',
+    summary: 'Auto-generate fixtures → "Weekly across a term": match day(s), kickoff time, term dates and holidays to skip.',
+    keywords: ['weekly', 'term', 'half-term', 'holiday', 'school league', 'wednesday', 'season', 'schedule'],
+    body: `Open the tournament → Manage → Auto-generate fixtures, pick the teams, then under "When are the matches?" tap "Weekly across a term".
+
+- Pick the match day(s): one round is played on each.
+- Type the kickoff time (venue time), the term start and end.
+- List holidays under "No matches on" (one per line, ranges like 26/10/2026 - 30/10/2026 work).
+- The preview lists each round's date and warns if the term is too short.`,
+  },
+  {
+    id: 'feeder-tournaments',
+    title: 'Qualify teams from one tournament into another',
+    category: 'Tournaments',
+    summary: 'On the qualifying round: Manage → "Qualifies to another tournament". The next round adds its qualifiers in one tap.',
+    keywords: ['qualify', 'qualifier', 'county', 'zonal', 'national', 'state playoffs', 'feeder', 'next round', 'conference'],
+    body: `Each stage of a competition is its own tournament. On the qualifying round, open Manage → "Qualifies to another tournament" → Set up, pick the next-round tournament and how many go through (top N of each group, or overall / final places).
+
+In the next round, Manage → Participating teams shows a Qualifiers card: tap "Add N qualifiers". They show "Qualified from …".`,
+  },
+  {
+    id: 'import-roster',
+    title: 'Import students or a squad from a CSV',
+    category: 'Teams & players',
+    summary: 'School: Members → 📥 Import CSV. Team: Squad → 📥 Import squad from CSV. Check the preview, then import.',
+    keywords: ['csv', 'import', 'roster', 'class list', 'sims', 'arbor', 'isams', 'powerschool', 'spreadsheet', 'excel', 'bulk'],
+    body: `Export the list from your school system or spreadsheet as CSV, then paste it or pick the file (web).
+
+- Columns in any order: Name, Date of birth, Gender, Class/Year, House, Team, Jersey, Guardian name, Guardian email, Guardian phone.
+- The preview shows new people, duplicates (skipped) and rows that can't be read.
+- Contact details are the guardian's and stay private — a child never gets their own phone or email from an import.`,
+  },
+  {
+    id: 'us-units',
+    title: 'Yards pools, feet and inches, pounds and miles',
+    category: 'Tournaments',
+    summary: 'Swimming: Pool → 25 yd. Athletics: "Field marks in" → Feet and inches. Everything is stored metric.',
+    keywords: ['yards', 'scy', 'feet', 'inches', 'imperial', 'pounds', 'lb', 'miles', 'us', 'usa', 'units'],
+    body: `- Swimming: set Pool to "25 yd (short course yards, US)". Yards events (500 / 1000 / 1650 yd free), records and PBs are kept apart from metres — nothing is converted.
+- Athletics: Manage → Athletics — points & timing → "Field marks in" → Feet and inches. Type 16-09.25 or 16' 9¼"; stored and ranked in metres, records stay metric.
+- Weightlifting: "Weights shown in" → Kilograms + pounds (kg still counts).
+- Road races: "Road distances" → Kilometres + miles.
+- Team levels (Varsity, JV, A, B): Edit team → Level.`,
+  },
 ];
 
 /** Split a string into lowercase word tokens for matching. */

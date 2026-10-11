@@ -29,6 +29,7 @@ Kickoff times only help if they're on your clock. SportnNote starts in your phon
 - **Clock**: 24-hour (16:30) or 12-hour (4:30 pm) times on cards, Live and fixture lists.
 - **Week starts on**: the first column of the calendar and the date picker.
 - **School year starts**: the first academic year a school or college community starts with. A school year inside one calendar year (January start) is labelled "2026", not "2026–27".
+- **Sport names and a few words**: in the US, football shows as Soccer, hockey as Field hockey, and "fixtures" as "schedule". Scores and stats are the same sport everywhere.
 - **Units**: for display only. Results are always stored in metres and kilograms, so records stay comparable.
 
 ## Tournament time zones
@@ -41,6 +42,9 @@ When a tournament has a time zone:
 - On the tournament page, match times show in the venue's zone with its name, like "Sat, 4:00 pm GST", whenever that isn't your own zone.
 
 > **Note:** An older tournament with no time zone shows times in each viewer's own zone, as before. Pick one in **Edit tournament** to fix it to the venue.
+
+## Schools have their own school system
+Your region also picks the **School system** a new school starts with: class names, the graduating class, age groups and the age cut-off. It is saved on the school, so everyone sees the same, and you can change it under **✎ Edit**. See [Set up a school, its classes and graduation](/guides/set-up-a-school-and-graduation/).
 
 ## Common questions
 ### I'm in India. Will anything change for me?

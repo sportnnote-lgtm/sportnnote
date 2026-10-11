@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-12 — International I-2: market presets (SD-153), units + venue time + competition structures + roster import (SD-154)
+- **Market presets (SD-153):** `organizations.market` — India (unchanged default), Gulf-Indian, Gulf-British, UK, Singapore, Malaysia, Australia, US. New schools choose the school system and graduating class (prefilled); graduation matches by class (Class X = Grade 10 = 10th), class ladders never invent "Year 14"; Promote year warns when the graduating class is unset. Age cut-offs per market (UK / Gulf-British 31 Aug, US 1 Sep, else 31 Dec) in app + `meet_age_cutoff`; US grade eligibility; age bands beyond U-labels ("12 & Under", "10–12 years", SG A/B/C Divisions, UK Junior/Inter/Senior, grade bands); small terminology map; US display names Soccer / Field hockey / Intramural (ids unchanged; american_football + ice_hockey reserved). A tournament's market comes from its host, never the viewer.
+- **Units (SD-154):** swimming in 25-yard pools (SCY programme incl. 500/1000/1650 yd, separate records/PBs and ranges; US tournaments default to yards); field marks in feet and inches (stored in metres); weightlifting kg + lb display; road km + miles on setup chips.
+- **Venue time:** meet timetable, print sheets, results dates, the live-screen time edit and default kickoffs all follow the tournament / meet time zone.
+- **Structures:** team levels (A/B/C, Varsity/JV…) shown after team names; weekly fixtures across a term (weekdays, term dates, holidays skipped); feeder tournaments ("Qualifies to another tournament", "Add N qualifiers", 🎟 Qualified from X).
+- **CSV roster import:** schools and squads — header detection, region date order, E.164 guardian phones, duplicate checks, preview, contacts only on the guardian.
+- **Migrations:** `20261020160000_market_presets.sql` (run live), `20261021120000_team_levels_feeders.sql` (to run).
+- **Verified:** sd153 (25), sd154 (29); suite green; tsc clean; PGlite marketpresets 21, levelsfeeders 19 + earlier scripts; demos on static exports. Guides: set-up-a-school-and-graduation, swim-meet-in-yards, field-marks-in-feet-and-inches, weekly-fixtures-across-a-term, feeder-tournaments, import-a-roster; updated region, age groups, swim meet, timetable.
+
+---
+
 ### 2026-10-12 — International I-0 + I-1: minors' data, phone identity, region + time zones, links + copy + sharing + voice, consent + rights; native speech (SD-148..152)
 - **Minors' data (SD-148):** server-side privacy — logged-out reads see known adults only (others as initials + jersey/sports/house); signed-in non-circle viewers get a reduced card (no photo/city/school/bio); the "circle" (team, tournament, match, org, guardian) sees the full card; following a possible minor limited to the circle; minors' profiles readable by owner + support only; new private `player-photos` bucket with signed URLs; alert senders skip disallowed follows.
 - **Phone identity (SD-149):** full E.164 everywhere (`phone_key()`, phone-login, verify-phone-firebase, send/verify-contact-otp) — closes the last-10-digit cross-country takeover; one PhoneField with country chip (15 fields); 8-digit SG/QA numbers work; verify-contact-otp only verifies the number/email the code went to. `phone_review` lists numbers the backfill couldn't convert.

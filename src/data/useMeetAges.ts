@@ -8,7 +8,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ageCutoff, meetAgeOf, type AgeBasis } from '../core/age';
 import { getMeetAges } from './resultsStore';
-import type { Player, Tournament } from '../core/types';
+import { getOrganization } from './repos';
+import { standardAt } from '../core/org';
+import type { Organization, Player, Tournament } from '../core/types';
 
 export function meetAgeBasis(tournament: Tournament | null | undefined, sport: string): AgeBasis {
   const v = (tournament?.formats?.[sport as never] as Record<string, unknown> | undefined)?.ageOn;
@@ -30,5 +32,18 @@ export function useMeetAges(tournament: Tournament | null | undefined, sport: st
     return () => { on = false; };
   }, [tournament?.id, sport, missing, cutoff]);
   const ageFor = (p: Pick<Player, 'id' | 'dob' | 'age'>) => meetAgeOf(p, cutoff, server);
-  return { basis, cutoff, ageFor, setBasis };
+  // SD-153: grade bands ("Grades 9–12") read each student's class on the meet's
+  // first day from the host school's class timeline.
+  const [hostOrg, setHostOrg] = useState<Organization | null>(null);
+  const hostOrgId = tournament?.hostOrgId;
+  useEffect(() => {
+    let on = true;
+    if (!hostOrgId) { setHostOrg(null); return; }
+    void getOrganization(hostOrgId).then((o) => { if (on) setHostOrg(o); }).catch(() => {});
+    return () => { on = false; };
+  }, [hostOrgId]);
+  const meetDay = tournament?.startDate?.slice(0, 10);
+  const gradeFor = (p: Pick<Player, 'id'>): string | undefined =>
+    standardAt(hostOrg?.members.find((m) => m.playerId === p.id), meetDay);
+  return { basis, cutoff, ageFor, gradeFor, setBasis };
 }

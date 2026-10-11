@@ -8,6 +8,7 @@
  *     automatically (+1 kg after a good lift, the same after a no lift);
  *   - LiftGrid: one lifter's 3 + 3 attempts, tap a cell to correct it.
  *  Pure rules live in data/results/weightlifting.ts. */
+import { formatLb } from '../../core/units';
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
@@ -137,7 +138,7 @@ function WeighInRow({ e, classes, weightClass, editable, onSave }: { e: ResultEn
 
 /* ----------------------------- next attempt ----------------------------- */
 
-export function NextLiftCard({ entries, seq, onSave, rules }: { entries: ResultEntry[]; seq: number; onSave: Save; /** SD-141: the meet's lifting rules */ rules?: CompRules }) {
+export function NextLiftCard({ entries, seq, onSave, rules, lb }: { entries: ResultEntry[]; seq: number; onSave: Save; /** SD-141: the meet's lifting rules */ rules?: CompRules; /** SD-154: show pounds alongside kg */ lb?: boolean }) {
   const lift = activeLift(entries);
   const order = useMemo(() => (lift ? liftingOrder(entries, lift, rules) : []), [entries, lift, rules]);
   const cur = order[0];
@@ -183,6 +184,7 @@ export function NextLiftCard({ entries, seq, onSave, rules }: { entries: ResultE
         <Text style={[textStyles.muted, { flex: 1, textAlign: 'right' }]} numberOfLines={1}>lot {r.order ?? '–'}{e.team?.name ? ` · ${e.team.name}` : ''}{r.bodyweight != null ? ` · bw ${fmtKg(r.bodyweight)}` : ''}</Text>
       </View>
       <Text style={st.upName} accessibilityRole="header">Next: {callText(cur)}</Text>
+      {lb && cur.kg != null ? <Text style={textStyles.muted}>{formatLb(cur.kg)} (kg counts)</Text> : null}
       {cur.kg == null ? (
         <View style={st.headRow}>
           <TextInput style={[st.input, { width: 90 }]} value={kg} onChangeText={setKg} placeholder="kg" placeholderTextColor={theme.colors.textMuted} keyboardType="number-pad" accessibilityLabel={`Declare ${first}'s weight`} onSubmitEditing={() => void changeWeight()} />
@@ -235,7 +237,7 @@ export function NextLiftCard({ entries, seq, onSave, rules }: { entries: ResultE
 /* ------------------------------ attempt grid ----------------------------- */
 
 /** One lifter's attempts: Sn / C&J rows, tap a cell to correct it. */
-export function LiftGrid({ r, editable, onChange, rules }: { r: EntryResult; editable: boolean; onChange: (next: EntryResult) => void; /** SD-141 */ rules?: CompRules }) {
+export function LiftGrid({ r, editable, onChange, rules, lb }: { r: EntryResult; editable: boolean; onChange: (next: EntryResult) => void; /** SD-141 */ rules?: CompRules; /** SD-154: pounds alongside kg */ lb?: boolean }) {
   const [sel, setSel] = useState<{ lift: Lift; i: number } | null>(null);
   const [kg, setKg] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -295,7 +297,7 @@ export function LiftGrid({ r, editable, onChange, rules }: { r: EntryResult; edi
         </View>
       ))}
       <Text style={[textStyles.muted, bomb && st.bad]}>
-        {r.bodyweight != null ? `Bw ${fmtKg(r.bodyweight)} · ` : ''}Total {s.total != null ? `${s.total} kg` : bomb ? `— no total (no good ${bomb === 'snatch' ? 'snatch' : 'clean & jerk'})` : '—'}
+        {r.bodyweight != null ? `Bw ${fmtKg(r.bodyweight)} · ` : ''}Total {s.total != null ? `${s.total} kg${lb ? ` (${formatLb(s.total)})` : ''}` : bomb ? `— no total (no good ${bomb === 'snatch' ? 'snatch' : 'clean & jerk'})` : '—'}
       </Text>
       {sel && (
         <View style={st.editor}>

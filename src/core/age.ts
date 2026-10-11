@@ -36,17 +36,36 @@ export function ageOn(dob: string | undefined, on: string): number | undefined {
 /**
  * SD-130: which day a meet's age groups are counted on. World Athletics U18 /
  * U20 and World Aquatics use the age on 31 December of the competition year;
- * school boards (SGFI, CBSE …) publish their own cut-off date. Stored on the
+ * school associations often publish their own cut-off date. Stored on the
  * tournament's sport format as `ageOn`: 'dec31' (default) | 'jan1' | 'meet'
- * (the meet's first day) | 'today' | a YYYY-MM-DD cut-off.
+ * (the meet's first day) | 'today' | a YYYY-MM-DD cut-off | SD-153 recurring
+ * school-year dates: 'aug31' (England & Wales / British-curriculum schools:
+ * 31 August at the start of the school year — a June 2027 meet counts on
+ * 31 Aug 2026) and 'sep1' (1 September at the start of the school year).
  */
-export type AgeBasis = 'dec31' | 'jan1' | 'meet' | 'today' | string;
+export type AgeBasis = 'dec31' | 'jan1' | 'meet' | 'today' | 'aug31' | 'sep1' | string;
 
 export const AGE_BASIS_OPTIONS: { value: AgeBasis; label: string }[] = [
   { value: 'dec31', label: '31 Dec of the meet year (World Athletics)' },
   { value: 'jan1', label: '1 Jan of the meet year' },
   { value: 'meet', label: 'The meet’s first day' },
 ];
+
+/** SD-153: the recurring school-year cut-offs (the most recent such day on or
+ *  before the meet). Both are the 1st or last day of a month (privacy rule). */
+export const SCHOOL_YEAR_BASES: { value: AgeBasis; label: string; monthDay: string }[] = [
+  { value: 'aug31', label: '31 Aug, start of the school year', monthDay: '08-31' },
+  { value: 'sep1', label: '1 Sep, start of the school year', monthDay: '09-01' },
+];
+
+/** The cut-off choices for a market's default (core/markets.ts ageCutoff): the
+ *  standard three, plus the market's school-year date first when it has one
+ *  (UK / British-curriculum Gulf: 31 Aug; US: 1 Sep), and the meet's current
+ *  basis if it is a school-year one. India: exactly the standard three. */
+export function ageBasisOptions(marketCutoff?: string, current?: AgeBasis): { value: AgeBasis; label: string }[] {
+  const extra = SCHOOL_YEAR_BASES.filter((b) => b.value === marketCutoff || b.value === current);
+  return [...extra.map(({ value, label }) => ({ value, label })), ...AGE_BASIS_OPTIONS];
+}
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -69,6 +88,8 @@ export function ageCutoff(basis: AgeBasis | undefined, meetStart?: string, today
   const b = basis ?? 'dec31';
   if (/^\d{4}-\d{2}-\d{2}$/.test(b) && isBoardCutoff(b)) return b;
   if (b === 'jan1') return `${year}-01-01`;
+  const sy = SCHOOL_YEAR_BASES.find((x) => x.value === b);
+  if (sy) return start.slice(5) >= sy.monthDay ? `${year}-${sy.monthDay}` : `${Number(year) - 1}-${sy.monthDay}`;
   if (b === 'meet') return start;
   if (b === 'today') return iso(today);
   return `${year}-12-31`;

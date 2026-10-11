@@ -10,6 +10,8 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { EmptyState, Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
+import { eventZone, useUserTimeZone } from '../core/time';
+import { defaultKickoff } from '../data/fixtureSchedule';
 import { DateTimeField } from '../components/DateTimeField';
 import { SportFormatEditor, defaultsFor, type FormatVal } from '../components/FormatEditor';
 import { VenueField } from '../components/VenueField';
@@ -67,13 +69,11 @@ export default function ScheduleMatchScreen() {
   const [home, setHome] = useState<string | null>(null);
   const [away, setAway] = useState<string | null>(null);
 
-  const [when, setWhen] = useState(() => {
-    const d = new Date();
-    if (!route.params?.tournamentId) return d; // friendly → kicks off now
-    d.setDate(d.getDate() + 1);
-    d.setHours(14, 0, 0, 0);
-    return d;
-  });
+  // SD-154: a tournament match defaults to tomorrow 14:00 in the TOURNAMENT's zone
+  // (its venue zone, else the app zone) — not the phone clock; a friendly kicks off now
+  const appZone = useUserTimeZone();
+  const [when, setWhen] = useState(() => (route.params?.tournamentId ? new Date(defaultKickoff(appZone, { time: '14:00' })) : new Date()));
+  const whenTouched = useRef(false);
   const [venue, setVenue] = useState('');
   const [venueUrl, setVenueUrl] = useState('');
   const [stream, setStream] = useState('');
@@ -125,6 +125,11 @@ export default function ScheduleMatchScreen() {
   const { matches: allMatches } = useMatches('all');
   // The tournament's own grounds lead the chips (parity #09).
   const tournament = useTournamentById(tournamentId);
+  // SD-154: once the tournament (and its venue zone) loads, re-seed the default kickoff in it
+  useEffect(() => {
+    if (!tournament?.timeZone || whenTouched.current || cloneOf) return;
+    setWhen(new Date(defaultKickoff(eventZone(tournament, appZone), { time: '14:00' })));
+  }, [tournament?.timeZone]); // eslint-disable-line react-hooks/exhaustive-deps
   const knownVenues = useMemo(
     () => venueOptions(tournament?.grounds, knownVenueNames(tournamentId ? allMatches.filter((mm) => mm.tournamentId === tournamentId) : allMatches)),
     [allMatches, tournamentId, tournament?.grounds]
@@ -445,7 +450,7 @@ export default function ScheduleMatchScreen() {
               </>
             )}
 
-            <DateTimeField label="Kickoff" value={when} onChange={setWhen} timeZone={tournament?.timeZone} />
+            <DateTimeField label="Kickoff" value={when} onChange={(d) => { whenTouched.current = true; setWhen(d); }} timeZone={tournament?.timeZone} />
 
             {/* Phase tag — only for tournament matches. Lets an organizer place a
                 match precisely: a group game, or a specific knockout tie that then

@@ -19,7 +19,7 @@ import { eventAwards, type Award, type FieldResultInput, type PointsConfig } fro
 import type { PlannedPhase } from './plan.ts';
 import { fieldRoundPresets } from './field.ts';
 import { phaseLabel } from './plan.ts';
-import { swimRoundPresets, courseShort, timedFinalPlan, SWIM_ORDER, swimMeetSettings } from './swimming.ts';
+import { swimRoundPresets, courseShort, swimLabel, timedFinalPlan, SWIM_ORDER, swimMeetSettings } from './swimming.ts';
 import { liftAwards, recordDefsFor, wlMeetSettings } from './weightlifting.ts';
 import { shootMeetSettings } from './shooting.ts';
 import { archMeetSettings, phaseNameOf } from './archery.ts';
@@ -28,6 +28,7 @@ import { cycMeetSettings } from './cycling.ts';
 import { roadMarkKey, roadKeyDiscipline, roadEventOf, roadRecordsAllowed, phaseTeams, teamAwards } from './road.ts';
 import { combinedStandings, combinedAwards, combinedDone, combinedRanked } from './combined.ts';
 import { isCombinedKey } from './combinedDefs.ts';
+import { ageBandOf, fitsBand } from '../../core/divisions.ts';
 
 /* ------------------------------ meet settings ----------------------------- */
 
@@ -64,21 +65,29 @@ export const GENDERS: { key: 'M' | 'F' | 'X'; label: string }[] = [
   { key: 'M', label: 'Boys / Men' }, { key: 'F', label: 'Girls / Women' }, { key: 'X', label: 'Mixed' },
 ];
 
-/** The upper age of a group (U14 → 14), or undefined for Open. */
+/** The upper age of a group (U14 → 14), or undefined for Open. SD-153: any
+ *  band with a top age counts too — "12 & Under" → 13, "C Division" → 15
+ *  (the first age that no longer fits). */
 export const ageLimit = (age?: string): number | undefined => {
   const m = /^U(\d+)$/i.exec(age ?? '');
-  return m ? Number(m[1]) : undefined;
+  if (m) return Number(m[1]);
+  const b = ageBandOf(age);
+  return b.maxAge != null ? b.maxAge + 1 : undefined;
 };
 
 /** Is a player eligible for a category? Unknown gender / age never excludes
- *  (the organiser checks); a known mismatch does. Age = years at the meet. */
-export function eligibleFor(cat: Category, p: { gender?: string; age?: number }): boolean {
+ *  (the organiser checks); a known mismatch does. Age = years at the meet.
+ *  SD-153: also bands with a minimum age ("10–12 years", ESAA "Inter") and
+ *  grade bands ("Grades 9–12", checked against `grade` — the student's class on
+ *  the meet day from the school's class timeline, when known). */
+export function eligibleFor(cat: Category, p: { gender?: string; age?: number; grade?: string }): boolean {
   const g = (p.gender ?? '').trim().toLowerCase();
   const male = /^(m|male|man|boy)/.test(g), female = /^(f|female|woman|girl)/.test(g);
   if (cat.gender === 'M' && female) return false;
   if (cat.gender === 'F' && male) return false;
   const lim = ageLimit(cat.age);
   if (lim != null && p.age != null && p.age >= lim) return false;
+  if (!fitsBand(ageBandOf(cat.age), p)) return false;
   return true;
 }
 
@@ -88,7 +97,17 @@ export type TrackGroup = 'sprint' | 'distance' | 'hurdles' | 'relay';
 export interface ProgrammeItem { discipline: string; label: string; group: TrackGroup }
 
 const item = (key: string, group: TrackGroup): ProgrammeItem => ({ discipline: `ath.${key}`, label: disciplineOf(`ath.${key}`)!.label, group });
-const ageRank = (age?: string) => Math.max(0, AGE_GROUPS.indexOf((age ?? 'Open') as AgeGroup));
+const ageRank = (age?: string) => {
+  const i = AGE_GROUPS.indexOf((age ?? 'Open') as AgeGroup);
+  if (i >= 0) return i;
+  // SD-153: a market band ("12 & Under", "C Division", "Grades 6–8") runs the
+  // programme of the nearest U-group that covers its oldest athlete.
+  const b = ageBandOf(age);
+  const top = b.maxAge ?? (b.maxGrade != null ? b.maxGrade + 6 : undefined);
+  if (top == null) return AGE_GROUPS.length - 1; // Open
+  const j = AGE_GROUPS.findIndex((a) => { const m = /^U(\d+)$/.exec(a); return !!m && Number(m[1]) > top; });
+  return j >= 0 ? j : AGE_GROUPS.length - 1;
+};
 
 /**
  * The D9 school-meet track events offered for a category: 100 / 200 m for
@@ -373,14 +392,15 @@ export function resultsText(title: string, rows: SheetRow[], final: boolean, lin
 /** The stat-line key for an athlete's legal mark in a discipline ('ath.100m' →
  *  'm_100m'). SD-94 swimming keeps the pool length in the key — long and short
  *  course are separate PBs / records: 'swim.50free' + LCM → 'm_sw_50free_lc'. */
-export const markKey = (discipline: string, course?: 'LCM' | 'SCM') =>
+export const markKey = (discipline: string, course?: 'LCM' | 'SCM' | 'SCY') =>
   // SD-92: road / walk keep the distance in the key ('m_road_10000', 'm_walk_t3000')
-  (roadEventOf(discipline) ? roadMarkKey(discipline) : /^swim\./.test(discipline) ? `m_sw_${discipline.slice(5)}_${course === 'SCM' ? 'sc' : 'lc'}` : `m_${discipline.replace(/^ath\./, '')}`);
+  (roadEventOf(discipline) ? roadMarkKey(discipline) : /^swim\./.test(discipline) ? `m_sw_${discipline.slice(5)}_${course === 'SCM' ? 'sc' : course === 'SCY' ? 'yd' : 'lc'}` : `m_${discipline.replace(/^ath\./, '')}`);
 
 /** The discipline + course a mark key came from ('m_sw_50free_sc' → swim.50free, SCM). */
-export function markKeyDiscipline(key: string): { discipline: string; course?: 'LCM' | 'SCM' } {
-  const m = /^m_sw_(.+)_(lc|sc)$/.exec(key);
-  if (m) return { discipline: `swim.${m[1]}`, course: m[2] === 'sc' ? 'SCM' : 'LCM' };
+export function markKeyDiscipline(key: string): { discipline: string; course?: 'LCM' | 'SCM' | 'SCY' } {
+  // SD-154: '_yd' = a 25-yard pool (SCY)
+  const m = /^m_sw_(.+)_(lc|sc|yd)$/.exec(key);
+  if (m) return { discipline: `swim.${m[1]}`, course: m[2] === 'sc' ? 'SCM' : m[2] === 'yd' ? 'SCY' : 'LCM' };
   const road = roadKeyDiscipline(key);
   if (road) return { discipline: road };
   return { discipline: `ath.${key.slice(2)}` };
@@ -506,7 +526,7 @@ export function athleticsCareer(
       };
       const prev = pbSoFar.get(bk);
       if (prev == null || betterMark(v, prev, def)) { if (prev != null) flags.push('PB'); pbSoFar.set(bk, v); }
-      const label = swim ? `${def.label} (${courseShort(course)})` : implement ? `${def.label} (${implement})` : (hurdles || throwKey || ce) && best.category ? `${def.label} (${best.category})` : def.label;
+      const label = swim ? `${swimLabel(def.label, course)} (${courseShort(course)})` : implement ? `${def.label} (${implement})` : (hurdles || throwKey || ce) && best.category ? `${def.label} (${best.category})` : def.label;
       const row = bests.get(bk) ?? { key: bk, label, pb: best };
       if (betterMark(v, row.pb.value, def)) row.pb = best;
       if (day >= seasonFrom && (!row.sb || betterMark(v, row.sb.value, def))) row.sb = best;

@@ -3,6 +3,7 @@
  * stat-line log. Works for any single sport, so a single-sport tournament just
  * shows that sport's table and leaders. Pure functions.
  */
+import { teamLabel } from '../core/teamLevels.ts';
 import type { Match, Player, SportId, StatLine } from '../core/types';
 import { isGoalkeeper } from '../sports/football/keepers.ts';
 import { STAT_SPORTS, leaderCategories, eligibilityOf, statSchema } from '../sports/statSchemas.ts';
@@ -821,7 +822,7 @@ function unitNeeds(cfg: StandingsConfig) {
  *  and SB (counted in `forfeitWins` / `forfeitLosses`). */
 export function teamStandings(
   matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport), phaseKey?: string,
-  teams?: { id: string; name: string; colorHex?: string }[],
+  teams?: { id: string; name: string; colorHex?: string; level?: string }[],
 ): TeamStanding[] {
   // SD-48: a team tie counts ONCE (its rubbers collapse into one fixture whose
   // score is rubbers won), so group tables rank ties, not rubbers.
@@ -840,8 +841,8 @@ export function teamStandings(
   const resultOf = (pts: number): GameRecord['result'] => (pts >= cfg.win ? 'win' : pts > cfg.loss ? 'draw' : 'loss');
   const played = matches.filter((m) => m.sport === sport && m.status === 'completed' && (!!m.winner || isNoResultMatch(m)));
   for (const m of played) {
-    const h = ensure(m.homeTeam.id, m.homeTeam.name, m.homeTeam.colorHex);
-    const a = ensure(m.awayTeam.id, m.awayTeam.name, m.awayTeam.colorHex);
+    const h = ensure(m.homeTeam.id, teamLabel(m.homeTeam), m.homeTeam.colorHex);
+    const a = ensure(m.awayTeam.id, teamLabel(m.awayTeam), m.awayTeam.colorHex);
     const rnd = swissRoundOf(m.stage);
     const base = { matchId: m.id, stage: m.stage, ...(rnd ? { round: rnd } : {}) };
     // No result / abandoned: played and the NR points, but nothing towards
@@ -922,11 +923,11 @@ export function teamStandings(
   // fixture of that round — and never to someone who also has a game in it.
   if (byePts !== undefined) {
     const names = new Map<string, { name: string; colorHex?: string }>();
-    for (const t of teams ?? []) names.set(t.id, { name: t.name, colorHex: t.colorHex });
+    for (const t of teams ?? []) names.set(t.id, { name: teamLabel(t), colorHex: t.colorHex });
     for (const m of matches) {
       if (m.sport !== sport) continue;
-      names.set(m.homeTeam.id, { name: m.homeTeam.name, colorHex: m.homeTeam.colorHex });
-      names.set(m.awayTeam.id, { name: m.awayTeam.name, colorHex: m.awayTeam.colorHex });
+      names.set(m.homeTeam.id, { name: teamLabel(m.homeTeam), colorHex: m.homeTeam.colorHex });
+      names.set(m.awayTeam.id, { name: teamLabel(m.awayTeam), colorHex: m.awayTeam.colorHex });
     }
     const swiss = matches.filter((m) => m.sport === sport && m.status !== 'cancelled' && typeof m.stage === 'string' && m.stage.startsWith('swiss'));
     const inRound = new Set(swiss.flatMap((m) => [`${m.stage}|${m.homeTeam.id}`, `${m.stage}|${m.awayTeam.id}`]));
@@ -953,10 +954,10 @@ export function teamStandings(
     const inRound = new Set(swiss.flatMap((m) => [`${swissRoundOf(m.stage)}|${m.homeTeam.id}`, `${swissRoundOf(m.stage)}|${m.awayTeam.id}`]));
     const pab = new Set(swiss.flatMap((m) => (m.byes ?? []).map((b) => `${swissRoundOf(m.stage)}|${b}`)));
     const names = new Map<string, { name: string; colorHex?: string }>();
-    for (const t of teams ?? []) names.set(t.id, { name: t.name, colorHex: t.colorHex });
+    for (const t of teams ?? []) names.set(t.id, { name: teamLabel(t), colorHex: t.colorHex });
     for (const m of swiss) {
-      names.set(m.homeTeam.id, { name: m.homeTeam.name, colorHex: m.homeTeam.colorHex });
-      names.set(m.awayTeam.id, { name: m.awayTeam.name, colorHex: m.awayTeam.colorHex });
+      names.set(m.homeTeam.id, { name: teamLabel(m.homeTeam), colorHex: m.homeTeam.colorHex });
+      names.set(m.awayTeam.id, { name: teamLabel(m.awayTeam), colorHex: m.awayTeam.colorHex });
     }
     const seen = new Set<string>();
     for (const x of cfg.swissExtras) {

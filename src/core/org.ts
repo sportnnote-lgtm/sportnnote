@@ -2,6 +2,7 @@
  *  tournament (an individual's ids, or every member of the hosting org). */
 import type { AcademicYear, GradeStint, House, HouseStint, Organization, OrgMember, OrgRole, Tournament } from './types';
 import { schoolYearLabel } from './region.ts';
+import { classKey, isBeyondTop, marketFor, nextClassInLadder, orgMarket, sameClass, type MarketId } from './markets.ts';
 
 export const ORG_ROLES: OrgRole[] = ['Owner', 'Admin', 'Organizer', 'Scorer', 'Referee', 'Member'];
 
@@ -42,17 +43,38 @@ export const gradePeriod = (g: GradeStintLike): string => {
 };
 type GradeStintLike = { since: string; until?: string };
 
-/** India default: schooling completes at Grade 10, after which students graduate. */
+/** India default: schooling completes at Grade 10, after which students graduate.
+ *  Only India (and communities with no market — every one before SD-153) gets
+ *  it silently; other markets ask when the school is created (SD-153). */
 export const DEFAULT_GRADUATING_STANDARD = 'Grade 10';
 
-/** The class after which students of this community graduate. Schools default to
- *  Grade 10; other academic communities must set their own. */
-export const graduatingStandardOf = (org: Organization | undefined): string | undefined =>
-  org?.graduatingStandard ?? (org?.type === 'School' ? DEFAULT_GRADUATING_STANDARD : undefined);
+/** The graduating-class suggestion for a new school in a market ("Year 13",
+ *  "Grade 12", "Secondary 4" …) — the organiser confirms or changes it. */
+export const suggestedGraduatingStandard = (market: MarketId | string | null | undefined): string =>
+  marketFor(market).graduating[0];
 
-/** Whether a student in `standard` would graduate (rather than be promoted). */
+/** The class after which students of this community graduate. Indian schools
+ *  default to Grade 10; schools in other markets and other academic communities
+ *  must set their own (undefined = unset — rollover warns). */
+export const graduatingStandardOf = (org: Organization | undefined): string | undefined =>
+  org?.graduatingStandard ?? (org?.type === 'School' && orgMarket(org) === 'in' ? DEFAULT_GRADUATING_STANDARD : undefined);
+
+/** Whether a student in `standard` would graduate (rather than be promoted).
+ *  Matches the class, not the exact text: "Class X", "Grade 10", "Std 10-A" and
+ *  "10th" are the same class; "Year 11" is not "Grade 11". */
 export const isGraduatingStandard = (org: Organization | undefined, standard?: string): boolean =>
-  !!standard && standard === graduatingStandardOf(org);
+  !!standard && sameClass(standard, graduatingStandardOf(org));
+
+/** SD-153: why a rollover can't trust the graduating class — 'unset' (none
+ *  saved and no default), 'unknown' (no current student is in it, so nobody
+ *  would graduate; often a typo or a different naming), or undefined (fine). */
+export function graduationWarning(org: Organization | undefined, currentStandards: readonly (string | undefined)[]): 'unset' | 'unknown' | undefined {
+  const g = graduatingStandardOf(org);
+  if (!g) return 'unset';
+  const any = currentStandards.filter(Boolean);
+  if (any.length && !any.some((s) => sameClass(s, g))) return 'unknown';
+  return undefined;
+}
 
 /* ───────────────────────────── Academic years ───────────────────────────── */
 
@@ -96,12 +118,23 @@ export const academicYearEnded = (org: Organization | undefined, date: string): 
 };
 
 /** Best guess at the next class up — increments the last number in the label
- *  ("Grade 9" → "Grade 10", "Year 1" → "Year 2", "10" → "11"). Labels with no
- *  number (e.g. roman "Class X") are returned unchanged for manual entry. */
-export const nextStandard = (standard: string): string => {
+ *  ("Grade 9" → "Grade 10", "Class 9-A" → "Class 10-A", "Year 1" → "Year 2").
+ *  SD-153: follows the market's class ladder where the name changes ("Primary 6"
+ *  → "Secondary 1", "Reception" → "Year 1"), and returns '' at the top of a
+ *  ladder ("Year 13", "Grade 12") — never an invented "Year 14". Labels with no
+ *  number that aren't on the ladder (e.g. "Nursery") are returned unchanged
+ *  for manual entry. */
+export const nextStandard = (standard: string, market: MarketId | string | null = 'in'): string => {
+  const viaLadder = nextClassInLadder(standard, market);
+  if (viaLadder === undefined) return '';
+  const cur = classKey(standard);
+  const nxt = viaLadder ? classKey(viaLadder) : undefined;
+  // The name changes (Primary → Secondary, Reception → Year 1): use the ladder's word.
+  if (viaLadder && (!cur || !nxt || (cur.family !== '' && nxt.family !== cur.family) || nxt.n !== cur.n + 1)) return viaLadder;
   const m = standard.match(/(\d+)(\D*)$/);
-  if (!m || m.index === undefined) return standard;
-  return standard.slice(0, m.index) + String(parseInt(m[1], 10) + 1) + m[2];
+  if (!m || m.index === undefined) return standard; // roman "Class IX": typed by hand, as before
+  const out = standard.slice(0, m.index) + String(parseInt(m[1], 10) + 1) + m[2];
+  return isBeyondTop(out) ? '' : out;
 };
 
 /** Add (or promote to) a new class for a member as of `since`, closing the

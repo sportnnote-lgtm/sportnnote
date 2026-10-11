@@ -44,6 +44,7 @@ const EditMatchScreen = lazyScreen(() => import('../screens/EditMatchScreen'));
 const GenerateFixturesScreen = lazyScreen(() => import('../screens/GenerateFixturesScreen'));
 const SwissRoundScreen = lazyScreen(() => import('../screens/SwissRoundScreen'));
 const ImportScheduleScreen = lazyScreen(() => import('../screens/ImportScheduleScreen'));
+const RosterImportScreen = lazyScreen(() => import('../screens/RosterImportScreen'));
 const AssignScorersScreen = lazyScreen(() => import('../screens/AssignScorersScreen'));
 const TournamentTeamsScreen = lazyScreen(() => import('../screens/TournamentTeamsScreen'));
 const ContingentsScreen = lazyScreen(() => import('../screens/ContingentsScreen'));
@@ -110,6 +111,8 @@ import type { RootStackParamList, TabParamList } from './types';
 import { trackScreen } from '../core/telemetry';
 import { linkPrefixes } from '../core/hosts';
 import { lazyScreen, prefetchScreens } from './lazyScreens';
+import { regionStore } from '../core/region';
+import { marketForCountry, term } from '../core/markets';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -118,7 +121,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'CompetitionRules', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianConsent', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'ManageChild', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'RegionSettings', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'Privacy', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'SwissRound', 'Team', 'TeamJourney', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'CompetitionRules', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianConsent', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'RosterImport', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'ManageChild', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'RegionSettings', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'Privacy', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'SwissRound', 'Team', 'TeamJourney', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -438,7 +441,7 @@ export default function RootNavigator() {
             <Stack.Screen
               name="GenerateFixtures"
               component={GenerateFixturesScreen}
-              options={{ ...stackScreenOpts, title: 'Auto-generate Fixtures' }}
+              options={{ ...stackScreenOpts, title: `Auto-generate ${term(marketForCountry(regionStore.get().country), 'fixtures')}` }}
             />
             <Stack.Screen
               name="SwissRound"
@@ -449,6 +452,11 @@ export default function RootNavigator() {
               name="ImportSchedule"
               component={ImportScheduleScreen}
               options={{ ...stackScreenOpts, title: 'Import Schedule' }}
+            />
+            <Stack.Screen
+              name="RosterImport"
+              component={RosterImportScreen}
+              options={{ ...stackScreenOpts, title: 'Import a roster' }}
             />
             <Stack.Screen
               name="AssignScorers"

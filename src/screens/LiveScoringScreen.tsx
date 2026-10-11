@@ -119,6 +119,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [rawFormat, setRawFormat] = useState<Record<string, unknown> | undefined>(undefined);
   const [meta, setMeta] = useState<{
     homeTeamId?: string; awayTeamId?: string; tournamentId?: string; tournamentName?: string;
+    /** SD-154: the tournament's venue zone — the "Date & time" edit is in it */
+    tournamentZone?: string;
     config?: Record<string, unknown>; venueName?: string; venueMapsUrl?: string; streamUrl?: string; startsAt?: string;
     tournamentHostIds?: string[];
     status?: Match['status']; score?: { home: number; away: number }; winner?: Match['winner'];
@@ -181,7 +183,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
             }
             setMeta({
               homeTeamId: m.homeTeam.id, awayTeamId: m.awayTeam.id, tournamentId: m.tournamentId,
-              tournamentName: tour?.name, config, venueName: m.venueName, venueMapsUrl: m.venueMapsUrl, streamUrl: m.streamUrl, startsAt: m.startsAt,
+              tournamentName: tour?.name, tournamentZone: tour?.timeZone, config, venueName: m.venueName, venueMapsUrl: m.venueMapsUrl, streamUrl: m.streamUrl, startsAt: m.startsAt,
               // org-hosted tournaments → every org member is a tournament host
               tournamentHostIds: tour ? tournamentHostPlayerIds(tour, orgs) : [],
               status: m.status, score: m.score, winner: m.winner, logoUrl: m.logoUrl, managers: m.managers,
@@ -2294,7 +2296,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   </>
                 ) : (
                   <View style={{ gap: theme.spacing(3), marginTop: theme.spacing(1) }}>
-                    <DateTimeField label="Date & time" value={editWhen} onChange={setEditWhen} />
+                    <DateTimeField label="Date & time" value={editWhen} onChange={setEditWhen} timeZone={meta.tournamentZone} />
                     <VenueField venue={editVenue} onVenue={setEditVenue} venueUrl={editVenueUrl} onVenueUrl={setEditVenueUrl} knownVenues={[]} />
                     {(getSport(sport).formatFields ?? []).length > 0 && !matchLive && (
                       <SportFormatEditor

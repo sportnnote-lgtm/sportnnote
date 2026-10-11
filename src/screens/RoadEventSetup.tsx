@@ -29,6 +29,8 @@ import {
 } from '../data/results';
 import { sportRule } from '../data/results/competitionRules';
 import type { Player } from '../core/types';
+import { useRegion } from '../core/region';
+import { distanceUnitsOf, formatMiles } from '../core/units';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 interface Source { key: string; name: string; colorHex?: string; teamId?: string; playerIds: string[] }
@@ -49,6 +51,9 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
   // SD-130: age groups on the meet's cut-off day (31 Dec by default), not today
   const ages = useMeetAges(tournament, 'athletics', players);
   const meet = meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined);
+  // SD-154: miles alongside kilometres (a US meet, or a US viewer when the meet doesn't say)
+  const region = useRegion();
+  const miles = distanceUnitsOf(tournament?.formats?.athletics as Record<string, unknown> | undefined, region.units) === 'mi';
   const [kind, setKind] = useState<RoadKind>('xc');
   const [age, setAge] = useState<string>('U14');
   const [gender, setGender] = useState<'M' | 'F' | 'X'>('M');
@@ -124,7 +129,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
   const [query, setQuery] = useState('');
   const [eligibleOnly, setEligibleOnly] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();
@@ -199,7 +204,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
           )}
           <Text style={st.label}>Distance</Text>
           <View style={st.wrap}>
-            {distances.map((m) => <SelectChip key={m} label={kind === 'walk' && trackWalk ? `${m} m` : kmLabel(m)} active={!custom.trim() && metres === m} onPress={() => { setCustom(''); setMetres(m); }} />)}
+            {distances.map((m) => <SelectChip key={m} label={kind === 'walk' && trackWalk ? `${m} m` : `${kmLabel(m)}${miles ? ` · ${formatMiles(m)}` : ''}`} active={!custom.trim() && metres === m} onPress={() => { setCustom(''); setMetres(m); }} />)}
           </View>
           <TextInput style={st.input} value={custom} onChangeText={setCustom} placeholder="Other distance in km (e.g. 2.5)" placeholderTextColor={theme.colors.textMuted} keyboardType="decimal-pad" accessibilityLabel="Other distance in km" />
           {kind === 'xc' ? <Text style={textStyles.muted}>Usual for {categoryLabel(cat)}: {kmLabel(xcDistance(age, gender))} (school presets for U10–U16; World Cross Country pattern from U18). Cross-country keeps no records or PBs — every course is different; places and team medals go on profiles.</Text> : null}

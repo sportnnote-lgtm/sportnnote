@@ -1,6 +1,7 @@
 /** Tournament hub: overview, follow, the overall house table, a per-sport
  *  league table + statistics rail, and participating teams. For a single-sport
  *  tournament the sport selector is skipped and its table shown directly. */
+import { QualifiesToCard } from '../components/FeederCards';
 import { notice } from '../core/confirm';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
@@ -89,6 +90,8 @@ function basicsLine(t: Tournament, sport: SportId): string {
 }
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+import { useViewerMarket } from '../data/useMarket';
+import { term } from '../core/markets';
 
 const PARTICIPATION_LABEL: Record<string, string> = {
   inter_house: '🏠 Inter-house (Houses compete)',
@@ -98,6 +101,7 @@ const PARTICIPATION_LABEL: Record<string, string> = {
 };
 
 export default function TournamentProfileScreen() {
+  const viewerMarket = useViewerMarket(); // SD-153: "schedule" for US viewers
   const nav = useNavigation<Nav>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'Tournament'>>();
   const { profile } = useAuth();
@@ -629,7 +633,7 @@ export default function TournamentProfileScreen() {
               Organized by {currentOwnerLabel}{creatorName ? ` · Created by ${creatorName}` : ''}
             </Text>
             {tournament.participation && tournament.participation !== 'open' && (
-              <Text style={textStyles.muted}>Contested by: {PARTICIPATION_LABEL[tournament.participation]}</Text>
+              <Text style={textStyles.muted}>Contested by: {tournament.participation === 'inter_house' ? `🏠 ${term(viewerMarket, 'interHouse')} (Houses compete)` : PARTICIPATION_LABEL[tournament.participation]}</Text>
             )}
 
             {tournament.structure && (
@@ -764,6 +768,8 @@ export default function TournamentProfileScreen() {
 
             <SectionHeader title="Tournament" />
             <HubRow icon="✎" title="Edit details" status="Name, dates, sports, registration" onPress={() => nav.navigate('EditTournament', { tournamentId: tournament.id })} />
+            {/* SD-154: a feeder round — its top teams qualify into another tournament */}
+            <QualifiesToCard tournament={tournament} />
             {tournament.sports.map((sp) => {
               const fmt = tournament.formats?.[sp] as Record<string, unknown> | undefined;
               const cfg = structureFromFormat(fmt);
@@ -803,7 +809,7 @@ export default function TournamentProfileScreen() {
                 : (
                   <>
                     <HubRow icon="📅" title="Schedule a match" status="One fixture at a time" onPress={() => nav.navigate('ScheduleMatch', { tournamentId: tournament.id })} />
-                    <HubRow icon="⚡" title="Auto-generate fixtures" status="League, groups or knockout" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
+                    <HubRow icon="⚡" title={`Auto-generate ${term(viewerMarket, 'fixtures').toLowerCase()}`} status="League, groups or knockout" onPress={() => nav.navigate('GenerateFixtures', { tournamentId: tournament.id })} />
                     <HubRow icon="📥" title="Import schedule (spreadsheet)" status="Paste from Excel / Sheets or a CSV" onPress={() => nav.navigate('ImportSchedule', { tournamentId: tournament.id })} />
                   </>
                 );

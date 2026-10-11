@@ -3,6 +3,7 @@
  * demo-mode fallback lives in exactly one place. Each function returns the same
  * domain shapes whether the data came from Postgres or the local mock.
  */
+import { readQualifiesTo, type QualifiesTo } from './feeders';
 import { ageOf } from '../core/age';
 import { firebasePhoneAvailable, sendPhoneCode, confirmPhoneCode } from '../core/firebasePhone';
 import { serializePrefs, type FollowPrefs } from './followPrefs';
@@ -138,6 +139,8 @@ interface TeamRow {
   club_id?: string | null;
   roster?: string[] | null;
   adhoc?: boolean | null;
+  /** SD-154: team level (Varsity / JV / A / B / U13 …) — migration 20261021120000 */
+  level?: string | null;
 }
 interface MatchRow {
   /** manual result (migration 0040) — absent on older databases */
@@ -177,6 +180,7 @@ const toTeam = (r: TeamRow): Team => ({
   clubId: r.club_id ?? undefined,
   roster: r.roster ?? undefined,
   adhoc: r.adhoc ?? undefined,
+  ...(r.level ? { level: r.level } : {}),
 });
 
 /** A completed match's result, derived from its stored sport state via the sport
@@ -232,10 +236,21 @@ const MATCH_SELECT_BASE =
   ' home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex),' +
   ' away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)';
 const MATCH_SELECT = MATCH_SELECT_BASE + ', result';
+/** SD-154: plus each team's level (Varsity / JV / A / B) — migration 20261021120000. */
+const MATCH_SELECT_LEVEL = MATCH_SELECT
+  .replace('home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex)', 'home_team:teams!matches_home_team_id_fkey(id,name,short_name,sport,color_hex,level)')
+  .replace('away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex)', 'away_team:teams!matches_away_team_id_fkey(id,name,short_name,sport,color_hex,level)');
+/** Remembered once a read shows `teams.level` isn't there yet (no retry per read). */
+let teamLevelMissing = false;
 
 /** Read matches with the newest columns, retrying without them on a database
- *  that hasn't run their migration yet (`result`: 0040). */
+ *  that hasn't run their migration yet (`result`: 0040, team `level`: SD-154). */
 async function withMatchCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  if (!teamLevelMissing) {
+    const lv = await build(MATCH_SELECT_LEVEL);
+    if (!lv.error) return lv;
+    teamLevelMissing = true;
+  }
   const full = await build(MATCH_SELECT);
   if (!full.error) return full;
   return build(MATCH_SELECT_BASE);
@@ -280,6 +295,7 @@ const toTournament = (data: any): Tournament => ({
   organiserEmail: data.organiser_email ?? undefined,
   deletedAt: data.deleted_at ?? undefined,
   timeZone: data.time_zone ?? undefined,
+  ...(readQualifiesTo(data.qualifies_to) ? { qualifiesTo: readQualifiesTo(data.qualifies_to) } : {}),
 });
 
 // The registration columns (registration_deadline / min_teams / max_teams) need
@@ -295,7 +311,14 @@ const TOURNAMENT_PROFILE_COLS = 'banner_url, city, grounds, event_category, abou
 // SD-150: the venue time zone (migration 20261020150000_tournament_time_zone).
 // Remembered once missing so pre-migration databases don't pay a failed read each time.
 let tournamentZoneCol = true;
+// SD-154: feeder links (migration 20261021120000_team_levels_feeders), remembered once missing.
+let tournamentFeederCol = true;
 async function withTournamentCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  if (tournamentZoneCol && tournamentFeederCol) {
+    const withFeeder = await build(`${TOURNAMENT_SELECT}, ${TOURNAMENT_PROFILE_COLS}, time_zone, qualifies_to`);
+    if (!withFeeder.error) return withFeeder;
+    tournamentFeederCol = false;
+  }
   if (tournamentZoneCol) {
     const withZone = await build(`${TOURNAMENT_SELECT}, ${TOURNAMENT_PROFILE_COLS}, time_zone`);
     if (!withZone.error) return withZone;
@@ -350,7 +373,12 @@ const visibleAfterDelete = (deleted: Set<string>) => (m: Match) =>
 export async function getMatches(filter?: SportId): Promise<Match[]> {
   const deleted = await deletedTournamentIds();
   if (!isSupabaseConfigured || !supabase) {
-    const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).filter(visibleAfterDelete(deleted));
+    // SD-154: a team's level lives on the team row (live reads embed it) — mirror that in demo
+    const lv = new Map(demo.teams.filter((t) => t.level).map((t) => [t.id, t.level!] as const));
+    const withLv = (m: Match): Match => (lv.has(m.homeTeam.id) || lv.has(m.awayTeam.id)
+      ? { ...m, homeTeam: lv.has(m.homeTeam.id) ? { ...m.homeTeam, level: lv.get(m.homeTeam.id) } : m.homeTeam, awayTeam: lv.has(m.awayTeam.id) ? { ...m.awayTeam, level: lv.get(m.awayTeam.id) } : m.awayTeam }
+      : m);
+    const all = [...demo.matches].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).filter(visibleAfterDelete(deleted)).map(withLv);
     return filter ? all.filter((m) => m.sport === filter) : all;
   }
   const { data, error } = await withMatchCols<unknown[]>((cols) => {
@@ -476,11 +504,13 @@ export async function getTeams(sport?: SportId): Promise<Team[]> {
   if (!isSupabaseConfigured || !supabase) {
     return sport ? demo.teams.filter((t) => t.sport === sport) : demo.teams;
   }
-  let q = supabase.from('teams').select('id,name,short_name,sport,color_hex,org_id,roster').order('name');
-  if (sport) q = q.eq('sport', sport);
-  const { data, error } = await q;
+  // SD-154: with the team level when the column is there (else the old columns)
+  const run = (cols: string) => { let q = supabase!.from('teams').select(cols).order('name'); if (sport) q = q.eq('sport', sport); return q; };
+  let res = teamLevelMissing ? null : await run('id,name,short_name,sport,color_hex,org_id,club_id,roster,level');
+  if (!res || res.error) { if (res) teamLevelMissing = true; res = await run('id,name,short_name,sport,color_hex,org_id,roster'); }
+  const { data, error } = res;
   if (error || !data) return [];
-  return (data as TeamRow[]).map(toTeam);
+  return (data as unknown as TeamRow[]).map(toTeam);
 }
 
 /** A team's captain & vice-captain (responsible for the matchday squad). */
@@ -545,7 +575,7 @@ export const isNeedsDbUpdate = (e: unknown): e is NeedsDbUpdateError => e instan
 const isMissingSchema = (err: { code?: string } | null | undefined): boolean =>
   !!err && ['42703', 'PGRST204', '42883', 'PGRST202', '42P01', 'PGRST205'].includes(err.code ?? '');
 
-export interface TeamPatch { name?: string; shortName?: string; colorHex?: string | null; logoUrl?: string | null; city?: string | null }
+export interface TeamPatch { name?: string; shortName?: string; colorHex?: string | null; logoUrl?: string | null; city?: string | null; /** SD-154: Varsity / JV / A / B / U13 … (null clears) */ level?: string | null }
 
 /** Edit a team's identity. Throws TeamPermissionError when the server refuses
  *  (not a manager / 0 rows), NeedsDbUpdateError when logoUrl / city are passed
@@ -564,6 +594,7 @@ export async function updateTeam(teamId: string, patch: TeamPatch): Promise<void
     if (patch.colorHex !== undefined) t.colorHex = patch.colorHex ?? undefined;
     if (patch.logoUrl !== undefined) t.logoUrl = patch.logoUrl ?? undefined;
     if (city !== undefined) t.city = city ?? undefined;
+    if (patch.level !== undefined) t.level = patch.level?.trim() || undefined;
     return;
   }
   if (patch.logoUrl !== undefined) assertPersistable(patch.logoUrl);
@@ -573,9 +604,10 @@ export async function updateTeam(teamId: string, patch: TeamPatch): Promise<void
   if (patch.colorHex !== undefined) row.color_hex = patch.colorHex;
   if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl;
   if (city !== undefined) row.city = city;
+  if (patch.level !== undefined) row.level = patch.level?.trim().slice(0, 30) || null;
   if (!Object.keys(row).length) return;
   const res = await supabase.from('teams').update(row).eq('id', teamId).select('id');
-  if (isMissingSchema(res.error) && ('logo_url' in row || 'city' in row)) throw new NeedsDbUpdateError();
+  if (isMissingSchema(res.error) && ('logo_url' in row || 'city' in row || 'level' in row)) throw new NeedsDbUpdateError();
   assertTeamWrite(res);
 }
 
@@ -4305,11 +4337,21 @@ const toOrganization = (r: any, members: OrgMember[]): Organization => ({
   houses: r.houses ?? undefined,
   academicYears: r.academic_years ?? undefined,
   graduatingStandard: r.graduating_standard ?? undefined,
+  market: r.market ?? undefined,
 });
 // houses (migration 0022) is optional in the select so reads still work pre-migration.
 const ORG_SELECT = 'id, name, type, logo_url, city, email, phone, bio, academic_years, graduating_standard';
 const ORG_SELECT_FULL = `${ORG_SELECT}, houses`;
+// SD-153: organizations.market (migration 20261020160000_market_presets) —
+// remembered once missing so pre-migration databases don't pay a failed read each time.
+let orgMarketCol = true;
+const isMissingCol = (e: unknown) => ['42703', 'PGRST204'].includes(String((e as { code?: string } | null)?.code ?? ''));
 async function withOrgCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  if (orgMarketCol) {
+    const withMarket = await build(`${ORG_SELECT_FULL}, market`);
+    if (!withMarket.error) return withMarket;
+    orgMarketCol = false;
+  }
   const full = await build(ORG_SELECT_FULL);
   if (!full.error) return full;
   return build(ORG_SELECT);
@@ -4366,6 +4408,10 @@ export interface NewOrganization {
   city?: string;
   email?: string;
   phone?: string;
+  /** SD-153: school-sport market (core/markets.ts) */
+  market?: string;
+  /** SD-153: asked when a School/College is created, prefilled from the market */
+  graduatingStandard?: string;
 }
 
 /** Create a community/organization; the creator becomes its first Admin. The
@@ -4380,11 +4426,16 @@ export async function createOrganization(input: NewOrganization, creatorPlayerId
   if (!isSupabaseConfigured || !supabase) {
     org = addOrganization({ ...input, members });
   } else {
-    const { data, error } = await supabase
-      .from('organizations')
-      .insert({ name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: contactPhone(input.phone), members: [] })
-      .select(ORG_SELECT)
-      .single();
+    const row: Record<string, unknown> = { name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: contactPhone(input.phone), members: [] };
+    if (input.graduatingStandard) row.graduating_standard = input.graduatingStandard;
+    if (input.market) row.market = input.market;
+    let res = await supabase.from('organizations').insert(row).select(ORG_SELECT).single();
+    if (res.error && row.market !== undefined && isMissingCol(res.error)) {
+      // No market column yet (SD-153 migration not run): create without it.
+      delete row.market;
+      res = await supabase.from('organizations').insert(row).select(ORG_SELECT).single();
+    }
+    const { data, error } = res;
     if (error || !data) throw new Error(error?.message ?? 'Could not create community');
     org = toOrganization(data, []);
   }
@@ -4652,6 +4703,8 @@ export interface OrgPatch {
   bio?: string;
   academicYears?: AcademicYear[];
   graduatingStandard?: string;
+  /** SD-153: school-sport market; undefined = leave as is */
+  market?: string;
 }
 
 /** Update a community's profile fields. */
@@ -4661,15 +4714,19 @@ export async function updateOrganization(orgId: string, patch: OrgPatch): Promis
     if (o) Object.assign(o, patch);
     return;
   }
-  await supabase
-    .from('organizations')
-    .update({
-      name: patch.name, type: patch.type ?? null, city: patch.city ?? null,
-      email: patch.email ?? null, phone: contactPhone(patch.phone), bio: patch.bio ?? null,
-      academic_years: patch.academicYears ?? null,
-      graduating_standard: patch.graduatingStandard ?? null,
-    })
-    .eq('id', orgId);
+  const row: Record<string, unknown> = {
+    name: patch.name, type: patch.type ?? null, city: patch.city ?? null,
+    email: patch.email ?? null, phone: contactPhone(patch.phone), bio: patch.bio ?? null,
+    academic_years: patch.academicYears ?? null,
+    graduating_standard: patch.graduatingStandard ?? null,
+  };
+  if (patch.market !== undefined) row.market = patch.market || null;
+  const res = await supabase.from('organizations').update(row).eq('id', orgId);
+  if (res.error && row.market !== undefined && isMissingCol(res.error)) {
+    // No market column yet (SD-153 migration not run): save the rest.
+    delete row.market;
+    await supabase.from('organizations').update(row).eq('id', orgId);
+  }
 }
 
 export interface NewTeam {
@@ -4685,6 +4742,8 @@ export interface NewTeam {
   roster?: string[];
   /** created on the fly (a one-off side for a friendly) — de-emphasised in Manage teams */
   adhoc?: boolean;
+  /** SD-154: a school squad's level (Varsity / JV / A / B / U13) */
+  level?: string;
 }
 
 export async function createTeam(input: NewTeam): Promise<Team> {
@@ -4697,14 +4756,18 @@ export async function createTeam(input: NewTeam): Promise<Team> {
     roster: input.roster ?? null, adhoc: input.adhoc ?? false,
   };
   if (input.clubId) row.club_id = input.clubId;
+  // SD-154: only sent when set (a database before the level migration still creates teams)
+  const level = input.level?.trim().slice(0, 30);
+  if (level) row.level = level;
   const { data, error } = await supabase
     .from('teams')
     .insert(row)
     .select('id,name,short_name,sport,color_hex,org_id,roster,adhoc')
     .single();
+  if (isMissingSchema(error) && level) throw new NeedsDbUpdateError();
   if (error || !data) throw new Error(error?.message ?? 'Could not create team');
-  // club_id isn't in the select (kept narrow for pre-migration safety) — merge it back.
-  return { ...toTeam(data as TeamRow), clubId: input.clubId ?? undefined };
+  // club_id / level aren't in the select (kept narrow for pre-migration safety) — merge them back.
+  return { ...toTeam(data as TeamRow), clubId: input.clubId ?? undefined, ...(level ? { level } : {}) };
 }
 
 /** Teams owned by a community. */
@@ -4981,10 +5044,13 @@ export async function claimClubInvite(token: string, playerId: string): Promise<
 /** The per-sport team rows that make up a club's sport profiles. */
 export async function getClubTeams(clubId: string): Promise<Team[]> {
   if (!isSupabaseConfigured || !supabase) return demo.teams.filter((t) => t.clubId === clubId);
-  const { data, error } = await supabase
-    .from('teams').select('id,name,short_name,sport,color_hex,org_id,club_id,roster,adhoc').eq('club_id', clubId);
+  // SD-154: with each squad's level when the column is there
+  const run = (cols: string) => supabase!.from('teams').select(cols).eq('club_id', clubId);
+  let res = teamLevelMissing ? null : await run('id,name,short_name,sport,color_hex,org_id,club_id,roster,adhoc,level');
+  if (!res || res.error) { if (res) teamLevelMissing = true; res = await run('id,name,short_name,sport,color_hex,org_id,club_id,roster,adhoc'); }
+  const { data, error } = res;
   if (error || !data) return [];
-  return (data as TeamRow[]).map(toTeam);
+  return (data as unknown as TeamRow[]).map(toTeam);
 }
 
 /** The sports a club plays (derived from its per-sport team rows). */
@@ -4995,7 +5061,9 @@ export async function getClubSports(clubId: string): Promise<SportId[]> {
 
 /** A club's team row for one sport, or null if it doesn't play that sport yet. */
 export async function getClubTeam(clubId: string, sport: SportId): Promise<Team | null> {
-  return (await getClubTeams(clubId)).find((t) => t.sport === sport) ?? null;
+  // SD-154: the main squad (no level) first, when a club has several (Varsity + JV, A + B)
+  const all = (await getClubTeams(clubId)).filter((t) => t.sport === sport);
+  return all.find((t) => !t.level) ?? all[0] ?? null;
 }
 
 /** Add a sport to a club: mint its per-sport team row (sharing the club's name /
@@ -5078,30 +5146,79 @@ export async function getTournamentEntries(tournamentId: string, sport?: SportId
   if (!isSupabaseConfigured || !supabase) {
     const rows = demo.tournamentTeams.filter((r) => r.tournamentId === tournamentId);
     return rows
-      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status, categoryId: r.categoryId, checkedInAt: r.checkedInAt }))
+      .map((r) => ({ team: demo.teams.find((t) => t.id === r.teamId), status: r.status, categoryId: r.categoryId, checkedInAt: r.checkedInAt, qualifiedFrom: r.qualifiedFrom }))
       .filter((e) => !!e.team && (!sport || e.team!.sport === sport))
-      .map((e) => ({ team: e.team as Team, status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt }));
+      .map((e) => ({ team: e.team as Team, status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt, ...(e.qualifiedFrom ? { qualifiedFrom: e.qualifiedFrom } : {}) }));
   }
   // Read with the widest column set, then degrade gracefully if a column isn't in
   // the live DB yet: category_id needs migration 0008, status needs 0007. Falling
   // back keeps the existing participants feature working before each migration
   // (missing category ⇒ no division; missing status ⇒ treated as confirmed).
   const TEAM_COLS = 'teams(id,name,short_name,sport,color_hex,org_id,roster)';
-  const attempts = [`status, category_id, checked_in_at, ${TEAM_COLS}`, `status, category_id, ${TEAM_COLS}`, `status, ${TEAM_COLS}`, TEAM_COLS];
+  // SD-154: each team's level (Varsity / JV / A / B) when the column is there
+  const LEVEL_COLS = 'teams(id,name,short_name,sport,color_hex,org_id,roster,level)';
+  const attempts = [
+    ...(teamLevelMissing ? [] : [`status, category_id, checked_in_at, qualified_from, ${LEVEL_COLS}`]),
+    `status, category_id, checked_in_at, ${TEAM_COLS}`, `status, category_id, ${TEAM_COLS}`, `status, ${TEAM_COLS}`, TEAM_COLS,
+  ];
   let res: { data: unknown; error: unknown } = { data: null, error: true };
   for (const cols of attempts) {
     res = await supabase.from('tournament_teams').select(cols).eq('tournament_id', tournamentId);
     if (!res.error) break;
+    if (cols.includes(',level)')) teamLevelMissing = true;
   }
   const { data, error } = res;
   if (error || !data) return [];
   // The joined `teams` relation may come back as an object or a single-element
   // array depending on the client's inference — normalise both to a row.
-  const entries = (data as unknown as { status?: TournamentEntryStatus; category_id?: string | null; checked_in_at?: string | null; teams: TeamRow | TeamRow[] | null }[])
-    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus, categoryId: r.category_id ?? undefined, checkedInAt: r.checked_in_at ?? undefined }))
+  const entries = (data as unknown as { status?: TournamentEntryStatus; category_id?: string | null; checked_in_at?: string | null; qualified_from?: string | null; teams: TeamRow | TeamRow[] | null }[])
+    .map((r) => ({ team: Array.isArray(r.teams) ? r.teams[0] : r.teams, status: (r.status ?? 'confirmed') as TournamentEntryStatus, categoryId: r.category_id ?? undefined, checkedInAt: r.checked_in_at ?? undefined, qualifiedFrom: r.qualified_from ?? undefined }))
     .filter((e) => !!e.team)
-    .map((e) => ({ team: toTeam(e.team as TeamRow), status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt }));
+    .map((e) => ({ team: toTeam(e.team as TeamRow), status: e.status, categoryId: e.categoryId, checkedInAt: e.checkedInAt, ...(e.qualifiedFrom ? { qualifiedFrom: e.qualifiedFrom } : {}) }));
   return sport ? entries.filter((e) => e.team.sport === sport) : entries;
+}
+
+/* ---------------------- SD-154: feeder tournaments ---------------------- */
+
+/** Mark a tournament as a feeder (its top N go through to another), or clear
+ *  the link (null). NeedsDbUpdateError before migration 20261021120000. */
+export async function setQualifiesTo(tournamentId: string, link: QualifiesTo | null): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    const t = demo.tournaments.find((x) => x.id === tournamentId);
+    if (!t) throw new Error('Tournament not found.');
+    if (link) t.qualifiesTo = link; else delete t.qualifiesTo;
+    return;
+  }
+  const res = await supabase.from('tournaments').update({ qualifies_to: link }).eq('id', tournamentId).select('id');
+  if (isMissingSchema(res.error)) throw new NeedsDbUpdateError();
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('Only the tournament’s organisers can change this.');
+}
+
+/** The tournaments that feed INTO this one (their link names it). */
+export async function getFeedersInto(tournamentId: string): Promise<Tournament[]> {
+  if (!isSupabaseConfigured || !supabase) return demo.tournaments.filter((t) => t.qualifiesTo?.tournamentId === tournamentId && isLiveTournament(t));
+  if (!tournamentFeederCol) return [];
+  const { data, error } = await withTournamentCols<any[]>((cols) => supabase!.from('tournaments').select(cols).eq('qualifies_to->>tournamentId', tournamentId));
+  if (error || !data) return [];
+  return data.map(toTournament).filter((t) => isLiveTournament(t) && t.qualifiesTo?.tournamentId === tournamentId);
+}
+
+/** Add a feeder's qualifiers to the receiving tournament (confirmed), each
+ *  remembering where it qualified from (the "Qualified from X" badge). Teams
+ *  already entered keep their entry and just get the badge. */
+export async function addQualifiedTeams(tournamentId: string, teamIds: string[], fromTournamentId: string): Promise<void> {
+  if (!teamIds.length) return;
+  if (!isSupabaseConfigured || !supabase) {
+    addTournamentTeamsDemo(tournamentId, teamIds, 'confirmed');
+    for (const r of demo.tournamentTeams) if (r.tournamentId === tournamentId && teamIds.includes(r.teamId)) r.qualifiedFrom = fromTournamentId;
+    return;
+  }
+  const rows = teamIds.map((id) => ({ tournament_id: tournamentId, team_id: id, status: 'confirmed', qualified_from: fromTournamentId }));
+  const { error } = await supabase.from('tournament_teams').upsert(rows, { onConflict: 'tournament_id,team_id' });
+  if (!error) return;
+  if (isMissingSchema(error)) { await addTournamentTeams(tournamentId, teamIds, 'confirmed'); return; }
+  throw new Error(error.message);
 }
 
 /** Register one or more teams as tournament participants (idempotent). Status

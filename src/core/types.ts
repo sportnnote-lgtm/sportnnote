@@ -327,6 +327,10 @@ export interface Organization {
   /** The class after which students graduate & leave (India default "Grade 10").
    *  At rollover, students in this class graduate instead of being promoted. */
   graduatingStandard?: string;
+  /** SD-153: the school-sport market preset ('in' | 'uk' | 'us' …, core/markets.ts)
+   *  — class names, graduating class, age cut-off and bands, a few words. Absent
+   *  (every community before SD-153) = India. */
+  market?: string;
 }
 
 /** One academic year with concrete dates (not a recurring template), e.g.
@@ -397,6 +401,10 @@ export interface Team {
   logoUrl?: string;
   /** home city / town (migration 0042) */
   city?: string;
+  /** SD-154: a school squad's level — "Varsity", "JV", "A", "B", "U13 A" —
+   *  so one school fields several teams in a sport (shown after the name in
+   *  fixtures and tables). Absent = the main / only team. */
+  level?: string;
 }
 
 /* ------------------------------- Clubs (teams) ---------------------------- */
@@ -491,6 +499,8 @@ export interface TournamentEntry {
   categoryId?: UUID;
   /** match-day check-in: when the organizer marked the entry as arrived (0032) */
   checkedInAt?: string;
+  /** SD-154: the feeder tournament this team qualified from ("Qualified from County Cup") */
+  qualifiedFrom?: UUID;
 }
 
 /** A division within a tournament — the backbone of school meets: age group ×
@@ -661,6 +671,9 @@ export interface Tournament {
   /** SD-150: the venue's IANA time zone (migration tournament_time_zone). Kickoff
    *  entry, fixture lists/prints and "today" follow it; absent = the viewer's. */
   timeZone?: string;
+  /** SD-154: a feeder — its top N go through to another tournament (county →
+   *  national, zonal → national, state playoffs). See data/feeders.ts. */
+  qualifiesTo?: { tournamentId: UUID; tournamentName?: string; topN: number; per: 'group' | 'overall'; sport?: SportId };
   /** soft-deleted by the organiser (hidden from lists; stats survive) */
   deletedAt?: string;
   /** The people who run this tournament (player ids). Any host can manage it and

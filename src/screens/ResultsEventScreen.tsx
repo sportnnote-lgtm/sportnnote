@@ -5,6 +5,10 @@
  *  Everything is driven by the discipline definition (unit, capture, tie rule,
  *  wind, attempts), so Wave 4 sports only add disciplines. Saves are offline-safe
  *  (the golf outbox). */
+import { dayKey as meetDay } from '../data/results/timetable';
+import { useMeetZone } from '../data/useMeetZone';
+import { useRegion } from '../core/region';
+import { fieldUnitsOf, massUnitsOf } from '../core/units';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -85,10 +89,14 @@ const confirmRange = (issue: RangeIssue, shown: string) => askConfirm({
   title: 'Check this mark', message: issue.message, yesLabel: `Yes, save ${shown}`, noLabel: 'No, re-enter it', tone: 'caution',
 });
 /** Ask about an out-of-range mark; resolves { ok, rangeOk } (rangeOk = confirmed out of range). */
+/** SD-154: the discipline showing feet and inches (distance / height only). */
+const withUnits = (d: DisciplineDef, imperial: boolean): DisciplineDef =>
+  imperial && (d.unit === 'distance' || d.unit === 'height') ? { ...d, displayUnits: 'imperial' } : d;
+
 async function checkRange(def: DisciplineDef, mark: number, course: Course): Promise<{ ok: boolean; rangeOk?: true }> {
   const issue = rangeCheck(def, mark, course);
   if (!issue) return { ok: true };
-  const ok = await confirmRange(issue, `${formatMark(mark, def)}${def.unit === 'time' ? '' : ' m'}`);
+  const ok = await confirmRange(issue, `${formatMark(mark, def)}${def.unit === 'time' || def.displayUnits ? '' : ' m'}`);
   return ok ? { ok: true, rangeOk: true } : { ok: false };
 }
 
@@ -132,14 +140,22 @@ export default function ResultsEventScreen() {
   const f = phase ? phaseOf(phase) : null;
   // SD-94: as raced at this venue (a 6- / 10-lane pool)
   const baseDef = f ? disciplineOf(f.discipline) ?? null : null;
-  const def = baseDef && f ? phaseDiscipline(baseDef, f) : null;
+  const tournament = useTournamentById(phase?.tournamentId);
+  // SD-154: print sheets and round times in the venue's zone
+  useMeetZone(tournament);
+  // SD-154: a US meet (or a US viewer, when the meet doesn't say) sees and types
+  // jumps and throws in feet and inches — stored in metres
+  const region = useRegion();
+  const imperial = !!baseDef && baseDef.sport === 'athletics' && fieldUnitsOf(tournament?.formats?.athletics as Record<string, unknown> | undefined, region.units) === 'imperial';
+  const def = baseDef && f ? withUnits(phaseDiscipline(baseDef, f), imperial) : null;
+  // SD-154: pounds alongside kilograms for a US lifting meet (kg counts)
+  const showLb = baseDef?.sport === 'weightlifting' && massUnitsOf(tournament?.formats?.weightlifting as Record<string, unknown> | undefined, region.units) === 'kg+lb';
   const swim = def?.sport === 'swimming';
   // SD-99 / SD-100: rowing / canoe — a final run as Finals A / B (places run on from A into B)
   const crew = isCrewSport(def?.sport);
   const raceFinal = !!f && f.phase === 'final' && (f.races?.length ?? 0) > 1;
   // SD-94: a final run in several heats is a timed final — places on time across heats
   const timedFinal = !!f && f.phase === 'final' && f.heats > 1 && def?.capture === 'single' && !raceFinal;
-  const tournament = useTournamentById(phase?.tournamentId);
   // Who may enter results: the event's creator / hosts, the tournament's
   // managers, or an organiser. Everyone else (a shared /r/ link) reads.
   const canEdit = !!phase && (canOrganize(profile?.role) || phase.createdBy === profile?.id || (!!me && (phase.hostIds ?? []).includes(me))
@@ -370,7 +386,7 @@ export default function ResultsEventScreen() {
     // SD-95: an archery record is a ranking-round score — a bracket reads as its archers' ranking scores
     // SD-98: a sprint bracket's record is the riders' flying 200 m times
     const recRows = (d: DisciplineDef) => (shoot ? rankEntries(qualView(resEntries), d) : arch || sprintBr ? rankEntries(archQualView(resEntries), d) : d === def ? rows : rankEntries(resEntries, d));
-    for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    for (const d of roadRecordsAllowed(f) ? recordDefsFor(def) : []) after = updateRecords(rowsForRecords(recRows(d), d, course), d, categoryKey(f.category), after, meetDay(phase.startsAt), ['MR'], f.eventKey);
     const unfinished = (shootMatches && !shootMatchState(resEntries).done) || (shoot && shootFinalPhase && !finalState(resEntries, shoot).done) || (archBracket && !bracketState(resEntries, bracketFormat(def), archMatch(bracketFormat(def), f.rules, def.key)).done) || (sprintBr && !sprintBracket(resEntries)?.done) ? `The ${archBracket ? 'bracket' : 'final'} isn’t complete — the places stand as they are now. ` : '';
     const detail = unfinished + finishDetail({
       blank: blankEntries(resEntries, def), def, records: newRecords(records, after), jumpOff: jo,
@@ -395,7 +411,7 @@ export default function ResultsEventScreen() {
     const cdef = disciplineOf(comb!.key)!;
     const cat = categoryKey(f.category);
     const finalRows = combinedStandings([...cePhases.filter((p) => p.id !== phase.id && p.format.combined?.index !== comb!.index), { id: phase.id, format: f, status: 'completed', entries: resEntries }], { final: true });
-    const after = updateRecords(combinedRanked(finalRows, cdef.key), cdef, cat, records, phase.startsAt.slice(0, 10), ['MR'], f.eventKey);
+    const after = updateRecords(combinedRanked(finalRows, cdef.key), cdef, cat, records, meetDay(phase.startsAt), ['MR'], f.eventKey);
     const detail = finishDetail({ blank: blankEntries(resEntries, def), def: cdef, records: newRecords(records, after), unconfirmed: resEntries.filter((e) => unconfirmedOutOfRange(e.result, def, course)).length })
       .replace('Places, medals and points go to the meet table.', `The ${cdef.label.toLowerCase()} is over: totals, places, medals and points go to the meet table${finalRows.some((r) => r.out) ? ' (athletes who didn’t start an event are DNF)' : ''}.`);
     if (!(await confirmMatchAction('finishEvent', { detail }))) return;
@@ -617,6 +633,7 @@ export default function ResultsEventScreen() {
           {hasCard(def) && phase.status !== 'completed' ? <SelectChip label="📝 Field card" active={false} onPress={() => void printPhase('card')} /> : null}
         </View>
         {hurdles ? <Text style={textStyles.muted}>Hurdle height {hurdles} (World Athletics, {categoryLabel(f.category)}).</Text> : null}
+        {def.displayUnits ? <Text style={textStyles.muted}>Marks in feet and inches — type 16' 9¼" or 16-09.25 (metres work too). Stored and ranked in metres; records stay metric.</Text> : null}
         {swim ? <Text style={textStyles.muted}>{courseLabel(f.category?.course)} · {def.lanes} lanes{f.handTimed ? ' · manual timing (SW 11.3)' : ''}{timedFinal ? ` · timed final: ${f.heats} heats, places on time across heats` : ''}</Text> : null}
         {!swim && timedFinal ? <Text style={textStyles.muted}>Timed final: {f.heats} heats, places on time across heats.</Text> : null}
         {crew ? <Text style={textStyles.muted}>{def.sport === 'rowing' ? 'World Rowing' : 'ICF canoe sprint'} · {crewEventOf(def.key)?.boat.label} · {def.lanes} lanes · {f.handTimed ? 'hand timing (1/100)' : 'photo finish: thousandths decide the order'}{raceFinal ? ` · Finals ${f.races!.join(', ')}: Final A for the medals, places run on into Final ${f.races![1]}` : ''}</Text> : null}
@@ -705,7 +722,7 @@ export default function ResultsEventScreen() {
             {roadEv && (editable || anyMark) && <RoadFinishCard def={def} entries={heatRes} editable={editable} onSave={saveLift} road={f.road} age={f.category?.age} />}
             {arch && archBracket && <BracketCard entries={resEntries} round={arch} fmt={matchFormatOf(arch.bow)} editable={editable} onSave={saveLift} rules={f.rules} discipline={def.key} />}
             {shoot && shootFinalPhase && phase.status !== 'completed' && <FinalCard entries={heatRes} ev={shoot} editable={editable} onSave={saveLift} />}
-            {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} rules={f.rules} />}
+            {lifts && editable && <NextLiftCard entries={heatRes} seq={nextSeq(resEntries)} onSave={saveLift} rules={f.rules} lb={showLb} />}
             {def.capture === 'attempts' && editable && (
               <AttemptCard def={def} up={nextUp} rows={heatRows} heatRes={heatRes} phaseKind={f.phase} onSave={saveAttempt} />
             )}
@@ -777,7 +794,7 @@ export default function ResultsEventScreen() {
                       onUndoable={(label) => offerUndo(e.id, r, `${label} · ${re.name.split(' ')[0]} R${round}`)} />
                   )}
                   {def.capture === 'heights' && <HeightRow def={def} r={r} bar={curBar} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} />}
-                  {def.capture === 'lifts' && <LiftGrid r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} rules={f.rules} />}
+                  {def.capture === 'lifts' && <LiftGrid r={r} editable={editable && (r.status ?? 'ok') === 'ok'} onChange={(n) => void save(e, n)} rules={f.rules} lb={showLb} />}
                   {swim && editable && f.handTimed && (r.status ?? 'ok') === 'ok' && (
                     <WatchesField key={`${e.id}:w:${(r.watches ?? []).join(',')}`} def={def} r={r} course={course}
                       register={(x) => { inputs.current.set(e.id, x); }} onNext={() => focusAfter(e.id)} onChange={(n) => void save(e, n)} />
@@ -844,8 +861,8 @@ export default function ResultsEventScreen() {
         {view === 'sheet' && (
           <>
             {/* SD-93: the combined event's full sheet first (every event's mark and points, the total) */}
-            {comb ? <CombinedSheet rows={ceRows} c={comb} title={`${f.eventTitle ?? ''} — ${ceLast && phase.status === 'completed' ? 'final classification' : `after ${combinedPhaseName(f)}`}`} subtitle={`${disciplineOf(comb.key)?.label ?? ''} · ${comb.table === 'M' ? 'men’s' : 'women’s'} scoring tables · ${phase.startsAt.slice(0, 10)}`} flags={ceFlags} /> : null}
-            <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)}${swim ? ` · ${courseLabel(f.category?.course)}` : ''} · ${phase.startsAt.slice(0, 10)}`} heats={overall && anyMark ? new Map([[0, overall]]) : ranked} wind={windByHeat} overall={!!overall && anyMark} heatLabel={heatName} notes={notes} road={f.road} />
+            {comb ? <CombinedSheet rows={ceRows} c={comb} title={`${f.eventTitle ?? ''} — ${ceLast && phase.status === 'completed' ? 'final classification' : `after ${combinedPhaseName(f)}`}`} subtitle={`${disciplineOf(comb.key)?.label ?? ''} · ${comb.table === 'M' ? 'men’s' : 'women’s'} scoring tables · ${meetDay(phase.startsAt)}`} flags={ceFlags} /> : null}
+            <ResultsSheet def={def} title={phase.title} subtitle={`${categoryLabel(f.category)}${swim ? ` · ${courseLabel(f.category?.course)}` : ''} · ${meetDay(phase.startsAt)}`} heats={overall && anyMark ? new Map([[0, overall]]) : ranked} wind={windByHeat} overall={!!overall && anyMark} heatLabel={heatName} notes={notes} road={f.road} />
             {f.jumpOff ? <Text style={textStyles.muted}>{jumpOffText(f.jumpOff, def, resEntries)}</Text> : null}
             {cycK === 'stage' && anyMark ? <StageSheets def={def} stageNo={f.phaseNo} entries={resEntries} /> : null}
             {f.road?.team && anyMark ? <TeamTable rows={teams} scorers={f.road.team.scorers} basis={f.road.team.basis} size={f.road.team.size} /> : null}
@@ -1311,8 +1328,8 @@ function AttemptCells({ def, r, round, editable, extraAllowed, course, onChange,
       </View>
       {allowed && (
         <View style={st.inline}>
-          <TextInput style={[st.input, { width: 80 }]} value={t} onChangeText={setT} placeholder={`R${round}`} placeholderTextColor={theme.colors.textMuted}
-            keyboardType="decimal-pad" accessibilityLabel={`Attempt ${round} mark`} onSubmitEditing={() => void commit()} />
+          <TextInput style={[st.input, { width: 80 }]} value={t} onChangeText={setT} placeholder={def.displayUnits ? `R${round} ft-in` : `R${round}`} placeholderTextColor={theme.colors.textMuted}
+            keyboardType={def.displayUnits ? 'numbers-and-punctuation' : 'decimal-pad'} accessibilityLabel={`Attempt ${round} mark`} onSubmitEditing={() => void commit()} />
           {def.wind === 'attempt' && (
             <TextInput style={[st.input, { width: 64 }]} value={w} onChangeText={setW} placeholder="wind" placeholderTextColor={theme.colors.textMuted}
               keyboardType="numbers-and-punctuation" accessibilityLabel={`Attempt ${round} wind`} onSubmitEditing={() => void commit()} />
@@ -1337,8 +1354,8 @@ function BarHeights({ def, bar, current, onPick, onAdd, editable }: { def: Disci
       </View>
       {editable && (
         <View style={st.inline}>
-          <TextInput style={[st.input, { width: 90 }]} value={t} onChangeText={setT} placeholder="1.20" placeholderTextColor={theme.colors.textMuted}
-            keyboardType="decimal-pad" accessibilityLabel="New bar height" />
+          <TextInput style={[st.input, { width: 90 }]} value={t} onChangeText={setT} placeholder={def.displayUnits ? '4-00' : '1.20'} placeholderTextColor={theme.colors.textMuted}
+            keyboardType={def.displayUnits ? 'numbers-and-punctuation' : 'decimal-pad'} accessibilityLabel="New bar height" />
           <SelectChip label="Add height" active={false} onPress={() => { const p = parseMark(t, def); if (p) { setT(''); void onAdd(p.mark); } }} />
         </View>
       )}
@@ -1443,8 +1460,8 @@ function AttemptCard({ def, up, rows, heatRes, phaseKind, onSave }: {
         {list.length ? `Series: ${list.map((a) => attemptText(a, def)).join('  ')}` : 'First trial'}{lead && lead.id !== up.entry.id ? `  ·  leader ${lead.entry.name.split(' ')[0]} ${lead.bestText}` : lead ? '  ·  leading' : ''}
       </Text>
       <View style={st.inline}>
-        <TextInput style={[st.input, st.markInput, bad && st.bad]} value={t} onChangeText={(x) => { setT(x); setBad(false); }} placeholder="5.12"
-          placeholderTextColor={theme.colors.textMuted} keyboardType="decimal-pad" accessibilityLabel={`Round ${up.round} mark for ${up.entry.name}`}
+        <TextInput style={[st.input, st.markInput, bad && st.bad]} value={t} onChangeText={(x) => { setT(x); setBad(false); }} placeholder={def.displayUnits ? `16' 9¼" or 16-09.25` : '5.12'}
+          placeholderTextColor={theme.colors.textMuted} keyboardType={def.displayUnits ? 'numbers-and-punctuation' : 'decimal-pad'} accessibilityLabel={`Round ${up.round} mark for ${up.entry.name}`}
           onSubmitEditing={commit} autoFocus={false} />
         {wind && (
           <TextInput style={[st.input, { width: 72 }]} value={w} onChangeText={setW} placeholder="wind" placeholderTextColor={theme.colors.textMuted}

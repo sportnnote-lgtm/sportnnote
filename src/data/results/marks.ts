@@ -4,13 +4,16 @@
  * bar progression, lift totals). Pure.
  */
 import type { Attempt, DisciplineDef, EntryResult, HeightAttempt, LiftAttempt, ResultStatus } from './model.ts';
+import { formatFeetInches, looksImperial, parseFeetInches } from '../../core/units.ts';
 
 const EPS = 1e-9;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 /** A mark as shown: 10.85 · 1:52.34 · 1:02:03.45 · 6.45 · 185 · 652. */
-export function formatMark(v: number | null | undefined, def: Pick<DisciplineDef, 'unit' | 'dp'>): string {
+export function formatMark(v: number | null | undefined, def: Pick<DisciplineDef, 'unit' | 'dp'> & { displayUnits?: 'imperial' }): string {
   if (v == null || !Number.isFinite(v)) return '';
+  // SD-154: a US meet shows jumps and throws in feet and inches (stored in metres)
+  if (def.displayUnits === 'imperial' && (def.unit === 'distance' || def.unit === 'height')) return formatFeetInches(v);
   if (def.unit !== 'time') return v.toFixed(def.dp);
   const dp = def.dp;
   const scale = 10 ** dp;
@@ -53,6 +56,12 @@ export function parseMark(text: string, def: Pick<DisciplineDef, 'unit' | 'dp'>)
     const decimals = (parts[parts.length - 1].split('.')[1] ?? '').length;
     const mark = Math.ceil(secs * scale - EPS) / scale;
     return decimals > def.dp ? { mark, thousandths: Math.round(secs * 1000) / 1000 } : { mark };
+  }
+  // SD-154: feet and inches (21' 4¼", 21-04.25) for a distance / height, any meet —
+  // converted to metres to the nearest centimetre (reads back exactly as typed)
+  if ((def.unit === 'distance' || def.unit === 'height') && looksImperial(text)) {
+    const m = parseFeetInches(text);
+    return m == null ? null : { mark: m };
   }
   if (!/^\d+(\.\d+)?$/.test(t)) return null;
   const v = Number(t);

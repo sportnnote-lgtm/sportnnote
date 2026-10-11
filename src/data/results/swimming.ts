@@ -22,15 +22,30 @@ import { crewSplitDistances } from './crewDefs.ts';
 /* ------------------------------ events ------------------------------------ */
 
 export type Stroke = 'free' | 'back' | 'breast' | 'fly' | 'im' | 'medley';
-export type Course = 'LCM' | 'SCM';
+/** SD-154: 'SCY' = a 25-yard pool (US school / college short course). Times
+ *  in yards are never converted — records and PBs are kept per course. */
+export type Course = 'LCM' | 'SCM' | 'SCY';
 
 export const COURSES: { key: Course; label: string; short: string; pool: number }[] = [
   { key: 'LCM', label: '50 m pool (long course)', short: 'LC', pool: 50 },
   { key: 'SCM', label: '25 m pool (short course)', short: 'SC', pool: 25 },
+  { key: 'SCY', label: '25 yd pool (short course yards)', short: 'SCY', pool: 25 },
 ];
-/** "LC" / "SC" (long course when not set). */
-export const courseShort = (c?: Course | string): string => (c === 'SCM' ? 'SC' : 'LC');
-export const courseLabel = (c?: Course | string): string => (c === 'SCM' ? COURSES[1].label : COURSES[0].label);
+/** "LC" / "SC" / "SCY" (long course when not set). */
+export const courseShort = (c?: Course | string): string => (c === 'SCM' ? 'SC' : c === 'SCY' ? 'SCY' : 'LC');
+export const courseLabel = (c?: Course | string): string => (c === 'SCM' ? COURSES[1].label : c === 'SCY' ? COURSES[2].label : COURSES[0].label);
+/** SD-154: the distance unit of a pool — "yd" in a yards pool, else "m". */
+export const courseUnit = (c?: Course | string): 'm' | 'yd' => (c === 'SCY' ? 'yd' : 'm');
+/** A swimming event's name in its pool's unit: "50 m freestyle" → "50 yd
+ *  freestyle" (and "4 × 50 m" → "4 × 50 yd") in a yards pool. */
+export const swimLabel = (label: string, c?: Course | string): string =>
+  c === 'SCY' ? label.replace(/(\d) m\b/g, '$1 yd') : label;
+/** Is a stored course value one we know? */
+export const isCourse = (c: unknown): c is Course => c === 'LCM' || c === 'SCM' || c === 'SCY';
+/** SD-154: events swum only in a yards pool (the US 500 / 1000 / 1650 yd free). */
+export const YARDS_ONLY = new Set(['swim.500free', 'swim.1000free', 'swim.1650free']);
+/** Metre-pool events with no yards equivalent (their yards cousins are 500 / 1000 / 1650). */
+export const METRES_ONLY = new Set(['swim.400free', 'swim.800free', 'swim.1500free']);
 
 export interface SwimEvent { distance: number; stroke: Stroke; relay: boolean; legs: number; legDistance: number }
 
@@ -68,7 +83,7 @@ export function swimMeetSettings(fmt?: Record<string, unknown>): SwimMeetSetting
     relayFactor: Number(fmt?.relayFactor ?? 1) || 1,
     manual: fmt?.handTimed === true,
     reaction: fmt?.reaction === true,
-    course: fmt?.course === 'SCM' ? 'SCM' : 'LCM',
+    course: fmt?.course === 'SCM' || fmt?.course === 'SCY' ? fmt.course : 'LCM',
     lanes: [4, 5, 6, 8, 10].includes(lanes) ? lanes : 8,
     splits: fmt?.splits !== false,
   };
@@ -81,7 +96,7 @@ export interface SwimProgrammeItem { discipline: string; label: string; group: S
 
 const AGES = ['U10', 'U12', 'U14', 'U16', 'U18', 'U20', 'Open'];
 const ageRank = (age?: string) => Math.max(0, AGES.indexOf(age ?? 'Open'));
-const sItem = (key: string, group: SwimGroup): SwimProgrammeItem => ({ discipline: `swim.${key}`, label: disciplineOf(`swim.${key}`)!.label, group });
+const sItem = (key: string, group: SwimGroup, course?: Course): SwimProgrammeItem => ({ discipline: `swim.${key}`, label: swimLabel(disciplineOf(`swim.${key}`)!.label, course), group });
 
 /**
  * The events offered for a category in a pool (a school-meet default, not a
@@ -91,8 +106,13 @@ const sItem = (key: string, group: SwimGroup): SwimProgrammeItem => ({ disciplin
  * 400 m IM and the 4 × 200 m free relay from U16. 100 m IM is short course only
  * (SW 12.2). Mixed (2 + 2, SW 10.11) is relays only — individual races are by
  * gender (SW 10.1).
+ *
+ * SD-154: a 25-yard pool (SCY, US) swims the yards programme — 500 / 1000 /
+ * 1650 yd free in place of 400 / 800 / 1500 m, 100 yd IM for everyone (as in
+ * the NFHS / NCAA programme), and labels in yards.
  */
 export function swimEventsFor(cat: Category, course: Course = 'LCM'): SwimProgrammeItem[] {
+  if (course === 'SCY') return swimEventsYards(cat);
   const r = ageRank(cat.age);
   const U12 = ageRank('U12'), U14 = ageRank('U14'), U16 = ageRank('U16');
   const out: SwimProgrammeItem[] = [];
@@ -113,6 +133,31 @@ export function swimEventsFor(cat: Category, course: Course = 'LCM'): SwimProgra
   out.push(sItem('4x50free', 'relay'), sItem('4x50medley', 'relay'));
   if (r >= U14) out.push(sItem('4x100free', 'relay'), sItem('4x100medley', 'relay'));
   if (r >= U16 && cat.gender !== 'X') out.push(sItem('4x200free', 'relay'));
+  return out;
+}
+
+function swimEventsYards(cat: Category): SwimProgrammeItem[] {
+  const r = ageRank(cat.age);
+  const U12 = ageRank('U12'), U14 = ageRank('U14'), U16 = ageRank('U16');
+  const y = (key: string, group: SwimGroup) => sItem(key, group, 'SCY');
+  const out: SwimProgrammeItem[] = [];
+  if (cat.gender !== 'X') {
+    out.push(y('50free', 'free'));
+    if (r >= U12) out.push(y('100free', 'free'), y('200free', 'free'));
+    if (r >= U14) out.push(y('500free', 'free'));
+    if (r >= U16) out.push(y('1000free', 'free'), y('1650free', 'free'));
+    for (const s of ['back', 'breast', 'fly'] as const) {
+      out.push(y(`50${s}`, s));
+      if (r >= U12) out.push(y(`100${s}`, s));
+      if (r >= U14) out.push(y(`200${s}`, s));
+    }
+    out.push(y('100im', 'im'));
+    if (r >= U12) out.push(y('200im', 'im'));
+    if (r >= U16) out.push(y('400im', 'im'));
+  }
+  out.push(y('4x50free', 'relay'), y('4x50medley', 'relay'));
+  if (r >= U14) out.push(y('4x100free', 'relay'), y('4x100medley', 'relay'));
+  if (r >= U16 && cat.gender !== 'X') out.push(y('4x200free', 'relay'));
   return out;
 }
 
@@ -374,7 +419,8 @@ export function splitsError(splits: (number | undefined)[], final?: number): str
 }
 
 /** "50 m 31.20 · 100 m 1:05.30 (34.10) · …" — cumulative splits with each 50 m lap. */
-export function splitsText(splits: (number | undefined)[] | undefined, fmt: (v: number) => string, discipline: string): string {
+export function splitsText(splits: (number | undefined)[] | undefined, fmt: (v: number) => string, discipline: string, course?: Course | string): string {
+  const unit = courseUnit(course);
   const ds = splitDistances(discipline);
   if (!splits?.length) return '';
   let prev: number | undefined = 0;
@@ -382,7 +428,7 @@ export function splitsText(splits: (number | undefined)[] | undefined, fmt: (v: 
     if (s == null) { prev = undefined; return ''; }
     const lap = prev != null && i > 0 ? ` (${fmt(Math.round((s - prev) * 100) / 100)})` : '';
     prev = s;
-    return `${ds[i] ?? (i + 1) * 50} m ${fmt(s)}${lap}`;
+    return `${ds[i] ?? (i + 1) * 50} ${unit} ${fmt(s)}${lap}`;
   }).filter(Boolean).join(' · ');
 }
 

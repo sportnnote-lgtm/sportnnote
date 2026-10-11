@@ -11,7 +11,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
-import { Card, Button, TextField, ScreenTitle, FormError, LoadingState, textStyles } from '../components/ui';
+import { Card, Button, TextField, ScreenTitle, FormError, LoadingState, SelectChip, textStyles } from '../components/ui';
+import { teamLabel, levelSuggestions } from '../core/teamLevels';
+import { useRegion } from '../core/region';
 import { LogoPicker } from '../components/LogoPicker';
 import { confirmAction, notice } from '../core/confirm';
 import { useTeamPermission } from '../data/hooks';
@@ -35,6 +37,9 @@ export default function EditTeamScreen() {
   const [short, setShort] = useState('');
   const [color, setColor] = useState<string | undefined>(undefined);
   const [city, setCity] = useState('');
+  // SD-154: the squad's level (Varsity / JV / A / B / U13) — shown after the name in fixtures and tables
+  const [level, setLevel] = useState('');
+  const region = useRegion();
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +54,7 @@ export default function EditTeamScreen() {
       setDetails(d);
       if (!t) return;
       setName(t.name); setShort(t.shortName); setColor(t.colorHex);
-      setCity(d.city ?? t.city ?? ''); setLogoUrl(d.logoUrl ?? t.logoUrl);
+      setCity(d.city ?? t.city ?? ''); setLogoUrl(d.logoUrl ?? t.logoUrl); setLevel(t.level ?? '');
       if (t.clubId) {
         const c = await getClub(t.clubId).catch(() => null);
         if (on) setClubName(c?.name ?? 'the club');
@@ -88,6 +93,7 @@ export default function EditTeamScreen() {
         ...(isClubTeam ? {} : { name: name.trim(), shortName: shortClean }),
         colorHex: color ?? null,
         ...(supported ? { city: city.trim() || null } : {}),
+        ...(level.trim() !== (team.level ?? '') ? { level: level.trim() || null } : {}),
       });
       notice('Team updated', `${isClubTeam ? team.name : name.trim()} was saved.`);
       nav.goBack();
@@ -149,6 +155,13 @@ export default function EditTeamScreen() {
             <Text key={c} accessibilityRole="button" accessibilityLabel={`Colour ${c}`} accessibilityState={{ selected: color === c }} onPress={() => setColor(c)} style={[st.swatch, { backgroundColor: c }, color === c && st.swatchActive]} />
           ))}
         </View>
+
+        <Text style={textStyles.muted}>Level (optional) · for a school with more than one {team.sport === 'football' ? 'side' : 'team'} in this sport — shown as “{teamLabel({ name: isClubTeam ? team.name : name || team.name, level: level || 'JV' })}”</Text>
+        <View style={st.chips}>
+          <SelectChip label="None" active={!level.trim()} onPress={() => setLevel('')} />
+          {levelSuggestions(region.country).map((l) => <SelectChip key={l} label={l} active={level.trim().toLowerCase() === l.toLowerCase()} onPress={() => setLevel(l)} />)}
+        </View>
+        <TextField label="Or type a level" value={level} onChange={(v) => setLevel(v.slice(0, 30))} placeholder="U13 A" autoCapitalize="words" />
 
         {supported ? (
           <TextField label="City / town" value={city} onChange={setCity} placeholder="Hyderabad" autoCapitalize="words" />

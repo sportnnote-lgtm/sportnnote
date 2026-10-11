@@ -130,7 +130,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
     const q = query.trim().toLowerCase();
     const base = src ? src.playerIds.map((id) => playerById.get(id)) : q ? players : sources.flatMap((s) => s.playerIds.map((id) => playerById.get(id)));
     const uniq = [...new Map(base.filter((p): p is Player => !!p).map((p) => [p.id, p])).values()];
-    return uniq.filter((p) => p.fullName && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })) && (!q || p.fullName.toLowerCase().includes(q))).slice(0, 80);
+    return uniq.filter((p) => p.fullName && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) })) && (!q || p.fullName.toLowerCase().includes(q))).slice(0, 80);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, query, sources, players, playerById, eligibleOnly, gender, age]);
   const toggle = (pid: string) => setPicks((ps) => (ps.includes(pid) ? ps.filter((x) => x !== pid) : [...ps, pid]));
@@ -274,7 +274,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
             <Text style={textStyles.h3}>3 · Teams ({teams.length})</Text>
             <AgeBasisNote tournament={tournament} sport={'cycling'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
             <TeamBuilder sources={sources} playerById={playerById} players={players} seatNames={Array.from({ length: ev.riders ?? 4 }, (_, i) => `Rider ${i + 1}`)}
-              fits={(p) => !eligibleOnly || gender === 'X' || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })} teams={teams} onChange={setTeams}
+              fits={(p) => !eligibleOnly || gender === 'X' || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) })} teams={teams} onChange={setTeams}
               hint={`Add a team from a house, then pick its ${ev.riders} riders in starting order — or “Fill empty seats”.`} />
           </Card>
         ) : null}

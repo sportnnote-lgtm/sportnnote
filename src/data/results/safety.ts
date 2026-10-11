@@ -70,6 +70,18 @@ const SWIM_LCM_MIN: Record<string, number> = {
   '4x50free': 84, '4x100free': 185, '4x200free': 410, '4x50medley': 94, '4x100medley': 203,
 };
 
+/** SD-154: a 25-YARD pool (SCY, US): the fast end in seconds (just under the
+ *  NCAA records, from memory — verify). Its own table: a yards time is never
+ *  converted from metres. The slow end is 4.5 × the fast end, as for metres. */
+const SWIM_SCY_MIN: Record<string, number> = {
+  '50free': 17.5, '100free': 39, '200free': 87, '500free': 240, '1000free': 510, '1650free': 855,
+  '50back': 19.5, '100back': 42.5, '200back': 93,
+  '50breast': 22, '100breast': 48, '200breast': 104,
+  '50fly': 19, '100fly': 41.5, '200fly': 93,
+  '100im': 44, '200im': 93, '400im': 205,
+  '4x50free': 73, '4x100free': 160, '4x200free': 360, '4x50medley': 80, '4x100medley': 177,
+};
+
 /** The usual range of marks for an event (and pool length), or null when the
  *  event has none (weightlifting, archery …). */
 export function markRange(discipline: string, course?: Category['course']): MarkRange | null {
@@ -86,6 +98,10 @@ export function markRange(discipline: string, course?: Category['course']): Mark
   // SD-92: road / race walk / cross-country by distance (the generous school end; the entry card checks by age)
   const road = roadRange(discipline, 'U10');
   if (road) return road;
+  if (discipline.startsWith('swim.') && course === 'SCY') {
+    const base = SWIM_SCY_MIN[discipline.slice(5)];
+    return base == null ? null : { min: base, max: Math.round(base * 4.5) };
+  }
   if (discipline.startsWith('swim.')) {
     const base = SWIM_LCM_MIN[discipline.slice(5)];
     if (base == null) return null;

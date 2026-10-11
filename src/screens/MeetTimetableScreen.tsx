@@ -3,6 +3,7 @@
  *  what's on now and next, "running late" for the rest of a session, athletes
  *  doubling up too close together, and the printable sheets (timetable, start
  *  lists / heat sheets, field cards, results, house table) for a day. */
+import { useMeetZone } from '../data/useMeetZone';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,6 +44,8 @@ export default function MeetTimetableScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'MeetTimetable'>>();
   const tournamentId = params?.tournamentId;
   const tournament = useTournamentById(tournamentId);
+  // SD-154: the timetable reads in the venue's zone (the tournament's), not the phone's
+  const mz = useMeetZone(tournament);
   const { profile } = useAuth();
   const orgs = useOrganizations();
   const [me, setMe] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export default function MeetTimetableScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const canEdit = canOrganize(profile?.role) || (!!tournament && canManageTournament(tournament, orgs, me));
-  const items = useMemo(() => buildTimetable(events), [events]);
+  const items = useMemo(() => buildTimetable(events), [events, mz.zone]); // eslint-disable-line react-hooks/exhaustive-deps
   const days = useMemo(() => timetableDays(items, tournament ? { start: tournament.startDate, end: tournament.endDate } : undefined), [items, tournament]);
   const tbd = useMemo(() => unscheduled(items), [items]);
   const today = dayKey(now);
@@ -147,6 +150,7 @@ export default function MeetTimetableScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title="🗓 Timetable" subtitle={tournament?.name} />
+        <Text style={textStyles.muted}>Times are {mz.short} — the venue's local time.</Text>
 
         {(nn.now.length > 0 || nn.next) && (
           <Card style={{ gap: theme.spacing(2) }}>

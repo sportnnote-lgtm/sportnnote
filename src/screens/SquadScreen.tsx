@@ -156,6 +156,10 @@ export default function SquadScreen() {
         {canManage && (
           <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('EditTeam', { teamId })}>✎ Edit team</Text>
         )}
+        {/* SD-154: a whole squad from a CSV (a club team's squad is picked from its members instead) */}
+        {canManage && !clubId && (
+          <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('RosterImport', { teamId })}>📥 Import squad from CSV</Text>
+        )}
         {canManage && clubId && (
           <Text style={textStyles.muted} onPress={() => nav.navigate('ClubHome', { clubId })}>Admins are set on the club page ›</Text>
         )}

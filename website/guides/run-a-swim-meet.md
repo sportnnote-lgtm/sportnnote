@@ -5,14 +5,14 @@ category: Tournaments
 audience: Organisers, Scorers, Players, Parents & fans
 sports: swimming
 order: 87
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 A swim meet is a list of events (say 50 m freestyle U12 Girls), each swum in one or more heats. You enter times on a phone; the app seeds heats the World Aquatics way, ranks swimmers, adds house points and keeps records and personal bests per pool length.
 
 ## Before you start
 - You need to be a host of the tournament (or an organiser) to add events and enter results.
-- Create the tournament with **Swimming** as a sport. Under **Swimming basics**, pick the **Pool** (50 m or 25 m), the number of **Lanes**, the position points (8-7-6-5-4-3-2-1 by default) and whether you use **Manual timing** (stopwatches, no touchpads).
+- Create the tournament with **Swimming** as a sport. Under **Swimming basics**, pick the **Pool** (50 m, 25 m or 25 yd — see [Run a swim meet in a yards pool](/guides/swim-meet-in-yards/)), the number of **Lanes**, the position points (8-7-6-5-4-3-2-1 by default) and whether you use **Manual timing** (stopwatches, no touchpads).
 - Add your houses or schools as teams (**Manage** → **Participating teams**). Swimmers and relay teams score for them.
 
 ## Step by step: add an event
@@ -50,7 +50,7 @@ A swim meet is a list of events (say 50 m freestyle U12 Girls), each swum in one
 
 ## What everyone sees
 - **House table:** on the Swimming page and the tournament's **Stats** tab. Relays can score double (**⚙ Pool, points & timing**).
-- **Best by event**, **Best swimmers (points)** from individual finals, and **Meet records**, marked LC (50 m pool) or SC (25 m pool), kept apart as World Aquatics does. When a school hosts, **School records** show its earlier meets' best times.
+- **Best by event**, **Best swimmers (points)** from individual finals, and **Meet records**, marked LC (50 m pool), SC (25 m pool) or SCY (25 yd pool), kept apart as World Aquatics does. When a school hosts, **School records** show its earlier meets' best times.
 - **Swimmer profiles:** races, medals, and a PB and SB per event and pool length.
 
 ## Common questions

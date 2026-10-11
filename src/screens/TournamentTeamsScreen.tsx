@@ -10,6 +10,8 @@
  *  new team is attributed to the hosting community, and you can capture a
  *  manager/captain contact who gets invited to claim the team & manage its
  *  squad (a team-claim invite → join link, sent by email / WhatsApp / SMS). */
+import { teamLabel } from '../core/teamLevels';
+import { QualifiersCard, qualifiedBadge, useFeeders } from '../components/FeederCards';
 import { isEventSport } from '../sports/eventSports';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Switch, Linking, Platform, Share } from 'react-native';
@@ -59,6 +61,8 @@ export default function TournamentTeamsScreen() {
   const entries = useTournamentEntries(params.tournamentId, sport, tick);
   const categories = useTournamentCategories(params.tournamentId, tick);
   const { matches } = useLeagueData(params.tournamentId);
+  // SD-154: tournaments that qualify teams into this one (badge + one-tap add)
+  const feeders = useFeeders(params.tournamentId, tick);
 
   // Division (category) the organizer is editing. Null when the tournament runs
   // as a single implicit division. Teams are rostered per division.
@@ -399,6 +403,9 @@ export default function TournamentTeamsScreen() {
 
         {tournament && <RegistrationBanner tournament={tournament} enteredCount={enteredCount} />}
 
+        {/* SD-154: qualifiers from feeder tournaments (county → national, zonal → national) */}
+        <QualifiersCard tournamentId={params.tournamentId} sport={sport} entries={entries} feeders={feeders} onAdded={() => setTick((t) => t + 1)} />
+
         {/* Join link: captains enter their own team from one WhatsApp link (or
             type its code under Settings → "Join a team with a code"). Entries are confirmed at once. */}
         {pMode === 'team' && (inviteNeedsDb ? (
@@ -443,7 +450,7 @@ export default function TournamentTeamsScreen() {
                 <Text style={textStyles.h3}>Requests to join · {pending.length}</Text>
                 {pending.map((e) => (
                   <View key={e.team.id} style={st.entryRow}>
-                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{teamLabel(e.team)}</Text>
                     <Button label="Accept" onPress={() => decide(e, true)} disabled={busy} />
                     <Button label="Decline" variant="ghost" onPress={() => decide(e, false)} disabled={busy} />
                   </View>
@@ -456,7 +463,7 @@ export default function TournamentTeamsScreen() {
                 <Text style={textStyles.muted}>Awaiting the captain’s acceptance — or confirm them yourself.</Text>
                 {invited.map((e) => (
                   <View key={e.team.id} style={st.entryRow}>
-                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{e.team.name}</Text>
+                    <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{teamLabel(e.team)}</Text>
                     <Button label="Confirm" onPress={() => decide(e, true)} disabled={busy} />
                     <Button label="Cancel" variant="ghost" onPress={() => decide(e, false)} disabled={busy} />
                   </View>
@@ -469,7 +476,7 @@ export default function TournamentTeamsScreen() {
                 <Text style={textStyles.muted}>Pulled out — kept for the record, and out of the fixtures. Reinstate to bring a team back.</Text>
                 {withdrawn.map((e) => (
                   <View key={e.team.id} style={st.entryRow}>
-                    <Text style={[textStyles.body, st.flex1, st.dim]} numberOfLines={1}>{e.team.name}</Text>
+                    <Text style={[textStyles.body, st.flex1, st.dim]} numberOfLines={1}>{teamLabel(e.team)}</Text>
                     <Button label="Reinstate" onPress={() => changeStatus(e, 'confirmed')} disabled={busy} />
                     <Button label="Remove" variant="ghost" onPress={() => removeEntry(e)} disabled={busy} />
                   </View>
@@ -490,7 +497,8 @@ export default function TournamentTeamsScreen() {
             {confirmedInScope.map((e) => (
               <View key={e.team.id} style={st.entryRow}>
                 <View style={st.flex1}>
-                  <Text style={textStyles.body} numberOfLines={1}>{e.checkedInAt ? '✅ ' : ''}{e.team.name}</Text>
+                  <Text style={textStyles.body} numberOfLines={1}>{e.checkedInAt ? '✅ ' : ''}{teamLabel(e.team)}</Text>
+                  {qualifiedBadge(e, feeders) ? <Text style={textStyles.muted} numberOfLines={1}>{qualifiedBadge(e, feeders)}</Text> : null}
                   {pMode === 'team' && (() => {
                     const s = setup[e.team.id];
                     const next = !s ? null : !s.hasCaptain ? 'No captain yet' : s.players === 0 ? 'No players yet' : null;
@@ -574,7 +582,7 @@ export default function TournamentTeamsScreen() {
               ) : (
                 <View style={st.chips}>
                   {shown.map((t) => (
-                    <SelectChip key={t.id} label={t.name} active={selected.includes(t.id)} onPress={() => toggle(t.id)} />
+                    <SelectChip key={t.id} label={teamLabel(t)} active={selected.includes(t.id)} onPress={() => toggle(t.id)} />
                   ))}
                 </View>
               )}

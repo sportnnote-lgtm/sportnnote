@@ -38,8 +38,8 @@ export const swimmingPlugin: SportPlugin<SwimmingMatchState> = {
   formatFields: [
     {
       key: 'course', label: 'Pool', type: 'choice', default: 'LCM', onCreate: true,
-      hint: 'records and personal bests are kept separately for 25 m and 50 m pools',
-      options: [{ value: 'LCM', label: '50 m (long course)' }, { value: 'SCM', label: '25 m (short course)' }],
+      hint: 'records and personal bests are kept separately for each pool (25 m, 50 m, 25 yd)',
+      options: [{ value: 'LCM', label: '50 m (long course)' }, { value: 'SCM', label: '25 m (short course)' }, { value: 'SCY', label: '25 yd (short course yards, US)' }],
     },
     {
       key: 'lanes', label: 'Lanes', type: 'choice', default: 8, onCreate: true,

@@ -5,11 +5,13 @@ category: Tournaments
 audience: Organisers, Scorers, Parents & fans
 sports: athletics, swimming, weightlifting, shooting, archery, rowing, canoe, cycling
 order: 84
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 Call rooms, lane judges and notice boards run on a timetable and on paper. Give each round a day, time and area (track, jumps pit, pool) when you add the event. The meet's **Timetable** shows the programme by day and session and prints A4 sheets.
 
+
+> **Note:** Times show in the venue's time zone (the tournament's), on every phone and every printed sheet.
 ## Before you start
 - Add events and change times as a host of the tournament or an organiser. Anyone can see the timetable.
 - Set the tournament's start and end dates. Each date becomes a day (Day 1, Day 2 …) on the timetable.

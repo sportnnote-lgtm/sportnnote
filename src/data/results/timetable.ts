@@ -9,9 +9,13 @@
  * without its own entry was created before SD-129 — its starts_at is just the
  * creation time, so it shows under "Not on the timetable yet".
  *
- * Pure: the I/O is in data/timetableStore.ts. Times are local wall-clock
- * (the organiser's device), stored as ISO.
+ * Pure: the I/O is in data/timetableStore.ts. Times are stored as ISO
+ * instants. SD-154: days, clock times and sessions are read IN THE MEET'S
+ * ZONE (`setMeetZone(eventZone(tournament))`, the tournament's venue zone, else
+ * the app zone) so a remote organiser, a parent abroad and the printed sheets
+ * all show the venue's clock. With no zone set: the device clock (as before).
  */
+import { isoToWall, wallTimeToIso } from '../../core/time.ts';
 import { disciplineOf, categoryLabel, type DisciplineDef, type MeetSession, type PhaseFormat, type PhaseKind, type SchedRound } from './model.ts';
 import type { MeetEvent } from './athletics.ts';
 import { phaseNameOf } from './archery.ts';
@@ -52,17 +56,44 @@ export interface TimetableItem {
 export const SESSION_LABEL: Record<MeetSession, string> = { AM: 'Morning', PM: 'Afternoon', EVE: 'Evening' };
 export const SESSIONS: MeetSession[] = ['AM', 'PM', 'EVE'];
 
+/* SD-154: the zone the meet's clock is read in (undefined = the device clock). */
+let MEET_ZONE: string | undefined;
+/** Read days / times / sessions in this zone from now on (the tournament's
+ *  `eventZone`). Screens set it when they open a meet; undefined = device. */
+export function setMeetZone(z?: string | null): void { MEET_ZONE = z || undefined; }
+export const meetZone = (): string | undefined => MEET_ZONE;
+
+const wallOf = (at: string | Date, z: string | undefined): { date: string; time: string } | null => {
+  if (!z) return null;
+  try { return isoToWall(at instanceof Date ? at.getTime() : at, z); } catch { return null; }
+};
+
 /** The clock's session: before 12:00 morning, before 17:00 afternoon, else evening. */
-export const sessionOf = (at: string | Date): MeetSession => {
-  const h = new Date(at).getHours();
+export const sessionOf = (at: string | Date, z: string | undefined = MEET_ZONE): MeetSession => {
+  const w = wallOf(at, z);
+  const h = w ? Number(w.time.slice(0, 2)) : new Date(at).getHours();
   return h < 12 ? 'AM' : h < 17 ? 'PM' : 'EVE';
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
-/** Local date key 'YYYY-MM-DD'. */
-export const dayKey = (at: string | Date): string => { const d = new Date(at); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-/** '09:05' (24-hour, local). */
-export const hhmm = (at: string | Date): string => { const d = new Date(at); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/** Date key 'YYYY-MM-DD' — in the meet's zone (else the device's). */
+export const dayKey = (at: string | Date, z: string | undefined = MEET_ZONE): string => {
+  const w = wallOf(at, z);
+  if (w) return w.date;
+  const d = new Date(at); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+/** '09:05' (24-hour) — in the meet's zone (else the device's). */
+export const hhmm = (at: string | Date, z: string | undefined = MEET_ZONE): string => {
+  const w = wallOf(at, z);
+  if (w) return w.time;
+  const d = new Date(at); return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+/** The day after a day key ('2026-11-12' → '2026-11-13'), calendar arithmetic only. */
+export const nextDayKey = (key: string): string => {
+  const [y, m, d] = key.split('-').map(Number);
+  const t = new Date(Date.UTC(y, (m || 1) - 1, (d || 1) + 1));
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+};
 /** 'Thu 12 Nov' */
 export const dayLabel = (key: string): string => {
   const d = fromDayKey(key);
@@ -70,7 +101,7 @@ export const dayLabel = (key: string): string => {
 };
 export const fromDayKey = (key: string): Date => { const [y, m, d] = key.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
 /** A day key + 'HH:MM' → ISO; null when the time can't be read. Accepts "9", "930", "9:30", "09.30". */
-export function atOf(day: string, time: string): string | null {
+export function atOf(day: string, time: string, z: string | undefined = MEET_ZONE): string | null {
   const t = time.trim().replace('.', ':');
   let h: number, m: number;
   const c = /^(\d{1,2}):(\d{2})$/.exec(t);
@@ -79,6 +110,7 @@ export function atOf(day: string, time: string): string | null {
     if (t.length <= 2) { h = v; m = 0; } else { h = Math.floor(v / 100); m = v % 100; }
   } else return null;
   if (h > 23 || m > 59) return null;
+  if (z) { try { return wallTimeToIso(day, `${pad(h)}:${pad(m)}`, z); } catch { /* device clock below */ } }
   const d = fromDayKey(day);
   d.setHours(h, m, 0, 0);
   return d.toISOString();
@@ -184,9 +216,10 @@ export interface TimetableDay { day: string; label: string; index: number; sessi
 export function timetableDays(items: TimetableItem[], range?: { start?: string; end?: string }): TimetableDay[] {
   const keys = new Set(items.filter((i) => i.set).map((i) => dayKey(i.at)));
   if (range?.start) {
-    const s = fromDayKey(range.start.slice(0, 10));
-    const e = range.end ? fromDayKey(range.end.slice(0, 10)) : s;
-    for (let d = new Date(s), n = 0; d <= e && n < 14; d.setDate(d.getDate() + 1), n++) keys.add(dayKey(d));
+    // tournament dates are calendar days already — step them as days (no clock)
+    const s = range.start.slice(0, 10);
+    const e = range.end ? range.end.slice(0, 10) : s;
+    for (let d = s, n = 0; d <= e && n < 14; d = nextDayKey(d), n++) keys.add(d);
   }
   return [...keys].sort().map((day, index) => ({
     day, index, label: `Day ${index + 1} · ${dayLabel(day)}`,
@@ -267,11 +300,9 @@ export function clashesFor(athletes: { id: string; name: string }[], at: string,
  *  rounded up to 5 min), else after the last one. */
 export function nextFreeSlot(items: TimetableItem[], day: string, area: string | undefined, minutes = 15, startHour = 9): string {
   const same = items.filter((i) => i.set && dayKey(i.at) === day && (i.area ?? '') === (area ?? '')).sort((a, b) => a.at.localeCompare(b.at));
-  const d = fromDayKey(day);
-  d.setHours(startHour, 0, 0, 0);
   const step = 5 * 60000;
   const up = (t: number) => Math.ceil(t / step) * step;
-  let t = d.getTime();
+  let t = new Date(atOf(day, `${pad(startHour)}:00`)!).getTime();
   for (const i of same) {
     const s = new Date(i.at).getTime();
     if (up(t) + minutes * 60000 <= s) break;
@@ -293,9 +324,7 @@ export function suggestRounds(first: string, plan: { phase: PhaseKind; heats: nu
     const prev = out[i - 1];
     if (opts.combined) {
       if (opts.combined.day2 != null && i === opts.combined.day2) {
-        const d = fromDayKey(dayKey(prev));
-        d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
-        out.push(d.toISOString());
+        out.push(atOf(nextDayKey(dayKey(prev)), '09:00')!);
         continue;
       }
       const prevDef = disciplineOf(opts.combined.events[i - 1]);
@@ -305,8 +334,8 @@ export function suggestRounds(first: string, plan: { phase: PhaseKind; heats: nu
     if (opts.stage) { out.push(addMinutes(prev, 24 * 60)); continue; }
     const p = new Date(prev);
     const busy = opts.minutes?.[i - 1] ?? 60;
-    if (p.getHours() < 13) {
-      const aft = new Date(p); aft.setHours(15, 0, 0, 0);
+    if (Number(hhmm(prev).slice(0, 2)) < 13) {
+      const aft = new Date(atOf(dayKey(prev), '15:00')!);
       const t = Math.max(aft.getTime(), p.getTime() + Math.max(120, busy + 60) * 60000);
       const step = 5 * 60000;
       out.push(new Date(Math.ceil(t / step) * step).toISOString());

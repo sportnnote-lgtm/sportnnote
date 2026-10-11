@@ -27,7 +27,7 @@ import {
   roadLines, phaseTeams, teamAwards, roadRecordsAllowed, type RoadFormat,
   combinedStandings, combinedAwards, combinedLines, combinedEventLines, combinedRanked, combinedSeed, combinedBar, continuing, nextCombinedFormat,
   combinedKey, markKey, type CombinedKind, type CombinedTable, type CombinedPhaseInput,
-  plannedSlot, type PhaseSched,
+  plannedSlot, type PhaseSched, dayKey,
   shootMatchEntrant, SHOOT_MATCH_TEAMS, memberLookup, type MemberScore,
 } from './results';
 import { removeFieldEntry } from './golf';
@@ -720,7 +720,7 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
     // SD-98: a sprint bracket's rows read as their flying 200 m times
     const view = def.sport === 'shooting' ? qualView : def.sport === 'archery' || (def.sport === 'cycling' && rows.some((r) => r.entry.result.mp != null)) ? archQualView : null;
     const dRows = view ? rankEntries(view(entries.map((e) => toResultEntry(e, nameOf))), d) : d === def ? rows : rankEntries(entries.map((e) => toResultEntry(e, nameOf)), d);
-    next = updateRecords(rowsForRecords(dRows, d, f.category?.course), d, cat, next, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+    next = updateRecords(rowsForRecords(dRows, d, f.category?.course), d, cat, next, dayKey(phase.startsAt), scopes, f.eventKey);
   }
   // SD-112: keep what the book said before, so "Reopen final" can put it back
   await patchPhaseFormat(phase.id, { recordsBefore: recordDefsFor(def).flatMap((d) => recordsFor(book, d.key, cat)) });
@@ -852,7 +852,7 @@ export async function getMarkHistory(def: DisciplineDef, athleteIds: string[], e
     const { data: rows } = await supabase!.from('field_entries').select('*').in('event_id', phases.map((p) => p.id)).in('player_id', ids);
     entries = ((rows ?? []) as any[]).map(toEntry);
   }
-  const dateOf = new Map(phases.map((p) => [p.id, p.startsAt.slice(0, 10)]));
+  const dateOf = new Map(phases.map((p) => [p.id, dayKey(p.startsAt)])); // SD-154: the venue's day
   const out: MarkHistory[] = [];
   for (const e of entries) {
     const p = performanceOf(toResultEntry(e, () => ''), def, undefined, looseLegal(phaseOf(phases.find((x) => x.id === e.eventId)!)));
@@ -1105,7 +1105,7 @@ async function completeCombined(phase: FieldEvent, f: PhaseFormat, def: Discipli
   const cdef = disciplineOf(f.combined!.key)!;
   const cat = categoryKey(f.category);
   const book = await getRecordBook(phase.tournamentId, 'athletics');
-  let next = updateRecords(combinedRanked(rows, cdef.key), cdef, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  let next = updateRecords(combinedRanked(rows, cdef.key), cdef, cat, book, dayKey(phase.startsAt), scopes, f.eventKey);
   await patchPhaseFormat(phase.id, { recordsBefore: recordsFor(book, cdef.key, cat) });
   if (next !== book) next = await commitRecords(phase, 'athletics', book, next); // SD-130
   await saveResultAlert(phase.id, combinedAlert(rows, f.eventTitle)); // SD-131

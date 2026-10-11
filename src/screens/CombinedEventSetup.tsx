@@ -105,7 +105,7 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
   const [query, setQuery] = useState('');
   const [eligibleOnly, setEligibleOnly] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p), grade: ages.gradeFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();

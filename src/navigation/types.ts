@@ -48,6 +48,8 @@ export type RootStackParamList = {
   SwissRound: { tournamentId: string; sport?: SportId; round?: number };
   /** bulk schedule import from a spreadsheet (parity #24) */
   ImportSchedule: { tournamentId: string };
+  /** SD-154: CSV roster import into a school (org) and/or a team's squad */
+  RosterImport: { orgId?: string; teamId?: string };
   AssignScorers: { tournamentId: string };
   TournamentTeams: { tournamentId: string; sport?: SportId };
   Contingents: { tournamentId: string };
@@ -133,7 +135,7 @@ export type RootStackParamList = {
   Clubs: undefined;
   CreateClub: { orgId?: string } | undefined;
   ClubHome: { clubId: string };
-  ClubSport: { clubId: string; sport: SportId };
+  ClubSport: { clubId: string; sport: SportId; /** SD-154: one squad (JV, B team) when the club has several */ teamId?: string };
   JoinClub: { token?: string } | undefined;
   ScanQR: undefined;
   /** tab: open on a tab (e.g. 'Settings' right after creating it) */

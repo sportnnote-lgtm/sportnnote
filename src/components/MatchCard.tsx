@@ -4,6 +4,7 @@
  *  or finished result is legible at a glance. Live matches are set apart with a
  *  red glow and a pulsing "LIVE" badge — this is a live-scoring app, so an
  *  in-progress game should never look like a scheduled one. */
+import { teamLabel } from '../core/teamLevels';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
@@ -76,7 +77,7 @@ export function MatchCard({ match, onPress, onStart, timeZone }: {
     <View style={[s.card, live && s.cardLive]}>
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`${plugin.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}${
+      accessibilityLabel={`${plugin.name}: ${teamLabel(match.homeTeam)} versus ${teamLabel(match.awayTeam)}${
         showScore ? `, ${match.score!.home} to ${match.score!.away}${setLine ? ` (${setLine})` : ''}${cardLine ? ` (${cardLine})` : ''}` : ''
       }, ${onBreak ? 'on a break' : live ? 'live now' : done ? 'final' : time}`}
       style={s.body}
@@ -105,7 +106,7 @@ export function MatchCard({ match, onPress, onStart, timeZone }: {
       {/* Scoreboard: team · score · team */}
       <View style={s.board}>
         <View style={[s.side, s.sideLeft]}>
-          <Text style={s.team} numberOfLines={1}>{match.homeTeam.name}</Text>
+          <Text style={s.team} numberOfLines={1}>{teamLabel(match.homeTeam)}</Text>
           <View style={[s.dot, { backgroundColor: match.homeTeam.colorHex }]} />
         </View>
 
@@ -123,7 +124,7 @@ export function MatchCard({ match, onPress, onStart, timeZone }: {
 
         <View style={[s.side, s.sideRight]}>
           <View style={[s.dot, { backgroundColor: match.awayTeam.colorHex }]} />
-          <Text style={s.team} numberOfLines={1}>{match.awayTeam.name}</Text>
+          <Text style={s.team} numberOfLines={1}>{teamLabel(match.awayTeam)}</Text>
         </View>
       </View>
 

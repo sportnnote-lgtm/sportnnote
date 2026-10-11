@@ -35,8 +35,9 @@ import {
   graduatingStandardOf, isGraduatingStandard, memberEntry, isSoleActiveAdmin, isSoleActiveOwner, canManageOwners, activeOwners,
   currentAcademicYear, firstAcademicYear, latestAcademicYear, nextAcademicYearDates,
   academicYearEnded, academicYearLabel, academicYearsOf,
-  housesOf, currentHouse, assignHouse, houseColorOf,
+  housesOf, currentHouse, assignHouse, houseColorOf, graduationWarning, suggestedGraduatingStandard,
 } from '../core/org';
+import { MARKETS, MARKET_ORDER, isMarket, orgMarket, type MarketId } from '../core/markets';
 import { notify } from '../core/notifications';
 import type { Organization, OrgMember, OrgRole, OrgRequest, House, ActivityEvent, Tournament, Team, Player, SportId, AcademicYear } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -375,7 +376,7 @@ export default function OrganizationScreen() {
         </Text>
       )}
       {academic && canOrganize && editingGrades === m.playerId && (
-        <GradeEditor member={m} onSave={(grades) => setMemberGrades(m.playerId, grades)} />
+        <GradeEditor member={m} example={MARKETS[orgMarket(org)].classLadder.slice(-3)[0]} onSave={(grades) => setMemberGrades(m.playerId, grades)} />
       )}
       {academic && canManage && !m.until && housesOf(org).length > 0 && (
         <Text style={st.classLink} onPress={() => setEditingHouse((v) => (v === m.playerId ? null : m.playerId))}>
@@ -456,7 +457,8 @@ export default function OrganizationScreen() {
                   <Text style={textStyles.body}>
                     🎓 Current year: {curAY ? `${curAY.label} (${curAY.start} → ${curAY.end})` : 'not set'}
                   </Text>
-                  <Text style={textStyles.muted}>Graduating class: {graduatingStandardOf(org) ?? '—'}</Text>
+                  <Text style={textStyles.muted}>Graduating class: {graduatingStandardOf(org) ?? 'not set'}</Text>
+                  <Text style={textStyles.muted}>School system: {MARKETS[orgMarket(org)].flag} {MARKETS[orgMarket(org)].name}</Text>
                   {yearEnded ? (
                     <Text style={st.warnStrong}>📅 {latestAcademicYear(org)?.label} ended on {latestAcademicYear(org)?.end} — set up the new academic year.</Text>
                   ) : null}
@@ -525,6 +527,10 @@ export default function OrganizationScreen() {
               )}
               {canManage && addable.length > 0 && (
                 <Text style={st.link} onPress={() => setAdding((v) => !v)}>{adding ? 'Close' : '+ Add member'}</Text>
+              )}
+              {/* SD-154: CSV roster import (students with class, House, guardian contact) */}
+              {canManage && org && (
+                <Text style={st.link} onPress={() => nav.navigate('RosterImport', { orgId: org.id })}>📥 Import CSV</Text>
               )}
             </View>
             {actionError ? (
@@ -756,17 +762,23 @@ function YearRollover({
   const members = org.members;
   const students = useMemo(() => members.filter((m) => !m.until && currentStandard(m)), [members]);
   const gradStd = graduatingStandardOf(org);
+  const market = orgMarket(org);
+  // SD-153: the graduating class matches by class ("Class X" = "Grade 10"), and a
+  // missing or unmatched one is called out instead of silently graduating nobody.
+  const gradWarn = graduationWarning(org, students.map((m) => currentStandard(m)));
+  // Top of the class ladder (Year 13, Grade 12…): no next class is ever invented.
+  const lastClass = (m: OrgMember) => nextStandard(currentStandard(m)!, market) === '';
 
   const [since, setSince] = useState(
     currentAcademicYear(org, today)?.start ?? nextAcademicYearDates(org)?.start ?? today
   );
   // Per-student target class, seeded with the next class up.
   const [targets, setTargets] = useState<Record<string, string>>(() =>
-    Object.fromEntries(students.map((m) => [m.playerId, nextStandard(currentStandard(m)!)]))
+    Object.fromEntries(students.map((m) => [m.playerId, nextStandard(currentStandard(m)!, market)]))
   );
   // Whether a (graduating-class) student graduates. Defaults on for that class.
   const [grad, setGrad] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(students.map((m) => [m.playerId, isGraduatingStandard(org, currentStandard(m))]))
+    Object.fromEntries(students.map((m) => [m.playerId, isGraduatingStandard(org, currentStandard(m)) || lastClass(m)]))
   );
 
   const eff = () => since.trim() || today;
@@ -818,6 +830,11 @@ function YearRollover({
           <Text style={textStyles.muted}>
             Each student moves up a class; those in {gradStd ?? 'the final class'} graduate. Override any one — repeat the same class, clear to skip, or turn off Graduate to keep a student on.
           </Text>
+          {gradWarn === 'unset' ? (
+            <Text style={st.warnStrong}>⚠ No graduating class is set, so nobody graduates. Set it under ✎ Edit (for example {suggestedGraduatingStandard(market)}).</Text>
+          ) : gradWarn === 'unknown' ? (
+            <Text style={st.warnStrong}>⚠ No student is in {gradStd}, the graduating class, so nobody graduates this year. Check the class name under ✎ Edit.</Text>
+          ) : null}
           <DateField label="Effective from" value={since} onChange={setSince} />
           {students.map((m) => {
             const cur = currentStandard(m)!;
@@ -831,6 +848,7 @@ function YearRollover({
                     <Text style={textStyles.muted}>
                       {cur} → {a === 'graduate' ? '🎓 graduates' : a === 'skip' ? '(skip)' : a === 'repeat' ? 'repeat' : targets[m.playerId]}
                     </Text>
+                    {lastClass(m) && !isGraduatingStandard(org, cur) ? <Text style={textStyles.muted}>{cur} is the last class</Text> : null}
                     {a === 'graduate' && (m.role === 'Admin' || m.role === 'Organizer') ? (
                       <Text style={st.warn}>↳ revokes {m.role} rights</Text>
                     ) : null}
@@ -841,7 +859,7 @@ function YearRollover({
                     </View>
                   )}
                 </View>
-                {isGraduatingStandard(org, cur) && (
+                {(isGraduatingStandard(org, cur) || lastClass(m)) && (
                   <View style={st.chips}>
                     <SelectChip label="🎓 Graduate" active={isGrad} onPress={() => setGrad((g) => ({ ...g, [m.playerId]: true }))} />
                     <SelectChip label="Keep on" active={!isGrad} onPress={() => setGrad((g) => ({ ...g, [m.playerId]: false }))} />
@@ -867,7 +885,7 @@ function YearRollover({
 
 /** Manage a student's class/standard timeline: show the history and record a
  *  promotion (a new class effective from a date, which closes the prior one). */
-function GradeEditor({ member, onSave }: { member: OrgMember; onSave: (grades: OrgMember['grades']) => void }) {
+function GradeEditor({ member, example, onSave }: { member: OrgMember; example?: string; onSave: (grades: OrgMember['grades']) => void }) {
   const today = todayIn();
   const [standard, setStandard] = useState('');
   const [since, setSince] = useState(today);
@@ -900,7 +918,7 @@ function GradeEditor({ member, onSave }: { member: OrgMember; onSave: (grades: O
       )}
       <Text style={textStyles.muted}>Promote / set class</Text>
       <View style={st.row}>
-        <View style={st.flex}><TextField label="Class" value={standard} onChange={setStandard} placeholder="e.g. Grade 10" /></View>
+        <View style={st.flex}><TextField label="Class" value={standard} onChange={setStandard} placeholder={`e.g. ${example ?? 'Grade 10'}`} /></View>
         <View style={st.flex}><DateField label="Effective from" value={since} onChange={setSince} /></View>
       </View>
       <Button label="Set class" onPress={promote} disabled={!standard.trim()} />
@@ -916,7 +934,9 @@ function DetailsEditor({ org, onCancel, onSaved }: { org: Organization; onCancel
   const [email, setEmail] = useState(org.email ?? '');
   const [phone, setPhone] = useState(org.phone ?? '');
   const [bio, setBio] = useState(org.bio ?? '');
-  const [gradStd, setGradStd] = useState(org.graduatingStandard ?? (org.type === 'School' ? 'Grade 10' : ''));
+  const [gradStd, setGradStd] = useState(graduatingStandardOf(org) ?? '');
+  // SD-153: the school system (market). Unset communities show India (today's behaviour).
+  const [market, setMarket] = useState<MarketId>(orgMarket(org));
   const [years, setYears] = useState<AcademicYear[]>(academicYearsOf(org));
   // New-year inputs, pre-filled from the next extrapolated year if available.
   // No year yet → the region's usual school year (Apr–Mar India, Sep UK, Jan SG/AU…).
@@ -946,6 +966,8 @@ function DetailsEditor({ org, onCancel, onSaved }: { org: Organization; onCancel
       bio: bio.trim() || undefined,
       academicYears: academic ? (years.length ? years : undefined) : undefined,
       graduatingStandard: academic ? (gradStd.trim() || undefined) : undefined,
+      // only write a market once someone picks one (or it was already saved)
+      market: isMarket(org.market) || market !== 'in' ? market : undefined,
     });
     setBusy(false);
     onSaved();
@@ -986,7 +1008,19 @@ function DetailsEditor({ org, onCancel, onSaved }: { org: Organization; onCancel
             <View style={st.flex}><DateField label="Year ends" value={nyEnd} onChange={setNyEnd} /></View>
           </View>
           <Button label="+ Add academic year" variant="ghost" onPress={addYear} disabled={!nyStart.trim() || !nyEnd.trim()} />
-          <TextField label="Graduating class (students leave after this)" value={gradStd} onChange={setGradStd} placeholder="Grade 10" autoCapitalize="words" />
+          <Text style={textStyles.muted}>School system</Text>
+          <View style={st.chips}>
+            {MARKET_ORDER.map((m) => (
+              <SelectChip key={m} label={`${MARKETS[m].flag} ${MARKETS[m].name}`} active={market === m} onPress={() => setMarket(m)} />
+            ))}
+          </View>
+          <Text style={textStyles.muted}>Sets class names at rollover, age groups and the age cut-off for new events.</Text>
+          <TextField label="Graduating class (students leave after this)" value={gradStd} onChange={setGradStd} placeholder={suggestedGraduatingStandard(market)} autoCapitalize="words" />
+          <View style={st.chips}>
+            {MARKETS[market].graduating.map((g) => (
+              <SelectChip key={g} label={g} active={gradStd.trim() === g} onPress={() => setGradStd(g)} />
+            ))}
+          </View>
         </>
       )}
       <View style={st.formActions}>
