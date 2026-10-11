@@ -87,3 +87,6 @@ A post marked "only if SDxxx is in the live build" stays unscheduled until that 
   - **APK 37** (keep-awake, haptics, in-app QR image share) is the download on sportnnote.in: the 19 Jan "Built for match day" APK gate is met (status and checks updated), and the 28 Jan QR posts lose their "next APK" caveat.
   - **Team-tie alert:** "one alert per tie" needs the redeployed `notify-followers` edge function; the three team-tie posts carry that pre-post check.
   - Totals: 189 rows (32 LinkedIn, 82 Instagram, 75 YouTube: 32 long, 43 Shorts), 98 copy-ready in 74 files.
+
+
+- **Founder decisions 2026-10-11 (batch 5):** Republic Day (Tue 26 Jan) product Reel approved; Wednesday 10 Feb LinkedIn team-ties post approved as scheduled. `notify-followers` is redeployed (one alert per tie is live).
