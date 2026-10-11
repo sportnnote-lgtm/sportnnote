@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Wave B — SD-124 / SD-125 / SD-126 / SD-127 — DONE (e92e6ce, 2026-10-11)
+- See DEVLOG. **Founder actions:** run `supabase/migrations/20261019123500_team_tie_ops.sql` (and the Wave A `20261019123220_golf_course_edit.sql`) in the SQL editor.
+- **Check:** points-per-game for unequal groups (UEFA/FIFA practice is discarding results vs the bottom team — not claimed as official); double-elim drop-in pattern (simulation-chosen); plate = first-round losers only; hockey 5-0 / handball 10-0 walkovers; handball red without report = 0 matches (IHF reading); 1-match default bans for FIH red / FIBA D / kabaddi red; BWF / Davis Cup group play of dead rubbers.
+- **Behaviour change:** a corrected tie that falls back to no majority now restores set-aside rubbers (was: stood as a draw).
+- **Not done:** chess rating seeding in knockouts; feed-in/repechage draws; volleyball + cricket discipline (no data); kabaddi / racket walkover scores; team-page scored/conceded use the board score; series aggregates ignore result.forfeit; lineup players not checked against rosters server-side; offline outbox for settle/lineups.
+
 ## Wave A — SD-120 / SD-121 / SD-122 / SD-123 — DONE (48c3b9f, 2026-10-11)
 - All 8 audit-2 P0s fixed. See DEVLOG.
 - **Founder actions:** run `supabase/migrations/20261019123220_golf_course_edit.sql` in the SQL editor (optional until other organisers edit shared courses). Decide: medal table shows no places for a groups+knockout sport until the knockout starts (current) vs a provisional league order.
