@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-53 / SD-54 racket conduct + timeouts, SD-63 let — DONE (133422a, 2026-10-11)
+- See DEVLOG. Check: pickleball technical foul in side-out (point to receiver?), further foul = forfeit?, medical timeout per side vs per player (USAP 13.G / 10.C); TT second penalty point carrying into the next game (ITTF 3.5.2.2); tennis default is suggested never (Referee's call); squash escalation one level at a time (WSF 15 leaves it to the referee); padel FIP schedule unverified; badminton cards per player (BWF 16.7).
+- Not done: Stroke / No let still only in the point-detail row; Match stats "Total points won" counts rallies (excludes penalty points); conduct tile remembers last side; volleyball conduct, padel/squash timeouts, voice.
+
 ## SD-95 archery — DONE (df28288, 2026-10-11)
 - See DEVLOG. Check vs World Archery Book 3 (from memory): tie order 10s→X for compound (inner-10 ring), shared =5/=9 places, X vs 10 in shoot-offs left to the judge + repeat shoot-off arrow, ranking-round shoot-offs only for the last bracket place. Not built: team/mixed team, end-total-only entry, points below a small bracket cut, shoot-off distances, >64 brackets untested.
 

@@ -83,8 +83,8 @@ P2 items are parked (PLAN.md §6.2).
 | SD-50 | Game-flow stats: biggest lead, lead changes, times tied, largest run, bench points | basketball, football, kabaddi | GEN-20; BK-09 | READY | Wave 3a · S |
 | SD-51 | Match-records hook persisted in the snapshot (partnerships, team totals, team highs) → tournament Records card | generic | GEN-21; CK-07 | READY | Wave 3a · M · one-off backfill replay |
 | SD-52 | Optional point-outcome tag (winner / forced / unforced / fault / kitchen / smash) with coverage | racket sports | GEN-22; PD-05, PB-05 (P1); TN-12, BD-06, TT-11, SQ-10 (P2) | READY | Wave 3a · M · D8 · optional `how` payload |
-| SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | IN-PROGRESS | Wave 3a · M · additive actions |
-| SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | IN-PROGRESS | Wave 3a · S · new TIMEOUT action |
+| SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | DONE | 133422a · Wave 3a · M · additive actions |
+| SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | DONE | 133422a · Wave 3a · S · new TIMEOUT action |
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
 | SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | READY | Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
 | SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | READY | Wave 3b R1 · S |
@@ -93,7 +93,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | READY | Wave 3b R1 · M · new FAULT · D8 |
 | SD-61 | Badminton fast doubles scoring (two "Rally won" buttons; credit optional) | badminton | BD-08 | READY | Wave 3b R1 · S |
 | SD-62 | Table tennis doubles service/receive order by name; change-ends cue | table tennis | TT-07 | READY | Wave 3b R1 · M |
-| SD-63 | Squash Let / Stroke / No Let decisions | squash | SQ-03 | READY | Wave 3b R1 · M |
+| SD-63 | Squash Let / Stroke / No Let decisions | squash | SQ-03 | DONE | 133422a · Wave 3b R1 · M |
 | SD-64 | Padel Star Point deuce option | padel | PD-07 | READY | Wave 3b R1 · S · D5 (verify FIP 2026 text) |
 | SD-65 | Pickleball "Serves first" picker (the engine already accepts SET_FIRST_SERVER); verify pickleball's game-2 first server | squash, pickleball | SQ-06, PB-11 | READY | Wave 3b R1 · S · PARTIAL: squash (and TT) first-server picker delivered by SD-104 (b3fbe7e) |
 | SD-66 | Golf gross and net boards side by side (Best Gross / Best Net) | golf | GF-06 | DONE | fc9f370 · Wave 3b R1 · S |
@@ -129,8 +129,8 @@ P2 items are parked (PLAN.md §6.2).
 | SD-96 | Shooting: qualification series (decimal / integer scoring), finals elimination format, inner-ten tie-breaks | shooting | ISSF General Technical Rules | DONE | fc9f370 · Wave 4 · M · needs SD-28 |
 | SD-97 | Weightlifting: snatch + clean & jerk, 3 attempts each, total, bodyweight categories, tie goes to the athlete who reached the total first | weightlifting | IWF Technical & Competition Rules | DONE | 73317eb · Wave 4 · M · needs SD-28 |
 | SD-98 | Cycling: road (mass start, time trial, GC by time) and track (sprint, keirin, pursuit, points / scratch races) | cycling | UCI Regulations (Part 2 road, Part 3 track) | READY | Wave 4 · L · needs SD-28 |
-| SD-99 | Rowing: heats → repechage → finals by time, crews and boat classes, progression system | rowing | World Rowing Rules of Racing | READY | Wave 4 · M · needs SD-28 |
-| SD-100 | Canoe / kayak sprint (K1/C1 … K4, heats → semis → finals by time); slalom optional later | canoe / kayak | ICF Canoe Sprint Competition Rules | READY | Wave 4 · M · needs SD-28 |
+| SD-99 | Rowing: heats → repechage → finals by time, crews and boat classes, progression system | rowing | World Rowing Rules of Racing | IN-PROGRESS | Wave 4 · M · needs SD-28 |
+| SD-100 | Canoe / kayak sprint (K1/C1 … K4, heats → semis → finals by time); slalom optional later | canoe / kayak | ICF Canoe Sprint Competition Rules | IN-PROGRESS | Wave 4 · M · needs SD-28 |
 | SD-101 | Hockey (FIH): 4 × 15-min quarters, goals (field / penalty corner / stroke), penalty corners won/converted, green/yellow/red cards with timed suspensions, shoot-out, box score, career (GK saves %), FIH points 3-1-0 + shoot-out bonus variants, FIH tie-breakers, leaderboards, awards, public guide | hockey | FIH Rules of Hockey; FIH tournament regulations | DONE | 68dd087 · Wave 4 · L · needs SD-11, SD-15–SD-19, SD-23, SD-24, SD-27, SD-29 |
 | SD-102 | Handball (IHF): 2 × 30-min halves, goals/shots by type, 7-metre throws, 2-minute suspensions, yellow/red/blue, GK saves %, timeouts, penalty shoot-out, box score, career, IHF points 2-1-0 + IHF tie-breakers, leaderboards, awards, public guide | handball | IHF Rules of the Game; IHF regulations | DONE | 73317eb · Wave 4 · L · needs SD-11, SD-15–SD-19, SD-23, SD-24, SD-27, SD-29 |
 | — | P2 items (PLAN.md §6.2): FB-16–19, BK-12/13, VB-10/11, KB-09/10, TN-12–14, BD-06/10–12, TT-09–11/13, SQ-07/10, PD-11/12, PB-09/13, GF-13–17, CH-09/10/12, CR-07/09, CK-09–12, GEN-26, ranking points, ratings | — | — | PARKED | Promote into the queue when a wave clears |
