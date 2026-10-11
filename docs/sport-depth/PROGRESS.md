@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Founder decisions + live ops — 2026-10-12 (after the new sports)
+- Team levels + feeders migration run on live (verified). LEGAL_VERSION bumped to 2026-10-12 (new sign-ups record it; no re-accept prompt).
+- Minors on public scoreboards: keep full names (no initials) — founder decision.
+- International marketing track: approved; Friday LinkedIn and the extra Instagram weeks: approved.
+- Firebase SMS region policy, the privacy-retention cron, Cloudflare check and other manual steps are tracked in docs/international/go-live-checklist.md (Cloudflare analytics script confirmed absent on the live site).
+
 ## SD-144 baseball + softball, SD-147 American football — DONE (373fc12, 2026-10-12)
 - See DEVLOG. No live steps.
 - **Verify:** WBSC run rules + extra-inning runners, softball and slow-pitch house rules, 9-0 / 7-0 forfeits, WBSC standings order + TQB; decisions and earned runs simplified (scorer override). IFAF flag timings / timeouts / conversions / foul yardages / tie-breakers; NFL 2025 OT; kickoff touchbacks; DPI simplified to 15 yd; walkover 1-0; ejection ban 1.

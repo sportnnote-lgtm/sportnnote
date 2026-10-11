@@ -11,7 +11,7 @@
  * (docs/company/COMPANY_SETUP.md).
  */
 
-export const LEGAL_VERSION = '2026-10-07';
+export const LEGAL_VERSION = '2026-10-12';
 export const LEGAL_CONTACT = 'sportnnote@gmail.com';
 
 export const PRIVACY_POLICY = `## Privacy Policy
