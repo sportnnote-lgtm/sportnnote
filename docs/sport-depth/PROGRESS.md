@@ -2,6 +2,13 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Founder decisions — 2026-10-11 (after Wave B)
+- Medal table: keep hidden for a groups + knockout sport until the knockout starts (SD-123 as built). Add history views (SD-138).
+- Handball / shoot-outs: the scorer picks who throws first (SD-139).
+- Football default bans on existing tournaments: OK. Carrom doubles keeps the Partners row. Team-tie restore of set-aside rubbers on a 2–2 correction: OK.
+- Golf: standard options for now (prize places, countback); customise later from user feedback.
+- Principle: rulebook details are organiser options with standard defaults — walkover scores (friendlies use federation defaults; tournaments set per sport; team-only, never credited to players; walkovers won/given in team stats — SD-140), bans (defaults, fully editable), weightlifting order/categories and all athletics / multi-sport factors chosen before the tournament starts (SD-141).
+
 ## Wave B — SD-124 / SD-125 / SD-126 / SD-127 — DONE (e92e6ce, 2026-10-11)
 - See DEVLOG. **Founder actions:** run `supabase/migrations/20261019123500_team_tie_ops.sql` (and the Wave A `20261019123220_golf_course_edit.sql`) in the SQL editor.
 - **Check:** points-per-game for unequal groups (UEFA/FIFA practice is discarding results vs the bottom team — not claimed as official); double-elim drop-in pattern (simulation-chosen); plate = first-round losers only; hockey 5-0 / handball 10-0 walkovers; handball red without report = 0 matches (IHF reading); 1-match default bans for FIH red / FIBA D / kabaddi red; BWF / Davis Cup group play of dead rubbers.
