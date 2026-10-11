@@ -13,6 +13,16 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Athletics road races, race walks and cross-country with team scoring (SD-92)
+- **Events:** road 5 / 10 / 15 km, half, marathon, custom; race walks track 3000 / 5000 / 10,000 m and road 5 / 10 / 20 km; cross-country with per-age distances (school U10–U16 presets). Each distance keeps its own PBs/records.
+- **Finish entry** (cycling's finish-order pattern): tap runners or type a bib + Enter (duplicate-bib warning); optional gun/chip time per runner, digits fill from the right, rounded up to the whole second (TR 19.24); ↑ / ✕ to fix order; range and order-clash confirms; DNF/DQ/DNS.
+- **Race-walk red cards:** 🟥 per walker; 3rd card asks before DQ (TR 54.7.1); optional Penalty Zone rule.
+- **Team scoring:** first N of M per team (3–6), counting mode (complete teams only with non-scorers displacing — default; overall places; scorers only), lowest total wins, tie → better last scorer, incomplete teams listed unranked; team medals + points into the house table.
+- **Records:** road/walk meet & school records only on a certified course with gun timing; XC has no records/time PBs. Careers: race counts, best time per distance, best XC place, team medals.
+- **Verified:** `tests/road-xc.test.mts` (19); demo 8093 — 4-house U14 XC with an incomplete team and a tie on points, 10 km certified road race with a meet record, track walk DQ on the 3rd card. Guide: new run-a-cross-country-or-road-race. No migration.
+
+---
+
 ### 2026-10-11 — SD-119 fix: stat lines named the wrong opponent (live bug)
 - **Root cause:** `useLiveMatch` labelled every credited line with the opponent of the *action's* side, and a line's `opponent` is fixed on first write. Wrong for: chess (the loser's line named the loser as their own opponent; draws / double forfeits named home for both), golf match play with strokes, tennis/padel double faults, volleyball opponent/serve errors, kabaddi tacklers, cricket bowlers/catchers/keepers (named their own team).
 - **Fix (`src/data/lineOpponent.ts`):** each credit's side = its new explicit `Attribution.side` → the roster the player is on (if exactly one) → the action's side; otherwise no label rather than a wrong one. Plugins now set `side` (chess `chessResultCredit`, golf, tennis/padel DF, voice DF/tackle/wicket, volleyball errors, kabaddi tackler, cricket `wicketAttribution(battingSide)`); undo/discard/correction writes use the roster-based opponent. Reducers ignore `side` → replays unchanged. No server code writes `opponent` → no migration.

@@ -20,6 +20,7 @@ import { SHOOT_EVENTS } from './shootingDefs.ts';
 import { ARCH_ROUNDS, type Arrow } from './archeryDefs.ts';
 import { CREW_EVENTS, CREW_LANES, crewSize } from './crewDefs.ts';
 import { CYC_EVENTS, ORDER_KINDS } from './cyclingDefs.ts';
+import { ROAD_EVENTS, roadEventOf, type RoadEvent, type RoadFormat } from './roadDefs.ts';
 
 export type Better = 'higher' | 'lower';
 
@@ -33,7 +34,7 @@ export type MarkCapture =
   | 'heights' // bar progression with O / X / – (HJ, PV)
   | 'lifts' // snatch + clean & jerk, 3 attempts each, good / no lift
   | 'target' // a score with 10s / X (inner-ten) counts (archery, shooting)
-  | 'order'; // SD-98: the order on the line (road race, keirin, scratch, points / elimination race)
+  | 'order'; // SD-98: the order on the line (road race, keirin, scratch, points / elimination race); SD-92 road / walk / XC
 
 /** How equal marks are separated (per discipline / governing body). */
 export type TieRule =
@@ -44,7 +45,8 @@ export type TieRule =
   | 'lifted-first' // weightlifting (IWF): the lifter who reached the total first
   | 'inner-count' // SD-95 archery (WA): total → most 10s (incl. X) → most X; then shoot-off / coin toss
   | 'issf' // SD-96 shooting (ISSF): total → inner tens (integer) → 10-shot series back → shot by shot back; finals by elimination
-  | 'cycling'; // SD-98 (UCI): finish order / points / GC time — cyclingRank.ts
+  | 'cycling' // SD-98 (UCI): finish order / points / GC time — cyclingRank.ts
+  | 'road'; // SD-92 (World Athletics TR 54–56): the order of finish; times optional — road.ts
 
 export type ResultStatus =
   | 'ok' // a valid mark (or still competing)
@@ -214,6 +216,8 @@ export interface PhaseFormat {
   carry?: CarriedCrew[];
   /** SD-98 cycling: the race set-up (laps, sprints, start interval, match heats, stage type) */
   cyc?: CycFormat;
+  /** SD-92 athletics road / race walk / cross-country: certified course, timing, team scoring, walk rules */
+  road?: RoadFormat;
 }
 
 /** SD-98 — a cycling phase's set-up (cycling.ts). */
@@ -389,6 +393,8 @@ export interface EntryResult {
   gc?: CycGc;
   /** SD-98 sprint bracket rows: heats per match (3 = best of three, 1 = one heat) */
   bo?: 1 | 3;
+  /** SD-92 race walk: red cards from the judges (TR 54.6 / 54.7) */
+  rc?: number;
 }
 
 /** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,
@@ -524,9 +530,24 @@ export const DISCIPLINES: DisciplineDef[] = [
   ...CYC_EVENTS.map((e): DisciplineDef => (ORDER_KINDS.includes(e.kind)
     ? { key: e.key, label: e.label, sport: 'cycling', unit: e.kind === 'points' ? 'points' : 'time', better: e.kind === 'points' ? 'higher' : 'lower', dp: 0, capture: 'order', tie: 'cycling' }
     : { key: e.key, label: e.label, sport: 'cycling', unit: 'time', better: 'lower', dp: e.setting === 'track' ? 3 : 2, capture: 'single', tie: 'photo' })),
+  // SD-92 athletics road races and race walks (standard distances; a custom
+  // distance or a cross-country course is parsed by disciplineOf)
+  ...ROAD_EVENTS.map(roadDiscipline),
 ];
 
-export const disciplineOf = (key: string): DisciplineDef | undefined => DISCIPLINES.find((d) => d.key === key);
+/** SD-92: a road / walk / XC discipline — ranked by the order of finish; road
+ *  times to the whole second (TR 19.24), a track walk to 1/100. */
+function roadDiscipline(e: RoadEvent): DisciplineDef {
+  return { key: e.key, label: e.label, sport: 'athletics', unit: 'time', better: 'lower', dp: e.track ? 2 : 0, capture: 'order', tie: 'road' };
+}
+
+export const disciplineOf = (key: string): DisciplineDef | undefined => {
+  const d = DISCIPLINES.find((x) => x.key === key);
+  if (d) return d;
+  // SD-92: any road / walk / XC distance ('ath.road.7500', 'ath.xc.4000')
+  const r = roadEventOf(key);
+  return r ? roadDiscipline(r) : undefined;
+};
 
 /** SD-94: the discipline as raced at this phase's venue (a 6- or 10-lane pool). */
 export const phaseDiscipline = (def: DisciplineDef, f?: Pick<PhaseFormat, 'lanes'> | null): DisciplineDef =>

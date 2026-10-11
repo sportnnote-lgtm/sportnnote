@@ -8,7 +8,7 @@ order: 85
 updated: 2026-10-11
 ---
 
-Each race is an event (say 100 m U14 Boys), run as heats and a final that adds points to the house table. You enter times on a phone; the app ranks heats, seeds the final and keeps records and personal bests. For jumps and throws, see [Run athletics field events](/guides/run-athletics-field-events/).
+Each race is an event (say 100 m U14 Boys), run as heats and a final that adds points to the house table. You enter times on a phone; the app ranks heats, seeds the final and keeps records and personal bests. For jumps and throws, see [Run athletics field events](/guides/run-athletics-field-events/). For cross-country, road races and race walks, see [Run a cross-country, road race or race walk](/guides/run-a-cross-country-or-road-race/).
 
 ## Before you start
 - You need to be a host of the tournament (or an organiser) to add events and enter results.

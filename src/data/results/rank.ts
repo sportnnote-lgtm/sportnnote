@@ -13,6 +13,7 @@ import { shootEventOf, sumTenths, fromTenths } from './shootingDefs.ts';
 import { isBracketRows, rankArcheryBracket } from './archeryBracket.ts';
 import { archRoundOf, endsOf } from './archeryDefs.ts';
 import { isCyclingRanked, rankCycling } from './cyclingRank.ts';
+import { rankRoad } from './road.ts';
 
 export interface Performance {
   status: ResultStatus;
@@ -74,6 +75,12 @@ export function performanceOf(e: ResultEntry, def: DisciplineDef, upToAttempt?: 
       return { status, best: l.total, bestLegal: l.total, legal: l.total != null, keys: [l.total ?? -Infinity, l.totalSeq != null ? -l.totalSeq : undefined, lot], flags };
     }
     case 'order':
+      // SD-92: a road / walk time (optional) is the athlete's mark for PBs; cross-country keeps none (courses differ)
+      if (def.tie === 'road') {
+        const t = r.fin != null && r.mark != null ? r.mark : null;
+        const xc = def.key.startsWith('ath.xc.');
+        return { status, best: t, bestLegal: xc ? null : t, legal: t != null && !xc, keys: [r.fin != null ? -r.fin : -Infinity], flags };
+      }
       // SD-98: a cycling order event (road race, keirin, points race …) — ranked by cyclingRank.ts; no mark for records / PBs
       return { status, best: null, bestLegal: null, legal: false, keys: [-Infinity], flags };
     case 'target': {
@@ -152,6 +159,8 @@ export function rankEntries(entries: ResultEntry[], def: DisciplineDef, o: RankO
   if (def.tie === 'issf' && isFinalRows(entries)) return rankShootFinal(entries, def);
   // SD-95: archery match play ranks by the bracket
   if (def.sport === 'archery' && isBracketRows(entries)) return rankArcheryBracket(entries, def);
+  // SD-92: athletics road / race walk / cross-country — the order of finish
+  if (def.tie === 'road') return rankRoad(entries, def);
   // SD-98: cycling order events (finish order / points / GC) and sprint match play
   if (isCyclingRanked(entries, def)) return rankCycling(entries, def, o);
   // SD-99 / SD-100: Finals A / B … rank race by race, places running on

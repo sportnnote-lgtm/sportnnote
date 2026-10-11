@@ -89,6 +89,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
       {canOrganize && (
         <View style={{ gap: theme.spacing(2) }}>
           <Button label={wl ? '＋ Add a bodyweight category' : sport === 'shooting' ? '＋ Add a shooting event' : sport === 'archery' ? '＋ Add an archery event' : crew || sport === 'cycling' ? '＋ Add a race' : '＋ Add an event'} onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
+          {sport === 'athletics' && <Button label="🌳 ＋ Road race, race walk or cross-country" variant="ghost" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, mode: 'road' })} />}
           <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : crew ? '⚙ Lanes, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
         </View>
       )}

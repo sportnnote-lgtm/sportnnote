@@ -10,8 +10,8 @@ import { Card, textStyles } from '../ui';
 import {
   attemptText, formatMark, summarizeLifts, usesLanes, splitsText, legLabels, liftSeries, bombedOutOf, fmtKg,
   shootEventOf, seriesLine, totalText, archRoundOf, archRowText, isBracketRows, bracketState, bracketFormat, bracketRowText, isCrewSport, crewMembersText,
-  cycRowText, cycKind, sprintBracket,
-  type DisciplineDef, type RankedEntry, type ResultFlag,
+  cycRowText, cycKind, sprintBracket, isRoadDiscipline, roadRowText,
+  type DisciplineDef, type RankedEntry, type ResultFlag, type RoadFormat,
 } from '../../data/results';
 
 const FLAG_COLOR: Partial<Record<ResultFlag, string>> = {
@@ -36,8 +36,10 @@ export function Flags({ flags }: { flags: ResultFlag[] }) {
 }
 
 /** The detail line under a name: attempts / bar progression / lifts / relay legs. */
-export function seriesText(r: RankedEntry, def: DisciplineDef): string {
+export function seriesText(r: RankedEntry, def: DisciplineDef, road?: RoadFormat): string {
   const res = r.entry.result;
+  // SD-92 road / walk / XC: the bib and a walker's red cards
+  if (isRoadDiscipline(def)) return roadRowText(r, { discipline: def.key, road });
   if (def.capture === 'attempts') return (res.attempts ?? []).map((a) => attemptText(a, def) + (def.wind === 'attempt' && a.mark != null && a.wind != null ? ` (${windText(a.wind)})` : '')).filter(Boolean).join('  ');
   if (def.capture === 'heights') return [...(res.heights ?? [])].sort((a, b) => a.height - b.height).filter((h) => h.tries).map((h) => `${formatMark(h.height, def)} ${h.tries}`).join(' · ');
   if (def.capture === 'lifts') {
@@ -80,7 +82,7 @@ export function seriesText(r: RankedEntry, def: DisciplineDef): string {
   return [members, splits].filter(Boolean).join(' · ');
 }
 
-export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatLabel, notes }: {
+export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatLabel, notes, road }: {
   def: DisciplineDef;
   title: string;
   subtitle?: string;
@@ -94,6 +96,8 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   heatLabel?: (heat: number) => string;
   /** SD-99 / SD-100: where each crew goes next ("→ Final A") */
   notes?: Map<string, string>;
+  /** SD-92: a road / walk / XC race's settings (red-card rule on the detail line) */
+  road?: RoadFormat;
 }) {
   const lanes = usesLanes(def);
   const many = heats.size > 1;
@@ -102,6 +106,8 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
   const bracket = def.sport === 'archery' && isBracketRows(allRows) ? bracketState(allRows, bracketFormat(def)) : def.sport === 'cycling' ? sprintBracket(allRows) : null;
   // SD-98: an order event's column — time / gap (road), points (points race), nothing (keirin, scratch, elimination)
   const cycK = def.sport === 'cycling' ? cycKind(def.key) : undefined;
+  // SD-92: road / walk / XC — the bib column (the detail line drops it)
+  const roadEv = isRoadDiscipline(def);
   return (
     <View style={{ gap: theme.spacing(3) }}>
       <View>
@@ -117,17 +123,17 @@ export function ResultsSheet({ def, title, subtitle, heats, wind, overall, heatL
           )}
           <View style={[st.row, st.head]}>
             <Text style={[st.pos, st.headTxt]}>Pl</Text>
-            <Text style={[st.lane, st.headTxt]}>{lanes ? 'Ln' : '#'}</Text>
+            <Text style={[st.lane, st.headTxt, roadEv && st.bib]}>{lanes ? 'Ln' : roadEv ? 'Bib' : '#'}</Text>
             <Text style={[st.name, st.headTxt]}>{def.sport === 'cycling' ? 'Rider' : isCrewSport(def.sport) ? (def.teamSize ? 'Crew' : def.sport === 'rowing' ? 'Sculler' : 'Paddler') : def.teamSize ? 'Team' : def.sport === 'swimming' ? 'Swimmer' : def.sport === 'weightlifting' ? 'Lifter' : def.sport === 'shooting' ? 'Shooter' : def.sport === 'archery' ? 'Archer' : 'Athlete'}</Text>
             <Text style={[st.mark, st.headTxt]}>{bracket ? 'Match' : cycK === 'points' ? 'Points' : cycK === 'stage' ? 'Time' : cycK === 'keirin' || cycK === 'scratch' || cycK === 'elim' ? '' : def.unit === 'time' ? 'Time' : def.unit === 'mass' ? (def.lifts?.length === 1 ? 'Best kg' : 'Total kg') : def.unit === 'points' ? 'Score' : 'Mark'}</Text>
           </View>
           {rows.map((r) => {
-            const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def)].filter(Boolean).join(' · ');
+            const detail = [overall ? (heatLabel ? heatLabel(r.entry.heat) : `Heat ${r.entry.heat}`) : '', notes?.get(r.id) ?? '', bracket ? bracketRowText(r.entry, bracket, allRows) : seriesText(r, def, road)].filter(Boolean).join(' · ');
             return (
               <View key={r.id} style={st.entry} accessibilityLabel={`${r.label || 'no place yet'}, ${r.entry.name}, ${r.bestText || r.status}`}>
                 <View style={st.row}>
                   <Text style={[st.pos, r.position === 1 && st.gold]}>{def.capture === 'lifts' && r.status === 'NM' ? '—' : r.label || '–'}</Text>
-                  <Text style={st.lane}>{(lanes ? r.entry.result.lane : r.entry.result.order) ?? ''}</Text>
+                  <Text style={[st.lane, roadEv && st.bib]}>{(lanes ? r.entry.result.lane : roadEv ? r.entry.result.bib ?? r.entry.result.order : r.entry.result.order) ?? ''}</Text>
                   <View style={st.name}>
                     <Text style={st.nameTxt} numberOfLines={1}>{r.entry.name}</Text>
                     {r.entry.team?.name && r.entry.team.name !== r.entry.name ? <Text style={st.team} numberOfLines={1}>{r.entry.team.name}</Text> : null}
@@ -161,6 +167,7 @@ const st = StyleSheet.create({
   entry: { paddingVertical: theme.spacing(1.5), borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border, gap: 2 },
   pos: { width: 34, color: theme.colors.text, fontWeight: '800', fontSize: theme.font.small },
   gold: { color: theme.colors.accent },
+  bib: { width: 34 },
   lane: { width: 22, color: theme.colors.textMuted, fontSize: theme.font.small, textAlign: 'center' },
   name: { flex: 1, minWidth: 0 },
   nameTxt: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },

@@ -34,6 +34,7 @@ import { ShootingEventSetup } from './ShootingEventSetup';
 import { ArcheryEventSetup } from './ArcheryEventSetup';
 import { CrewEventSetup } from './CrewEventSetup';
 import { CyclingEventSetup } from './CyclingEventSetup';
+import { RoadEventSetup } from './RoadEventSetup';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -58,6 +59,7 @@ export default function AthleticsEventSetupScreen() {
   if (params?.sport === 'archery') return <ArcheryEventSetup tournamentId={params.tournamentId} />; // SD-95
   if (params?.sport === 'rowing' || params?.sport === 'canoe') return <CrewEventSetup tournamentId={params.tournamentId} sport={params.sport} />; // SD-99 / SD-100
   if (params?.sport === 'cycling') return <CyclingEventSetup tournamentId={params.tournamentId} />; // SD-98
+  if (params?.mode === 'road' && (params.sport ?? 'athletics') === 'athletics') return <RoadEventSetup tournamentId={params.tournamentId} />; // SD-92
   return params?.sport === 'weightlifting' ? <WeightliftingEventSetup tournamentId={params.tournamentId} /> : <TrackSwimEventSetup />;
 }
 
@@ -246,6 +248,8 @@ function TrackSwimEventSetup() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         <ScreenTitle title={swim ? '🏊 New swimming event' : '🏃 New event'} subtitle={tournament?.name} />
+        {/* SD-92: road races, race walks and cross-country have their own setup */}
+        {!swim && <Button label="🌳 Road race, race walk or cross-country →" variant="ghost" onPress={() => nav.setParams({ mode: 'road' })} />}
 
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Category</Text>
