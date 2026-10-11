@@ -2,6 +2,9 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-119 wrong opponent on stat lines — DONE (a92ef1e, 2026-10-11)
+- See DEVLOG. **Founder action:** in the live web app console run `await __sportnnoteAdmin.repairOpponents({ dryRun: true })`, check the per-sport counts and samples, then run without dryRun. Lines flagged `resultSuspect` (W/L backfilled from a wrong label) are reported only — review separately. Helper sees the first 1000 matches (getMatches doesn't page).
+
 ## SD-98 cycling, SD-36/67/77/85 chess, SD-76/84/87/88 golf — DONE (2fdda8a, 2026-10-11)
 - See DEVLOG.
 - **Cycling — check (UCI from memory):** 1 s group gap (2.3.039), GC ties (2.6.015), track Part 3 rules, junior distances. Not built: team pursuit/sprint, madison, omnium, sprint/keirin repechages, pursuit last-lap tie, 3 km rule, clock-time TT entry, custom TT distances.
