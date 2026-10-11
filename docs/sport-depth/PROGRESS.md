@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-58 / SD-71 volleyball serve, rotation, subs + libero — DONE (a4b28ee, 2026-10-11)
+- See DEVLOG. Check: libero clause numbers (19.3.x, from memory of 2025–28 numbering); exceptional-sub eligibility not checked (15.7); expulsion/disqualification subs (15.8) not modelled; national "libero may serve" variants not modelled.
+- Not done: per-player SE column in the live box; libero digs; SD-81 detailed attack mode; libero not auto-forced off at the front row (cue only); subs not drawn on the point timeline; 9-a-side rotation.
+
 ## SD-96 shooting, SD-35/42/45/66/89 golf, SD-118 — DONE (fc9f370, 2026-10-11)
 - See DEVLOG. No migration.
 - **Shooting — check with ISSF GTR (PDF unreadable):** decimal series countback on decimal vs integer series totals; 3P tie order (positions vs X); 3P final 40→45 per 2022+ rules; smaller finals scaling (house); shoot-off for medal places with no final (house); 50% low-series threshold (house). Not built: 25 m / shotgun / mixed-team medal-match finals, relays, clocks, decimal per-shot inner-ten count.

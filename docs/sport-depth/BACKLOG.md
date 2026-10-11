@@ -88,7 +88,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
 | SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | READY | Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
 | SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | READY | Wave 3b R1 · S |
-| SD-58 | Volleyball serve tracking (first server, rotation) → pre-fills Ace / Serve error, feeds SD-22 | volleyball | VB-05 | IN-PROGRESS | Wave 3b R1 · M · new SET_SERVE / SET_ROTATION |
+| SD-58 | Volleyball serve tracking (first server, rotation) → pre-fills Ace / Serve error, feeds SD-22 | volleyball | VB-05 | DONE | a4b28ee · Wave 3b R1 · M · new SET_SERVE / SET_ROTATION |
 | SD-59 | Kabaddi technical points and line-outs | kabaddi | KB-05 | READY | Wave 3b R1 · S · new TECH_POINT |
 | SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | READY | Wave 3b R1 · M · new FAULT · D8 |
 | SD-61 | Badminton fast doubles scoring (two "Rally won" buttons; credit optional) | badminton | BD-08 | READY | Wave 3b R1 · S |
@@ -101,7 +101,7 @@ P2 items are parked (PLAN.md §6.2).
 | SD-68 | Carrom ICF score sheet (breaker, running total, penalty boards) | carrom | CR-03 | READY | Wave 3b R1 · S |
 | SD-69 | Cricket captain and keeper flags → Captaincy section, keeper dismissals | cricket | CK-04 | READY | Wave 3b R1 · S · backfill replay script |
 | SD-70 | Football discipline table + suspension rule | football | FB-12 | READY | Wave 3b R2 · M |
-| SD-71 | Volleyball substitutions + libero → sets played | volleyball | VB-06 | IN-PROGRESS | Wave 3b R2 · M · needs SD-29 · new SUB |
+| SD-71 | Volleyball substitutions + libero → sets played | volleyball | VB-06 | DONE | a4b28ee · Wave 3b R2 · M · needs SD-29 · new SUB |
 | SD-72 | Kabaddi cards (green / yellow 2-min suspension / red) | kabaddi | KB-06 | READY | Wave 3b R2 · M · needs SD-59 |
 | SD-73 | Doubles serving order chosen per set (tennis ITF Rule 14; padel server naming) | tennis, padel | TN-09, PD-08 | DONE | delivered by SD-104 (b3fbe7e): per-set SET_SERVE_ORDER picker for tennis / padel; tiebreak rotation and serve stats follow it |
 | SD-74 | Badminton doubles server and receiver by name (Law 11) | badminton | BD-05 | READY | Wave 3b R2 · M |
