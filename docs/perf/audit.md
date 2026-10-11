@@ -161,3 +161,5 @@ F-15 split sport metadata from plugins, lazily · F-28 inline requires · F-20/F
 6. Q6: keep the full phone-number metadata.
 
 Wave 2 is therefore: F-04 slimmer `phone-login` · F-09(4) `home_feed` RPC · F-17 `push_allowed_targets` rewrite · F-19 short-lived read cache · F-22 region pinning.
+
+7. Wave 2 read cache: **keep 10 seconds** (2026-10-13). Wave 2 migration run and `phone-login` deployed the same day; signed-in players_view 175 ms → about 25–35 ms on live.
