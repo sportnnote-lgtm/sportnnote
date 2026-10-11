@@ -2,6 +2,13 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Wave D batch 2 — SD-134 / SD-137a / SD-138 / SD-140 / SD-141 — DONE (72a1804, 2026-10-11)
+- See DEVLOG. No live steps.
+- **Decide:** native speech for voice scoring (needs a native module → APK 38) — today voice is typed-only on phones.
+- **Check:** team-Swiss bye = a tie won (Olympiad may differ); ICF doubles break rotation; golf divisions cut-off 31 Dec; ½-bye limit 2; late-entry missed rounds one value; handball voice goal default 9 m; hockey voice yellow 5′; Sinclair 2017–20 coefficients from memory; NFHS 6th-runner rule; one-false-start / recall options are school practice.
+- **Behaviour changes:** standings rows open the Team journey (team page one tap away); walkovers give no player an appearance; a walkover is not a clean sheet.
+- **Not done:** SD-137b team events (next); withdrawn players still eligible for category prizes; category ages don't use meet_ages; round sheet has no own undo; team-Swiss colours by preference; accelerated pairings; racket walkovers still count as player wins; chess has no statTotals; voice for chess / event sports / volleyball detail.
+
 ## Wave D batch 1 — SD-132 / SD-133 / SD-135 / SD-136 / SD-139 — DONE (3ba9a98, 2026-10-11)
 - See DEVLOG. No live steps.
 - **Check (from memory / secondary sources):** FIBA 3×3 article numbers + classification; IHF sudden-death order (scorer picks); futsal Laws 7/12/13 detail; ICC Super Over eligibility clause; Hundred playing conditions; pickleball rally-doubles positions (USA Pickleball provisional rule — MLP dropped doubles rally scoring 2025); 9-a-side volleyball rules; Beach Pro Tour ranking; FIVB sanction escalation/cards; AKFI school do-or-die.
