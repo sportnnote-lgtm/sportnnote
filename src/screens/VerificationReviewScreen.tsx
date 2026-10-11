@@ -3,6 +3,7 @@
  *  build the document image/PDF arrives by email (see SUPPORT_EMAIL) and only
  *  the support team can open this; here it's reachable in the demo for review. */
 import React, { useCallback, useState } from 'react';
+import { formatPhone } from '../core/phone';
 import { ScrollView, View, Text, StyleSheet, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -93,7 +94,7 @@ export default function VerificationReviewScreen() {
                 </View>
                 <Row label="Date of birth" value={`${p.dob ?? '—'}${age !== undefined ? `  ·  ${age} yrs${age < 18 ? ' (minor)' : ''}` : ''}`} />
                 {p.guardian ? (
-                  <Row label="Parent / Guardian" value={`${p.guardian.name}${p.guardian.phone ? `  ·  ${p.guardian.phone}` : ''}`} />
+                  <Row label="Parent / Guardian" value={`${p.guardian.name}${p.guardian.phone ? `  ·  ${formatPhone(p.guardian.phone)}` : ''}`} />
                 ) : null}
                 <Row label="Document" value={p.verification?.docName ?? '—'} />
                 {p.verification?.docPath ? (

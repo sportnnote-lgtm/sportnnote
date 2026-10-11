@@ -21,6 +21,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { rateLimit } from '../_shared/guard.ts';
+import { phoneKey } from '../_shared/phone.ts';
 
 type OtpChannel = 'email' | 'phone' | 'guardian_phone';
 
@@ -135,7 +136,9 @@ Deno.serve(async (req) => {
   const target = (channel === 'email' ? player.email : channel === 'phone' ? player.phone : guardianPhone) ?? '';
   const t = target.trim();
   if (channel === 'email' && !t.includes('@')) return json({ sent: false, reason: 'no-email' });
-  if (channel !== 'email' && t.replace(/[^0-9]/g, '').length < 8) return json({ sent: false, reason: 'no-phone' });
+  // Phones: the full international number (E.164) — never assume a country.
+  const intl = channel === 'email' ? '' : phoneKey(t);
+  if (channel !== 'email' && !intl) return json({ sent: false, reason: 'no-phone' });
 
   const code = newCode();
   const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -144,6 +147,6 @@ Deno.serve(async (req) => {
   }, { onConflict: 'player_id,channel' });
   if (up.error) { console.error('contact_otps upsert failed', up.error); return json({ sent: false, reason: 'store-failed', detail: up.error.message.slice(0, 200) }); }
 
-  const r = channel === 'email' ? await sendEmail(t, code) : await sendWhatsApp(t, code);
+  const r = channel === 'email' ? await sendEmail(t, code) : await sendWhatsApp(intl, code);
   return json({ sent: r.ok, reason: r.reason, detail: r.detail });
 });

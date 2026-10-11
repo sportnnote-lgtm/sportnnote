@@ -12,9 +12,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, TextField, textStyles } from './ui';
-import { isValidPhone } from '../core/phone';
+import { isValidPhone, phoneHelp } from '../core/phone';
 import { looksLikeContact } from '../core/contactQuery';
 import { openSms, openWhatsApp } from '../core/connect';
+import { preferredChat } from '../core/chatRegion';
 import { findPlayerByPhone, invitePerson, lookupPeople } from '../data/repos';
 import type { Player } from '../core/types';
 import { reportError } from '../core/telemetry';
@@ -120,8 +121,18 @@ export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
         <View style={st.invite}>
           <Text style={textStyles.body}>Not on SportnNote yet — add them and send an invite:</Text>
           <TextField label="" value={name} onChange={setName} placeholder="Their name (optional — they’ll add it when they join)" autoCapitalize="words" />
-          <Button label={busy ? 'Adding…' : '💬 Add & invite on WhatsApp'} onPress={() => void addAndInvite('whatsapp')} disabled={busy} />
-          <Button label="✉️ Add & invite by SMS" variant="ghost" onPress={() => void addAndInvite('sms')} disabled={busy} />
+          {/* SD-151: the everyday chat app first — WhatsApp (India, Gulf, UK, SG/MY) or text. */}
+          {preferredChat() === 'whatsapp' ? (
+            <>
+              <Button label={busy ? 'Adding…' : '💬 Add & invite on WhatsApp'} onPress={() => void addAndInvite('whatsapp')} disabled={busy} />
+              <Button label="✉️ Add & invite by SMS" variant="ghost" onPress={() => void addAndInvite('sms')} disabled={busy} />
+            </>
+          ) : (
+            <>
+              <Button label={busy ? 'Adding…' : '✉️ Add & invite by text (SMS)'} onPress={() => void addAndInvite('sms')} disabled={busy} />
+              <Button label="💬 Add & invite on WhatsApp" variant="ghost" onPress={() => void addAndInvite('whatsapp')} disabled={busy} />
+            </>
+          )}
           <Text style={st.link} onPress={() => void addAndInvite('none')}>Just add — I’ll tell them myself</Text>
         </View>
       )}
@@ -136,7 +147,7 @@ export function PersonPicker({ role, excludeIds = [], onPick, inviteText }: {
         <Text style={textStyles.muted}>No members by that name — try their mobile number to invite them.</Text>
       )}
       {/^[+\d\s()-]+$/.test(q.trim()) && !isNumber && q.replace(/\D/g, '').length > 0 && (
-        <Text style={textStyles.muted}>Enter the full 10-digit mobile number.</Text>
+        <Text style={textStyles.muted}>{phoneHelp()}</Text>
       )}
     </View>
   );

@@ -15,6 +15,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = join(ROOT, 'website');
 const OUT = join(SITE, 'dist');
 const cfg = JSON.parse(readFileSync(join(SITE, 'config.json'), 'utf8'));
+// SD-151: the .com switch is a config change — SITE_URL / APP_URL / SUPPORT_EMAIL in the
+// build environment override config.json (docs/international/domain-move-com.md).
+for (const [key, env] of [['siteUrl', 'SITE_URL'], ['appUrl', 'APP_URL'], ['contactEmail', 'SUPPORT_EMAIL']]) {
+  const v = (process.env[env] ?? '').trim().replace(/\/+$/, '');
+  if (v) cfg[key] = v;
+}
 // Node 24 runs .ts with type stripping; legal.ts has no imports.
 const legal = await import(join(ROOT, 'src/data/legal.ts'));
 
@@ -80,12 +86,13 @@ function page({ title, description, path, body, ogType = 'website', head = '', n
 </div></header>
 ${body}
 <footer><div class="wrap">
-  <span>© ${new Date().getFullYear()} SportnNote · Made in ${esc(cfg.city)}</span>
+  <span>© ${new Date().getFullYear()} SportnNote · Built in ${esc(cfg.homeCountry)}, for sport everywhere</span>
   <nav>
     <a href="/guides/">Guides</a>
+    <a href="/support/">Support</a>
     <a href="/privacy/">Privacy Policy</a>
     <a href="/terms/">Terms of Use</a>
-    <a href="mailto:${cfg.contactEmail}">${esc(cfg.contactEmail)}</a>
+    <a href="/delete-account/">Delete account</a>
   </nav>
 </div></footer>
 </body>
@@ -344,7 +351,7 @@ function guidePage(g) {
 ${html}
       </div>
       <div class="article-cta card">
-        <div><h2>Try it in SportnNote</h2><p>Free on iPhone, Android and desktop.</p></div>
+        <div><h2>Try it in SportnNote</h2><p>Works on iPhone, Android and desktop. ${esc(cfg.pricingLine)}</p></div>
         <a class="btn btn-primary" href="${cfg.appUrl}">Open SportnNote</a>
       </div>
       ${prev || next ? `<nav class="pager" aria-label="More in ${esc(g.category)}">
@@ -373,24 +380,24 @@ const androidSteps = cfg.androidApkUrl
 
 const home = page({
   title: 'SportnNote — score every match, run any tournament',
-  description: `Free live scoring, tournaments, stats and player profiles for ${SPORTS.length} sports — cricket, football, badminton, golf and more. Built in ${cfg.city}.`,
+  description: `Live scoring, tournaments, stats and player profiles for ${SPORTS.length} sports — cricket, football, badminton, golf and more. For schools, clubs and open tournaments anywhere.`,
   path: '/',
   body: `
 <section class="hero"><div class="wrap">
   <div>
-    <p class="eyebrow">Free during our ${esc(cfg.city)} pilot</p>
+    <p class="eyebrow">Free while we’re new</p>
     <h1>Score every match.<br><em>Run any tournament.</em></h1>
     <p class="lead">Live scoring, fixtures, standings and player stats for ${SPORTS.length} sports — in one app your whole team can follow. Built for open tournaments, clubs and schools.</p>
     <div class="cta">
       <a class="btn btn-primary" href="${cfg.appUrl}">Open SportnNote</a>
       ${androidCta}
     </div>
-    <p class="note">Works on iPhone, Android and desktop. No credit card, no ads.</p>
+    <p class="note">Works on iPhone, Android and desktop, in any country. ${esc(cfg.pricingLine)} No ads.</p>
   </div>
   <div class="phone" aria-hidden="true">
     <div class="score-card">
       <span class="live">LIVE</span>
-      <div class="teams"><span>🏏 Banjara Hills XI</span><span class="s">142/4</span><span>Gachibowli Strikers</span><span class="s">—</span></div>
+      <div class="teams"><span>🏏 Riverside XI</span><span class="s">142/4</span><span>Northfield Strikers</span><span class="s">—</span></div>
       <div class="meta">16.2 overs · Run rate 8.69 · Open T20 Cup</div>
     </div>
     <div class="score-card">
@@ -444,7 +451,7 @@ const home = page({
 
 <section id="get" class="band"><div class="wrap">
   <h2>Get the app</h2>
-  <p class="sub">Free. Sign up with your email and mobile number.</p>
+  <p class="sub">${esc(cfg.pricingLine)} Sign up with your email or mobile number — from any country.</p>
   <div class="install">
     <div class="card"><h3>📱 iPhone</h3>
       <ol><li>Open <strong>${esc(cfg.appUrl.replace('https://', ''))}</strong> in <strong>Safari</strong>.</li><li>Tap Share → <strong>Add to Home Screen</strong>.</li><li>Open SportnNote from your home screen.</li></ol>
@@ -458,7 +465,7 @@ const home = page({
 
 <section><div class="wrap">
   <h2>Questions or want SportnNote for your club?</h2>
-  <p class="sub">We’re working closely with our first organisers in ${esc(cfg.city)}. Write to us at <a href="mailto:${cfg.contactEmail}">${esc(cfg.contactEmail)}</a>.</p>
+  <p class="sub">We work closely with the organisers, schools and clubs who use SportnNote. Write to us at <a href="mailto:${cfg.contactEmail}">${esc(cfg.contactEmail)}</a> — ${esc(cfg.supportHours)}. <a href="/support/">More ways to get help</a>.</p>
 </div></section>
 `,
 });
@@ -468,6 +475,77 @@ const legalPage = (title, path, content) => page({
   description: `SportnNote ${title}.`,
   path,
   body: `<main class="doc">${md(content)}</main>`,
+});
+
+// SD-151: public support / contact page (email + hours with the time zone).
+const supportPage = page({
+  title: 'Support — SportnNote',
+  description: 'Get help with SportnNote: guides, in-app help, and how to reach the team by email, with our support hours.',
+  path: '/support/',
+  body: `<main class="doc">
+<h2>Support</h2>
+<p>Stuck on something? Most answers are one tap away.</p>
+<h3>Help yourself first</h3>
+<ul>
+  <li><strong>In the app:</strong> Settings → <strong>Help &amp; support</strong>. Type your question for an instant answer.</li>
+  <li><strong>Guides:</strong> step-by-step pages for organisers, scorers and players at <a href="/guides/">Guides</a>.</li>
+</ul>
+<h3>Contact us</h3>
+<p>Email <a href="mailto:${cfg.contactEmail}">${esc(cfg.contactEmail)}</a>, or use <strong>Contact support</strong> in the app’s help.</p>
+<ul>
+  <li><strong>Support hours:</strong> ${esc(cfg.supportHours)}.</li>
+  <li>${esc(cfg.supportReply)}</li>
+  <li>Tell us the match or tournament name, the sport, and what you tapped. A screenshot helps.</li>
+</ul>
+<p>SportnNote works in any country. Write to us in English, wherever you are.</p>
+<h3>Privacy and your account</h3>
+<ul>
+  <li>Questions about your data: see the <a href="/privacy/">Privacy Policy</a>, or email us.</li>
+  <li>To delete your account: <a href="/delete-account/">Delete your account</a>.</li>
+</ul>
+<h3>Price</h3>
+<p>${esc(cfg.pricingLine)}</p>
+</main>`,
+});
+
+// SD-151 (Google Play requirement): how to delete an account, with or without the app.
+const deleteAccountPage = page({
+  title: 'Delete your account — SportnNote',
+  description: 'How to delete your SportnNote account and data — in the app or by email — and what is kept afterwards.',
+  path: '/delete-account/',
+  body: `<main class="doc">
+<h2>Delete your SportnNote account</h2>
+<p>You can delete your account and personal data at any time. This page explains how, and what happens next.</p>
+<h3>In the app (fastest)</h3>
+<ol>
+  <li>Open SportnNote (the phone app, or the web app at <a href="${cfg.appUrl}">${esc(cfg.appUrl.replace('https://', ''))}</a>) and sign in.</li>
+  <li>Go to <strong>Profile</strong> → <strong>⚙ Settings</strong>.</li>
+  <li>Under <strong>Privacy &amp; legal</strong>, tap <strong>Delete my account</strong>.</li>
+  <li>Read what is removed, type <strong>DELETE</strong> and confirm. It happens straight away.</li>
+</ol>
+<h3>Without the app</h3>
+<p>Can’t sign in, or no longer have the app? Email <a href="mailto:${cfg.contactEmail}?subject=Delete%20my%20account">${esc(cfg.contactEmail)}</a> with the subject <strong>Delete my account</strong>.</p>
+<ul>
+  <li>Send it from the email address on your account, or include the mobile number on your account.</li>
+  <li>We check the request is really from you, then delete the account and tell you when it’s done — within 30 days.</li>
+  <li>A parent or guardian can ask the same way for a child’s account.</li>
+</ul>
+<h3>What is deleted</h3>
+<ul>
+  <li>Your name, mobile number, email, date of birth, photo, bio and guardian details.</li>
+  <li>Uploaded age or ID proofs.</li>
+  <li>The text of messages you sent.</li>
+  <li>Your follows, notification settings and team or club memberships.</li>
+  <li>Your login. You won’t be able to sign in again.</li>
+</ul>
+<h3>What stays</h3>
+<ul>
+  <li>Scores of matches you played stay in other people’s match histories and standings, shown as “Deleted player”, no longer linked to you. This keeps tables and results correct for everyone else.</li>
+  <li>Tournaments you organised stay up for their players.</li>
+  <li>Usage and error data is kept for up to 13 months, then deleted, as set out in the Privacy Policy.</li>
+</ul>
+<p>More detail is in our <a href="/privacy/">Privacy Policy</a>. Questions? See <a href="/support/">Support</a>.</p>
+</main>`,
 });
 
 const notFound = page({
@@ -484,6 +562,10 @@ writeFileSync(join(OUT, 'index.html'), home);
 writeFileSync(join(OUT, 'privacy/index.html'), legalPage('Privacy Policy', '/privacy/', legal.PRIVACY_POLICY));
 writeFileSync(join(OUT, 'terms/index.html'), legalPage('Terms of Use', '/terms/', legal.TERMS));
 writeFileSync(join(OUT, '404.html'), notFound);
+mkdirSync(join(OUT, 'support'), { recursive: true });
+writeFileSync(join(OUT, 'support/index.html'), supportPage);
+mkdirSync(join(OUT, 'delete-account'), { recursive: true });
+writeFileSync(join(OUT, 'delete-account/index.html'), deleteAccountPage);
 mkdirSync(join(OUT, 'guides'), { recursive: true });
 writeFileSync(join(OUT, 'guides/index.html'), guidesIndex());
 for (const g of guides) {
@@ -500,7 +582,7 @@ copyFileSync(join(ROOT, 'assets/favicon.png'), join(OUT, 'favicon.ico'));
 writeFileSync(join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${cfg.siteUrl}/sitemap.xml\n`);
 writeFileSync(join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${['/', '/privacy/', '/terms/', '/guides/'].map((p) => `  <url><loc>${cfg.siteUrl}${p}</loc></url>`).join('\n')}
+${['/', '/privacy/', '/terms/', '/support/', '/delete-account/', '/guides/'].map((p) => `  <url><loc>${cfg.siteUrl}${p}</loc></url>`).join('\n')}
 ${guides.filter((g) => !g.draft).map((g) => `  <url><loc>${cfg.siteUrl}/guides/${g.slug}/</loc><lastmod>${g.updated}</lastmod></url>`).join('\n')}
 </urlset>
 `);

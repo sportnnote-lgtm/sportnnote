@@ -5,7 +5,11 @@
  *   - Organizer: organize events (create & schedule tournaments/matches).
  *   - Scorer / Member: view only.
  *  Reached from a user's profile or a tournament's host. */
+import { eventZone, todayIn } from '../core/time';
+import { defaultSchoolYear, regionStore } from '../core/region';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatPhone } from '../core/phone';
+import { PhoneField } from '../components/PhoneField';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -95,13 +99,12 @@ export default function OrganizationScreen() {
 
   // Current = ongoing/upcoming (soonest first); past = finished, grouped by year.
   const currentEvents = useMemo(() => {
-    const d = new Date().toISOString().slice(0, 10);
-    return events.filter((t) => (t.endDate || '') >= d).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    // SD-150: "today" at each event's venue zone, not the UTC date.
+    return events.filter((t) => (t.endDate || '') >= todayIn(eventZone(t))).sort((a, b) => a.startDate.localeCompare(b.startDate));
   }, [events]);
   const pastEventsByYear = useMemo(() => {
-    const d = new Date().toISOString().slice(0, 10);
     const map = new Map<string, Tournament[]>();
-    for (const t of events.filter((t) => (t.endDate || '') < d)) {
+    for (const t of events.filter((t) => (t.endDate || '') < todayIn(eventZone(t)))) {
       const yr = (t.startDate || '').slice(0, 4) || '—';
       (map.get(yr) ?? map.set(yr, []).get(yr)!).push(t);
     }
@@ -114,7 +117,7 @@ export default function OrganizationScreen() {
   const canManage = canManageOrg(org ?? undefined, myId); // Admin
   const canOrganize = canOrganizeEvents(org ?? undefined, myId); // Admin or Organizer
   const academic = isAcademicCommunity(org?.type); // school/college → class timelines
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIn();
   // The academic year running today (drives "current year", rollover date, etc.).
   const curAY = currentAcademicYear(org ?? undefined, today);
   // The running year is over and the next one isn't set up yet → prompt admins.
@@ -174,7 +177,7 @@ export default function OrganizationScreen() {
     const std = joinStandard.trim();
     if (fresh && academic && std) {
       const m = fresh.members.find((x) => x.playerId === playerId);
-      const since = m?.since ?? new Date().toISOString().slice(0, 10);
+      const since = m?.since ?? todayIn();
       const members = fresh.members.map((x) =>
         x.playerId === playerId ? { ...x, grades: promoteGrade(x.grades, std, since) } : x
       );
@@ -440,7 +443,7 @@ export default function OrganizationScreen() {
               {(org.email || org.phone) && (
                 <Card style={{ gap: theme.spacing(1) }}>
                   <Text style={textStyles.muted}>Contact</Text>
-                  {org.phone ? <Text style={textStyles.body}>📞 {org.phone}</Text> : null}
+                  {org.phone ? <Text style={textStyles.body}>📞 {formatPhone(org.phone)}</Text> : null}
                   {org.email ? <Text style={textStyles.body}>✉️ {org.email}</Text> : null}
                 </Card>
               )}
@@ -749,7 +752,7 @@ function YearRollover({
   nameOf: (id: string) => string;
   onApply: (members: OrgMember[]) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIn();
   const members = org.members;
   const students = useMemo(() => members.filter((m) => !m.until && currentStandard(m)), [members]);
   const gradStd = graduatingStandardOf(org);
@@ -865,7 +868,7 @@ function YearRollover({
 /** Manage a student's class/standard timeline: show the history and record a
  *  promotion (a new class effective from a date, which closes the prior one). */
 function GradeEditor({ member, onSave }: { member: OrgMember; onSave: (grades: OrgMember['grades']) => void }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIn();
   const [standard, setStandard] = useState('');
   const [since, setSince] = useState(today);
   const grades = [...(member.grades ?? [])].sort((a, b) => a.since.localeCompare(b.since));
@@ -916,7 +919,8 @@ function DetailsEditor({ org, onCancel, onSaved }: { org: Organization; onCancel
   const [gradStd, setGradStd] = useState(org.graduatingStandard ?? (org.type === 'School' ? 'Grade 10' : ''));
   const [years, setYears] = useState<AcademicYear[]>(academicYearsOf(org));
   // New-year inputs, pre-filled from the next extrapolated year if available.
-  const seed = nextAcademicYearDates({ ...org, academicYears: years });
+  // No year yet → the region's usual school year (Apr–Mar India, Sep UK, Jan SG/AU…).
+  const seed = nextAcademicYearDates({ ...org, academicYears: years }) ?? (years.length ? undefined : defaultSchoolYear(regionStore.get(), todayIn()));
   const [nyStart, setNyStart] = useState(seed?.start ?? '');
   const [nyEnd, setNyEnd] = useState(seed?.end ?? '');
   const [busy, setBusy] = useState(false);
@@ -960,7 +964,7 @@ function DetailsEditor({ org, onCancel, onSaved }: { org: Organization; onCancel
       <TextField label="Category (custom)" value={type} onChange={setType} placeholder="e.g. Academy" />
       <TextField label="City" value={city} onChange={setCity} />
       <TextField label="Email" value={email} onChange={setEmail} autoCapitalize="none" />
-      <TextField label="Phone" value={phone} onChange={setPhone} />
+      <PhoneField label="Phone" value={phone} onChange={setPhone} optional />
       <TextField label="Bio" value={bio} onChange={setBio} placeholder="What this community is about" />
       {academic && (
         <>

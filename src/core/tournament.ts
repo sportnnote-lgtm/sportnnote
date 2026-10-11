@@ -4,6 +4,7 @@
  *  played even if that's before the listed end date. */
 import { theme } from './theme';
 import type { MatchStatus, Tournament } from './types';
+import { eventZone, todayIn } from './time';
 
 export type TournamentStatusKind = 'live' | 'upcoming' | 'completed';
 
@@ -21,7 +22,9 @@ export interface MatchProgress {
   completed: number;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today at the venue (the tournament's zone, else the viewer's) — never the
+ *  UTC date, which is a day off for AU mornings and US evenings (SD-150). */
+const today = (t?: { timeZone?: string }) => todayIn(eventZone(t));
 
 export function matchProgress(matches: { status: MatchStatus }[]): MatchProgress {
   return {
@@ -32,13 +35,13 @@ export function matchProgress(matches: { status: MatchStatus }[]): MatchProgress
 }
 
 export function tournamentStatus(
-  t: Pick<Tournament, 'startDate' | 'endDate'>,
+  t: Pick<Tournament, 'startDate' | 'endDate'> & { timeZone?: string },
   progress?: MatchProgress,
 ): TournamentStatus {
   const LIVE: TournamentStatus = { kind: 'live', label: 'Live now', color: theme.colors.danger };
   const UPCOMING: TournamentStatus = { kind: 'upcoming', label: 'Upcoming', color: theme.colors.accent };
   const COMPLETED: TournamentStatus = { kind: 'completed', label: 'Completed', color: theme.colors.textMuted };
-  const now = today();
+  const now = today(t);
 
   // Match reality wins when we have fixtures to judge by.
   if (progress && progress.total > 0) {

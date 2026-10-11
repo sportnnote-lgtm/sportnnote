@@ -8,7 +8,7 @@ order: 30
 updated: 2026-10-11
 ---
 
-A school meet can have 30 to 60 house and class teams. You can add them yourself, or share one link on WhatsApp so each captain enters their own team. This page covers both, plus fixing a misspelt team name and taking a team out.
+A school meet can have 30 to 60 house and class teams. You can add them yourself, or share one link in your chat group so each captain enters their own team. This page covers both, plus fixing a misspelt team name and taking a team out.
 
 ## Before you start
 - To add or remove teams, you must be a host of the tournament.
@@ -26,7 +26,7 @@ A school meet can have 30 to 60 house and class teams. You can add them yourself
 
 ## Step by step: let captains join with one link
 1. On **Participating teams**, turn on **🔗 Teams can join by link**.
-2. A join code and a QR code appear, such as `T-ABC123`. Tap **📤 Share QR + message** to send the QR picture with the invite text in one go. The message starts "Enter your team in Tournament …", so captains know what it is. **💬 WhatsApp** sends the text only, and **Copy link** copies the link to paste anywhere.
+2. A join code and a QR code appear, such as `T-ABC123`. Tap **📤 Share QR + message** to send the QR picture with the invite text in one go. The message starts "Enter your team in Tournament …", so captains know what it is. **💬 WhatsApp** (or **📤 Share** where most people text rather than use WhatsApp) sends the text only, and **Copy link** copies the link to paste anywhere.
 3. Each captain who opens the link picks their team, and it's in the tournament at once.
 4. When every team is in, turn the switch off. Anyone who opens the old link then sees "This link is turned off".
 

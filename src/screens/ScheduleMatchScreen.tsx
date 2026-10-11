@@ -445,7 +445,7 @@ export default function ScheduleMatchScreen() {
               </>
             )}
 
-            <DateTimeField label="Kickoff" value={when} onChange={setWhen} />
+            <DateTimeField label="Kickoff" value={when} onChange={setWhen} timeZone={tournament?.timeZone} />
 
             {/* Phase tag — only for tournament matches. Lets an organizer place a
                 match precisely: a group game, or a specific knockout tie that then

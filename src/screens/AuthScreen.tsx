@@ -18,7 +18,9 @@ import { Button, Card, SelectChip, FormError, textStyles } from '../components/u
 import { DateField } from '../components/DateTimeField';
 import { useAuth } from '../core/auth';
 import { ageFromDob } from '../core/age';
-import { isValidPhone } from '../core/phone';
+import { guardianConfirmRequired, privacyCountry, usUnder13Blocked, US_UNDER_13_MESSAGE } from '../core/privacyRegion';
+import { isValidPhone, normalizePhone, formatPhone } from '../core/phone';
+import { PhoneField } from '../components/PhoneField';
 import { phoneLoginAvailable } from '../core/phoneLogin';
 import { PhoneLoginCard } from '../components/PhoneLoginCard';
 import type { Role } from '../core/types';
@@ -69,6 +71,10 @@ export default function AuthScreen() {
 
   const age = ageFromDob(dob.trim());
   const minor = age !== undefined && age < 18;
+  // SD-152: under-18 rules by country (India unchanged — the checkbox below is the consent).
+  const country = privacyCountry();
+  const usUnder13 = usUnder13Blocked(country, age);
+  const guardianMustConfirm = minor && guardianConfirmRequired(country);
 
   const clearFlow = () => { setSent(false); setCode(''); setNewPassword(''); setNote(null); setError(null); setOtpChannel('email'); setShowResend(false); };
   const switchMode = (m: Mode) => { setMode(m); setFlow('password'); clearFlow(); };
@@ -87,17 +93,22 @@ export default function AuthScreen() {
   // Password sign-up / sign-in — captures identity + guardian consent on sign-up.
   function submitPassword() {
     if (mode === 'up') {
-      if (!isValidPhone(mobile)) return setError('Enter your mobile number — it’s your SportnNote identity.');
+      if (!isValidPhone(mobile)) return setError('Enter your mobile number (check the country code) — it’s your SportnNote identity.');
       if (!dob.trim() || age === undefined) return setError('Enter a valid date of birth (YYYY-MM-DD).');
+      if (usUnder13) return setError(US_UNDER_13_MESSAGE);
+      if (guardianMustConfirm && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gEmail.trim())) {
+        return setError("Add your parent/guardian's email — we'll email them a link to confirm your account.");
+      }
       if (minor) {
         if (!gName.trim()) return setError('A parent/guardian name is required to create an under-18 account.');
         if (!gPhone.trim() && !gEmail.trim()) return setError("Add the guardian's mobile or email — under-18 accounts need a guardian contact.");
+        if (gPhone.trim() && !isValidPhone(gPhone)) return setError("The guardian's mobile doesn't look right — check the number and country code.");
         if (!consent) return setError('Parent/guardian consent is required for an under-18 account.');
       }
       if (!agreed) return setError('Please agree to the Terms of Use and Privacy Policy to create an account.');
     }
     const guardian = minor && gName.trim()
-      ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
+      ? { name: gName.trim(), phone: normalizePhone(gPhone) || undefined, email: gEmail.trim() || undefined, consentedAt: new Date().toISOString() }
       : undefined;
     if (mode === 'in') {
       setShowResend(false);
@@ -136,8 +147,8 @@ export default function AuthScreen() {
   // Passwordless OTP sign-in — email or SMS code.
   const otpRequest = () => {
     if (otpChannel === 'phone') {
-      if (!isValidPhone(mobile)) return setError('Enter your mobile number to get an SMS code.');
-      return void run(() => sendPhoneOtp(mobile.trim()), `We texted a 6-digit code to ${mobile.trim()}.`, () => setSent(true));
+      if (!isValidPhone(mobile)) return setError('Enter your mobile number (check the country code) to get an SMS code.');
+      return void run(() => sendPhoneOtp(mobile.trim()), `We texted a 6-digit code to ${formatPhone(mobile)}.`, () => setSent(true));
     }
     if (!email.trim()) return setError('Enter your email to get a code.');
     void run(() => sendSignInOtp(email.trim()), `We emailed a 6-digit code to ${email.trim()}.`, () => setSent(true));
@@ -194,11 +205,15 @@ export default function AuthScreen() {
           </View>
 
           {mode === 'up' && <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Aarav Mehta" />}
-          {mode === 'up' && <Field label="Mobile number" value={mobile} onChange={setMobile} placeholder="+91 98765 43210" />}
+          {mode === 'up' && <PhoneField label="Mobile number" value={mobile} onChange={setMobile} labelStyle={textStyles.muted} />}
           {mode === 'up' && (
             <>
               <DateField label="Date of birth" value={dob} onChange={setDob} />
               {age !== undefined && <Text style={st.ageHint}>Age: {age} yrs{minor ? ' — a parent/guardian is required' : ''}</Text>}
+              {usUnder13 && <Text style={[st.ageHint, { color: theme.colors.danger }]}>{US_UNDER_13_MESSAGE}</Text>}
+              {guardianMustConfirm && !usUnder13 && (
+                <Text style={st.ageHint}>We’ll email your parent/guardian a link to confirm your account. Until they do, following and messages are off and only your teams see your profile.</Text>
+              )}
             </>
           )}
 
@@ -212,7 +227,7 @@ export default function AuthScreen() {
             </View>
           )}
           {!otpPhone && <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" />}
-          {otpPhone && <Field label="Mobile number" value={mobile} onChange={setMobile} placeholder="+91 98765 43210" />}
+          {otpPhone && <PhoneField label="Mobile number" value={mobile} onChange={setMobile} labelStyle={textStyles.muted} />}
           {showPassword && <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure />}
 
           {/* OTP / reset: the 6-digit code, plus a new password for reset. */}
@@ -223,8 +238,8 @@ export default function AuthScreen() {
             <View style={{ gap: theme.spacing(2) }}>
               <Text style={textStyles.muted}>👪 Parent / Guardian (required for under-18)</Text>
               <Field label="Guardian name" value={gName} onChange={setGName} placeholder="Priya Mehta" />
-              <Field label="Guardian mobile" value={gPhone} onChange={setGPhone} placeholder="+91…" />
-              <Field label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" keyboardType="email-address" />
+              <PhoneField label="Guardian mobile" value={gPhone} onChange={setGPhone} labelStyle={textStyles.muted} />
+              <Field label={guardianMustConfirm ? 'Guardian email (we send the confirmation link here)' : 'Guardian email'} value={gEmail} onChange={setGEmail} placeholder="parent@email.com" keyboardType="email-address" />
               <TouchableOpacity
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: consent }}

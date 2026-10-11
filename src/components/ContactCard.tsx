@@ -8,6 +8,7 @@ import { theme } from '../core/theme';
 import { Card, Pill, textStyles } from './ui';
 import { verifyContact, beginContactVerification, verifyContactOtp, type OtpChannel, type OtpVia } from '../data/repos';
 import { isSupabaseConfigured } from '../core/supabase';
+import { formatPhone } from '../core/phone';
 
 type Channel = 'phone' | 'email';
 
@@ -171,7 +172,7 @@ export function ContactCard({
     <Card style={{ gap: theme.spacing(2) }}>
       <Text style={textStyles.muted}>{title}</Text>
       {name ? <Text style={[textStyles.body, { fontWeight: '700' }]}>{name}</Text> : null}
-      {phone ? row('phone', '📞', phone) : null}
+      {phone ? row('phone', '📞', formatPhone(phone)) : null}
       {email ? row('email', '✉️', email) : null}
       {!phone && !email ? <Text style={textStyles.muted}>No contact added.</Text> : null}
     </Card>

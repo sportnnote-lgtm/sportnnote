@@ -11,6 +11,8 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, LoadingState, textStyles } from '../components/ui';
+import { PhoneField } from '../components/PhoneField';
+import { formatPhone } from '../core/phone';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import {
@@ -239,7 +241,7 @@ export default function ClubHomeScreen() {
                   <TouchableOpacity key={p.id} disabled={busy} onPress={() => addExisting(p.id)} accessibilityRole="button" style={st.resultRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={textStyles.body}>{p.fullName}</Text>
-                      {!!p.phone && <Text style={textStyles.muted}>{p.phone}</Text>}
+                      {!!p.phone && <Text style={textStyles.muted}>{formatPhone(p.phone)}</Text>}
                     </View>
                     <Text style={st.link}>Add</Text>
                   </TouchableOpacity>
@@ -248,7 +250,7 @@ export default function ClubHomeScreen() {
             ) : (
               <>
                 <TextField label="Name" value={mName} onChange={setMName} placeholder="Player name" />
-                <TextField label="Phone (optional)" value={mPhone} onChange={setMPhone} placeholder="+91…" autoCapitalize="none" />
+                <PhoneField label="Phone" value={mPhone} onChange={setMPhone} optional />
                 <Button label={busy ? 'Adding…' : 'Add & invite'} onPress={addByPhone} />
               </>
             )}

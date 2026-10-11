@@ -4,6 +4,7 @@
  *   • fixturesPrintHtml — a clean printable page (the web "Print / PDF" button).
  * Times come in already formatted by the caller (timezone-aware).
  */
+import { SITE_HOST } from './hosts.ts';
 
 export interface FixtureRow {
   /** ISO start time (sorting + day grouping); may be empty for unscheduled */
@@ -68,6 +69,6 @@ export function fixturesPrintHtml(o: { tournament: string; rows: FixtureRow[]; s
   @media print { body { margin: 10mm; } h2 { break-after: avoid; } tr { break-inside: avoid; } }
 </style></head><body>
 <h1>${esc(o.tournament)}</h1><p class="sub">${esc(o.subtitle ?? 'Fixtures')}</p>${days || '<p>No fixtures scheduled yet.</p>'}
-<p class="foot">Live scores on SportnNote · sportnnote.in</p>
+<p class="foot">Live scores on SportnNote · ${esc(SITE_HOST)}</p>
 </body></html>`;
 }

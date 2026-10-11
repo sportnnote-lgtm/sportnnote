@@ -46,7 +46,8 @@ test('player added to a team by number (squad / match)', () => {
     "Hi Ravi! You've been added to Team L&H on SportnNote 🏆\n\n"
     + 'Tap the link and sign up with this mobile number (1 minute, no password) to confirm your spot and track your stats:\n'
     + 'https://app.sportnnote.in/i/p1\n\n'
-    + "Not you / didn't expect this? Tell us (no app needed): https://app.sportnnote.in/i/p1?notme=1",
+    + "Not you / didn't expect this? Tell us (no app needed): https://app.sportnnote.in/i/p1?notme=1\n"
+    + 'How we handle your details: https://sportnnote.in/privacy/',
   );
   assert.match(provisionalInviteMessage({ name: 'Invited (…1234)', playerId: 'p1', teamName: 'L&H', captain: true }), /^Hi there! You're the captain of Team L&H on SportnNote 🧢\n/);
 });
@@ -56,11 +57,13 @@ test('team manager + tournament co-host invites', () => {
   assert.equal(teamAtTournament('L&H'), 'Team L&H');
   assert.equal(
     inviteMessage({ name: 'Asha', inviterName: 'Hrudhay', link: 'https://app.sportnnote.in/i/p2', context: teamAtTournament('L&H', 'Open Cup'), role: 'manage' }),
-    'Hi Asha! Hrudhay invited you to manage Team L&H at Tournament Open Cup on SportnNote 🏆 Install the app and register with this number/email to join:\nhttps://app.sportnnote.in/i/p2',
+    'Hi Asha! Hrudhay invited you to manage Team L&H at Tournament Open Cup on SportnNote 🏆 Install the app and register with this number/email to join:\nhttps://app.sportnnote.in/i/p2'
+    + '\n\nHow we handle your details: https://sportnnote.in/privacy/',
   );
   assert.equal(
     inviteMessage({ name: '', inviterName: 'Hrudhay', link: 'L', context: inviteLabel('Tournament', 'Open Cup') }),
-    'Hi there! Hrudhay invited you to co-host Tournament Open Cup on SportnNote 🏆 Install the app and register with this number/email to join:\nL',
+    'Hi there! Hrudhay invited you to co-host Tournament Open Cup on SportnNote 🏆 Install the app and register with this number/email to join:\nL'
+    + '\n\nHow we handle your details: https://sportnnote.in/privacy/',
   );
 });
 

@@ -125,6 +125,10 @@ export interface Player {
   findableByContact?: boolean;
   /** a parent/guardian has linked their own account (gets messages about this player) */
   guardianLinked?: boolean;
+  /** Live reads (players_view, migration protect_minors): this viewer got the
+   *  REDUCED card of a possible minor — no photo, city, school or bio (and only
+   *  initials when logged out). See core/minorPrivacy.ts. */
+  restricted?: boolean;
 }
 
 /** Parent/guardian contact for a young player. Phone & email are verified the
@@ -654,6 +658,9 @@ export interface Tournament {
   about?: string;
   organiserPhone?: string;
   organiserEmail?: string;
+  /** SD-150: the venue's IANA time zone (migration tournament_time_zone). Kickoff
+   *  entry, fixture lists/prints and "today" follow it; absent = the viewer's. */
+  timeZone?: string;
   /** soft-deleted by the organiser (hidden from lists; stats survive) */
   deletedAt?: string;
   /** The people who run this tournament (player ids). Any host can manage it and

@@ -26,7 +26,8 @@ import { getSport } from '../sports/registry';
 import { sportSummary, hasPartialCoverage, recordText } from '../data/stats';
 import { profileHeadline } from '../data/profileHeadline';
 import type { Player, SportId } from '../core/types';
-import { displayableImage } from '../core/imageUrl';
+import { useImageUri } from '../data/useImageUri';
+import { avatarInitials, canFollowCard, isReducedCard, reducedCardNote } from '../core/minorPrivacy';
 import { notice } from '../core/confirm';
 import { FollowBell } from './FollowBell';
 
@@ -113,7 +114,8 @@ export function ProfileView({
       setPhotoBusy(false);
     }
   };
-  const shownPhoto = displayableImage(photo, !isSupabaseConfigured || photoBusy);
+  // A private player photo is signed per viewer (protect_minors); refused → initials.
+  const shownPhoto = useImageUri(photo, !isSupabaseConfigured || photoBusy);
 
   if (!player || !allStats || !official || !friendly) {
     // Own account with no player yet (a fresh sign-up): make this actionable —
@@ -148,7 +150,9 @@ export function ProfileView({
     ? scope === 'friendly' ? 'No friendlies played yet.' : 'No official (tournament) matches yet.'
     : null;
 
-  const initials = player.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  const initials = avatarInitials(player.fullName);
+  const reduced = !ownProfile && isReducedCard(player);
+  const followAllowed = canFollowCard(player, { signedIn: !!viewer, isSelf: ownProfile || player.profileId === viewer?.id });
   const details = player.sportDetails ?? {};
 
   return (
@@ -197,7 +201,10 @@ export function ProfileView({
         <Button label="✎ Edit player details" variant="ghost" onPress={onAdminEdit} />
       )}
       {onShare && <Button label={ownProfile ? '📤 Share my profile' : '📤 Share profile'} variant="ghost" onPress={onShare} />}
-      {follow && (
+      {reduced && (
+        <Card><Text style={textStyles.muted}>🔒 {reducedCardNote(player, !viewer)}</Text></Card>
+      )}
+      {follow && (followAllowed || follow.following) && (
         <View style={st.followRow}>
           <Button
             label={follow.following ? '✓ Following' : '+ Follow player'}

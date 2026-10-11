@@ -2,6 +2,7 @@
  *  deep-link opener, and a tiny "time ago" formatter. */
 import { Linking, Platform } from 'react-native';
 import type { ListingKind } from './types';
+import { intlDigits } from './phone';
 
 export const LISTING_KINDS: {
   kind: ListingKind;
@@ -28,14 +29,9 @@ export const wantsSchedule = (kind: ListingKind) =>
   kind === 'team_seeking_opponent' || kind === 'team_seeking_ground';
 export const wantsLevel = (kind: ListingKind) => kind === 'team_seeking_opponent';
 
-/** Digits with a country code: a bare 10-digit Indian mobile gets 91 (wa.me and
- *  sms need the full international number). */
-export function intlDigits(phone?: string): string {
-  let d = (phone ?? '').replace(/[^0-9]/g, '').replace(/^00/, '');
-  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
-  if (d.length === 10) d = `91${d}`;
-  return d;
-}
+/** Digits with a country code for wa.me / sms (E.164 without '+'). Stored numbers
+ *  are E.164; a typed local number is read in the user's country (core/phone.ts). */
+export { intlDigits };
 
 /** Open WhatsApp / Messages. On the web, Safari blocks opening a new window
  *  unless it happens right inside the tap — and invite buttons often save first

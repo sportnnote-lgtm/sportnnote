@@ -16,6 +16,7 @@ import {
 import { lateAddEntry, scratchEntry, reinstateEntry, removeEntry, checkDeleteEvent, deleteResultsEvent, createEventAthlete, updateEntriesDoc } from '../../data/meetEntriesStore';
 import { useMeetEntries, type MeetAthlete, type MeetSource } from '../../data/useMeetEntries';
 import { eventWords } from '../../sports/eventSports';
+import { useRegion, dateOrderWords, exampleDate } from '../../core/region';
 
 type Mode = null | 'add' | 'scratch';
 
@@ -78,6 +79,7 @@ function LateEntry({ phase, f, def, entries, words, onDone }: {
   phase: FieldEvent; f: PhaseFormat; def: DisciplineDef; entries: FieldEntry[]; words: string; onDone: (msg: string) => Promise<void>;
 }) {
   const sport = def.sport as SportId;
+  const region = useRegion(); // SD-150: typed DOBs follow the region's date order
   const { sources, athletes, doc } = useMeetEntries(phase.tournamentId, sport);
   const team = !!def.teamSize;
   const [error, setError] = useState<string | null>(null);
@@ -131,9 +133,9 @@ function LateEntry({ phase, f, def, entries, words, onDone }: {
       } else if (fresh) {
         const name = nName.trim().replace(/\s+/g, ' ');
         if (!name) { setError('Type the name.'); return; }
-        const dob = nDob.trim() ? readDob(nDob) : undefined;
+        const dob = nDob.trim() ? readDob(nDob, new Date(), region.dateOrder) : undefined;
         const ageTyped = /^u\d{1,2}$|^open$/i.test(nDob.trim()) ? nDob.trim().toUpperCase().replace('OPEN', 'Open') : undefined;
-        if (nDob.trim() && !dob && !ageTyped) { setError('Date of birth as day/month/year (e.g. 05/03/2012), or an age group (U14).'); return; }
+        if (nDob.trim() && !dob && !ageTyped) { setError(`Date of birth as ${dateOrderWords(region.dateOrder)} (e.g. ${exampleDate(region.dateOrder)}), or an age group (U14).`); return; }
         const house = nHouse?.name ?? (nHouseText.trim() || undefined);
         who = name;
         const ok0 = await askConfirm({ title: `Add ${name} as a new ${words.replace(/s$/, '')}?`, message: `${name} isn't on any team roster — they're added for this meet only (event-only).${dob ? ` Born ${dob} (${yearsOn(dob)}).` : ''}`, yesLabel: 'Yes, create', noLabel: 'No, go back', tone: 'caution' });
@@ -208,7 +210,7 @@ function LateEntry({ phase, f, def, entries, words, onDone }: {
                 <SelectChip label="Boy / Man" active={nGender === 'M'} onPress={() => setNGender('M')} />
                 <SelectChip label="Girl / Woman" active={nGender === 'F'} onPress={() => setNGender('F')} />
               </View>
-              <TextInput style={st.input} value={nDob} onChangeText={setNDob} placeholder="Date of birth (05/03/2012) or age group (U14)" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Date of birth or age group" />
+              <TextInput style={st.input} value={nDob} onChangeText={setNDob} placeholder={`Date of birth (${exampleDate(region.dateOrder)}) or age group (U14)`} placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Date of birth or age group" />
               <Text style={st.label}>House / team</Text>
               <View style={st.wrap}>{sources.map((s) => <SelectChip key={s.key} label={s.name} dotColor={s.colorHex} active={nHouse?.key === s.key} onPress={() => setNHouse(nHouse?.key === s.key ? null : s)} />)}</View>
               {!nHouse ? <TextInput style={st.input} value={nHouseText} onChangeText={setNHouseText} placeholder="…or type a school / house" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="School or house" /> : null}

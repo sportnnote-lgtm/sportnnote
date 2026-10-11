@@ -15,8 +15,7 @@ import type { LineupSlot, Player } from '../../core/types';
 import type { FootballEvent } from './events';
 import { minuteText, type MinuteFormat } from './engine';
 import { playerLink } from '../playerLink';
-import { displayableImage } from '../../core/imageUrl';
-import { isSupabaseConfigured } from '../../core/supabase';
+import { useImageUri } from '../../data/useImageUri';
 
 const DEF = new Set(['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'SW']);
 const FWD = new Set(['ST', 'CF', 'LW', 'RW', 'SS']);
@@ -70,8 +69,10 @@ const CardDot = ({ card }: { card: Marks['card'] }) =>
   ) : null;
 
 function Avatar({ photoUrl, label, color, size = 36 }: { photoUrl?: string; label: string; color: string; size?: number }) {
-  if (displayableImage(photoUrl, !isSupabaseConfigured)) {
-    return <Image source={{ uri: photoUrl! }} style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: '#fff' }} />;
+  // Private player photos are signed per viewer (protect_minors); refused → initials.
+  const uri = useImageUri(photoUrl);
+  if (uri) {
+    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: '#fff' }} />;
   }
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: '#fff', backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>

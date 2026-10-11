@@ -56,6 +56,7 @@ export type RootStackParamList = {
   SportSettings: { sport: SportId; tournamentId?: string };
   OrganizerDashboard: undefined;
   NotificationPrefs: undefined;
+  RegionSettings: undefined;
   Settings: undefined;
   Support: undefined;
   /** Privacy Policy / Terms (public: /privacy, /terms). */
@@ -72,6 +73,12 @@ export type RootStackParamList = {
    *  or starts). viaGuardian: the player is under 18, so it goes to their guardian. */
   Conversation: { threadId?: string; playerId?: string; title?: string; viaGuardian?: boolean; readOnly?: boolean };
   GuardianLink: undefined;
+  /** SD-152: Settings → Your data & privacy. */
+  Privacy: undefined;
+  /** SD-152: the guardian's confirmation page from the email (public: /guardian-consent?c=CODE). */
+  GuardianConsent: { c?: string } | undefined;
+  /** SD-152: a linked guardian manages their child's account. */
+  ManageChild: { playerId: string };
   /** Support: reported-message queue (migration 0027). */
   MessageReports: undefined;
   /** Golf (field event) — a round's scorecard + leaderboard, and its setup. */

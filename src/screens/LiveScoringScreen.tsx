@@ -26,7 +26,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { shareMessage } from '../core/share';
 import { PersonPicker } from '../components/PersonPicker';
 import { useParamState } from '../navigation/useParamState';
-import { matchShareText, matchLink } from '../core/shareText';
+import { matchShareText, matchLink, SHARE_BASE } from '../core/shareText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useKeepAwakeWhile } from '../core/keepAwake';
@@ -445,7 +445,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         winner: complete ? (meta.winner ?? plugin.result?.(state)?.winner ?? undefined) : undefined,
         resultLine: complete && meta.result ? manualResultLine(meta.result, hName, aName) : undefined,
         tournamentName: meta.tournamentName,
-        when: meta.startsAt ? formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST') : undefined,
+        when: meta.startsAt ? formatDateTime(meta.startsAt) : undefined,
         venue: meta.venueName,
         matchId,
       }), 'match');
@@ -695,8 +695,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const inviteTextFor = (role: 'scorer' | 'host' | 'official') => (name?: string) => matchRoleInviteText({
     role, name, inviterName: profile?.fullName,
     home: homeTeamName ?? homeName, away: awayTeamName ?? awayName,
-    when: meta.startsAt ? formatDateTime(meta.startsAt).replace('GMT+5:30', 'IST') : undefined,
-    link: matchId ? matchLink(matchId) : 'https://app.sportnnote.in',
+    when: meta.startsAt ? formatDateTime(meta.startsAt) : undefined,
+    link: matchId ? matchLink(matchId) : SHARE_BASE,
   });
 
   // When did scoring actually begin? (first event's server time). Refetch when the

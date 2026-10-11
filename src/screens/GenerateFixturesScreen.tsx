@@ -812,7 +812,7 @@ export default function GenerateFixturesScreen() {
           </Text>
         )}
 
-        <DateTimeField label="First match kickoff" value={start} onChange={setStart} />
+        <DateTimeField label="First match kickoff" value={start} onChange={setStart} timeZone={tournament?.timeZone} />
         <View style={st.row}>
           <View style={st.flex}><TextField label="Gap between matches (min)" value={gapMin} onChange={setGapMin} autoCapitalize="none" /></View>
           <View style={st.flex}><TextField label="Venue (optional)" value={venue} onChange={setVenue} placeholder="Main ground" /></View>
@@ -868,7 +868,7 @@ export default function GenerateFixturesScreen() {
                     )}
                     <Text style={st.remove} onPress={() => setDrafts((ds) => (ds ? ds.filter((_, ix) => ix !== i) : ds))}>✕</Text>
                   </View>
-                  <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? stageLabel(d.stage) : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
+                  <DateTimeField label={d.stage === 'super' ? `Super · Round ${d.round}` : d.stage && d.stage !== 'group' ? STAGE_LABEL[d.stage] ?? stageLabel(d.stage) : `${d.group ? `Group ${d.group} · ` : ''}Round ${d.round}`} value={d.when} timeZone={tournament?.timeZone} onChange={(w) => setDrafts((ds) => (ds ? ds.map((x, ix) => (ix === i ? { ...x, when: w } : x)) : ds))} />
                 </View>
               ))}
               <Button label={busy ? 'Creating…' : `✅ Create ${drafts.length} match${drafts.length === 1 ? '' : 'es'}`} onPress={create} disabled={busy} />

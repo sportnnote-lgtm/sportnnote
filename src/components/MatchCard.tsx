@@ -9,7 +9,7 @@ import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native
 import { theme } from '../core/theme';
 import { getSport } from '../sports/registry';
 import { openVenue } from '../core/venue';
-import { formatShort, useUserTimeZone } from '../core/time';
+import { formatShort, useUserTimeZone, zoneShortName } from '../core/time';
 import type { Match } from '../core/types';
 import { matchLine, resultWords } from '../sports/matchLine';
 import { isTieMatch, fmtPts } from '../data/teamTie';
@@ -42,10 +42,17 @@ function LiveBadge() {
 
 /** `onStart` (parity #13): the scorer's one-tap "▶ Start scoring" / "Continue
  *  scoring" straight into the Scoring tab. */
-export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: () => void; onStart?: () => void }) {
+export function MatchCard({ match, onPress, onStart, timeZone }: {
+  match: Match; onPress: () => void; onStart?: () => void;
+  /** SD-150: show kickoff in this zone (a tournament's venue zone), labelled
+   *  ("Thu, 4:00 pm GST") when it isn't the viewer's own clock. */
+  timeZone?: string;
+}) {
   const plugin = getSport(match.sport);
-  const tz = useUserTimeZone(); // show kickoff in the viewer's own timezone
-  const time = formatShort(match.startsAt, tz);
+  const viewerTz = useUserTimeZone(); // default: the viewer's own timezone
+  const tz = timeZone || viewerTz;
+  const otherClock = tz !== viewerTz && zoneShortName(tz, match.startsAt) !== zoneShortName(viewerTz, match.startsAt);
+  const time = formatShort(match.startsAt, tz) + (otherClock && match.startsAt ? ` ${zoneShortName(tz, match.startsAt)}` : '');
   const live = match.status === 'live';
   // Play paused (drinks, rain, stumps…) — an amber BREAK tag instead of LIVE.
   const onBreak = live && !!match.onBreak;

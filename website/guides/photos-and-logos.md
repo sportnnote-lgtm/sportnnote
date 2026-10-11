@@ -1,11 +1,11 @@
 ---
 title: Add a player photo, team logo or tournament banner
-description: Upload a profile photo, a team logo, or a tournament logo and banner so everyone who opens the link sees them, on any phone or browser.
+description: Upload a profile photo, a team logo, or a tournament logo and banner so they show on any phone or browser. Under-18 players' photos are shown only to their teams, organisers and guardian.
 category: Teams & players
 audience: Organisers, Captains, Players
 sports: all
 order: 10
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 A meet looks much more real when the house crests, the tournament banner and the players' faces show up. In SportnNote, every image you add is uploaded, so parents opening your shared link on another phone see it straight away. Images aren't kept only on your own device.
@@ -50,7 +50,14 @@ You can also add both when you create the tournament, or later from **⚙ Manage
 ## Common questions
 
 ### Who can see the images?
-Everyone. Tournament pages, match pages and profiles are public, so their images are public too. Don't upload anything you wouldn't put on a notice board.
+Team logos, tournament logos and banners, and match logos are public. Anyone who opens the link sees them, so don't upload anything you wouldn't put on a notice board.
+
+Player photos are private files. Each viewer's app gets its own short-lived link to the photo:
+- An adult's photo (18 or over, with a date of birth on file) shows to everyone who opens their profile.
+- A photo of a player **under 18**, or of anyone with no date of birth on file, shows only to their teammates, coaches and team managers, the organisers and teams of tournaments they play in, members of the same school or club, their parent/guardian, and the player themselves. Everyone else sees their initials.
+
+### It says "Update SportnNote to add a photo for a player under 18". What now?
+Your app is an older version that saves photos publicly. Update the app (or reload the web app) and add the photo again.
 
 ### It says "Couldn't save the image". What now?
 The image goes back to what it was before, and nothing is half-saved. Common reasons:

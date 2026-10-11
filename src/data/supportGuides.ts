@@ -146,7 +146,7 @@ If a table looks wrong, check you're viewing the right tournament and that the f
 ## Add a player
 1. Open the team: **Organize → Teams** (a team you just created opens here automatically), the team's page → **Squad · ＋ Add players**, or a match's **Info → Matchday squads → ＋ Add players to this team**.
 2. In **Mobile number, name or email**: type a name to find someone already on SportnNote, or enter their mobile number — or tap **📇 Choose from contacts** (Android) / **📋 Paste number** (iPhone).
-3. Already on SportnNote → tap **＋ Add**. New number → **＋ Add & invite**: they're added as "invited" and WhatsApp opens with an invite. Their name and jersey number are optional.
+3. Already on SportnNote → tap **＋ Add**. New number → **＋ Add & invite**: they're added as "invited" and your phone's share options open with an invite to send by WhatsApp, Messages or any chat app. Their name and jersey number are optional.
 
 A player is identified by their **phone number**, so the same number is always the same person across teams and tournaments. If they're not on SportnNote yet, adding them creates an invited entry you can score against immediately; they can claim it later by signing up with that number.`,
 
@@ -181,13 +181,20 @@ Reminders cover matches you're **playing in** and matches for **anyone you follo
 
 Reminders rely on notifications being allowed for SportnNote on your device. If you're not getting them, check your phone's notification settings for the app.`,
 
-  'change-timezone': `All match times display in your chosen time zone (default India / IST), so kickoffs and reminders line up with your clock.
+  'change-timezone': `SportnNote starts in your phone's own time zone. Kickoffs, the calendar, "today" and reminder emails all follow it.
 
 ## Change it
-1. Go to **Settings → Time zone**.
-2. Pick your time zone from the inline list.
+1. Go to **Settings → Region & time zone**.
+2. Under **Time zone**, tap **Change**.
+3. Pick a zone for your country, or tap **Other countries and zones…** and search (for example "Riyadh").
 
-Set this if you travel or if your matches are in a different region — a match abroad then shows in your local time, and reminders fire at the right moment.`,
+Set this when you travel. The zone is saved to your account, so reminder emails use it too.
+
+## Country, dates and clock
+On the same page, **Country** sets the defaults: typed dates day first (month first in the US), 12- or 24-hour times, and the first day of the week. Change any one of them; a "changed" tag shows what you changed.
+
+## Tournament time zones
+Organisers set a tournament's **Time zone** (its venue) in Create or Edit tournament. Kickoffs are typed in it, and fixture shares and prints use it. If it isn't your zone, times show with its name, like "4:00 pm GST".`,
 
   verification: `Verification confirms a player's date of birth — and, for under-18s, their parent/guardian — using a proof ID.
 

@@ -50,11 +50,23 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeEqual, sendEmail } from '../_shared/guard.ts';
 import { webPushMany } from '../_shared/webpush.ts';
+import { allowedPlayerFollows, keepAllowedFollows } from '../_shared/minorFollows.ts';
+import { APP_URL } from '../_shared/hosts.ts';
+import { emailWhen, emailZone } from '../_shared/localTime.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
+
+/** Tournament names + venue zones (SD-150); before the time_zone migration runs,
+ *  fall back to names only. */
+async function tournamentsWithZone(ids: string[]): Promise<{ data: { id: string; name: string; time_zone?: string | null }[] | null }> {
+  const withZone = await supabase.from('tournaments').select('id, name, time_zone').in('id', ids);
+  if (!withZone.error) return { data: withZone.data as { id: string; name: string; time_zone: string | null }[] };
+  const plain = await supabase.from('tournaments').select('id, name').in('id', ids);
+  return { data: (plain.data ?? []) as { id: string; name: string }[] };
+}
 
 const MIN = 60_000;
 const LEADS = [
@@ -63,7 +75,7 @@ const LEADS = [
   { key: '15m', ms: 15 * MIN, minutes: 15, label: 'in 15 min' },
 ];
 const MINUTES_BY_LEAD = new Map(LEADS.map((l) => [l.key, l.minutes]));
-const APP_URL = 'https://app.sportnnote.in';
+// SD-151: APP_URL comes from the secret (default app.sportnnote.in) — _shared/hosts.ts.
 // Slack after a lead's exact time in which it still counts as "freshly due", so a
 // ~5-min cron never misses a window (and the ledger stops it firing twice).
 const DUE_WINDOW_MS = 10 * MIN;
@@ -160,9 +172,13 @@ Deno.serve(async (req) => {
   ]);
   // Per-follow alert choices (#23). Before the follow_prefs migration the `prefs`
   // column doesn't exist → fall back to the plain select (everyone wants everything).
-  const follows = (followsWithPrefs.error
+  const followsAll = (followsWithPrefs.error
     ? (await followQuery('follower_id, target_id')).data
     : followsWithPrefs.data) as { follower_id: string; target_id: string; prefs?: Record<string, boolean> | null }[] | null;
+  // protect_minors (L15): match time + venue of an under-18 only to their circle + guardian.
+  const follows = followsAll?.length
+    ? keepAllowedFollows(followsAll, await allowedPlayerFollows(supabase, [...new Set(followsAll.map((f) => f.target_id))]))
+    : followsAll;
   const playerById = new Map((players ?? []).map((p) => [p.id, p]));
   const followersByPlayer = new Map<string, string[]>();
   for (const f of (follows ?? []).filter((f) => f.prefs?.reminder !== false)) followersByPlayer.set(f.target_id as string, [...(followersByPlayer.get(f.target_id as string) ?? []), f.follower_id as string]);
@@ -215,7 +231,8 @@ Deno.serve(async (req) => {
     supabase.from('profiles').select('id, time_zone').in('id', everyone),
   ]);
   const leadsByProfile = new Map((prefs ?? []).map((p) => [p.profile_id as string, (p.lead_minutes as number[] | null) ?? []]));
-  const tzByProfile = new Map((profs ?? []).map((p) => [p.id as string, (p.time_zone as string | null) || 'Asia/Kolkata']));
+  // SD-150: the app now writes profiles.time_zone; null = not synced yet (venue → IST fallback below).
+  const tzByProfile = new Map((profs ?? []).map((p) => [p.id as string, (p.time_zone as string | null) ?? null]));
   const remindersOff = (pid: string) => leadsByProfile.has(pid) && leadsByProfile.get(pid)!.length === 0;
   const wantsLead = (pid: string, leadKey: string) =>
     !leadsByProfile.has(pid) || leadsByProfile.get(pid)!.includes(MINUTES_BY_LEAD.get(leadKey) ?? -1);
@@ -249,19 +266,19 @@ Deno.serve(async (req) => {
   const matchById = new Map(dueMatches.map(({ m }) => [m.id as string, m]));
   const tournamentIds = [...new Set(emailTargets.map((t) => matchById.get(t.matchId)?.tournament_id).filter(Boolean) as string[])];
   const { data: tours } = tournamentIds.length
-    ? await supabase.from('tournaments').select('id, name').in('id', tournamentIds)
-    : { data: [] as { id: string; name: string }[] };
+    ? await tournamentsWithZone(tournamentIds)
+    : { data: [] as { id: string; name: string; time_zone?: string | null }[] };
   const tourName = new Map((tours ?? []).map((t) => [t.id as string, t.name as string]));
+  const tourZone = new Map((tours ?? []).map((t) => [t.id as string, (t.time_zone as string | null | undefined) ?? null]));
 
   const emails = emailTargets.map((t) => {
     const m = matchById.get(t.matchId)!;
     const homeT = teamById.get(m.home_team_id as string);
     const awayT = teamById.get(m.away_team_id as string);
     const vs = `${homeT?.name ?? homeT?.short_name ?? 'Home'} vs ${awayT?.name ?? awayT?.short_name ?? 'Away'}`;
-    const when = new Intl.DateTimeFormat('en-IN', {
-      timeZone: tzByProfile.get(t.profileId) ?? 'Asia/Kolkata',
-      weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
-    }).format(new Date(m.starts_at as string));
+    // SD-150: the recipient's zone and conventions (else the venue's, else IST), zone named.
+    const zone = emailZone(tzByProfile.get(t.profileId), m.tournament_id ? tourZone.get(m.tournament_id as string) : null);
+    const when = emailWhen(m.starts_at as string, zone);
     const tour = m.tournament_id ? tourName.get(m.tournament_id as string) : undefined;
     const lead = LEADS.find((l) => l.key === t.leadKey)!;
     const subject = t.kind === 'scorer' ? `🎯 You're scoring ${vs} — ${when}` : `⏰ You play ${lead.label}: ${vs} — ${when}`;

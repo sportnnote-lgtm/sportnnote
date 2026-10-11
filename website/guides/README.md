@@ -65,7 +65,7 @@ Use nothing else:
 
 ## Writing rules
 
-- Write for a school PE teacher, a parent, or a college student scorer in India. Use plain English and short sentences, and say "you".
+- Write for a school PE teacher, a coach, a parent, or a volunteer scorer — in India, the Gulf, the UK or anywhere else. Don't assume one country: say "WhatsApp, Messages or any chat app", not just WhatsApp. Use plain English and short sentences, and say "you".
 - Every step must match the shipped app exactly: button labels, tab names, where things are. Check `src/` and the spec in `docs/cricheroes-parity/specs/`, and PROGRESS.md for what was actually built (it records choices that differ from the spec). Don't invent features, and don't describe anything that isn't built.
 - Explain the rule behind the feature where it helps. For example: a cricket correction never changes earlier balls; the "once only" Player of the Match change.
 - No marketing fluff, no competitor names, no emojis in headings.

@@ -13,12 +13,19 @@
  * events, or when the app goes to the background). Errors are sent at once,
  * and also parked in storage first so a fatal crash is reported on next launch.
  * Telemetry never throws into the app. Demo mode sends nothing.
+ *
+ * Consent (SD-152, core/analyticsConsent.ts): usage events and the device id
+ * (`anonId`) only when analytics is allowed. In the UK / GDPR countries nothing is
+ * sent or stored until the viewer picks "Allow analytics" (events wait in memory);
+ * "Essential only" drops them and deletes the stored id. Error reports still go,
+ * without any device id, so we can fix crashes.
  */
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { isStaleVersionError, reloadForNewVersion } from './staleVersion';
+import { analyticsState, subscribeAnalyticsConsent } from './analyticsConsent';
 
 type Props = Record<string, string | number | boolean>;
 type Queued = { name: string; at: string; props: Props };
@@ -65,7 +72,9 @@ let currentScreen: string | undefined;
 let screenTrail: string[] = [];
 let started = false;
 
-async function loadAnonId(): Promise<string> {
+async function loadAnonId(): Promise<string | null> {
+  // No persistent device id unless analytics is allowed (UK PECR / GDPR).
+  if (analyticsState() !== 'allowed') return null;
   if (anonId) return anonId;
   try {
     const saved = await AsyncStorage.getItem(ANON_KEY);
@@ -80,7 +89,7 @@ async function loadAnonId(): Promise<string> {
 
 /** Record a client event. Safe to call anywhere; never throws. */
 export function track(name: ClientEvent, props: Props = {}): void {
-  if (!enabled) return;
+  if (!enabled || analyticsState() === 'denied') return;
   queue.push({ name, at: new Date().toISOString(), props });
   if (queue.length >= 20) void flush();
 }
@@ -103,6 +112,9 @@ export const appVersionLabel = (): string => version;
 
 export async function flush(): Promise<void> {
   if (!enabled || !queue.length) return;
+  const consent = analyticsState();
+  if (consent === 'denied') { queue = []; return; }
+  if (consent === 'undecided') { queue = queue.slice(-50); return; } // wait for the choice
   const batch = queue.slice(0, 50);
   queue = queue.slice(batch.length);
   try {
@@ -206,6 +218,12 @@ export function startTelemetry(): void {
     window.addEventListener('pagehide', () => { void flush(); });
   }
 
+  // A new analytics choice: "Essential only" forgets the device id; "Allow" sends what waited.
+  subscribeAnalyticsConsent(() => {
+    const c = analyticsState();
+    if (c === 'denied') { queue = []; anonId = null; void AsyncStorage.removeItem(ANON_KEY).catch(() => {}); }
+    else if (c === 'allowed') void flush();
+  });
   AppState.addEventListener('change', (s) => { if (s !== 'active') void flush(); });
   timer = setInterval(() => { void flush(); }, 15_000);
 

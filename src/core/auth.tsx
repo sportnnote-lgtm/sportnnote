@@ -3,11 +3,14 @@
  * (email/password) and loads the user's profile. When it isn't, it hands back
  * a demo user so the whole app stays explorable offline.
  */
+import { startProfileZoneSync, stopProfileZoneSync } from '../data/profileRegion';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { setReminderPrefsUser } from '../data/reminderPrefs';
-import { normalizePhone } from './phone';
-import { LEGAL_VERSION } from '../data/legal';
+import { normalizePhone, rememberCountryFromPhone } from './phone';
+import { legalVersionFor } from '../data/legal';
+import { privacyCountry, US_UNDER_13_MESSAGE } from './privacyRegion';
+import { analyticsChoice } from './analyticsConsent';
 import type { GuardianContact, Profile, Role } from './types';
 
 /** Turn a raw Supabase/network error into a plain, actionable message. Users
@@ -129,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setLoading(false);
         void setReminderPrefsUser(null); // stop cross-device sync on sign-out
+        stopProfileZoneSync();
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -139,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, handle, avatar_url, role, school_id')
+      .select('id, full_name, handle, avatar_url, role, school_id, time_zone')
       .eq('id', userId)
       .single();
     if (data) {
@@ -152,7 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         schoolId: data.school_id ?? undefined,
       });
       void setReminderPrefsUser(data.id); // pull this user's reminder timers across devices
+      startProfileZoneSync(data.id, data.time_zone); // SD-150: reminder emails use the app's zone
       void syncConfirmedEmailToPlayer(data.id); // confirmed login email ⇒ verified contact email
+      // Your own number's country becomes the default dial code for numbers you type.
+      void Promise.resolve(supabase.rpc('my_profile_private'))
+        .then(({ data: priv }) => rememberCountryFromPhone((priv as { phone?: string | null }[] | null)?.[0]?.phone))
+        .catch(() => { /* default stays the device region */ });
     }
     setLoading(false);
   }
@@ -184,15 +193,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: async (email, password, fullName, role, dob, guardian, phone) => {
       if (!supabase) return {};
       try {
-        const normPhone = phone ? normalizePhone(phone) : null;
+        const normPhone = normalizePhone(phone) || null; // E.164 (+…) — the identity key
         // Pass the profile fields as user metadata so the DB trigger (migration
         // 0011) can create the profile row — this works with OR without a session,
         // so it's correct whether or not "Confirm email" is on. (dob is mandatory;
         // phone is the primary identity key; guardian carries under-18 consent.)
         // legal_accepted: which Terms/Privacy version they agreed to, and when (consent record).
-        const meta = { full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}), legal_accepted: { version: LEGAL_VERSION, at: new Date().toISOString() } };
+        // SD-152: `country` (device / Settings → Region) drives the server's under-18
+        // rules (migration 20261020120000): India keeps the sign-up checkbox; elsewhere
+        // the guardian confirms by email; US under-13s can't self-sign-up.
+        // `analytics: 'denied'` carries an "Essential only" choice made before sign-up.
+        const country = privacyCountry();
+        const meta = {
+          full_name: fullName, role, dob, phone: normPhone, ...(guardian ? { guardian } : {}), country,
+          ...(analyticsChoice() === 'denied' ? { analytics: 'denied' } : {}),
+          legal_accepted: { version: legalVersionFor(country), at: new Date().toISOString() },
+        };
         const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } });
-        if (error) return { error: friendlyAuthError(error.message) };
+        if (error) {
+          // The server refuses US under-13 self sign-up (the screen checks first).
+          if (/US_UNDER_13/.test(error.message)) return { error: US_UNDER_13_MESSAGE };
+          return { error: friendlyAuthError(error.message) };
+        }
 
         if (data.session && data.user) {
           // We have a session (Confirm email OFF, or the trigger isn't deployed):

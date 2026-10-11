@@ -205,7 +205,10 @@ export function useFollow(profileId?: string) {
       if (isSupabaseConfigured && !profileId) { promptSignIn('up'); return; }
       const willFollow = !followStore.has(type, id);
       followStore.toggle(type, id);
-      void setFollow(type, id, willFollow, profileId);
+      setFollow(type, id, willFollow, profileId).catch((e) => {
+        followStore.toggle(type, id); // undo the optimistic change
+        notice('Couldn’t follow', e instanceof Error ? e.message : 'Please try again.');
+      });
     },
     [profileId]
   );

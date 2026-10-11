@@ -1,10 +1,18 @@
 /** A tap-to-open calendar + time picker. Pure React Native (View/Modal/Touchable)
  *  so it renders identically on iOS, Android and the web preview — no native
- *  datetime module. Holds a Date value; the caller owns it. */
+ *  datetime module. Holds a Date value; the caller owns it.
+ *
+ *  SD-150: in 'datetime' mode the day and time are WALL TIME IN A ZONE — the
+ *  `timeZone` prop (pass the tournament's venue zone) or else the app's zone —
+ *  the same clock the app displays, so 16:00 typed is 16:00 shown. The week
+ *  starts on the region's first day and the hour is 12-hour (AM/PM) or 24-hour
+ *  per the region. 'date' mode is a plain calendar date (no zone). */
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { textStyles } from './ui';
+import { formatDateTime, isoToWall, useUserTimeZone, wallTimeToIso, zoneLabel } from '../core/time';
+import { useRegion, weekdayOrder, leadingBlanks } from '../core/region';
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = [
@@ -14,13 +22,6 @@ const MONTHS = [
 
 const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 const pad = (n: number) => String(n).padStart(2, '0');
-
-function formatStamp(d: Date): string {
-  return d.toLocaleString(undefined, {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
 
 function formatDate(d: Date): string {
   return d.toLocaleDateString(undefined, {
@@ -43,6 +44,7 @@ export function DateTimeField({
   onChange,
   mode = 'datetime',
   placeholder = 'Select…',
+  timeZone,
 }: {
   label: string;
   value: Date | null;
@@ -51,12 +53,30 @@ export function DateTimeField({
   mode?: 'date' | 'datetime';
   /** Shown when value is null/unset. */
   placeholder?: string;
+  /** 'datetime' only: the zone the wall time is in (default: the app's zone). */
+  timeZone?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const appZone = useUserTimeZone();
+  const region = useRegion();
+  const zoned = mode === 'datetime';
+  const z = timeZone || appZone;
+  // Wall date/time of an instant: in the zone (datetime) or the device calendar (date).
+  const wallOf = (d: Date) => (zoned ? isoToWall(d, z) : { date: toISODate(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` });
+  const fromWall = (date: string, time: string): Date => {
+    if (zoned) return new Date(wallTimeToIso(date, time, z));
+    const [y, m, d] = date.split('-').map(Number);
+    const [h, mi] = time.split(':').map(Number);
+    return new Date(y, m - 1, d, h, mi);
+  };
+  const stamp = (d: Date) => (zoned ? formatDateTime(d.toISOString(), z) : formatDate(d));
   // The calendar view + any carried-over time fall back to "now" until a value is set.
   const base = value ?? new Date();
-  const [viewY, setViewY] = useState(base.getFullYear());
-  const [viewM, setViewM] = useState(base.getMonth());
+  const baseWall = wallOf(base);
+  const baseY = Number(baseWall.date.slice(0, 4));
+  const baseM = Number(baseWall.date.slice(5, 7)) - 1;
+  const [viewY, setViewY] = useState(baseY);
+  const [viewM, setViewM] = useState(baseM);
   // Which sub-view is showing: the day grid, or a month / year pick-list.
   const [pick, setPick] = useState<'day' | 'month' | 'year'>('day');
   // Year range for the pick-list: a few years ahead (future match dates) down to
@@ -65,8 +85,8 @@ export function DateTimeField({
   const years = Array.from({ length: nowY + 5 - 1900 + 1 }, (_, i) => nowY + 5 - i);
 
   function show() {
-    setViewY(base.getFullYear());
-    setViewM(base.getMonth());
+    setViewY(baseY);
+    setViewM(baseM);
     setPick('day');
     setOpen(true);
   }
@@ -81,22 +101,22 @@ export function DateTimeField({
   const stepYear = (delta: number) => setViewY((y) => y + delta);
 
   function pickDay(day: number) {
-    onChange(new Date(viewY, viewM, day, base.getHours(), base.getMinutes()));
+    onChange(fromWall(`${viewY}-${pad(viewM + 1)}-${pad(day)}`, baseWall.time));
     if (mode === 'date') setOpen(false); // date-only: choosing a day is the whole interaction
   }
 
   const firstWeekday = new Date(viewY, viewM, 1).getDay();
   const total = daysInMonth(viewY, viewM);
   const cells: (number | null)[] = [
-    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: leadingBlanks(firstWeekday, region.weekStart) }, () => null),
     ...Array.from({ length: total }, (_, i) => i + 1),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
   const rows: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
 
-  const isSelectedDay = (day: number) =>
-    value != null && value.getFullYear() === viewY && value.getMonth() === viewM && value.getDate() === day;
+  const selectedDate = value ? wallOf(value).date : '';
+  const isSelectedDay = (day: number) => selectedDate === `${viewY}-${pad(viewM + 1)}-${pad(day)}`;
 
   return (
     <View style={{ gap: theme.spacing(1) }}>
@@ -106,13 +126,13 @@ export function DateTimeField({
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={
-          value ? `${label}: ${mode === 'date' ? formatDate(value) : formatStamp(value)}` : `${label}: not set`
+          value ? `${label}: ${stamp(value)}` : `${label}: not set`
         }
         accessibilityHint="Opens a picker"
         onPress={show}
       >
         <Text style={[st.fieldText, !value && st.fieldPlaceholder]}>
-          {value ? `📅 ${mode === 'date' ? formatDate(value) : formatStamp(value)}` : placeholder}
+          {value ? `📅 ${stamp(value)}` : placeholder}
         </Text>
       </TouchableOpacity>
 
@@ -173,7 +193,7 @@ export function DateTimeField({
             {pick === 'day' && (
               <>
                 <View style={st.weekRow}>
-                  {WEEKDAYS.map((w) => (
+                  {weekdayOrder(WEEKDAYS, region.weekStart).map((w) => (
                     <Text key={w} style={st.weekday}>{w}</Text>
                   ))}
                 </View>
@@ -199,7 +219,12 @@ export function DateTimeField({
                   </View>
                 ))}
 
-                {mode === 'datetime' && <TimeEditor value={base} onChange={onChange} />}
+                {zoned && (
+                  <>
+                    <TimeEditor time={baseWall.time} hour12={region.entryHour12} onChange={(t) => onChange(fromWall(baseWall.date, t))} />
+                    <Text style={[textStyles.muted, st.zoneNote]}>Times in {zoneLabel(z)}</Text>
+                  </>
+                )}
               </>
             )}
 
@@ -213,41 +238,42 @@ export function DateTimeField({
   );
 }
 
-/** Enter the exact time: type the hour & minute, nudge with ▲▼, and flip AM/PM.
- *  12-hour so it reads naturally; commits a Date on every change. */
-function TimeEditor({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
-  const h24 = value.getHours();
-  const minute = value.getMinutes();
+/** Enter the exact time: type the hour & minute, nudge with ▲▼, and (12-hour
+ *  regions) flip AM/PM. Works on a wall time 'HH:MM'; the field converts it. */
+function TimeEditor({ time, hour12, onChange }: { time: string; hour12: boolean; onChange: (t: string) => void }) {
+  const [h24, minute] = time.split(':').map(Number);
   const ap: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
   const h12 = ((h24 + 11) % 12) + 1;
-  const at = (H: number, M: number) => new Date(value.getFullYear(), value.getMonth(), value.getDate(), (H + 24) % 24, (M + 60) % 60);
-  const setH12 = (h: number, a: 'AM' | 'PM') => { let H = h % 12; if (a === 'PM') H += 12; onChange(at(H, minute)); };
+  const at = (H: number, M: number) => onChange(`${pad((H + 24) % 24)}:${pad((M + 60) % 60)}`);
+  const setH12 = (h: number, a: 'AM' | 'PM') => { let H = h % 12; if (a === 'PM') H += 12; at(H, minute); };
   return (
     <View style={{ gap: theme.spacing(2) }}>
       <Text style={[textStyles.muted, st.timeLabel]}>Time</Text>
       <View style={st.timeControls}>
         <Stepper
           label="Hour"
-          text={pad(h12)}
-          onUp={() => onChange(at(h24 + 1, minute))}
-          onDown={() => onChange(at(h24 - 1, minute))}
-          onText={(n) => { if (n >= 1 && n <= 12) setH12(n, ap); }}
+          text={pad(hour12 ? h12 : h24)}
+          onUp={() => at(h24 + 1, minute)}
+          onDown={() => at(h24 - 1, minute)}
+          onText={(n) => { if (hour12) { if (n >= 1 && n <= 12) setH12(n, ap); } else if (n >= 0 && n <= 23) at(n, minute); }}
         />
         <Text style={st.colon}>:</Text>
         <Stepper
           label="Minute"
           text={pad(minute)}
-          onUp={() => onChange(at(h24, minute + 1))}
-          onDown={() => onChange(at(h24, minute - 1))}
-          onText={(n) => { if (n >= 0 && n <= 59) onChange(at(h24, n)); }}
+          onUp={() => at(h24, minute + 1)}
+          onDown={() => at(h24, minute - 1)}
+          onText={(n) => { if (n >= 0 && n <= 59) at(h24, n); }}
         />
-        <View style={st.ampm}>
-          {(['AM', 'PM'] as const).map((a) => (
-            <TouchableOpacity key={a} style={[st.ampmChip, ap === a && st.ampmSel]} onPress={() => setH12(h12, a)} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ selected: ap === a }}>
-              <Text style={[st.ampmTxt, ap === a && st.ampmTxtSel]}>{a}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {hour12 && (
+          <View style={st.ampm}>
+            {(['AM', 'PM'] as const).map((a) => (
+              <TouchableOpacity key={a} style={[st.ampmChip, ap === a && st.ampmSel]} onPress={() => setH12(h12, a)} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ selected: ap === a }}>
+                <Text style={[st.ampmTxt, ap === a && st.ampmTxtSel]}>{a}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -352,6 +378,7 @@ const st = StyleSheet.create({
   dayTxt: { color: theme.colors.text, fontSize: theme.font.body },
   dayTxtSel: { color: '#06120D', fontWeight: '800' },
   timeLabel: { marginTop: theme.spacing(2) },
+  zoneNote: { fontSize: theme.font.tiny },
   timeControls: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   colon: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: '900', marginHorizontal: theme.spacing(1) },
   stepper: { alignItems: 'center', gap: theme.spacing(1) },

@@ -7,14 +7,17 @@
  * `validateImport` (teams, dates, clashes) → one ImportRow per match, each
  * `ok` / `warn` (imports, but worth a look) / `error` (won't import).
  *
- * Forgiving on purpose: dates read day-first (India-first pilot), times take
+ * Forgiving on purpose: numeric dates follow the region's order (day-first
+ * everywhere but the US; a file whose dates prove the other order wins, and an
+ * all-ambiguous file is flagged — SD-150), times take
  * most spreadsheet spellings, team names ignore case/punctuation and suggest a
  * near miss. It never invents a team — an unknown name is an error.
  */
 import type { Match, SportId, Team, Tournament } from '../core/types';
 import { findScheduleConflicts, type ConflictCandidate } from './scheduleConflicts.ts';
 import { nameTier } from './search.ts';
-import { wallTimeToIso } from '../core/time.ts';
+import { wallTimeToIso, localDay } from '../core/time.ts';
+import { dateOrderOf, exampleDate, type DateOrder } from '../core/region.ts';
 
 /* --------------------------------- Columns -------------------------------- */
 
@@ -138,10 +141,11 @@ function ymd(y: number, m: number, d: number): string | null {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-/** A date cell → 'YYYY-MM-DD', or null. Reads ISO (2026-10-12), DAY-FIRST
- *  numeric dates (12/10/2026, 12-10-26, 12.10.2026), 12 Oct 2026, Oct 12, 2026,
- *  and Excel serial day numbers (46307). A leading weekday is ignored. */
-export function parseDateCell(raw: string | undefined | null): string | null {
+/** A date cell → 'YYYY-MM-DD', or null. Reads ISO (2026-10-12), numeric dates
+ *  in `order` (DMY default: 12/10/2026, 12-10-26, 12.10.2026 = 12 Oct; MDY:
+ *  10/12/2026 = Oct 12), 12 Oct 2026, Oct 12, 2026, and Excel serial day
+ *  numbers (46307). A leading weekday is ignored. */
+export function parseDateCell(raw: string | undefined | null, order: DateOrder = 'DMY'): string | null {
   let s = (raw ?? '').trim();
   if (!s) return null;
   // Excel serial (days since 1899-12-30); any time fraction is ignored.
@@ -155,7 +159,7 @@ export function parseDateCell(raw: string | undefined | null): string | null {
   let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/.exec(s);
   if (m) return ymd(+m[1], +m[2], +m[3]);
   m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})(?:\s.*)?$/.exec(s);
-  if (m) return ymd(+m[3], +m[2], +m[1]);
+  if (m) return order === 'MDY' ? ymd(+m[3], +m[1], +m[2]) : ymd(+m[3], +m[2], +m[1]);
   m = /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/.,]+([a-z]{3,9})\.?[\s\-/.,]+(\d{2}|\d{4})$/i.exec(s);
   if (m) return ymd(+m[3], monthOf(m[2]), +m[1]);
   m = /^([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{2}|\d{4})$/i.exec(s);
@@ -336,22 +340,29 @@ export interface ImportContext {
   zone: string;
   /** rows the organiser skipped — validated, but they don't clash with others */
   skipLines?: ReadonlySet<number>;
+  /** how numeric dates read (region default; DMY when absent) */
+  dateOrder?: DateOrder;
+}
+
+/** How a file's numeric dates will be read. `verdict`: 'proven' (a date like
+ *  25/10 or 10/25 settles it — that order is used even if the region differs),
+ *  'ambiguous' (every date fits both ways — read in the preferred order, ask the
+ *  organiser to confirm), 'mixed' (dates contradict each other), 'none'. */
+export interface DateOrderCheck { order: DateOrder; verdict: 'proven' | 'ambiguous' | 'mixed' | 'none'; switched: boolean }
+
+export function checkDateOrder(rows: readonly RawRow[], preferred: DateOrder = 'DMY'): DateOrderCheck {
+  const v = dateOrderOf(rows.map((r) => r.cells.date));
+  if (v === 'DMY' || v === 'MDY') return { order: v, verdict: 'proven', switched: v !== preferred };
+  return { order: preferred, verdict: v, switched: false };
 }
 
 const DEFAULT_TIME = '09:00';
 const DAY = 86_400_000;
 const shiftDay = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 
-/** The wall-clock day of an instant in a zone ('YYYY-MM-DD'). */
-export function localDay(iso: string, zone: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(iso));
-    const g = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-    return `${g('year')}-${g('month')}-${g('day')}`;
-  } catch {
-    return iso.slice(0, 10);
-  }
-}
+/** The wall-clock day of an instant in a zone ('YYYY-MM-DD') — now lives in
+ *  core/time.ts (SD-150); re-exported for existing callers. */
+export { localDay };
 
 /** "12 Oct" for messages. */
 const shortDate = (date: string) => `${+date.slice(8, 10)} ${MONTHS[+date.slice(5, 7) - 1]?.replace(/^./, (c) => c.toUpperCase())}`;
@@ -394,9 +405,9 @@ export function validateImport(rows: readonly RawRow[], ctx: ImportContext): Imp
     const warn = (field: ImportField, msg: string, fix?: Team) => issues.push({ field, msg, level: 'warn', ...(fix ? { fix } : {}) });
 
     // Date
-    const date = parseDateCell(c.date);
+    const date = parseDateCell(c.date, ctx.dateOrder ?? 'DMY');
     if (!c.date?.trim()) err('date', 'No date');
-    else if (!date) err('date', `Can't read the date “${c.date}” — use 12/10/2026`);
+    else if (!date) err('date', `Can't read the date “${c.date}” — use ${exampleDate(ctx.dateOrder ?? 'DMY', '2026-10-12')}`);
     else if (lo && hi && (date < lo || date > hi)) err('date', `${shortDate(date)} is outside the tournament (${shortDate(start)} – ${shortDate(end)})`);
 
     // Time
@@ -512,11 +523,17 @@ export function validateImport(rows: readonly RawRow[], ctx: ImportContext): Imp
   return out;
 }
 
-/** Text → validated rows in one step (what the screen calls on every edit). */
-export function importFromText(text: string, ctx: ImportContext, overrides: Record<number, Partial<Record<ImportField, string>>> = {}) {
+/** Text → validated rows in one step (what the screen calls on every edit).
+ *  `ctx.dateOrder` is the preferred order; a file that proves the other order
+ *  is read that way (see `dates`). `forceOrder` (the organiser's explicit
+ *  "day-first / month-first" choice) always wins. */
+export function importFromText(text: string, ctx: ImportContext, overrides: Record<number, Partial<Record<ImportField, string>>> = {}, forceOrder?: DateOrder) {
   const { rows, hasHeader, unknownColumns } = toRawRows(parseDelimitedLines(text));
   const withFixes = rows.map((r) => (overrides[r.line] ? { ...r, cells: { ...r.cells, ...overrides[r.line] } } : r));
-  return { rows: validateImport(withFixes, ctx), hasHeader, unknownColumns };
+  const dates: DateOrderCheck = forceOrder
+    ? { order: forceOrder, verdict: checkDateOrder(withFixes, forceOrder).verdict, switched: false }
+    : checkDateOrder(withFixes, ctx.dateOrder ?? 'DMY');
+  return { rows: validateImport(withFixes, { ...ctx, dateOrder: dates.order }), hasHeader, unknownColumns, dates };
 }
 
 /** Count rows by outcome for the summary pills. `guessed`: rows that will
@@ -535,7 +552,7 @@ export function importSummary(rows: readonly ImportRow[], skip: ReadonlySet<numb
 
 const csvCell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 const csvRow = (cells: string[]) => cells.map(csvCell).join(',');
-const dayFirst = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
+const typed = (date: string, order: DateOrder) => exampleDate(order, date);
 
 /** The venue to put in the example rows: the tournament ground used most in its
  *  matches (ties → listed order), else the most-used venue, else its first
@@ -566,7 +583,7 @@ export function mostUsedVenue(grounds: readonly string[] | undefined, matches: r
 export function templateCsv(
   tournament: Pick<Tournament, 'sports' | 'startDate'> & { grounds?: string[] },
   teams: readonly Team[],
-  opts: { matches?: readonly Match[]; sportName?: (id: SportId) => string } = {},
+  opts: { matches?: readonly Match[]; sportName?: (id: SportId) => string; dateOrder?: DateOrder } = {},
 ): string {
   const sport = tournament.sports[0];
   const sportTeams = teams.filter((t) => !sport || t.sport === sport);
@@ -577,11 +594,12 @@ export function templateCsv(
   const venue = mostUsedVenue(tournament.grounds, opts.matches ?? []);
   const sportLabel = sport ? (opts.sportName?.(sport) ?? sport) : '';
   const grouped = names.length >= 4;
+  const order = opts.dateOrder ?? 'DMY';
   const lines = [
     csvRow(TEMPLATE_COLUMNS),
-    csvRow([dayFirst(start), '4:30 pm', a, b, venue, grouped ? 'A' : '', grouped ? 'Group' : 'League', sportLabel]),
-    csvRow([dayFirst(shiftDay(start, 1)), '4:30 pm', c, d, venue, grouped ? 'B' : '', grouped ? 'Group' : 'League', sportLabel]),
-    csvRow(['# One row per match. Dates are DAY-FIRST (12/10/2026 = 12 Oct). Times like 4:30 pm or 16:30, in your time zone. Team names must match your teams. Stage: Group, QF, SF, Final… Replace the two example rows.']),
+    csvRow([typed(start, order), '4:30 pm', a, b, venue, grouped ? 'A' : '', grouped ? 'Group' : 'League', sportLabel]),
+    csvRow([typed(shiftDay(start, 1), order), '4:30 pm', c, d, venue, grouped ? 'B' : '', grouped ? 'Group' : 'League', sportLabel]),
+    csvRow([`# One row per match. Dates are ${order === 'MDY' ? `MONTH-FIRST (${exampleDate(order, '2026-10-12')} = Oct 12)` : `DAY-FIRST (${exampleDate('DMY', '2026-10-12')} = 12 Oct)`}. Times like 4:30 pm or 16:30, in the event's time zone. Team names must match your teams. Stage: Group, QF, SF, Final… Replace the two example rows.`]),
   ];
   return lines.join('\r\n') + '\r\n';
 }

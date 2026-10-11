@@ -1,6 +1,7 @@
 /** Organization helpers: roles, membership checks, and resolving who hosts a
  *  tournament (an individual's ids, or every member of the hosting org). */
 import type { AcademicYear, GradeStint, House, HouseStint, Organization, OrgMember, OrgRole, Tournament } from './types';
+import { schoolYearLabel } from './region.ts';
 
 export const ORG_ROLES: OrgRole[] = ['Owner', 'Admin', 'Organizer', 'Scorer', 'Referee', 'Member'];
 
@@ -73,9 +74,9 @@ export const latestAcademicYear = (org: Organization | undefined): AcademicYear 
   return ys[ys.length - 1];
 };
 
-/** A label like "2025–26" from a start/end date pair. */
-export const academicYearLabel = (start: string, end: string): string =>
-  `${start.slice(0, 4)}–${end.slice(2, 4)}`;
+/** A label like "2025–26" from a start/end date pair — or "2026" for a
+ *  calendar-year school year (SG, MY, AU), not "2026–26" (SD-150). */
+export const academicYearLabel = (start: string, end: string): string => schoolYearLabel(start, end);
 
 /** The next academic year's dates, derived from the latest one's month-days +1
  *  year (undefined when there's no prior year to extrapolate from). */

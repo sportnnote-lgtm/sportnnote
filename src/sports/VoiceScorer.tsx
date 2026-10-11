@@ -9,19 +9,14 @@
  *  or any call that would complete the match) always asks in the ConfirmSheet
  *  before it applies — Auto mode included — exactly like the buttons. */
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, TextField, textStyles } from '../components/ui';
 import { useSpeech } from '../core/speech';
 import { confirmMatchAction } from '../components/ConfirmSheet';
 import type { Player } from '../core/types';
 import type { ScoreAction, SportPlugin, VoiceEnding } from './types';
-import { voiceEnding } from './voiceMatch';
-
-/** Below this recognizer confidence a call is sent to confirm even in auto mode
- *  (0 / absent confidence ⇒ unknown ⇒ trusted, so it still works where the
- *  browser doesn't report one). */
-const LOW_CONFIDENCE = 0.55;
+import { voiceEnding, voiceRoute } from './voiceMatch';
 
 type LogKind = 'applied' | 'confirmed' | 'discarded' | 'unheard';
 interface LogEntry { id: number; text: string; summary: string; kind: LogKind }
@@ -95,11 +90,12 @@ export function VoiceScorer({
     const summary = !ending ? describe(actions)
       : explicit ? `${ending.action === 'fullTime' ? 'full time' : `end of ${ending.period ?? 'the period'}`}${ending.score ? ` · ${ending.score}` : ''}`
       : `${describe(actions)} · ${ending.action === 'fullTime' ? 'ends the match' : `ends ${ending.period ?? 'the period'}`}`;
-    const lowConf = confidence != null && confidence > 0 && confidence < LOW_CONFIDENCE;
-    // Auto mode applies confident calls straight away; Confirm mode (default) and any
-    // low-confidence call wait for a tap — a mishear never changes the score silently.
-    if (autoApply && !lowConf) void applyNow(actions, t, summary, 'applied', ending);
-    else setPending({ text: t, actions, summary, conf: confidence, typed, ending });
+    // Auto mode applies confident calls straight away (an ending still asks in the
+    // ConfirmSheet first); Confirm mode (default) and any low-confidence call wait
+    // for a tap — a mishear never changes the score silently. Below 0.55 recognizer
+    // confidence counts as unsure (0 / absent ⇒ unknown ⇒ trusted).
+    if (voiceRoute(autoApply, confidence, ending) === 'pending') setPending({ text: t, actions, summary, conf: confidence, typed, ending });
+    else void applyNow(actions, t, summary, 'applied', ending);
   };
 
   const speech = useSpeech(handle);
@@ -116,7 +112,9 @@ export function VoiceScorer({
           style={st.flex}
           onPress={() =>
             speech.listening ? speech.stop() : speech.supported ? speech.start()
-              : pushLog('', 'voice needs Chrome/Edge on web (or a device build) — type below', 'unheard')
+              : pushLog('', Platform.OS === 'web'
+                ? 'voice needs Chrome or Edge — type below'
+                : 'this app version can’t hear yet — update the app, or type below', 'unheard')
           }
         />
         <Button
@@ -127,6 +125,7 @@ export function VoiceScorer({
         />
       </View>
       {speech.interim ? <Text style={st.heard}>🎙 {speech.interim}</Text> : null}
+      {!speech.listening && speech.notice ? <Text style={st.notice}>{speech.notice}</Text> : null}
       <Text style={textStyles.muted}>
         Say e.g. {hints.slice(0, 3).map((h) => `“${h}”`).join(', ')}.{' '}
         {autoApply ? 'Confident calls apply automatically.' : 'Each call waits for you to tap Apply.'}
@@ -179,6 +178,7 @@ const st = StyleSheet.create({
   headRow: { flexDirection: 'row', gap: theme.spacing(2), alignItems: 'center' },
   row: { flexDirection: 'row', gap: theme.spacing(2), alignItems: 'flex-end' },
   flex: { flex: 1 },
+  notice: { color: theme.colors.textMuted, fontSize: theme.font.small },
   heard: { color: theme.colors.accent, fontSize: theme.font.small, fontStyle: 'italic' },
   pending: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2),

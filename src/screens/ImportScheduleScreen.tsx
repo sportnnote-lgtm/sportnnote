@@ -18,7 +18,8 @@ import { addTournamentTeams, createMatch, getMyPlayerId } from '../data/repos';
 import { importFromText, importSummary, templateCsv, slugify, type ImportField, type ImportRow } from '../data/scheduleImport';
 import { matchFormatFor } from '../data/matchFormat';
 import { isEliminationStage, isKoStage, KO_STAGE_LABEL } from '../data/bracket';
-import { formatDateTime, useUserTimeZone } from '../core/time';
+import { eventZone, formatDateTime, useUserTimeZone, zoneLabel } from '../core/time';
+import { useRegion, exampleDate, dateOrderWords, spelledDate, type DateOrder } from '../core/region';
 import { pickTextFile } from '../core/document';
 import { downloadText } from '../core/download';
 import { notice } from '../core/confirm';
@@ -45,8 +46,11 @@ export default function ImportScheduleScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'ImportSchedule'>>();
   const tid = params.tournamentId;
   const { profile } = useAuth();
-  const zone = useUserTimeZone();
+  const viewerZone = useUserTimeZone();
+  const region = useRegion();
   const tournament = useTournamentById(tid);
+  // Typed times are wall times at the venue: the tournament's zone, else the viewer's.
+  const zone = eventZone(tournament, viewerZone);
   const entered = useTournamentTeams(tid);
   const allTeams = useTeams();
   const { matches } = useMatches('all');
@@ -63,6 +67,8 @@ export default function ImportScheduleScreen() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The organiser's explicit "day-first / month-first" answer for an ambiguous file.
+  const [forceOrder, setForceOrder] = useState<DateOrder | undefined>(undefined);
 
   // Parse 300 ms after the last keystroke — a big paste shouldn't re-validate per character.
   useEffect(() => {
@@ -74,10 +80,12 @@ export default function ImportScheduleScreen() {
   const result = useMemo(() => {
     if (!tournament || !parsedText.trim()) return null;
     return importFromText(parsedText, {
-      tournament, sports: sportsList, entered, allTeams, existing: matches, zone, skipLines: skip,
-    }, overrides);
-  }, [tournament, parsedText, sportsList, entered, allTeams, matches, zone, skip, overrides]);
+      tournament, sports: sportsList, entered, allTeams, existing: matches, zone, skipLines: skip, dateOrder: region.dateOrder,
+    }, overrides, forceOrder);
+  }, [tournament, parsedText, sportsList, entered, allTeams, matches, zone, skip, overrides, region.dateOrder, forceOrder]);
+  const dates = result?.dates;
   const rows = result?.rows ?? [];
+  const firstDate = rows.find((r) => r.draft)?.draft?.date;
   const summary = importSummary(rows, skip);
   const isCreated = (r: ImportRow) => created.has(rowKey(r));
   const todo = rows.filter((r) => r.draft && r.status !== 'error' && !skip.has(r.line) && !isCreated(r));
@@ -91,7 +99,7 @@ export default function ImportScheduleScreen() {
 
   async function downloadTemplate() {
     if (!tournament) return;
-    const csv = templateCsv(tournament, entered, { matches: tourMatches, sportName: (id) => getSport(id).name });
+    const csv = templateCsv(tournament, entered, { matches: tourMatches, sportName: (id) => getSport(id).name, dateOrder: region.dateOrder });
     const name = `${slugify(tournament.name)}-schedule.csv`;
     if (downloadText(name, 'text/csv;charset=utf-8', csv)) return;
     await Share.share({ title: name, message: csv });
@@ -169,7 +177,7 @@ export default function ImportScheduleScreen() {
         <Card style={st.card}>
           <Text style={textStyles.h3}>1 · Get the template</Text>
           <Text style={textStyles.muted}>
-            One row per match. Dates like 12/10/2026 (day first), times like 4:30 pm. Team names must match your teams.
+            One row per match. Dates like {exampleDate(region.dateOrder, '2026-10-12')} ({region.dateOrder === 'MDY' ? 'month first' : 'day first'}), times like 4:30 pm in {zoneLabel(zone)}. Team names must match your teams.
             {multiSport ? ' Add the sport on every row.' : ''}
           </Text>
           <Button label="⬇ Download template (CSV)" variant="ghost" onPress={() => void downloadTemplate()} />
@@ -193,12 +201,27 @@ export default function ImportScheduleScreen() {
             label={Platform.OS === 'web' ? '…or paste rows from Excel / Google Sheets' : 'Paste rows from Excel / Google Sheets'}
             value={text}
             onChange={(v) => { setText(v); setFileNote(null); setFileError(null); }}
-            placeholder={'date\ttime\thome_team\taway_team\tvenue\n12/10/2026\t4:30 pm\tRed House\tBlue House\tMain Ground'}
+            placeholder={`date\ttime\thome_team\taway_team\tvenue\n${exampleDate(region.dateOrder, '2026-10-12')}\t4:30 pm\tRed House\tBlue House\tMain Ground`}
             autoCapitalize="none"
             multiline
           />
           {result && !result.hasHeader && rows.length > 0 && (
             <Text style={textStyles.muted}>No header row — reading columns as date, time, home team, away team, venue, group, stage, sport.</Text>
+          )}
+          {dates && (dates.verdict === 'ambiguous' || dates.verdict === 'mixed' || dates.switched || forceOrder) && (
+            <View style={st.dateNote}>
+              <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
+                {dates.verdict === 'mixed'
+                  ? '⚠ Some dates read day-first and others month-first. Pick one and check the rows marked ✕.'
+                  : dates.switched
+                    ? `Your dates are ${dateOrderWords(dates.order)} (a date like ${dates.order === 'MDY' ? '10/25' : '25/10'} proves it), so they're read that way.`
+                    : `⚠ Dates like ${exampleDate(dates.order, '2026-03-05')} could be 5 March or 3 May. Reading them ${dateOrderWords(dates.order)}${firstDate ? ` — the first match is ${spelledDate(firstDate)}` : ''}. Is that right?`}
+              </Text>
+              <View style={st.chips}>
+                <SelectChip label="Day first (DD/MM)" active={dates.order === 'DMY'} onPress={() => setForceOrder('DMY')} />
+                <SelectChip label="Month first (MM/DD)" active={dates.order === 'MDY'} onPress={() => setForceOrder('MDY')} />
+              </View>
+            </View>
           )}
           {result && result.unknownColumns.length > 0 && (
             <Text style={textStyles.muted}>Ignored columns: {result.unknownColumns.join(', ')}</Text>
@@ -301,6 +324,7 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   preview: { gap: theme.spacing(3) },
   flex: { flex: 1 },
+  dateNote: { gap: theme.spacing(2) },
   link: { color: theme.colors.primary, fontWeight: '700', fontSize: theme.font.small },
   row: {
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,

@@ -16,8 +16,37 @@ export function isLocalImageUri(u?: string | null): boolean {
 export function displayableImage(u: string | null | undefined, allowLocal: boolean): string | undefined {
   if (!u) return undefined;
   if (!allowLocal && isLocalImageUri(u)) return undefined;
+  // A private storage ref needs a signed URL first (useImageUri does that).
+  if (isPrivateImageRef(u)) return undefined;
   return u;
 }
+
+/** Player photos live in the PRIVATE `player-photos` bucket (migration
+ *  protect_minors): the row stores `private://player-photos/<path>` and viewers
+ *  get a short-lived signed URL — the storage policy only signs it for people
+ *  allowed to see that player's full card (an under-18's photo is never public). */
+export const PRIVATE_IMAGE_PREFIX = 'private://';
+export const PLAYER_PHOTO_BUCKET = 'player-photos';
+
+export function isPrivateImageRef(u?: string | null): boolean {
+  return !!u && u.startsWith(PRIVATE_IMAGE_PREFIX);
+}
+
+export function privateImageRef(bucket: string, path: string): string {
+  return `${PRIVATE_IMAGE_PREFIX}${bucket}/${path}`;
+}
+
+/** `private://<bucket>/<path>` → { bucket, path }, else undefined. */
+export function parsePrivateImageRef(u?: string | null): { bucket: string; path: string } | undefined {
+  if (!isPrivateImageRef(u)) return undefined;
+  const rest = u!.slice(PRIVATE_IMAGE_PREFIX.length);
+  const i = rest.indexOf('/');
+  if (i <= 0 || i === rest.length - 1) return undefined;
+  return { bucket: rest.slice(0, i), path: rest.slice(i + 1) };
+}
+
+/** Which bucket an upload goes to: player photos private, logos/banners public. */
+export const isPrivateImageKind = (kind: ImageKind): boolean => kind === 'player-photo';
 
 /** Storage path `<uid>/<kind>/<now>-<rand>.<ext>` — the uid folder is what the
  *  bucket policy checks; the timestamp + random part make each upload unique. */

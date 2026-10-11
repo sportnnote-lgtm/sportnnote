@@ -14,10 +14,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import { theme } from '../core/theme';
-import { Card, SelectChip, textStyles } from '../components/ui';
+import { Card, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
 import { isSupport } from '../core/roles';
-import { TIME_ZONES, timeZoneStore, useUserTimeZone, zoneLabel } from '../core/time';
+import { useUserTimeZone, zoneShortName } from '../core/time';
+import { useRegion } from '../core/region';
 import { reminderPrefsStore, formatLead } from '../data/reminderPrefs';
 import { onboardingStore } from '../data/onboardingStore';
 import { hapticsPref, useHapticsOn } from '../core/hapticsPref';
@@ -88,7 +89,7 @@ export default function SettingsScreen() {
   const reminders = useSyncExternalStore(reminderPrefsStore.subscribe, reminderPrefsStore.getSnapshot);
   const reminderSummary = reminders.length ? reminders.map((m) => formatLead(m).replace(' before', '')).join(' · ') : 'Off';
   const tz = useUserTimeZone();
-  const [tzOpen, setTzOpen] = useState(false);
+  const region = useRegion();
   const hapticsOn = useHapticsOn();
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
@@ -99,14 +100,8 @@ export default function SettingsScreen() {
         <Group title="Preferences">
           <Row icon="🔔" label="Match reminders" value={reminderSummary} onPress={() => nav.navigate('NotificationPrefs')} />
           <View style={st.divider} />
-          <Row icon="🕑" label="Time zone" value={zoneLabel(tz)} onPress={() => setTzOpen((o) => !o)} />
-          {tzOpen && (
-            <View style={st.tzChips}>
-              {TIME_ZONES.map((z) => (
-                <SelectChip key={z.id} label={z.label} active={tz === z.id} onPress={() => timeZoneStore.set(z.id)} />
-              ))}
-            </View>
-          )}
+          {/* SD-150: country, time zone, date order, clock, week start… */}
+          <Row icon="🌍" label="Region & time zone" value={`${region.flag} ${zoneShortName(tz)}`} onPress={() => nav.navigate('RegionSettings')} />
           <View style={st.divider} />
           {/* SD-110: a light buzz on each scoring tap — this phone only. */}
           <Row icon="📳" label="Buzz on scoring taps" value={hapticsOn ? 'On' : 'Off'} onPress={() => hapticsPref.set(!hapticsOn)} />
@@ -145,6 +140,9 @@ export default function SettingsScreen() {
         </Group>
 
         <Group title="Privacy & legal">
+          {/* SD-152: download my data, analytics choice, guardian status. */}
+          <Row icon="🛡️" label="Your data & privacy" value="Download · analytics · guardian" onPress={() => nav.navigate('Privacy')} />
+          <View style={st.divider} />
           <Row icon="🔒" label="Privacy Policy" onPress={() => nav.navigate('Legal', { doc: 'privacy' })} />
           <View style={st.divider} />
           <Row icon="📄" label="Terms of Use" onPress={() => nav.navigate('Legal', { doc: 'terms' })} />
@@ -179,7 +177,6 @@ const st = StyleSheet.create({
   rowValue: { flex: 1, textAlign: 'right', color: theme.colors.textMuted, fontSize: theme.font.small },
   chevron: { color: theme.colors.textMuted, fontSize: 20 },
   divider: { height: 1, backgroundColor: theme.colors.border, marginLeft: theme.spacing(4) },
-  tzChips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), padding: theme.spacing(4), paddingTop: 0 },
   version: { color: theme.colors.textMuted, fontSize: theme.font.small, textAlign: 'center', marginTop: theme.spacing(2) },
   signOut: { alignSelf: 'center', paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(6) },
   signOutText: { color: theme.colors.danger, fontSize: theme.font.body, fontWeight: '700' },

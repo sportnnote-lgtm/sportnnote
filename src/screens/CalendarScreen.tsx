@@ -20,6 +20,8 @@ import { matchLine } from '../sports/matchLine';
 import type { Match, Tournament, Player } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
+import { formatTime, localDay, todayIn, useUserTimeZone } from '../core/time';
+import { leadingBlanks, useRegion, weekdayOrder } from '../core/region';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,10 +30,6 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const ymd = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
-const timeOf = (iso: string) => {
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
 
 export default function CalendarScreen() {
   const nav = useNavigation<Nav>();
@@ -71,8 +69,12 @@ export default function CalendarScreen() {
   const matches = scope === 'mine' ? allMatches.filter(isMyMatch) : allMatches;
   const scopedTournaments = scope === 'mine' ? tournaments.filter(isMyTournament) : tournaments;
 
-  const now = new Date();
-  const todayStr = ymd(now.getFullYear(), now.getMonth(), now.getDate());
+  // SD-150: days and "today" are in the app's zone, not UTC or the device clock.
+  const zone = useUserTimeZone();
+  const region = useRegion();
+  const timeOf = (iso: string) => formatTime(iso, zone);
+  const todayStr = todayIn(zone);
+  const now = new Date(Number(todayStr.slice(0, 4)), Number(todayStr.slice(5, 7)) - 1, Number(todayStr.slice(8, 10)));
   const [view, setView] = useParamState<'month' | 'agenda'>('view', 'month');
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() }); // visible month
   const [selected, setSelected] = useState(todayStr);
@@ -81,11 +83,11 @@ export default function CalendarScreen() {
   const matchesByDay = useMemo(() => {
     const map = new Map<string, Match[]>();
     for (const m of matches) {
-      const key = m.startsAt.slice(0, 10);
+      const key = localDay(m.startsAt, zone);
       (map.get(key) ?? map.set(key, []).get(key)!).push(m);
     }
     return map;
-  }, [matches]);
+  }, [matches, zone]);
 
   // A tournament "touches" a day if it runs on it; tracks which start that day.
   const tournamentsOnDay = (day: string) => scopedTournaments.filter((t) => t.startDate <= day && day <= t.endDate);
@@ -96,13 +98,13 @@ export default function CalendarScreen() {
 
   // Build the month grid cells (leading blanks for weekday offset).
   const cells = useMemo(() => {
-    const first = new Date(cursor.y, cursor.m, 1).getDay();
+    const first = leadingBlanks(new Date(cursor.y, cursor.m, 1).getDay(), region.weekStart);
     const days = new Date(cursor.y, cursor.m + 1, 0).getDate();
     const arr: (string | null)[] = Array.from({ length: first }, () => null);
     for (let d = 1; d <= days; d++) arr.push(ymd(cursor.y, cursor.m, d));
     while (arr.length % 7 !== 0) arr.push(null);
     return arr;
-  }, [cursor]);
+  }, [cursor, region.weekStart]);
 
   const shiftMonth = (delta: number) => {
     setCursor((c) => {
@@ -168,7 +170,7 @@ export default function CalendarScreen() {
   const agendaDays = useMemo(() => {
     const map = new Map<string, { matches: Match[]; starts: Tournament[] }>();
     for (const m of matches) {
-      const day = m.startsAt.slice(0, 10);
+      const day = localDay(m.startsAt, zone);
       if (day < todayStr || m.status === 'completed') continue;
       (map.get(day) ?? map.set(day, { matches: [], starts: [] }).get(day)!).matches.push(m);
     }
@@ -177,7 +179,7 @@ export default function CalendarScreen() {
       (map.get(t.startDate) ?? map.set(t.startDate, { matches: [], starts: [] }).get(t.startDate)!).starts.push(t);
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [matches, scopedTournaments, todayStr]);
+  }, [matches, scopedTournaments, todayStr, zone]);
 
   const selMatches = (matchesByDay.get(selected) ?? []).slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const selTournaments = tournamentsOnDay(selected);
@@ -225,7 +227,7 @@ export default function CalendarScreen() {
             </View>
 
             <View style={st.weekRow}>
-              {WEEKDAYS.map((w) => <Text key={w} style={st.weekday}>{w}</Text>)}
+              {weekdayOrder(WEEKDAYS, region.weekStart).map((w) => <Text key={w} style={st.weekday}>{w}</Text>)}
             </View>
 
             <View style={st.grid}>

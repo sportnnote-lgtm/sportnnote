@@ -19,8 +19,8 @@
  */
 import { admin, CORS, json, rateLimit, requireUser, tooMany } from '../_shared/guard.ts';
 import { firebaseConfigured, verifiedPhoneFromToken } from '../_shared/firebaseToken.ts';
+import { phoneKey } from '../_shared/phone.ts';
 
-const key10 = (p: string) => p.replace(/\D/g, '').slice(-10);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -38,14 +38,17 @@ Deno.serve(async (req) => {
   // 1. Google's signature + our project + freshness.
   const verified = await verifiedPhoneFromToken(idToken);
   if (verified instanceof Error) return json({ verified: false, reason: verified.message }, 401);
-  const phone = verified;
+  // Full E.164 from Google's token (e.g. +447400123456) — compared whole.
+  const phone = verified.startsWith('+') ? phoneKey(verified) : '';
+  if (!phone) return json({ verified: false, reason: 'That number couldn’t be read — include the country code.' }, 400);
 
   // 2 + 3. The caller's own profile, and the number on it.
   const { data: player } = await admin.from('players').select('id, profile_id, phone, guardian').eq('id', playerId).single();
   if (!player || player.profile_id !== caller.user.id) return json({ verified: false, reason: 'Not your profile.' }, 403);
   const guardian = (player.guardian ?? null) as Record<string, unknown> | null;
   const onProfile = channel === 'guardian_phone' ? String(guardian?.phone ?? '') : String(player.phone ?? '');
-  if (!onProfile || key10(onProfile) !== key10(phone)) {
+  // The whole number must match: same country code AND national number.
+  if (!onProfile || phoneKey(onProfile) !== phone) {
     return json({ verified: false, reason: 'The verified number doesn’t match the one on the profile.' });
   }
 

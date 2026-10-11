@@ -2,6 +2,7 @@ import { registerRootComponent } from 'expo';
 import { Platform } from 'react-native';
 
 import App from './App';
+import { setupNativeSpeech } from './src/core/speechSetup';
 
 // Mobile Safari zooms the page in when a text box under 16px gets focus, which
 // pushes buttons beside it off-screen. Keep touch-screen inputs at 16px (pinch
@@ -11,6 +12,9 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   style.textContent = '@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }';
   document.head.appendChild(style);
 }
+
+// Phones: spoken voice scoring when this APK has the speech module (else typed-only).
+setupNativeSpeech();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

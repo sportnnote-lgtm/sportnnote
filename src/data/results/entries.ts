@@ -342,13 +342,16 @@ const BIB_RE = /^#?[a-z]{0,3}\d{1,5}[a-z]?$/i;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-/** A typed date → YYYY-MM-DD (day first, as written in India: 05/03/2012 = 5 March). */
-export function readDob(t: string, today: Date = new Date()): string | undefined {
+/** A typed date → YYYY-MM-DD. Day first by default (as written in India and
+ *  most markets: 05/03/2012 = 5 March); `order` 'MDY' reads US month-first
+ *  (05/03/2012 = May 3) — SD-150, pass the region's `dateOrder`. */
+export function readDob(t: string, today: Date = new Date(), order: 'DMY' | 'MDY' | 'YMD' = 'DMY'): string | undefined {
   const m = DATE_RE.exec(t.trim());
   if (!m) return undefined;
   let y: number, mo: number, d: number;
   if (m[1]) { y = +m[1]; mo = +m[2]; d = +m[3]; } else {
     d = +m[4]; mo = +m[5]; y = +m[6];
+    if (order === 'MDY') [d, mo] = [mo, d];
     if (m[6].length === 2) y += y + 2000 > today.getFullYear() ? 1900 : 2000;
   }
   const dt = new Date(Date.UTC(y, mo - 1, d));
@@ -404,7 +407,7 @@ const cells = (line: string): string[] => (line.includes('\t') ? line.split('\t'
  * (U14 / Open), a bib (digits), events ("100m; LJ") — and the first other text
  * is the house / team. A header row is skipped.
  */
-export function parseBulk(text: string, sport: string = 'athletics', today: Date = new Date()): BulkRow[] {
+export function parseBulk(text: string, sport: string = 'athletics', today: Date = new Date(), order: 'DMY' | 'MDY' | 'YMD' = 'DMY'): BulkRow[] {
   const out: BulkRow[] = [];
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.trim();
@@ -419,7 +422,7 @@ export function parseBulk(text: string, sport: string = 'athletics', today: Date
       if (g) { row.gender = g; continue; }
       const a = !row.age && !row.dob ? readAge(c) : undefined;
       if (a) { row.age = a; continue; }
-      const d = !row.dob ? readDob(c, today) : undefined;
+      const d = !row.dob ? readDob(c, today, order) : undefined;
       if (d) { row.dob = d; continue; }
       const evs = c.split(/[;/+|&]/).map((x) => x.trim()).filter(Boolean);
       const keys = evs.map((x) => readEvent(x, sport));
@@ -429,7 +432,7 @@ export function parseBulk(text: string, sport: string = 'athletics', today: Date
       row.unknown.push(c);
     }
     if (!row.name || /\d/.test(row.name) && !/[a-z]/i.test(row.name)) row.error = 'No name';
-    else if (DATE_RE.test(cs.find((c) => /\d+[-/.]\d+[-/.]\d+/.test(c)) ?? 'x') && !row.dob) row.error = 'Date of birth not read (day/month/year)';
+    else if (DATE_RE.test(cs.find((c) => /\d+[-/.]\d+[-/.]\d+/.test(c)) ?? 'x') && !row.dob) row.error = `Date of birth not read (${order === 'MDY' ? 'month/day/year' : 'day/month/year'})`;
     out.push(row);
   });
   return out;

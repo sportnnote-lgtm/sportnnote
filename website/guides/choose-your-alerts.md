@@ -77,5 +77,8 @@ Yes, through **Result**. When the official taps **🏁 Finish & lock results** o
 ### And for golf?
 When the organiser taps **🏁 Finish the round** in stroke play, followers get the round's winner and score.
 
+### Why can't I follow this player?
+A player under 18, or anyone with no date of birth on file, can only be followed by their teammates, coaches and team managers, the organisers and teams of tournaments they play in, members of the same school or club, and their parent/guardian. Everyone else sees a 🔒 note on the profile instead of **+ Follow player**. You can still follow their team or tournament. If you stop being connected (for example, the child leaves your team), you keep the follow but no longer get alerts about them.
+
 ### Where do I set my own match reminder times?
 Under **Settings** → **Match reminders**, in the **🔔 Reminder timers** card. The same times are used for matches you play or score in, and for players you follow.

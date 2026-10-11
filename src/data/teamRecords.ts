@@ -26,6 +26,7 @@ import { scoreUnit, type ScoreUnit } from './standings.ts';
 import { resultFor, type Leader, type Result } from './teamStats.ts';
 import { withLineResults } from './leaderMinimums.ts';
 import { seasonOf } from './lineContext.ts';
+import { regionStore } from '../core/region.ts';
 import { isWalkover, teamScoreOf } from './walkover.ts';
 
 /* --------------------------------- unit --------------------------------- */
@@ -291,7 +292,7 @@ export function teamMatchFilters(teamId: string, matches: Match[], nameOf: (tour
     const tk = p.m.tournamentId ?? FRIENDLY;
     const t = tours.get(tk) ?? tours.set(tk, { key: tk, label: p.m.tournamentId ? nameOf(p.m.tournamentId) ?? 'Tournament' : 'Friendlies', count: 0 }).get(tk)!;
     t.count++;
-    const s = seasonOf(p.m.startsAt);
+    const s = seasonOf(p.m.startsAt, regionStore.get().statsSeasonStartMonth);
     if (s) { const e = seasons.get(s.key) ?? seasons.set(s.key, { ...s, count: 0 }).get(s.key)!; e.count++; }
   }
   const tl = [...tours.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
@@ -304,5 +305,5 @@ export function teamMatchFilters(teamId: string, matches: Match[], nameOf: (tour
 export function filterTeamMatches(matches: Match[], sel: TeamMatchSelection): Match[] {
   return matches.filter((m) =>
     (!sel.tournament || (m.tournamentId ?? FRIENDLY) === sel.tournament) &&
-    (!sel.season || seasonOf(m.startsAt)?.key === sel.season));
+    (!sel.season || seasonOf(m.startsAt, regionStore.get().statsSeasonStartMonth)?.key === sel.season));
 }

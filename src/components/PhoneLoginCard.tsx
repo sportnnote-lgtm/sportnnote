@@ -11,7 +11,8 @@ import { theme } from '../core/theme';
 import { Button, Card, FormError, SelectChip, TextField, textStyles } from './ui';
 import { DateField } from './DateTimeField';
 import { ageFromDob } from '../core/age';
-import { isValidPhone } from '../core/phone';
+import { isValidPhone, normalizePhone, formatPhone } from '../core/phone';
+import { PhoneField } from './PhoneField';
 import { completePhoneSignup, confirmPhoneLogin, sendPhoneCode } from '../core/phoneLogin';
 import type { Role } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -47,8 +48,8 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
   };
 
   const send = () => run(async () => {
-    if (!isValidPhone(phone)) throw new Error('Enter your 10-digit mobile number.');
-    await sendPhoneCode(phone);
+    if (!isValidPhone(phone)) throw new Error('Enter your mobile number — check the country code.');
+    await sendPhoneCode(normalizePhone(phone));
     setCode('');
     setStep('code');
   });
@@ -67,10 +68,11 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
     if (minor && (!gName.trim() || (!gPhone.trim() && !gEmail.trim()) || !consent)) {
       throw new Error('Under-18 accounts need a parent/guardian’s name, contact and consent.');
     }
+    if (minor && gPhone.trim() && !isValidPhone(gPhone)) throw new Error('The guardian’s mobile doesn’t look right — check the number and country code.');
     if (!agreed) throw new Error('Please agree to the Terms of Use and Privacy Policy.');
     const r = await completePhoneSignup({
       fullName: fullName.trim(), dob: dob.trim(), role, agreed,
-      guardian: minor ? { name: gName.trim(), phone: gPhone.trim() || undefined, email: gEmail.trim() || undefined, consent } : undefined,
+      guardian: minor ? { name: gName.trim(), phone: normalizePhone(gPhone) || undefined, email: gEmail.trim() || undefined, consent } : undefined,
     });
     if (r.status === 'unverified') { setNote(r.reason); setStep('unverified'); }
   });
@@ -89,7 +91,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
       {step === 'phone' && (
         <>
           <Text style={textStyles.muted}>We’ll text you a code — no password needed.</Text>
-          <TextField label="Mobile number" value={phone} onChange={setPhone} placeholder="98765 43210" autoCapitalize="none" />
+          <PhoneField label="Mobile number" value={phone} onChange={setPhone} />
           <FormError message={error} />
           <Button label={busy ? 'Sending…' : 'Send code'} onPress={() => void send()} disabled={busy} />
         </>
@@ -97,7 +99,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
 
       {step === 'code' && (
         <>
-          <Text style={textStyles.muted}>Enter the 6-digit code we sent to {phone}.</Text>
+          <Text style={textStyles.muted}>Enter the 6-digit code we sent to {formatPhone(phone)}.</Text>
           <TextField label="Code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" autoCapitalize="none" />
           <FormError message={error} />
           <Button label={busy ? 'Checking…' : 'Continue'} onPress={() => void confirm()} disabled={busy} />
@@ -122,7 +124,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
             <View style={{ gap: theme.spacing(2) }}>
               <Text style={textStyles.muted}>👪 Parent / Guardian (required for under-18)</Text>
               <TextField label="Guardian name" value={gName} onChange={setGName} placeholder="Priya Mehta" autoCapitalize="words" />
-              <TextField label="Guardian mobile" value={gPhone} onChange={setGPhone} placeholder="+91…" autoCapitalize="none" />
+              <PhoneField label="Guardian mobile" value={gPhone} onChange={setGPhone} />
               <TextField label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" autoCapitalize="none" />
               <Check on={consent} onPress={() => setConsent((c) => !c)}>
                 I am {gName.trim() ? `${gName.trim()}’s ` : 'the '}parent/guardian and I consent to them creating and using a SportnNote account.

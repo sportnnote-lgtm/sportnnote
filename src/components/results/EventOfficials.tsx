@@ -13,7 +13,7 @@ import { PersonPicker } from '../PersonPicker';
 import { getPlayers, getTournamentOfficials } from '../../data/repos';
 import { useAuth } from '../../core/auth';
 import { tournamentRoleInviteText } from '../../core/inviteText';
-import { tournamentLink } from '../../core/shareText';
+import { tournamentLink, SHARE_BASE } from '../../core/shareText';
 import type { Tournament } from '../../core/types';
 
 export function EventOfficials({ tournament, value, onChange, title = 'Event officials (optional)', bare = false }: {
@@ -40,7 +40,7 @@ export function EventOfficials({ tournament, value, onChange, title = 'Event off
   }, [tournament?.id]);
   const extra = useMemo(() => pool.filter((id) => !value.includes(id)), [pool, value]);
   const nameOf = (id: string) => names.get(id) ?? 'Official';
-  const invite = (name?: string) => tournamentRoleInviteText({ role: 'official', name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in' });
+  const invite = (name?: string) => tournamentRoleInviteText({ role: 'official', name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : SHARE_BASE });
 
   const Box = bare ? View : Card;
   return (

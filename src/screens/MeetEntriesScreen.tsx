@@ -33,6 +33,7 @@ import {
 } from '../data/results';
 import { isEventSport, eventWords, type EventSport } from '../sports/eventSports';
 import type { SportId } from '../core/types';
+import { useRegion, dateOrderOf, dateOrderWords, exampleDate, spelledDate } from '../core/region';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type G = 'M' | 'F' | 'X';
@@ -317,10 +318,15 @@ function BulkAdd({ sport, tournamentId, doc, meet, athletes, players, sources, c
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const words = eventWords(sport);
+  // SD-150: typed DOBs follow the region (US month-first); a list whose dates
+  // prove the other order is flagged, and each DOB previews spelled out.
+  const region = useRegion();
+  const pastedOrder = dateOrderOf(text.split(/[\t,;\n]/));
+  const orderClash = (pastedOrder === 'DMY' || pastedOrder === 'MDY') && pastedOrder !== region.dateOrder;
 
   const check = () => {
     setError(null);
-    const rows = parseBulk(text, sport);
+    const rows = parseBulk(text, sport, new Date(), region.dateOrder);
     if (!rows.length) { setError('Paste one athlete per line.'); return; }
     setParsed(rows);
     setDups(findDuplicates(rows, players));
@@ -383,9 +389,14 @@ function BulkAdd({ sport, tournamentId, doc, meet, athletes, players, sources, c
       </TouchableOpacity>
       {open && (
         <>
-          <Text style={textStyles.muted}>One {words.athletes.replace(/s$/, '')} per line: name, house / school, gender, date of birth (day/month/year) or age group, bib — and, if you like, events ("100m; LJ"). Copy straight from a spreadsheet (tabs work).</Text>
+          <Text style={textStyles.muted}>One {words.athletes.replace(/s$/, '')} per line: name, house / school, gender, date of birth ({dateOrderWords(region.dateOrder)}) or age group, bib — and, if you like, events ("100m; LJ"). Copy straight from a spreadsheet (tabs work).</Text>
           <TextInput style={[st.input, st.area]} value={text} onChangeText={(t) => { setText(t); setParsed(null); }} multiline textAlignVertical="top"
-            placeholder={sport === 'swimming' ? 'Meera Iyer, Blue House, G, 14/02/2013, 211, 50 free; 100 back' : 'Aarav Nair, Red House, B, 05/03/2012, 101, 100m; LJ'} placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Pasted list" />
+            placeholder={sport === 'swimming' ? `Meera Iyer, Blue House, G, ${exampleDate(region.dateOrder, '2013-02-14')}, 211, 50 free; 100 back` : `Aarav Nair, Red House, B, ${exampleDate(region.dateOrder)}, 101, 100m; LJ`} placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Pasted list" />
+          {orderClash && (
+            <Text style={[textStyles.muted, { color: theme.colors.accent }]}>
+              ⚠ These dates look {dateOrderWords(pastedOrder as 'DMY' | 'MDY')}, but your region reads {dateOrderWords(region.dateOrder)}. Change it in Settings → Region & time zone, or check each date of birth below.
+            </Text>
+          )}
           <Button label="Check the list" variant="ghost" onPress={check} disabled={!text.trim()} />
           <FormError message={error} />
           {parsed && (
@@ -397,7 +408,7 @@ function BulkAdd({ sport, tournamentId, doc, meet, athletes, players, sources, c
                 return (
                   <View key={r.line} style={st.bulkRow}>
                     <Text style={[textStyles.body, st.bold]} numberOfLines={1}>{r.name || '—'}</Text>
-                    <Text style={textStyles.muted} numberOfLines={2}>{[r.house, r.gender === 'M' ? 'Boy' : r.gender === 'F' ? 'Girl' : 'gender?', r.dob ?? r.age ?? 'age?', ag && !r.age ? ag : '', r.bib ? `bib ${r.bib}` : '', r.events.map(shortLabel).join(' '), r.unknown.length ? `? ${r.unknown.join(', ')}` : ''].filter(Boolean).join(' · ')}</Text>
+                    <Text style={textStyles.muted} numberOfLines={2}>{[r.house, r.gender === 'M' ? 'Boy' : r.gender === 'F' ? 'Girl' : 'gender?', (r.dob ? spelledDate(r.dob) : undefined) ?? r.age ?? 'age?', ag && !r.age ? ag : '', r.bib ? `bib ${r.bib}` : '', r.events.map(shortLabel).join(' '), r.unknown.length ? `? ${r.unknown.join(', ')}` : ''].filter(Boolean).join(' · ')}</Text>
                     <Text style={[st.sub, (r.error || d) && { color: theme.colors.accent }]}>{status}</Text>
                     {d && d.kind !== 'inList' && !r.error ? (
                       <SelectChip label="Create a new player instead" active={createAnyway.has(r.line)} onPress={() => setCreateAnyway((s) => { const n = new Set(s); if (n.has(r.line)) n.delete(r.line); else n.add(r.line); return n; })} />

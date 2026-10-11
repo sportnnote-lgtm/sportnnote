@@ -16,10 +16,10 @@
  *              --project-ref mpgbvbylmkwasjgupsbq
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { APP_URL } from '../_shared/hosts.ts'; // SD-151: APP_URL secret, default app.sportnnote.in
 
 const PROJECT_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.sportnnote.in';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 

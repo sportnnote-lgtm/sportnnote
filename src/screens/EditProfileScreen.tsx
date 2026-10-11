@@ -24,6 +24,8 @@ import { LogoPicker } from '../components/LogoPicker';
 import { adminPatch } from '../core/playerEditAccess';
 import { notice } from '../core/confirm';
 import { ageFromDob } from '../core/age';
+import { isValidPhone, samePhone } from '../core/phone';
+import { PhoneField } from '../components/PhoneField';
 import type { Player, SportDetail, SportId, TeamStint } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -142,8 +144,18 @@ export default function EditProfileScreen({ route, navigation }: Props) {
     return kept;
   }
 
+  /** A changed number must be valid for its country (an unchanged old one is left alone). */
+  const changedPhone = (a: string, b?: string) => a.trim() !== (b ?? '').trim() && !samePhone(a, b);
+  const badPhone = (): string | null => {
+    if (phone.trim() && changedPhone(phone, loaded.phone) && !isValidPhone(phone)) return 'That contact number doesn’t look right — check the number and the country code.';
+    if (gPhone.trim() && changedPhone(gPhone, loaded.guardian?.phone) && !isValidPhone(gPhone)) return 'The guardian’s phone doesn’t look right — check the number and the country code.';
+    return null;
+  };
+
   async function saveAsAdmin() {
     if (!name.trim()) return setError('Enter the player’s name.');
+    const phoneErr = badPhone();
+    if (phoneErr) return setError(phoneErr);
     // DOB is optional here (the admin may not know it) — but validated if entered.
     if (dob.trim() && ageFromDob(dob.trim()) === undefined) return setError('Enter a valid date of birth (YYYY-MM-DD), or leave it blank.');
     const jerseyNo = jersey.trim() ? Number(jersey.replace(/[^0-9]/g, '')) : undefined;
@@ -156,7 +168,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
         photoUrl: photoUrl !== loaded.photoUrl ? photoUrl : undefined,
         jerseyNo,
         // Only a changed guardian is written (keeps its verified flags otherwise).
-        guardian: gName.trim() && (gName.trim() !== (loaded.guardian?.name ?? '') || gPhone.trim() !== (loaded.guardian?.phone ?? '') || gEmail.trim() !== (loaded.guardian?.email ?? ''))
+        guardian: gName.trim() && (gName.trim() !== (loaded.guardian?.name ?? '') || !(gPhone.trim() ? samePhone(gPhone, loaded.guardian?.phone) : !loaded.guardian?.phone) || gEmail.trim() !== (loaded.guardian?.email ?? ''))
           ? { name: gName, phone: gPhone, email: gEmail } : undefined,
         sports,
         sportDetails: keptDetails(),
@@ -180,12 +192,14 @@ export default function EditProfileScreen({ route, navigation }: Props) {
       if (!gName.trim()) return setError('A parent/guardian name is required for players under 18.');
       if (!gPhone.trim() && !gEmail.trim()) return setError("Add the guardian's phone or email — under-18 players need a guardian contact.");
     }
+    const phoneErr = badPhone();
+    if (phoneErr) return setError(phoneErr);
     setError(null);
     setBusy(true);
     try {
       const kept = keptDetails();
       // Changing a contact resets its verified status (the new value is unverified).
-      const phoneVerified = phone.trim() === loaded.phone ? loaded.phoneVerified : false;
+      const phoneVerified = samePhone(phone, loaded.phone) ? loaded.phoneVerified : false;
       const emailVerified = email.trim() === loaded.email ? loaded.emailVerified : false;
       // Guardian — preserve a channel's verified flag only if its value is unchanged.
       const g = loaded.guardian;
@@ -194,7 +208,7 @@ export default function EditProfileScreen({ route, navigation }: Props) {
             name: gName.trim(),
             phone: gPhone.trim() || undefined,
             email: gEmail.trim() || undefined,
-            phoneVerified: gPhone.trim() && gPhone.trim() === (g?.phone ?? '') ? g?.phoneVerified : false,
+            phoneVerified: gPhone.trim() && samePhone(gPhone, g?.phone) ? g?.phoneVerified : false,
             emailVerified: gEmail.trim() && gEmail.trim() === (g?.email ?? '') ? g?.emailVerified : false,
           }
         : undefined;
@@ -279,15 +293,15 @@ export default function EditProfileScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        <View style={st.row}>
-          <View style={st.flex}>
+        <View style={st.wrapRow}>
+          <View style={st.wrapCell}>
             {asAdmin && loaded.phone ? (
               <OnFile label="Contact number" />
             ) : (
-              <TextField label="Contact number" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" />
+              <PhoneField label="Contact number" value={phone} onChange={setPhone} optional />
             )}
           </View>
-          <View style={st.flex}>
+          <View style={st.wrapCell}>
             {asAdmin && loaded.email ? (
               <OnFile label="Email" />
             ) : (
@@ -348,9 +362,9 @@ export default function EditProfileScreen({ route, navigation }: Props) {
             For young players who don&apos;t have their own phone or email, a parent/guardian can be the point of contact. Their phone &amp; email are verified, and you can upload a document on your profile to confirm age &amp; guardianship.
           </Text>
           <TextField label="Guardian name" value={gName} onChange={setGName} placeholder="e.g. Priya Mehta" />
-          <View style={st.row}>
-            <View style={st.flex}><TextField label="Guardian phone" value={gPhone} onChange={setGPhone} placeholder="+91…" autoCapitalize="none" /></View>
-            <View style={st.flex}><TextField label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" autoCapitalize="none" /></View>
+          <View style={st.wrapRow}>
+            <View style={st.wrapCell}><PhoneField label="Guardian phone" value={gPhone} onChange={setGPhone} /></View>
+            <View style={st.wrapCell}><TextField label="Guardian email" value={gEmail} onChange={setGEmail} placeholder="parent@email.com" autoCapitalize="none" /></View>
           </View>
           </>)}
         </Card>
@@ -476,6 +490,9 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
+  // Phone + email pairs: side by side when there's room, stacked on a phone.
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
+  wrapCell: { flexGrow: 1, flexBasis: 220, minWidth: 0 },
   flex: { flex: 1 },
   section: { marginTop: theme.spacing(2) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },

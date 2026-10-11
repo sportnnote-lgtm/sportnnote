@@ -9,8 +9,8 @@ import { serializePrefs, type FollowPrefs } from './followPrefs';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 import type { PickedDoc } from '../core/document';
 import type { PickedImage } from '../core/photo';
-import { isLocalImageUri, mediaPath, extForMime, type ImageKind } from '../core/imageUrl';
-import { normalizePhone, samePhone, isValidPhone } from '../core/phone';
+import { isLocalImageUri, mediaPath, extForMime, isPrivateImageKind, privateImageRef, PLAYER_PHOTO_BUCKET, type ImageKind } from '../core/imageUrl';
+import { samePhone, isValidPhone, toE164 } from '../core/phone';
 import { canManageTeamLocal } from '../core/teamPermissions';
 import { editAccess, type EditAccess } from '../core/playerEditAccess';
 import { parseTournamentToken } from '../core/tournamentInvite';
@@ -279,6 +279,7 @@ const toTournament = (data: any): Tournament => ({
   organiserPhone: data.organiser_phone ?? undefined,
   organiserEmail: data.organiser_email ?? undefined,
   deletedAt: data.deleted_at ?? undefined,
+  timeZone: data.time_zone ?? undefined,
 });
 
 // The registration columns (registration_deadline / min_teams / max_teams) need
@@ -291,7 +292,15 @@ const TOURNAMENT_PROFILE_COLS = 'banner_url, city, grounds, event_category, abou
 
 /** Run a tournaments query with the full column set; if the registration columns
  *  aren't in the live DB yet, transparently retry with the base set. */
+// SD-150: the venue time zone (migration 20261020150000_tournament_time_zone).
+// Remembered once missing so pre-migration databases don't pay a failed read each time.
+let tournamentZoneCol = true;
 async function withTournamentCols<T>(build: (cols: string) => PromiseLike<{ data: T | null; error: unknown }>): Promise<{ data: T | null; error: unknown }> {
+  if (tournamentZoneCol) {
+    const withZone = await build(`${TOURNAMENT_SELECT}, ${TOURNAMENT_PROFILE_COLS}, time_zone`);
+    if (!withZone.error) return withZone;
+    tournamentZoneCol = false;
+  }
   const profile = await build(`${TOURNAMENT_SELECT}, ${TOURNAMENT_PROFILE_COLS}`);
   if (!profile.error) return profile;
   const full = await build(TOURNAMENT_SELECT);
@@ -671,6 +680,8 @@ interface PlayerRow {
   show_email?: boolean | null;
   findable_by_contact?: boolean | null;
   guardian_linked?: boolean | null;
+  /** players_view (migration protect_minors): reduced card of a possible minor */
+  restricted?: boolean | null;
 }
 const toPlayer = (r: PlayerRow): Player => ({
   id: r.id,
@@ -698,6 +709,7 @@ const toPlayer = (r: PlayerRow): Player => ({
   showEmail: r.show_email ?? undefined,
   findableByContact: r.findable_by_contact ?? undefined,
   guardianLinked: r.guardian_linked ?? undefined,
+  restricted: r.restricted ? true : undefined,
 });
 
 /** Live player reads go through `players_view` (migration 0026): phone / email /
@@ -707,18 +719,34 @@ const toPlayer = (r: PlayerRow): Player => ({
  *  status flags so eligibility checks still work. The base `players` table no
  *  longer lets clients read those columns at all; WRITES still go to `players`. */
 const PLAYERS_READ = 'players_view';
-const PLAYER_SELECT = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification, age, show_phone, show_email, guardian_linked, findable_by_contact';
+const PLAYER_SELECT_BASE = 'id, profile_id, full_name, jersey_no, sports, house_name, house_color, city, gender, bio, phone, email, phone_verified, email_verified, photo_url, sport_details, dob, guardian, verification, age, show_phone, show_email, guardian_linked, findable_by_contact';
+/** `restricted` (migration protect_minors): the viewer got a possible minor's
+ *  reduced card. False once the view says the column doesn't exist yet — reads
+ *  then run without it (and every card counts as full, as before). */
+let viewHasRestricted = true;
+const playerSelect = () => (viewHasRestricted ? `${PLAYER_SELECT_BASE}, restricted` : PLAYER_SELECT_BASE);
+const isMissingRestricted = (err: { code?: string; message?: string } | null | undefined): boolean =>
+  !!err && (['42703', 'PGRST204'].includes(err.code ?? '') || /restricted/i.test(err.message ?? ''));
+/** Run a players_view read with `restricted`, retrying once without it before the migration. */
+async function readPlayers(run: (cols: string) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>): Promise<{ data: unknown; error: { code?: string; message?: string } | null }> {
+  const res = await run(playerSelect());
+  if (viewHasRestricted && isMissingRestricted(res.error)) {
+    viewHasRestricted = false;
+    return run(playerSelect());
+  }
+  return res;
+}
 
 export async function getPlayers(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) return demo.players;
-  const { data, error } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).order('full_name');
+  const { data, error } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).order('full_name'));
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {
   if (!isSupabaseConfigured || !supabase) return demo.players.find((p) => p.id === id) ?? null;
-  const { data, error } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).eq('id', id).single();
+  const { data, error } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).eq('id', id).single());
   if (error || !data) return null;
   return toPlayer(data as PlayerRow);
 }
@@ -844,11 +872,10 @@ export async function searchPlayers(opts: PlayerSearch): Promise<Player[]> {
     return age >= lo && age <= hi;
   };
   if (!isSupabaseConfigured || !supabase) {
-    const digits = q.replace(/\D/g, '');
     return demo.players.filter((p) => {
       const nameHit = !q || p.fullName.toLowerCase().includes(q.toLowerCase());
       const contactHit = contact === 'email' ? p.email?.toLowerCase() === q.toLowerCase()
-        : contact === 'phone' ? !!p.phone && p.phone.replace(/\D/g, '').endsWith(digits.slice(-10)) : false;
+        : contact === 'phone' ? samePhone(p.phone, q) : false;
       return (contact ? contactHit : nameHit)
         && (!opts.sports?.length || opts.sports.some((s) => p.sports.includes(s)))
         && (!opts.cities?.length || opts.cities.some((c) => sameCity(c, p.city)))
@@ -859,20 +886,26 @@ export async function searchPlayers(opts: PlayerSearch): Promise<Player[]> {
   }
   let ids: string[] | null = null;
   if (contact) {
-    const { data, error } = await withTimeout(supabase.rpc('discover_player_by_contact', { p_query: q }));
+    // Phones go to the server as E.164 — a typed local number is read in the
+    // user's country here, never guessed (as Indian) by the database.
+    const pq = contact === 'phone' ? toE164(q) : q;
+    if (!pq) return [];
+    const { data, error } = await withTimeout(supabase.rpc('discover_player_by_contact', { p_query: pq }));
     if (error) throw new Error(error.message.includes('Too many') ? 'Too many contact searches — try again in an hour.' : 'Couldn’t search by contact just now.');
     ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
     if (!ids.length) return [];
   }
-  let req = supabase.from(PLAYERS_READ).select(PLAYER_SELECT).order('full_name').limit(50);
-  if (ids) req = req.in('id', ids);
-  else if (q) req = req.ilike('full_name', `%${q}%`);
-  if (opts.sports?.length) req = req.overlaps('sports', opts.sports);
-  if (opts.cities?.length) req = req.or(opts.cities.map((c) => `city.ilike.${c.replace(/[,()]/g, ' ').trim()}`).join(','));
-  if (opts.gender) req = req.eq('gender', opts.gender);
-  if (opts.age) { const [lo, hi] = AGE_RANGE[opts.age]; req = req.gte('age', lo).lte('age', hi); }
-  if (opts.verifiedOnly) req = req.eq('verification->>status', 'approved');
-  const { data, error } = await req;
+  const { data, error } = await readPlayers((cols) => {
+    let req = supabase!.from(PLAYERS_READ).select(cols).order('full_name').limit(50);
+    if (ids) req = req.in('id', ids);
+    else if (q) req = req.ilike('full_name', `%${q}%`);
+    if (opts.sports?.length) req = req.overlaps('sports', opts.sports);
+    if (opts.cities?.length) req = req.or(opts.cities.map((c) => `city.ilike.${c.replace(/[,()]/g, ' ').trim()}`).join(','));
+    if (opts.gender) req = req.eq('gender', opts.gender);
+    if (opts.age) { const [lo, hi] = AGE_RANGE[opts.age]; req = req.gte('age', lo).lte('age', hi); }
+    if (opts.verifiedOnly) req = req.eq('verification->>status', 'approved');
+    return req;
+  });
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
 }
@@ -1000,7 +1033,8 @@ export async function getCities(): Promise<string[]> {
   let raw: (string | null | undefined)[];
   if (!isSupabaseConfigured || !supabase) raw = demo.players.map((p) => p.city);
   else {
-    const { data, error } = await supabase.from('players').select('city').not('city', 'is', null).limit(5000);
+    // players_view: a minor's city is only returned to their circle (protect_minors).
+    const { data, error } = await supabase.from(PLAYERS_READ).select('city').not('city', 'is', null).limit(5000);
     if (error || !data) return [];
     raw = data.map((r) => r.city as string | null);
   }
@@ -1504,9 +1538,10 @@ export async function setTournamentReminderLeads(tournamentId: string, minutes: 
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-/** Upload a picked image to the public `media` bucket (migration 0038) and return
- *  its public URL — the only kind of image URL other devices can open. Demo mode
- *  is single-device, so the local URI is returned as-is. */
+/** Upload a picked image and return what to store: logos/banners → the public
+ *  `media` bucket (migration 0038) and its public URL; player photos → the
+ *  private `player-photos` bucket and a `private://` ref (render it with
+ *  useImageUri). Demo mode is single-device, so the local URI is returned as-is. */
 export async function uploadImage(img: PickedImage, kind: ImageKind): Promise<string> {
   if (!isSupabaseConfigured || !supabase) return img.uri;
   const { data: auth } = await supabase.auth.getUser();
@@ -1517,7 +1552,16 @@ export async function uploadImage(img: PickedImage, kind: ImageKind): Promise<st
   const bytes = await (await fetch(img.uri)).arrayBuffer();
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('That image is over 5 MB — pick a smaller one.');
   const path = mediaPath(uid, kind, extForMime(img.mimeType), Date.now(), Math.random().toString(36).slice(2, 8));
-  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType: img.mimeType ?? 'image/jpeg', upsert: false });
+  const contentType = img.mimeType ?? 'image/jpeg';
+  // Player photos go to the PRIVATE bucket (protect_minors): the row stores a
+  // `private://` ref and viewers get signed URLs, so an under-18's photo is never
+  // world-readable. Before that migration the bucket is missing → public as before.
+  if (isPrivateImageKind(kind)) {
+    const { error } = await supabase.storage.from(PLAYER_PHOTO_BUCKET).upload(path, bytes, { contentType, upsert: false });
+    if (!error) return privateImageRef(PLAYER_PHOTO_BUCKET, path);
+    if (!/bucket not found/i.test(error.message)) throw new Error(error.message);
+  }
+  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType, upsert: false });
   if (error) {
     if (/bucket not found/i.test(error.message)) throw new Error('Photo uploads aren’t switched on yet.');
     throw new Error(error.message);
@@ -2158,7 +2202,9 @@ export async function findPlayerByPhone(phone: string): Promise<Player | null> {
   }
   // Live: phone is a private column — an exact-match server lookup returns just
   // the person's id (rate-limited), then we read their public profile.
-  const { data, error } = await withTimeout(supabase.rpc('find_player_by_phone', { p_phone: normalizePhone(phone) }));
+  const e164 = toE164(phone);
+  if (!e164) return null;
+  const { data, error } = await withTimeout(supabase.rpc('find_player_by_phone', { p_phone: e164 }));
   if (error) throw new Error(error.message);
   const id = (data as { id: string }[] | null)?.[0]?.id;
   return id ? getPlayer(id) : null;
@@ -2219,12 +2265,12 @@ export async function invitePerson(args: { name: string; phone?: string; email?:
   const existing = (phone ? await findPlayerByPhone(phone) : null) ?? (email ? await findPlayerByEmail(email) : null);
   if (existing) return { player: existing, status: 'existing' };
   if (!isSupabaseConfigured || !supabase) {
-    const p = addPlayer({ fullName: name, sports: [], phone: phone ? normalizePhone(phone) : undefined, email: email || undefined, invited: true });
+    const p = addPlayer({ fullName: name, sports: [], phone: toE164(phone) || undefined, email: email || undefined, invited: true });
     return { player: p, status: 'invited' };
   }
   const { data, error } = await supabase
     .from('players')
-    .insert({ full_name: name, sports: [], phone: phone ? normalizePhone(phone) : null, email: email ?? null, phone_verified: false })
+    .insert({ full_name: name, sports: [], phone: toE164(phone) || null, email: email ?? null, phone_verified: false })
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create the invite');
@@ -2338,13 +2384,13 @@ export async function invitePlayer(args: {
   }
   // New number → create a pending invited player (phone stored normalised).
   if (!isSupabaseConfigured || !supabase) {
-    const player = addPlayer({ fullName: newName, sports: [args.sport], houseName: args.teamName, phone: normalizePhone(phone), phoneVerified: false, invited: true, jerseyNo: args.jerseyNo });
+    const player = addPlayer({ fullName: newName, sports: [args.sport], houseName: args.teamName, phone: toE164(phone) || undefined, phoneVerified: false, invited: true, jerseyNo: args.jerseyNo });
     await appendRoster(player.id);
     const madeCaptain = await maybeSetCaptain(player.id);
     return { player, status: 'invited', madeCaptain };
   }
   const { data, error } = await supabase.from('players')
-    .insert({ full_name: newName, sports: [args.sport], house_name: args.teamName, phone: normalizePhone(phone), phone_verified: false, jersey_no: args.jerseyNo ?? null })
+    .insert({ full_name: newName, sports: [args.sport], house_name: args.teamName, phone: toE164(phone) || null, phone_verified: false, jersey_no: args.jerseyNo ?? null })
     .select('id').single();
   if (error || !data) throw new Error(error?.message ?? 'Could not add player');
   const p = await getPlayer(data.id as string);
@@ -3157,6 +3203,8 @@ export async function getFollows(profileId?: string): Promise<string[]> {
   return data.map((r) => `${r.target_type}:${r.target_id}`);
 }
 
+export const FOLLOW_MINOR_REFUSED = 'Only their teammates, coaches, tournament organisers and parent/guardian can follow a player under 18.';
+
 export async function setFollow(
   targetType: FollowTargetType,
   targetId: string,
@@ -3165,7 +3213,10 @@ export async function setFollow(
 ): Promise<void> {
   if (!isSupabaseConfigured || !supabase || !profileId) return; // demo: followStore only
   if (follow) {
-    await supabase.from('follows').upsert({ follower_id: profileId, target_type: targetType, target_id: targetId });
+    const { error } = await supabase.from('follows').upsert({ follower_id: profileId, target_type: targetType, target_id: targetId });
+    // protect_minors: an under-18 can be followed only by their teammates, coaches,
+    // tournament/org people and guardian — the server refuses anyone else.
+    if (error) throw new Error(error.code === '42501' ? FOLLOW_MINOR_REFUSED : error.message);
   } else {
     await supabase
       .from('follows')
@@ -3273,14 +3324,14 @@ export async function getRoster(teamName: string, sport: SportId, teamId?: strin
     : await supabase.from('teams').select('id, roster').eq('name', teamName).eq('sport', sport).limit(1);
   const explicit = (teamRows?.[0]?.roster ?? null) as string[] | null;
   if (explicit && explicit.length) {
-    const { data } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).in('id', explicit);
+    const { data } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).in('id', explicit));
     return (data as PlayerRow[] | null)?.map(toPlayer) ?? [];
   }
-  const { data, error } = await supabase
+  const { data, error } = await readPlayers((cols) => supabase!
     .from(PLAYERS_READ)
-    .select(PLAYER_SELECT)
+    .select(cols)
     .eq('house_name', teamName)
-    .contains('sports', [sport]);
+    .contains('sports', [sport]));
   if (error || !data) return [];
   return (data as PlayerRow[]).map(toPlayer);
 }
@@ -3348,7 +3399,7 @@ export async function createPlayer(input: NewPlayer, profileId?: string): Promis
       return { ...existing, sports: merged };
     }
   }
-  const phone = input.phone ? normalizePhone(input.phone) : undefined;
+  const phone = toE164(input.phone) || undefined;
   if (!isSupabaseConfigured || !supabase) return addPlayer({ ...input, phone });
   const { data, error } = await supabase
     .from('players')
@@ -3376,7 +3427,8 @@ export type PlayerPatch = Partial<
 
 /** Where verification documents and support cases are routed for the support team.
  *  Kept in sync with SUPPORT_EMAIL in supabase/functions/support-escalate. */
-export const SUPPORT_EMAIL = 'sportnnote@gmail.com';
+// SD-151: one source of truth (core/hosts.ts, EXPO_PUBLIC_SUPPORT_EMAIL; default unchanged).
+export { SUPPORT_EMAIL } from '../core/hosts';
 
 /** Details of an escalated support case (see data/supportKB.ts SupportCaseContext). */
 export interface SupportCaseInput {
@@ -3424,9 +3476,27 @@ export async function deleteMyAccount(): Promise<string | null> {
   }
 }
 
+/** Numbers are stored as E.164 (+…). A value that can't be parsed (an old,
+ *  country-less row left as it was) is kept as typed — screens validate edits. */
+/** A contact number for a listing / club / org / event: E.164 when it parses,
+ *  else as typed (it's shown, not used as an identity). */
+function contactPhone(v?: string | null): string | null {
+  const t = (v ?? '').trim();
+  return t ? toE164(t) || t : null;
+}
+
+function canonicalPhonePatch(patch: PlayerPatch): PlayerPatch {
+  const fix = (v?: string) => (v && v.trim() ? toE164(v) || v.trim() : v);
+  const out: PlayerPatch = { ...patch };
+  if (patch.phone !== undefined) out.phone = fix(patch.phone);
+  if (patch.guardian?.phone) out.guardian = { ...patch.guardian, phone: fix(patch.guardian.phone) };
+  return out;
+}
+
 /** Update a player's details — your own, or (parity #12) an unclaimed player you
  *  manage. Throws a friendly error when the server refused or matched no row. */
-export async function updatePlayer(id: string, patch: PlayerPatch): Promise<void> {
+export async function updatePlayer(id: string, rawPatch: PlayerPatch): Promise<void> {
+  const patch = canonicalPhonePatch(rawPatch);
   if (!isSupabaseConfigured || !supabase) {
     const p = demo.players.find((x) => x.id === id);
     if (p) Object.assign(p, patch);
@@ -3632,7 +3702,7 @@ export async function getPendingVerifications(): Promise<Player[]> {
   if (!isSupabaseConfigured || !supabase) {
     return demo.players.filter((p) => p.verification?.status === 'pending');
   }
-  const { data } = await supabase.from(PLAYERS_READ).select(PLAYER_SELECT).eq('verification->>status', 'pending');
+  const { data } = await readPlayers((cols) => supabase!.from(PLAYERS_READ).select(cols).eq('verification->>status', 'pending'));
   return (data as PlayerRow[] | null)?.map(toPlayer) ?? [];
 }
 
@@ -3713,7 +3783,7 @@ export async function createListing(input: NewListing): Promise<Listing> {
       details: input.details,
       preferred_date: input.preferredDate ?? null,
       level: input.level ?? null,
-      contact_phone: input.contactPhone ?? null,
+      contact_phone: contactPhone(input.contactPhone),
       contact_verified: input.contactVerified ?? false,
     })
     .select(LISTING_SELECT)
@@ -3793,7 +3863,7 @@ export async function createMyPlayer(profileId: string): Promise<string> {
 
   const { data, error } = await supabase
     .from('players')
-    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: prof?.phone ? normalizePhone(prof.phone) : null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null, email: authEmail, email_verified: emailVerified })
+    .insert({ profile_id: profileId, full_name: prof?.full_name ?? 'Player', sports: [], phone: (prof?.phone && (toE164(prof.phone) || prof.phone)) || null, dob: prof?.dob ?? null, guardian: prof?.guardian ?? null, email: authEmail, email_verified: emailVerified })
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Could not create your profile');
@@ -3812,6 +3882,8 @@ export interface TournamentDetails {
   about?: string | null;
   organiserPhone?: string | null;
   organiserEmail?: string | null;
+  /** SD-150: the venue's IANA zone */
+  timeZone?: string | null;
 }
 
 /** Save tournament details. false = the database doesn't have the columns yet
@@ -3831,10 +3903,17 @@ export async function saveTournamentDetails(id: string, d: TournamentDetails): P
   if (d.grounds !== undefined) row.grounds = d.grounds;
   if (d.eventCategory !== undefined) row.event_category = d.eventCategory;
   if (d.about !== undefined) row.about = d.about ? d.about.slice(0, 4000) : null;
-  if (d.organiserPhone !== undefined) row.organiser_phone = d.organiserPhone?.trim() || null;
+  if (d.organiserPhone !== undefined) row.organiser_phone = contactPhone(d.organiserPhone);
   if (d.organiserEmail !== undefined) row.organiser_email = d.organiserEmail?.trim() || null;
+  if (d.timeZone !== undefined) row.time_zone = d.timeZone || null;
   if (!Object.keys(row).length) return true;
-  const res = await supabase.from('tournaments').update(row).eq('id', id).select('id');
+  let res = await supabase.from('tournaments').update(row).eq('id', id).select('id');
+  if (res.error && row.time_zone !== undefined && (res.error.code === '42703' || res.error.code === 'PGRST204')) {
+    // No time_zone column yet (SD-150 migration not run): save the rest.
+    delete row.time_zone;
+    if (!Object.keys(row).length) return false;
+    res = await supabase.from('tournaments').update(row).eq('id', id).select('id');
+  }
   if (res.error && (res.error.code === '42703' || res.error.code === 'PGRST204')) {
     // No detail columns yet: keep at least the logo (an older column).
     if (row.logo_url !== undefined) await supabase.from('tournaments').update({ logo_url: row.logo_url }).eq('id', id);
@@ -3952,7 +4031,7 @@ export async function createTournament(input: NewTournament): Promise<Tournament
   return { ...tournament, ...details, profileSaved } as Tournament & { profileSaved: boolean };
 }
 
-const DETAIL_KEYS = ['logoUrl', 'bannerUrl', 'city', 'grounds', 'eventCategory', 'about', 'organiserPhone', 'organiserEmail'] as const;
+const DETAIL_KEYS = ['logoUrl', 'bannerUrl', 'city', 'grounds', 'eventCategory', 'about', 'organiserPhone', 'organiserEmail', 'timeZone'] as const;
 function pickDetails(x: TournamentDetails): TournamentDetails {
   const out: Record<string, unknown> = {};
   for (const k of DETAIL_KEYS) if (x[k] !== undefined) out[k] = x[k];
@@ -4303,7 +4382,7 @@ export async function createOrganization(input: NewOrganization, creatorPlayerId
   } else {
     const { data, error } = await supabase
       .from('organizations')
-      .insert({ name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: input.phone ?? null, members: [] })
+      .insert({ name: input.name, type: input.type ?? null, city: input.city ?? null, email: input.email ?? null, phone: contactPhone(input.phone), members: [] })
       .select(ORG_SELECT)
       .single();
     if (error || !data) throw new Error(error?.message ?? 'Could not create community');
@@ -4586,7 +4665,7 @@ export async function updateOrganization(orgId: string, patch: OrgPatch): Promis
     .from('organizations')
     .update({
       name: patch.name, type: patch.type ?? null, city: patch.city ?? null,
-      email: patch.email ?? null, phone: patch.phone ?? null, bio: patch.bio ?? null,
+      email: patch.email ?? null, phone: contactPhone(patch.phone), bio: patch.bio ?? null,
       academic_years: patch.academicYears ?? null,
       graduating_standard: patch.graduatingStandard ?? null,
     })
@@ -4712,7 +4791,7 @@ export async function createClub(input: NewClub): Promise<Club> {
       .insert({
         name: input.name.trim(), short_name: shortName, logo_url: input.logoUrl ?? null,
         color_hex: input.colorHex ?? null, city: input.city ?? null, about: input.about ?? null,
-        contact_phone: input.contactPhone ?? null, contact_email: input.contactEmail ?? null,
+        contact_phone: contactPhone(input.contactPhone), contact_email: input.contactEmail ?? null,
         org_id: input.orgId ?? null, created_by: input.createdBy ?? null,
       })
       .select(CLUB_COLS)
@@ -4785,7 +4864,7 @@ export async function updateClub(clubId: string, patch: Partial<Omit<Club, 'id' 
     ...(patch.colorHex !== undefined ? { color_hex: patch.colorHex } : {}),
     ...(patch.city !== undefined ? { city: patch.city } : {}),
     ...(patch.about !== undefined ? { about: patch.about } : {}),
-    ...(patch.contactPhone !== undefined ? { contact_phone: patch.contactPhone } : {}),
+    ...(patch.contactPhone !== undefined ? { contact_phone: contactPhone(patch.contactPhone) } : {}),
     ...(patch.contactEmail !== undefined ? { contact_email: patch.contactEmail } : {}),
   }).eq('id', clubId).select('id');
   assertUpdated(res, 'team');

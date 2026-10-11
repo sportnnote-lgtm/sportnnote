@@ -7,7 +7,8 @@ import { theme } from '../core/theme';
 import { pickImage } from '../core/photo';
 import { notice } from '../core/confirm';
 import { isSupabaseConfigured } from '../core/supabase';
-import { displayableImage, type ImageKind } from '../core/imageUrl';
+import { type ImageKind } from '../core/imageUrl';
+import { useImageUri } from '../data/useImageUri';
 import { uploadImage } from '../data/repos';
 
 export function LogoPicker({
@@ -56,7 +57,8 @@ export function LogoPicker({
   };
 
   // Live: an old device-local URI can't be shown here — treat it as unset.
-  const shown = displayableImage(logo, !isSupabaseConfigured || uploading);
+  // A private player photo (protect_minors) is shown via a signed URL.
+  const shown = useImageUri(logo, !isSupabaseConfigured || uploading);
   if (!shown && !canManage) return null; // viewers see nothing when there's no image
 
   const banner = shape === 'banner';

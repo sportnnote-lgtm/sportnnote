@@ -6,6 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
+import { PhoneField } from '../components/PhoneField';
+import { samePhone } from '../core/phone';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, getPlayer, createListing } from '../data/repos';
@@ -57,7 +59,7 @@ export default function CreateListingScreen({ navigation }: Props) {
   }, [profile?.id]);
 
   // The shared number counts as verified only if it's the profile's verified phone.
-  const contactVerified = !!verifiedPhone && phone.trim() === verifiedPhone;
+  const contactVerified = !!verifiedPhone && samePhone(phone, verifiedPhone);
 
   async function submit() {
     if (isTeamKind(kind) && !teamName.trim()) return setError('Enter your team name.');
@@ -142,7 +144,7 @@ export default function CreateListingScreen({ navigation }: Props) {
           placeholder={`What ${getSport(sport).name.toLowerCase()} ${isTeamKind(kind) ? 'your team needs' : 'you’re looking for'} — availability, level, timing…`}
           multiline
         />
-        <TextField label="Contact number (WhatsApp)" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" />
+        <PhoneField label="Contact number (WhatsApp)" value={phone} onChange={setPhone} optional />
         <Text style={textStyles.muted}>
           Shared on the post so interested people can reach you.
           {phone.trim()

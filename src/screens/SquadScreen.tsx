@@ -4,7 +4,7 @@
  *  already on SportnNote — never a bare typed name. */
 import { notice } from '../core/confirm';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, Text, Image, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -15,14 +15,15 @@ import { EmptyState, Card, Button, Pill, ScreenTitle, SelectChip, textStyles, pl
 import { getSport } from '../sports/registry';
 import { getTeamSummary, getRoster, createInvite, getTeamLeaders, setTeamLeaders, setTeamAdmins, getMyPlayerId, getTeams, getPlayerEditAccess, getTeamPlayerRoles, setTeamPlayerRoles } from '../data/repos';
 import { rolesForSport, sportHasRoles } from '../data/teamRoles';
-import { displayableImage } from '../core/imageUrl';
-import { isSupabaseConfigured } from '../core/supabase';
+import { PlayerPhoto } from '../components/PlayerPhoto';
+import { avatarInitials } from '../core/minorPrivacy';
 import type { EditAccess } from '../core/playerEditAccess';
 import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { useCaptainships, useTeamPermission } from '../data/hooks';
 import { nextLeaders } from '../core/teamPermissions';
 import { confirmAction } from '../core/confirm';
 import { useAuth } from '../core/auth';
+import { APP_HOST } from '../core/hosts';
 import { RemindInstall } from '../components/RemindInstall';
 import type { Player, SportId, TeamLeadership, TeamSummary } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -183,18 +184,15 @@ export default function SquadScreen() {
             const sport = teamSport ?? (team.sports.length === 1 ? team.sports[0] : null);
             const showRoles = !!canManage && !!sport && sportHasRoles(sport);
             const pRoles = roles[p.id] ?? [];
-            const photo = displayableImage(p.photoUrl, !isSupabaseConfigured);
             return (
               <Card key={p.id} style={{ gap: theme.spacing(2) }}>
                 <View style={st.playerRow}>
                   <View style={[st.avatar, { backgroundColor: (team.colorHex ?? theme.colors.surfaceAlt) + '33' }]}>
-                    {photo ? (
-                      <Image source={{ uri: photo }} style={st.avatarImg} accessibilityIgnoresInvertColors />
-                    ) : (
+                    <PlayerPhoto url={p.photoUrl} style={st.avatarImg} fallback={
                       <Text style={[st.avatarText, { color: team.colorHex ?? theme.colors.primary }]}>
-                        {p.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                        {avatarInitials(p.fullName)}
                       </Text>
-                    )}
+                    } />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={textStyles.body}>{p.fullName}{p.jerseyNo ? ` · #${p.jerseyNo}` : ''}{p.invited ? '  ⏳' : ''}</Text>
@@ -277,7 +275,7 @@ export default function SquadScreen() {
           />
           {inviteCode && (
             <Text style={st.link} selectable>
-              Code: {inviteCode}{'\n'}sportnnote.in/join/{inviteCode}
+              Code: {inviteCode}{'\n'}{APP_HOST}/join/{inviteCode}
             </Text>
           )}
         </Card>}

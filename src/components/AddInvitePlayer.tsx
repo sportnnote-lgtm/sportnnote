@@ -16,8 +16,9 @@ import { looksLikeContact } from '../core/contactQuery';
 import { canPickContact, pickContact, canPaste, pasteText } from '../core/pickContact';
 import { notify } from '../core/notifications';
 import { openWhatsApp, openSms } from '../core/connect';
+import { preferredChat } from '../core/chatRegion';
 import { provisionalInviteMessage, realName } from '../core/invite';
-import { isValidPhone } from '../core/phone';
+import { isValidPhone, toE164, examplePhone, defaultPhoneCountry, phoneHelp } from '../core/phone';
 import { reportError } from '../core/telemetry';
 import type { Player, SportId } from '../core/types';
 import { RemindInstall } from './RemindInstall';
@@ -119,7 +120,7 @@ export function AddInvitePlayer({
       if (!c) return;
       const num = c.phones.find((n) => isValidPhone(n)) ?? c.phones[0];
       if (!num) { setNote('That contact has no mobile number.'); return; }
-      setPhone(num.trim()); setName(c.name ?? '');
+      setPhone(toE164(num) || num.trim()); setName(c.name ?? '');
     } catch (e) {
       reportError(e);
       setNote(Platform.OS === 'web' ? 'Couldn’t open your contacts — paste or type the number instead.' : 'Couldn’t open your contacts — allow SportnNote to access them in Settings, or type the number.');
@@ -165,9 +166,12 @@ export function AddInvitePlayer({
         setLastInvite(null);
       } else {
         const msg = inviteMsg(res.player.id, res.player.fullName, !!cap);
-        openWhatsApp(phone, msg);
-        setLastInvite({ phone, msg }); // keep it so they can also send by SMS
-        setNote(`⏳ Invited ${realName(res.player.fullName) || 'them'}${cap ? ' as captain' : ''} — WhatsApp opened. Didn’t send it? Use WhatsApp / SMS below, or “📤 Invite again” next to their name any time. They’re confirmed once they sign up.`);
+        // SD-151: WhatsApp where it's the everyday chat app (India, Gulf, UK, SG/MY),
+        // otherwise the phone's Messages app. Both stay one tap away below.
+        const chat = preferredChat();
+        if (chat === 'whatsapp') openWhatsApp(phone, msg); else openSms(phone, msg);
+        setLastInvite({ phone, msg }); // keep it so they can also send the other way
+        setNote(`⏳ Invited ${realName(res.player.fullName) || 'them'}${cap ? ' as captain' : ''} — ${chat === 'whatsapp' ? 'WhatsApp' : 'Messages'} opened. Didn’t send it? Use ${chat === 'whatsapp' ? 'WhatsApp / SMS' : 'SMS / WhatsApp'} below, or “📤 Invite again” next to their name any time. They’re confirmed once they sign up.`);
       }
       setPhone(''); setName(''); setJersey(''); setMatched(null); setPeople([]);
       onChanged();
@@ -180,6 +184,7 @@ export function AddInvitePlayer({
   };
 
   const registered = async (id: string) => { await markPlayerRegistered(id); onChanged(); };
+  const waFirst = preferredChat() === 'whatsapp';
 
   return (
     <View style={st.inviteCard}>
@@ -200,7 +205,7 @@ export function AddInvitePlayer({
           )}
 
           {/* One box: number (the identity), name or email — or straight from contacts. */}
-          <TextField label="Mobile number, name or email" value={phone} onChange={(v) => { setPhone(v); setNote(null); }} placeholder="98765 43210" autoCapitalize="none" />
+          <TextField label="Mobile number, name or email" value={phone} onChange={(v) => { setPhone(v); setNote(null); }} placeholder={`e.g. ${examplePhone(defaultPhoneCountry())}`} autoCapitalize="none" />
           {(canPickContact() || canPaste()) && (
             <View style={st.sourceRow}>
               {canPickContact() && <Text style={st.sourceBtn} accessibilityRole="button" onPress={() => void fromContacts()}>📇 Choose from contacts</Text>}
@@ -221,7 +226,7 @@ export function AddInvitePlayer({
               {!searching && people.length === 0 && <Text style={textStyles.muted}>No one on SportnNote by that name. Add them with their mobile number{canPickContact() ? ' or from your contacts' : ''}.</Text>}
             </>
           ) : !valid && !isEmail ? (
-            <Text style={textStyles.muted}>Enter the full 10-digit mobile number.</Text>
+            <Text style={textStyles.muted}>{phoneHelp()}</Text>
           ) : looking ? (
             <Text style={textStyles.muted}>{isEmail ? 'Checking this email…' : 'Checking this number…'}</Text>
           ) : matched && matchedReported ? (
@@ -246,7 +251,7 @@ export function AddInvitePlayer({
 
           {(valid || (isEmail && matched)) && !looking && !(matched && (matchedReported || existingIds.includes(matched.id))) && (
             <Button
-              label={busy ? 'Adding…' : matched ? `＋ Add ${realName(matched.fullName) || 'them'} to ${teamName}` : '＋ Add & invite (WhatsApp / SMS)'}
+              label={busy ? 'Adding…' : matched ? `＋ Add ${realName(matched.fullName) || 'them'} to ${teamName}` : (waFirst ? '＋ Add & invite (WhatsApp / SMS)' : '＋ Add & invite (SMS / WhatsApp)')}
               onPress={() => void submit()}
               disabled={busy}
             />
@@ -255,8 +260,9 @@ export function AddInvitePlayer({
           {lastInvite && (
             <View style={st.sendRow}>
               <Text style={st.sendVia}>Send invite via:</Text>
+              {!waFirst && <Text style={st.sendLink} accessibilityRole="button" onPress={() => openSms(lastInvite.phone, lastInvite.msg)}>SMS</Text>}
               <Text style={st.sendLink} accessibilityRole="button" onPress={() => openWhatsApp(lastInvite.phone, lastInvite.msg)}>WhatsApp</Text>
-              <Text style={st.sendLink} accessibilityRole="button" onPress={() => openSms(lastInvite.phone, lastInvite.msg)}>SMS</Text>
+              {waFirst && <Text style={st.sendLink} accessibilityRole="button" onPress={() => openSms(lastInvite.phone, lastInvite.msg)}>SMS</Text>}
             </View>
           )}
 

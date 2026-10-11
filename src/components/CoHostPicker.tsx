@@ -7,10 +7,15 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, FieldLabel, textStyles } from './ui';
+import { PhoneField } from './PhoneField';
+import { formatPhone } from '../core/phone';
 import { lookupPeople, invitePerson } from '../data/repos';
 import { openWhatsApp, openSms } from '../core/connect';
+import { preferredChat } from '../core/chatRegion';
 import { sendInviteEmail, inviteMessage, joinLink, inviteLabel } from '../core/invite';
 import type { Player } from '../core/types';
+
+const waFirst = preferredChat() === 'whatsapp';
 
 export interface CoHost { id: string; name: string; invited?: boolean }
 
@@ -142,7 +147,7 @@ export function CoHostPicker({
             <TouchableOpacity key={p.id} accessibilityRole="button" activeOpacity={0.8} style={st.result} onPress={() => add(p)}>
               <View style={{ flex: 1 }}>
                 <Text style={textStyles.body}>{p.fullName}</Text>
-                {(p.city || p.phone) ? <Text style={textStyles.muted}>{[p.city, p.phone].filter(Boolean).join(' · ')}</Text> : null}
+                {(p.city || p.phone) ? <Text style={textStyles.muted}>{[p.city, p.phone && formatPhone(p.phone)].filter(Boolean).join(' · ')}</Text> : null}
               </View>
               <Text style={st.add}>+ Add</Text>
             </TouchableOpacity>
@@ -159,14 +164,16 @@ export function CoHostPicker({
               <Text style={textStyles.h3}>Invite to SportnNote</Text>
               <Text style={textStyles.muted}>They’ll get a link to install the app &amp; register, and join as a co-host.</Text>
               <TextField label="Name (optional)" value={iName} onChange={setIName} placeholder="They’ll add it when they join" />
-              <View style={st.row}>
-                <View style={st.flex}><TextField label="Phone" value={iPhone} onChange={setIPhone} placeholder="+91…" autoCapitalize="none" /></View>
-                <View style={st.flex}><TextField label="Email" value={iEmail} onChange={setIEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
+              <View style={st.wrapRow}>
+                <View style={st.wrapCell}><PhoneField label="Phone" value={iPhone} onChange={setIPhone} /></View>
+                <View style={st.wrapCell}><TextField label="Email" value={iEmail} onChange={setIEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
               </View>
               <View style={st.chips}>
                 <Button label={busy === 'email' ? 'Sending…' : '📧 Email'} variant="ghost" onPress={() => invite('email')} disabled={!!busy} />
-                <Button label={busy === 'whatsapp' ? 'Opening…' : '💬 WhatsApp'} variant="ghost" onPress={() => invite('whatsapp')} disabled={!!busy} />
+                {/* SD-151: the everyday chat app first (WhatsApp where it's the norm, else SMS). */}
+                {waFirst && <Button label={busy === 'whatsapp' ? 'Opening…' : '💬 WhatsApp'} variant="ghost" onPress={() => invite('whatsapp')} disabled={!!busy} />}
                 <Button label={busy === 'sms' ? 'Opening…' : '✉️ SMS'} variant="ghost" onPress={() => invite('sms')} disabled={!!busy} />
+                {!waFirst && <Button label={busy === 'whatsapp' ? 'Opening…' : '💬 WhatsApp'} variant="ghost" onPress={() => invite('whatsapp')} disabled={!!busy} />}
               </View>
               <Text style={st.link} onPress={() => setInvOpen(false)}>Cancel invite</Text>
             </View>
@@ -184,6 +191,9 @@ const st = StyleSheet.create({
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
+  // Phone + email pairs: side by side when there's room, stacked on a phone.
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
+  wrapCell: { flexGrow: 1, flexBasis: 220, minWidth: 0 },
   flex: { flex: 1 },
   hostChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: theme.spacing(1), paddingHorizontal: theme.spacing(3) },
   hostName: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: '700' },

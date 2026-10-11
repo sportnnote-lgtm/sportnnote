@@ -52,7 +52,7 @@ Each event has a usual range. A time outside it, such as an 800 m typed as 2153 
 - With **Hand** on, the last digit is the tenth: 108 is 10.8, 1053 is 1:05.3. Turning it off brings back the full time you typed.
 - Hand times never count for PBs or records unless your meet is all stopwatches and **Hand-timed meet** is on in **⚙ Points & timing**. Then they count, as do races without a wind reading; wind over +2.0 still doesn't.
 
-> **Tip:** Tap **📤 Share** to send the start list or results, with a live-results link, to WhatsApp.
+> **Tip:** Tap **📤 Share** to send the start list or results, with a live-results link, to WhatsApp, Messages or any chat app.
 
 ## What everyone sees
 - **House table** (Athletics page and **Stats** tab; tied places share points), **🏆 Champions by category**, **Best by event**, **Best athletes (points)** (individual finals only) and **Meet records**. When a school hosts, **School records** show its earlier meets' best marks and its [record board](/guides/school-record-board/).

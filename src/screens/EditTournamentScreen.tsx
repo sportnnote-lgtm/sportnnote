@@ -104,6 +104,7 @@ export default function EditTournamentScreen() {
       organiserPhone: tournament.organiserPhone ?? '',
       organiserEmail: tournament.organiserEmail ?? '',
       about: tournament.about ?? '',
+      timeZone: tournament.timeZone ?? '',
     });
     setLoaded(true);
   }, [tournament, loaded]);

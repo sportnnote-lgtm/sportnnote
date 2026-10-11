@@ -75,6 +75,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeEqual } from '../_shared/guard.ts';
 import { webPushToProfiles } from '../_shared/webpush.ts';
+import { allowedPlayerFollows, keepAllowedFollows } from '../_shared/minorFollows.ts';
 import { alertText, eventName, parseAlert, phaseKind, recordsSetBy, type AlertMedal, type RecordSet } from '../_shared/resultAlert.ts';
 
 const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET') ?? '';
@@ -104,10 +105,11 @@ async function followersOf(targetType: TargetType, ids: string[]): Promise<Follo
   if (!ids.length) return [];
   const q = (cols: string) => supabase.from('follows').select(cols).eq('target_type', targetType).in('target_id', ids);
   const withPrefs = await q('follower_id, target_type, target_id, prefs');
-  if (!withPrefs.error) return (withPrefs.data ?? []) as unknown as FollowRow[];
   // Pre-migration: no prefs column → everyone wants everything.
-  const plain = await q('follower_id, target_type, target_id');
-  return (plain.data ?? []) as unknown as FollowRow[];
+  const rows = ((!withPrefs.error ? withPrefs.data : (await q('follower_id, target_type, target_id')).data) ?? []) as unknown as FollowRow[];
+  // protect_minors (L15): an under-18's alerts reach only their circle + guardian.
+  if (targetType !== 'player' || !rows.length) return rows;
+  return keepAllowedFollows(rows, await allowedPlayerFollows(supabase, ids));
 }
 
 const wants = (p: Prefs, key: AlertKey) => p?.[key] !== false;

@@ -9,6 +9,7 @@ import { ProfileView } from '../components/ProfileView';
 import { useAuth } from '../core/auth';
 import { useFollow, usePlayerProfile } from '../data/hooks';
 import { ageOf } from '../core/age';
+import { guestSeesMembersOnly } from '../core/minorPrivacy';
 import { isGuestSession, promptSignIn } from '../core/guest';
 import { useProfileShare } from '../data/useProfileShare';
 import { getMyPlayerId, getPlayerEditAccess } from '../data/repos';
@@ -43,8 +44,9 @@ export default function PlayerProfileScreen() {
   const shareProfile = useProfileShare(playerId);
   const age = ageOf(player);
   // Logged-out visitors see adult profiles only (DPDP §9): an under-18 — or a
-  // player whose age we don't know — is members-only.
-  if (isGuestSession(authed) && player && (age === undefined || age < 18)) {
+  // player whose age we don't know — is members-only. The server enforces the
+  // same (protect_minors: initials only, no photo/city/school/bio).
+  if (isGuestSession(authed) && guestSeesMembersOnly(player)) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <View style={st.gate}>

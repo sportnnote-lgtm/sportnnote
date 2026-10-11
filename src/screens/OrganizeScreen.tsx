@@ -17,15 +17,17 @@ import { ContextSwitcher } from '../components/ContextSwitcher';
 import type { OrgRequest } from '../core/types';
 import { getSport } from '../sports/registry';
 import { formatDayShort } from '../core/dates';
+import { eventZone, todayIn } from '../core/time';
 import type { RootStackParamList } from '../navigation/types';
 import type { Tournament } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const today = () => new Date().toISOString().slice(0, 10);
+// SD-150: "today" at the venue (tournament zone, else the viewer's), not UTC.
+const today = (t: Tournament) => todayIn(eventZone(t));
 type Status = 'live' | 'upcoming' | 'completed';
 const statusOf = (t: Tournament): Status => {
-  const d = today();
+  const d = today(t);
   if (d < t.startDate) return 'upcoming';
   if (d > t.endDate) return 'completed';
   return 'live';

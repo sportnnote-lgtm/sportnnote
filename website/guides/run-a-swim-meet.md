@@ -46,7 +46,7 @@ A swim meet is a list of events (say 50 m freestyle U12 Girls), each swum in one
 8. Close the heats to seed the final, then tap **🏁 Finish & lock results**. Each check counts swimmers with no time, and the finish lists any new meet record. Medals, house points, records and profiles then update.
 9. Mistake after locking? An organiser can tap **↺ Reopen heats** (until the final has a time) or **↺ Reopen final**, which returns any record it set to the previous holder and removes its house points until you lock it again.
 
-> **Tip:** Tap **📤 Share** to send the start list or results, with a live-results link, to WhatsApp.
+> **Tip:** Tap **📤 Share** to send the start list or results, with a live-results link, to WhatsApp, Messages or any chat app.
 
 ## What everyone sees
 - **House table:** on the Swimming page and the tournament's **Stats** tab. Relays can score double (**⚙ Pool, points & timing**).

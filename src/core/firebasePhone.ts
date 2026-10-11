@@ -17,6 +17,7 @@
  */
 import { Platform } from 'react-native';
 import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
+import { toE164 } from './phone';
 
 // Expo inlines EXPO_PUBLIC_* only for direct `process.env.X` references.
 const config = {
@@ -29,12 +30,9 @@ const config = {
 export const firebasePhoneAvailable = (): boolean =>
   Platform.OS === 'web' && typeof document !== 'undefined' && !!config.apiKey && !!config.projectId && !!config.authDomain;
 
-/** A stored number → E.164 for Firebase. Indian 10-digit mobiles get +91. */
-export function toE164(raw: string): string {
-  const d = raw.replace(/\D/g, '').replace(/^0+/, '');
-  if (d.length === 10) return `+91${d}`;
-  return `+${d}`;
-}
+/** A stored or typed number → E.164 for Firebase (core/phone.ts — no +91 guessing
+ *  beyond the pre-E.164 rows, which were always Indian). */
+export { toE164 };
 
 let confirmation: ConfirmationResult | null = null;
 let verifier: RecaptchaVerifier | null = null;
@@ -76,7 +74,9 @@ export async function sendPhoneCode(phone: string): Promise<void> {
     host.id = 'sn-recaptcha';
     document.body.appendChild(host);
     verifier = new Verifier(auth, host, { size: 'invisible' });
-    confirmation = await signInWithPhoneNumber(auth, toE164(phone), verifier);
+    const e164 = toE164(phone);
+    if (!e164) throw Object.assign(new Error('invalid'), { code: 'auth/invalid-phone-number' });
+    confirmation = await signInWithPhoneNumber(auth, e164, verifier);
   } catch (e) {
     try { verifier?.clear(); } catch { /* ignore */ }
     verifier = null;

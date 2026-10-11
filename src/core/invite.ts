@@ -4,9 +4,10 @@
  *  a mailto fallback so it still works before that function is deployed. */
 import { Linking } from 'react-native';
 import { supabase } from './supabase';
+import { SITE_URL } from './hosts';
 
 /** Marketing site (used only as a demo fallback for invite links). */
-export const APP_INSTALL_URL = 'https://sportnnote.in';
+export const APP_INSTALL_URL = SITE_URL;
 
 export {
   joinLink, reportLink, clubJoinLink, clubJoinDeepLink, parseClubToken, realName,

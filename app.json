@@ -11,8 +11,8 @@
       "bundleIdentifier": "in.sportnnote.app",
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "SportnNote uses the microphone for hands-free voice scoring and navigation.",
-        "NSSpeechRecognitionUsageDescription": "SportnNote uses speech recognition to let you score and navigate by voice.",
+        "NSMicrophoneUsageDescription": "SportnNote uses the microphone for hands-free voice scoring. Audio isn’t recorded or uploaded by SportnNote — only the recognized words are used.",
+        "NSSpeechRecognitionUsageDescription": "SportnNote uses speech recognition to turn your spoken calls (like “goal Rao”) into score entries.",
         "NSContactsUsageDescription": "Allow SportnNote to open your contacts so you can pick a player’s mobile number. Only the contact you pick is used."
       }
     },
@@ -60,6 +60,14 @@
         "expo-contacts",
         {
           "contactsPermission": "Allow SportnNote to open your contacts so you can pick a player’s mobile number. Only the contact you pick is used."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "SportnNote uses the microphone for hands-free voice scoring. Audio isn’t recorded or uploaded by SportnNote — only the recognized words are used.",
+          "speechRecognitionPermission": "SportnNote uses speech recognition to turn your spoken calls (like “goal Rao”) into score entries.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.tts", "com.google.android.as"]
         }
       ]
     ],

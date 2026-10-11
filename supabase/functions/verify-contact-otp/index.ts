@@ -13,6 +13,7 @@
  * Deploy:  supabase functions deploy verify-contact-otp
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { phoneKey } from '../_shared/phone.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -45,10 +46,10 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: 'unauthorized' }, 401);
 
   const svc = createClient(URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: player } = await svc.from('players').select('id, profile_id, guardian').eq('id', playerId).single();
+  const { data: player } = await svc.from('players').select('id, profile_id, email, phone, guardian').eq('id', playerId).single();
   if (!player || player.profile_id !== user.id) return json({ error: 'forbidden' }, 403);
 
-  const { data: otp } = await svc.from('contact_otps').select('code_hash, attempts, expires_at').eq('player_id', playerId).eq('channel', channel).single();
+  const { data: otp } = await svc.from('contact_otps').select('code_hash, attempts, expires_at, target').eq('player_id', playerId).eq('channel', channel).single();
   if (!otp) return json({ verified: false, reason: 'none' });
   if (new Date(otp.expires_at).getTime() < Date.now()) {
     await svc.from('contact_otps').delete().eq('player_id', playerId).eq('channel', channel);
@@ -59,6 +60,16 @@ Deno.serve(async (req) => {
   if (otp.code_hash !== (await sha256(code))) {
     await svc.from('contact_otps').update({ attempts: (otp.attempts ?? 0) + 1 }).eq('player_id', playerId).eq('channel', channel);
     return json({ verified: false, reason: 'mismatch' });
+  }
+
+  // The code proves the address it was SENT to — only verify if that is still the
+  // one on the profile (whole international number for phones, not last-10).
+  const current = channel === 'email' ? String(player.email ?? '').trim().toLowerCase()
+    : phoneKey(channel === 'phone' ? player.phone : (player.guardian as { phone?: string } | null)?.phone);
+  const sentTo = channel === 'email' ? String(otp.target ?? '').trim().toLowerCase() : phoneKey(otp.target);
+  if (!current || current !== sentTo) {
+    await svc.from('contact_otps').delete().eq('player_id', playerId).eq('channel', channel);
+    return json({ verified: false, reason: 'changed' });
   }
 
   // Correct: mark verified and clear the code.

@@ -24,9 +24,9 @@ import { MatchCard } from '../components/MatchCard';
 import { SectionHeader, SECTION_CAP } from '../components/SectionHeader';
 import { getSport, participantMode } from '../sports/registry';
 import { shareMessage } from '../core/share';
-import { tournamentShareText, tournamentLink } from '../core/shareText';
+import { tournamentShareText, tournamentLink, SHARE_BASE } from '../core/shareText';
 import { fixturesPrintHtml, fixturesShareText, type FixtureRow } from '../core/fixturesText';
-import { formatDate, formatTime, zoneAbbrev } from '../core/time';
+import { eventZone, formatDate, formatTime, zoneShortName } from '../core/time';
 import { tournamentStatus, matchProgress } from '../core/tournament';
 import { useAuth } from '../core/auth';
 import { useTournamentById, useTeamSummaries, useFollow, useLeagueData, usePlayers, useOrganizations, useTournamentTeams, useTournamentEntries, useCaptainships } from '../data/hooks';
@@ -69,6 +69,7 @@ import { EVENT_CATEGORIES, inlineFieldKeys } from '../data/tournamentForm';
 import { assignableMatches } from '../data/scorerAssign';
 import { openVenue } from '../core/venue';
 import { openWhatsApp } from '../core/connect';
+import { toE164, formatPhone } from '../core/phone';
 import type { Tournament } from '../core/types';
 
 /** "🏏 T20 · Leather · Turf" — the sport's inline basics (preset + onCreate
@@ -160,7 +161,7 @@ export default function TournamentProfileScreen() {
   }, [nav, tournament, headerManage]);
   // People added as hosts from outside the loaded players (PersonPicker).
   const [extraPeople, setExtraPeople] = useState<Record<string, string>>({});
-  const hostInvite = (name?: string) => tournamentRoleInviteText({ role: 'host', name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in' });
+  const hostInvite = (name?: string) => tournamentRoleInviteText({ role: 'host', name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : SHARE_BASE });
   const playerName = (id: string) => allPlayers.find((p) => p.id === id)?.fullName ?? extraPeople[id];
   const hostOrg = tournament?.hostOrgId ? orgs.find((o) => o.id === tournament.hostOrgId) : undefined;
   // Manage = an individual host, or any member of the hosting org.
@@ -290,17 +291,19 @@ export default function TournamentProfileScreen() {
   );
 
   // Organiser: broadcast the upcoming fixtures (WhatsApp) or print them / save a PDF (web).
+  const evZone = eventZone(tournament);
   const fixtureRows = (): FixtureRow[] => upcomingMatches.map((m) => ({
     startsAt: m.startsAt ?? '',
-    day: m.startsAt ? formatDate(m.startsAt) : '',
-    time: m.startsAt ? formatTime(m.startsAt) : '',
+    day: m.startsAt ? formatDate(m.startsAt, evZone) : '',
+    time: m.startsAt ? formatTime(m.startsAt, evZone) : '',
     home: m.homeTeam.name,
     away: m.awayTeam.name,
     sportIcon: (tournament?.sports.length ?? 0) > 1 ? getSport(m.sport).icon : undefined,
     venue: m.venueName,
     stage: m.group ? `Group ${m.group}` : m.stage ? stageLabel(m.stage) : undefined,
   }));
-  const zone = zoneAbbrev().replace('GMT+5:30', 'IST');
+  // SD-150: shared/printed fixtures are in the venue's zone, with its proper name.
+  const zone = zoneShortName(evZone, upcomingMatches[0]?.startsAt || Date.now());
   const shareFixtures = () => {
     if (!tournament) return;
     void shareMessage(fixturesShareText({ tournament: `${tournament.name} (times ${zone})`, rows: fixtureRows(), link: tournamentLink(tournament.id) }), 'tournament');
@@ -498,7 +501,7 @@ export default function TournamentProfileScreen() {
     }
     setOffTick((n) => n + 1);
   }
-  const officialInvite = (role: OfficialRole) => (name?: string) => tournamentRoleInviteText({ role, name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : 'https://app.sportnnote.in' });
+  const officialInvite = (role: OfficialRole) => (name?: string) => tournamentRoleInviteText({ role, name, inviterName: profile?.fullName, tournamentName: tournament?.name, link: tournament ? tournamentLink(tournament.id) : SHARE_BASE });
   // Fixtures still waiting for a scorer (drives "Assign scorers to fixtures").
   const unscoredCount = assignableMatches(matches).length;
 
@@ -644,12 +647,13 @@ export default function TournamentProfileScreen() {
             )}
 
             {/* Details (parity #09): place, category, sport basics, about, contact. */}
-            {(tournament.city || (tournament.grounds?.length ?? 0) > 0 || tournament.eventCategory) && (
+            {(tournament.city || (tournament.grounds?.length ?? 0) > 0 || tournament.eventCategory || tournament.timeZone) && (
               <View style={st.tags}>
                 {tournament.eventCategory && (
                   <Pill label={EVENT_CATEGORIES.find((c) => c.key === tournament.eventCategory)?.label ?? tournament.eventCategory} />
                 )}
                 {tournament.city ? <Text style={[textStyles.muted, { alignSelf: 'center', color: theme.colors.text }]}>📍 {tournament.city}</Text> : null}
+                {tournament.timeZone ? <Text style={[textStyles.muted, { alignSelf: 'center' }]}>🕑 Times in {zoneShortName(tournament.timeZone)}</Text> : null}
                 {(tournament.grounds ?? []).map((g) => (
                   <TouchableOpacity key={g} accessibilityRole="link" accessibilityLabel={`Open ${g} in maps`} activeOpacity={0.8}
                     onPress={() => openVenue(tournament.city ? `${g}, ${tournament.city}` : g)}>
@@ -672,12 +676,12 @@ export default function TournamentProfileScreen() {
               <Card style={{ gap: theme.spacing(2) }}>
                 <Text style={textStyles.h3}>Contact organiser</Text>
                 <Text style={textStyles.muted}>
-                  {[tournament.hostName, tournament.organiserPhone, tournament.organiserEmail].filter(Boolean).join(' · ')}
+                  {[tournament.hostName, tournament.organiserPhone && formatPhone(tournament.organiserPhone), tournament.organiserEmail].filter(Boolean).join(' · ')}
                 </Text>
                 <View style={st.tags}>
                   {tournament.organiserPhone ? (
                     <>
-                      <Button label="📞 Call" variant="ghost" onPress={() => void Linking.openURL(`tel:${tournament.organiserPhone!.replace(/[^0-9+]/g, '')}`)} />
+                      <Button label="📞 Call" variant="ghost" onPress={() => void Linking.openURL(`tel:${toE164(tournament.organiserPhone) || tournament.organiserPhone!.replace(/[^0-9+]/g, '')}`)} />
                       <Button label="💬 WhatsApp" variant="ghost" onPress={() => openWhatsApp(tournament.organiserPhone)} />
                     </>
                   ) : null}
@@ -964,7 +968,7 @@ export default function TournamentProfileScreen() {
               (() => {
                 const list = matchTab === 'upcoming' ? upcomingMatches : completedMatches;
                 return (showMatches ? list : list.slice(0, SECTION_CAP)).map((m) => (
-                  <MatchCard key={m.id} match={m} onPress={() => openMatch(m)} />
+                  <MatchCard key={m.id} match={m} onPress={() => openMatch(m)} timeZone={tournament?.timeZone} />
                 ));
               })()
             )}

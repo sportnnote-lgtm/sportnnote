@@ -7,7 +7,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Platform, Share } from 'react-native';
 import { theme } from '../core/theme';
 import { openWhatsApp, openSms } from '../core/connect';
+import { preferredChat } from '../core/chatRegion';
 import { provisionalInviteMessage } from '../core/invite';
+
+// SD-151: the everyday chat app first (WhatsApp in India, Gulf, UK, SG/MY; else SMS).
+const waFirst = preferredChat() === 'whatsapp';
 
 export function RemindInstall({
   playerId, name, phone, teamName = 'the team', captain, message, label = '📤 Invite again',
@@ -48,8 +52,9 @@ export function RemindInstall({
       ) : (
         <View style={s.row}>
           <Text style={s.label}>Send again:</Text>
+          {phone && !waFirst ? <Text style={s.link} accessibilityRole="button" accessibilityLabel={`Invite ${name} by SMS`} onPress={() => openSms(phone, msg)}>SMS</Text> : null}
           {phone ? <Text style={s.link} accessibilityRole="button" accessibilityLabel={`Invite ${name} on WhatsApp`} onPress={() => openWhatsApp(phone, msg)}>WhatsApp</Text> : null}
-          {phone ? <Text style={s.link} accessibilityRole="button" accessibilityLabel={`Invite ${name} by SMS`} onPress={() => openSms(phone, msg)}>SMS</Text> : null}
+          {phone && waFirst ? <Text style={s.link} accessibilityRole="button" accessibilityLabel={`Invite ${name} by SMS`} onPress={() => openSms(phone, msg)}>SMS</Text> : null}
           <Text style={s.link} accessibilityRole="button" accessibilityLabel={`Share ${name}'s invite`} onPress={() => void share()}>Share / Copy</Text>
           <Text style={s.close} accessibilityRole="button" accessibilityLabel="Close" onPress={() => { setOpen(false); setNote(null); }}>✕</Text>
         </View>

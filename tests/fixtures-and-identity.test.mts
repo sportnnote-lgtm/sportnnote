@@ -66,22 +66,23 @@ describe('fixtures: knockout round 1', () => {
 
 describe('identity: phone is the primary key', () => {
   test('formatting is irrelevant — same number, same identity', () => {
-    assert.ok(samePhone('+91 98765 43210', '9876543210'));
-    assert.ok(samePhone('+919876543210', '098765 43210'));
+    assert.ok(samePhone('+91 98765 43210', '9876543210', 'IN'));
+    assert.ok(samePhone('+919876543210', '098765 43210', 'IN'));
   });
 
   test('different numbers are different people', () => {
-    assert.equal(samePhone('9876543210', '9876543211'), false);
+    assert.equal(samePhone('9876543210', '9876543211', 'IN'), false);
   });
 
-  test('normalize keeps digits only and drops leading zeros', () => {
-    assert.equal(normalizePhone('+91 (98765) 43210'), '919876543210');
-    assert.equal(normalizePhone('098765-43210'), '9876543210');
+  test('normalize gives full E.164 (+country code), reading local numbers in the given country', () => {
+    assert.equal(normalizePhone('+91 (98765) 43210', 'IN'), '+919876543210');
+    assert.equal(normalizePhone('098765-43210', 'IN'), '+919876543210');
   });
 
-  test('the comparable key is the last 10 digits', () => {
-    assert.equal(phoneKey('+919876543210'), '9876543210');
-    assert.equal(phoneKey('9876543210'), '9876543210');
+  test('the comparable key is the whole international number, not the last 10 digits', () => {
+    assert.equal(phoneKey('+919876543210'), '+919876543210');
+    assert.equal(phoneKey('9876543210'), '+919876543210', 'pre-E.164 rows: bare 10 digits were Indian');
+    assert.notEqual(phoneKey('+19876543210'), phoneKey('+919876543210'));
   });
 
   test('too-short or empty numbers are not usable identities', () => {
@@ -91,8 +92,9 @@ describe('identity: phone is the primary key', () => {
     assert.equal(samePhone('', ''), false, 'blank must never match blank');
   });
 
-  test('a valid number is 8+ digits', () => {
-    assert.ok(isValidPhone('12345678'));
+  test('a valid number is valid for its country (8-digit SG/QA mobiles too)', () => {
+    assert.ok(isValidPhone('9123 4567', 'SG'));
     assert.ok(isValidPhone('+91 98765 43210'));
+    assert.equal(isValidPhone('12345678', 'IN'), false);
   });
 });

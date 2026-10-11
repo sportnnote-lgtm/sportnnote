@@ -5,7 +5,10 @@
  * page in the app (app.sportnnote.in/m/<id>, /t/<id>, /g/<id>).
  */
 
-export const SHARE_BASE = 'https://app.sportnnote.in';
+import { APP_URL, SITE_HOST } from './hosts.ts';
+
+/** The web app's origin (SD-151: from core/hosts.ts — app.sportnnote.in today). */
+export const SHARE_BASE = APP_URL;
 
 export const matchLink = (matchId: string) => `${SHARE_BASE}/m/${matchId}`;
 export const tournamentLink = (tournamentId: string) => `${SHARE_BASE}/t/${tournamentId}`;
@@ -78,7 +81,7 @@ export function matchShareText(m: MatchShareInput): string {
   lines.push('');
   lines.push(m.matchId
     ? `${m.status === 'live' ? 'Follow live' : 'Details'} on SportnNote: ${matchLink(m.matchId)}`
-    : 'Scored on SportnNote — sportnnote.in');
+    : `Scored on SportnNote — ${SITE_HOST}`);
   return lines.join('\n');
 }
 

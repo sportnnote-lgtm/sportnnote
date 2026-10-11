@@ -19,6 +19,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, SelectChip, ScreenTitle, FormError, textStyles } from '../components/ui';
+import { PhoneField } from '../components/PhoneField';
 import { RegistrationBanner } from '../components/RegistrationBanner';
 import { ClubQuickPick } from '../components/ClubQuickPick';
 import { getSport, participantMode } from '../sports/registry';
@@ -32,6 +33,8 @@ import { InviteQrShare } from '../components/InviteQrShare';
 import { confirmAction, notice } from '../core/confirm';
 import { sendInviteEmail, joinLink, inviteMessage, teamAtTournament } from '../core/invite';
 import { openWhatsApp, openSms } from '../core/connect';
+import { whatsappFirst } from '../core/chatRegion';
+import { shareMessage } from '../core/share';
 import { notify } from '../core/notifications';
 import type { SportId, TournamentEntry } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
@@ -178,9 +181,13 @@ export default function TournamentTeamsScreen() {
       notice('Couldn’t copy the link', link);
     }
   }
+  // SD-151: WhatsApp straight away where it's the everyday chat app (India, Gulf,
+  // UK, SG/MY); elsewhere the share sheet (Messages, email, any app).
+  const waFirst = whatsappFirst();
   const shareInviteWhatsApp = (token: string) => {
     const msg = tournamentInviteMessage({ tournamentName: tournament?.name ?? 'our tournament', inviterName: profile?.fullName, token });
-    void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    if (waFirst) void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    else void shareMessage(msg, 'tournament');
   };
 
   // Teams with fixtures in this tournament — removing those loses them from the
@@ -415,7 +422,7 @@ export default function TournamentTeamsScreen() {
                 />
                 <Text style={st.code} selectable>{inviteToken}</Text>
                 <View style={st.chips}>
-                  <Button label="💬 WhatsApp" variant="ghost" onPress={() => shareInviteWhatsApp(inviteToken)} />
+                  <Button label={waFirst ? '💬 WhatsApp' : '📤 Share'} variant="ghost" onPress={() => shareInviteWhatsApp(inviteToken)} />
                   <Button label={copied ? 'Copied ✓' : 'Copy link'} variant="ghost" onPress={() => void copyInviteLink(inviteToken)} />
                 </View>
                 <Text style={textStyles.muted}>Turn this off once every team is in.</Text>
@@ -602,9 +609,9 @@ export default function TournamentTeamsScreen() {
                   {pMode === 'pairs' ? 'Pair contact — invited to claim the entry and set both players.' : 'Team manager / captain — they’ll be invited to claim the team and set its squad.'}
                 </Text>
                 <TextField label={pMode === 'pairs' ? 'Contact name' : 'Manager name'} value={mgrName} onChange={setMgrName} placeholder={pMode === 'pairs' ? 'Who to reach for this pair?' : 'Who runs this team?'} />
-                <View style={st.row}>
-                  <View style={st.flex1}><TextField label="Phone" value={mgrPhone} onChange={setMgrPhone} placeholder="+91…" autoCapitalize="none" /></View>
-                  <View style={st.flex1}><TextField label="Email" value={mgrEmail} onChange={setMgrEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
+                <View style={st.wrapRow}>
+                  <View style={st.wrapCell}><PhoneField label="Phone" value={mgrPhone} onChange={setMgrPhone} /></View>
+                  <View style={st.wrapCell}><TextField label="Email" value={mgrEmail} onChange={setMgrEmail} placeholder="name@email.com" autoCapitalize="none" /></View>
                 </View>
               </View>
             ) : (
@@ -626,10 +633,10 @@ export default function TournamentTeamsScreen() {
             {added.link && (
               <View style={st.chips}>
                 {added.phone ? (
-                  <>
+                  <View style={[st.chips, !waFirst && { flexDirection: 'row-reverse', justifyContent: 'flex-end' }]}>
                     <Button label="💬 WhatsApp" variant="ghost" onPress={() => openWhatsApp(added.phone!, inviteMessage({ name: added.name ?? '', inviterName, link: added.link!, context: added.context, role: 'manage' }))} />
                     <Button label="✉️ SMS" variant="ghost" onPress={() => openSms(added.phone!, inviteMessage({ name: added.name ?? '', inviterName, link: added.link!, context: added.context, role: 'manage' }))} />
-                  </>
+                  </View>
                 ) : null}
               </View>
             )}
@@ -653,6 +660,9 @@ const st = StyleSheet.create({
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
+  // Phone + email pairs: side by side when there's room, stacked on a phone.
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
+  wrapCell: { flexGrow: 1, flexBasis: 220, minWidth: 0 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dim: { color: theme.colors.textMuted, textDecorationLine: 'line-through' },

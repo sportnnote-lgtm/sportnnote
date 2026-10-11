@@ -13,8 +13,8 @@
  *   - the SERVER writes the subject + body from a fixed template — the client only
  *     supplies the invitee's name, a short context ("Red House at Inter-School
  *     Cup") and the join link; the inviter's name comes from their own profile;
- *   - the link must point at SportnNote (our functions URL, sportnnote.in, or the
- *     app's deep-link scheme); free text is length-capped with links stripped.
+ *   - the link must point at SportnNote (our functions URL, a SportnNote host —
+ *     _shared/hosts.ts — or the app's deep-link scheme); free text is length-capped with links stripped.
  *
  * Contract (matches src/core/invite.ts → sendInviteEmail):
  *   POST { to: string, name?: string, link: string, context?: string, role?: 'co-host'|'manage' }
@@ -23,6 +23,7 @@
  * Deploy:  supabase functions deploy send-invite
  * Secrets: reuses RESEND_API_KEY (+ optional INVITE_FROM, else SUPPORT_FROM).
  */
+import { inviteLinkPrefixes, SITE_URL } from '../_shared/hosts.ts';
 import { admin, clip, CORS, json, rateLimit, requireUser, stripLinks, SUPABASE_URL, tooMany } from '../_shared/guard.ts';
 
 const FROM = Deno.env.get('INVITE_FROM') ?? Deno.env.get('SUPPORT_FROM') ?? 'SportnNote <onboarding@resend.dev>';
@@ -31,7 +32,9 @@ const REPLY_TO = Deno.env.get('SUPPORT_EMAIL') ?? 'sportnnote@gmail.com';
 // A single, reasonable email address — we email arbitrary recipients, so guard it.
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254;
 // Only SportnNote links may appear in an invite.
-const LINK_PREFIXES = [`${SUPABASE_URL}/functions/v1/`, 'https://sportnnote.in/', 'sportnnote://'];
+// SD-151: every .in host (incl. app.sportnnote.in, where invite links point) plus the
+// configured APP_URL / SITE_URL / EXTRA_LINK_ORIGINS (the .com hosts) — _shared/hosts.ts.
+const LINK_PREFIXES = inviteLinkPrefixes(SUPABASE_URL);
 const isOurLink = (s: string) => LINK_PREFIXES.some((p) => s.startsWith(p)) && !/\s/.test(s);
 
 type Role = 'co-host' | 'manage';
@@ -42,7 +45,9 @@ const subjectFor = (inviter: string, role: Role) =>
 const messageFor = (o: { name: string; inviter: string; link: string; context: string; role: Role }) => {
   const who = o.name || 'there';
   const what = o.context ? ` ${o.context}` : '';
-  return `Hi ${who}! ${o.inviter} invited you to ${o.role === 'manage' ? 'manage' : 'co-host'}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${o.link}`;
+  // SD-152: the privacy notice for a person someone else added (legal audit L21).
+  return `Hi ${who}! ${o.inviter} invited you to ${o.role === 'manage' ? 'manage' : 'co-host'}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${o.link}` +
+    `\n\nHow we handle your details: ${SITE_URL}/privacy/`;
 };
 
 async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {

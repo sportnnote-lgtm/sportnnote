@@ -26,6 +26,7 @@ import { canScoreByRole } from '../core/roles';
 import type { Match, SportId, Tournament } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { WebPushCard } from '../components/WebPushCard';
+import { GuardianPendingCard } from '../components/GuardianPendingCard';
 import { Logo } from '../components/Logo';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -187,6 +188,8 @@ export default function HomeScreen() {
 
         {/* Web app: nudge to turn on notifications (iPhone: Add to Home Screen first). */}
         <WebPushCard compact />
+        {/* SD-152: under-18 outside India, guardian hasn't confirmed yet. */}
+        <GuardianPendingCard />
 
         {!isSupabaseConfigured && (
           <Card style={st.demo}>

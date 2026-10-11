@@ -10,6 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Card, Button, TextField, ScreenTitle, FormError, textStyles } from '../components/ui';
 import { useAuth } from '../core/auth';
+import { APP_HOST } from '../core/hosts';
 import { getInvite, claimInvite } from '../data/repos';
 import { captainStore } from '../data/captainStore';
 import { parseTournamentToken } from '../core/tournamentInvite';
@@ -74,7 +75,7 @@ export default function JoinTeamScreen() {
         )}
 
         <Text style={st.note}>
-          Opening a shared link (sportnnote.in/join/CODE) brings you here with the code filled in.
+          Opening a shared link ({APP_HOST}/join/CODE) brings you here with the code filled in.
         </Text>
       </ScrollView>
     </SafeAreaView>

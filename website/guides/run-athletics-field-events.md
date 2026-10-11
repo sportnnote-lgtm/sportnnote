@@ -55,4 +55,4 @@ If athletes are still level for 1st when everyone is out, the card shows **Tie f
 
 ## Common questions
 ### Can I share the results?
-Yes. **📤 Share** sends the start list or results, with each jump's wind, to WhatsApp.
+Yes. **📤 Share** sends the start list or results, with each jump's wind, to WhatsApp, Messages or any chat app.

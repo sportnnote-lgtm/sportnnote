@@ -110,3 +110,17 @@ export function completesMatch<S>(
     return plugin.isComplete(actions.reduce((s, a) => plugin.reducer(s, a), state));
   } catch { return false; }
 }
+
+/** SD-137b — what the voice panel does with a parsed call (spoken or typed):
+ *  - 'pending' → show "Heard … → … ✓ Apply / ✕" (Confirm mode, or a call the
+ *    recognizer wasn't sure about even in Auto mode);
+ *  - 'ask'     → Auto mode, but the call ends a period / the match: the
+ *    ConfirmSheet asks first (SD-137a) — never applied straight away;
+ *  - 'apply'   → Auto mode, confident, not an ending.
+ *  The same rule for web speech, phone speech and typed calls. */
+export const LOW_VOICE_CONFIDENCE = 0.55;
+export function voiceRoute(autoApply: boolean, confidence: number | undefined, ending: VoiceEnding | null | undefined): 'pending' | 'ask' | 'apply' {
+  const lowConf = confidence != null && confidence > 0 && confidence < LOW_VOICE_CONFIDENCE;
+  if (!autoApply || lowConf) return 'pending';
+  return ending ? 'ask' : 'apply';
+}

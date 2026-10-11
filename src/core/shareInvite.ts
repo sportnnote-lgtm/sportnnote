@@ -4,13 +4,14 @@
  *  Web: draws the QR (plus a short caption) to a PNG on a canvas and shares it
  *  with the Web Share API Level 2 — `navigator.share({ files, text })` — where the
  *  browser supports files (Android Chrome, iPhone Safari). Elsewhere it downloads
- *  the PNG and shares / opens WhatsApp with the text, so the image can be attached.
+ *  the PNG and shares the text (WhatsApp where it's the norm, else copies it), so
+ *  the image can be attached.
  *  Everything up to the share call is synchronous so the tap still counts as the
  *  user gesture browsers require. */
-import { Linking } from 'react-native';
 // @ts-expect-error untyped helper of react-native-qrcode-svg (same matrix the on-screen QR draws)
 import genMatrix from 'react-native-qrcode-svg/src/genMatrix';
 import { track } from './telemetry';
+import { shareFallbackWeb } from './share';
 
 export type InviteShareResult = 'shared-image' | 'shared-text' | 'downloaded' | 'cancelled' | 'needs-tap' | 'failed';
 
@@ -115,7 +116,7 @@ export async function shareInviteWithQr(input: InviteShareInput): Promise<Invite
     if (typeof nav?.share === 'function') {
       await nav.share({ text: input.message });
     } else {
-      await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(input.message)}`);
+      await shareFallbackWeb(input.message); // SD-151: WhatsApp where it's the norm, else copy
     }
     track('share_link', { what: 'invite' });
   } catch (e) {

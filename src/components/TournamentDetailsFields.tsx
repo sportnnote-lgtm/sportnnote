@@ -8,6 +8,7 @@ import React, { useState, useSyncExternalStore } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { Button, FieldLabel, SelectChip, TextField, textStyles } from './ui';
+import { PhoneField } from './PhoneField';
 import { LogoPicker } from './LogoPicker';
 import { SportFormatEditor, type FormatVal } from './FormatEditor';
 import { getSport } from '../sports/registry';
@@ -15,6 +16,8 @@ import { tournamentDraft } from '../data/tournamentDraft';
 import { EVENT_CATEGORIES, addGround, inlineFieldKeys } from '../data/tournamentForm';
 import type { TournamentDetails } from '../data/repos';
 import type { EventCategory, SportId } from '../core/types';
+import { timeZoneStore, zoneLabel } from '../core/time';
+import { TimeZonePicker } from './TimeZonePicker';
 
 export const ABOUT_MAX = 4000;
 
@@ -26,9 +29,12 @@ export interface DetailsValue {
   organiserPhone: string;
   organiserEmail: string;
   about: string;
+  /** SD-150: the venue's time zone ('' = not set: each viewer's own zone) */
+  timeZone: string;
 }
 
-export const emptyDetails = (): DetailsValue => ({ city: '', grounds: [], organiserPhone: '', organiserEmail: '', about: '' });
+/** A new tournament starts in the organiser's own zone (SD-150). */
+export const emptyDetails = (): DetailsValue => ({ city: '', grounds: [], organiserPhone: '', organiserEmail: '', about: '', timeZone: timeZoneStore.get() });
 
 /** Form value → repo payload: trimmed, blanks become null (= cleared / hidden). */
 export function detailsPayload(v: DetailsValue): TournamentDetails {
@@ -40,6 +46,7 @@ export function detailsPayload(v: DetailsValue): TournamentDetails {
     organiserPhone: s(v.organiserPhone),
     organiserEmail: s(v.organiserEmail),
     about: v.about.trim().slice(0, ABOUT_MAX) || null,
+    timeZone: v.timeZone || null,
   };
 }
 
@@ -98,6 +105,8 @@ export function TournamentPlaceFields({ value, onChange, knownVenues }: {
         </View>
       )}
 
+      <TournamentZoneField value={value.timeZone} onChange={(timeZone) => onChange({ timeZone })} />
+
       <FieldLabel>Category (optional)</FieldLabel>
       <View style={st.chips}>
         {EVENT_CATEGORIES.map((c) => (
@@ -105,6 +114,21 @@ export function TournamentPlaceFields({ value, onChange, knownVenues }: {
             onPress={() => onChange({ eventCategory: value.eventCategory === c.key ? undefined : c.key })} />
         ))}
       </View>
+    </View>
+  );
+}
+
+/** The venue's time zone: kickoff times are typed, listed and printed in it,
+ *  and "today" for the event follows it (SD-150). */
+function TournamentZoneField({ value, onChange }: { value: string; onChange: (z: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={st.section}>
+      <FieldLabel hint="Match times are typed and printed in this zone. Viewers elsewhere see their own time.">Time zone</FieldLabel>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Time zone: ${value ? zoneLabel(value) : 'not set'}. Change`} onPress={() => setOpen((o) => !o)} activeOpacity={0.8}>
+        <Text style={st.zoneText}>🕑 {value ? zoneLabel(value) : "Not set — each viewer's own zone"}  <Text style={st.zoneChange}>{open ? 'Done' : 'Change'}</Text></Text>
+      </TouchableOpacity>
+      {open && <TimeZonePicker value={value} onChange={onChange} noneLabel={value ? undefined : 'Not set'} />}
     </View>
   );
 }
@@ -142,7 +166,7 @@ export function TournamentContactFields({ value, onChange }: {
   return (
     <View style={st.section}>
       <FieldLabel>Organiser contact</FieldLabel>
-      <TextField label="Phone" value={value.organiserPhone} onChange={(organiserPhone) => onChange({ organiserPhone })} placeholder="98765 43210" autoCapitalize="none" />
+      <PhoneField label="Phone" value={value.organiserPhone} onChange={(organiserPhone) => onChange({ organiserPhone })} optional />
       <TextField label="Email (optional)" value={value.organiserEmail} onChange={(organiserEmail) => onChange({ organiserEmail })} placeholder="sports@school.edu" autoCapitalize="none" />
       <Text style={st.hint}>Shown on the tournament page. Clear it to hide.</Text>
 
@@ -157,6 +181,8 @@ export function TournamentContactFields({ value, onChange }: {
 }
 
 const st = StyleSheet.create({
+  zoneText: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
+  zoneChange: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   section: { gap: theme.spacing(3) },
   images: { gap: theme.spacing(2) },
   logoWrap: { alignSelf: 'flex-start', marginLeft: theme.spacing(3) },

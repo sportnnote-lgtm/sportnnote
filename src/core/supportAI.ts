@@ -14,11 +14,14 @@
  *  uses the knowledge base only. This mirrors `core/voiceLLM.ts`'s degrade path.
  *
  *  ── Server contract ──
- *  POST { question, context, appVersion? } → { answer, resolved }
+ *  POST { question, context, appVersion?, region?, timeZone? } → { answer, resolved }
+ *  (SD-151: region = the device's country code, timeZone = its IANA zone, so the
+ *  answer fits where the user is instead of assuming India.)
  *  `context` is the KB text we already matched, so the model answers from our
  *  own docs rather than inventing product behaviour.
  */
 import { supabase, isSupabaseConfigured } from './supabase';
+import { deviceRegion } from './chatRegion';
 
 /** AI answers are available only in live mode, where the edge function is deployed. */
 export const enabled = (): boolean => isSupabaseConfigured;
@@ -41,7 +44,7 @@ export async function askSupport(
   if (!enabled() || !supabase) return null;
   try {
     const { data, error } = await supabase.functions.invoke('support-assistant', {
-      body: { question, context, appVersion },
+      body: { question, context, appVersion, region: deviceRegion() ?? undefined, timeZone: deviceTimeZone() },
     });
     if (error) return null;
     const answer = typeof data?.answer === 'string' ? data.answer.trim() : '';
@@ -50,4 +53,8 @@ export async function askSupport(
   } catch {
     return null;
   }
+}
+
+function deviceTimeZone(): string | undefined {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
 }

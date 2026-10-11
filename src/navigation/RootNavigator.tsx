@@ -51,6 +51,7 @@ const AmericanoScreen = lazyScreen(() => import('../screens/AmericanoScreen'));
 const SportSettingsScreen = lazyScreen(() => import('../screens/SportSettingsScreen'));
 const OrganizerDashboardScreen = lazyScreen(() => import('../screens/OrganizerDashboardScreen'));
 const NotificationPrefsScreen = lazyScreen(() => import('../screens/NotificationPrefsScreen'));
+const RegionSettingsScreen = lazyScreen(() => import('../screens/RegionSettingsScreen'));
 const PlayerProfileScreen = lazyScreen(() => import('../screens/PlayerProfileScreen'));
 const SportProfileScreen = lazyScreen(() => import('../screens/SportProfileScreen'));
 const HeadToHeadScreen = lazyScreen(() => import('../screens/HeadToHeadScreen'));
@@ -61,6 +62,10 @@ const FollowingScreen = lazyScreen(() => import('../screens/FollowingScreen'));
 const MessagesScreen = lazyScreen(() => import('../screens/MessagesScreen'));
 const ConversationScreen = lazyScreen(() => import('../screens/ConversationScreen'));
 const GuardianLinkScreen = lazyScreen(() => import('../screens/GuardianLinkScreen'));
+// SD-152: privacy rights.
+const PrivacyScreen = lazyScreen(() => import('../screens/PrivacyScreen'));
+const GuardianConsentScreen = lazyScreen(() => import('../screens/GuardianConsentScreen'));
+const ManageChildScreen = lazyScreen(() => import('../screens/ManageChildScreen'));
 const MessageReportsScreen = lazyScreen(() => import('../screens/MessageReportsScreen'));
 const GolfRoundScreen = lazyScreen(() => import('../screens/GolfRoundScreen'));
 const GolfRoundSetupScreen = lazyScreen(() => import('../screens/GolfRoundSetupScreen'));
@@ -103,16 +108,17 @@ const MatchLinkScreen = lazyScreen(() => import('../screens/MatchLinkScreen'));
 const DeleteAccountScreen = lazyScreen(() => import('../screens/DeleteAccountScreen'));
 import type { RootStackParamList, TabParamList } from './types';
 import { trackScreen } from '../core/telemetry';
+import { linkPrefixes } from '../core/hosts';
 import { lazyScreen, prefetchScreens } from './lazyScreens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// Deep links: sportnnote://join/CODE or https://sportnnote.in/join/CODE open
+// Deep links: sportnnote://join/CODE or https://app.sportnnote.in/join/CODE open
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'CompetitionRules', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'SwissRound', 'Team', 'TeamJourney', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'CompetitionRules', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianConsent', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'ManageChild', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'RegionSettings', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'Privacy', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'SwissRound', 'Team', 'TeamJourney', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -146,7 +152,9 @@ function saveNavState(authed: boolean) {
 // Screen views for analytics (route names only — never params).
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['sportnnote://', 'https://sportnnote.in'],
+  // SD-151: scheme + every .in host forever (printed QRs) + configured hosts (.com
+  // once EXPO_PUBLIC_EXTRA_LINK_ORIGINS / _SITE_URL / _APP_URL are set) — core/hosts.ts.
+  prefixes: linkPrefixes(),
   config: {
     initialRouteName: 'Tabs',
     screens: {
@@ -161,6 +169,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       PlayerProfile: 'p/:playerId',
       JoinClub: 'join-club/:token',
       JoinTournament: 'join-tournament/:token',
+      // SD-152: the parent/guardian confirmation link (?c=CODE) — public.
+      GuardianConsent: 'guardian-consent',
     },
   },
   getStateFromPath: (path, options) => {
@@ -315,6 +325,8 @@ export default function RootNavigator() {
       component={PlayerProfileScreen}
       options={{ ...stackScreenOpts, title: 'Player' }}
         />
+      {/* SD-152: opened from the guardian's email — works signed in or out. */}
+      <Stack.Screen name="GuardianConsent" component={GuardianConsentScreen} options={{ ...stackScreenOpts, title: 'Parent / guardian consent' }} />
       <Stack.Screen
       name="SportProfile"
       component={SportProfileScreen}
@@ -474,6 +486,11 @@ export default function RootNavigator() {
               options={{ ...stackScreenOpts, title: 'Match reminders' }}
             />
             <Stack.Screen
+              name="RegionSettings"
+              component={RegionSettingsScreen}
+              options={{ ...stackScreenOpts, title: 'Region' }}
+            />
+            <Stack.Screen
               name="Settings"
               component={SettingsScreen}
               options={{ ...stackScreenOpts, title: 'Settings' }}
@@ -561,6 +578,8 @@ export default function RootNavigator() {
               component={GuardianLinkScreen}
               options={{ ...stackScreenOpts, title: 'Parent / guardian' }}
             />
+            <Stack.Screen name="ManageChild" component={ManageChildScreen} options={{ ...stackScreenOpts, title: 'Manage child’s account' }} />
+            <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ ...stackScreenOpts, title: 'Your data & privacy' }} />
             <Stack.Screen
               name="Following"
               component={FollowingScreen}

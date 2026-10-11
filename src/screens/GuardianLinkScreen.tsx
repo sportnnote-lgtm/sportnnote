@@ -3,13 +3,14 @@
  *  on, messages about the child come to this account (the child never receives
  *  them), and the guardian email counts as verified. */
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, StyleSheet } from 'react-native';
+import { ScrollView, Text, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, Card, TextField, ScreenTitle, FormError, textStyles } from '../components/ui';
-import { claimGuardianLink, getMyGuardedPlayers } from '../data/messages';
+import { claimGuardianLink } from '../data/messages';
+import { getGuardianChildren, type GuardianChild } from '../data/privacy';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -19,9 +20,10 @@ export default function GuardianLinkScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [children, setChildren] = useState<{ id: string; fullName: string }[]>([]);
+  const [children, setChildren] = useState<GuardianChild[]>([]);
 
-  const refresh = () => getMyGuardedPlayers().then(setChildren).catch(() => {});
+  // SD-152: with consent status, for the per-child Manage screen.
+  const refresh = () => getGuardianChildren().then(setChildren).catch(() => {});
   useEffect(() => { void refresh(); }, []);
 
   const claim = async () => {
@@ -50,8 +52,16 @@ export default function GuardianLinkScreen() {
           <Card style={{ gap: theme.spacing(2) }}>
             <Text style={textStyles.h3}>You&apos;re the parent/guardian of</Text>
             {children.map((c) => (
-              <Text key={c.id} style={textStyles.body} accessibilityRole="link" onPress={() => nav.navigate('PlayerProfile', { playerId: c.id })}>👦 {c.fullName}</Text>
+              <View key={c.playerId} style={st.child}>
+                <View style={{ flex: 1 }}>
+                  <Text style={textStyles.body} accessibilityRole="link" onPress={() => nav.navigate('PlayerProfile', { playerId: c.playerId })}>👦 {c.fullName}</Text>
+                  {c.consent === 'pending' && <Text style={[textStyles.muted, { color: theme.colors.accent }]}>Waiting for you to confirm</Text>}
+                  {c.consent === 'withdrawn' && <Text style={[textStyles.muted, { color: theme.colors.danger }]}>Consent withdrawn — locked</Text>}
+                </View>
+                <Button label="Manage" variant="ghost" onPress={() => nav.navigate('ManageChild', { playerId: c.playerId })} />
+              </View>
             ))}
+            <Text style={textStyles.muted}>Manage: view, download or delete their data, and confirm or withdraw consent.</Text>
             <Button label="💬 Open messages" variant="ghost" onPress={() => nav.navigate('Messages')} />
           </Card>
         )}
@@ -63,4 +73,5 @@ export default function GuardianLinkScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
+  child: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
 });

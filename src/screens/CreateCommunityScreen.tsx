@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
 import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, textStyles } from '../components/ui';
+import { PhoneField } from '../components/PhoneField';
 import { useAuth } from '../core/auth';
 import { getMyPlayerId, createOrganization } from '../data/repos';
 import { COMMUNITY_TYPES } from '../core/org';
@@ -73,9 +74,9 @@ export default function CreateCommunityScreen({ navigation }: Props) {
         )}
 
         <TextField label="City" value={city} onChange={setCity} placeholder="Bengaluru" />
-        <View style={st.row}>
-          <View style={st.flex}><TextField label="Email" value={email} onChange={setEmail} placeholder="sports@…" autoCapitalize="none" /></View>
-          <View style={st.flex}><TextField label="Phone" value={phone} onChange={setPhone} placeholder="+91…" autoCapitalize="none" /></View>
+        <View style={st.wrapRow}>
+          <View style={st.wrapCell}><TextField label="Email" value={email} onChange={setEmail} placeholder="sports@…" autoCapitalize="none" /></View>
+          <View style={st.wrapCell}><PhoneField label="Phone" value={phone} onChange={setPhone} optional /></View>
         </View>
         <Text style={textStyles.muted}>You'll be its first admin. Add members, a logo, and organize events from the community page.</Text>
 
@@ -91,5 +92,8 @@ const st = StyleSheet.create({
   content: { padding: theme.spacing(4), gap: theme.spacing(3) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   row: { flexDirection: 'row', gap: theme.spacing(3) },
+  // Phone + email pairs: side by side when there's room, stacked on a phone.
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
+  wrapCell: { flexGrow: 1, flexBasis: 220, minWidth: 0 },
   flex: { flex: 1 },
 });

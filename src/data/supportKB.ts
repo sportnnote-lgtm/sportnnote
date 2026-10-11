@@ -13,6 +13,7 @@
  * Keep answers short and task-shaped ("how do I…"), in the app's own vocabulary
  * (organizer/scorer, match, tournament, fixtures, squad).
  */
+import { DELETE_ACCOUNT_URL, SITE_HOST, SUPPORT_EMAIL, SUPPORT_HOURS, SUPPORT_REPLY } from '../core/hosts.ts';
 
 export type SupportCategory =
   | 'Getting started'
@@ -58,6 +59,30 @@ You can:
 - Follow players and teams and get alerts when they're playing.
 
 The person we build for first is the organizer/scorer — the one running the game. Everything is designed to be fast to tap while a match is happening.`,
+  },
+  {
+    id: 'install-app',
+    title: 'Get SportnNote on your phone',
+    category: 'Getting started',
+    summary: 'Android: download from the website. iPhone or computer: open the web app — it works in any country.',
+    keywords: ['install', 'download', 'apk', 'iphone', 'ios', 'android', 'play store', 'app store', 'home screen', 'abroad', 'country', 'outside india', 'uae', 'uk', 'singapore', 'australia', 'usa'],
+    body: `SportnNote works in any country — there's no region lock.
+
+- Android: open ${SITE_HOST} → Get the app → download and install the Android app.
+- iPhone: open the web app in Safari, tap Share → Add to Home Screen. It then opens like an app.
+- Computer: use the web app in any modern browser.
+
+Google Play and App Store listings are on the way; the website always has the current way to install.`,
+  },
+  {
+    id: 'pricing',
+    title: 'Is SportnNote free?',
+    category: 'Getting started',
+    summary: "Free while we're new; a small fee later, announced 30 days in advance.",
+    keywords: ['free', 'price', 'pricing', 'cost', 'pay', 'payment', 'fee', 'subscription', 'charge', 'money'],
+    body: `SportnNote is free while we're new. Later there will be a small fee, and we will announce it 30 days in advance — in the app and on the website — before anyone is charged.
+
+Nothing is charged automatically today, and you never need a card to use the app.`,
   },
   {
     id: 'score-first-match',
@@ -236,9 +261,13 @@ Reminders fire for matches you play in and for players/teams you follow. Turn th
     id: 'change-timezone',
     title: 'Change your time zone',
     category: 'Account',
-    summary: 'Settings → Time zone. Match times then display in your chosen zone.',
-    keywords: ['timezone', 'time zone', 'time', 'gmt', 'ist', 'clock'],
-    body: `All match times display in your chosen time zone (default India / IST). Change it in Settings → Time zone — handy when you travel, so a match abroad shows in your local time.`,
+    summary: 'Settings → Region & time zone. It starts as your phone\'s zone; match times and reminder emails use it.',
+    keywords: ['timezone', 'time zone', 'time', 'gmt', 'utc', 'ist', 'gst', 'bst', 'aest', 'est', 'clock', 'abroad', 'country', 'region', 'date format', 'month first', 'day first', '24 hour', '12 hour', 'week start'],
+    body: `The app starts in your phone's time zone. Match times, the calendar and reminder emails all use it. Change it in Settings → Region & time zone — handy when you travel.
+
+The same page sets your country, which picks how typed dates read (day first, or month first in the US), 12- or 24-hour times and the first day of the week. You can change each one.
+
+A tournament has its own time zone (its venue). Kickoff times are typed and printed in it, and they show with the zone name (for example "4:00 pm GST") when it isn't yours.`,
   },
   {
     id: 'verification',
@@ -251,7 +280,48 @@ Reminders fire for matches you play in and for players/teams you follow. Turn th
 - From your profile, open "Age & guardian verification" and upload the document.
 - Our support team reviews it and marks the profile approved or rejected.
 
-Only the support team sees the document; it isn't shown on your public profile.`,
+Only the support team sees the document; it isn't shown on your public profile. The file is deleted 30 days after the review — we keep only the result ("verified on <date>").`,
+  },
+  {
+    id: 'under-18-privacy',
+    title: 'Who can see and follow an under-18 player',
+    category: 'Account',
+    summary: 'Only their teammates, coaches, tournament organisers, school/club and guardian see a child’s photo, city, school and bio, or can follow them.',
+    keywords: ['under 18', 'under-18', 'minor', 'child', 'kid', 'privacy', 'photo', 'follow', 'cannot follow', 'initials', 'hidden', 'school', 'guardian'],
+    body: `Players under 18, and anyone whose date of birth isn't on file, get extra privacy:
+
+- Not signed in: only their initials, team/house and sports show. No photo.
+- Signed in but not connected to them: their name, sports, team and age show, but not their photo, city, school or bio.
+- Their teammates, coaches and team managers, the organisers and teams of tournaments they play in, members of the same school or club, and their parent/guardian see the full profile.
+- Only those same people can follow an under-18 player and get their match-time and venue alerts.
+
+If you're an adult and your profile shows only initials, add your date of birth in Edit profile.`,
+  },
+  {
+    id: 'guardian-confirm',
+    title: 'Parent or guardian consent (outside India)',
+    category: 'Account',
+    summary: 'Under-18s outside India: we email the parent/guardian a link to confirm. A linked parent can view, download or delete the child’s data.',
+    keywords: ['guardian', 'parent', 'consent', 'confirm', 'child', 'under 18', 'under 13', 'coppa', 'withdraw', 'locked', 'waiting', 'manage child'],
+    body: `If you're under 18 and live outside India, your parent or guardian confirms your account from their own email. We send them a link when you first sign in (Home shows "Waiting for your parent or guardian"). Until they agree, nobody can follow you or message about you, and only your teams see your profile. Resend it from Settings → Your data & privacy.
+
+In India, the parent/guardian consent box at sign-up works as before.
+
+In the US, children under 13 can't sign up themselves — a parent adds them as a player instead.
+
+Parents: sign in with your own account and go to Settings → Link as a parent/guardian → Manage to view, download or delete your child's data, or confirm or withdraw consent. Withdrawing locks the account; it's deleted after 30 days unless you confirm again.`,
+  },
+  {
+    id: 'your-data',
+    title: 'Download your data and choose analytics',
+    category: 'Account',
+    summary: 'Settings → Your data & privacy: download everything we hold (JSON) and switch analytics on or off.',
+    keywords: ['download', 'my data', 'export', 'copy', 'gdpr', 'access request', 'analytics', 'cookies', 'tracking', 'essential only', 'privacy', 'organiser added me'],
+    body: `Settings → Your data & privacy → Download my data saves a file (JSON) with your account, player profile, match stats, messages you sent, who you follow, memberships and consent choices.
+
+Analytics: tap Allow analytics or Essential only. In the UK and Europe we ask on your first visit and collect nothing until you choose. We never record what you type, never sell data and show no ads; under-18 accounts are never linked to analytics.
+
+If an organiser added you before you joined, the same page shows who and when. You can correct the details in Edit profile or delete them with your account.`,
   },
   {
     id: 'edit-profile',
@@ -260,6 +330,32 @@ Only the support team sees the document; it isn't shown on your public profile.`
     summary: 'Settings → Edit profile (or tap your photo) to change your details and sports.',
     keywords: ['edit profile', 'photo', 'name', 'details', 'change', 'sports'],
     body: `Update your details from Settings → Edit profile, or tap your profile photo to change it. You can edit your name, city, jersey number, the sports you play, and your contact details.`,
+  },
+  {
+    id: 'delete-account',
+    title: 'Delete your account',
+    category: 'Account',
+    summary: 'Settings → Delete my account. No app? Email us from your account email or mobile number.',
+    keywords: ['delete', 'remove', 'close account', 'erase', 'data', 'privacy', 'gdpr', 'forget'],
+    body: `In the app: Settings → Delete my account, read what's removed, and confirm. It's permanent.
+
+No app or can't sign in? Email ${SUPPORT_EMAIL} with the subject "Delete my account", from the email on your account (or give the mobile number on it). We check it's you, then delete it.
+
+Parents: delete your child's data from Settings → Link as a parent/guardian → Manage.
+
+What's deleted: your name, contact details, date of birth, photo, ID proofs and message text. What stays: scores of matches you played, shown as "Deleted player" so standings stay correct. Full details: ${DELETE_ACCOUNT_URL}`,
+  },
+  {
+    id: 'contact-support',
+    title: 'Contact support',
+    category: 'Account',
+    summary: `Email ${SUPPORT_EMAIL} — ${SUPPORT_HOURS}.`,
+    keywords: ['contact', 'support', 'help', 'email', 'human', 'hours', 'reply', 'complaint'],
+    body: `Ask here first — most answers are instant. If you still need a person, tap "Contact support" in Help (or Settings → Send feedback), or email ${SUPPORT_EMAIL}.
+
+Support hours: ${SUPPORT_HOURS}. ${SUPPORT_REPLY}
+
+Mention the match or tournament name and what you tapped — that saves a back-and-forth.`,
   },
 ];
 

@@ -20,9 +20,9 @@
  */
 import { admin, clip, CORS, json, rateLimit, tooMany } from '../_shared/guard.ts';
 import { firebaseConfigured, verifiedPhoneFromToken } from '../_shared/firebaseToken.ts';
+import { phoneKey } from '../_shared/phone.ts';
 
 const ROLES = ['player', 'parent', 'scorer', 'organizer', 'fan'];
-const key10 = (p: string) => p.replace(/\D/g, '').slice(-10);
 
 function ageFrom(dob: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
@@ -61,9 +61,14 @@ Deno.serve(async (req) => {
   const idToken = typeof body.idToken === 'string' ? body.idToken : '';
   if (!idToken) return json({ error: 'idToken is required' }, 400);
 
-  const phone = await verifiedPhoneFromToken(idToken);
-  if (phone instanceof Error) return json({ error: phone.message }, 401);
-  if (!(await rateLimit('phone-login', key10(phone), 10, 3600))) return tooMany();
+  const verified = await verifiedPhoneFromToken(idToken);
+  if (verified instanceof Error) return json({ error: verified.message }, 401);
+  // The identity is the FULL international number Firebase verified (E.164,
+  // e.g. +19175551234) — never its last 10 digits, which a number in another
+  // country can share (+1 917 555 1234 vs +91 91755 51234 = account takeover).
+  const phone = verified.startsWith('+') ? phoneKey(verified) : '';
+  if (!phone) return json({ error: 'That number couldn’t be read — try again with the country code.' }, 400);
+  if (!(await rateLimit('phone-login', phone, 10, 3600))) return tooMany();
 
   // Who owns this number?
   const { data: owner } = await admin.rpc('phone_login_lookup', { p_phone: phone });
@@ -95,7 +100,7 @@ Deno.serve(async (req) => {
     if (!gName || (!gPhone && !gEmail) || g.consent !== true) {
       return json({ error: 'Under-18 accounts need a parent/guardian’s name, contact and consent.' }, 400);
     }
-    guardian = { name: gName, phone: gPhone || undefined, email: gEmail || undefined, consentedAt: new Date().toISOString() };
+    guardian = { name: gName, phone: (phoneKey(gPhone) || gPhone) || undefined, email: gEmail || undefined, consentedAt: new Date().toISOString() };
   }
 
   const placeholder = `${crypto.randomUUID()}@phone.sportnnote.in`;

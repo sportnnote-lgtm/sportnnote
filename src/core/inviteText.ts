@@ -54,6 +54,12 @@ export function clubInviteMessage(opts: { clubName: string; inviterName: string;
   return `Join ${inviteLabel('Team', opts.clubName)} on SportnNote! ${opts.inviterName} invited you 🛡️\n\nOpen this to join: ${clubJoinLink(opts.token)}\n\nOr in the app, go to Join a team and enter code: ${opts.token}`;
 }
 
+/** SD-152: the short privacy notice every invite to a person an organiser added
+ *  carries (legal audit L21) — the policy says what "data an organiser adds
+ *  about you" covers, and the person can see/remove it when they join. */
+export const PRIVACY_NOTICE_URL = `${SITE_URL}/privacy/`;
+export const privacyNoticeLine = (): string => `How we handle your details: ${PRIVACY_NOTICE_URL}`;
+
 /** The install/join message for a provisional (added-by-phone) player. */
 export function provisionalInviteMessage(opts: { name: string; playerId: string; teamName: string; captain?: boolean }): string {
   const who = realName(opts.name) || 'there';
@@ -61,8 +67,8 @@ export function provisionalInviteMessage(opts: { name: string; playerId: string;
   const link = joinLink(opts.playerId);
   const report = reportLink(opts.playerId);
   return opts.captain
-    ? `Hi ${who}! You're the captain of ${team} on SportnNote 🧢\n\nTap the link and sign up with this mobile number (1 minute, no password) to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`
-    : `Hi ${who}! You've been added to ${team} on SportnNote 🏆\n\nTap the link and sign up with this mobile number (1 minute, no password) to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}`;
+    ? `Hi ${who}! You're the captain of ${team} on SportnNote 🧢\n\nTap the link and sign up with this mobile number (1 minute, no password) to confirm your spot, add your teammates and set the squad:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}\n${privacyNoticeLine()}`
+    : `Hi ${who}! You've been added to ${team} on SportnNote 🏆\n\nTap the link and sign up with this mobile number (1 minute, no password) to confirm your spot and track your stats:\n${link}\n\nNot you / didn't expect this? Tell us (no app needed): ${report}\n${privacyNoticeLine()}`;
 }
 
 /** What someone is being invited to do — co-host an event (default) or manage a team. */
@@ -75,7 +81,9 @@ export function inviteMessage(opts: { name: string; inviterName: string; link: s
   const who = realName(opts.name) || 'there';
   const what = opts.context ? ` ${opts.context}` : '';
   const base = `Hi ${who}! ${opts.inviterName} invited you to ${inviteVerb(opts.role)}${what} on SportnNote 🏆 Install the app and register with this number/email to join:\n${opts.link}`;
-  return opts.reportUrl ? `${base}\n\nNot you / didn’t expect this? Tell us (no app needed): ${opts.reportUrl}` : base;
+  return opts.reportUrl
+    ? `${base}\n\nNot you / didn’t expect this? Tell us (no app needed): ${opts.reportUrl}\n${privacyNoticeLine()}`
+    : `${base}\n\n${privacyNoticeLine()}`;
 }
 
 export const inviteSubject = (inviterName: string, role?: InviteRole) =>
@@ -111,7 +119,8 @@ export const ANDROID_PACKAGE = 'in.sportnnote.app';
 export const APP_SCHEME = 'sportnnote';
 /** Where "Open in the app" lands when the app isn't installed: the website's
  *  "Get the app" section (Android APK download + iPhone steps). */
-export const INSTALL_PAGE_URL = 'https://sportnnote.in/#get';
+export { INSTALL_PAGE_URL } from './hosts.ts';
+import { INSTALL_PAGE_URL, SITE_URL } from './hosts.ts';
 
 export type WebDevice = 'android' | 'ios' | 'other';
 /** Which phone a browser is on (iPadOS 13+ reports "Macintosh" + touch). */

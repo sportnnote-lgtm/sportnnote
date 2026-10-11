@@ -140,7 +140,7 @@ export default function EditMatchScreen() {
               </View>
             )}
 
-            <DateTimeField label="Kickoff" value={when} onChange={setWhen} />
+            <DateTimeField label="Kickoff" value={when} onChange={setWhen} timeZone={tournament?.timeZone} />
             <VenueField venue={venue} onVenue={setVenue} venueUrl={venueUrl} onVenueUrl={setVenueUrl} knownVenues={knownVenues} />
             <Text style={textStyles.muted}>Moving the match just updates this fixture — the rest of the schedule is untouched.</Text>
 

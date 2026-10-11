@@ -27,6 +27,8 @@
 import type { Match, SportId, StatLine, Tournament } from '../core/types';
 import type { SplitDim } from '../sports/statSchema.ts';
 import { sideFromOpponent } from './appearances.ts';
+import { localDay } from '../core/time.ts';
+import { regionStore } from '../core/region.ts';
 
 export type { SplitDim };
 
@@ -56,7 +58,8 @@ export interface LineContext {
 
 export interface ContextOptions {
   /** month a season starts (1 = January → calendar years "2026"; 4 = April →
-   *  an Indian school year "2026–27"). Default 1. */
+   *  an Indian school year "2026–27"). Default: the region's stats season
+   *  (SD-150 — calendar years in India/Gulf/SG/MY/AU, Sep UK, Aug US). */
   seasonStartMonth?: number;
 }
 
@@ -77,9 +80,11 @@ function configOf(match: Match | undefined, tournament: Pick<Tournament, 'format
 }
 const stateOf = (match: Match | undefined): Cfg => (match?.state && typeof match.state === 'object' ? (match.state as Cfg) : {});
 
-/** Season of an ISO date: "2026", or "2025–26" when the season starts after January. */
+/** Season of an ISO date: "2026", or "2025–26" when the season starts after January.
+ *  A full timestamp counts on its day in the app's zone (SD-150), not the UTC day. */
 export function seasonOf(date: string | undefined, startMonth = 1): SplitValue | undefined {
   if (!date || date.length < 7) return undefined;
+  if (date.length > 10) date = localDay(date);
   const y = Number(date.slice(0, 4));
   const m = Number(date.slice(5, 7));
   if (!Number.isFinite(y) || !Number.isFinite(m)) return undefined;
@@ -228,7 +233,7 @@ export function lineContext(
     // a line whose match isn't loaded can't be called a friendly
     competition: tId ? v('tournament', 'Tournament') : match ? v('friendly', 'Friendly') : undefined,
     tournament: tId ? v(tId, tournament?.name ?? 'Tournament') : match ? v('friendly', 'Friendlies') : undefined,
-    season: seasonOf(match?.startsAt ?? line.date, opts.seasonStartMonth),
+    season: seasonOf(match?.startsAt ?? line.date, opts.seasonStartMonth ?? regionStore.get().statsSeasonStartMonth),
   };
   if (match) {
     ctx.format = formatFor(sport, cfg, state);

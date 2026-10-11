@@ -10,7 +10,7 @@
  * It lives here as a Supabase secret and is read from the environment.
  *
  * Contract (matches core/supportAI.ts):
- *   POST { question: string, context: string, appVersion?: string }
+ *   POST { question: string, context: string, appVersion?: string, region?: 'GB', timeZone?: 'Europe/London' }
  *     → 200 { answer: string, resolved: boolean }
  *
  * Abuse guards (migration 0025): signed-in users only (the anon key ships in
@@ -43,6 +43,13 @@ const SYSTEM = [
   'If the context does not contain the answer, do NOT guess: set resolved to false and say a',
   'human from the support team will follow up. When the context fully answers it, set resolved',
   'to true. Never invent features, screens, or steps that are not in the context.',
+  // SD-151: users are in many countries (India, the Gulf, the UK, Singapore/Malaysia,
+  // Australia, the US). Don't assume India, Indian phone numbers, IST or WhatsApp.
+  'SportnNote is used in many countries. Do not assume the user is in India: never assume',
+  'an Indian phone number, India time, rupees or WhatsApp unless the user or the context says so.',
+  'When sharing or inviting comes up, say "WhatsApp, Messages or any chat app". Use the user',
+  'country and time zone given below (if any) only to phrase times and examples; never invent',
+  'country-specific features. For anything about price, use exactly the context\'s pricing line.',
 ].join(' ');
 
 // Structured output so the client always gets a valid { answer, resolved } shape.
@@ -67,7 +74,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 503);
 
-  let body: { question?: unknown; context?: unknown; appVersion?: unknown };
+  let body: { question?: unknown; context?: unknown; appVersion?: unknown; region?: unknown; timeZone?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -76,6 +83,10 @@ Deno.serve(async (req) => {
   const question = typeof body.question === 'string' ? body.question.trim().slice(0, 1000) : '';
   const context = typeof body.context === 'string' ? body.context.slice(0, 12000) : '';
   if (!question) return json({ error: 'question is required' }, 400);
+  // Optional, validated hard (they go into the prompt): "GB", "Europe/London".
+  const region = typeof body.region === 'string' && /^[A-Z]{2}$/.test(body.region) ? body.region : '';
+  const timeZone = typeof body.timeZone === 'string' && /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+){0,2}$/.test(body.timeZone) && body.timeZone.length <= 40 ? body.timeZone : '';
+  const where = region || timeZone ? `User country: ${region || 'unknown'}; time zone: ${timeZone || 'unknown'}.\n\n` : '';
 
   const client = new Anthropic({ apiKey });
   try {
@@ -87,7 +98,7 @@ Deno.serve(async (req) => {
       messages: [
         {
           role: 'user',
-          content: `Help context:\n${context || '(no matching articles)'}\n\nUser question: ${question}`,
+          content: `${where}Help context:\n${context || '(no matching articles)'}\n\nUser question: ${question}`,
         },
       ],
     });

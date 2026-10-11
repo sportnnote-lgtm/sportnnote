@@ -1,6 +1,6 @@
 /** The invite QR + "Share QR + message" (SD-108). One component for team (club)
  *  and tournament invites: shows the QR (it encodes the same https join link the
- *  message carries) and shares the QR image together with the WhatsApp text.
+ *  message carries) and shares the QR image together with the invite text.
  *  `shareRef` lets the screen trigger the same share right after creating a code. */
 import React, { useImperativeHandle, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -13,7 +13,7 @@ import { inviteQrFileName, inviteQrPayload } from '../core/inviteText';
 export type InviteQrShareHandle = { share: () => Promise<InviteShareResult> };
 
 const NOTE: Partial<Record<InviteShareResult, string>> = {
-  'downloaded': 'QR image saved — attach it in WhatsApp with the message.',
+  'downloaded': 'QR image saved — attach it in your chat (WhatsApp, Messages or any app) with the message.',
   'needs-tap': 'Tap “Share QR + message” to send it.',
   'failed': 'Couldn’t open sharing — show the QR or send the code.',
 };
