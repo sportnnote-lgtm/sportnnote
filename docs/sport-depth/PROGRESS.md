@@ -2,6 +2,12 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## Wave A — SD-120 / SD-121 / SD-122 / SD-123 — DONE (48c3b9f, 2026-10-11)
+- All 8 audit-2 P0s fixed. See DEVLOG.
+- **Founder actions:** run `supabase/migrations/20261019123220_golf_course_edit.sql` in the SQL editor (optional until other organisers edit shared courses). Decide: medal table shows no places for a groups+knockout sport until the knockout starts (current) vs a provisional league order.
+- **Check:** handball 2-leg → 7 m straight away (EHF practice); FIBA two-game aggregate; ODI 20-over minimum + NRR appendix clause numbers; quarter-overs minimum default for short formats (house); "lowest board" team KO rule (organiser's choice); WHS 6.2b mixed-tee application; group exits banded by group position (house).
+- **Not done:** forcing a decider at full time for pre-existing KO matches (bracket pick covers it); undo of an advance pick; leg-1 correction after leg 2 started doesn't restamp; chess team KO play-off game linking; live DLS par chip; full DLS table; course hole count can't change; basketball minutes/+/- still keyed by name; meet divisions in the medal table.
+
 ## SD-48 team ties, SD-51 match records — DONE (cdf0168, 2026-10-11)
 - See DEVLOG. No migration. **Live step:** redeploy `notify-followers` (edge function edited; not type-checked — no Deno locally). Until then every rubber still sends "Full time" to followers.
 - Check (from memory): ITTF team ranking clauses; BWF team tie-breaks and dead rubbers in groups; Davis Cup Finals tie-breaks; squash team order; FIDE team tie-breaks simplified; chess KO board count is a house choice; carrom team format generic.
