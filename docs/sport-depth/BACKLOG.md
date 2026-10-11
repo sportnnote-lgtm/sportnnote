@@ -86,10 +86,10 @@ P2 items are parked (PLAN.md §6.2).
 | SD-53 | Conduct, cards and penalties (warning → point → game → match; AWARD_GAME) | squash (+ tennis, TT, badminton, volleyball) | GEN-23; SQ-04 | DONE | 133422a · Wave 3a · M · additive actions |
 | SD-54 | Rally timeouts (TT 1 per match; pickleball 2/3 per game + switch-ends prompt) and match/game duration | TT, pickleball, squash (+ others P2) | GEN-24; TT-06, PB-08, SQ-09 | DONE | 133422a · Wave 3a · S · new TIMEOUT action |
 | SD-55 | Atomic stat increment RPC (optional) | generic | GEN-25; cross-sport X5 | READY | Wave 3a · S · **migration** (provisional 0052) · drop if statTotals covers all drift |
-| SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | READY | Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
+| SD-56 | Football HT score in the status / detail line; shirt-number column; drop the dead `PlayerStatLine.goals` | football | FB-09 | IN-PROGRESS | Wave 3b R1 · S · PARTIAL: per-player box (MIN G A SH SOT SV GA FC YC RC) delivered by SD-23 (ba10433) |
 | SD-57 | Basketball FIBA timeouts per half; draw only where the format allows | basketball | BK-11 | READY | Wave 3b R1 · S |
 | SD-58 | Volleyball serve tracking (first server, rotation) → pre-fills Ace / Serve error, feeds SD-22 | volleyball | VB-05 | DONE | a4b28ee · Wave 3b R1 · M · new SET_SERVE / SET_ROTATION |
-| SD-59 | Kabaddi technical points and line-outs | kabaddi | KB-05 | READY | Wave 3b R1 · S · new TECH_POINT |
+| SD-59 | Kabaddi technical points and line-outs | kabaddi | KB-05 | IN-PROGRESS | Wave 3b R1 · S · new TECH_POINT |
 | SD-60 | Tennis 1st-serve tracking (Fault button) → 1st serve %, 1st/2nd serve points won | tennis | TN-05 | READY | Wave 3b R1 · M · new FAULT · D8 |
 | SD-61 | Badminton fast doubles scoring (two "Rally won" buttons; credit optional) | badminton | BD-08 | READY | Wave 3b R1 · S |
 | SD-62 | Table tennis doubles service/receive order by name; change-ends cue | table tennis | TT-07 | READY | Wave 3b R1 · M |
@@ -100,9 +100,9 @@ P2 items are parked (PLAN.md §6.2).
 | SD-67 | Chess more results (double forfeit, dead position, adjudication, arbiter decision); name in "has White"; exact time control | chess | CH-08 | READY | Wave 3b R1 · S |
 | SD-68 | Carrom ICF score sheet (breaker, running total, penalty boards) | carrom | CR-03 | READY | Wave 3b R1 · S |
 | SD-69 | Cricket captain and keeper flags → Captaincy section, keeper dismissals | cricket | CK-04 | READY | Wave 3b R1 · S · backfill replay script |
-| SD-70 | Football discipline table + suspension rule | football | FB-12 | READY | Wave 3b R2 · M |
+| SD-70 | Football discipline table + suspension rule | football | FB-12 | IN-PROGRESS | Wave 3b R2 · M |
 | SD-71 | Volleyball substitutions + libero → sets played | volleyball | VB-06 | DONE | a4b28ee · Wave 3b R2 · M · needs SD-29 · new SUB |
-| SD-72 | Kabaddi cards (green / yellow 2-min suspension / red) | kabaddi | KB-06 | READY | Wave 3b R2 · M · needs SD-59 |
+| SD-72 | Kabaddi cards (green / yellow 2-min suspension / red) | kabaddi | KB-06 | IN-PROGRESS | Wave 3b R2 · M · needs SD-59 |
 | SD-73 | Doubles serving order chosen per set (tennis ITF Rule 14; padel server naming) | tennis, padel | TN-09, PD-08 | DONE | delivered by SD-104 (b3fbe7e): per-set SET_SERVE_ORDER picker for tennis / padel; tiebreak rotation and serve stats follow it |
 | SD-74 | Badminton doubles server and receiver by name (Law 11) | badminton | BD-05 | READY | Wave 3b R2 · M |
 | SD-75 | Padel timeline labels: Game / Break / Hold with team names | padel | PD-09 | READY | Wave 3b R2 · S |
@@ -110,10 +110,10 @@ P2 items are parked (PLAN.md §6.2).
 | SD-77 | Chess wall chart / crosstable | chess | CH-06 | READY | Wave 3b R2 · M · needs SD-26 |
 | SD-78 | Carrom break and White/Black Slams | carrom | CR-04 | READY | Wave 3b R2 · S |
 | SD-79 | Cricket career shows BF, ducks, bowling innings, 4w/5w | cricket | CK-08 (rest) | READY | Wave 3b R2 · S |
-| SD-80 | Football own goals credited + shootout takers/keepers | football | FB-13, FB-14 | READY | Wave 3b R3 · S |
+| SD-80 | Football own goals credited + shootout takers/keepers | football | FB-13, FB-14 | IN-PROGRESS | Wave 3b R3 · S |
 | SD-81 | Volleyball box remainder: per-player attack attempts, serve errors and errors (needs a detailed capture mode; SD-04 credits errors to nobody) and attack efficiency for a Best Attacker award | volleyball | VB-07, VB-08 | READY | Wave 3b R3 · M · needs SD-71 · PARTIAL: rest delivered by SD-23 (ba10433) box + opp-error rows, SD-24 (b3fbe7e) per-set career, SD-27 (526d50e) FIVB awards |
 | SD-82 | Kabaddi career remainder: raid strike %, not-out %, tackle %, super raids / super tackles (need SD-33's attempt keys), best match by total points | kabaddi | KB-04 | DONE | 665c38f · Wave 3b R3 · S · needs SD-33 · PARTIAL: rest delivered by SD-24 (b3fbe7e) pts/match, raid / tackle split, Super 10s, High 5s, best raid match |
-| SD-83 | Kabaddi rule check: touches when the raider is caught | kabaddi | KB-11 | READY | Wave 3b R3 · S · D6 · new matches only (v2) |
+| SD-83 | Kabaddi rule check: touches when the raider is caught | kabaddi | KB-11 | IN-PROGRESS | Wave 3b R3 · S · D6 · new matches only (v2) |
 | SD-84 | Golf Handicap Index field, trend, unofficial differential | golf | GF-09 | READY | Wave 3b R3 · M |
 | SD-85 | Chess ratings (FIDE ID, per time control), rating-seeded R1, ARO, performance rating | chess | CH-07 | READY | Wave 3b R3 · M |
 | SD-86 | Carrom career remainder: games W/L, board % and points per board (need SD-37), slams, 25-0 games, best game | carrom | CR-05 | DONE | 68dd087 · Wave 3b R3 · M · needs SD-37, SD-78 · PARTIAL: rest delivered by SD-24 (b3fbe7e) match W-L, points per match, boards, queens, best match |
