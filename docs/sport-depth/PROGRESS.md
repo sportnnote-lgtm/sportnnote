@@ -2,6 +2,10 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-93 combined events — DONE (7042c7d, 2026-10-11)
+- See DEVLOG. Note: the brief's sample values for heptathlon 100 mH 13.00 (1115) and 800 m 2:00.00 (1087) were wrong; the formula gives 1124 and 1116 (verified against 1000-point anchors and six world-record totals).
+- Check (from memory): current combined-events false-start rule (TR 39.8.3 / 16.8 — may have changed); 3+-way tie method (pairwise sum, then highest single scores); CR 31 sub-rule number; women's 60 m not offered (no coefficients). Not done: organiser-set heats/groups per event; separate withdraw button; hub/profile/reopen not seen in the demo (unit tests only). run-athletics-track-events is 907 words.
+
 ## SD-92 athletics road / walks / cross-country — DONE (69b1678, 2026-10-11)
 - See DEVLOG. Check (from memory): XC is TR 56 (not 55); TR 19.24/19.25 timing; TR 54.7.x walk cards + Penalty Zone times; default "displace" team rule (NFHS/NCAA practice) vs World XC "overall places"; last-scorer tie-break (NFHS uses the 6th runner — not offered); XC distances/ranges are house choices.
 - Not done: historic road records, chip + gun per runner, relays/ekiden/trail, heats for huge fields, yellow paddles, different-judges check, "＋ All house" not capped at team size. run-athletics-track-events guide is over 900 words (pre-existing).
