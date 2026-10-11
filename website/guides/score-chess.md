@@ -10,6 +10,8 @@ updated: 2026-10-11
 
 Chess is scored once per game: who won, or a draw, and how it ended. The app writes the result the way an arbiter does, White first: 1-0 when White wins, ½-½ for a draw and 0-1 when Black wins. Players get 1, ½ or 0 points in the table.
 
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
+
 ## Before you start
 - You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
 - In a Swiss, the pairing already gives each game its colours. See [Run a chess tournament](/guides/run-a-chess-tournament/).

@@ -11,6 +11,7 @@ import { appendMatchEvent, endMatchManually, getMatch, getMatchEvents, mapThroug
 import { newUuid } from '../core/deviceId';
 import { deltasBesideTotals } from './statSync';
 import type { MatchEventRecord, SportId } from '../core/types';
+import { withMatchRecords } from '../sports/matchRecords'; // SD-51
 
 /** What publishing would do — for the preview, and what publish then writes. */
 export async function planAmendment(matchId: string, sport: SportId, config: Record<string, unknown> | undefined, ops: AmendOp[], lines: string[], byName: string) {
@@ -59,7 +60,7 @@ export async function publishAmendment(matchId: string, sport: SportId, config: 
   } else {
     for (const d of plan.deltas) await recordStatLine({ matchId, playerId: d.playerId, sport, stat: d.stat, by: d.by });
   }
-  await updateMatchSnapshot(matchId, (plugin.snapshot?.(afterState as never) ?? afterState) as object, plugin.isComplete(afterState as never));
+  await updateMatchSnapshot(matchId, withMatchRecords(plugin, afterState as never, plugin.isComplete(afterState as never)), plugin.isComplete(afterState as never));
   // A match ended by hand stores its final score in the result — keep it true to
   // the corrected log (endMatchManually is the only writer of results).
   if (m?.result?.score) {

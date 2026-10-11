@@ -74,6 +74,11 @@ export const halfText = (n: number) => {
 
 const SPORTS_WITH_DRAWS = new Set<string>(['football', 'hockey', 'handball', 'kabaddi']);
 
+/** SD-48 — is this a team-tie table (its chain uses a rubber-count / game-
+ *  points criterion)? */
+const TIE_TBS = new Set<string>(['rubbersRatio', 'h2hGames', 'rubbersDiff', 'rubbersPct', 'boardPoints']);
+const isTieChain = (chain: Set<TieBreaker>) => [...chain].some((k) => TIE_TBS.has(k));
+
 /** Does this sport's table need the SD-17 units (sets / games / rally points)
  *  for its base columns? */
 function needsUnits(sport: SportId | string): boolean {
@@ -97,7 +102,7 @@ const gamesDiff = (t: TeamStanding) => (t.gamesFor === undefined ? DASH : signed
 
 /** Canonical left-to-right order (Pts last, except chess: score then its
  *  tie-break columns, as on a FIDE rank list). */
-const ORDER = ['played', 'won', 'drawn', 'lost', 'wdl', 'nr', 'for', 'against', 'diff', 'sets', 'gamesDiff', 'pointsDiff',
+const ORDER = ['played', 'won', 'drawn', 'lost', 'wdl', 'nr', 'for', 'against', 'sets', 'diff', 'rubbersPct', 'gamesDiff', 'pointsDiff',
   'nrr', 'setRatio', 'pointRatio', 'setsPct', 'gamesPct', 'fairPlay'];
 
 /** A sport's standings columns for a config (its tie-break chain) and who the
@@ -129,7 +134,18 @@ export function tableColumns(
 
   // The sport's own score columns.
   const forCol = (label: string, title: string): StandingsColumn => ({ key: 'for', label, title, value: (t) => String(t.for) });
-  if (sport === 'cricket') {
+  // SD-48 — a team-tie table: the row's score is rubbers won-lost (chess:
+  // game points), then the games / points the tie-breaks read.
+  const ties = isTieChain(chain);
+  if (ties && chess) {
+    add({ key: 'for', label: 'GP', title: 'game points (boards)', wide: true, value: (t) => halfText(t.for) });
+  } else if (ties) {
+    add({ key: 'sets', label: 'R', title: 'rubbers won-lost', wide: true, value: (t) => `${t.for}-${t.against}` });
+    add({ key: 'diff', label: 'R±', title: 'rubbers difference', value: (t) => signed(t.diff) });
+    if (unit === 'sets') add({ key: 'setsPct', label: 'S%', title: '% of sets won', wide: true, extra: true, value: (t) => pctText(t.setsFor ?? 0, t.setsAgainst ?? 0) });
+    add({ key: 'gamesDiff', label: 'G±', title: 'games difference', extra: true, value: gamesDiff });
+    if (unit !== 'sets') add({ key: 'pointsDiff', label: 'P±', title: sport === 'carrom' ? 'board points difference' : 'points difference', extra: true, value: rallyDiff });
+  } else if (sport === 'cricket') {
     add({ key: 'nrr', label: 'NRR', title: 'net run rate', wide: true, value: (t) => (t.nrr === undefined ? DASH : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`) });
   } else if (chess) {
     // the score is the points column
@@ -160,13 +176,16 @@ export function tableColumns(
   const tb = (c: Omit<StandingsColumn, 'tieBreak' | 'extra'>) => add({ ...c, tieBreak: true, extra: true });
   for (const k of chain) {
     switch (k) {
+      case 'rubbersPct': tb({ key: 'rubbersPct', label: 'R%', title: '% of rubbers won', wide: true, value: (t) => pctText(t.for, t.against) }); break;
       case 'for':
+        if (ties) break;
         // cricket keeps its SD-12 table; chess has no score; volleyball: the Sets column
         if (sport === 'cricket' || chess || sport === 'volleyball') break;
         if (unit === 'sets' || unit === 'games') tb({ key: 'for', label: unit === 'sets' ? 'SW' : 'GW', title: tieBreakerLabel('for', sport), value: (t) => String(t.for) });
         else if (sport === 'kabaddi') tb({ key: 'for', label: 'PF', title: 'points scored', value: (t) => String(t.for) });
         break;
       case 'diff':
+        if (ties) break;
         if (chess || sport === 'cricket' || sport === 'volleyball') break; // volleyball: the Sets column
         tb({ key: 'diff', label: '±', title: tieBreakerLabel('diff', sport), value: (t) => signed(t.diff) });
         break;
@@ -203,7 +222,8 @@ export function tableColumns(
     }
   }
   const columns = chess || after.length ? [...ordered, points, ...after] : [...ordered, points];
-  const kind = participantKind === 'both' ? 'individual' : participantKind;
+  // SD-48: a team-tie table's rows are teams, whatever the sport's own kind
+  const kind = ties ? 'team' : participantKind === 'both' ? 'individual' : participantKind;
   return { nameHeader: kind === 'individual' ? 'Player' : kind === 'pairs' ? 'Pair' : 'Team', columns };
 }
 

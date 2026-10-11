@@ -21,7 +21,8 @@ import { useAuth } from '../core/auth';
 import { useTournament, useTournamentById, useLeagueData, useOrganizations, useTeams, useDivisions } from '../data/hooks';
 import { matchesInDivision } from '../data/groups';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { getMyPlayerId, createMatch } from '../data/repos';
+import { getMyPlayerId, createMatch, createTeamTie } from '../data/repos';
+import { tournamentTieSpec } from '../data/teamTie';
 import { canManageTournament } from '../core/org';
 import {
   knockoutBracket, bracketChampion, type BracketSlot, type BracketMatch, type DecideFn,
@@ -143,7 +144,18 @@ export default function BracketScreen() {
     setError(null); setBusy(true);
     try {
       const format = tournament?.formats?.[activeSport] ?? {};
+      // SD-48: a sport run as team ties gets its next round as ties too.
+      const tieSpec = tournamentTieSpec(format as Record<string, unknown>);
       for (let i = 0; i < pairs.length; i++) {
+        if (tieSpec) {
+          await createTeamTie({
+            tournamentId, sport: activeSport, stage: pairs[i].stage, spec: tieSpec,
+            teamAId: pairs[i].homeId, teamBId: pairs[i].awayId,
+            startsAt: new Date(baseTimeMs + (i + 1) * 24 * 60 * 60 * 1000).toISOString(),
+            hostIds: myId ? [myId] : [], matchFormat: format,
+          });
+          continue;
+        }
         await createMatch({
           tournamentId, sport: activeSport, stage: pairs[i].stage,
           homeTeamId: pairs[i].homeId, awayTeamId: pairs[i].awayId,

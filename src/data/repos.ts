@@ -70,7 +70,11 @@ import { getSport } from '../sports/registry';
 import { replayLog } from '../sports/amend';
 import type { StatTotalsContext } from '../sports/types';
 import { mergeMatchConfig } from '../core/matchConfig';
-import { seriesLegFormat, readSeriesMeta, type SeriesFormat } from './series';
+import { seriesLegFormat, readSeriesMeta, deriveSeries, type SeriesFormat } from './series';
+import {
+  rubberFormat, rubberPlayers, rubberLabel, lineupOf, lineupKey, rubbersToStop, rubbersToRestore, decidedBy, tieResultText, tieSpecOf,
+  TIE_KEYS, type TieSpec, type TieLineup,
+} from './teamTie';
 import type {
   Role,
   MatchResult,
@@ -2747,6 +2751,143 @@ export async function setLineup(matchId: string, lineup: MatchLineup): Promise<v
   await supabase
     .from('match_lineups')
     .upsert({ match_id: matchId, home: lineup.home, away: lineup.away, home_formation: lineup.homeFormation ?? null, away_formation: lineup.awayFormation ?? null });
+}
+
+/* ------------------------------ Team ties (SD-48) ------------------------- */
+
+export interface NewTeamTie {
+  tournamentId?: string;
+  sport: SportId;
+  /** team A (always the home side of every rubber) and team B */
+  teamAId: string;
+  teamBId: string;
+  spec: TieSpec;
+  name?: string;
+  group?: string;
+  stage?: string;
+  /** the first rubber's start; later ones are `spec.gap` minutes apart */
+  startsAt: string;
+  hostIds?: string[];
+  venueName?: string;
+  /** the sport's match rules (points per game, games per match…) for every rubber */
+  matchFormat?: SportFormat;
+}
+
+/** Create a team tie: one normal match per rubber, all sharing a `__seriesId`
+ *  (a `rubbers` series) and carrying the tie spec on their format, team A at
+ *  home. No new table — see teamTie.ts. */
+export async function createTeamTie(input: NewTeamTie): Promise<{ seriesId: string; matches: Match[] }> {
+  const seriesId = `tie-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const base = new Date(input.startsAt).getTime();
+  const gapMs = Math.max(0, input.spec.gap ?? 0) * 60_000;
+  const matches: Match[] = [];
+  for (let i = 0; i < input.spec.rubbers.length; i++) {
+    const m = await createMatch({
+      tournamentId: input.tournamentId,
+      sport: input.sport,
+      group: input.group,
+      stage: input.stage,
+      homeTeamId: input.teamAId,
+      awayTeamId: input.teamBId,
+      startsAt: new Date(base + i * gapMs).toISOString(),
+      hostIds: input.hostIds,
+      venueName: input.venueName,
+      format: { ...(input.matchFormat ?? {}), ...rubberFormat(input.spec, i, { seriesId, teamAId: input.teamAId, name: input.name }) },
+    });
+    matches.push(m);
+  }
+  return { seriesId, matches };
+}
+
+/** ITTF draw: which team plays the ABC letters. Rewrites the spec (and the
+ *  rubbers' labels) on every rubber — only before any lineup is in and before
+ *  any rubber has started. */
+export async function setTieAbc(seriesId: string, abc: 'home' | 'away'): Promise<void> {
+  const rubbers = await getTieRubbers(seriesId);
+  const spec = rubbers.map(tieSpecOf).find(Boolean);
+  if (!spec || spec.abc === abc) return;
+  if (lineupOf(rubbers, 'home') || lineupOf(rubbers, 'away')) throw new Error('A lineup is already in — the ABC draw is made before the lineups.');
+  if (rubbers.some((m) => m.status === 'live' || m.status === 'completed')) throw new Error('The tie has started.');
+  const next: TieSpec = { ...spec, abc };
+  for (const m of rubbers) {
+    const i = (readSeriesMeta(m)?.leg ?? 1) - 1;
+    await setMatchFormat(m.id, { [TIE_KEYS.spec]: JSON.stringify(next), [TIE_KEYS.slot]: rubberLabel(next, i) });
+  }
+}
+
+/** Every rubber of a tie (any order). Live: one query on the format key. */
+export async function getTieRubbers(seriesId: string): Promise<Match[]> {
+  if (!isSupabaseConfigured || !supabase) return demo.matches.filter((m) => readSeriesMeta(m)?.id === seriesId);
+  const { data, error } = await withMatchCols<unknown[]>((cols) => supabase!.from('matches').select(cols).eq('format->>__seriesId', seriesId));
+  if (error || !data) return [];
+  return (data as unknown as MatchRow[]).map(toMatch);
+}
+
+/** Save one team's lineup on every rubber. Once BOTH lineups are in, each
+ *  rubber not yet started gets its matchday squads (its 1 or 2 players a
+ *  side), so it scores and credits like any singles / doubles match. The tie
+ *  host enters it (the captains hand their lineups to the referee). */
+export async function saveTieLineup(seriesId: string, side: 'home' | 'away', lineup: TieLineup): Promise<void> {
+  const rubbers = await getTieRubbers(seriesId);
+  const spec = rubbers.map(tieSpecOf).find(Boolean);
+  if (!spec) throw new Error('This tie could not be found.');
+  const stamped: TieLineup = { ...lineup, at: new Date().toISOString() };
+  const json = JSON.stringify(stamped);
+  for (const m of rubbers) {
+    await setMatchFormat(m.id, { [lineupKey(side)]: json });
+    m.format = { ...(m.format ?? {}), [lineupKey(side)]: json };
+  }
+  await applyTieSquads(rubbers, spec);
+}
+
+/** Write each unstarted rubber's squads from the two lineups (both needed). */
+async function applyTieSquads(rubbers: Match[], spec: TieSpec): Promise<void> {
+  const home = lineupOf(rubbers, 'home');
+  const away = lineupOf(rubbers, 'away');
+  if (!home || !away) return;
+  for (const m of rubbers) {
+    if (m.status !== 'scheduled' && m.status !== 'postponed') continue;
+    const i = (readSeriesMeta(m)?.leg ?? 1) - 1;
+    const h = rubberPlayers(spec, i, 'home', home);
+    const a = rubberPlayers(spec, i, 'away', away);
+    if (h) await setMatchSquad(m.id, 'home', { starters: h, subs: [] });
+    if (a) await setMatchSquad(m.id, 'away', { starters: a, subs: [] });
+  }
+}
+
+/** Keep a tie's unplayed rubbers in step with its result: in "stop at the
+ *  majority" mode, rubbers still to play once the tie is decided are set
+ *  aside (cancelled + `__tieDead`); if a correction undoes the decision they
+ *  come back. Idempotent — safe to call after every rubber result. */
+export async function settleTie(seriesId: string): Promise<{ stopped: number; restored: number }> {
+  const rubbers = await getTieRubbers(seriesId);
+  const spec = rubbers.map(tieSpecOf).find(Boolean);
+  const series = deriveSeries(rubbers)[0];
+  if (!spec || !series) return { stopped: 0, restored: 0 };
+  const stop = rubbersToStop(series, spec);
+  for (const m of stop) {
+    await setMatchFormat(m.id, { [TIE_KEYS.dead]: true });
+    await setMatchStatus(m.id, 'cancelled');
+  }
+  const back = rubbersToRestore(series);
+  for (const m of back) {
+    await setMatchFormat(m.id, { [TIE_KEYS.dead]: false });
+    await setMatchStatus(m.id, 'scheduled');
+  }
+  return { stopped: stop.length, restored: back.length };
+}
+
+/** After a rubber's result has gone out: settle the tie and say whether THIS
+ *  rubber decided it (then the one tie-result alert goes out, not one per
+ *  rubber). Null when the match isn't a tie rubber. */
+export async function afterRubberResult(matchId: string): Promise<{ decidedNow: boolean; text: string; seriesId: string } | null> {
+  const m = await getMatch(matchId);
+  const meta = m ? readSeriesMeta(m) : null;
+  if (!m || !meta || !tieSpecOf(m)) return null;
+  await settleTie(meta.id);
+  const series = deriveSeries(await getTieRubbers(meta.id))[0];
+  if (!series) return null;
+  return { decidedNow: decidedBy(series, matchId), text: tieResultText(series), seriesId: meta.id };
 }
 
 /* ------------------------- Matchday squads (XI + subs) --------------------- */

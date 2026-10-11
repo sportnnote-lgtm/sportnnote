@@ -14,7 +14,9 @@ import { DateTimeField } from '../components/DateTimeField';
 import { getSport } from '../sports/registry';
 import { useTeams, useTournamentById, useLeagueData, useTournamentTeams, useDivisions } from '../data/hooks';
 import { DivisionTabs } from '../components/DivisionTabs';
-import { createMatch, getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
+import { createMatch, createTeamTie, getMyPlayerId, updateTournament, patchTournamentFormat, formatDiff } from '../data/repos';
+import { TieSetup } from '../components/TieSetup';
+import { TIE_SPORTS, TIE_POINTS, tournamentTieSpec, type TieSpec } from '../data/teamTie';
 import { structureFromFormat, mergeStructure, structureFieldFor, type StructureConfig } from '../data/structureConfig';
 import { defaultsFor } from '../components/FormatEditor';
 import { matchFormatFor } from '../data/matchFormat';
@@ -97,6 +99,13 @@ export default function GenerateFixturesScreen() {
     setVenue((v) => v || tournament.grounds![0]);
   }, [tournament?.grounds]);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
+  // SD-48 — each fixture as a team tie of N rubbers (saved on the sport's
+  // format as `teamTie`, so later rounds and the table follow it).
+  const savedTie = tournamentTieSpec(tournament?.formats?.[sport] as Record<string, unknown> | undefined);
+  const [asTies, setAsTies] = useState<boolean | null>(null);
+  const [tieSpec, setTieSpec] = useState<TieSpec | null>(null);
+  const tiesOn = TIE_SPORTS.has(sport) && (asTies ?? !!savedTie);
+  const effTie = tieSpec ?? savedTie;
   const [error, setError] = useState<string | null>(null);
   // SD-26: said when the Swiss pairing had to bend a rule (rematch / colours).
   const [pairNote, setPairNote] = useState<string | null>(null);
@@ -329,6 +338,16 @@ export default function GenerateFixturesScreen() {
       const koLike = drafts.every((d) => d.stage && d.stage !== 'group' && d.stage !== 'super' && !String(d.stage).startsWith('swiss'));
       const format = matchFormatFor(tournament, sport, koLike, defaultsFor(getSport(sport).formatFields ?? [], 'tournament'));
       for (const d of drafts) {
+        if (tiesOn && effTie) {
+          // SD-48: the pairing becomes one tie (its rubbers share the slot's time)
+          await createTeamTie({
+            tournamentId: params.tournamentId, sport, spec: effTie,
+            group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined),
+            teamAId: d.homeId, teamBId: d.awayId, startsAt: d.when.toISOString(),
+            venueName: venue.trim() || undefined, hostIds: myId ? [myId] : [], matchFormat: format,
+          });
+          continue;
+        }
         await createMatch({
           tournamentId: params.tournamentId, sport,
           group: d.group, stage: d.stage ?? (d.group ? 'group' : undefined), byes: d.byes,
@@ -361,6 +380,12 @@ export default function GenerateFixturesScreen() {
         if (structure === 'swiss' && isChess && swissMatches.length === 0) {
           if (bySeedRating) merged.swissSeed = 'rating';
           else if (before?.swissSeed) merged.swissSeed = 'order';
+        }
+        // SD-48: remember the tie format, and rank ties by the federation's team
+        // ranking the first time ties are turned on.
+        if (tiesOn && effTie) {
+          merged.teamTie = JSON.stringify(effTie);
+          if (!before?.teamTie) Object.assign(merged, TIE_POINTS[sport]?.set ?? {});
         }
         await patchTournamentFormat(params.tournamentId, sport, formatDiff(before, merged));
         await updateTournament(params.tournamentId, {
@@ -546,6 +571,24 @@ export default function GenerateFixturesScreen() {
             )}
           </>
         )}
+        {/* SD-48 — team ties: every fixture is one tie of N rubbers. */}
+        {TIE_SPORTS.has(sport) && structure !== 'advance' && (
+          <View style={{ gap: theme.spacing(2) }}>
+            <View style={st.chips}>
+              <SelectChip label="👤 Each fixture is one match" active={!tiesOn} onPress={() => { setAsTies(false); invalidate(); }} />
+              <SelectChip label="👥 Each fixture is a team tie" active={tiesOn} onPress={() => { setAsTies(true); invalidate(); }} />
+            </View>
+            {tiesOn && (
+              <>
+                <TieSetup sport={sport} value={effTie} onChange={(sp) => { setTieSpec(sp); invalidate(); }} showDraw={false} />
+                <Text style={textStyles.muted}>
+                  The table counts each tie once ({TIE_POINTS[sport]?.label ?? 'team ranking'}). ABC v XYZ: the first-named team plays ABC — change it per tie before the lineups go in.
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+        {structure === 'advance' && tiesOn && effTie && <Text style={textStyles.muted}>👥 Knockout fixtures are created as team ties ({effTie.rubbers.length} rubbers).</Text>}
         {/* Play-in round — offered when the knockout field isn't a clean power of two. */}
         {(structure === 'knockout' || (structure === 'advance' && target === 'knockout')) && koFieldIds.length >= 3 && !koPlan.clean && (
           <View style={{ gap: theme.spacing(2) }}>

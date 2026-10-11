@@ -14,7 +14,9 @@ import { Button, TextField, SelectChip, ScreenTitle, FieldLabel, FormError, text
 import { DateTimeField } from '../components/DateTimeField';
 import { SPORT_LIST, getSport } from '../sports/registry';
 import { useTeams } from '../data/hooks';
-import { createSeries, getMyPlayerId } from '../data/repos';
+import { createSeries, createTeamTie, getMyPlayerId } from '../data/repos';
+import { TieSetup } from '../components/TieSetup';
+import { TIE_SPORTS, type TieSpec } from '../data/teamTie';
 import { useAuth } from '../core/auth';
 import type { SeriesFormat } from '../data/series';
 import type { SportId } from '../core/types';
@@ -39,9 +41,11 @@ export default function CreateSeriesScreen() {
   const teams = useTeams(sport ?? undefined);
   const [teamA, setTeamA] = useState<string | null>(null);
   const [teamB, setTeamB] = useState<string | null>(null);
-  const [format, setFormat] = useState<SeriesFormat>('best_of');
+  const [format, setFormat] = useState<SeriesFormat>(route.params?.sport && TIE_SPORTS.has(route.params.sport) ? 'rubbers' : 'best_of');
   const [legs, setLegs] = useState(3);
   const [awayGoals, setAwayGoals] = useState(false);
+  // SD-48 — a team tie in a racket sport / chess / carrom: rubbers from a preset
+  const [tieSpec, setTieSpec] = useState<TieSpec | null>(null);
   const [name, setName] = useState('');
   const [when, setWhen] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d;
@@ -50,9 +54,10 @@ export default function CreateSeriesScreen() {
   const [busy, setBusy] = useState(false);
 
   const teamName = (id: string | null) => teams.find((t) => t.id === id)?.name ?? '';
-  const legsCount = format === 'aggregate' ? 2 : legs;
+  const isTie = format === 'rubbers' && !!sport && TIE_SPORTS.has(sport);
+  const legsCount = format === 'aggregate' ? 2 : isTie && tieSpec ? tieSpec.rubbers.length : legs;
 
-  function pickSport(s: SportId) { setSport(s); setTeamA(null); setTeamB(null); }
+  function pickSport(s: SportId) { setSport(s); setTeamA(null); setTeamB(null); setTieSpec(null); if (TIE_SPORTS.has(s)) setFormat('rubbers'); }
 
   async function submit() {
     if (!sport) return setError('Pick a sport.');
@@ -61,6 +66,15 @@ export default function CreateSeriesScreen() {
     setError(null); setBusy(true);
     try {
       const myId = await getMyPlayerId(profile?.id);
+      if (isTie) {
+        if (!tieSpec) { setBusy(false); return setError('Pick how the tie is played.'); }
+        const { seriesId } = await createTeamTie({
+          tournamentId, sport, teamAId: teamA, teamBId: teamB, spec: tieSpec,
+          name: name.trim() || undefined, startsAt: when.toISOString(), hostIds: myId ? [myId] : [],
+        });
+        nav.replace('Series', { seriesId });
+        return;
+      }
       const { seriesId } = await createSeries({
         tournamentId, sport, teamAId: teamA, teamBId: teamB,
         format, legs: legsCount, name: name.trim() || undefined,
@@ -83,7 +97,7 @@ export default function CreateSeriesScreen() {
 
         {sport && (
           <>
-            <Dropdown label="Team A (hosts leg 1)" value={teamName(teamA) || null} placeholder="Pick team A"
+            <Dropdown label={isTie ? 'Team A (named first)' : 'Team A (hosts leg 1)'} value={teamName(teamA) || null} placeholder="Pick team A"
               options={teams.filter((t) => t.id !== teamB).map((t) => ({ id: t.id, label: t.name }))} onPick={setTeamA} />
             <Dropdown label="Team B" value={teamName(teamB) || null} placeholder="Pick team B"
               options={teams.filter((t) => t.id !== teamA).map((t) => ({ id: t.id, label: t.name }))} onPick={setTeamB} />
@@ -96,7 +110,11 @@ export default function CreateSeriesScreen() {
               <Text style={textStyles.muted}>{FORMATS.find((f) => f.id === format)!.hint}</Text>
             </View>
 
-            {format !== 'aggregate' && (
+            {isTie && (
+              <TieSetup sport={sport} value={tieSpec} onChange={setTieSpec} teamAName={teamName(teamA) || undefined} teamBName={teamName(teamB) || undefined} />
+            )}
+
+            {format !== 'aggregate' && !isTie && (
               <View style={{ gap: theme.spacing(2) }}>
                 <FieldLabel>{format === 'best_of' ? 'Best of' : 'Rubbers'}</FieldLabel>
                 <View style={st.chips}>
@@ -114,15 +132,17 @@ export default function CreateSeriesScreen() {
             )}
 
             <TextField label="Series name (optional)" value={name} onChange={setName} placeholder="e.g. India tour of Australia" />
-            <DateTimeField label="First match" value={when} onChange={setWhen} />
+            <DateTimeField label={isTie ? 'Tie starts' : 'First match'} value={when} onChange={setWhen} />
             <Text style={textStyles.muted}>
-              {legsCount} match{legsCount === 1 ? '' : 'es'} will be created, three days apart, alternating home & away.
+              {isTie
+                ? `${legsCount} rubbers will be created${tieSpec?.gap ? `, ${tieSpec.gap} min apart` : ', all at the same time'}. Enter both lineups on the tie page.`
+                : `${legsCount} match${legsCount === 1 ? '' : 'es'} will be created, three days apart, alternating home & away.`}
             </Text>
           </>
         )}
 
         <FormError message={error} />
-        <Button label={busy ? 'Creating…' : `Create series (${legsCount} match${legsCount === 1 ? '' : 'es'})`} onPress={submit} disabled={busy || !sport} />
+        <Button label={busy ? 'Creating…' : isTie ? `Create tie (${legsCount} rubbers)` : `Create series (${legsCount} match${legsCount === 1 ? '' : 'es'})`} onPress={submit} disabled={busy || !sport} />
       </ScrollView>
     </SafeAreaView>
   );

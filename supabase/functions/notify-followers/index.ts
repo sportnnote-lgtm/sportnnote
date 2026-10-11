@@ -41,6 +41,13 @@
  * and optionally 'functions_anon_key' (the public anon key, for the gateway's JWT
  * check). Until both are set the trigger posts nothing.
  *
+ * TEAM TIES (SD-48): a rubber of a team tie (its `format.__tie` is set) does
+ * not spam team / tournament followers. 'start' goes to them for rubber 1
+ * only; a rubber's 'result' goes to its players' followers only; and when the
+ * rubber that DECIDES the tie completes, team + tournament followers get one
+ * "🏆 A beat B 3–1" push (ledger: lead_key 'tie_result' on rubber 1's id, so
+ * it can never double-send). Before this deploy, every rubber pushed as a match.
+ *
  * ALERT CHOICES: a follower whose follows.prefs has `scores: false` gets no stat
  * pushes; `start: false` / `result: false` skip the status pushes. Before the
  * migration the prefs column is absent → the select falls back and everyone gets
@@ -120,6 +127,74 @@ interface MatchRecord {
   away_team_id: string | null;
   winner: 'home' | 'away' | 'draw' | null;
   result?: { kind?: string } | null;
+  format?: Record<string, unknown> | null;
+}
+
+/** SD-48 — the tie this rubber belongs to (its format carries the spec). */
+function tieOf(record: MatchRecord): { id: string; leg: number; n: number; half: boolean; teamA: string } | null {
+  const f = record.format ?? {};
+  if (typeof f.__tie !== 'string' || typeof f.__seriesId !== 'string') return null;
+  return { id: f.__seriesId, leg: Number(f.__seriesLeg) || 0, n: Number(f.__seriesN) || 0, half: f.__tieHalf === true, teamA: String(f.__seriesA ?? '') };
+}
+
+/** SD-48 — the tie's score from its rubbers, and whether it is decided (more
+ *  than half the rubbers' points; ½ each for a drawn chess board). */
+function tieScore(rubbers: MatchRecord[], tie: NonNullable<ReturnType<typeof tieOf>>) {
+  let a = 0, b = 0;
+  const n = tie.n || rubbers.length;
+  for (const r of rubbers) {
+    if (r.status !== 'completed') continue;
+    const aHome = r.home_team_id === tie.teamA;
+    if (r.winner === 'draw') {
+      const noGame = r.result?.kind === 'no_result' || r.result?.kind === 'abandoned';
+      if (tie.half && !noGame) { a += 0.5; b += 0.5; }
+    } else if (r.winner) { if ((r.winner === 'home') === aHome) a += 1; else b += 1; }
+  }
+  const need = tie.half ? n / 2 + 0.5 : Math.floor(n / 2) + 1;
+  const left = rubbers.filter((r) => r.status === 'scheduled' || r.status === 'live' || r.status === 'postponed').length;
+  const decided = a >= need || b >= need || left === 0;
+  return { a, b, decided };
+}
+
+const pts = (n: number) => (Number.isInteger(n) ? String(n) : `${Math.floor(n) || ''}½`);
+
+/** SD-48 — one push to team + tournament followers when a rubber decides its tie. */
+async function handleTieResult(record: MatchRecord, tie: NonNullable<ReturnType<typeof tieOf>>): Promise<Record<string, unknown>> {
+  const { data } = await supabase.from('matches')
+    .select('id, status, sport, tournament_id, home_team_id, away_team_id, winner, result, format')
+    .eq('format->>__seriesId', tie.id);
+  const rubbers = (data ?? []) as MatchRecord[];
+  const now = tieScore(rubbers, tie);
+  if (!now.decided) return { tie: 'open' };
+  // Decided only now? (this rubber back to unfinished → not decided)
+  const before = tieScore(rubbers.map((r) => (r.id === record.id ? { ...r, status: 'live', winner: null } : r)), tie);
+  if (before.decided) return { tie: 'already decided' };
+  const first = rubbers.find((r) => Number((r.format ?? {}).__seriesLeg) === 1) ?? record;
+  const teamIds = [first.home_team_id, first.away_team_id].filter((x): x is string => !!x);
+  const [teamF, tourF, { data: teams }] = await Promise.all([
+    followersOf('team', teamIds),
+    followersOf('tournament', record.tournament_id ? [record.tournament_id] : []),
+    supabase.from('teams').select('id, name, short_name').in('id', teamIds),
+  ]);
+  const recipients = [...new Set([...teamF, ...tourF].filter((f) => wants(f.prefs, 'result')).map((f) => f.follower_id))];
+  if (!recipients.length) return { tie: 'no followers' };
+  const { data: claimed } = await supabase
+    .from('reminder_sends')
+    .upsert(recipients.map((recipient_id) => ({ match_id: first.id, lead_key: 'tie_result', recipient_id, kind: 'follower' })),
+      { onConflict: 'match_id,lead_key,recipient_id,kind', ignoreDuplicates: true })
+    .select('recipient_id');
+  const toSend = claimed ? (claimed as { recipient_id: string }[]).map((r) => r.recipient_id) : [];
+  if (!toSend.length) return { tie: 'duplicate' };
+  const nameOf = (id: string | null) => {
+    const t = (teams ?? []).find((x) => x.id === id);
+    return (t?.short_name || t?.name || 'Team') as string;
+  };
+  const A = nameOf(tie.teamA || first.home_team_id);
+  const B = nameOf(teamIds.find((x) => x !== (tie.teamA || first.home_team_id)) ?? null);
+  const title = now.a === now.b ? `🤝 ${A} and ${B} draw ${pts(now.a)}–${pts(now.b)}`
+    : now.a > now.b ? `🏆 ${A} beat ${B} ${pts(now.a)}–${pts(now.b)}` : `🏆 ${B} beat ${A} ${pts(now.b)}–${pts(now.a)}`;
+  const out = await sendToProfiles(toSend, title, 'Team tie result', { url: `/m/${record.id}`, matchId: record.id });
+  return { tie: 'sent', recipients: toSend.length, ...out };
 }
 
 const idsOf = (v: unknown): string[] =>
@@ -154,15 +229,21 @@ async function handleMatchStatus(record: MatchRecord, oldStatus: string | null |
     playerIds = (members ?? []).map((m) => m.player_id as string);
   }
 
+  // SD-48: a tie rubber reaches team / tournament followers only as the tie
+  // (rubber 1's start, and the one tie result below) — players' followers
+  // still hear about their rubber.
+  const tie = tieOf(record);
+  const tieQuiet = !!tie && !(key === 'start' && tie.leg === 1);
+  const tieOut = tie && key === 'result' ? await handleTieResult(record, tie).catch((e) => ({ tie: 'error', message: String(e) })) : undefined;
   const [teamF, tourF, playerF] = await Promise.all([
-    followersOf('team', teamIds),
-    followersOf('tournament', record.tournament_id ? [record.tournament_id] : []),
+    tieQuiet ? Promise.resolve([] as FollowRow[]) : followersOf('team', teamIds),
+    tieQuiet ? Promise.resolve([] as FollowRow[]) : followersOf('tournament', record.tournament_id ? [record.tournament_id] : []),
     followersOf('player', [...new Set(playerIds)]),
   ]);
   // Filter by each follow's choice, then de-dupe per profile: a profile gets the
   // alert if ANY of its follows touching this match wants it.
   const recipients = [...new Set([...teamF, ...tourF, ...playerF].filter((f) => wants(f.prefs, key)).map((f) => f.follower_id))];
-  if (!recipients.length) return json({ key, sent: 0, recipients: 0 });
+  if (!recipients.length) return json({ key, sent: 0, recipients: 0, ...(tieOut ? { tieOut } : {}) });
 
   // Ledger: one start + one result per (match, profile), ever.
   const { data: already } = await supabase
@@ -198,7 +279,7 @@ async function handleMatchStatus(record: MatchRecord, oldStatus: string | null |
       : record.result?.kind ? 'No result' : 'Match ended';
   }
   const out = await sendToProfiles(toSend, title, body, { url: `/m/${record.id}`, matchId: record.id });
-  return json({ key, recipients: toSend.length, ...out });
+  return json({ key, recipients: toSend.length, ...out, ...(tieOut ? { tieOut } : {}) });
 }
 
 interface StatLineRecord {

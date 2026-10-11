@@ -35,6 +35,8 @@ import { getMyPlayerId, patchTournamentFormat, setTournamentHosts, setTournament
 import { TournamentAwardsTab } from '../components/TournamentAwardsTab';
 import { LeaderSplitChips, useLeaderSplits } from '../components/LeaderSplitChips';
 import { DisciplineTable } from '../components/DisciplineTable';
+import { TournamentRecords } from '../components/TournamentRecords';
+import { collapseTies, isTieMatch } from '../data/teamTie';
 import { LEAD_OPTIONS, DEFAULT_LEAD_MINUTES } from '../data/reminderPrefs';
 import { canManageTournament, tournamentHostPlayerIds, isAcademicCommunity, standardAt, membersOnDate, organizableOrgsForPlayer, hasOrgRole } from '../core/org';
 import type { OwnershipEvent, OwnerRef, TournamentOfficial, OfficialRole, TournamentAwards } from '../core/types';
@@ -273,13 +275,15 @@ export default function TournamentProfileScreen() {
   useEffect(() => { getTournamentOfficials(params.tournamentId).then(setOfficials); }, [params.tournamentId, offTick]);
   const bySportFilter = (list: typeof matches) =>
     matchSport === 'all' ? list : list.filter((m) => m.sport === matchSport);
+  // SD-48: a team tie lists as ONE fixture (its rubbers are on the tie page)
+  const fixtureList = useMemo(() => collapseTies(matches), [matches]);
   const upcomingMatches = useMemo(
-    () => bySportFilter(matches.filter((m) => m.status !== 'completed').sort((a, b) => a.startsAt.localeCompare(b.startsAt))),
-    [matches, matchSport]
+    () => bySportFilter(fixtureList.filter((m) => m.status !== 'completed').sort((a, b) => a.startsAt.localeCompare(b.startsAt))),
+    [fixtureList, matchSport]
   );
   const completedMatches = useMemo(
-    () => bySportFilter(matches.filter((m) => m.status === 'completed').sort((a, b) => b.startsAt.localeCompare(a.startsAt))),
-    [matches, matchSport]
+    () => bySportFilter(fixtureList.filter((m) => m.status === 'completed').sort((a, b) => b.startsAt.localeCompare(a.startsAt))),
+    [fixtureList, matchSport]
   );
 
   // Organiser: broadcast the upcoming fixtures (WhatsApp) or print them / save a PDF (web).
@@ -308,7 +312,7 @@ export default function TournamentProfileScreen() {
     setTimeout(() => w.print(), 300);
   };
 
-  const openMatch = (m: (typeof matches)[number]) => openMatchViewer(nav, m);
+  const openMatch = (m: (typeof matches)[number]) => (isTieMatch(m) ? nav.navigate('Series', { seriesId: m.tieId }) : openMatchViewer(nav, m));
 
   // For a school/college host: which class each member was in during this event
   // (resolved from each student's class timeline at the tournament's start date).
@@ -1051,6 +1055,10 @@ export default function TournamentProfileScreen() {
             {activeSport === 'football' ? (
               <DisciplineTable matches={matches} format={tournament.formats?.football as Record<string, unknown> | undefined}
                 onPlayer={(id) => nav.navigate('PlayerProfile', { playerId: id })} />
+            ) : null}
+            {/* SD-51: tournament records (top 5 per type, from each match's records block) */}
+            {activeSport && !isEventSport(activeSport) ? (
+              <TournamentRecords sport={activeSport} matches={matches} onMatch={openMatch} />
             ) : null}
           </>
         )}

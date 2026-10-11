@@ -10,6 +10,8 @@ updated: 2026-10-11
 
 Every rally scores, and the rally winner serves next. You tap who won each rally; the app keeps the score and shows who serves from which court.
 
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
+
 ## Before you start
 - You must be a scorer or host. See [Scorers and officials](/guides/scorers-and-officials/).
 - **Format**: **BWF · 21 rally**, **5×11 (rally, cap 15)**, **15-point**, **Single game to 21** or **Custom**.

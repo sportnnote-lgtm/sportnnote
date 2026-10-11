@@ -60,6 +60,8 @@ import { AddInvitePlayer } from '../components/AddInvitePlayer';
 import { tournamentHostPlayerIds } from '../core/org';
 import { canScoreMatch, isListedScorer, isMatchHost } from '../core/scoringAccess';
 import { seriesMetaFromFormat } from '../data/series';
+import { tieSpecFromFormat, TIE_KEYS } from '../data/teamTie';
+import { announceTieResult } from '../data/tieAlerts';
 import { canFieldPlayer } from '../core/eligibility';
 import { useAuth } from '../core/auth';
 import { openVenue } from '../core/venue';
@@ -110,6 +112,9 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [homeLeaders, setHomeLeaders] = useState<TeamLeadership>({});
   const [awayLeaders, setAwayLeaders] = useState<TeamLeadership>({});
 
+  // SD-48: the match's own format, internal `__*` keys included (the merged
+  // `meta.config` drops them) — the series / tie keys live there.
+  const [rawFormat, setRawFormat] = useState<Record<string, unknown> | undefined>(undefined);
   const [meta, setMeta] = useState<{
     homeTeamId?: string; awayTeamId?: string; tournamentId?: string; tournamentName?: string;
     config?: Record<string, unknown>; venueName?: string; venueMapsUrl?: string; streamUrl?: string; startsAt?: string;
@@ -154,6 +159,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           if (on) {
             setScorerIds(m.scorerIds && m.scorerIds.length ? m.scorerIds : (m.scorerId ? [m.scorerId] : []));
             setMatchHostIds(m.hostIds ?? []);
+            setRawFormat(m.format as Record<string, unknown> | undefined);
             setHomeLeaders(hl);
             setAwayLeaders(al);
             setMeta({
@@ -238,6 +244,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
   const [homeFull, setHomeFull] = useState<Player[]>([]);
   const [awayFull, setAwayFull] = useState<Player[]>([]);
   const sideRosters = useMemo(() => ({ home: homeFull.map((p) => p.id), away: awayFull.map((p) => p.id) }), [homeFull, awayFull]);
+  // SD-48 — a rubber of a team tie (its spec rides on the format)
+  const tieRubberMeta = useMemo(() => {
+    if (!tieSpecFromFormat(rawFormat)) return undefined;
+    return { first: Number(rawFormat?.__seriesLeg) === 1 };
+  }, [rawFormat]);
   const { state, dispatch, undo, reset, eventCount, live, syncing, rejectedCount, discardRejected, refresh, amend, lastStep, resultSendsAt, sendResultNow } = useLiveMatch({
     matchId,
     sport,
@@ -250,6 +261,11 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
     awayTeamId: meta.awayTeamId,
     tournamentId: meta.tournamentId,
     config: meta.config,
+    // SD-48: a team-tie rubber announces the TIE result once, not itself
+    ...(tieRubberMeta ? {
+      tieRubber: tieRubberMeta,
+      onResultSent: () => { if (matchId) void announceTieResult(matchId, { homeTeamId: meta.homeTeamId, awayTeamId: meta.awayTeamId, tournamentId: meta.tournamentId, sportName: getSport(sport).name }); },
+    } : {}),
   });
 
   const viewerTz = useUserTimeZone(); // show every time on this screen in the viewer's own zone
@@ -1762,7 +1778,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         )}
         {/* Part-of-a-series banner — links back to the tie's standing. */}
         {(() => {
-          const sm = seriesMetaFromFormat(meta.config);
+          const sm = seriesMetaFromFormat(rawFormat ?? meta.config);
           if (!sm) return null;
           return (
             <TouchableOpacity
@@ -1771,8 +1787,12 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
               style={[st.reschedBanner, { backgroundColor: theme.colors.primary + '1A', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
               onPress={() => navigation.navigate('Series', { seriesId: sm.id })}
             >
-              <Text style={st.reschedBannerText}>🔁 {sm.name ? sm.name + ' · ' : ''}Leg {sm.leg} of {sm.legs}</Text>
-              <Text style={[st.editLink, { marginTop: 0 }]}>View series ›</Text>
+              {tieRubberMeta ? (
+                <Text style={[st.reschedBannerText, { flex: 1 }]}>👥 Rubber {sm.leg} of {sm.legs}{typeof rawFormat?.[TIE_KEYS.slot] === 'string' ? ` · ${rawFormat[TIE_KEYS.slot]}` : ''}</Text>
+              ) : (
+                <Text style={st.reschedBannerText}>🔁 {sm.name ? sm.name + ' · ' : ''}Leg {sm.leg} of {sm.legs}</Text>
+              )}
+              <Text style={[st.editLink, { marginTop: 0 }]}>{tieRubberMeta ? 'View tie ›' : 'View series ›'}</Text>
             </TouchableOpacity>
           );
         })()}

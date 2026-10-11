@@ -12,6 +12,7 @@ import { openVenue } from '../core/venue';
 import { formatShort, useUserTimeZone } from '../core/time';
 import type { Match } from '../core/types';
 import { matchLine, resultWords } from '../sports/matchLine';
+import { isTieMatch, fmtPts } from '../data/teamTie';
 
 /** A stored snapshot from an older engine must never break a card. */
 function safeLine(f: () => string): string {
@@ -58,6 +59,8 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
   // hand "6-4, 3-2 ret."). A walkover already reads W/O in the middle.
   const setLine = done && showScore ? matchLine(match) : '';
   // SD-56: football's half-time score ("HT 1-0") under a live / final score.
+  // SD-48: a team tie shown as one fixture (rubbers won; ½ for chess draws)
+  const tie = isTieMatch(match);
   const cardLine = showScore && !setLine && match.state && plugin.cardLine ? safeLine(() => plugin.cardLine!(match.state as never)) : '';
 
   return (
@@ -101,9 +104,9 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
 
         {showScore ? (
           <View style={s.scoreWrap}>
-            <Text style={[s.score, live && s.scoreLive]}>{match.score!.home}</Text>
+            <Text style={[s.score, live && s.scoreLive]}>{tie ? fmtPts(match.score!.home) : match.score!.home}</Text>
             <Text style={s.scoreSep}>–</Text>
-            <Text style={[s.score, live && s.scoreLive]}>{match.score!.away}</Text>
+            <Text style={[s.score, live && s.scoreLive]}>{tie ? fmtPts(match.score!.away) : match.score!.away}</Text>
           </View>
         ) : walkover ? (
           <Text style={s.walkover}>W/O</Text>
@@ -122,7 +125,9 @@ export function MatchCard({ match, onPress, onStart }: { match: Match; onPress: 
 
       {/* Footer: call-to-action / kickoff, plus venue */}
       <Text style={s.foot}>
-        {live ? (
+        {tie ? (
+          `👥 Team tie · ${match.tieRubbers.length} rubbers${done ? '' : live ? ' · in progress' : ` · ${time}`}`
+        ) : live ? (
           <Text style={s.cta}>tap to score ›</Text>
         ) : done ? (
           match.result ? resultWords({ sport: match.sport, result: match.result }, match.homeTeam.name, match.awayTeam.name) : walkover ? 'Walkover' : 'Full time'

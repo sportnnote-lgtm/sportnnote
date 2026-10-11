@@ -36,6 +36,7 @@ import { AppState } from 'react-native';
 import { createResultHold, type ResultHold } from './resultHold';
 import { pendingResults, flushPendingResults } from './pendingResults';
 import { tapFeedback, undoFeedback } from '../core/haptics';
+import { withMatchRecords } from '../sports/matchRecords'; // SD-51
 
 const toAction = (e: MatchEventRecord): ScoreAction => ({
   type: e.type,
@@ -102,10 +103,21 @@ export function useLiveMatch(params: {
   onRemoteEvent?: (prev: unknown, next: unknown) => void;
   /** a pure viewer (the OBS overlay): never flush this device's outbox */
   readOnly?: boolean;
+  /** SD-48 — this match is a rubber of a team tie: team / tournament
+   *  followers get "live" for the tie's first rubber only and no per-rubber
+   *  "Full time" (the tie result goes out once, via `onResultSent`). */
+  tieRubber?: { first: boolean };
+  /** SD-48 — called after this device has sent the held result (the match is
+   *  now completed): the tie settles and announces itself if this decided it. */
+  onResultSent?: () => void;
 }): UseLiveMatch {
   const { matchId, sport, canScore = true, homeTeamName, awayTeamName, homeTeamId, awayTeamId, tournamentId, config, lockStatus = 'unsupported', readOnly = false } = params;
   const onRemoteRef = useRef(params.onRemoteEvent);
   onRemoteRef.current = params.onRemoteEvent;
+  const tieRef = useRef(params.tieRubber);
+  tieRef.current = params.tieRubber;
+  const onResultSentRef = useRef(params.onResultSent);
+  onResultSentRef.current = params.onResultSent;
   // SD-119: latest rosters, read at credit time (they load after the screen mounts)
   const rostersRef = useRef(params.rosters);
   rostersRef.current = params.rosters;
@@ -146,7 +158,7 @@ export function useLiveMatch(params: {
   const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const persist = (s: unknown, completed = plugin.isComplete(s as never)) => {
     const id = matchId!;
-    const p = writeChainRef.current.then(() => updateMatchSnapshot(id, (plugin.snapshot?.(s as never) ?? s) as object, completed));
+    const p = writeChainRef.current.then(() => updateMatchSnapshot(id, withMatchRecords(plugin, s as never, completed), completed));
     writeChainRef.current = p.catch(() => {});
     return p;
   };
@@ -342,7 +354,7 @@ export function useLiveMatch(params: {
         (!!awayTeamId && followStore.wants('team', awayTeamId, key)) ||
         (!!tournamentId && followStore.wants('tournament', tournamentId, key));
       const matchLabel = `${homeTeamName ?? 'Home'} vs ${awayTeamName ?? 'Away'}`;
-      if (seq === 1 && teamOrTourWants('start')) {
+      if (seq === 1 && (!tieRef.current || tieRef.current.first) && teamOrTourWants('start')) {
         void notify({ title: `🔴 ${matchLabel} is live`, body: getSport(sport).name, matchId });
       }
       // SD-111: the deciding tap holds the result (the "Full time" alert goes out
@@ -462,9 +474,12 @@ export function useLiveMatch(params: {
     const s = stateRef.current;
     if (plugin.isComplete(s as never)) {
       await syncThenPersist(s);
-      const wants = (!!homeTeamId && followStore.wants('team', homeTeamId, 'result')) ||
+      // SD-48: a tie rubber's result goes to its players' followers (server);
+      // team / tournament followers get the tie result once (onResultSent).
+      if (tieRef.current) { try { onResultSentRef.current?.(); } catch { /* never blocks the send */ } }
+      const wants = !tieRef.current && ((!!homeTeamId && followStore.wants('team', homeTeamId, 'result')) ||
         (!!awayTeamId && followStore.wants('team', awayTeamId, 'result')) ||
-        (!!tournamentId && followStore.wants('tournament', tournamentId, 'result'));
+        (!!tournamentId && followStore.wants('tournament', tournamentId, 'result')));
       if (wants) {
         const sm = plugin.summary(s as never);
         // SD-01: set/game sports add the per-set line — "2–1 · 21-18, 19-21, 21-15".

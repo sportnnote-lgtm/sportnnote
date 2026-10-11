@@ -8,7 +8,9 @@ order: 59
 updated: 2026-10-11
 ---
 
-You tap who won each point; the app keeps the score and shows who serves next, by name in doubles.
+You tap who won each point; the app keeps score and names the next server in doubles.
+
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
 
 ## Before you start
 - You must be a scorer or host. See [Scorers and officials](/guides/scorers-and-officials/).

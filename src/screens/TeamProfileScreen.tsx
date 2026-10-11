@@ -1,6 +1,7 @@
 /** Team (house) profile: stats (form, scored/conceded, top performers,
  *  head-to-head), record per sport, squad, matches — and a follow toggle. */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { collapseTies, isTieMatch } from '../data/teamTie';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -35,7 +36,10 @@ export default function TeamProfileScreen() {
   const { teamId } = params;
   const { profile } = useAuth();
   const { team, loading } = useTeamSummary(teamId);
-  const { matches } = useMatches();
+  const { matches: rawMatches } = useMatches();
+  // SD-48: a team tie is ONE result for the team (W/L, form, records); its
+  // rubbers credit the players on their own profiles.
+  const matches = useMemo(() => collapseTies(rawMatches), [rawMatches]);
   const players = usePlayers();
   const { isFollowing, toggle } = useFollow(profile?.id);
   const [showSquad, setShowSquad] = useState(false);
@@ -143,7 +147,7 @@ export default function TeamProfileScreen() {
   const leaders = [...stats.leaders, ...moreLeaders];
   const teamRecs = sport ? teamRecords(sport, team.id, scoped, { lineOf: (m) => matchLineFor(m, team.id), dayOf: formatDay }) : [];
   const nameOf = (id: string) => squad.find((p) => p.id === id)?.fullName ?? players.find((p) => p.id === id)?.fullName ?? 'Player';
-  const openMatch = (m: (typeof matches)[number]) => nav.navigate('LiveScoring', {
+  const openMatch = (m: (typeof matches)[number]) => isTieMatch(m) ? nav.navigate('Series', { seriesId: m.tieId }) : nav.navigate('LiveScoring', {
     matchId: m.id, sport: m.sport,
     homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
     homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,

@@ -8,7 +8,9 @@ order: 57
 updated: 2026-10-11
 ---
 
-You tap who won each point. The app handles 15-30-40, deuce, tiebreaks and who serves.
+You tap each point; the app handles 15-30-40, deuce, tiebreaks and serve.
+
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).

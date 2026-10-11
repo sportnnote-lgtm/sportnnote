@@ -15,6 +15,8 @@ import { getFollows, getFollowPrefs, savePushToken, getCaptainTeams, getMyPlayer
 import { captainStore } from '../data/captainStore';
 import { useReminderEngine } from '../data/reminders';
 import '../data/devSeed'; // registers window.__sportfolioSeedDemo() in dev only
+import '../data/teamTieDemoSeed'; // SD-48: __sportnnoteDemo.seedTeamTies() — demo mode (no backend) only
+import '../data/matchRecordsBackfill'; // SD-51: registers __sportnnoteAdmin.backfillMatchRecords (console only)
 import { OnboardingOverlay } from '../components/OnboardingOverlay';
 import HomeScreen from '../screens/HomeScreen';
 import MatchesScreen from '../screens/MatchesScreen';

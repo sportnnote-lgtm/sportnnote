@@ -30,6 +30,7 @@ import { canoePlugin } from './canoe';
 import { cyclingPlugin } from './cycling';
 import { handballPlugin } from './handball';
 import { STAT_SCHEMAS } from './statSchemas';
+import { MATCH_RECORD_HOOKS } from './matchRecordHooks';
 
 export const SPORTS: Record<SportId, SportPlugin<any>> = {
   football: footballPlugin,
@@ -61,6 +62,8 @@ export const SPORTS: Record<SportId, SportPlugin<any>> = {
 // SD-15: every plugin carries its stat schema (defined next to the plugin in
 // `<sport>/stats.ts`, collected RN-free in statSchemas.ts).
 for (const id of Object.keys(SPORTS) as SportId[]) SPORTS[id].statSchema = STAT_SCHEMAS[id] as SportPlugin<any>['statSchema'];
+// SD-51: the per-match records hook (pure, in matchRecordHooks.ts).
+for (const id of Object.keys(SPORTS) as SportId[]) { const h = MATCH_RECORD_HOOKS[id]; if (h && !SPORTS[id].matchRecords) SPORTS[id].matchRecords = h; }
 
 export const SPORT_LIST = Object.values(SPORTS);
 

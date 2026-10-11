@@ -41,7 +41,8 @@ export function PointsEditor({ sport, value, onChange }: {
 }) {
   const [advanced, setAdvanced] = useState(false);
   const cfg = standingsConfigFromFormat(sport, value);
-  const available = availableTieBreakers(sport);
+  // SD-48: a sport run as team ties also offers the rubber-count criteria.
+  const available = availableTieBreakers(sport, typeof value.teamTie === 'string');
   const uniq = (xs: number[]) => [...new Set(xs)].sort((a, b) => a - b);
   // Chess scores a draw as half a point; PKL a tie 3 and a win 5.
   const winOptions = uniq([1, 2, 3, cfg.win]);
@@ -53,7 +54,7 @@ export function PointsEditor({ sport, value, onChange }: {
   // event's rules. Shown once the structure is Swiss (or a bye value is saved).
   const isSwiss = structureFromFormat(value)?.shape === 'swiss' || typeof value.byePoints === 'number';
   const bye = sport === 'chess' && isSwiss ? byePointsFor(sport, cfg) : undefined;
-  const presets = standingsPresets(sport);
+  const presets = standingsPresets(sport, value);
   const current = activePreset(sport, value);
   const rules = marginRulesText(cfg);
   const label = (t: TieBreaker) => tieBreakerLabel(t, sport);

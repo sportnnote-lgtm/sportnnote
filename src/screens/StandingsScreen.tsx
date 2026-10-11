@@ -62,6 +62,7 @@ export default function StandingsScreen() {
   // Who the rows are (SD-18 "Player" header): singles events list players —
   // unless houses / the school team are the entrants in every sport.
   const participant: TableParticipant = tournament?.participation === 'inter_house' || tournament?.participation === 'school_team'
+    || typeof (tournament?.formats?.[activeSport] as Record<string, unknown> | undefined)?.teamTie === 'string' // SD-48: team ties
     ? 'team' : participantMode(activeSport, tournament?.formats?.[activeSport] as Record<string, unknown> | undefined);
   const phases = useMemo(
     () => standingsPhases(activeCat ? matchesInDivision(matches, entries, activeCat) : matches, activeSport, cfg, entries.map((e) => e.team)),

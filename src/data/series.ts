@@ -185,10 +185,16 @@ export function resolveSeries(s: Series): SeriesStanding {
       if (winnerIsA) winsA += 1; else winsB += 1;
     } else if (m.status === 'completed') {
       played += 1; // a drawn leg counts as played but no win credited
+      // SD-48: a drawn rubber of a chess team match is ½ each (not a 0-0
+      // double forfeit, not a no result).
+      if (s.format === 'rubbers' && m.winner === 'draw' && halfPointLeg(m)) { winsA += 0.5; winsB += 0.5; }
     }
   }
 
-  const clinchAt = clinchTarget(s.legsPlanned || s.legs.length || 1);
+  const n = s.legsPlanned || s.legs.length || 1;
+  // SD-48: with ½-point rubbers a team needs MORE than half (2½ of 4 boards).
+  const halves = s.format === 'rubbers' && s.legs.some(halfPointLeg);
+  const clinchAt = halves ? n / 2 + 0.5 : clinchTarget(n);
   const scheduledLeft = s.legs.filter((m) => m.status === 'scheduled' || m.status === 'live' || m.status === 'postponed').length;
 
   let winnerId: string | undefined;
@@ -239,6 +245,15 @@ export function resolveSeries(s: Series): SeriesStanding {
   };
 }
 
+/** SD-48 — a rubber whose draw is worth ½ to each side (chess team match:
+ *  `__tieHalf` on its format), unless it ended without a game (no result,
+ *  abandoned, a 0-0 double forfeit). */
+function halfPointLeg(m: Match): boolean {
+  if ((m.format as Record<string, unknown> | undefined)?.__tieHalf !== true) return false;
+  if (m.result?.kind === 'no_result' || m.result?.kind === 'abandoned') return false;
+  return (m.state as { method?: unknown } | null | undefined)?.method !== 'double-forfeit';
+}
+
 /** Away goals a side scored (the leg where they were the away team). */
 function awayGoalsFor(s: Series, teamId?: string): number {
   if (!teamId) return 0;
@@ -252,7 +267,30 @@ function awayGoalsFor(s: Series, teamId?: string): number {
 
 /** The winning team id of a decided series, else undefined. */
 export function seriesWinnerId(s: Series): string | undefined {
-  return resolveSeries(s).winnerId;
+  const st = resolveSeries(s);
+  if (st.winnerId || !st.drawn) return st.winnerId;
+  // SD-48: a knockout chess team match level on board points goes to the
+  // board count; a group-stage draw stays a draw (1 match point each).
+  const ko = !!s.stage && s.stage !== 'group' && s.stage !== 'super' && !s.stage.startsWith('swiss');
+  return ko && s.format === 'rubbers' && s.legs.some(halfPointLeg) ? boardCountWinner(s) : undefined;
+}
+
+/** SD-48 — knockout only: a chess team match level on board points is decided
+ *  by the board count (Berger board weighting: points on board b count
+ *  n − b + 1, so board 1 weighs most). Still level → undefined (the organiser
+ *  settles it, e.g. a blitz play-off). Check the event's own regulations. */
+export function boardCountWinner(s: Series): string | undefined {
+  const n = s.legs.length;
+  let a = 0, b = 0;
+  s.legs.forEach((m, i) => {
+    if (m.status !== 'completed') return;
+    const w = n - i;
+    const aHome = m.homeTeam?.id === s.teamAId;
+    if (m.winner === 'draw') { if (halfPointLeg(m)) { a += w / 2; b += w / 2; } }
+    else if (m.winner) { if ((m.winner === 'home') === aHome) a += w; else b += w; }
+  });
+  if (a === b) return undefined;
+  return a > b ? s.teamAId : s.teamB?.id;
 }
 
 function summarize(a: {

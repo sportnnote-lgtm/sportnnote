@@ -10,6 +10,8 @@ updated: 2026-10-11
 
 In PAR (point-a-rally) squash every rally is a point. In English scoring only the server scores; a lost serve is a hand-out. You tap each rally's winner.
 
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
+
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
 - **Format**: **PSA (PAR 11 · best of 5)**, **American (PARS 15)**, **Club English (to 9)**, **Short (PAR 11 · best of 3)** or **Custom**.

@@ -10,6 +10,8 @@ updated: 2026-10-11
 
 Carrom is scored one board at a time. The board winner scores one point for each of the opponent's coins still on it, plus 3 for a covered Queen. The app adds up the games and the match to ICF rules.
 
+> **Tip:** Team match? See [Run a team tie](/guides/run-team-ties/).
+
 ## Before you start
 - You must be a scorer of the match, or a host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/).
 - The organiser picks the **Format** (**ICF (to 25 · 8 boards · best of 3)**, **Single game to 25**, **Casual (to 29 · best of 3)** or **Custom**) and **Singles** or **Doubles**.

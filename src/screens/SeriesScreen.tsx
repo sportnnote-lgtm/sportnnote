@@ -18,6 +18,9 @@ import { getMyPlayerId, deleteSeries } from '../data/repos';
 import { deriveSeries, resolveSeries, type SeriesFormat } from '../data/series';
 import type { Match } from '../core/types';
 import { matchLine } from '../sports/matchLine';
+import { TeamTieView } from '../components/TeamTieView';
+import { isTieRubber } from '../data/teamTie';
+import { canScoreByRole } from '../core/roles';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -36,6 +39,9 @@ export default function SeriesScreen() {
   const { matches, loading } = useMatches('all');
 
   const series = useMemo(() => deriveSeries(matches).find((s) => s.id === params.seriesId), [matches, params.seriesId]);
+  // SD-48: a team tie (its rubbers carry the tie spec)
+  const isTie = !!series && series.legs.some(isTieRubber);
+  useEffect(() => { if (isTie) nav.setOptions({ title: 'Team tie' }); }, [isTie, nav]);
   const standing = useMemo(() => (series ? resolveSeries(series) : null), [series]);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -81,13 +87,16 @@ export default function SeriesScreen() {
       homeName: m.homeTeam.shortName, awayName: m.awayTeam.shortName,
       homeTeamName: m.homeTeam.name, awayTeamName: m.awayTeam.name,
       homeColor: m.homeTeam.colorHex, awayColor: m.awayTeam.colorHex,
-      canScore: false,
+      // SD-48: a tie's rubbers are scored from here (the screen still checks
+      // the scorer list / lock); other series legs open read-only as before.
+      canScore: isTie ? canScoreByRole(profile?.role) || canManage : false,
     });
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={st.content}>
-        <ScreenTitle title={series.name || `${teamAName} v ${teamBName}`} subtitle={FORMAT_LABEL[series.format](series.legsPlanned)} />
+        <ScreenTitle title={series.name || `${teamAName} v ${teamBName}`} subtitle={isTie ? `Team tie · ${series.legsPlanned} rubbers` : FORMAT_LABEL[series.format](series.legsPlanned)} />
+        {isTie ? <TeamTieView initial={series} canManage={canManage} tz={tz} onOpen={openLeg} /> : (<>
 
         {/* Standing */}
         <View style={st.board}>
@@ -138,6 +147,7 @@ export default function SeriesScreen() {
         {standing.decided && standing.gamesLeft > 0 && (
           <Text style={textStyles.muted}>The tie is decided — remaining matches are dead rubbers.</Text>
         )}
+        </>)}
 
         {/* Host-only delete — offered only while no leg has been played. */}
         {canManage && (

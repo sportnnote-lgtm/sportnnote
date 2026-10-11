@@ -16,6 +16,7 @@ import { mergeLog } from './eventLog';
 import { effectiveLog } from '../sports/amend';
 import type { MatchEventRecord, SportId } from '../core/types';
 import { parsePending, withPending, withoutPending, type PendingResult } from './resultHold';
+import { withMatchRecords } from '../sports/matchRecords'; // SD-51
 
 const KEY = 'sportfolio.pendingResults';
 
@@ -68,7 +69,7 @@ async function finalize(r: PendingResult): Promise<void> {
     const totals = await matchStatTotals(r.matchId, r.sport as SportId, s).catch(() => null);
     if (totals) await syncMatchStatLines(r.matchId, r.sport as SportId, totals, { home: r.homeTeamName, away: r.awayTeamName }).catch(() => 0);
   }
-  await updateMatchSnapshot(r.matchId, (plugin.snapshot?.(s as never) ?? s) as object, true);
+  await updateMatchSnapshot(r.matchId, withMatchRecords(plugin, s as never, true), true);
 }
 
 /** Send every result a previous session held but never sent. A failure (offline)

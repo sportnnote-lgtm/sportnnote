@@ -463,6 +463,14 @@ export interface SportPlugin<S = unknown> {
   /** Parity #19 — the state to persist in `matches.state` (e.g. cricket drops
    *  its derived ball log, which replay rebuilds). Omitted = the state as is. */
   snapshot?: (state: S) => S;
+  /** SD-51 (GEN-21) — per-match record candidates derived from the FINAL state
+   *  (cricket team totals / partnerships / best figures / margins, biggest wins,
+   *  fastest goals, hat-tricks, 30-point games, super 10s, longest matches,
+   *  comebacks, tiebreaks, fastest chess wins…). PURE and read-only: written
+   *  into the completed snapshot as `matches.state.matchRecords`
+   *  (`withMatchRecords`) and aggregated by the tournament Records card. Set by
+   *  the registry from `matchRecordHooks.ts`; absent = the sport has none. */
+  matchRecords?: (state: S) => import('./matchRecords').MatchRecordsBlock | null;
   /** Parity #25 — richer score-ticker cells (batters, bowler, this over…),
    *  merged over the summary by `buildTicker`. `names` = the short team names. */
   tickerDetail?: (state: S, names: { home: string; away: string }) => import('./ticker').TickerDetail;

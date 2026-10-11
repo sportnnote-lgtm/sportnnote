@@ -24,6 +24,7 @@ import type { LineResult, Player, StatLine } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { openMatchViewer } from '../navigation/openMatch';
 import { FormRow } from '../components/FormStrip';
+import { collapseTies } from '../data/teamTie';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -72,13 +73,13 @@ export default function HeadToHeadScreen() {
 
   const lineOf = (m: Parameters<typeof matchLine>[0], side: 'home' | 'away') => matchLine(m, side);
   const rec: HeadToHeadRecord | null = useMemo(() => {
-    if (teamMode) return teamHeadToHead(teamA!, teamB!, matches.filter((m) => m.sport === sport), lineOf);
+    if (teamMode) return teamHeadToHead(teamA!, teamB!, collapseTies(matches.filter((m) => m.sport === sport)), lineOf); // SD-48: a tie = one meeting
     if (!a || !b) return null;
     return playerHeadToHead(sport, a, b, [...matchLines, ...bLines], matchById, lineOf);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamMode, teamA, teamB, a, b, sport, matches, matchLines, bLines, matchById]);
 
-  const sportMatches = matches.filter((m) => m.sport === sport);
+  const sportMatches = collapseTies(matches.filter((m) => m.sport === sport));
   const teamName = (id?: string) => {
     const m = sportMatches.find((x) => x.homeTeam.id === id || x.awayTeam.id === id);
     return (m?.homeTeam.id === id ? m?.homeTeam.name : m?.awayTeam.name) ?? 'Team';

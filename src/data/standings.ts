@@ -9,6 +9,7 @@ import { STAT_SPORTS, leaderCategories, eligibilityOf, statSchema } from '../spo
 import { rankPlayers, statDefIn, qualifierOf, qualifierText, type Qualifier, type StatDef } from '../sports/statSchema.ts';
 import { fideTieBreaks, type FideTieBreaks, type XRound } from './swissTiebreaks.ts';
 import { effectiveQualifier, withLineResults, type LeaderMins } from './leaderMinimums.ts';
+import { collapseTies, isTieMatch, TIE_POINTS, tournamentTieSpec, type TieMatch } from './teamTie.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -145,6 +146,10 @@ export interface PointsAdjustment {
  *   • pointRatio / pointsDiff — rally points won ÷ lost / won − lost (FIVB, BWF, pickleball)
  *   • gamesDiff / gamesPct — games won − lost / games won ÷ played (BWF, ATP, padel)
  *   • fairPlay  — fewest disciplinary points (FIFA: Y −1, 2nd Y −3, R −4, Y+R −5)
+ *   • team ties (SD-48 — a tie is one fixture whose score is rubbers won):
+ *     rubbersRatio (rubbers won ÷ lost among the tied, ITTF), h2hGames (games
+ *     ratio among the tied, ITTF), rubbersDiff (BWF), rubbersPct (ITF Davis
+ *     Cup), boardPoints (chess game points)
  *   • lots      — explicit drawing of lots: teams still level are flagged
  *                 `lots` ("Drawn by lot") instead of a silent name order
  *  plus any tie-breaker registered with `registerTieBreaker` (chess Buchholz &
@@ -152,7 +157,8 @@ export interface PointsAdjustment {
 export type BuiltinTieBreaker =
   | 'h2h' | 'nrr' | 'diff' | 'for' | 'wins' | 'sb' | 'h2hRatio' | 'h2hPoints'
   | 'h2hDiff' | 'h2hFor' | 'setRatio' | 'pointRatio' | 'gamesDiff' | 'pointsDiff'
-  | 'setsPct' | 'gamesPct' | 'played' | 'fairPlay' | 'lots';
+  | 'setsPct' | 'gamesPct' | 'played' | 'fairPlay' | 'lots'
+  | 'rubbersRatio' | 'h2hGames' | 'rubbersDiff' | 'rubbersPct' | 'boardPoints';
 /** A built-in tie-breaker, or the key of one added with `registerTieBreaker`. */
 export type TieBreaker = BuiltinTieBreaker | (string & { readonly __customTieBreaker?: never });
 
@@ -232,9 +238,10 @@ export function isChessDoubleForfeit(m: Pick<Match, 'sport' | 'state' | 'result'
 const BUILTIN_TB: BuiltinTieBreaker[] = [
   'h2h', 'nrr', 'diff', 'for', 'wins', 'sb', 'h2hRatio', 'h2hPoints',
   'h2hDiff', 'h2hFor', 'setRatio', 'pointRatio', 'gamesDiff', 'pointsDiff', 'setsPct', 'gamesPct', 'played', 'fairPlay', 'lots',
+  'rubbersRatio', 'h2hGames', 'rubbersDiff', 'rubbersPct', 'boardPoints',
 ];
 /** The criteria computed only from matches among the tied teams. */
-const AMONG_TIED = new Set<string>(['h2h', 'h2hDiff', 'h2hFor', 'h2hRatio', 'h2hPoints']);
+const AMONG_TIED = new Set<string>(['h2h', 'h2hDiff', 'h2hFor', 'h2hRatio', 'h2hPoints', 'rubbersRatio', 'h2hGames']);
 
 /** A tie-breaker added from outside the kit (chess Buchholz / Cut-1 / Median /
  *  Progressive in SD-26). `value` is higher-is-better; `seed` is its value
@@ -410,10 +417,18 @@ const CHESS_PRESETS = (): PointsPreset[] => [
 /** One-tap points presets for the PointsEditor: the body's system(s), then the
  *  "Simple 2-1-0" fallback (D1). Chess has none (Swiss / round-robin
  *  tie-breaks are their own item, SD-26); golf has no table. */
-export function standingsPresets(sport: SportId | string): PointsPreset[] {
-  if (sport === 'chess') return CHESS_PRESETS();
+export function standingsPresets(sport: SportId | string, fmt?: Record<string, unknown> | null): PointsPreset[] {
+  // SD-48: a sport run as team ties offers its team ranking first.
+  const tie = fmt && tournamentTieSpec(fmt) ? tiePointsPreset(sport) : undefined;
+  if (sport === 'chess') return [...(tie ? [tie] : []), ...CHESS_PRESETS()];
   const body = BODY_PRESETS[sport];
-  return body ? [...body, simplePreset(sport)] : [];
+  return [...(tie ? [tie] : []), ...(body ? [...body, simplePreset(sport)] : [])];
+}
+
+/** SD-48 — the sport's team-tie ranking as a points preset. */
+export function tiePointsPreset(sport: SportId | string): PointsPreset | undefined {
+  const t = TIE_POINTS[sport as SportId];
+  return t ? preset(t.id, t.label, t.note, t.set) : undefined;
 }
 
 /** The keys a NEW tournament's format stores for a sport (D1): its default
@@ -455,7 +470,7 @@ export function activePreset(sport: SportId, fmt?: Record<string, unknown> | nul
   const rules = (c: StandingsConfig) => JSON.stringify([c.win, c.draw, c.loss, c.order, c.pairOrder ?? null, c.restart ?? false, c.rankBy ?? 'points',
     c.setPoints ?? null, c.lossBonus ?? null, c.shootout ?? null, c.forfeitLoss ?? null]);
   const now = rules(standingsConfigFromFormat(sport, fmt));
-  return standingsPresets(sport).find((p) => rules(standingsConfigFromFormat(sport, { ...(fmt ?? {}), ...p.set })) === now);
+  return standingsPresets(sport, fmt).find((p) => rules(standingsConfigFromFormat(sport, { ...(fmt ?? {}), ...p.set })) === now);
 }
 
 /** Short points text for a settings row: the preset's name, else "w/d/l". */
@@ -485,7 +500,13 @@ export function noResultPoints(sport: SportId, cfg?: StandingsConfig | null): nu
 
 /** The tie-breakers an organiser can use for a sport (PointsEditor's
  *  advanced order), most useful first. */
-export function availableTieBreakers(sport: SportId): TieBreaker[] {
+export function availableTieBreakers(sport: SportId, ties = false): TieBreaker[] {
+  // SD-48: team ties add the rubber-count criteria (and chess game points).
+  if (ties) {
+    const base = availableTieBreakers(sport).filter((t) => t !== 'lots');
+    const extra: TieBreaker[] = sport === 'chess' ? ['boardPoints'] : ['rubbersRatio', 'rubbersDiff', 'rubbersPct', 'h2hGames'];
+    return [...extra, ...base.filter((t) => !extra.includes(t)), 'lots'];
+  }
   if (sport === 'chess') return ['sb', 'wins', 'h2h', ...customTB.keys(), 'lots'];
   // (chess: the FIDE Buchholz family, progressive score and Black counts are
   // registered tie-breakers — SD-26)
@@ -532,6 +553,11 @@ export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): strin
     case 'gamesPct': return '% of games won';
     case 'fairPlay': return 'fair play (cards)';
     case 'lots': return 'drawing of lots';
+    case 'rubbersRatio': return 'rubbers ratio (among tied)';
+    case 'h2hGames': return 'games ratio (among tied)';
+    case 'rubbersDiff': return 'rubbers difference';
+    case 'rubbersPct': return '% of rubbers won';
+    case 'boardPoints': return 'game points (boards)';
     default: return customTB.get(tb)?.label ?? tb;
   }
 }
@@ -637,11 +663,13 @@ export const isNoResultMatch = (m: Match): boolean =>
 /** The score a match counts in the table: a hand-ended result's score, else
  *  the sport's table crediting (SD-13), else the match score. */
 function tableScore(m: Match): { home: number; away: number } | null {
+  if (isTieMatch(m)) return m.score ?? null; // SD-48: rubbers won
   return m.result?.score ?? (m.result ? null : scoreProvider?.(m.sport, m.state)) ?? m.score ?? null;
 }
 
 /** Rally / board points won by each side (the sport's points provider). */
 function pointsOf(m: Match): { home: number; away: number } | null {
+  if (isTieMatch(m)) return tieSum(m, pointsOf);
   const u = m.state != null ? unitsProvider?.(m.sport, m.state) ?? null : null;
   return u?.points ?? pointsProvider?.(m.sport, m.state) ?? null;
 }
@@ -650,6 +678,13 @@ function pointsOf(m: Match): { home: number; away: number } | null {
  *  with the match score standing in for sets or games when that is what the
  *  sport's score counts (volleyball's score is sets, badminton's is games). */
 export function matchUnits(m: Match): StandingsUnits {
+  if (isTieMatch(m)) {
+    // SD-48: a tie's sets / games / points = its played rubbers' (team A home).
+    const sets = tieSum(m, (r) => matchUnits(r).sets ?? null);
+    const games = tieSum(m, (r) => matchUnits(r).games ?? null);
+    const points = tieSum(m, pointsOf);
+    return { ...(sets ? { sets } : {}), ...(games ? { games } : {}), ...(points ? { points } : {}) };
+  }
   const u = m.state != null ? unitsProvider?.(m.sport, m.state) ?? null : null;
   const score = tableScore(m) ?? undefined;
   const unit = scoreUnit(m.sport);
@@ -660,6 +695,22 @@ export function matchUnits(m: Match): StandingsUnits {
     ...(points ? { points } : {}),
     ...(u?.fairPlay ? { fairPlay: u.fairPlay } : {}),
   };
+}
+
+/** SD-48 — sum a per-rubber pair over a tie's finished rubbers, turned so
+ *  `home` is the tie's home team (team A); null when no rubber has one. */
+function tieSum(t: TieMatch, f: (r: Match) => { home: number; away: number } | null): { home: number; away: number } | null {
+  let home = 0, away = 0, any = false;
+  for (const r of t.tieRubbers) {
+    if (r.status !== 'completed' || isNoResultMatch(r)) continue;
+    const v = f(r);
+    if (!v) continue;
+    any = true;
+    const aHome = r.homeTeam.id === t.homeTeam.id;
+    home += aHome ? v.home : v.away;
+    away += aHome ? v.away : v.home;
+  }
+  return any ? { home, away } : null;
 }
 
 /** Match points each side takes from one finished match (SD-17 margin-aware
@@ -694,7 +745,7 @@ function unitNeeds(cfg: StandingsConfig) {
   const all = !!cfg.withUnits;
   return {
     sets: all || tbs.has('setRatio') || tbs.has('setsPct'),
-    games: all || tbs.has('gamesDiff') || tbs.has('gamesPct'),
+    games: all || tbs.has('gamesDiff') || tbs.has('gamesPct') || tbs.has('h2hGames'),
     points: all || tbs.has('h2hPoints') || tbs.has('pointRatio') || tbs.has('pointsDiff'),
     fair: all || tbs.has('fairPlay'),
   };
@@ -718,6 +769,9 @@ export function teamStandings(
   matches: Match[], sport: SportId, cfg: StandingsConfig = defaultStandingsConfig(sport), phaseKey?: string,
   teams?: { id: string; name: string; colorHex?: string }[],
 ): TeamStanding[] {
+  // SD-48: a team tie counts ONCE (its rubbers collapse into one fixture whose
+  // score is rubbers won), so group tables rank ties, not rubbers.
+  matches = collapseTies(matches);
   const table = new Map<string, TeamStanding>();
   const ensure = (id: string, name: string, color?: string) => {
     if (!table.has(id))
@@ -993,6 +1047,10 @@ function overallKey(t: TeamStanding, tb: TieBreaker): number | null {
     case 'pointRatio': return ratio(t.rallyFor ?? 0, t.rallyAgainst ?? 0);
     case 'pointsDiff': return (t.rallyFor ?? 0) - (t.rallyAgainst ?? 0);
     case 'fairPlay': return t.fairPlay ?? 0;
+    // SD-48 — a tie table's score is rubbers (chess: game points)
+    case 'rubbersDiff': return t.diff;
+    case 'rubbersPct': return pct(t.for, t.against);
+    case 'boardPoints': return t.for;
     default: return null;
   }
 }
@@ -1004,7 +1062,8 @@ function overallKey(t: TeamStanding, tb: TieBreaker): number | null {
  *  points ratio its overall rally-point ratio; lots is skipped. Higher is better. */
 export function seedKey(t: TeamStanding, tb: TieBreaker): number | null {
   if (tb === 'h2h' || tb === 'h2hDiff' || tb === 'h2hFor' || tb === 'lots') return null;
-  if (tb === 'h2hRatio') return ratio(t.for, t.against);
+  if (tb === 'h2hRatio' || tb === 'rubbersRatio') return ratio(t.for, t.against);
+  if (tb === 'h2hGames') return t.gamesFor === undefined ? null : ratio(t.gamesFor, t.gamesAgainst ?? 0);
   if (tb === 'h2hPoints' || tb === 'pointRatio' || tb === 'pointsDiff') {
     if (t.rallyFor === undefined) return null;
     return tb === 'pointsDiff' ? t.rallyFor - (t.rallyAgainst ?? 0) : ratio(t.rallyFor, t.rallyAgainst ?? 0);
@@ -1046,6 +1105,21 @@ function headToHeadRatio(teamId: string, cluster: TeamStanding[], matches: Match
   return ratio(won, lost);
 }
 
+/** SD-48 — games won ÷ lost in the ties among the cluster only (ITTF team
+ *  ranking: after the individual-matches ratio). */
+function headToHeadGames(teamId: string, cluster: TeamStanding[], matches: Match[]): number {
+  let won = 0;
+  let lost = 0;
+  for (const { m, isHome } of amongTied(teamId, cluster, matches)) {
+    if (isNoResultMatch(m)) continue;
+    const g = matchUnits(m).games;
+    if (!g) continue;
+    won += isHome ? g.home : g.away;
+    lost += isHome ? g.away : g.home;
+  }
+  return ratio(won, lost);
+}
+
 /** Score difference (or scored) in the matches among the cluster only — the
  *  FIBA / UEFA / IHF mini-league. */
 function headToHeadScore(teamId: string, cluster: TeamStanding[], matches: Match[], what: 'diff' | 'for'): number {
@@ -1076,6 +1150,8 @@ function tieKey(t: TeamStanding, tb: TieBreaker, cluster: TeamStanding[], matche
   switch (tb) {
     case 'h2h': return headToHeadPoints(t.teamId, cluster, matches, cfg);
     case 'h2hRatio': return headToHeadRatio(t.teamId, cluster, matches, false);
+    case 'rubbersRatio': return headToHeadRatio(t.teamId, cluster, matches, false);
+    case 'h2hGames': return headToHeadGames(t.teamId, cluster, matches);
     case 'h2hPoints': return headToHeadRatio(t.teamId, cluster, matches, true);
     case 'h2hDiff': return headToHeadScore(t.teamId, cluster, matches, 'diff');
     case 'h2hFor': return headToHeadScore(t.teamId, cluster, matches, 'for');
