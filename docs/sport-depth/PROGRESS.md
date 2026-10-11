@@ -2,6 +2,11 @@
 
 Newest at the top. One entry per item: what was built, files, migration (if any), tests, commit, open questions.
 
+## SD-144 baseball + softball, SD-147 American football — DONE (373fc12, 2026-10-12)
+- See DEVLOG. No live steps.
+- **Verify:** WBSC run rules + extra-inning runners, softball and slow-pitch house rules, 9-0 / 7-0 forfeits, WBSC standings order + TQB; decisions and earned runs simplified (scorer override). IFAF flag timings / timeouts / conversions / foul yardages / tie-breakers; NFL 2025 OT; kickoff touchbacks; DPI simplified to 15 yd; walkover 1-0; ejection ban 1.
+- **Not done:** softball DP/FLEX re-entry, dropped third strike / triple play / appeals / interference via manual moves only, youth pitch limits, pitching table on Summary; football: removing a play doesn't move the ball, no declined-penalty logic, return yards, NCAA 3rd-OT 2-pt rule enforcement.
+
 ## SD-155 accessibility, SD-146 netball, SD-143 rugby, SD-145 ice hockey — DONE (3e49c34, 2026-10-12)
 - See DEVLOG. No live steps.
 - **Verify:** netball suspension length, coach time-outs, extra-time format, goal % vs GD tie-break, 20-0 walkover; rugby sevens final length, tens sin-bin, age-grade halves, KO deciders, bonus-point model, 28-0 walkover, ban defaults; ice hockey IIHF playoff OT, shoot-out order, PIM for GM/MP, coincident penalties, tie-break orders, NFHS OT, 5-0 walkover.
