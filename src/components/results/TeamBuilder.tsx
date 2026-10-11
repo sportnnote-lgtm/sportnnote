@@ -95,7 +95,7 @@ export function TeamBuilder({ sources, playerById, players, seatNames, fits, tea
           <View key={t.id} style={[st.team, open && { borderColor: theme.colors.primary }]}>
             <View style={st.head}>
               <TextInput style={[st.input, { flex: 1 }]} value={t.name} onChangeText={(v) => onChange(teams.map((x) => (x.id === t.id ? { ...x, name: v } : x)))} accessibilityLabel="Team name" />
-              <SelectChip label="✕" active={false} onPress={() => { onChange(teams.filter((x) => x.id !== t.id)); if (open) setActive(null); }} />
+              <SelectChip label="✕" accessibilityLabel={`Remove team ${t.name || ''}`.trim()} active={false} onPress={() => { onChange(teams.filter((x) => x.id !== t.id)); if (open) setActive(null); }} />
             </View>
             <View style={st.wrap}>
               {seatNames.map((sn, i) => {

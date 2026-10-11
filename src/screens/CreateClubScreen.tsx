@@ -135,5 +135,5 @@ const st = StyleSheet.create({
   check: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3), backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3) },
   box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   boxOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  tick: { color: '#fff', fontWeight: '900', fontSize: 14 },
+  tick: { color: theme.colors.onFill, fontWeight: '900', fontSize: 14 },
 });

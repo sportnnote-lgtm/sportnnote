@@ -596,7 +596,7 @@ export default function TournamentTeamsScreen() {
         {/* Inline add-a-team so an organizer can build the roster without leaving. */}
         {adding ? (
           <Card style={{ gap: theme.spacing(3) }}>
-            <Text style={textStyles.h3}>Add a {sportName} {noun}</Text>
+            <Text style={textStyles.h3}>Add {/^[aeiou]/i.test(sportName) ? 'an' : 'a'} {sportName} {noun}</Text>
             <View style={st.row}>
               <View style={st.flex2}><TextField label="Name" value={name} onChange={setName} placeholder={pMode === 'individual' ? 'Rafael Nadal' : pMode === 'pairs' ? 'Nadal / Alcaraz' : 'Red House'} /></View>
               <View style={st.flex1}><TextField label="Short" value={short} onChange={setShort} placeholder={pMode === 'team' ? 'RED' : 'RN'} autoCapitalize="characters" /></View>

@@ -63,6 +63,10 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   cycling: [{ key: 'type', label: 'Rides', options: ['Road', 'Track', 'Both'] }],
   // A left-hander is prized on the right side (right back / right wing).
   handball: [{ key: 'hand', label: 'Throwing hand', options: ['Right', 'Left'] }],
+  // skaters shoot left / right; goalies catch with the left (regular) or right hand
+  ice_hockey: [{ key: 'shoots', label: 'Shoots / catches', options: ['Left', 'Right'] }],
+  netball: [{ key: 'area', label: 'Plays mostly', options: ['Shooting circle', 'Midcourt', 'Defence circle'] }],
+  rugby: [{ key: 'foot', label: 'Kicking foot', options: ['Right', 'Left', 'Both'] }],
 };
 
 export const POSITION_HINT: Record<SportId, string> = {
@@ -90,6 +94,9 @@ export const POSITION_HINT: Record<SportId, string> = {
   canoe: 'e.g. Kayak (K1 / K2 / K4), Canoe (C1 / C2)',
   cycling: 'e.g. Time trialist, Sprinter (track), Climber, Endurance (points / scratch)',
   handball: 'e.g. Goalkeeper, Left wing, Left back, Centre back, Right back, Right wing, Pivot',
+  ice_hockey: 'e.g. Goalie, Defence, Centre, Left wing, Right wing',
+  netball: 'e.g. GS, GA, WA, C, WD, GD, GK',
+  rugby: 'e.g. Prop, Hooker, Lock, Flanker, Number 8, Scrum-half, Fly-half, Centre, Wing, Full-back',
 };
 
 /** SD-85 — typed rating fields a sport's profile offers (stored under

@@ -78,7 +78,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
   });
 
   const Check = ({ on, onPress, children }: { on: boolean; onPress: () => void; children: React.ReactNode }) => (
-    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: on }} activeOpacity={0.8} onPress={onPress} style={st.checkRow}>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: on }} aria-checked={on} activeOpacity={0.8} onPress={onPress} style={st.checkRow}>
       <Text style={[st.box, on && st.boxOn]}>{on ? '☑' : '☐'}</Text>
       <Text style={st.checkText}>{children}</Text>
     </TouchableOpacity>
@@ -104,8 +104,8 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
           <FormError message={error} />
           <Button label={busy ? 'Checking…' : 'Continue'} onPress={() => void confirm()} disabled={busy} />
           <View style={st.links}>
-            <Text style={st.link} onPress={() => { setStep('phone'); setError(null); }}>Change number</Text>
-            <Text style={st.link} onPress={() => void send()}>Resend code</Text>
+            <Text style={st.link} accessibilityRole="button" onPress={() => { setStep('phone'); setError(null); }}>Change number</Text>
+            <Text style={st.link} accessibilityRole="button" onPress={() => void send()}>Resend code</Text>
           </View>
         </>
       )}
@@ -133,9 +133,9 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
           )}
           <Check on={agreed} onPress={() => setAgreed((a) => !a)}>
             I agree to the{' '}
-            <Text style={st.link} onPress={() => nav.navigate('Legal', { doc: 'terms' })}>Terms of Use</Text>
+            <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('Legal', { doc: 'terms' })}>Terms of Use</Text>
             {' '}and{' '}
-            <Text style={st.link} onPress={() => nav.navigate('Legal', { doc: 'privacy' })}>Privacy Policy</Text>
+            <Text style={st.link} accessibilityRole="link" onPress={() => nav.navigate('Legal', { doc: 'privacy' })}>Privacy Policy</Text>
             {minor ? ', and my parent/guardian agrees on my behalf.' : '.'}
           </Check>
           <FormError message={error} />
@@ -147,7 +147,7 @@ export function PhoneLoginCard({ onUseEmail }: { onUseEmail?: () => void }) {
         <>
           <Text style={textStyles.body}>{note}</Text>
           {onUseEmail && <Button label="Sign in with email" variant="ghost" onPress={onUseEmail} />}
-          <Text style={st.link} onPress={() => { setStep('phone'); setNote(null); }}>Use a different number</Text>
+          <Text style={st.link} accessibilityRole="button" onPress={() => { setStep('phone'); setNote(null); }}>Use a different number</Text>
         </>
       )}
     </Card>

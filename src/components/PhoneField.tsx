@@ -123,8 +123,8 @@ export function PhoneField({
       ) : hint ? <Text style={st.hint}>{hint}</Text> : null}
 
       <Modal visible={picking} transparent animationType="fade" onRequestClose={() => setPicking(false)}>
-        <Pressable style={st.backdrop} onPress={() => setPicking(false)}>
-          <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={st.backdrop} onPress={() => setPicking(false)} accessibilityRole="button" accessibilityLabel="Close country list">
+          <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none" tabIndex={-1}>
             <CountryList current={country} onPick={pick} />
           </Pressable>
         </Pressable>
@@ -163,7 +163,7 @@ function CountryList({ current, onPick }: { current: CountryCode; onPick: (c: Co
             onPress={() => onPick(item.code)}
             style={[st.item, item.code === current && st.itemActive]}
             accessibilityRole="button"
-            accessibilityState={{ selected: item.code === current }}
+            accessibilityState={{ selected: item.code === current }} aria-pressed={item.code === current}
             accessibilityLabel={`${item.name} ${item.dial}`}
           >
             <Text style={st.itemFlag}>{item.flag}</Text>
@@ -186,7 +186,7 @@ const st = StyleSheet.create({
     alignItems: 'stretch',
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.inputBorder, // SD-155: ≥3:1 field edge
     borderRadius: theme.radius.md,
     overflow: 'hidden',
   },
@@ -225,7 +225,7 @@ const st = StyleSheet.create({
   search: {
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.inputBorder,
     borderRadius: theme.radius.md,
     paddingVertical: theme.spacing(2.5),
     paddingHorizontal: theme.spacing(3),

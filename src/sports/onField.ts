@@ -299,11 +299,36 @@ export const FIELD_RULES = {
     /** disqualification: the side plays short for 2 minutes, then may refill */
     red: { shortFor: 2 },
   },
+  netball: {
+    clock: 'game-clock minutes, 4 × 15 (time held for injury, blood, tactical changes)',
+    /** World Netball suspension: minutes of playing time (organiser option, verify) */
+    suspension: { minutes: 2 },
+    /** ordered off: no further part, not replaced */
+    off: { shortFor: undefined },
+  },
+  ice_hockey: {
+    clock: 'game-clock minutes, 3 × 20 stop time — penalties run on their own box (ice_hockey/engine.ts penaltyBox: PP goals end minors, delayed penalties, coincidents)',
+    minor: { minutes: 2 },
+    doubleMinor: { minutes: 4 },
+    major: { minutes: 5 },
+    /** the player sits 10 minutes; the team is not short */
+    misconduct: { minutes: 10 },
+    /** match penalty: ejected, a team-mate serves 5 minutes */
+    match: { shortFor: 5 },
+  },
   kabaddi: {
     clock: 'match minutes, 2 × 20',
     /** green = a warning only */
     yellow: { minutes: 2 },
     red: { shortFor: undefined },
+  },
+  rugby: {
+    clock: 'playing minutes: the halves as actually played (time added included), 2 × 40 / sevens 2 × 7',
+    /** sin-bin (Law 9; format `sinBinMinutes`: 10, sevens 2) */
+    yellow: { minutes: 10 },
+    red: { shortFor: undefined },
+    /** World Rugby global law trial: replaceable after 20 minutes */
+    red20: { shortFor: 20 },
   },
   volleyball: {
     clock: 'none — sets played (a player who was on court in a set)',

@@ -79,7 +79,7 @@ const st = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   sport: { flex: 1, color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
   status: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill },
-  statusLive: { backgroundColor: theme.colors.danger },
+  statusLive: { backgroundColor: theme.colors.dangerStrong } /* SD-155: white text 4.98:1 */,
   statusFinal: { backgroundColor: theme.colors.surfaceAlt },
   statusSoon: { backgroundColor: theme.colors.surfaceAlt },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },

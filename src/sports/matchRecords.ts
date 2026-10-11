@@ -95,6 +95,31 @@ export const MATCH_RECORD_TYPES: Partial<Record<SportId, MatchRecordType[]>> = {
   football: goalTypes('goals', true),
   hockey: goalTypes('goals', true),
   handball: goalTypes('goals', false),
+  // SD-145 — ice hockey: goals as football, plus goalies' shutouts and saves
+  ice_hockey: [
+    { key: 'biggestWin', label: 'Biggest wins', who: 'team' },
+    { key: 'mostGoals', label: 'Most goals in a game', who: 'match' },
+    { key: 'fastestGoal', label: 'Fastest goal', dir: 'low', who: 'player' },
+    { key: 'hatTrick', label: 'Hat-tricks', who: 'player' },
+    { key: 'shutout', label: 'Shutouts', who: 'player' },
+    { key: 'mostSaves', label: 'Most saves in a game', who: 'player' },
+  ],
+  // SD-146 — netball (netball/records.ts; perfect shooting = PERFECT_MIN 10+ attempts)
+  netball: [
+    { key: 'teamHigh', label: 'Highest team scores', who: 'team' },
+    { key: 'biggestWin', label: 'Biggest wins', who: 'team' },
+    { key: 'playerGoals', label: 'Most goals by a player', who: 'player' },
+    { key: 'perfectShooting', label: 'Perfect shooting (10+ attempts)', who: 'player' },
+  ],
+  // SD-143
+  rugby: [
+    { key: 'teamHigh', label: 'Highest team scores', who: 'team' },
+    { key: 'biggestWin', label: 'Biggest wins', who: 'team' },
+    { key: 'mostGoals', label: 'Most points in a match', who: 'match' },
+    { key: 'fastestTry', label: 'Fastest try', dir: 'low', who: 'player' },
+    { key: 'tryHatTrick', label: 'Try hat-tricks', who: 'player' },
+    { key: 'playerPoints', label: 'Most points by a player', who: 'player' },
+  ],
   basketball: [
     { key: 'teamHigh', label: 'Highest team scores', who: 'team' },
     { key: 'biggestWin', label: 'Biggest wins', who: 'team' },

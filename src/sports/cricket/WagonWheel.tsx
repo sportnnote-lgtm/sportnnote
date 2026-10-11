@@ -4,10 +4,11 @@
  * The field is drawn from behind the batter, bowler at the top; a right-
  * hander's off side is on the right (a left-hander's picture is mirrored).
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Path, Rect, Line, G, Text as SvgText } from 'react-native-svg';
 import { theme } from '../../core/theme';
+import { SelectChip } from '../../components/ui';
 import type { ShotRec } from './engine';
 import { mirrorZone, zoneName, zoneAngle, shotEnd, sideSplit } from './wagon';
 
@@ -39,8 +40,23 @@ export function WagonField({ lh, selected, onPick }: {
   selected?: { zone: number; deep: boolean } | null;
   onPick: (screenZone: number, deep: boolean) => void;
 }) {
+  // SD-155: the SVG wedges can't take keyboard focus or be found by a screen
+  // reader on the web — the same 16 choices as named buttons.
+  const [list, setList] = useState(false);
   return (
     <View style={st.wrap} accessibilityLabel={`Field: tap where the shot went${lh ? ' (left-hander)' : ''}`}>
+      <Text style={st.listToggle} accessibilityRole="button" accessibilityState={{ expanded: list }} aria-expanded={list} onPress={() => setList(!list)}>
+        {list ? 'Hide the list' : '☰ Pick the zone from a list'}
+      </Text>
+      {list ? (
+        <View style={st.zoneList}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].flatMap((z) => [true, false].map((deep) => (
+            <SelectChip key={`${z}${deep}`} label={`${zoneName(z, lh)} · ${deep ? 'deep' : 'ring'}`}
+              accessibilityLabel={`${zoneName(z, lh)}, ${deep ? 'deep' : 'in the ring'}`}
+              active={selected?.zone === z && selected.deep === deep} onPress={() => onPick(z, deep)} />
+          )))}
+        </View>
+      ) : null}
       <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
         {[1, 2, 3, 4, 5, 6, 7, 8].map((z) => {
           const deepOn = selected?.zone === z && selected.deep;
@@ -95,7 +111,10 @@ export function WagonWheelView({ shots, title, note, lh, career }: {
     <View style={st.card}>
       {title ? <Text style={st.title}>{title}</Text> : null}
       <View style={st.wrap}>
-        <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} accessibilityLabel={`Wagon wheel${title ? `: ${title}` : ''}`}>
+        <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}
+          // SD-155: the picture's content as words (runs per zone), not just "Wagon wheel".
+          accessibilityRole="image"
+          accessibilityLabel={`Wagon wheel${title ? `: ${title}` : ''}. ${perZone.map((n, i) => (n > 0 ? `${zoneName(i + 1, lh)} ${n}` : '')).filter(Boolean).join(', ') || 'No shots tagged'}${career ? '' : `. ${fours} fours, ${sixes} sixes`}`}>
           <Circle cx={C} cy={C} r={R} fill={GRASS} />
           <Circle cx={C} cy={C} r={R * RING} fill={GRASS_IN} stroke="#ffffff" strokeDasharray="4 4" strokeWidth={1} />
           {[1, 2, 3, 4, 5, 6, 7, 8].map((z) => (
@@ -136,6 +155,8 @@ export function WagonWheelView({ shots, title, note, lh, career }: {
 
 const st = StyleSheet.create({
   wrap: { alignItems: 'center' },
+  listToggle: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700', paddingVertical: theme.spacing(2) },
+  zoneList: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2), justifyContent: 'center', marginBottom: theme.spacing(2) },
   card: { gap: theme.spacing(1), alignItems: 'stretch' },
   title: { color: theme.colors.text, fontWeight: '700', fontSize: theme.font.body },
   legend: { color: theme.colors.textMuted, fontSize: theme.font.small, textAlign: 'center' },

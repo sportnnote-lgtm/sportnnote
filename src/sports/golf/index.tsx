@@ -91,12 +91,12 @@ const ScoringControls: SportPlugin<GolfMatchState>['ScoringControls'] = ({ state
           {(['home', 'away'] as const).map((side) => (
             <View key={side} style={st.strokeRow}>
               <Text style={[textStyles.body, st.flex]} numberOfLines={1}>{nm(side)}{shots(side) > 0 ? `  ${'●'.repeat(shots(side))}` : ''}</Text>
-              <Button label="−" variant="ghost" style={st.stepBtn} onPress={() => step(side, -1)} />
+              <Button label="−" accessibilityLabel={`One stroke fewer for ${nm(side)}, now ${val(side)}`} variant="ghost" style={st.stepBtn} onPress={() => step(side, -1)} />
               <View style={st.strokeVal}>
                 <Text style={st.strokeNum}>{val(side)}</Text>
                 {shots(side) ? <Text style={st.meta}>net {val(side) - shots(side)}</Text> : null}
               </View>
-              <Button label="+" variant="ghost" style={st.stepBtn} onPress={() => step(side, 1)} />
+              <Button label="+" accessibilityLabel={`One stroke more for ${nm(side)}, now ${val(side)}`} variant="ghost" style={st.stepBtn} onPress={() => step(side, 1)} />
             </View>
           ))}
           <Button

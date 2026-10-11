@@ -202,7 +202,7 @@ export default function MeetTimetableScreen() {
                         <Text style={textStyles.muted} numberOfLines={1}>{i.roundLabel}{i.heats > 1 ? ` · ${i.heats} ${i.phase === 'qualification' ? 'groups' : 'heats'}` : ''}{i.area ? ` · ${i.area}` : ''}{i.entries ? ` · ${i.entries}` : ''}</Text>
                       </View>
                       <Pill label={i.status === 'completed' ? 'DONE' : i.status === 'live' ? 'LIVE' : i.status === 'planned' ? 'PLANNED' : 'START LIST'}
-                        color={i.status === 'live' ? theme.colors.danger : theme.colors.surfaceAlt} textColor={i.status === 'live' ? '#fff' : theme.colors.textMuted} />
+                        color={i.status === 'live' ? theme.colors.dangerStrong : theme.colors.surfaceAlt} textColor={i.status === 'live' ? '#fff' : theme.colors.textMuted} />
                     </View>
                   </TouchableOpacity>
                   {canEdit && i.status !== 'completed' ? (

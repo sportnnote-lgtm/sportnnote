@@ -27,6 +27,9 @@ import { isEliminationStage } from '../data/bracket.ts';
 import * as football from './football/discipline.ts';
 import { HOCKEY_DISCIPLINE } from './hockey/discipline.ts';
 import { HANDBALL_DISCIPLINE } from './handball/discipline.ts';
+import { ICE_HOCKEY_DISCIPLINE } from './ice_hockey/discipline.ts';
+import { NETBALL_DISCIPLINE } from './netball/discipline.ts';
+import { RUGBY_DISCIPLINE } from './rugby/discipline.ts';
 import { BASKETBALL_DISCIPLINE } from './basketball/discipline.ts';
 import { KABADDI_DISCIPLINE } from './kabaddi/discipline.ts';
 
@@ -78,6 +81,9 @@ export interface SportDisciplineSpec {
 export const DISCIPLINE_SPECS: Partial<Record<SportId, SportDisciplineSpec>> = {
   hockey: HOCKEY_DISCIPLINE,
   handball: HANDBALL_DISCIPLINE,
+  ice_hockey: ICE_HOCKEY_DISCIPLINE,
+  netball: NETBALL_DISCIPLINE,
+  rugby: RUGBY_DISCIPLINE,
   basketball: BASKETBALL_DISCIPLINE,
   kabaddi: KABADDI_DISCIPLINE,
 };

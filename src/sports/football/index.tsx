@@ -745,9 +745,9 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
           {canET && (
             <>
               <View style={ctrl.row}>
-                <Button label="−1'" variant="ghost" style={ctrl.flex} onPress={() => setEtMins((m) => Math.max(1, m - 1))} />
+                <Button label="−1'" accessibilityLabel="One minute less" variant="ghost" style={ctrl.flex} onPress={() => setEtMins((m) => Math.max(1, m - 1))} />
                 <Text style={[ctrl.label, { alignSelf: 'center' }]}>{etMins}′ halves</Text>
-                <Button label="+1'" variant="ghost" style={ctrl.flex} onPress={() => setEtMins((m) => m + 1)} />
+                <Button label="+1'" accessibilityLabel="One minute more" variant="ghost" style={ctrl.flex} onPress={() => setEtMins((m) => m + 1)} />
               </View>
               <Button label={`▶ Extra time · 2×${etMins}′ · +${state.etExtraSubs} sub`} variant="home" onPress={() => dispatch({ type: 'START_EXTRA_TIME', payload: { etMinutes: etMins } })} />
             </>
@@ -1136,8 +1136,8 @@ const ScoringControls: SportPlugin<FootballState>['ScoringControls'] = ({
             <Text style={ctrl.label}>⏪ Backfilling at {minLabel(backfillMin, backfillHalf)}</Text>
             <Text style={ctrl.meta}>Every action you log now is stamped at {minLabel(backfillMin, backfillHalf)}. Adjust the minute, or go back to live scoring.</Text>
             <View style={ctrl.row}>
-              <Button label="−1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(Math.max(0, backfillMin - 1))} />
-              <Button label="+1'" variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(backfillMin + 1)} />
+              <Button label="−1'" accessibilityLabel={`One minute earlier, now ${backfillMin}`} variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(Math.max(0, backfillMin - 1))} />
+              <Button label="+1'" accessibilityLabel={`One minute later, now ${backfillMin}`} variant="ghost" style={ctrl.flex} onPress={() => setBackfillMin(backfillMin + 1)} />
               <Button label="▶ Back to live" variant="home" style={ctrl.flex} onPress={backToLive} />
             </View>
           </View>

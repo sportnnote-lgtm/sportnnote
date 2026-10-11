@@ -134,7 +134,7 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
                     <Text style={textStyles.muted} numberOfLines={1}>{s.label} · {first?.entries.length ?? 0} {disciplineOf(e.discipline)?.teamSize ? 'teams' : words.athletes}{first?.format.implement ? ` · ${first.format.implement}` : ''}</Text>
                   </View>
                   <Pill label={s.done ? 'FINAL' : s.live ? 'LIVE' : ce ? `EVENT ${e.phases.length}/${ce.events.length}` : e.phases.length > 1 ? `ROUND ${e.phases.length}` : 'START LIST'}
-                    color={s.live ? theme.colors.danger : theme.colors.surfaceAlt} textColor={s.live ? '#fff' : theme.colors.textMuted} />
+                    color={s.live ? theme.colors.dangerStrong : theme.colors.surfaceAlt} textColor={s.live ? '#fff' : theme.colors.textMuted} />
                 </View>
               </TouchableOpacity>
             );

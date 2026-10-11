@@ -22,6 +22,11 @@
  *                          and the opponent gets the points / sets it needed
  *   hockey      5-0        FIH tournament regulations — verify
  *   handball    10-0       IHF / EHF regulations (0:10) — verify
+ *   ice_hockey  5-0        IIHF (a forfeited game is recorded 5-0) — verify
+ *   netball     20-0       common league / competition practice — verify
+ *   rugby       28-0       common competition practice (no World Rugby law;
+ *                          e.g. club / union regulations) — verify; with a
+ *                          bonus-point table the winner also takes the try bonus
  * Other sports have no default (a walkover adds nothing, as today); the
  * organiser can still set one per tournament. Chess forfeits keep their own
  * FIDE handling (standings.ts `isChessForfeit`).
@@ -52,10 +57,13 @@ export const WALKOVER_SCORES: Partial<Record<SportId, WalkoverRule>> = {
   volleyball: { win: 3, loss: 0, source: 'FIVB 6.4', sets: true },
   hockey: { win: 5, loss: 0, source: 'FIH', verify: true },
   handball: { win: 10, loss: 0, source: 'IHF / EHF', verify: true },
+  ice_hockey: { win: 5, loss: 0, source: 'IIHF', verify: true },
+  netball: { win: 20, loss: 0, source: 'competition rules', verify: true },
+  rugby: { win: 28, loss: 0, source: 'competition rules', verify: true },
 };
 
 /** Sports whose table can carry a walkover score (match sports with a score). */
-export const WALKOVER_SCORE_SPORTS: SportId[] = ['football', 'basketball', 'volleyball', 'hockey', 'handball', 'kabaddi'];
+export const WALKOVER_SCORE_SPORTS: SportId[] = ['football', 'basketball', 'volleyball', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball'];
 
 export interface ActiveWalkoverRule extends WalkoverRule {
   /** true = the organiser's own score */

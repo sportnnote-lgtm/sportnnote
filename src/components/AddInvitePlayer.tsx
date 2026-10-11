@@ -322,7 +322,7 @@ const st = StyleSheet.create({
   matchedNote: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   reportedNote: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   reportedRowNote: { color: theme.colors.danger, fontSize: theme.font.tiny, fontWeight: '700' },
-  reportedTag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  reportedTag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.dangerStrong },
   reportedTagText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
   invitedLabel: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   invitedRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), paddingVertical: theme.spacing(1) },

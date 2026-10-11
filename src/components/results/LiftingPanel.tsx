@@ -61,7 +61,7 @@ export function WeighInCard({ entries, classes, weightClass, editable, onSave }:
   const rows = [...entries].sort((a, b) => (a.result.order ?? 99) - (b.result.order ?? 99));
   return (
     <Card style={st.card}>
-      <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={st.headRow}>
+      <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: open }} aria-expanded={open} onPress={() => setOpen(!open)} style={st.headRow}>
         <Text style={[textStyles.h3, { flex: 1 }]}>⚖️ Weigh-in</Text>
         <Text style={textStyles.muted}>{weighed}/{entries.length} weighed {open ? '▲' : '▼'}</Text>
       </TouchableOpacity>
@@ -341,7 +341,7 @@ const st = StyleSheet.create({
   bigOk: { backgroundColor: theme.colors.primary },
   bigX: { backgroundColor: theme.colors.danger },
   bigOff: { backgroundColor: theme.colors.surfaceAlt },
-  bigTxt: { color: '#fff', fontWeight: '900', fontSize: theme.font.body },
+  bigTxt: { color: theme.colors.onFill, fontWeight: '900', fontSize: theme.font.body }, // SD-155: was white on green (1.8:1)
   light: { flex: 1, minHeight: 52, borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceAlt },
   lightW: { backgroundColor: '#FFFFFF', borderColor: '#999' },
   lightR: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },

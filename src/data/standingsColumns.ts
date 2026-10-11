@@ -12,6 +12,8 @@
  *   tennis / padel                P W L S± G± Pts
  *   cricket (SD-12)               P W T L NR NRR Pts
  *   chess                         P W-D-L Pts SB …
+ *   rugby (SD-143)                P W D L PF PA ± (TF TD) (BP) Pts
+ *   ice hockey (SD-145)           P W OTW OTL L GF GA GD Pts (NHL: P W OTL L …)
  *
  * plus one column for every per-row tie-breaker of the active chain that the
  * base set doesn't already show (S% / G% for ATP, SR / PR, FP, SB, and any
@@ -72,7 +74,7 @@ export const halfText = (n: number) => {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '');
 };
 
-const SPORTS_WITH_DRAWS = new Set<string>(['football', 'hockey', 'handball', 'kabaddi']);
+const SPORTS_WITH_DRAWS = new Set<string>(['football', 'hockey', 'handball', 'kabaddi', 'rugby', 'netball']);
 
 /** SD-48 — is this a team-tie table (its chain uses a rubber-count / game-
  *  points criterion)? */
@@ -102,8 +104,8 @@ const gamesDiff = (t: TeamStanding) => (t.gamesFor === undefined ? DASH : signed
 
 /** Canonical left-to-right order (Pts last, except chess: score then its
  *  tie-break columns, as on a FIDE rank list). */
-const ORDER = ['played', 'won', 'drawn', 'lost', 'wdl', 'nr', 'for', 'against', 'sets', 'diff', 'rubbersPct', 'gamesDiff', 'pointsDiff',
-  'nrr', 'setRatio', 'pointRatio', 'setsPct', 'gamesPct', 'fairPlay'];
+const ORDER = ['played', 'won', 'otw', 'otl', 'drawn', 'lost', 'wdl', 'nr', 'for', 'against', 'sets', 'diff', 'rubbersPct', 'gamesDiff', 'pointsDiff',
+  'nrr', 'setRatio', 'pointRatio', 'setsPct', 'gamesPct', 'fairPlay', 'triesFor', 'triesDiff', 'bonus'];
 
 /** A sport's standings columns for a config (its tie-break chain) and who the
  *  rows are. `rows` decides the conditional ones (a D column once someone has
@@ -129,6 +131,18 @@ export function tableColumns(
     if (SPORTS_WITH_DRAWS.has(sport) || rows.some((t) => t.drawn > 0))
       add({ key: 'drawn', label: labels.draw, title: labels.draw === 'T' ? 'tied' : 'drawn', value: (t) => String(t.drawn) });
     add({ key: 'lost', label: 'L', title: 'lost', value: (t) => String(t.lost) });
+  }
+  // SD-145 — ice hockey: results after regulation. IIHF 3-2-1-0 tables read
+  // W (regulation) OTW OTL L (regulation); NHL-style tables W L OTL.
+  if (rows.some((t) => t.otWins !== undefined)) {
+    const otw = (t: TeamStanding) => (t.otWins ?? 0) + (t.soWins ?? 0);
+    const otl = (t: TeamStanding) => (t.otLosses ?? 0) + (t.soLosses ?? 0);
+    if (cfg.overtime && cfg.overtime.win !== cfg.win) {
+      cols.set('won', { key: 'won', label: 'W', title: 'won in regulation', value: (t) => String(t.won - otw(t)) });
+      add({ key: 'otw', label: 'OTW', title: 'won in overtime or a shoot-out', value: (t) => String(otw(t)) });
+    }
+    add({ key: 'otl', label: 'OTL', title: 'lost in overtime or a shoot-out', value: (t) => String(otl(t)) });
+    cols.set('lost', { key: 'lost', label: 'L', title: 'lost in regulation', value: (t) => String(t.lost - otl(t)) });
   }
   if (labels.alwaysNr || rows.some((t) => (t.nr ?? 0) > 0)) add({ key: 'nr', label: 'NR', title: 'no result', value: (t) => String(t.nr ?? 0) });
 
@@ -196,13 +210,25 @@ export function tableColumns(
       case 'setsPct': tb({ key: 'setsPct', label: 'S%', title: '% of sets won', wide: true, value: (t) => pctText(t.setsFor ?? 0, t.setsAgainst ?? 0) }); break;
       case 'gamesDiff': tb({ key: 'gamesDiff', label: 'G±', title: 'games difference', value: gamesDiff }); break;
       case 'gamesPct': tb({ key: 'gamesPct', label: 'G%', title: '% of games won', wide: true, value: (t) => pctText(t.gamesFor ?? 0, t.gamesAgainst ?? 0) }); break;
-      case 'pointRatio': tb({ key: 'pointRatio', label: 'PR', title: 'point ratio', wide: true, value: rallyRatio }); break;
+      case 'pointRatio':
+        // SD-146: netball's goal percentage (goals for ÷ against × 100)
+        if (sport === 'netball') tb({ key: 'pointRatio', label: 'G%', title: 'goal percentage', wide: true, value: (t) => (t.rallyFor === undefined ? DASH : (t.rallyAgainst ?? 0) > 0 ? (100 * t.rallyFor / t.rallyAgainst!).toFixed(1) : t.rallyFor > 0 ? '∞' : DASH) });
+        else tb({ key: 'pointRatio', label: 'PR', title: 'point ratio', wide: true, value: rallyRatio });
+        break;
       case 'pointsDiff': tb({ key: 'pointsDiff', label: 'P±', title: tieBreakerLabel('pointsDiff', sport), value: rallyDiff }); break;
       case 'fairPlay': tb({ key: 'fairPlay', label: 'FP', title: 'fair play points', value: (t) => String(t.fairPlay ?? 0) }); break;
+      // SD-143 (rugby)
+      case 'triesFor': tb({ key: 'triesFor', label: 'TF', title: 'tries scored', value: (t) => String(t.triesFor ?? 0) }); break;
+      case 'triesDiff': tb({ key: 'triesDiff', label: 'TD', title: 'try difference', value: (t) => signed((t.triesFor ?? 0) - (t.triesAgainst ?? 0)) }); break;
       default: break; // played / wins already shown; h2h* only among the tied; lots → ‡; sb + custom below
     }
   }
 
+  // SD-143 — rugby bonus-point tables: tries scored and the bonus points (inside Pts)
+  if (cfg.tryBonus) {
+    add({ key: 'triesFor', label: 'TF', title: 'tries scored', extra: true, value: (t) => String(t.triesFor ?? 0) });
+    add({ key: 'bonus', label: 'BP', title: 'bonus points', value: (t) => String(t.bonus ?? 0) });
+  }
   const ordered = ORDER.filter((k) => cols.has(k)).map((k) => cols.get(k)!);
   const points: StandingsColumn = { key: 'points', label: 'Pts', title: 'points', emphasis: true, value: (t) => (chess ? halfText(t.points) : String(t.points)) };
   // Chess (FIDE rank list): Sonneborn-Berger and registered tie-breaks follow the score.

@@ -166,7 +166,7 @@ export function OverEditor({ log, config, onOps, homeName, awayName, homeRoster,
           {staged.map((s) => (
             <View key={s.key} style={st.row}>
               <Text style={[textStyles.body, { flex: 1 }]}>• {s.line}</Text>
-              <Text style={st.undo} accessibilityRole="button" onPress={() => stage(s.key, [], '')}>↺</Text>
+              <Text style={st.undo} accessibilityRole="button" accessibilityLabel={`Undo change: ${s.line}`} onPress={() => stage(s.key, [], '')}>↺</Text>
             </View>
           ))}
         </View>
@@ -306,9 +306,9 @@ const st = StyleSheet.create({
   link: { color: theme.colors.text, fontWeight: '700', fontSize: theme.font.small, textDecorationLine: 'underline' },
   changed: { color: theme.colors.primary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
-  chip: { minWidth: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderWidth: 2, borderColor: 'transparent' },
+  chip: { minWidth: 28, minHeight: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderWidth: 2, borderColor: 'transparent' },
   chipStaged: { borderColor: theme.colors.primary },
-  chipText: { color: '#fff', fontWeight: '800', fontSize: theme.font.small },
+  chipText: { color: theme.colors.onFill, fontWeight: '800', fontSize: theme.font.small }, // SD-155: white on amber/red/grey was 1.8–3.0:1
   plain: { backgroundColor: theme.colors.surfaceAlt },
   boundary: { backgroundColor: theme.colors.accent },
   wicket: { backgroundColor: theme.colors.danger },

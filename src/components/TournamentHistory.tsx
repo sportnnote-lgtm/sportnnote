@@ -130,7 +130,7 @@ export function JourneyView({ j, onGroup, onMatch, onOpponent }: {
               <View style={st.row}>
                 <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>
                   v{' '}
-                  <Text style={st.opp} onPress={s.opponentId && onOpponent ? () => onOpponent(s.opponentId!) : undefined}>{s.opponentName}</Text>
+                  <Text style={st.opp} accessibilityRole={s.opponentId && onOpponent ? 'link' : undefined} onPress={s.opponentId && onOpponent ? () => onOpponent(s.opponentId!) : undefined}>{s.opponentName}</Text>
                 </Text>
                 {s.score ? <Text style={st.score}>{s.score}</Text> : null}
               </View>

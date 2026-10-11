@@ -110,7 +110,7 @@ describe('confirmCopy — clear title, one-line consequence, YES / NO', () => {
 
   test('period-level actions are caution (amber), not red, and say Undo brings them back', () => {
     const p = confirmCopy('endPeriod', { period: 'Q2', score: '40-38' });
-    assert.equal(p.title, 'End the Q2?');
+    assert.equal(p.title, 'End the 2nd quarter?');
     assert.equal(p.tone, 'caution');
     assert.match(p.message, /Undo/);
     assert.equal(confirmCopy('endInnings').tone, 'caution');
@@ -159,4 +159,15 @@ describe('source guards', () => {
     assert.ok(/confirmMatchAction\(del \? 'deleteMatch' : 'resetFixture'\)/.test(screen));
     assert.ok(/confirmMatchAction\('restartMatch'\)/.test(screen) && /confirmMatchAction\('cancelStart'\)/.test(screen));
   });
+});
+
+import { periodWords } from '../src/core/matchSafety.ts';
+import { test as _pwTest } from 'node:test';
+import _pwAssert from 'node:assert/strict';
+_pwTest('end-period confirm reads naturally', () => {
+  _pwAssert.equal(periodWords('Q1'), '1st quarter');
+  _pwAssert.equal(periodWords('P3'), '3rd period');
+  _pwAssert.equal(periodWords('H2'), '2nd half');
+  _pwAssert.equal(periodWords('OT1'), '1st overtime');
+  _pwAssert.equal(periodWords('1st half'), '1st half');
 });

@@ -18,6 +18,7 @@
  */
 import { periodLabel, type BasketballState } from './basketball/engine.ts';
 import { pointsOf } from './basketball/events.ts';
+import { pointsOf as rugbyPointsOf, minuteText as rugbyMinute, type RugbyState } from './rugby/engine.ts';
 
 type Side = 'home' | 'away';
 
@@ -117,7 +118,7 @@ function basketballPlays(s: BasketballState): FlowScore[] {
 interface MinuteEvent { type?: string; kind?: string; side?: Side; minute?: number; half?: number; period?: number; sec?: number; id?: number | string; points?: number; stamp?: string }
 
 /** Which sports have a game-flow block. */
-export const GAME_FLOW_SPORTS = ['basketball', 'football', 'hockey', 'handball', 'kabaddi'] as const;
+export const GAME_FLOW_SPORTS = ['basketball', 'football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball'] as const;
 
 /** Game flow for a sport's stored state; null = not a running-score sport,
  *  or nothing scored yet (goals sports: fewer than 2 goals says nothing). */
@@ -149,6 +150,8 @@ export function gameFlowFor(sport: string, state: unknown, starters?: Starters):
       break;
     case 'hockey':
     case 'handball':
+    case 'ice_hockey': // SD-145: goal events carry period + game second
+    case 'netball':
       plays = byKeys(evs.filter((e) => e.type === 'goal' && e.side), (e) => num(e.period, 1), (e) => num(e.sec))
         .map((e) => goal(e, `${Math.floor(num(e.sec) / 60)}'`));
       break;
@@ -160,6 +163,14 @@ export function gameFlowFor(sport: string, state: unknown, starters?: Starters):
         .filter((e) => e.side && e.stamp !== 'SO' && (e.kind === 'raid' || e.kind === 'tackle' || e.kind === 'allout' || e.kind === 'tech' || e.kind === 'lineout') && num(e.points) > 0)
         .map((e) => ({ side: e.side as Side, points: num(e.points), at: e.stamp ?? (e.minute != null ? `${e.minute}'` : undefined) }));
       break;
+    case 'rugby': {
+      // SD-143: every score (try 5, penalty try 7, kicks 3 / 2), in match order
+      unit = 'points';
+      const rs = state as RugbyState;
+      plays = [...rs.events].filter((e) => rugbyPointsOf(e) > 0).sort((a, b) => a.period - b.period || a.psec - b.psec)
+        .map((e) => ({ side: e.side, points: rugbyPointsOf(e), at: rugbyMinute(rs, e.period, e.psec) }));
+      break;
+    }
     default:
       return null;
   }

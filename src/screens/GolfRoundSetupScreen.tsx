@@ -376,7 +376,7 @@ const st = StyleSheet.create({
   idxInput: { width: 64, textAlign: 'center', color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: 8, paddingVertical: 6, fontSize: theme.font.body },
   teamChip: { maxWidth: 96, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, backgroundColor: theme.colors.primary },
   teamChipOff: { backgroundColor: theme.colors.textMuted },
-  teamChipTxt: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '800' },
+  teamChipTxt: { color: theme.colors.onFill, fontSize: theme.font.tiny, fontWeight: '800' }, // SD-155: white on green was 1.8:1
   remove: { color: theme.colors.danger, fontSize: theme.font.h3, fontWeight: '800', paddingHorizontal: theme.spacing(2) },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
   warn: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },

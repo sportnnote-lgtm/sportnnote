@@ -311,7 +311,7 @@ export default function GolfRoundScreen() {
           </View>
           <Pill
             label={ev.status === 'live' ? 'LIVE' : ev.status === 'completed' ? 'FINAL' : 'UPCOMING'}
-            color={ev.status === 'live' ? theme.colors.danger : theme.colors.surfaceAlt}
+            color={ev.status === 'live' ? theme.colors.dangerStrong : theme.colors.surfaceAlt}
             textColor={ev.status === 'live' ? '#fff' : theme.colors.textMuted}
           />
         </View>

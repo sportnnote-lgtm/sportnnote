@@ -69,6 +69,19 @@ export interface TeamStanding {
   gamesFor?: number;
   gamesAgainst?: number;
   fairPlay?: number;
+  /** SD-143 (rugby) — tries scored / conceded, present only when the config
+   *  has a try bonus or a tries tie-breaker; `bonus` = the bonus points
+   *  (try + losing bonus) inside `points`, present only with a try bonus. */
+  triesFor?: number;
+  triesAgainst?: number;
+  bonus?: number;
+  /** SD-145 (ice hockey) — wins / losses after regulation (overtime, shoot-out),
+   *  present only when the config has overtime points or an RW / ROW
+   *  tie-breaker (they are inside `won` / `lost`). */
+  otWins?: number;
+  otLosses?: number;
+  soWins?: number;
+  soLosses?: number;
   /** level on every tie-breaker of a chain that ends in `lots`: the order
    *  shown is by name and must be settled by drawing lots ("Drawn by lot") */
   lots?: boolean;
@@ -164,7 +177,11 @@ export type BuiltinTieBreaker =
   | 'h2hDiff' | 'h2hFor' | 'setRatio' | 'pointRatio' | 'gamesDiff' | 'pointsDiff'
   | 'setsPct' | 'gamesPct' | 'played' | 'fairPlay' | 'lots'
   | 'rubbersRatio' | 'h2hGames' | 'rubbersDiff' | 'rubbersPct' | 'boardPoints'
-  | 'avgFor';
+  | 'avgFor'
+  // SD-143: rugby — tries scored / try difference over all matches
+  | 'triesFor' | 'triesDiff'
+  // SD-145: ice hockey — regulation wins (RW), regulation + overtime wins (ROW)
+  | 'regWins' | 'row';
 /** A built-in tie-breaker, or the key of one added with `registerTieBreaker`. */
 export type TieBreaker = BuiltinTieBreaker | (string & { readonly __customTieBreaker?: never });
 
@@ -208,6 +225,14 @@ export interface StandingsConfig {
   /** points for the losing side of a walkover / forfeit (FIBA: 0, while a
    *  played loss is 1). Absent = a normal loss. */
   forfeitLoss?: number;
+  /** SD-143 (rugby) — a bonus point for scoring `tries` or more tries in a
+   *  match (`relative`: `tries` or more MORE than the opponent), win, draw or
+   *  lose; `walkover` = the winner of a walkover takes it too. Absent = none. */
+  tryBonus?: { tries: number; points: number; relative?: boolean; walkover?: boolean };
+  /** SD-145 (ice hockey) — points for a game won / lost in overtime or a
+   *  shoot-out (IIHF 3-2-1-0: win 2, loss 1; NHL: 2 / 1). Absent = a normal
+   *  win / loss. */
+  overtime?: { win: number; loss: number };
   /** compute sets / games / rally points / fair play for every row even when
    *  no tie-breaker asks for them (for columns, SD-18). */
   withUnits?: boolean;
@@ -250,6 +275,10 @@ const BUILTIN_TB: BuiltinTieBreaker[] = [
   'rubbersRatio', 'h2hGames', 'rubbersDiff', 'rubbersPct', 'boardPoints',
   // SD-132 (BK-13): FIBA 3×3 — average points scored per game
   'avgFor',
+  // SD-143: rugby tries
+  'triesFor', 'triesDiff',
+  // SD-145: ice hockey RW / ROW
+  'regWins', 'row',
 ];
 /** The criteria computed only from matches among the tied teams. */
 const AMONG_TIED = new Set<string>(['h2h', 'h2hDiff', 'h2hFor', 'h2hRatio', 'h2hPoints', 'rubbersRatio', 'h2hGames']);
@@ -284,7 +313,7 @@ const isTieBreaker = (s: string): s is TieBreaker => (BUILTIN_TB as string[]).in
 export type ScoreUnit = 'goals' | 'points' | 'runs' | 'sets' | 'games';
 export function scoreUnit(sport: SportId | string): ScoreUnit {
   switch (sport) {
-    case 'football': case 'hockey': case 'handball': return 'goals';
+    case 'football': case 'hockey': case 'handball': case 'ice_hockey': case 'netball': return 'goals';
     case 'cricket': return 'runs';
     case 'volleyball': case 'tennis': case 'padel': return 'sets';
     case 'badminton': case 'tabletennis': case 'squash': case 'pickleball': case 'carrom': return 'games';
@@ -423,9 +452,42 @@ const BODY_PRESETS: Record<string, PointsPreset[]> = {
     preset('fih-so', 'FIH + shoot-out bonus', '3 a win; a draw goes to a shoot-out: winner 2, loser 1',
       { winPoints: 3, drawPoints: 1, lossPoints: 0, soWinPoints: 2, soLossPoints: 1, tieBreak: 'wins,diff,for,h2h,lots' }),
   ],
+  // SD-146 — World Netball / Commonwealth: 2 a win, 1 a draw. Netball ranks a
+  // tie on goal percentage (goals for ÷ against — the 'pointRatio' criterion
+  // reads the plugin's standingsUnits = goals); verify per competition.
+  netball: [
+    preset('wn', 'World Netball 2-1-0', '2 a win, 1 a draw; ties: goal percentage (goals for ÷ against), goal difference, head-to-head',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'pointRatio,diff,h2h,lots' }),
+    preset('wn-gd', 'Goal difference', '2-1-0; ties: goal difference, goals scored, head-to-head',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'diff,for,h2h,lots' }),
+  ],
+  // SD-145 — ice hockey. IIHF 3-2-1-0 (regulation win 3, overtime / shoot-out
+  // win 2, overtime / shoot-out loss 1); ties: games among the tied (points,
+  // goal difference, goals), then overall (IIHF championship regulations —
+  // verify; the "results against the next-best team" step isn't modelled).
+  // NHL 2-1-0 with the overtime-loss point; ties: regulation wins, regulation +
+  // overtime wins, wins, head-to-head, goal difference, goals (NHL — verify).
+  ice_hockey: [
+    preset('iihf', 'IIHF 3-2-1-0', '3 a regulation win, 2 an OT / shoot-out win, 1 an OT / shoot-out loss; ties: head-to-head points, goal difference, goals; then overall',
+      { winPoints: 3, drawPoints: 1, lossPoints: 0, otWinPoints: 2, otLossPoints: 1, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: 'h2h' }),
+    preset('nhl', 'NHL 2-1-0 (OT loss = 1)', '2 a win, 1 an overtime / shoot-out loss; ties: regulation wins, regulation + OT wins, wins, head-to-head, goal difference, goals',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, otWinPoints: 2, otLossPoints: 1, tieBreak: 'regWins,row,wins,h2h,diff,for,lots' }),
+  ],
   handball: [
     preset('ihf', 'IHF 2-1-0', '2-1-0; ties: head-to-head points, goal difference, goals; then overall',
       { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: 'h2h' }),
+  ],
+  // SD-143 — rugby union. Bonus points: Six Nations / URC model (verify per
+  // competition); RWC 2023 pool tie-breaks; HSBC SVNS pool 3-2-1 (verify).
+  rugby: [
+    preset('bonus', 'Bonus points 4-2-0', '4 a win, 2 a draw; +1 for 4+ tries, +1 for losing by 7 or fewer; ties: points difference, tries, lots',
+      { winPoints: 4, drawPoints: 2, lossPoints: 0, tryBonusTries: 4, tryBonusPoints: 1, tryBonusWalkover: true, lossBonusMargin: 7, lossBonusPoints: 1, tieBreak: 'diff,triesFor,lots' }),
+    preset('rwc', 'Rugby World Cup', '4-2-0 with bonus points; ties: head-to-head, points difference, try difference, points, tries, lots',
+      { winPoints: 4, drawPoints: 2, lossPoints: 0, tryBonusTries: 4, tryBonusPoints: 1, tryBonusWalkover: true, lossBonusMargin: 7, lossBonusPoints: 1, tieBreak: 'h2h,diff,triesDiff,for,triesFor,lots' }),
+    preset('nobonus', '4-2-0 (no bonus points)', '4 a win, 2 a draw, 0 a loss; ties: points difference, tries, lots',
+      { winPoints: 4, drawPoints: 2, lossPoints: 0, tieBreak: 'diff,triesFor,lots' }),
+    preset('sevens', 'Sevens 3-2-1', '3 a win, 2 a draw, 1 a loss, 0 a no-show; ties: head-to-head, points difference, try difference, points, lots',
+      { winPoints: 3, drawPoints: 2, lossPoints: 1, forfeitLossPoints: 0, tieBreak: 'h2h,diff,triesDiff,for,lots' }),
   ],
 };
 
@@ -448,8 +510,17 @@ export function standingsPresets(sport: SportId | string, fmt?: Record<string, u
   const tie = fmt && tournamentTieSpec(fmt) ? tiePointsPreset(sport) : undefined;
   if (sport === 'chess') return [...(tie ? [tie] : []), ...CHESS_PRESETS()];
   const body = BODY_PRESETS[sport];
-  return [...(tie ? [tie] : []), ...(body ? [...body, simplePreset(sport)] : [])];
+  const list = [...(tie ? [tie] : []), ...(body ? [...body, simplePreset(sport)] : [])];
+  // SD-143: rugby presets fully define the try bonus too ('' clears it)
+  if (sport === 'ice_hockey') return list.map((p) => ({ ...p, set: { ...OT_CLEAR, ...p.set } }));
+  return sport === 'rugby' ? list.map((p) => ({ ...p, set: { ...TRY_CLEAR, ...p.set } })) : list;
 }
+
+/** SD-145 — the overtime-points keys an ice-hockey preset writes ('' = not used). */
+const OT_CLEAR: Record<string, string> = { otWinPoints: '', otLossPoints: '' };
+
+/** SD-143 — the try-bonus keys a rugby preset writes ('' = not used). */
+const TRY_CLEAR: Record<string, string | boolean> = { tryBonusTries: '', tryBonusPoints: '', tryBonusRel: false, tryBonusWalkover: false };
 
 /** SD-48 — the sport's team-tie ranking as a points preset. */
 export function tiePointsPreset(sport: SportId | string): PointsPreset | undefined {
@@ -507,7 +578,7 @@ export function newTournamentFormats<F extends Record<string, unknown>>(sports: 
  *  so a format that spells the same rules differently still matches. */
 export function activePreset(sport: SportId, fmt?: Record<string, unknown> | null): PointsPreset | undefined {
   const rules = (c: StandingsConfig) => JSON.stringify([c.win, c.draw, c.loss, c.order, c.pairOrder ?? null, c.restart ?? false, c.rankBy ?? 'points',
-    c.setPoints ?? null, c.lossBonus ?? null, c.shootout ?? null, c.forfeitLoss ?? null]);
+    c.setPoints ?? null, c.lossBonus ?? null, c.shootout ?? null, c.forfeitLoss ?? null, c.tryBonus ?? null, c.overtime ?? null]);
   const now = rules(standingsConfigFromFormat(sport, fmt));
   return standingsPresets(sport, fmt).find((p) => rules(standingsConfigFromFormat(sport, { ...(fmt ?? {}), ...p.set })) === now);
 }
@@ -560,9 +631,10 @@ export function availableTieBreakers(sport: SportId, ties = false): TieBreaker[]
         ? ['h2h', 'h2hRatio', 'h2hPoints', 'diff', 'pointsDiff', 'pointRatio', 'gamesPct', 'wins', 'played', 'lots']
         : ['h2h', 'diff', 'pointsDiff', 'h2hRatio', 'h2hPoints', 'pointRatio', 'gamesPct', 'wins', 'played', 'lots'];
     case 'goals':
-      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', ...(sport === 'football' ? ['fairPlay' as const] : []), 'played', 'lots'];
+      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', ...(sport === 'football' ? ['fairPlay' as const] : []), ...(sport === 'netball' ? ['pointRatio' as const] : []), ...(sport === 'ice_hockey' ? ['regWins' as const, 'row' as const] : []), 'played', 'lots'];
     default:
-      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', 'played', ...(sport === 'basketball' ? ['avgFor' as const] : []), 'lots'];
+      return ['h2h', 'h2hDiff', 'h2hFor', 'diff', 'for', 'wins', 'played', ...(sport === 'basketball' ? ['avgFor' as const] : []),
+        ...(sport === 'rugby' ? ['triesFor' as const, 'triesDiff' as const] : []), 'lots'];
   }
 }
 
@@ -585,7 +657,7 @@ export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): strin
     case 'played': return 'matches played';
     case 'sb': return 'Sonneborn-Berger';
     case 'setRatio': return 'set ratio';
-    case 'pointRatio': return 'point ratio';
+    case 'pointRatio': return sport === 'netball' ? 'goal percentage' : 'point ratio';
     case 'gamesDiff': return 'games difference';
     case 'pointsDiff': return sport === 'carrom' ? 'board points difference' : 'points difference';
     case 'setsPct': return '% of sets won';
@@ -598,6 +670,10 @@ export function tieBreakerLabel(tb: TieBreaker, sport?: SportId | string): strin
     case 'rubbersPct': return '% of rubbers won';
     case 'boardPoints': return 'game points (boards)';
     case 'avgFor': return 'average points scored';
+    case 'triesFor': return 'tries scored';
+    case 'triesDiff': return 'try difference';
+    case 'regWins': return 'regulation wins';
+    case 'row': return 'regulation + overtime wins';
     default: return customTB.get(tb)?.label ?? tb;
   }
 }
@@ -655,6 +731,10 @@ export function standingsConfigFromFormat(sport: SportId, fmt?: Record<string, u
       ? { lossBonus: { margin: fmt.lossBonusMargin as number, points: fmt.lossBonusPoints as number } } : {}),
     ...(has('soWinPoints') ? { shootout: { win: fmt.soWinPoints as number, loss: num('soLossPoints', num('lossPoints', d.loss)) } } : {}),
     ...(has('forfeitLossPoints') ? { forfeitLoss: fmt.forfeitLossPoints as number } : {}),
+    ...(has('otWinPoints') && has('otLossPoints') ? { overtime: { win: fmt.otWinPoints as number, loss: fmt.otLossPoints as number } } : {}),
+    ...(has('tryBonusTries') && has('tryBonusPoints') && (fmt.tryBonusPoints as number) !== 0
+      ? { tryBonus: { tries: fmt.tryBonusTries as number, points: fmt.tryBonusPoints as number,
+        ...(fmt.tryBonusRel === true ? { relative: true } : {}), ...(fmt.tryBonusWalkover === true ? { walkover: true } : {}) } } : {}),
     ...(fmt.swissOps != null ? (() => { const x = swissExtraRounds(swissOpsOf(fmt)); return x.length ? { swissExtras: x } : {}; })() : {}) };
 }
 
@@ -684,6 +764,12 @@ export interface StandingsUnits {
   games?: { home: number; away: number };
   points?: { home: number; away: number };
   fairPlay?: { home: number; away: number };
+  /** SD-143 — tries scored by each side (rugby: the try bonus, tries tie-breaks) */
+  tries?: { home: number; away: number };
+  /** SD-145 — ice hockey: the game was decided after regulation (overtime or
+   *  a shoot-out), and which */
+  overtime?: boolean;
+  decidedIn?: 'reg' | 'ot' | 'so';
 }
 type UnitsProvider = (sport: SportId, state: unknown) => StandingsUnits | null;
 let unitsProvider: UnitsProvider | null = null;
@@ -749,6 +835,9 @@ export function matchUnits(m: Match): StandingsUnits {
     ...(u?.games ?? (unit === 'games' ? score : undefined) ? { games: u?.games ?? score } : {}),
     ...(points ? { points } : {}),
     ...(u?.fairPlay ? { fairPlay: u.fairPlay } : {}),
+    ...(u?.tries ? { tries: u.tries } : {}),
+    ...(u?.overtime ? { overtime: true } : {}),
+    ...(u?.decidedIn ? { decidedIn: u.decidedIn } : {}),
   };
 }
 
@@ -777,11 +866,19 @@ function tieSum(t: TieMatch, f: (r: Match) => { home: number; away: number } | n
 export function matchPoints(m: Match, cfg: StandingsConfig): { home: number; away: number } {
   if (isNoResultMatch(m)) { const n = noResultPoints(m.sport, cfg); return { home: n, away: n }; }
   if (isChessDoubleForfeit(m)) return { home: cfg.loss, away: cfg.loss };
+  if (cfg.tryBonus) {
+    // SD-143: the base points, then each side's try bonus on top
+    const base = matchPoints(m, { ...cfg, tryBonus: undefined });
+    const tb = tryBonusOf(m, cfg);
+    return { home: base.home + tb.home, away: base.away + tb.away };
+  }
   if (m.winner === 'draw') return { home: cfg.draw, away: cfg.draw };
   let w = cfg.win;
   let l = cfg.loss;
   const score = cfg.shootout || cfg.lossBonus ? tableScore(m) : null;
   if (m.walkover && cfg.forfeitLoss !== undefined) l = cfg.forfeitLoss;
+  // SD-145: an ice-hockey game decided in overtime / a shoot-out (IIHF 2-1, NHL 2-1)
+  else if (cfg.overtime && !m.walkover && !m.result && matchUnits(m).overtime) { w = cfg.overtime.win; l = cfg.overtime.loss; }
   else if (cfg.shootout && score && score.home === score.away) { w = cfg.shootout.win; l = cfg.shootout.loss; }
   else if (cfg.setPoints) {
     const sets = matchUnits(m).sets;
@@ -794,6 +891,20 @@ export function matchPoints(m: Match, cfg: StandingsConfig): { home: number; awa
   return m.winner === 'home' ? { home: w, away: l } : { home: l, away: w };
 }
 
+/** SD-143 — the try bonus each side takes from one match (rugby): `tries` or
+ *  more tries (or that many MORE than the opponent with `relative`); a
+ *  walkover's winner takes it when `walkover` is set. */
+export function tryBonusOf(m: Match, cfg: StandingsConfig): { home: number; away: number } {
+  const tb = cfg.tryBonus;
+  const none = { home: 0, away: 0 };
+  if (!tb || isNoResultMatch(m)) return none;
+  if (m.walkover) return tb.walkover && (m.winner === 'home' || m.winner === 'away') ? { ...none, [m.winner]: tb.points } : none;
+  const t = matchUnits(m).tries;
+  if (!t) return none;
+  const ok = (a: number, b: number) => (tb.relative ? a - b >= tb.tries : a >= tb.tries);
+  return { home: ok(t.home, t.away) ? tb.points : 0, away: ok(t.away, t.home) ? tb.points : 0 };
+}
+
 /** Which units a config's tie-breakers read. */
 function unitNeeds(cfg: StandingsConfig) {
   const tbs = new Set<string>([...cfg.order, ...(cfg.pairOrder ?? [])]);
@@ -803,6 +914,8 @@ function unitNeeds(cfg: StandingsConfig) {
     games: all || tbs.has('gamesDiff') || tbs.has('gamesPct') || tbs.has('h2hGames'),
     points: all || tbs.has('h2hPoints') || tbs.has('pointRatio') || tbs.has('pointsDiff'),
     fair: all || tbs.has('fairPlay'),
+    tries: !!cfg.tryBonus || tbs.has('triesFor') || tbs.has('triesDiff'),
+    ot: !!cfg.overtime || tbs.has('regWins') || tbs.has('row'),
   };
 }
 
@@ -887,16 +1000,32 @@ export function teamStandings(
         a[f] = (a[f] ?? 0) + pair.away; a[ag] = (a[ag] ?? 0) + pair.home;
       };
       if (need.points) add('rally', pointsOf(m));
-      if (need.sets || need.games || need.fair) {
+      if (need.sets || need.games || need.fair || need.tries) {
         const u = matchUnits(m);
         if (need.sets) add('sets', u.sets);
         if (need.games) add('games', u.games);
         if (need.fair && u.fairPlay) { h.fairPlay = (h.fairPlay ?? 0) + u.fairPlay.home; a.fairPlay = (a.fairPlay ?? 0) + u.fairPlay.away; }
+        if (need.tries && u.tries) {
+          h.triesFor = (h.triesFor ?? 0) + u.tries.home; h.triesAgainst = (h.triesAgainst ?? 0) + u.tries.away;
+          a.triesFor = (a.triesFor ?? 0) + u.tries.away; a.triesAgainst = (a.triesAgainst ?? 0) + u.tries.home;
+        }
       }
     }
     const kind: GameRecord['kind'] = forfeit ? 'forfeit' : 'played';
     const mp = matchPoints(m, cfg);
     h.points += mp.home; a.points += mp.away;
+    if (need.ot && !forfeit && (m.winner === 'home' || m.winner === 'away')) {
+      // SD-145: overtime / shoot-out wins and losses (inside won / lost)
+      const d = m.walkover || m.result ? undefined : matchUnits(m).decidedIn;
+      const [w, l] = m.winner === 'home' ? [h, a] : [a, h];
+      if (d === 'ot') { w.otWins = (w.otWins ?? 0) + 1; l.otLosses = (l.otLosses ?? 0) + 1; }
+      if (d === 'so') { w.soWins = (w.soWins ?? 0) + 1; l.soLosses = (l.soLosses ?? 0) + 1; }
+    }
+    if (cfg.tryBonus) {
+      // SD-143: the BP column — try bonus + losing bonus
+      const base = matchPoints(m, { ...cfg, tryBonus: undefined, lossBonus: undefined });
+      h.bonus = (h.bonus ?? 0) + mp.home - base.home; a.bonus = (a.bonus ?? 0) + mp.away - base.away;
+    }
     // SD-26: the colours over the board (chess, played games only).
     const white = sport === 'chess' && !forfeit ? chessWhiteSide(m) : undefined;
     const col = (side: 'home' | 'away') => (white ? { colour: side === white ? 'white' as const : 'black' as const } : {});
@@ -977,6 +1106,9 @@ export function teamStandings(
     if (need.sets) { t.setsFor ??= 0; t.setsAgainst ??= 0; }
     if (need.games) { t.gamesFor ??= 0; t.gamesAgainst ??= 0; }
     if (need.fair) t.fairPlay ??= 0;
+    if (need.tries) { t.triesFor ??= 0; t.triesAgainst ??= 0; }
+    if (need.ot) { t.otWins ??= 0; t.otLosses ??= 0; t.soWins ??= 0; t.soLosses ??= 0; }
+    if (cfg.tryBonus) t.bonus ??= 0;
   }
   // Organiser adjustments — only for teams already in this table (a team with
   // no result in the phase has no row to adjust).
@@ -1136,6 +1268,10 @@ function overallKey(t: TeamStanding, tb: TieBreaker): number | null {
     case 'rubbersPct': return pct(t.for, t.against);
     case 'boardPoints': return t.for;
     case 'avgFor': return t.played > 0 ? t.for / t.played : 0;
+    case 'triesFor': return t.triesFor ?? 0;
+    case 'triesDiff': return (t.triesFor ?? 0) - (t.triesAgainst ?? 0);
+    case 'regWins': return t.won - (t.otWins ?? 0) - (t.soWins ?? 0);
+    case 'row': return t.won - (t.soWins ?? 0);
     default: return null;
   }
 }

@@ -12,6 +12,8 @@ import {
   StyleProp,
 } from 'react-native';
 import { theme } from '../core/theme';
+import { readableOn } from '../core/contrast';
+import { toggleA11y } from '../core/a11y';
 
 /** Count + correctly-pluralized noun, e.g. plural(1,'match','matches') → "1 match".
  *  Keeps stat lines grammatical ("1 match · 1 win", not "1 matches · 1 wins"). */
@@ -86,6 +88,7 @@ export function Button({
   disabled = false,
   accessibilityLabel,
   accessibilityHint,
+  selected,
 }: {
   label: string;
   onPress: () => void;
@@ -98,6 +101,9 @@ export function Button({
   /** Override when the visible label is too terse to stand alone (e.g. "+1", "↻"). */
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /** SD-155: a toggle button (e.g. cricket's Wide / No ball panels) — read as
+   *  "selected" by VoiceOver/TalkBack, aria-pressed on the web. */
+  selected?: boolean;
 }) {
   const variantBg =
     variant === 'primary'
@@ -110,7 +116,8 @@ export function Button({
       ? theme.colors.danger
       : 'transparent';
   const bg = variant === 'ghost' ? 'transparent' : color ?? variantBg;
-  const fg = variant === 'ghost' ? theme.colors.text : '#06120D';
+  // SD-155: a custom kit colour gets whichever ink reads on it (dark kits → white).
+  const fg = variant === 'ghost' ? theme.colors.text : color ? readableOn(color) : theme.colors.onFill;
   return (
     <TouchableOpacity
       onPress={disabled ? undefined : onPress}
@@ -119,7 +126,7 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled }}
+      {...toggleA11y(selected, disabled)}
       style={[
         styles.btn,
         { backgroundColor: bg },
@@ -251,12 +258,15 @@ export function SelectChip({
   onPress,
   dotColor,
   disabled = false,
+  accessibilityLabel,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
   dotColor?: string;
   disabled?: boolean;
+  /** SD-155: required when the visible label is a symbol ("‹", "✕", "✓"). */
+  accessibilityLabel?: string;
 }) {
   return (
     <TouchableOpacity
@@ -264,10 +274,12 @@ export function SelectChip({
       disabled={disabled}
       activeOpacity={0.8}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       // `selected` is what a screen reader announces as "selected"/"not selected" —
       // without it a chip is indistinguishable from its neighbours by voice.
-      accessibilityState={{ selected: active, disabled }}
+      {...toggleA11y(active, disabled)}
+      // ≥44pt touch target without making every chip row taller.
+      hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
       style={[styles.selChip, active && styles.selChipActive, disabled && styles.selChipDisabled]}
     >
       {dotColor ? <View style={[styles.selDot, { backgroundColor: dotColor }]} /> : null}
@@ -296,6 +308,7 @@ const styles = StyleSheet.create({
     ...theme.shadow.card,
   },
   btn: {
+    minHeight: 44, // SD-155: ≥44pt target
     paddingVertical: theme.spacing(3),
     paddingHorizontal: theme.spacing(4),
     borderRadius: theme.radius.md,
@@ -304,7 +317,7 @@ const styles = StyleSheet.create({
   },
   btnGhost: { borderWidth: 1, borderColor: theme.colors.border },
   btnDisabled: { opacity: 0.4 },
-  btnText: { fontSize: theme.font.body, fontWeight: '700' },
+  btnText: { fontSize: theme.font.body, fontWeight: '700', textAlign: 'center' },
   pill: {
     paddingVertical: theme.spacing(1),
     paddingHorizontal: theme.spacing(2.5),
@@ -315,8 +328,10 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    // SD-155: field edge must be ≥3:1 against the page (1.4.11) — `border` was 1.3:1.
+    borderColor: theme.colors.inputBorder,
     borderRadius: theme.radius.md,
+    minHeight: 44,
     paddingVertical: theme.spacing(3),
     paddingHorizontal: theme.spacing(3),
     color: theme.colors.text,
@@ -324,6 +339,7 @@ const styles = StyleSheet.create({
   },
   inputMultiline: { minHeight: 96, paddingTop: theme.spacing(3) },
   selChip: {
+    minHeight: 36, // + hitSlop → 44pt
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing(2),

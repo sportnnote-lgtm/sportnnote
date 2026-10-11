@@ -27,7 +27,7 @@ const legal = await import(join(ROOT, 'src/data/legal.ts'));
 const SPORTS = [
   ['🏏', 'Cricket'], ['⚽', 'Football'], ['🏀', 'Basketball'], ['🏐', 'Volleyball'], ['🤼', 'Kabaddi'],
   ['🎾', 'Tennis'], ['🏸', 'Badminton'], ['🏓', 'Table tennis'], ['⚫', 'Squash'], ['🟡', 'Padel'],
-  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'], ['🏑', 'Hockey'], ['🤾', 'Handball'], ['🏊', 'Swimming'], ['🏋️', 'Weightlifting'], ['🎯', 'Shooting'], ['🏹', 'Archery'], ['🚣', 'Rowing'], ['🛶', 'Canoe sprint'], ['🚴', 'Cycling'],
+  ['🥒', 'Pickleball'], ['⛳', 'Golf'], ['♟️', 'Chess'], ['🎱', 'Carrom'], ['🏃', 'Athletics'], ['🏑', 'Hockey'], ['🤾', 'Handball'], ['🏒', 'Ice hockey'], ['🥅', 'Netball'], ['🏊', 'Swimming'], ['🏋️', 'Weightlifting'], ['🎯', 'Shooting'], ['🏹', 'Archery'], ['🚣', 'Rowing'], ['🛶', 'Canoe sprint'], ['🚴', 'Cycling'], ['🏉', 'Rugby'],
 ];
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -75,6 +75,7 @@ function page({ title, description, path, body, ogType = 'website', head = '', n
 <link rel="stylesheet" href="/styles.css">${head}
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap">
   <a class="brand" href="/"><img src="/icon.png" alt="" width="30" height="30">SportnNote</a>
   <nav>
@@ -84,7 +85,7 @@ function page({ title, description, path, body, ogType = 'website', head = '', n
     <a class="btn btn-primary btn-sm" href="${cfg.appUrl}">Open app</a>
   </nav>
 </div></header>
-${body}
+${/<main\b/.test(body) ? body.replace(/<main(?![^>]*\bid=)/, '<main id="main"') : `<main id="main">${body}</main>`}
 <footer><div class="wrap">
   <span>© ${new Date().getFullYear()} SportnNote · Built in ${esc(cfg.homeCountry)}, for sport everywhere</span>
   <nav>
@@ -93,6 +94,7 @@ ${body}
     <a href="/privacy/">Privacy Policy</a>
     <a href="/terms/">Terms of Use</a>
     <a href="/delete-account/">Delete account</a>
+    <a href="/accessibility/">Accessibility</a>
   </nav>
 </div></footer>
 </body>
@@ -548,6 +550,69 @@ const deleteAccountPage = page({
 </main>`,
 });
 
+// SD-155: public accessibility statement (WCAG 2.1 AA — US ADA Title II, UK PSBAR).
+// Source of truth: docs/international/accessibility-statement.md — keep in step.
+const A11Y_ROWS = [
+  ['1.1.1 Non-text content', 'A', 'part', 'Icon buttons, scoreboards, the wagon wheel and pitch maps have text alternatives. A few charts outside the scoring screens have no table version yet.'],
+  ['1.3.1 Info and relationships', 'A', 'part', 'Headings, labels and grouped score lines are exposed. Stats tables on the web are not yet marked up as data tables.'],
+  ['1.3.2 Meaningful sequence · 1.3.3 Sensory characteristics', 'A', 'yes', 'Reading order follows the screen. Instructions never rely on colour or position alone.'],
+  ['1.4.1 Use of colour', 'A', 'yes', 'Team buttons carry team names, results carry W/D/L, and LIVE is written out.'],
+  ['2.1.1 Keyboard · 2.1.2 No keyboard trap', 'A', 'part', 'Every scoring pad, tab, chip and dialog works with Tab, Enter and Space, and Escape closes sheets. Some drag-to-reorder lists outside the core flows need a mouse or touch.'],
+  ['2.2.1 Timing adjustable · 2.2.2 Pause, stop, hide', 'A', 'yes', 'Nothing times out your input. The pulsing LIVE dot stops when you turn on Reduce Motion.'],
+  ['2.3.1 Three flashes', 'A', 'yes', 'Nothing flashes.'],
+  ['2.4.1 Bypass blocks', 'A', 'part', 'This website has a skip link. The app has short headers but no skip link.'],
+  ['2.4.2–2.4.4 Titles, focus order, link purpose', 'A', 'yes', 'Every screen is titled, focus follows the layout, and links say where they go.'],
+  ['2.5.1–2.5.3 Pointer gestures, cancellation, label in name', 'A', 'yes', 'Long-press always has a tap alternative, and spoken names start with the visible text.'],
+  ['3.1.1 Language · 3.2.1/3.2.2 Predictable · 3.3.1/3.3.2 Input help', 'A', 'yes', 'Language is set, and nothing changes on focus. Errors are shown in words and announced.'],
+  ['4.1.2 Name, role, value', 'A', 'yes', 'Every control on the core screens has a role, a name and its state (selected, expanded, disabled). An automated test checks this on every build.'],
+  ['1.3.4 Orientation · 1.3.5 Input purpose', 'AA', 'part', 'Works in either orientation. Sign-in fields support autofill, but profile fields don’t yet.'],
+  ['1.4.3 Contrast (minimum)', 'AA', 'yes', 'All text meets 4.5:1 (large text 3:1), checked by an automated test over the theme. Team colours are adjusted so they always read.'],
+  ['1.4.4 Resize text', 'AA', 'part', 'The apps follow your phone’s text size and the web app zooms to 200%. Very large score digits stop growing at 1.5×. Full 200% device testing is in progress.'],
+  ['1.4.10 Reflow · 1.4.11 Non-text contrast', 'AA', 'yes', 'No sideways scrolling at phone width (wide tables scroll in place). Field edges and the focus ring meet 3:1.'],
+  ['1.4.12 Text spacing · 1.4.13 Hover or focus content', 'AA', 'part', 'Boxes grow with their text. Long single-line names shorten with “…” on screen but are read out in full. There are no hover pop-ups.'],
+  ['2.4.5–2.4.7 Multiple ways, headings, focus visible', 'AA', 'yes', 'Search, browse and follow. Every control shows a clear amber focus ring when you use a keyboard.'],
+  ['3.2.3/3.2.4 Consistency · 3.3.3/3.3.4 Error help and prevention', 'AA', 'yes', 'Shared controls look and behave the same everywhere. Ending a match, deleting or clearing always asks first, and results can be undone.'],
+  ['4.1.3 Status messages', 'AA', 'yes', 'Score changes are announced by VoiceOver, TalkBack and screen readers on the web as they happen.'],
+  ['1.2.x Audio and video · 2.5.4 Motion actuation · 3.1.2 Language of parts', 'A/AA', 'na', 'Not applicable: no hosted media, no shake or tilt input, English only.'],
+];
+const A11Y_WORD = { yes: ['Supports', 'a11y-yes'], part: ['Partially supports', 'a11y-part'], na: ['Not applicable', 'a11y-na'] };
+const accessibilityPage = page({
+  title: 'Accessibility — SportnNote',
+  description: 'SportnNote’s accessibility statement: how the scoring app meets WCAG 2.1 AA, what we know is not there yet, and how to tell us about a problem.',
+  path: '/accessibility/',
+  body: `<main class="doc">
+<h2>Accessibility</h2>
+<p>SportnNote should work for every player, scorer, parent and organiser, including people who use a screen reader, a keyboard, larger text or reduced motion. Our target is <strong>WCAG 2.1 Level AA</strong>, the standard US public schools must meet under ADA Title II and the one UK public bodies follow.</p>
+<h3>What works today</h3>
+<ul>
+  <li><strong>Screen readers:</strong> VoiceOver (iPhone), TalkBack (Android) and screen readers on the web read every scoring button by name (for example “Four (boundary)” or “Point to Red House, serving”) and <strong>announce each score change</strong> as it happens.</li>
+  <li><strong>Keyboard:</strong> in the web app every scoring pad, tab and dialog works with Tab, Enter and Space, with a clear amber focus ring.</li>
+  <li><strong>Contrast:</strong> all text meets the 4.5:1 minimum, and team colours are adjusted so a dark kit still reads.</li>
+  <li><strong>Larger text:</strong> the apps follow your phone’s text size, and buttons grow instead of cutting words off.</li>
+  <li><strong>Reduce motion:</strong> pulsing and sliding animations stop when you ask your phone or browser to reduce motion.</li>
+  <li><strong>Colour is never the only signal:</strong> team buttons carry names, and results carry W / D / L.</li>
+</ul>
+<h3>Conformance summary (WCAG 2.1)</h3>
+<p>Assessed on ${esc(new Date().toISOString().slice(0, 10))} for sign-in, Home, live scoring in every sport, standings and brackets, player and tournament pages, and results entry.</p>
+<div class="a11y-table-wrap" tabindex="0" role="region" aria-label="Conformance table (scrolls sideways on small screens)"><table class="a11y-table">
+<caption>Criteria, level and how well we meet them</caption>
+<thead><tr><th scope="col">Criterion</th><th scope="col">Level</th><th scope="col">Conformance</th><th scope="col">Notes</th></tr></thead>
+<tbody>
+${A11Y_ROWS.map(([c, l, k, n]) => `<tr><th scope="row">${esc(c)}</th><td>${l}</td><td class="${A11Y_WORD[k][1]}">${A11Y_WORD[k][0]}</td><td>${esc(n)}</td></tr>`).join('\n')}
+</tbody></table></div>
+<h3>Known gaps we are working on</h3>
+<ul>
+  <li>A full real-device VoiceOver and TalkBack walk-through of every sport, and 200% text checks on iOS and Android.</li>
+  <li>Stats tables on the web marked up as proper data tables.</li>
+  <li>The same label and keyboard pass on admin screens (organisation settings, messages, meet setup wizards).</li>
+  <li>The browser’s “text size only” setting (zoom works; text-only resizing does not yet).</li>
+</ul>
+<h3>Tell us about a problem</h3>
+<p>If something is hard or impossible to use, email <a href="mailto:${cfg.contactEmail}?subject=Accessibility">${esc(cfg.contactEmail)}</a> with “Accessibility” in the subject. Tell us the screen, the sport and the device or assistive technology. We answer within our support hours (${esc(cfg.supportHours)}) and fix anything that blocks scoring first.</p>
+<p>Schools and districts can ask for our VPAT (Accessibility Conformance Report, WCAG edition) at the same address.</p>
+</main>`,
+});
+
 const notFound = page({
   title: 'Page not found — SportnNote',
   description: 'Page not found.',
@@ -566,6 +631,8 @@ mkdirSync(join(OUT, 'support'), { recursive: true });
 writeFileSync(join(OUT, 'support/index.html'), supportPage);
 mkdirSync(join(OUT, 'delete-account'), { recursive: true });
 writeFileSync(join(OUT, 'delete-account/index.html'), deleteAccountPage);
+mkdirSync(join(OUT, 'accessibility'), { recursive: true });
+writeFileSync(join(OUT, 'accessibility/index.html'), accessibilityPage);
 mkdirSync(join(OUT, 'guides'), { recursive: true });
 writeFileSync(join(OUT, 'guides/index.html'), guidesIndex());
 for (const g of guides) {
@@ -582,7 +649,7 @@ copyFileSync(join(ROOT, 'assets/favicon.png'), join(OUT, 'favicon.ico'));
 writeFileSync(join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${cfg.siteUrl}/sitemap.xml\n`);
 writeFileSync(join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${['/', '/privacy/', '/terms/', '/support/', '/delete-account/', '/guides/'].map((p) => `  <url><loc>${cfg.siteUrl}${p}</loc></url>`).join('\n')}
+${['/', '/privacy/', '/terms/', '/support/', '/delete-account/', '/accessibility/', '/guides/'].map((p) => `  <url><loc>${cfg.siteUrl}${p}</loc></url>`).join('\n')}
 ${guides.filter((g) => !g.draft).map((g) => `  <url><loc>${cfg.siteUrl}/guides/${g.slug}/</loc><lastmod>${g.updated}</lastmod></url>`).join('\n')}
 </urlset>
 `);

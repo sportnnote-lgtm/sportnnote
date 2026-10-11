@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
+import { readableOn } from '../../core/contrast';
 import { SelectChip, Button, textStyles } from '../../components/ui';
 import { LiveTimeline } from '../LiveTimeline';
 import { scoreLine, finalSummary } from '../scoreline';
@@ -79,7 +80,7 @@ function SidePoints({ side, name, color, court, bench, opponents, oppColor, serv
     <View style={[ctrl.sideBox, { borderLeftColor: color }]}>
       <View style={ctrl.headRow}>
         <Text style={ctrl.label}>{icon} Point — {name}</Text>
-        {serving === true && <Text style={[ctrl.serveBadge, { backgroundColor: color }]} accessibilityLabel={`${server ? server.fullName : name} serving`}>🏐 {server ? `${server.fullName} serves` : 'Serving'}</Text>}
+        {serving === true && <Text style={[ctrl.serveBadge, { backgroundColor: color, color: readableOn(color) }]} accessibilityLabel={`${server ? server.fullName : name} serving`}>🏐 {server ? `${server.fullName} serves` : 'Serving'}</Text>}
       </View>
       {roster.length > 0 ? (
         <>

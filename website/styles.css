@@ -191,3 +191,16 @@ footer { border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(-
 footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
 footer a { color: var(--muted); }
 footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
+
+/* SD-155 accessibility: skip link (visible on focus) + the /accessibility/ conformance table */
+.skip { position: absolute; left: 12px; top: -48px; z-index: 20; background: var(--accent); color: var(--primary-ink); font-weight: 800; padding: 10px 14px; border-radius: 8px; text-decoration: none; }
+.skip:focus { top: 10px; }
+.a11y-table-wrap { overflow-x: auto; margin: 12px 0 8px; }
+.a11y-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.a11y-table caption { text-align: left; color: var(--muted); font-size: 14px; padding-bottom: 6px; }
+.a11y-table th, .a11y-table td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); color: #D6DCE4; }
+.a11y-table th { color: var(--text); font-weight: 700; background: var(--surface); }
+.a11y-yes { color: var(--primary); font-weight: 700; }
+.a11y-part { color: var(--accent); font-weight: 700; }
+.a11y-na { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

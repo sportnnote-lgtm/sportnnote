@@ -141,7 +141,7 @@ export default function HomeScreen() {
             <Text style={st.icon}>🔔</Text>
             {unread > 0 && (
               <View style={st.badge}>
-                <Text style={st.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+                <Text style={st.badgeText} maxFontSizeMultiplier={1.5}>{unread > 9 ? '9+' : unread}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
             style={st.iconBtn}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityState={{ expanded: actionsOpen }}
+            accessibilityState={{ expanded: actionsOpen }} aria-expanded={actionsOpen}
             accessibilityLabel="Quick actions"
             onPress={() => setActionsOpen((v) => !v)}
           >
@@ -161,7 +161,7 @@ export default function HomeScreen() {
 
         {/* Quick actions as an anchored dropdown menu. */}
         <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
-          <Pressable style={st.menuBackdrop} onPress={() => setActionsOpen(false)}>
+          <Pressable style={st.menuBackdrop} onPress={() => setActionsOpen(false)} accessibilityRole="button" accessibilityLabel="Close menu">
             <View style={[st.menu, { top: insets.top + 60, right: theme.spacing(4) }]} onStartShouldSetResponder={() => true}>
               {[
                 { icon: '🎙', label: 'Voice — find a game', onPress: () => setVoiceOpen(true) },
@@ -336,8 +336,8 @@ const st = StyleSheet.create({
   menuLabel: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600' },
   menuDivider: { height: 1, backgroundColor: theme.colors.border, marginHorizontal: theme.spacing(3) },
   badge: {
-    position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10,
-    backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center',
+    position: 'absolute', top: -2, right: -2, minWidth: 20, minHeight: 20, borderRadius: 10,
+    backgroundColor: theme.colors.dangerStrong, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 4, borderWidth: 2, borderColor: theme.colors.bg,
   },
   badgeText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '800' },

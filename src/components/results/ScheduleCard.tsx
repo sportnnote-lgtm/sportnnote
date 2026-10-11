@@ -129,9 +129,9 @@ export function DayStepper({ days, value, onChange }: { days: string[]; value: s
   const i = all.indexOf(value);
   return (
     <View style={st.row}>
-      <SelectChip label="‹" active={false} disabled={i <= 0} onPress={() => i > 0 && onChange(all[i - 1])} />
+      <SelectChip label="‹" accessibilityLabel="Previous day" active={false} disabled={i <= 0} onPress={() => i > 0 && onChange(all[i - 1])} />
       <Text style={[st.label, { flex: 1, textAlign: 'center' }]} accessibilityLabel={`Day ${i + 1}, ${dayLabel(value)}`}>Day {i + 1} · {dayLabel(value)}</Text>
-      <SelectChip label="›" active={false} disabled={i >= all.length - 1} onPress={() => i < all.length - 1 && onChange(all[i + 1])} />
+      <SelectChip label="›" accessibilityLabel="Next day" active={false} disabled={i >= all.length - 1} onPress={() => i < all.length - 1 && onChange(all[i + 1])} />
     </View>
   );
 }

@@ -571,7 +571,9 @@ export default function SportProfileScreen() {
                 </Card>
               );
               return openable ? (
-                <TouchableOpacity accessibilityRole="button" key={l.id} activeOpacity={0.85} onPress={() => (golfRound ? nav.navigate('GolfRound', { eventId: l.eventId! }) : openMatch(l.matchId))}>{row}</TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" key={l.id} activeOpacity={0.85}
+                  accessibilityLabel={`${golfRound ? (l.opponent ?? 'Round') : `vs ${l.opponent ?? 'TBD'}`}${l.date ? `, ${formatDay(l.date)}` : ''}${res ? `, ${RESULT_PILL[res]}` : ''}`}
+                  onPress={() => (golfRound ? nav.navigate('GolfRound', { eventId: l.eventId! }) : openMatch(l.matchId))}>{row}</TouchableOpacity>
               ) : (
                 <View key={l.id}>{row}</View>
               );
@@ -611,7 +613,11 @@ function Stat({
   // A partial-coverage stat is tappable: the cloud opens the games it spans.
   return (
     <View style={st.statCardWrap}>
-      {coverage ? <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onToggle}>{inner}</TouchableOpacity> : inner}
+      {coverage ? (
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.85} onPress={onToggle}
+          accessibilityLabel={`${value} ${label}`} accessibilityHint={`Tracked in ${coverage.tracked} of ${coverage.total} games`}
+          accessibilityState={{ expanded: !!open }} aria-expanded={!!open}>{inner}</TouchableOpacity>
+      ) : inner}
     </View>
   );
 }

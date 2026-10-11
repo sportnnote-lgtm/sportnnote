@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
+import { ensureContrast } from '../core/contrast';
 import type { ScoreSummary } from '../sports/types';
 
 export function Scoreboard({
@@ -22,8 +23,16 @@ export function Scoreboard({
   /** optional widget shown between the status line and the score (e.g. a clock) */
   centerNode?: React.ReactNode;
 }) {
+  // SD-155: one screen-reader stop that reads the whole board, in order.
+  const reds = (n?: number) => (n ? `, ${n} red card${n === 1 ? '' : 's'}` : '');
+  const label = [
+    summary.statusLine,
+    `${homeName} ${summary.homeScore}${reds(summary.homeReds)}`,
+    `${awayName} ${summary.awayScore}${reds(summary.awayReds)}`,
+    summary.detailLine,
+  ].filter(Boolean).join('. ');
   return (
-    <View style={s.wrap}>
+    <View style={s.wrap} accessible accessibilityRole="summary" accessibilityLabel={label}>
       <View style={s.statusRow}>
         {live ? <View style={s.liveDot} /> : null}
         <Text style={s.status}>{summary.statusLine}</Text>
@@ -31,7 +40,7 @@ export function Scoreboard({
       {centerNode ? <View style={s.center}>{centerNode}</View> : null}
       <View style={s.row}>
         <Side name={homeName} score={summary.homeScore} color={homeColor} reds={summary.homeReds} />
-        <Text style={s.colon}>:</Text>
+        <Text style={s.colon} maxFontSizeMultiplier={1.5} importantForAccessibility="no">:</Text>
         <Side name={awayName} score={summary.awayScore} color={awayColor} reds={summary.awayReds} />
       </View>
       {summary.detailLine ? <Text style={s.detail}>{summary.detailLine}</Text> : null}
@@ -43,7 +52,7 @@ export function Scoreboard({
 export function RedBadges({ count }: { count?: number }) {
   if (!count || count <= 0) return null;
   return (
-    <View style={s.reds}>
+    <View style={s.reds} accessible accessibilityLabel={`${count} red card${count === 1 ? '' : 's'}`}>
       {Array.from({ length: count }).map((_, i) => <View key={i} style={s.redCard} />)}
     </View>
   );
@@ -52,7 +61,9 @@ export function RedBadges({ count }: { count?: number }) {
 function Side({ name, score, color, reds }: { name: string; score: string; color: string; reds?: number }) {
   return (
     <View style={s.side}>
-      <Text style={[s.score, { color }]} numberOfLines={1}>
+      {/* Team colour as text: lifted to ≥3:1 on the card (large text) when a kit is dark.
+          Already 52pt, so cap OS scaling at 1.5× rather than clip the digits. */}
+      <Text style={[s.score, { color: ensureContrast(color, theme.colors.surface, 3) }]} numberOfLines={1} maxFontSizeMultiplier={1.5} adjustsFontSizeToFit>
         {score}
       </Text>
       <View style={s.teamRow}>

@@ -331,7 +331,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
   ));
   const adjButton = (t: TeamStanding) => (
     <TouchableOpacity style={st.adjBtn} accessibilityRole="button" accessibilityLabel={`Adjust points for ${t.name}`}
-      accessibilityState={{ expanded: openTeam === t.teamId }} hitSlop={6} activeOpacity={0.7}
+      accessibilityState={{ expanded: openTeam === t.teamId }} aria-expanded={openTeam === t.teamId} hitSlop={6} activeOpacity={0.7}
       onPress={() => { setOpenTeam(openTeam === t.teamId ? null : t.teamId); setDelta(0); setReason(''); }}>
       <Text style={st.adjBtnIcon}>±</Text>
       <Text style={st.adjBtnText}>Adjust</Text>
@@ -343,9 +343,9 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
       <View style={st.adjPanel}>
         {split && <Text style={[textStyles.body, { fontWeight: '700' }]}>{t.name}</Text>}
         <View style={st.adjStepper}>
-          <Button label="−" variant="ghost" onPress={() => setDelta((d) => Math.max(-20, d - 1))} />
+          <Button label="−" accessibilityLabel={`One point less for ${t.name}, now ${signed(delta) || '0'}`} variant="ghost" onPress={() => setDelta((d) => Math.max(-20, d - 1))} />
           <Text style={st.adjValue}>{signed(delta) || '0'}</Text>
-          <Button label="+" variant="ghost" onPress={() => setDelta((d) => Math.min(20, d + 1))} />
+          <Button label="+" accessibilityLabel={`One point more for ${t.name}, now ${signed(delta) || '0'}`} variant="ghost" onPress={() => setDelta((d) => Math.min(20, d + 1))} />
         </View>
         <TextField label="Reason (shown publicly)" value={reason} onChange={setReason} placeholder="e.g. late arrival" />
         <Button label="Save adjustment" disabled={delta === 0 || reason.trim().length < 3} onPress={async () => {
@@ -356,7 +356,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
         {mine.map((a) => (
           <View key={a.id} style={st.adjRow}>
             <Text style={[textStyles.muted, { flex: 1 }]}>{signed(a.points)} · {a.reason}</Text>
-            <Text style={st.adjRemove} accessibilityRole="button" onPress={async () => {
+            <Text style={st.adjRemove} accessibilityRole="button" accessibilityLabel={`Remove adjustment ${signed(a.points)} for ${t.name}`} onPress={async () => {
               if (!(await confirmAction('Remove this adjustment?', `${t.name} ${signed(a.points)} · ${a.reason}`, 'Remove', true))) return;
               await onSave(adjustments.filter((x) => x.id !== a.id), `${t.name}: removed ${signed(a.points)}${phaseLabel} (${a.reason})`);
             }}>✕</Text>
@@ -407,7 +407,7 @@ function PhaseTable({ title, phaseKey, rows, adjustments, canManage, expanded, o
                     {canManage && <View style={{ width: ADJ_W, marginLeft: 2 }} />}
                   </View>
                   {shown.map((t, i) => (
-                    <TouchableOpacity key={t.teamId} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" activeOpacity={0.8} onPress={() => onTeam(t.teamId)}>
+                    <TouchableOpacity key={t.teamId} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" accessibilityRole="none" focusable={false} aria-hidden activeOpacity={0.8} onPress={() => onTeam(t.teamId)}>
                       <View style={[st.row, { height: rowH }, tierBg(i)]}>
                         {cells(t)}
                         {canManage && adjButton(t)}

@@ -12,6 +12,7 @@ import type { Player } from '../core/types';
 import type { VoiceEnding } from './types';
 import * as hk from './hockey/engine.ts';
 import * as hb from './handball/engine.ts';
+import { rugbyVoice, rugbyVoiceEnds } from './rugby/voice.ts';
 import { boardCloses, boardPoints, nextBreaker, slamFor, PENALTY_POINTS, type CarromState } from './carrom/engine.ts';
 import { creditedPlayers } from './carrom/totals.ts';
 import { holeWinner } from './golf/engine.ts';
@@ -463,4 +464,8 @@ export function kabaddiExtrasVoice(text: string, ctx: VoiceContext): ScoreAction
 }
 
 // Test/inspection hook (parity with the other __sportfolio* engines).
-(globalThis as unknown as Record<string, unknown>).__sportfolioVoice = { pointVoice, basketballVoice, kabaddiVoice, cricketVoice, tennisVoice, volleyballVoice, hockeyVoice, handballVoice, carromVoice, golfMatchVoice };
+(globalThis as unknown as Record<string, unknown>).__sportfolioVoice = { pointVoice, basketballVoice, kabaddiVoice, cricketVoice, tennisVoice, volleyballVoice, hockeyVoice, handballVoice, carromVoice, golfMatchVoice, rugbyVoice };
+/** SD-143 — rugby's grammar lives next to its engine (./rugby/voice.ts). */
+export { rugbyVoice, rugbyVoiceEnds };
+/** SD-145 — ice hockey's grammar lives next to its engine (./ice_hockey/voice.ts). */
+export { iceHockeyVoice, iceHockeyVoiceEnds } from './ice_hockey/voice.ts';

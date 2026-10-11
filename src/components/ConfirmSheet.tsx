@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View, StyleSheet, Platform } from 'react-native';
 import { theme } from '../core/theme';
 import { confirmAction } from '../core/confirm';
+import { useReducedMotion } from '../core/a11y';
 import { confirmCopy, type ConfirmContext, type ConfirmCopy, type MatchAction } from '../core/matchSafety';
 
 type Ask = { copy: ConfirmCopy; resolve: (ok: boolean) => void };
@@ -28,6 +29,7 @@ export const confirmMatchAction = (action: MatchAction, ctx?: ConfirmContext): P
 export function ConfirmSheetHost() {
   const [ask, setAsk] = useState<Ask | null>(null);
   const noRef = useRef<View>(null);
+  const still = useReducedMotion(); // SD-155: no slide-in when motion is reduced
   useEffect(() => {
     show = (a) => setAsk((prev) => { prev?.resolve(false); return a; });
     return () => { show = null; };
@@ -45,9 +47,9 @@ export function ConfirmSheetHost() {
   const c = ask?.copy ?? last.current;
   const yesBg = c?.tone === 'caution' ? theme.colors.accent : theme.colors.danger;
   return (
-    <Modal visible={!!ask} transparent animationType="slide" onRequestClose={() => done(false)}>
-      <Pressable style={st.backdrop} onPress={() => done(false)} accessibilityLabel={c ? `${c.noLabel} — close` : 'Close'}>
-        <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()} accessibilityViewIsModal accessibilityRole="alert">
+    <Modal visible={!!ask} transparent animationType={still ? 'none' : 'slide'} onRequestClose={() => done(false)}>
+      <Pressable style={st.backdrop} onPress={() => done(false)} accessibilityRole="button" accessibilityLabel={c ? `${c.noLabel} — close` : 'Close'}>
+        <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()} accessibilityViewIsModal accessibilityRole="alert" tabIndex={-1}>
           <View style={st.grab} />
           <Text style={st.title} accessibilityRole="header">{c?.title}</Text>
           <Text style={st.message}>{c?.message}</Text>

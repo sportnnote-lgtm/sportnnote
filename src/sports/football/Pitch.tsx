@@ -36,8 +36,11 @@ export function Pitch({
   homeColor?: string;
   awayColor?: string;
 }) {
+  // SD-155: the formation as words — the dots alone are colour + initials.
+  const who = (l: LineupSlot[]) => l.map((x) => `${x.position}${x.playerName ? ` ${x.playerName}` : ''}`).join(', ');
+  const label = [homeLineup.length ? `Home (bottom): ${who(homeLineup)}` : '', awayLineup.length ? `Away (top): ${who(awayLineup)}` : ''].filter(Boolean).join('. ');
   return (
-    <View style={styles.pitch}>
+    <View style={styles.pitch} accessible accessibilityRole="image" accessibilityLabel={`Pitch. ${label || 'No line-ups yet'}`}>
       {/* markings */}
       <View style={styles.halfway} />
       <View style={styles.centre} />

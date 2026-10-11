@@ -45,12 +45,38 @@ export const OFFICIAL_SLOTS: Partial<Record<SportId, OfficialSlot[]>> = {
     { key: 'technical_officer', label: 'Technical officer', group: ['Technical officer', 'Technical officers'] },
     COMMENTATOR,
   ],
+  // IIHF four-official system: two referees and two linesmen, plus the game timekeeper and official scorer off the ice
+  ice_hockey: [
+    { key: 'referee1', label: 'Referee 1', group: ['Referee', 'Referees'] },
+    { key: 'referee2', label: 'Referee 2', group: ['Referee', 'Referees'] },
+    { key: 'linesman1', label: 'Linesman 1', group: ['Linesman', 'Linesmen'] },
+    { key: 'linesman2', label: 'Linesman 2', group: ['Linesman', 'Linesmen'] },
+    { key: 'timekeeper', label: 'Game timekeeper', group: ['Timekeeper', 'Timekeepers'] },
+    { key: 'scorer', label: 'Official scorer', group: ['Scorer', 'Scorers'] },
+    COMMENTATOR,
+  ],
   // IHF: a pair of referees, plus the timekeeper and scorekeeper at the table
   handball: [
     { key: 'referee1', label: 'Referee 1', group: ['Referee', 'Referees'] },
     { key: 'referee2', label: 'Referee 2', group: ['Referee', 'Referees'] },
     { key: 'timekeeper', label: 'Timekeeper', group: ['Timekeeper', 'Timekeepers'] },
     { key: 'scorekeeper', label: 'Scorekeeper', group: ['Scorekeeper', 'Scorekeepers'] },
+    COMMENTATOR,
+  ],
+  // World Netball: two umpires, plus the scorers and timekeepers at the table
+  netball: [
+    { key: 'umpire1', label: 'Umpire 1', group: UMPIRES },
+    { key: 'umpire2', label: 'Umpire 2', group: UMPIRES },
+    { key: 'timekeeper', label: 'Timekeeper', group: ['Timekeeper', 'Timekeepers'] },
+    { key: 'scorer', label: 'Scorer', group: ['Scorer', 'Scorers'] },
+    COMMENTATOR,
+  ],
+  // World Rugby: the referee, two assistant referees, the TMO (elite) and a timekeeper
+  rugby: [
+    { key: 'referee', label: 'Referee', group: ['Referee', 'Referees'] },
+    { key: 'ar1', label: 'Assistant referee 1', group: ['Assistant referee', 'Assistant referees'] },
+    { key: 'ar2', label: 'Assistant referee 2', group: ['Assistant referee', 'Assistant referees'] },
+    { key: 'tmo', label: 'TMO', group: ['TMO', 'TMOs'] },
     COMMENTATOR,
   ],
   kabaddi: [

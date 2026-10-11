@@ -16,6 +16,18 @@ export const theme = {
     danger: '#FF5C5C',
     home: '#4DA3FF',
     away: '#FF8A5C',
+    // SD-155 (WCAG 2.1 AA). Measured in tests/a11y-contrast.test.mts — keep ≥ the
+    // ratios noted when changing any of these.
+    /** Dark text on every bright fill (primary/accent/danger/home/away): ≥6.3:1. */
+    onFill: '#06120D',
+    /** Red fill that carries WHITE text (LIVE / UNDER REVIEW / badges): 4.98:1.
+     *  `danger` (#FF5C5C) with white was 3.03:1 — keep `danger` for red text/
+     *  outlines on dark (5.1–6.3:1) and use this for solid red pills. */
+    dangerStrong: '#D32F2F',
+    /** Text-field / outline-control boundary (1.4.11 non-text ≥3:1 on bg/surface/surfaceAlt). */
+    inputBorder: '#6A7482',
+    /** Keyboard focus ring on web (≥10:1 on bg/surface). */
+    focus: '#FFB454',
   },
   spacing: (n: number) => n * 4,
   radius: { sm: 8, md: 14, lg: 22, pill: 999 },
@@ -25,7 +37,8 @@ export const theme = {
     h3: 18,
     body: 15,
     small: 13,
-    tiny: 11,
+    // SD-155: 11 → 12 so badges stay legible (and scale with the OS text size).
+    tiny: 12,
   },
   // Soft elevation so surfaces lift off the background instead of reading as flat
   // outlined boxes. Cross-platform: shadow* applies on iOS/web, elevation on

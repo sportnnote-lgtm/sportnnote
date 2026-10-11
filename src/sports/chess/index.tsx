@@ -133,7 +133,7 @@ const ScoringControls: SportPlugin<ChessState>['ScoringControls'] = ({ state, di
   const choose = (p: Pick | null) => { setPick(p); setMethod(null); };
   const tile = (p: Pick, score: string, caption: string, names: string) => (
     <TouchableOpacity key={p} onPress={() => choose(p)} activeOpacity={0.8} accessibilityRole="button"
-      accessibilityLabel={`${score} ${caption} — ${names}`} accessibilityState={{ selected: pick === p }}
+      accessibilityLabel={`${score} ${caption} — ${names}`} accessibilityState={{ selected: pick === p }} aria-pressed={pick === p}
       style={[ctrl.tile, pick === p && ctrl.tileOn]}>
       <Text style={[ctrl.tileScore, pick === p && ctrl.tileOnText]}>{score}</Text>
       <Text style={[ctrl.tileCaption, pick === p && ctrl.tileOnText]}>{caption}</Text>

@@ -104,7 +104,7 @@ const st = StyleSheet.create({
   leadHead: { width: 52, textAlign: 'center', color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', letterSpacing: 0.5 },
   colHead: { width: CELL, alignItems: 'center' },
   colHeadText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
-  colPill: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  colPill: { minWidth: 22, minHeight: 22, borderRadius: 11, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   colPillText: { color: '#0B0F14', fontSize: theme.font.small, fontWeight: '900' },
 
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing(2) },

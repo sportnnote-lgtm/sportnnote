@@ -71,7 +71,7 @@ export function MatchStatsPanel({
         const tot = r.hv + r.av;
         const hw = tot > 0 ? r.hv / tot : 0.5;
         return (
-          <View key={r.key} style={st_.row} accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
+          <View key={r.key} style={st_.row} accessible accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
             <View style={st_.vals}>
               <Text style={[st_.val, r.hv > r.av && st_.lead]}>{r.home}</Text>
               <Text style={st_.label}>{r.label}</Text>
@@ -91,7 +91,7 @@ export function MatchStatsPanel({
             const tot = r.hv + r.av;
             const hw = tot > 0 ? r.hv / tot : 0.5;
             return (
-              <View key={r.key} style={st_.row} accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
+              <View key={r.key} style={st_.row} accessible accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
                 <View style={st_.vals}>
                   <Text style={[st_.val, r.hv > r.av && st_.lead]}>{r.home}</Text>
                   <Text style={st_.label}>{r.label}</Text>

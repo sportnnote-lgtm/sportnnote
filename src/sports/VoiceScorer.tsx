@@ -138,7 +138,7 @@ export function VoiceScorer({
             <Text style={st.pendingHeard} numberOfLines={1}>{pending.typed ? 'Call' : 'Heard'} “{pending.text}”</Text>
             <Text style={st.pendingSummary} numberOfLines={1}>→ {pending.summary}</Text>
           </View>
-          <Button label="✕" variant="ghost" onPress={() => { pushLog(pending.text, pending.summary, 'discarded'); setPending(null); }} />
+          <Button label="✕" accessibilityLabel="Discard this" variant="ghost" onPress={() => { pushLog(pending.text, pending.summary, 'discarded'); setPending(null); }} />
           <Button label={pending.ending ? '✓ Apply…' : '✓ Apply'} variant="primary" onPress={() => void applyNow(pending.actions, pending.text, pending.summary, 'confirmed', pending.ending)} />
         </View>
       ) : null}

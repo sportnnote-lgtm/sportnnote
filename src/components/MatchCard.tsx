@@ -8,6 +8,7 @@ import { teamLabel } from '../core/teamLevels';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
+import { useReducedMotion } from '../core/a11y';
 import { getSport } from '../sports/registry';
 import { openVenue } from '../core/venue';
 import { formatShort, useUserTimeZone, zoneShortName } from '../core/time';
@@ -23,7 +24,10 @@ function safeLine(f: () => string): string {
 /** A small dot that gently pulses — the universal "live" signal. */
 function LiveBadge() {
   const pulse = useRef(new Animated.Value(1)).current;
+  // SD-155: no endless pulse for people who asked the OS to reduce motion.
+  const still = useReducedMotion();
   useEffect(() => {
+    if (still) { pulse.setValue(1); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.25, duration: 700, useNativeDriver: true }),
@@ -32,7 +36,7 @@ function LiveBadge() {
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, still]);
   return (
     <View style={s.liveBadge}>
       <Animated.View style={[s.liveDot, { opacity: pulse }]} />
@@ -147,6 +151,8 @@ export function MatchCard({ match, onPress, onStart, timeZone }: {
             {'  ·  '}
             <Text
               style={s.venue}
+              accessibilityRole="link"
+              accessibilityLabel={`Map: ${match.venueName}`}
               onPress={() => openVenue(match.venueName, match.venueMapsUrl)}
               suppressHighlighting
             >

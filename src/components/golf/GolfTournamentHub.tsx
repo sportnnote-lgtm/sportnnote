@@ -105,7 +105,7 @@ export function GolfTournamentHub({ tournamentId, format, canOrganize }: { tourn
             </View>
             <Pill
               label={e.status === 'live' ? 'LIVE' : e.status === 'completed' ? 'FINAL' : 'UPCOMING'}
-              color={e.status === 'live' ? theme.colors.danger : theme.colors.surfaceAlt}
+              color={e.status === 'live' ? theme.colors.dangerStrong : theme.colors.surfaceAlt}
               textColor={e.status === 'live' ? '#fff' : theme.colors.textMuted}
             />
           </View>

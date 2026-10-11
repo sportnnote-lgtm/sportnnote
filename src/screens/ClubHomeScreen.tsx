@@ -10,6 +10,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { readableOn } from '../core/contrast';
 import { Card, Button, TextField, SelectChip, ScreenTitle, LoadingState, textStyles } from '../components/ui';
 import { PhoneField } from '../components/PhoneField';
 import { formatPhone } from '../core/phone';
@@ -144,7 +145,7 @@ export default function ClubHomeScreen() {
             />
           ) : (
             <View style={[st.badge, { backgroundColor: club.colorHex ?? theme.colors.primary }]}>
-              <Text style={st.badgeText}>{club.shortName?.slice(0, 3) || club.name.slice(0, 2).toUpperCase()}</Text>
+              <Text style={[st.badgeText, { color: readableOn(club.colorHex ?? theme.colors.primary) }]}>{club.shortName?.slice(0, 3) || club.name.slice(0, 2).toUpperCase()}</Text>
             </View>
           )}
           <View style={{ flex: 1 }}>

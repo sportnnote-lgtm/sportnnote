@@ -1585,15 +1585,22 @@ export async function uploadImage(img: PickedImage, kind: ImageKind): Promise<st
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('That image is over 5 MB — pick a smaller one.');
   const path = mediaPath(uid, kind, extForMime(img.mimeType), Date.now(), Math.random().toString(36).slice(2, 8));
   const contentType = img.mimeType ?? 'image/jpeg';
+  // SD-155 latency (docs/international/latency.md): every upload gets a fresh,
+  // never-overwritten path (timestamp + random, upsert:false), so a public logo
+  // can be cached for a year by browsers and the Storage CDN — far regions then
+  // fetch it from Mumbai once, not on every screen. Private photos are read via
+  // short-lived signed URLs: cache an hour (the signing window), never "immutable".
+  const PUBLIC_CACHE = '31536000';
+  const PRIVATE_CACHE = '3600';
   // Player photos go to the PRIVATE bucket (protect_minors): the row stores a
   // `private://` ref and viewers get signed URLs, so an under-18's photo is never
   // world-readable. Before that migration the bucket is missing → public as before.
   if (isPrivateImageKind(kind)) {
-    const { error } = await supabase.storage.from(PLAYER_PHOTO_BUCKET).upload(path, bytes, { contentType, upsert: false });
+    const { error } = await supabase.storage.from(PLAYER_PHOTO_BUCKET).upload(path, bytes, { contentType, upsert: false, cacheControl: PRIVATE_CACHE });
     if (!error) return privateImageRef(PLAYER_PHOTO_BUCKET, path);
     if (!/bucket not found/i.test(error.message)) throw new Error(error.message);
   }
-  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType, upsert: false });
+  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType, upsert: false, cacheControl: PUBLIC_CACHE });
   if (error) {
     if (/bucket not found/i.test(error.message)) throw new Error('Photo uploads aren’t switched on yet.');
     throw new Error(error.message);

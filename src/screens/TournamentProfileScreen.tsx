@@ -555,7 +555,7 @@ export default function TournamentProfileScreen() {
         {/* Tab bar */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabBar}>
           {TABS.map((t) => (
-            <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === t }} key={t} onPress={() => setTab(t)} style={[st.tabBtn, activeTab === t && st.tabBtnActive]} activeOpacity={0.8}>
+            <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === t }} aria-selected={activeTab === t} key={t} onPress={() => setTab(t)} style={[st.tabBtn, activeTab === t && st.tabBtnActive]} activeOpacity={0.8}>
               <Text style={[st.tabText, activeTab === t && st.tabTextActive]}>{tabLabel(t)}</Text>
             </TouchableOpacity>
           ))}
@@ -840,7 +840,7 @@ export default function TournamentProfileScreen() {
                     {assigned.map((id) => (
                       <View key={id} style={st.entryRow}>
                         <Text style={[textStyles.body, st.flex1]} numberOfLines={1}>{playerName(id) ?? 'Player'}</Text>
-                        <Text style={st.link} onPress={() => void removeOfficial(id, role)}>Remove</Text>
+                        <Text style={st.link} accessibilityRole="button" accessibilityLabel={`Remove ${playerName(id) ?? 'official'}`} onPress={() => void removeOfficial(id, role)}>Remove</Text>
                       </View>
                     ))}
                     {eligible.length > 0 && (
@@ -917,11 +917,11 @@ export default function TournamentProfileScreen() {
                     {transferOrgs.map((o) => (
                       <Button key={o.id} label={`🏛️ ${o.name}`} variant="ghost" onPress={() => void transferOwnership({ kind: 'org', orgId: o.id })} />
                     ))}
-                    <Text style={st.link} onPress={() => setShowTransfer(false)}>Cancel</Text>
+                    <Text style={st.link} accessibilityRole="button" onPress={() => setShowTransfer(false)}>Cancel</Text>
                     <Text style={textStyles.muted}>The creator stays on record; the tournament moves to the new owner and stays accessible if you leave.</Text>
                   </View>
                 ) : (
-                  <Text style={st.link} onPress={() => setShowTransfer(true)}>Transfer ownership →</Text>
+                  <Text style={st.link} accessibilityRole="button" onPress={() => setShowTransfer(true)}>Transfer ownership →</Text>
                 )
               )}
 

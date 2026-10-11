@@ -84,6 +84,9 @@ export const FLOW_CONTROLS: Partial<Record<SportId, MatchAction[]>> = {
   kabaddi: ['endPeriod', 'fullTime', 'endTie'],
   hockey: ['endPeriod', 'fullTime'],
   handball: ['endPeriod', 'fullTime'],
+  ice_hockey: ['endPeriod', 'fullTime'],
+  netball: ['endPeriod', 'fullTime'],
+  rugby: ['endPeriod', 'fullTime'],
 };
 
 /** Field / timed events run on their own screens; their finish lives at the
@@ -190,7 +193,7 @@ export function confirmCopy(action: MatchAction, ctx: ConfirmContext = {}): Conf
     case 'deleteMatch':
       return { title: 'Delete this match?', message: ctx.detail ?? 'The score, its player stats and any table result go for everyone.', yesLabel: 'Yes, delete match', noLabel: 'No, keep it', tone: 'danger' };
     case 'endPeriod': {
-      const pd = ctx.period ?? 'period';
+      const pd = periodWords(ctx.period ?? 'period');
       return { title: `End the ${pd}?`, message: ctx.detail ?? (sc ? `The ${pd} closes at ${sc}. Undo can bring it back.` : `The ${pd} closes. Undo can bring it back.`), yesLabel: `Yes, end ${pd}`, noLabel: 'No, keep playing', tone: 'caution' };
     }
     case 'endInnings':
@@ -216,4 +219,14 @@ export function confirmCopy(action: MatchAction, ctx: ConfirmContext = {}): Conf
     case 'closePhase':
       return { title: 'Close this round?', message: ctx.detail ?? 'The qualifiers are seeded into the next round and these results are locked.', yesLabel: 'Yes, close & seed', noLabel: 'No, keep entering', tone: 'caution' };
   }
+}
+
+/** "Q1" → "1st quarter", "P2" → "2nd period", "H1" → "1st half", "OT1" → "1st overtime";
+ *  anything else (already words, e.g. "1st half") is returned unchanged. */
+export function periodWords(pd: string): string {
+  const ord = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+  const m = /^(Q|P|H|OT|ET)\s?(\d+)$/i.exec(pd.trim());
+  if (!m) return pd;
+  const unit = ({ Q: 'quarter', P: 'period', H: 'half', OT: 'overtime', ET: 'extra-time period' } as Record<string, string>)[m[1].toUpperCase()];
+  return `${ord(Number(m[2]))} ${unit}`;
 }

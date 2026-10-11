@@ -19,18 +19,15 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
 import { SelectChip } from '../components/ui';
 import type { Player } from '../core/types';
+import { readableOn } from '../core/contrast';
 
 type Side = 'home' | 'away';
 
-/** Dark or light text, whichever reads on `hex` (team colours vary). */
+/** Dark or light text, whichever reads on `hex` (team colours vary). SD-155:
+ *  picks the higher WCAG contrast — the old luminance cut-off (0.36) put white
+ *  on mid-bright kits like #FF5C5C (3.0:1) where the dark ink reads 6.3:1. */
 export function inkOn(hex: string | undefined): string {
-  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((hex ?? '').trim());
-  if (!m) return '#06120D';
-  const h = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1];
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return L > 0.36 ? '#06120D' : '#FFFFFF';
+  return readableOn(hex);
 }
 
 export function PointButtons({
@@ -83,7 +80,7 @@ export function PointButtons({
         delayLongPress={350}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={`${verb} to ${nameOf(s)}`}
+        accessibilityLabel={`${verb} to ${nameOf(s)}${serving === s ? ', serving' : ''}`}
         accessibilityHint={canCredit(s) ? 'Long-press to credit a player' : undefined}
         accessibilityState={{ disabled: !!disabled }}
         style={({ pressed }) => [pb.big, { backgroundColor: bg }, pressed && pb.pressed, disabled && pb.off]}
@@ -112,7 +109,7 @@ export function PointButtons({
       {pick && !disabled ? (
         <View style={pb.creditBox}>
           {(pick === 'both' ? (['home', 'away'] as const).filter(canCredit) : [pick]).map(creditRow)}
-          <Text style={pb.link} onPress={() => setPick(null)} accessibilityRole="button">Cancel</Text>
+          <Text style={[pb.link, pb.linkPad]} onPress={() => setPick(null)} accessibilityRole="button">Cancel</Text>
         </View>
       ) : anyCredit && !disabled ? (
         <Text style={pb.meta}>
@@ -176,7 +173,7 @@ export function ServeFirstPicker({
     );
   }
   if (!canFix) return null;
-  if (!open) return <Text style={pb.link} onPress={() => setOpen(true)} accessibilityRole="button">Fix who served first</Text>;
+  if (!open) return <Text style={[pb.link, pb.linkPad]} onPress={() => setOpen(true)} accessibilityRole="button">Fix who served first</Text>;
   return (
     <View style={pb.pickBox}>
       <Text style={pb.label}>{icon} Who served first?</Text>
@@ -186,7 +183,7 @@ export function ServeFirstPicker({
           <SelectChip key={s} label={s === 'home' ? homeName : awayName} active={picked === s}
             onPress={() => { if (picked !== s) onPick(s, true); setOpen(false); }} />
         ))}
-        <Text style={[pb.link, { alignSelf: 'center' }]} onPress={() => setOpen(false)} accessibilityRole="button">Done</Text>
+        <Text style={[pb.link, pb.linkPad, { alignSelf: 'center' }]} onPress={() => setOpen(false)} accessibilityRole="button">Done</Text>
       </View>
     </View>
   );
@@ -210,6 +207,8 @@ const pb = StyleSheet.create({
   hint: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: theme.font.small },
   link: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '700' },
+  /** standalone text link → ≥44pt tall target (inline links stay inline) */
+  linkPad: { paddingVertical: theme.spacing(3), alignSelf: 'flex-start' },
   creditBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3) },
   creditRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing(2) },
   dot: { width: 10, height: 10, borderRadius: 5 },

@@ -31,6 +31,9 @@ import { rowingStats } from './rowing/stats.ts';
 import { canoeStats } from './canoe/stats.ts';
 import { cyclingStats } from './cycling/stats.ts';
 import { handballStats } from './handball/stats.ts';
+import { iceHockeyStats } from './ice_hockey/stats.ts';
+import { netballStats } from './netball/stats.ts';
+import { rugbyStats } from './rugby/stats.ts';
 
 export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   football: footballStats,
@@ -57,6 +60,9 @@ export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   canoe: canoeStats,
   cycling: cyclingStats,
   handball: handballStats,
+  ice_hockey: iceHockeyStats,
+  netball: netballStats,
+  rugby: rugbyStats,
 };
 
 export const STAT_SPORTS = Object.keys(STAT_SCHEMAS) as SportId[];

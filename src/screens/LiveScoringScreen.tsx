@@ -80,6 +80,7 @@ import { matchBoxSource } from '../sports/boxSources';
 import type { MatchEventRecord, MatchResult, ResultKind, DisputeEvent, LineupSlot, Match, MatchDispute, MatchPotm, MatchSquads, Player, SportId, StatLine, TeamLeadership } from '../core/types';
 import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
+import { LiveAnnouncer, scoreSentence } from '../components/LiveAnnouncer';
 import { realName } from '../core/invite';
 import { matchRoleInviteText } from '../core/inviteText';
 
@@ -1387,10 +1388,10 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
         <View style={st.lineupHeadRight}>
           <Text style={st.lineupCount}>{homePlaced} v {awayPlaced} placed</Text>
           {canEditHome && matchId && (
-            <Text style={st.editLink} onPress={() => editSquad('home')}>Edit {homeName} ›</Text>
+            <Text style={st.editLink} accessibilityRole="button" onPress={() => editSquad('home')}>Edit {homeName} ›</Text>
           )}
           {canEditAway && matchId && (
-            <Text style={st.editLink} onPress={() => editSquad('away')}>Edit {awayName} ›</Text>
+            <Text style={st.editLink} accessibilityRole="button" onPress={() => editSquad('away')}>Edit {awayName} ›</Text>
           )}
         </View>
       </View>
@@ -1525,7 +1526,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
       const count = (sq?.starters.length ?? 0) + (sq?.subs.length ?? 0);
       return (
         <View style={st.infoCard}>
-          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} onPress={() => setInfoOpen(open ? 'closed' : sd)}>
+          <TouchableOpacity activeOpacity={0.8} style={st.squadHead} accessibilityRole="button" accessibilityLabel={`${sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name} squad — ${set ? 'set' : 'to be set'}`} accessibilityState={{ expanded: open }} aria-expanded={open} onPress={() => setInfoOpen(open ? 'closed' : sd)}>
             <View style={[st.legendDot, { backgroundColor: color }]} />
             <Text style={[textStyles.body, { flex: 1, fontWeight: '700' }]}>{sd === 'home' ? homeTeamName ?? name : awayTeamName ?? name}</Text>
             <Text style={[textStyles.muted, { color: set ? theme.colors.primary : theme.colors.textMuted }]}>
@@ -1691,7 +1692,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                   <Text style={[st.editLink, { color: theme.colors.danger }]} accessibilityRole="button" accessibilityLabel={`Remove ${o.name} as ${sl.label}`} onPress={() => removeOfficial(sl.key)}>Remove</Text>
                 )}
                 {canEditOfficials && !o && (
-                  <Text style={st.editLink} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Add ${sl.label}`} onPress={() => { setOfficialSlot(open ? null : sl.key); setOfficialName(''); }}>{open ? 'Close' : '＋ Add'}</Text>
+                  <Text style={st.editLink} accessibilityRole="button" accessibilityState={{ expanded: open }} aria-expanded={open} accessibilityLabel={`Add ${sl.label}`} onPress={() => { setOfficialSlot(open ? null : sl.key); setOfficialName(''); }}>{open ? 'Close' : '＋ Add'}</Text>
                 )}
               </View>
               {canEditOfficials && open && !o && (
@@ -1775,7 +1776,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           <Text
             style={st.editLink}
             accessibilityRole="button"
-            accessibilityState={{ expanded: pickScorer }}
+            accessibilityState={{ expanded: pickScorer }} aria-expanded={pickScorer}
             onPress={() => setPickScorer(!pickScorer)}
           >
             {pickScorer ? 'Close' : '＋ Add scorer'}
@@ -1857,7 +1858,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                 <Button label={homeName} style={{ flex: 1 }} onPress={() => void giveWalkover('home')} />
                 <Button label={awayName} style={{ flex: 1 }} onPress={() => void giveWalkover('away')} />
               </View>
-              <Text style={st.editLink} onPress={() => setWoOpen(false)}>Cancel</Text>
+              <Text style={st.editLink} accessibilityRole="button" onPress={() => setWoOpen(false)}>Cancel</Text>
             </View>
           )
         )}
@@ -2121,6 +2122,8 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
        <DisputeMaskProvider value={maskValue}>
         <ScrollView contentContainerStyle={st.content}>
           {header}
+          {/* SD-155: screen readers hear every score change (polite live region). */}
+          <LiveAnnouncer message={scoreSentence(homeTeamName ?? homeName, shownSummary.homeScore, awayTeamName ?? awayName, shownSummary.awayScore, shownSummary.statusLine)} />
           {/* Optional live stream — pinned at the very top when the organizer set one. */}
           {!!meta.streamUrl && <LiveStream url={meta.streamUrl} live={meta.status === 'live'} />}
           {disputeBanner}
@@ -2142,7 +2145,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           {scrollTabs ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabScroll}>
               {TABS.map((t) => (
-                <TouchableOpacity key={t.key} style={[st.tabChip, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} onPress={() => setTab(t.key)}>
+                <TouchableOpacity key={t.key} style={[st.tabChip, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} aria-selected={activeTab === t.key} onPress={() => setTab(t.key)}>
                   <Text style={[st.tabText, activeTab === t.key && st.tabTextActive]}>{t.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -2150,7 +2153,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
           ) : (
             <View style={st.tabBar}>
               {TABS.map((t) => (
-                <TouchableOpacity key={t.key} style={[st.tab, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} onPress={() => setTab(t.key)}>
+                <TouchableOpacity key={t.key} style={[st.tab, activeTab === t.key && st.tabActive]} activeOpacity={0.8} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: activeTab === t.key }} aria-selected={activeTab === t.key} onPress={() => setTab(t.key)}>
                   <Text style={[st.tabText, activeTab === t.key && st.tabTextActive]}>{t.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -2194,7 +2197,7 @@ export default function LiveScoringScreen({ route, navigation }: Props) {
                       <Text style={st.syncBtnText}>Discard</Text>
                     </TouchableOpacity>
                   ) : (
-                    <Text style={st.syncBtnText} accessibilityRole="button" onPress={() => setLostTo(null)}>✕</Text>
+                    <Text style={st.syncBtnText} accessibilityRole="button" accessibilityLabel="Clear" onPress={() => setLostTo(null)}>✕</Text>
                   )}
                 </View>
               ) : null}
@@ -2487,6 +2490,9 @@ function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   if (sport === 'kabaddi' && fmt.halfMinutes != null) parts.push(`${fmt.halfMinutes}-min halves`);
   if (sport === 'hockey' && fmt.periodMinutes != null) parts.push(`${fmt.periods ?? 4} × ${fmt.periodMinutes} min`);
   if (sport === 'handball' && fmt.periodMinutes != null) parts.push(`2 × ${fmt.periodMinutes} min`);
+  if (sport === 'ice_hockey' && fmt.periodMinutes != null) parts.push(`3 × ${fmt.periodMinutes} min`);
+  if (sport === 'netball' && fmt.periodMinutes != null) parts.push(`${fmt.periods ?? 4} × ${fmt.periodMinutes} min`);
+  if (sport === 'rugby' && fmt.periodMinutes != null) parts.push(`${fmt.variant === '7s' ? 'Sevens · ' : fmt.variant === '10s' ? 'Tens · ' : ''}2 × ${fmt.periodMinutes} min`);
   return parts.length ? parts.join(' · ') : '—';
 }
 
@@ -2559,7 +2565,7 @@ function OfflineSyncBanner({ matchId }: { matchId: string }) {
 function DisputeTag({ kind }: { kind: 'reported' | 'open' | 'resolved' | 'dismissed' }) {
   const map = {
     reported: { label: 'REPORTED', bg: theme.colors.accent, fg: '#0B0F14' },
-    open: { label: 'UNDER REVIEW', bg: theme.colors.danger, fg: '#fff' },
+    open: { label: 'UNDER REVIEW', bg: theme.colors.dangerStrong, fg: '#fff' },
     resolved: { label: 'RESOLVED', bg: theme.colors.primary, fg: '#0B0F14' },
     dismissed: { label: 'DISMISSED', bg: theme.colors.surface, fg: theme.colors.textMuted },
   }[kind];
@@ -2680,7 +2686,7 @@ const st = StyleSheet.create({
   lockBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3), alignItems: 'center' },
   lockWatch: { paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4), borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border },
   lockWatchText: { color: theme.colors.text, fontWeight: '800', fontSize: theme.font.body },
-  scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  scorerLive: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(1), paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.dangerStrong },
   scorerLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
   scorerLiveText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 1 },
   streamHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -2715,14 +2721,14 @@ const st = StyleSheet.create({
   squadSection: { color: theme.colors.textMuted, fontSize: theme.font.tiny, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginTop: theme.spacing(2), marginBottom: theme.spacing(1) },
   jersey: { width: 26, height: 26, borderRadius: 6, borderWidth: 1.5, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   jerseyNum: { fontSize: theme.font.small, fontWeight: '900' },
-  roleTag: { minWidth: 18, height: 18, borderRadius: 4, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  roleTag: { minWidth: 18, minHeight: 18, borderRadius: 4, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   roleCaptain: { backgroundColor: theme.colors.accent },
   roleTagText: { color: theme.colors.text, fontSize: theme.font.tiny, fontWeight: '900' },
   roleTagTextDark: { color: '#0B0F14' },
   disputedName: { color: theme.colors.danger, fontWeight: '800', textDecorationLine: 'line-through' },
   objectLink: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   disputeBox: { gap: theme.spacing(2), backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.md, padding: theme.spacing(3), marginTop: theme.spacing(2) },
-  disputeCount: { paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger },
+  disputeCount: { paddingVertical: 3, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill, backgroundColor: theme.colors.dangerStrong },
   disputeCountText: { color: '#fff', fontSize: theme.font.tiny, fontWeight: '900', letterSpacing: 0.5 },
   disputeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2) },
   dtag: { paddingVertical: 2, paddingHorizontal: theme.spacing(2), borderRadius: theme.radius.pill },

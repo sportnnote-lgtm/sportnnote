@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { readableOn } from '../core/contrast';
 import { Card, Button, ScreenTitle, LoadingState, EmptyState, textStyles } from '../components/ui';
 import { getSport } from '../sports/registry';
 import { getClubs, getClubSports } from '../data/repos';
@@ -55,7 +56,7 @@ export default function ClubsScreen() {
                     <Image source={{ uri: c.logoUrl! }} style={st.badgeImg} resizeMode="cover" />
                   ) : (
                     <View style={[st.badge, { backgroundColor: c.colorHex ?? theme.colors.primary }]}>
-                      <Text style={st.badgeText}>{c.shortName?.slice(0, 3) || c.name.slice(0, 2).toUpperCase()}</Text>
+                      <Text style={[st.badgeText, { color: readableOn(c.colorHex ?? theme.colors.primary) }]}>{c.shortName?.slice(0, 3) || c.name.slice(0, 2).toUpperCase()}</Text>
                     </View>
                   )}
                   <View style={{ flex: 1 }}>

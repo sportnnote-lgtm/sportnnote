@@ -26,7 +26,10 @@ export const KO_DECIDER: Partial<Record<SportId, string>> = {
   football: 'extra_time', // IFAB Law 10: extra time, then kicks from the penalty mark
   hockey: 'shootout', // FIH: shoot-out
   handball: 'et2', // IHF 2:2: 2 × 5 min, again if level, then 7 m throws
+  ice_hockey: 'playoff', // SD-145: play-off overtime (sudden death), then the preset's shoot-out / more OT
+  netball: 'et', // World Netball: 2 × 7 min extra time, then play on to a 2-goal lead
   kabaddi: 'extra_time', // extra time, then golden raid
+  rugby: 'standard', // SD-143: 15s RWC-style ET 2×10 → sudden death → kicks; sevens / tens sudden-death periods
 };
 
 /** Does this sport's level knockout match need a decider in its format? */
@@ -45,6 +48,15 @@ export function stageAwareFormat(
     // FIBA: a level game always goes to overtime. A league may let a draw stand
     // (`allowDraw`); a knockout never does.
     if (elimination && f.allowDraw != null) f.allowDraw = false;
+    return f as MatchFormat;
+  }
+  if (sport === 'ice_hockey') {
+    // SD-145 — ice hockey resolves group games too (IIHF 3-2-1-0 needs a
+    // winner): groups play the round-robin overtime + shoot-out ('otso'),
+    // unless the organiser lets league games end tied (`allowTies`) or goes
+    // straight to a shoot-out ('so'); knockouts play play-off overtime.
+    if (elimination) { if (f.decider !== 'so') f.decider = 'playoff'; }
+    else f.decider = f.allowTies === true || f.allowTies === 'true' ? 'none' : f.decider === 'so' ? 'so' : 'otso';
     return f as MatchFormat;
   }
   const koDecider = KO_DECIDER[sport];
@@ -85,13 +97,14 @@ export function matchFormatFor(
  *  (see `aggregatePriorFor` in series.ts). Plain (non-`__`) keys so they survive
  *  the scoring screen's merge. */
 /** Engines that read `aggregateLeg` / `aggPrior*` (src/sports/aggregate.ts). */
-export const AGG_ENGINES: ReadonlySet<SportId> = new Set<SportId>(['football', 'hockey', 'handball']);
+export const AGG_ENGINES: ReadonlySet<SportId> = new Set<SportId>(['football', 'hockey', 'handball', 'ice_hockey', 'rugby']);
 
 export function aggregateLegFormat(format: Record<string, unknown>, sport: SportId, leg: number, awayGoals = false): MatchFormat {
   if (!hasDecider(sport)) return { ...format } as MatchFormat;
   // FIBA two-game series: no overtime after game 1 — a level game 1 stands.
   if (sport === 'basketball' && leg <= 1) return { ...format, allowDraw: true } as MatchFormat;
-  if (leg <= 1) return stageAwareFormat(format, sport, false);
+  // SD-145: an ice-hockey leg 1 may end tied (the tie isn't over)
+  if (leg <= 1) return sport === 'ice_hockey' ? { ...format, decider: 'none' } as MatchFormat : stageAwareFormat(format, sport, false);
   // An engine that can't yet play its decider on aggregate (kabaddi) lets the
   // leg stand; a level aggregate then goes to the organiser's advance pick.
   if (!AGG_ENGINES.has(sport) && sport !== 'basketball') return { ...stageAwareFormat(format, sport, false), aggregateLeg: 2 };

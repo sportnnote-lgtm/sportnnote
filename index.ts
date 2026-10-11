@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import App from './App';
 import { setupNativeSpeech } from './src/core/speechSetup';
+import { installWebA11y } from './src/core/a11y';
 
 // Mobile Safari zooms the page in when a text box under 16px gets focus, which
 // pushes buttons beside it off-screen. Keep touch-screen inputs at 16px (pinch
@@ -12,6 +13,9 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   style.textContent = '@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }';
   document.head.appendChild(style);
 }
+
+// SD-155: web keyboard focus ring, Enter/Space on text links, aria-live regions.
+installWebA11y();
 
 // Phones: spoken voice scoring when this APK has the speech module (else typed-only).
 setupNativeSpeech();

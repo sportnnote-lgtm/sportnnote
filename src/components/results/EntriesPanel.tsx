@@ -195,7 +195,7 @@ function LateEntry({ phase, f, def, entries, words, onDone }: {
               <SelectChip label={`Only eligible for ${categoryLabel(f.category)}`} active={eligibleOnly} onPress={() => setEligibleOnly((v) => !v)} />
               <View style={{ gap: 4 }}>
                 {pool.map((a) => (
-                  <TouchableOpacity key={a.id} accessibilityRole="button" accessibilityState={{ selected: pick?.id === a.id }} onPress={() => setPick(a)} style={[st.row, pick?.id === a.id && st.rowOn]}>
+                  <TouchableOpacity key={a.id} accessibilityRole="button" accessibilityState={{ selected: pick?.id === a.id }} aria-pressed={pick?.id === a.id} onPress={() => setPick(a)} style={[st.row, pick?.id === a.id && st.rowOn]}>
                     <Text style={[textStyles.body, { flex: 1 }]} numberOfLines={1}>{a.name}{a.team ? <Text style={textStyles.muted}>  {a.team.name}</Text> : null}</Text>
                     {a.eventOnly ? <Text style={st.tag}>event-only</Text> : null}
                   </TouchableOpacity>

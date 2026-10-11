@@ -267,6 +267,8 @@ export const isBeyondTop = (label: string): boolean => {
  */
 const SPORT_NAMES: Partial<Record<MarketId, Record<string, string>>> = {
   us: { football: 'Soccer', hockey: 'Field hockey', american_football: 'Football', ice_hockey: 'Hockey' },
+  // SD-143: in Australia "rugby" often means rugby league — say union
+  au: { rugby: 'Rugby union' },
 };
 const SPORT_NAMES_ELSEWHERE: Record<string, string> = { american_football: 'American football', ice_hockey: 'Ice hockey' };
 /** Reserved for the new sports — do not reuse for anything else. */

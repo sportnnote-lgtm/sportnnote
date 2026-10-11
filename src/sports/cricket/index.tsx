@@ -1373,7 +1373,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
           <View style={ctrl.row}>
             {[0, 1, 2, 3, 4, 6].map((r) => (
               <Button key={r} label={String(r)} color={r === 4 || r === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]} disabled={!canScore}
-                accessibilityLabel={r === 4 ? 'Four (boundary)' : r === 6 ? 'Six (boundary)' : undefined}
+                accessibilityLabel={r === 0 ? 'Dot ball, no run' : r === 4 ? 'Four (boundary)' : r === 6 ? 'Six (boundary)' : `${r} run${r === 1 ? '' : 's'}`}
                 onPress={() => (r === 4 || r === 6 ? runs(r, { boundary: true }) : runs(r))} />
             ))}
             {/* 7th key: rare run values (a compact ghost key so the pad stays one row). */}
@@ -1423,8 +1423,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
 
         <View style={ctrl.row}>
           <Button label="WICKET" variant="danger" style={ctrl.flex} disabled={!canScore} onPress={() => { closeMore(); setWf({}); }} />
-          <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
-          <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
+          <Button label="Wide" variant="ghost" style={ctrl.flex} disabled={!canScore} selected={extraMode === 'wd'} accessibilityHint="Opens the wide runs" onPress={() => setExtraMode((m) => (m === 'wd' ? null : 'wd'))} />
+          <Button label="No ball" variant="ghost" style={ctrl.flex} disabled={!canScore} selected={extraMode === 'nb'} accessibilityHint="Opens the no-ball runs" onPress={() => setExtraMode((m) => (m === 'nb' ? null : 'nb'))} />
         </View>
 
         {extraMode === 'nb' && (
@@ -1432,7 +1432,7 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <Text style={ctrl.meta}>No ball{R.noBallRuns !== STANDARD_RULES.noBallRuns ? ` (+${R.noBallRuns})` : ''}{R.noBallLegal ? ' · counts as a ball' : ''} — runs off the bat?</Text>
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                <Button key={n} label={n === 0 ? 'Nb' : `+${n}`} accessibilityLabel={n === 0 ? 'Nb' : `Nb+${n}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
+                <Button key={n} label={n === 0 ? 'Nb' : `+${n}`} accessibilityLabel={n === 0 ? 'No ball, no runs off the bat' : `No ball plus ${n} run${n === 1 ? '' : 's'} off the bat${n === 4 || n === 6 ? ', boundary' : ''}`} color={n === 4 || n === 6 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
                   // 4 and 6 are boundaries; an all-run 4 off a no-ball goes in the field below.
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'No ball', runs: n, boundary: n === 4 || n === 6 }, attribution: nbRuns(n) }); setExtraMode(null); }} />
               ))}
@@ -1467,7 +1467,8 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
             <View style={ctrl.row}>
               {[0, 1, 2, 3, 4].map((n) => (
                 // label shows the total with the wide penalty in force, e.g. Wd+3 (=4)
-                <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n} (=${penalty('wide', R) + n})`} color={n === 4 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
+                <Button key={n} label={n === 0 ? 'Wd' : `Wd+${n} (=${penalty('wide', R) + n})`}
+                  accessibilityLabel={n === 0 ? `Wide, ${penalty('wide', R)} total` : `Wide plus ${n} run${n === 1 ? '' : 's'}, ${penalty('wide', R) + n} total`} color={n === 4 ? theme.colors.primary : battingColor} style={[ctrl.flex, ctrl.padKey]}
                   onPress={() => { ball({ type: 'EXTRA', payload: { kind: 'Wide', runs: n } }); setExtraMode(null); }} />
               ))}
             </View>
@@ -1481,15 +1482,15 @@ const ScoringControls: SportPlugin<CricketState>['ScoringControls'] = ({
         {/* Byes / leg byes — team extras, not charged to bat or bowler. */}
         {(R.byes || R.legByes) && (
           <View style={ctrl.row}>
-            {R.byes && <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />}
-            {R.legByes && <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />}
+            {R.byes && <Button label="Bye" variant="ghost" style={ctrl.flex} disabled={!canScore} selected={extraMode === 'b'} onPress={() => setExtraMode((m) => (m === 'b' ? null : 'b'))} />}
+            {R.legByes && <Button label="Leg bye" variant="ghost" style={ctrl.flex} disabled={!canScore} selected={extraMode === 'lb'} onPress={() => setExtraMode((m) => (m === 'lb' ? null : 'lb'))} />}
           </View>
         )}
         {((extraMode === 'b' && R.byes) || (extraMode === 'lb' && R.legByes)) && (
           <>
             <View style={ctrl.row}>
               {[1, 2, 3, 4, 5].map((n) => (
-                <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} color={battingColor} style={[ctrl.flex, ctrl.padKey]}
+                <Button key={n} label={`${extraMode === 'lb' ? 'LB' : 'B'} ${n}`} accessibilityLabel={`${n} ${extraMode === 'lb' ? 'leg bye' : 'bye'}${n === 1 ? '' : 's'}`} color={battingColor} style={[ctrl.flex, ctrl.padKey]}
                   onPress={() => { ball({ type: extraMode === 'lb' ? 'LEGBYES' : 'BYES', payload: { runs: n } }); setExtraMode(null); }} />
               ))}
             </View>
@@ -2442,7 +2443,7 @@ const ctrl = StyleSheet.create({
   freeHitText: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '900', letterSpacing: 0.3 },
   // SD-113 (A2) — the fixed slot above the run pad, and the free-hit frame (a
   // constant 2 px border that only changes colour, so nothing moves).
-  padSlot: { height: 34, justifyContent: 'center', paddingHorizontal: theme.spacing(3), borderRadius: theme.radius.sm, borderWidth: 1, borderColor: 'transparent' },
+  padSlot: { minHeight: 34, justifyContent: 'center', paddingHorizontal: theme.spacing(3), borderRadius: theme.radius.sm, borderWidth: 1, borderColor: 'transparent' },
   padSlotFreeHit: { backgroundColor: theme.colors.primary + '1A', borderColor: theme.colors.primary },
   padSlotPen: { backgroundColor: theme.colors.accent + '1A', borderColor: theme.colors.accent },
   padSlotText: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '700' },
@@ -2494,7 +2495,7 @@ const ctrl = StyleSheet.create({
   card: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing(3), gap: theme.spacing(2) },
   potm: { color: theme.colors.primary, fontSize: theme.font.small, fontWeight: '800' },
   overRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing(2), flexWrap: 'wrap' },
-  ballDot: { minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  ballDot: { minWidth: 24, minHeight: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   ballDotNeutral: { borderWidth: 1, borderColor: theme.colors.border },
   ballSym: { color: '#06120D', fontSize: theme.font.tiny, fontWeight: '800' },
   ballSymNeutral: { color: theme.colors.text },

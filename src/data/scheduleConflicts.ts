@@ -33,6 +33,9 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   hockey: 105, // 4 × 15 + breaks + turnaround
   swimming: 240, // a session of swimming events
   handball: 90, // 2 × 30 + half-time + time-outs + turnaround
+  ice_hockey: 150, // 3 × 20 stop time + two 15–18 min intermissions (ice resurface) + turnaround
+  netball: 75, // 4 × 15 + 3/5/3 min intervals + held time + turnaround
+  rugby: 120, // 2 × 40 + time added + half-time + turnaround (sevens matches are far shorter)
   shooting: 150, // a qualification relay (60 shots) + the final
   archery: 240, // a 72-arrow ranking round (~2.5 h) + match play
   rowing: 120, // a session of races (2000 m ≈ 6–8 min, 10–15 min apart)

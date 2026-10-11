@@ -1103,7 +1103,7 @@ function TimeField({ def, r, editable, handMeet, course, watchesOnly, register, 
 /** A SelectChip-looking toggle that reports press-in (before the time box blurs on web). */
 function ModeChip({ label, active, disabled, onPressIn, onPress }: { label: string; active: boolean; disabled?: boolean; onPressIn: () => void; onPress: () => void }) {
   return (
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active, disabled }} disabled={disabled}
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active, disabled }} aria-pressed={active} disabled={disabled}
       delayPressIn={0} onPressIn={onPressIn} onPress={onPress} activeOpacity={0.8} style={[st.mode, active && st.modeOn, disabled && { opacity: 0.4 }]}>
       <Text style={[st.modeTxt, active && st.modeTxtOn]}>{label}</Text>
     </TouchableOpacity>
@@ -1217,7 +1217,7 @@ function SwimStatusChips({ def, r, onChange, onFalseStart }: { def: DisciplineDe
           </TouchableOpacity>
         ) : null}
         {(['DNS', 'DQ'] as ResultStatus[]).map((x) => (
-          <TouchableOpacity key={x} accessibilityRole="button" accessibilityState={{ selected: s === x }} accessibilityLabel={`Mark ${x}`}
+          <TouchableOpacity key={x} accessibilityRole="button" accessibilityState={{ selected: s === x }} aria-pressed={s === x} accessibilityLabel={`Mark ${x}`}
             onPress={() => onChange({ ...r, status: s === x ? undefined : x, ruleRef: undefined, reason: undefined })}
             style={[st.status, s === x && st.statusOn]}>
             <Text style={[st.statusTxt, s === x && st.statusTxtOn]}>{x}</Text>
@@ -1266,7 +1266,7 @@ function StatusChips({ def, r, onChange, onFalseStart }: { def: DisciplineDef; r
     <View style={{ gap: theme.spacing(2) }}>
       <View style={st.wrap}>
         {statusesFor(def).map((x) => (
-          <TouchableOpacity key={x} accessibilityRole="button" accessibilityState={{ selected: s === x }} accessibilityLabel={`Mark ${x}`}
+          <TouchableOpacity key={x} accessibilityRole="button" accessibilityState={{ selected: s === x }} aria-pressed={s === x} accessibilityLabel={`Mark ${x}`}
             onPress={() => (x === 'FS' && s !== 'FS' && onFalseStart ? onFalseStart() : onChange({ ...r, status: s === x ? undefined : x, ruleRef: s === x ? undefined : x === 'FS' ? 'TR 16.8' : r.ruleRef }))}
             style={[st.status, s === x && st.statusOn]}>
             <Text style={[st.statusTxt, s === x && st.statusTxtOn]}>{x}</Text>
@@ -1334,9 +1334,9 @@ function AttemptCells({ def, r, round, editable, extraAllowed, course, onChange,
             <TextInput style={[st.input, { width: 64 }]} value={w} onChangeText={setW} placeholder="wind" placeholderTextColor={theme.colors.textMuted}
               keyboardType="numbers-and-punctuation" accessibilityLabel={`Attempt ${round} wind`} onSubmitEditing={() => void commit()} />
           )}
-          <SelectChip label="✓" active={false} onPress={() => void commit()} />
-          <SelectChip label="X" active={list[i]?.foul === true} onPress={() => { onUndoable?.('X foul'); put({ foul: true }); }} />
-          <SelectChip label="–" active={list[i]?.pass === true} onPress={() => { onUndoable?.('– pass'); put({ pass: true }); }} />
+          <SelectChip label="✓" accessibilityLabel={`Save attempt ${round}`} active={false} onPress={() => void commit()} />
+          <SelectChip label="X" accessibilityLabel={`Foul, attempt ${round}`} active={list[i]?.foul === true} onPress={() => { onUndoable?.('X foul'); put({ foul: true }); }} />
+          <SelectChip label="–" accessibilityLabel={`Pass, attempt ${round}`} active={list[i]?.pass === true} onPress={() => { onUndoable?.('– pass'); put({ pass: true }); }} />
         </View>
       )}
     </View>
@@ -1623,7 +1623,7 @@ const st = StyleSheet.create({
   badTxt: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: '700' },
   // SD-112: 44 pt targets, set apart from the time box above
   status: { minHeight: 44, minWidth: 56, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
-  statusOn: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },
+  statusOn: { backgroundColor: theme.colors.dangerStrong, borderColor: theme.colors.dangerStrong },
   statusTxt: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800' },
   statusTxtOn: { color: '#fff' },
   cells: { flexDirection: 'row', gap: 4 },
@@ -1639,7 +1639,7 @@ const st = StyleSheet.create({
   bigOk: { backgroundColor: theme.colors.primary },
   bigX: { backgroundColor: theme.colors.danger },
   bigPass: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.border },
-  bigTxt: { color: '#fff', fontWeight: '900', fontSize: theme.font.body },
+  bigTxt: { color: theme.colors.onFill, fontWeight: '900', fontSize: theme.font.body }, // SD-155: was white on green (1.8:1)
   bigTxtDark: { color: theme.colors.text, fontWeight: '900', fontSize: theme.font.body },
   clock: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border },
   clockTxt: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '800', fontVariant: ['tabular-nums'] },

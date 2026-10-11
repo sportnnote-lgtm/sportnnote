@@ -239,7 +239,7 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(2) },
   box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   boxOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  tick: { color: '#fff', fontWeight: '900', fontSize: 14 },
+  tick: { color: theme.colors.onFill, fontWeight: '900', fontSize: 14 },
   link: { color: theme.colors.primary, fontWeight: '700' },
   leaderTag: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: '600', marginTop: 2 },
 });

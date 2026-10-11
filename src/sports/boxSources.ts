@@ -38,6 +38,12 @@ import { DETAIL_BOX_KEYS, detailCoverage, detailPlayerCredits, detailTracked, ty
 import type { HockeyState } from './hockey/engine.ts';
 import { handballBox } from './handball/box.ts';
 import type { HandballState } from './handball/engine.ts';
+import { iceHockeyBox } from './ice_hockey/box.ts';
+import type { IceHockeyState } from './ice_hockey/engine.ts';
+import { netballBox } from './netball/box.ts';
+import type { NetballState } from './netball/engine.ts';
+import { rugbyBox } from './rugby/box.ts';
+import type { RugbyState } from './rugby/engine.ts';
 
 type Side = 'home' | 'away';
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -571,6 +577,9 @@ export function matchBoxSource(sport: SportId, state: unknown, ctx: BoxContext =
     case 'carrom': return carromBox(state as CarromState);
     case 'hockey': return hockeyBox(state as HockeyState, ctx);
     case 'handball': return handballBox(state as HandballState, ctx);
+    case 'ice_hockey': return iceHockeyBox(state as IceHockeyState, ctx);
+    case 'netball': return netballBox(state as NetballState, ctx);
+    case 'rugby': return rugbyBox(state as RugbyState, ctx);
     default: return undefined;
   }
 }

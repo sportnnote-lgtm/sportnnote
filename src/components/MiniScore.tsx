@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../core/theme';
+import { ensureContrast } from '../core/contrast';
 import { RedBadges } from './Scoreboard';
 import type { ScoreSummary } from '../sports/types';
 
@@ -30,8 +31,13 @@ export function MiniScore({
   const detail = [summary.statusLine, summary.detailLine].filter(Boolean).join(' · ');
   // Top → bottom: status ("1st Half") · running clock · scoreline. The scoreline
   // centres the score (HOME : away) with the team short-names pushed to the ends.
+  const reds = (n?: number) => (n ? `, ${n} red card${n === 1 ? '' : 's'}` : '');
+  // SD-155: read as one sentence ("1st Half. Lions 2. Tigers 1"), not 6 fragments.
+  const label = [detail, `${homeName} ${summary.homeScore}${reds(summary.homeReds)}`, `${awayName} ${summary.awayScore}${reds(summary.awayReds)}`].filter(Boolean).join('. ');
+  const hc = ensureContrast(homeColor, theme.colors.surfaceAlt, 3);
+  const ac = ensureContrast(awayColor, theme.colors.surfaceAlt, 3);
   return (
-    <View style={s.wrap}>
+    <View style={s.wrap} accessible={!clockNode} accessibilityRole="summary" accessibilityLabel={label}>
       {(detail || (live && !clockNode)) ? (
         <View style={s.statusRow}>
           {live && !clockNode ? <View style={s.dot} /> : null}
@@ -45,9 +51,9 @@ export function MiniScore({
           <RedBadges count={summary.homeReds} />
         </View>
         <View style={s.scoreGroup}>
-          <Text style={[s.score, { color: homeColor }]} numberOfLines={1}>{summary.homeScore}</Text>
+          <Text style={[s.score, { color: hc }]} numberOfLines={1} maxFontSizeMultiplier={1.6}>{summary.homeScore}</Text>
           <Text style={s.colon}>:</Text>
-          <Text style={[s.score, { color: awayColor }]} numberOfLines={1}>{summary.awayScore}</Text>
+          <Text style={[s.score, { color: ac }]} numberOfLines={1} maxFontSizeMultiplier={1.6}>{summary.awayScore}</Text>
         </View>
         <View style={[s.nameWrap, s.nameRightWrap]}>
           <RedBadges count={summary.awayReds} />

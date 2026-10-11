@@ -164,10 +164,30 @@ function formatFor(sport: SportId, cfg: Cfg, state: Cfg): SplitValue | undefined
       if (n === 6) return v('6aside', 'Indoor 6-a-side');
       return n ? v(`${n}aside`, `${n}-a-side`) : undefined;
     }
+    case 'netball': {
+      // SD-146: 4 × 15 / 4 × 10 / 2 × 20
+      const n = numOf(cfg.periods) ?? numOf(state.periods) ?? 4;
+      const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
+      return m ? v(`${n}x${m}`, `${n} × ${m} min`) : undefined;
+    }
+    case 'ice_hockey': {
+      // SD-145: 3 × 20 (IIHF / NHL) / 3 × 17 (US high school) / youth 3 × 15, 3 × 12
+      const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
+      return m ? v(`3x${m}`, `3 × ${m} min`) : undefined;
+    }
     case 'handball': {
       // SD-102: senior 2 × 30 / youth 2 × 25 / 2 × 20 (IHF 2:1)
       const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
       return m ? v(`2x${m}`, `2 × ${m} min`) : undefined;
+    }
+    case 'rugby': {
+      // SD-143: 15s / tens / sevens, and the half length (age-grade presets)
+      const n = numOf(cfg.playersPerSide) ?? numOf(state.playersPerSide);
+      const vr = strOf(cfg.variant) ?? strOf(state.variant) ?? (n === 7 ? '7s' : n === 10 ? '10s' : n ? '15s' : undefined);
+      const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
+      if (!vr) return undefined;
+      const name = vr === '7s' ? 'Sevens' : vr === '10s' ? 'Tens' : '15s';
+      return m ? v(`${vr}-${m}`, `${name} · 2 × ${m}`) : v(vr, name);
     }
     case 'basketball': {
       const n = numOf(cfg.playersPerSide);

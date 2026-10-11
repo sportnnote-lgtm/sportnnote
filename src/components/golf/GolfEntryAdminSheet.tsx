@@ -70,8 +70,8 @@ export function GolfEntryAdminSheet({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={st.backdrop} onPress={onClose} accessibilityLabel="Close entry admin">
-        <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()}>
+      <Pressable style={st.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close entry admin">
+        <Pressable style={st.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none" tabIndex={-1}>
           <ScrollView contentContainerStyle={{ gap: theme.spacing(3) }} keyboardShouldPersistTaps="handled">
             <View style={st.head}>
               <Text style={st.title} numberOfLines={1}>⛳ {name}</Text>

@@ -226,13 +226,13 @@ export default function AuthScreen() {
               </View>
             </View>
           )}
-          {!otpPhone && <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" />}
+          {!otpPhone && <Field label="Email" value={email} onChange={setEmail} placeholder="you@school.edu" keyboardType="email-address" autoComplete="email" />}
           {otpPhone && <PhoneField label="Mobile number" value={mobile} onChange={setMobile} labelStyle={textStyles.muted} />}
-          {showPassword && <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure />}
+          {showPassword && <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" secure autoComplete={mode === 'up' ? 'new-password' : 'current-password'} />}
 
           {/* OTP / reset: the 6-digit code, plus a new password for reset. */}
-          {codeFlow && sent && <Field label="6-digit code" value={code} onChange={setCode} placeholder="123456" keyboardType="number-pad" />}
-          {mode === 'in' && flow === 'reset' && sent && <Field label="New password" value={newPassword} onChange={setNewPassword} placeholder="••••••••" secure />}
+          {codeFlow && sent && <Field label="6-digit code" value={code} onChange={setCode} placeholder="123456" keyboardType="number-pad" autoComplete="one-time-code" />}
+          {mode === 'in' && flow === 'reset' && sent && <Field label="New password" value={newPassword} onChange={setNewPassword} placeholder="••••••••" secure autoComplete="new-password" />}
 
           {mode === 'up' && minor && (
             <View style={{ gap: theme.spacing(2) }}>
@@ -242,7 +242,7 @@ export default function AuthScreen() {
               <Field label={guardianMustConfirm ? 'Guardian email (we send the confirmation link here)' : 'Guardian email'} value={gEmail} onChange={setGEmail} placeholder="parent@email.com" keyboardType="email-address" />
               <TouchableOpacity
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: consent }}
+                accessibilityState={{ checked: consent }} aria-checked={consent}
                 activeOpacity={0.8}
                 onPress={() => setConsent((c) => !c)}
                 style={st.consentRow}
@@ -269,7 +269,7 @@ export default function AuthScreen() {
           {mode === 'up' && (
             <TouchableOpacity
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: agreed }}
+              accessibilityState={{ checked: agreed }} aria-checked={agreed}
               activeOpacity={0.8}
               onPress={() => setAgreed((a) => !a)}
               style={st.consentRow}
@@ -277,9 +277,9 @@ export default function AuthScreen() {
               <Text style={[st.checkbox, agreed && st.checkboxOn]}>{agreed ? '☑' : '☐'}</Text>
               <Text style={st.consentText}>
                 I agree to the{' '}
-                <Text style={st.legalLink} onPress={() => nav.navigate('Legal', { doc: 'terms' })}>Terms of Use</Text>
+                <Text style={st.legalLink} accessibilityRole="link" onPress={() => nav.navigate('Legal', { doc: 'terms' })}>Terms of Use</Text>
                 {' '}and{' '}
-                <Text style={st.legalLink} onPress={() => nav.navigate('Legal', { doc: 'privacy' })}>Privacy Policy</Text>
+                <Text style={st.legalLink} accessibilityRole="link" onPress={() => nav.navigate('Legal', { doc: 'privacy' })}>Privacy Policy</Text>
                 {minor ? ', and my parent/guardian agrees on my behalf.' : '.'}
               </Text>
             </TouchableOpacity>
@@ -340,6 +340,7 @@ function Field({
   placeholder,
   secure,
   keyboardType,
+  autoComplete,
 }: {
   label: string;
   value: string;
@@ -347,6 +348,8 @@ function Field({
   placeholder?: string;
   secure?: boolean;
   keyboardType?: 'email-address' | 'number-pad';
+  /** SD-155 (1.3.5): lets password managers / autofill identify the field. */
+  autoComplete?: 'email' | 'current-password' | 'new-password' | 'one-time-code' | 'name';
 }) {
   return (
     <View style={{ gap: theme.spacing(1) }}>
@@ -360,6 +363,9 @@ function Field({
         secureTextEntry={secure}
         autoCapitalize="none"
         keyboardType={keyboardType}
+        // SD-155: the <Text> above isn't tied to the input, so name it here too.
+        accessibilityLabel={label}
+        autoComplete={autoComplete}
       />
     </View>
   );
@@ -380,7 +386,8 @@ const st = StyleSheet.create({
   input: {
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.inputBorder, // SD-155: ≥3:1 field edge (1.4.11)
+    minHeight: 44,
     borderRadius: theme.radius.md,
     paddingVertical: theme.spacing(3),
     paddingHorizontal: theme.spacing(3),

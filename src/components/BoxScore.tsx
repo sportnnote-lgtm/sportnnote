@@ -135,7 +135,7 @@ function TeamTable({ title, color, table, side, emptyText = 'No players.', onPla
           <View style={{ width: layout.nameWidth }}>
             <View style={[st.row, st.headRow]}>{table.numbers ? <Text style={[st.head, st.num]}>#</Text> : null}<Text style={[st.head, { textAlign: 'left' }]}>Player</Text></View>
             {players.map((r) => (
-              <View key={r.name} style={st.row} accessibilityLabel={rowLabel(table.columns, r)}>{num(r)}{nameCell(r, { flex: 1 })}</View>
+              <View key={r.name} style={st.row} accessible accessibilityLabel={rowLabel(table.columns, r)}>{num(r)}{nameCell(r, { flex: 1 })}</View>
             ))}
             <View style={[st.row, st.totalsRow]}>{num()}{totalsName}</View>
           </View>
@@ -157,7 +157,7 @@ function TeamTable({ title, color, table, side, emptyText = 'No players.', onPla
             {heads}
           </View>
           {players.map((r) => (
-            <View key={r.name} style={st.row} accessibilityLabel={rowLabel(table.columns, r)}>
+            <View key={r.name} style={st.row} accessible accessibilityLabel={rowLabel(table.columns, r)}>
               {num(r)}
               {nameCell(r, { flex: 1 })}
               {nums(r.cells)}
@@ -197,7 +197,7 @@ export function TeamComparison({ rows, homeName, awayName, homeColor, awayColor,
           </View>
         );
         return (
-          <View key={r.key} style={sv.statBlock} accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
+          <View key={r.key} style={sv.statBlock} accessible accessibilityLabel={`${r.label}: ${homeName} ${r.home}, ${awayName} ${r.away}`}>
             <View style={sv.statRow}>
               <Cell v={r.home} side="home" />
               <Text style={sv.statLabel}>{r.label}</Text>
