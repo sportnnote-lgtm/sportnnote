@@ -19,7 +19,7 @@ Before then, we're inviting 10 schools and colleges to run their January sports 
 3. We set up a free score overlay if you livestream.
 4. On the day, we're on call.
 
-What it covers: 20 sports, each scored by its own international rules, from athletics heats and the house medal table to kabaddi, chess and cricket.
+What it covers: 24 sports, each scored by its own international rules, from athletics heats and the house medal table to kabaddi, chess and cricket.
 
 What it costs: nothing. SportnNote is free while we're new; a small fee will come later, announced well in advance (30 days' notice).
 

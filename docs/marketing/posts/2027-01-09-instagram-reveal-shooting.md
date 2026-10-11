@@ -23,7 +23,8 @@ Scored the ISSF way, from the range to the medal table:
 🏁 The elimination final run for you, shot by shot, with automatic shoot-offs
 🏅 Meet records, house points, and every shooter's PBs and inner-ten rate
 
-That's all 10 reveals: 20 sports. Launching Monday, 11.01.
+That's the last of our 10 reveals. 24 sports go live on Monday, 11.01.
+Archery, rowing, canoe sprint and cycling are in too: each gets its own spotlight after launch.
 Tag your school's shooting team 👇
 
 #SportnNote #Shooting #AirRifle #AirPistol #SportShooting #SchoolSports #IndianSports
@@ -47,7 +48,7 @@ Tag your shooting team.
 | 0:06–0:09 | Pre-filled series 6: tap **Close qualification → seed the final**. The top 8 are marked q. | Top 8 to the final |
 | 0:09–0:13 | **FINAL** card: type shots `10.5`, `105`, `9.8`… The line "Out after shot 12: … — 8th" appears. | Eliminations, automatic |
 | 0:13–0:17 | Two finalists level at an elimination: the card switches to **Shoot-off**. One shot each; the lower goes out. | Tied? Shoot-off |
-| 0:17–0:20 | End card. | Reveal 10 of 10 · 20 sports · 11.01 |
+| 0:17–0:20 | End card. | Reveal 10 of 10 · 24 sports · 11.01 |
 
 **Audio:** licensed track; a soft "tick" on each shot typed.
 
@@ -62,4 +63,4 @@ Tag your shooting team.
 - **Final eliminations:** the guide says the 10 m final with 8 finalists eliminates from shot 12. Match the "Out after shot 12" text to what the screen really shows.
 - **Events list in the caption:** the guide notes that 25 m, trap and skeet medals come from the match (no final yet). The caption only says those events are scored, which is true; don't add "finals" for them.
 - **Imagery:** keep to phone screens and the target icon. No guns, no people aiming, no minors (platform policies and our minors rule).
-- **Sport count line:** "That's all 10 reveals: 20 sports" must match the live list on the day.
+- **Sport count line:** "24 sports" and the four named sports (archery, rowing, canoe sprint, cycling) must match the live list on the day. The reveals cover 20 sports; the other four get first-season spotlights (30 Jan, 20 Feb, 27 Feb, 6 Mar), so the reveal numbering stays "of 10".

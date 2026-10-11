@@ -16,7 +16,7 @@ Livestream your match with a live score overlay (OBS) | SportnNote how-to #5
 ```text
 Put a live score bar on your YouTube or Facebook stream. Every SportnNote match has a free score overlay link: pick a style (Bar, Pill or Corner), add a sponsor logo, copy the link into OBS as a browser source, and the score updates by itself as the scorer taps. Wickets, fours, sixes and goals flash on screen. No login on the streaming computer, no extra app.
 
-Every sport on SportnNote has a live overlay: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
+Every sport on SportnNote has a live overlay: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 

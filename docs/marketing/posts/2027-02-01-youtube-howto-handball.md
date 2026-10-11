@@ -18,7 +18,7 @@ How to score a handball match: clock, 7 m throws, 2-minute suspensions | SportnN
 ```text
 Score a whole handball match on one phone, the IHF way. Run the clock, log goals by type (6 m, 9 m, wing, breakthrough, fast break), 7-metre throws, saves, blocks and turnovers. Take time-outs within the IHF limits, give warnings, 2-minute suspensions and disqualifications that leave the team short, and settle a knockout with extra time or 7-metre throws. The app builds the box score, every player's stats and the IHF 2-1-0 table for you.
 
-Handball is one of 20 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
+Handball is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -121,5 +121,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Build:** handball shipped on 11 Oct 2026 (SD-102). Recheck every label against the frozen launch build (23 Nov–6 Dec): **▶ Throw-off**, **⏸ Stop**, **▶ Resume**, **⏭ End H1**, **▶ Start H2**, **🏁 Full time**, **⏱ Set clock**, **🤾 Goal** and its five types, **Team goal (no scorer)**, **🎯 7 m**, **✓ Scored**, **🧤 Saved**, **↗ Missed**, **↗ Shot**, **🛡 Blocked**, **⚠️ Turnover**, **⚠️ Technical fault**, **🖐 Ball stolen**, **🔁 Sub**, **No one — fill the empty place**, **⏸ Time-out**, **🟨 Card** and its four options, **Or a team official**, **Record**, **✎ Correct the timeline**, **▶ Back to live**.
 - **Format labels:** confirm the exact names of the **If level at full time** options for extra time and 7 m throws, and that the second half starts at 30:00 on the clock.
 - **IHF table tie-breaks:** the guide gives head-to-head points, then head-to-head goal difference and goals, then overall. The VO shortens this to "head-to-head first, then overall"; keep it that short.
-- **"Every sport" list:** matches the live list (20 sports, 11 Oct 2026). Don't mention archery.
+- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Don't mention combined events (heptathlon/decathlon): they're still being built.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

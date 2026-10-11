@@ -36,7 +36,7 @@ What federations record that school sport doesn't
 | 5 | Every goal, point and wicket, with the minute or the over | A final score, if someone wrote it down |
 | 6 | A player's whole career, across seasons | Last year's sheet, in a drawer |
 | 7 | Corrections made in public, with a name and a time | Results changed after the argument |
-| 8 | Close: **We built the first column, for schools.** 20 sports · live scoring · tables · careers. Launch 11 January · sportnnote.in | |
+| 8 | Close: **We built the first column, for schools.** 24 sports · live scoring · tables · careers. Launch 11 January · sportnnote.in | |
 
 ## Alt text (for the PDF)
 An eight-slide comparison:

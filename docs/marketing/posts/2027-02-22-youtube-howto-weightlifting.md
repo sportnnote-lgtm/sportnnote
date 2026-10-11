@@ -18,7 +18,7 @@ Run a weightlifting meet: weigh-in, lifting order, totals and records | SportnNo
 ```text
 Run a weightlifting meet from one phone, the IWF way. Add bodyweight categories, weigh lifters in, then tap Good lift or No lift (or the three referee lights) for every snatch and clean & jerk. The app keeps the lifting order, sets the next weight, refuses impossible declarations, adds up totals, breaks ties, and updates medals, the house table, meet records, Sinclair and every lifter's PBs.
 
-Weightlifting is one of 20 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
+Weightlifting is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -117,5 +117,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Build:** weightlifting shipped on 11 Oct 2026 (SD-97). Recheck every label against the frozen launch build (23 Nov–6 Dec): **Weightlifting basics**, **Position points**, **Medals for snatch and C&J too**, **Weightlifting — events**, **＋ Add a bodyweight category**, **Create event & weigh-in list**, **⚖️ Weigh-in**, **Bw / Sn / C&J**, the "Next: …" card, **✓ Good lift**, **✗ No lift**, **3 lights**, **Declined**, **Change kg**, **Check this weight**, **Big jump**, **✓ Good / Clear**, **Undo**, **Live — snatch standings**, **🏁 Finish & lock results**, **⚙ Medals & points**, **Sinclair totals**, **Best lifters (Sinclair)**, **↺ Reopen final**.
 - **Facts:** "IWF categories in force from 1 June 2025", "bodyweight no longer breaks ties (IWF, since 2017)" and the Sinclair coefficients "IWF 2021–2024" are from the guide. Keep the VO to the guide's wording.
 - **Weights:** keep the demo weights plausible for senior women 63 kg; the tie on total must be reachable with whole kilograms and +1 kg steps.
-- **"Every sport" list:** matches the live list (20 sports, 11 Oct 2026). Don't mention archery.
+- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Don't mention combined events (heptathlon/decathlon): they're still being built.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.

@@ -18,7 +18,7 @@ Run a shooting competition: series, finals and shoot-offs, the ISSF way | Sportn
 ```text
 Run a shooting competition from one phone. Add an event like 10 m Air Rifle, enter each series (or every shot), and let the app rank shooters with the ISSF tie rules. Then run the elimination final shot by shot, with automatic eliminations and shoot-offs. Medals, the house table, meet records and every shooter's PBs update when you lock the results.
 
-Shooting is one of 20 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting and shooting.
+Shooting is one of 24 sports on SportnNote, each scored by its own international rules: cricket, football, hockey, handball, basketball, volleyball, kabaddi, tennis, badminton, table tennis, squash, padel, pickleball, carrom, chess, golf, athletics, swimming, weightlifting, shooting, archery, rowing, canoe sprint and cycling.
 
 SportnNote is open to everyone at https://app.sportnnote.in. Free while we're new; a small fee later, announced well in advance (30 days' notice).
 
@@ -114,5 +114,5 @@ Times are targets for the edit. "VO" is the AI voice-over, word for word. Screen
 - **Elimination timing:** the guide says the 10 m final with 8 finalists eliminates from shot 12 (later with fewer finalists). Match the on-screen text and VO ("starts eliminating at shot twelve, then every two shots") to what the screen shows.
 - **Limits:** keep the closing line about 25 m, trap and skeet (no final yet) and mixed teams ranking on the team total; it's in the guide's Common questions.
 - **Platform policy:** YouTube is sensitive to firearm content. The video shows only app screens and icons, which is fine; don't add range or gun B-roll.
-- **"Every sport" list:** matches the live list (20 sports, 11 Oct 2026). Don't mention archery.
+- **"Every sport" list:** matches the live list (24 sports, 11 Oct 2026). Don't mention combined events (heptathlon/decathlon): they're still being built.
 - Check that every "free" sits with the full "small fee later, 30 days' notice" line.
