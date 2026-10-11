@@ -63,5 +63,11 @@ export const swimmingPlugin: SportPlugin<SwimmingMatchState> = {
     { key: 'handTimed', label: 'Manual timing', type: 'toggle', default: false, onCreate: true, hint: 'stopwatches, no touchpads: times to 1/100 from the lane’s watches (SW 11.3) count for meet records' },
     { key: 'splits', label: '50 m splits', type: 'toggle', default: true, advanced: true, hint: 'record the time at every 50 m (races over 50 m)' },
     { key: 'reaction', label: 'Reaction times', type: 'toggle', default: false, advanced: true, hint: 'touchpad timing reads each start' },
+    // SD-130: who is the individual champion when two athletes have the same points
+    {
+      key: 'champTie', label: 'Champion tie-break', type: 'choice', default: 'medals', advanced: true,
+      hint: 'the individual champion of each age group: most position points; if level…',
+      options: [{ value: 'medals', label: 'More golds, then silvers, bronzes' }, { value: 'share', label: 'Joint champions' }],
+    },
   ],
 };

@@ -5,7 +5,7 @@ category: Following & alerts
 audience: Parents & fans, Players, Captains
 sports: all
 order: 10
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 When you follow your child, you probably want to know about every goal they score. When you follow a whole tournament, you may only want the results. The 🔔 next to **✓ Following** lets you choose, separately for each player, team and tournament you follow.
@@ -31,16 +31,16 @@ The bell shows your choice at a glance:
 ### For a player you follow
 - **Before they play**: a reminder before their match, at your own reminder times. The app says "At your reminder times (Settings → Match reminders)". You set those times under **Settings** → **Match reminders** (by default a day, an hour and 15 minutes before).
 - **Match starts**: when their match goes live.
-- **Result**: who won, when the match ends.
+- **Result**: who won, when the match ends, when a final they ran, swam or lifted in is locked, or when their golf round is finished.
 - **Goals, wickets & big moments**: each time they score, in any sport.
 
 ### For a team you follow
 - **Match starts**: when the team's match goes live.
-- **Result**: who won, when the match ends.
+- **Result**: who won, when the match ends, and who won each final the team's athletes or relay took part in.
 
 ### For a tournament you follow
 - **Match starts**: when any match in it goes live.
-- **Result**: who won, for every match in it.
+- **Result**: who won, for every match, every final and every golf round in it.
 
 > **Tip:** For a big tournament with many matches a day, keep only **Result** on. For your own child, keep everything on.
 
@@ -70,6 +70,12 @@ The scorer's last tap is held for about 60 seconds, so a wrong tap can be undone
 
 ### I follow a team and a player in it. Will I get two alerts?
 You may get one for the team and one for the player, because they're separate follows. Turn off **Match starts** or **Result** on one of them if that's too many.
+
+### Do I get alerts for athletics, swimming and other event sports?
+Yes, through **Result**. When the official taps **🏁 Finish & lock results** on a final, followers of its athletes, their house or team, and the meet get one alert, such as "🥇 Asha Rao won U14 Girls 100 m in 13.42 — meet record". Heats and semi-finals send nothing; a decathlon or heptathlon alerts after its last event. The same goes for swimming, weightlifting, shooting, archery, rowing, canoe and cycling. A final reopened and locked again doesn't alert twice.
+
+### And for golf?
+When the organiser taps **🏁 Finish the round** in stroke play, followers get the round's winner and score.
 
 ### Where do I set my own match reminder times?
 Under **Settings** → **Match reminders**, in the **🔔 Reminder timers** card. The same times are used for matches you play or score in, and for players you follow.

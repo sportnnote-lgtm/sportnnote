@@ -223,7 +223,27 @@ export interface PhaseFormat {
   /** SD-93 athletics combined events: this phase is one event of a decathlon /
    *  heptathlon / pentathlon … (its `discipline` is that event's) */
   combined?: CombinedFormat;
+  /** SD-129: the meet timetable — when (and where) each round of this event
+   *  is scheduled. Copied to every later phase; a phase whose own phaseNo has
+   *  an entry has an organiser-set time (= field_events.starts_at). Absent on
+   *  events made before SD-129 (their starts_at is the creation time). */
+  sched?: PhaseSched;
 }
+
+/** SD-129: a meet session — morning / afternoon / evening. */
+export type MeetSession = 'AM' | 'PM' | 'EVE';
+/** SD-129: one round's slot on the meet timetable. */
+export interface SchedRound {
+  /** the phase number in the event's plan (1 = first round) */
+  phaseNo: number;
+  /** scheduled start (ISO) */
+  at: string;
+  /** venue / area: 'Track', 'Long jump pit', 'Pool' … */
+  area?: string;
+  /** set when the organiser picked a session other than the clock's */
+  session?: MeetSession;
+}
+export interface PhaseSched { rounds: SchedRound[] }
 
 /** SD-98 — a cycling phase's set-up (cycling.ts). */
 export interface CycFormat {
@@ -402,6 +422,11 @@ export interface EntryResult {
   rc?: number;
   /** SD-93 combined events: this athlete was warned for the race's one allowed false start (TR 39.8.3) */
   fsWarn?: boolean;
+  /** SD-128: scratched from the start list (status DNS) — why and when; the
+   *  lane stays empty and the entrant can't go on to a later round */
+  scratch?: { reason: string; at: string };
+  /** SD-128: added after the start list was made (late entry) */
+  late?: boolean;
 }
 
 /** SD-95: one archer's side of one match — ends of 3 arrows, shoot-off arrows,

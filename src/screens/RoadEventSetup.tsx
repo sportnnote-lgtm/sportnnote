@@ -12,9 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
+import { AgeBasisNote } from '../components/results/AgeBasisNote';
+import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
@@ -22,7 +26,6 @@ import {
   ROAD_METRES, WALK_ROAD_METRES, WALK_TRACK_METRES, XC_METRES, HALF, MARATHON,
   type Category, type RoadKind, type RoadFormat, type TeamBasis,
 } from '../data/results';
-import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -40,6 +43,9 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
+  // SD-130: age groups on the meet's cut-off day (31 Dec by default), not today
+  const ages = useMeetAges(tournament, 'athletics', players);
   const meet = meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined);
   const [kind, setKind] = useState<RoadKind>('xc');
   const [age, setAge] = useState<string>('U14');
@@ -105,7 +111,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
   const [query, setQuery] = useState('');
   const [eligibleOnly, setEligibleOnly] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ageOf(p) });
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();
@@ -134,6 +140,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!ev) { setError('Pick a distance (at least 0.4 km).'); return; }
@@ -146,8 +153,9 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
     setBusy(true);
     try {
       const evt = await createResultsEvent({
+        hostIds: officials,
         discipline: ev.key, category: cat, tournamentId, entrants: list, plan: [{ phase: 'final', heats: 1 }], road,
-        handTimed: meet.handTimed, lanes: 'seeded', title: `${ev.label} ${categoryLabel(cat)}`, startsAt: new Date().toISOString(),
+        handTimed: meet.handTimed, lanes: 'seeded', title: `${ev.label} ${categoryLabel(cat)}`, startsAt: schedule.startsAt, sched: schedule.value,
       });
       nav.replace('ResultsEvent', { phaseId: evt.id });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -227,6 +235,7 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
           </View>
           <TextInput style={st.input} value={query} onChangeText={setQuery} placeholder="Search any player by name" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search players" />
           <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : 'Showing everyone'} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
+          <AgeBasisNote tournament={tournament} sport={'athletics'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
           <View style={st.wrap}>
             {pool.map((p) => {
               const on = picks.includes(p.id);
@@ -262,6 +271,8 @@ export function RoadEventSetup({ tournamentId }: { tournamentId?: string }) {
           )}
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev?.key ?? 'ath.xc'} athleteIds={picks} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create race & start list'} onPress={() => void create()} disabled={busy || !n} />
       </ScrollView>

@@ -11,9 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
@@ -39,6 +41,7 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
   const rowing = sport === 'rowing';
   const meet = crewMeetSettings(sport, tournament?.formats?.[sport] as Record<string, unknown> | undefined);
   const boats = rowing ? ROW_BOATS : CANOE_BOATS;
@@ -157,6 +160,7 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!entrants) { setError(single ? `Add at least one ${rowing ? 'sculler' : 'paddler'}.` : 'Add at least one crew.'); return; }
@@ -180,8 +184,9 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
     setBusy(true);
     try {
       const created = await createResultsEvent({
+        hostIds: officials,
         discipline: ev.key, category: cat, tournamentId, entrants: list, plan, lanes: 'draw', venueLanes: lanes,
-        handTimed: meet.handTimed, splits, title: `${ev.label} ${categoryLabel(cat)}`, startsAt: new Date().toISOString(),
+        handTimed: meet.handTimed, splits, title: `${ev.label} ${categoryLabel(cat)}`, startsAt: schedule.startsAt, sched: schedule.value,
       });
       nav.replace('ResultsEvent', { phaseId: created.id });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -314,6 +319,8 @@ export function CrewEventSetup({ tournamentId, sport }: { tournamentId?: string;
           <Text style={textStyles.muted}>{meet.handTimed ? 'Hand timing (regatta setting): times to 1/100.' : 'Photo finish: type thousandths with the “.000” chip — they decide the order; the official time shows to 1/100.'}</Text>
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev.key} plan={plan} athleteIds={single ? picks : crews.flatMap((c) => c.seats.filter((x): x is string => !!x))} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create race & draw lanes'} onPress={() => void create()} disabled={busy || !entrants} />
       </ScrollView>

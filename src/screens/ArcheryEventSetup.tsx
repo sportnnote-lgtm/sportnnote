@@ -11,9 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
@@ -30,6 +32,7 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
   const [bow, setBow] = useState<Bow>('R');
   const [indoor, setIndoor] = useState(false);
   const [age, setAge] = useState<ArchAge>('U18');
@@ -92,6 +95,7 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!entrants) { setError('Add at least one archer.'); return; }
@@ -102,9 +106,10 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
     setBusy(true);
     try {
       const evt = await createResultsEvent({
+        hostIds: officials,
         discipline: round.key, category: cat, tournamentId, entrants: list, plan,
         // target order is drawn (start list order)
-        lanes: 'draw', title: `${round.label} ${categoryLabel(cat)}`, startsAt: new Date().toISOString(),
+        lanes: 'draw', title: `${round.label} ${categoryLabel(cat)}`, startsAt: schedule.startsAt, sched: schedule.value,
       });
       nav.replace('ResultsEvent', { phaseId: evt.id });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -169,6 +174,8 @@ export function ArcheryEventSetup({ tournamentId }: { tournamentId?: string }) {
           <Text style={textStyles.muted}>Ranking ties (WA): the higher score, then more 10s (X included), then more X. Level for the last match-play place: a shoot-off; other equal ranks: a coin toss for the seed.</Text>
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={round.key} plan={withMatches ? [{ phase: 'qualification', heats: 1 }, { phase: 'final', heats: 1 }] : undefined} athleteIds={picks} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create event & start list'} onPress={() => void create()} disabled={busy || !entrants} />
       </ScrollView>

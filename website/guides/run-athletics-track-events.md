@@ -18,11 +18,12 @@ Each race is an event (say 100 m U14 Boys), run as heats and a final that adds p
 ## Step by step: add an event
 1. Open the tournament, then **Manage** → **Athletics — events**, and tap **＋ Add an event**.
 2. **Category** and **Event:** pick the age group (U10 to U20, or Open), Boys, Girls or Mixed, then the race. The list follows the category: 3000 m starts at U16, and hurdles vary by age and gender.
-3. **Athletes:** tap a house or search any player, and tap each one to enter them. Players outside the category are hidden; tap the category chip to show everyone.
+3. **Athletes:** tap a house or search any player, and tap each one to enter them. Players outside the category are hidden; tap the category chip to show everyone. Ages count on 31 December ([cut-offs](/guides/sports-day-champions-and-age-groups/)).
 4. **Entry marks (optional):** type each best time, or tap **Fill from PB** or **Fill from SB**. Digits fill from the right: 1185 is 11.85, 25034 is 2:50.34.
 5. **Rounds:** the app suggests rounds from the World Athletics tables, e.g. 12 sprinters make 2 heats, with the first 3 in each plus the 2 fastest of the rest in a final of 8. You can pick another option.
 6. **Lanes:** **Draw lanes** draws lanes within each heat. **Fastest in the middle** puts the best seed in lane 4.
-7. Tap **Create event & start list**.
+7. **Event officials (optional):** who runs just this event.
+8. Tap **Create event & start list**.
 
 ## Relays
 - Pick **4 × 100 m relay** or **4 × 400 m relay** and tap a house to add its team. A second team from one house is named "Red House B".
@@ -54,5 +55,5 @@ Each event has a usual range. A time outside it, such as an 800 m typed as 2153 
 > **Tip:** Tap **📤 Share** to send the start list or results, with a live-results link, to WhatsApp.
 
 ## What everyone sees
-- **House table** (Athletics page and **Stats** tab; tied places share points), **Best by event**, **Best athletes (points)** (individual finals only) and **Meet records**. When a school hosts, **School records** show its earlier meets' best marks.
+- **House table** (Athletics page and **Stats** tab; tied places share points), **🏆 Champions by category**, **Best by event**, **Best athletes (points)** (individual finals only) and **Meet records**. When a school hosts, **School records** show its earlier meets' best marks and its [record board](/guides/school-record-board/).
 - **Athlete profiles:** every result, medals, and a PB and SB per event.

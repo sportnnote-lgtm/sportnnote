@@ -17,6 +17,7 @@
     "expo-image-picker": "~56.0.17",
     "expo-keep-awake": "~56.0.3",
     "expo-notifications": "~56.0.17",
+    "expo-print": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "expo-updates": "~56.0.25",
     "firebase": "^12.19.0",

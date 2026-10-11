@@ -11,12 +11,13 @@ import { theme } from '../../core/theme';
 import { Button, Card, EmptyState, Pill, textStyles } from '../ui';
 import { SectionHeader } from '../SectionHeader';
 import { MedalTable } from '../MedalTable';
+import { ChampionsCard } from '../results/ChampionsCard';
 import { useMeet } from '../../data/useAthletics';
 import { medalStandings } from '../../data/medalStandings';
 import {
   categoryKey, categoryLabel, disciplineOf, eventLeaders, eventStatus, formatMark, meetFieldResults, meetSettings, topAthletes,
   swimMeetSettings, courseLabel, courseShort, eventMeetSettings, wlMeetSettings, sinclairTotal, summarizeLifts, fmtKg, SINCLAIR, pointsLabel,
-  isCrewSport, crewMeetSettings,
+  isCrewSport, crewMeetSettings, champTieOf,
   type MeetEvent, type RecordMark,
 } from '../../data/results';
 import { eventWords, eventPrefix, type EventSport } from '../../sports/eventSports';
@@ -92,8 +93,12 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
           {sport === 'athletics' && <Button label="🌳 ＋ Road race, race walk or cross-country" variant="ghost" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, mode: 'road' })} />}
           {sport === 'athletics' && <Button label="🏅 ＋ Combined event (decathlon, heptathlon, pentathlon)" variant="ghost" onPress={() => nav.navigate('AthleticsEventSetup', { tournamentId: tournament.id, mode: 'combined' })} />}
           <Button label={swim ? '⚙ Pool, points & timing' : wl ? '⚙ Medals & points' : sport === 'shooting' || sport === 'archery' ? '⚙ Points' : crew ? '⚙ Lanes, points & timing' : '⚙ Points & timing'} variant="ghost" onPress={() => nav.navigate('SportSettings', { sport, tournamentId: tournament.id })} />
+          {/* SD-128: the entries desk — athletes × events, event caps, paste a list */}
+          <Button label={`📋 Entries (${words.athletes} × events)`} variant="ghost" onPress={() => nav.navigate('MeetEntries', { tournamentId: tournament.id, ...(sport !== 'athletics' ? { sport } : {}) })} />
         </View>
       )}
+      {/* SD-129: the meet timetable (every event sport) and the printable sheets */}
+      <Button label="🗓 Timetable & print sheets" variant="ghost" onPress={() => nav.navigate('MeetTimetable', { tournamentId: tournament.id })} />
       {swimSettings ? (
         <Text style={textStyles.muted}>{courseLabel(swimSettings.course)} · {swimSettings.lanes} lanes{swimSettings.manual ? ' · manual timing' : ''} · World Aquatics seeding (fastest heat last, fastest in the centre lane).</Text>
       ) : null}
@@ -137,6 +142,8 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
       <SectionHeader title="🏅 House table" count={table.length} />
       <Text style={textStyles.muted}>{pointsLabel(settings.positionPoints)} points per {wl ? `category${wlSettings?.liftMedals ? ' and per lift' : ''}` : 'final'}{settings.relayFactor !== 1 ? `, relays ×${settings.relayFactor}` : ''}; tied places share.</Text>
       <MedalTable rows={table} emptyLabel="No final has finished yet." />
+      {/* SD-130: champion house and individual champion per age group and gender */}
+      <ChampionsCard events={events} points={points} tie={champTieOf(fmt)} title={tournament.name} athletesWord={words.athlete} />
 
       {leaders.length > 0 && (
         <>
@@ -197,7 +204,9 @@ export function AthleticsHub({ tournament, canOrganize, sport = 'athletics' }: {
         </>
       )}
 
-      <RecordBook title="📖 Meet records" list={records} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : crew ? 'Set by the first final of each boat class and distance (lightweight and para categories kept apart).' : sport === 'cycling' ? 'Timed events only (time trials, pursuits, the sprint’s flying 200 m), per distance — a road race or bunch race sets no record.' : 'Set by the first final of each event.'} />
+      {/* SD-130: the school's existing records (historic board) */}
+      {canOrganize && <Button label="📖 Record board — add your school’s records" variant="ghost" onPress={() => nav.navigate('RecordBoard', { tournamentId: tournament.id, sport })} />}
+      <RecordBook title="📖 Meet records" list={records.filter((r) => r.scope === 'MR')} prefix={eventPrefix(sport)} empty={swim ? 'Set by the first final of each event — 25 m and 50 m pools keep separate records.' : wl ? 'Set by the first session of each bodyweight category — snatch, clean & jerk and total.' : sport === 'shooting' ? 'Qualification / match scores, per event and match length (a final score is not a record).' : sport === 'archery' ? 'Complete ranking rounds, per bow and distance (a match is not a record).' : crew ? 'Set by the first final of each boat class and distance (lightweight and para categories kept apart).' : sport === 'cycling' ? 'Timed events only (time trials, pursuits, the sprint’s flying 200 m), per distance — a road race or bunch race sets no record.' : 'Set by the first final of each event — or entered from your record board.'} />
       {tournament.hostOrgId ? <RecordBook title="🏫 School records" list={schoolRecords} prefix={eventPrefix(sport)} empty={swim ? "Best times from this organisation's earlier meets appear here, per pool length." : "Best marks from this organisation's earlier meets appear here."} /> : null}
     </View>
   );

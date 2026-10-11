@@ -11,16 +11,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
+import { AgeBasisNote } from '../components/results/AgeBasisNote';
+import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
   CYC_EVENTS, categoryLabel, eligibleFor, cycPlan, describeCycPlan, sprintFields, defaultSprintField, sprintCount, cycMeetSettings,
   type CycKind, type Category, type CycFormat,
 } from '../data/results';
-import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -58,6 +61,9 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
+  // SD-130: age groups on the meet's cut-off day (31 Dec by default), not today
+  const ages = useMeetAges(tournament, 'cycling', players);
   const [setting, setSetting] = useState<'road' | 'track'>('road');
   const [kind, setKind] = useState<CycKind>('itt');
   useEffect(() => { setKind(setting === 'road' ? 'itt' : 'ip'); }, [setting]);
@@ -113,7 +119,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
     const q = query.trim().toLowerCase();
     const base = src ? src.playerIds.map((id) => playerById.get(id)) : q ? players : sources.flatMap((s) => s.playerIds.map((id) => playerById.get(id)));
     const uniq = [...new Map(base.filter((p): p is Player => !!p).map((p) => [p.id, p])).values()];
-    return uniq.filter((p) => p.fullName && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ageOf(p) })) && (!q || p.fullName.toLowerCase().includes(q))).slice(0, 80);
+    return uniq.filter((p) => p.fullName && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })) && (!q || p.fullName.toLowerCase().includes(q))).slice(0, 80);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, query, sources, players, playerById, eligibleOnly, gender, age]);
   const toggle = (pid: string) => setPicks((ps) => (ps.includes(pid) ? ps.filter((x) => x !== pid) : [...ps, pid]));
@@ -129,6 +135,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!n) { setError('Add at least one rider.'); return; }
@@ -147,9 +154,10 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
     setBusy(true);
     try {
       const evt = await createResultsEvent({
+        hostIds: officials,
         discipline: ev.key, category: cat, tournamentId, entrants: list, plan, cyc, handTimed,
         // the start order is drawn (a time trial's start list, a pursuit's pairs)
-        lanes: 'draw', title: `${ev.label}${kmText} ${categoryLabel(cat)}`, startsAt: new Date().toISOString(),
+        lanes: 'draw', title: `${ev.label}${kmText} ${categoryLabel(cat)}`, startsAt: schedule.startsAt, sched: schedule.value,
       });
       nav.replace('ResultsEvent', { phaseId: evt.id });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -236,6 +244,7 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
           </View>
           <TextInput style={st.input} value={query} onChangeText={setQuery} placeholder="Search any player by name" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search players" />
           <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : 'Showing everyone'} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
+          <AgeBasisNote tournament={tournament} sport={'cycling'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
           <View style={st.wrap}>
             {pool.map((p) => {
               const on = picks.includes(p.id);
@@ -262,6 +271,8 @@ export function CyclingEventSetup({ tournamentId }: { tournamentId?: string }) {
           {handTimed ? <Text style={textStyles.muted}>Hand timing is on for this meet (Points & timing).</Text> : null}
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev.key} plan={plan} stage={kind === 'stage'} athleteIds={picks} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create race & start list'} onPress={() => void create()} disabled={busy || !n} />
       </ScrollView>

@@ -19,6 +19,9 @@ import { theme } from '../core/theme';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
+import { AgeBasisNote } from '../components/results/AgeBasisNote';
+import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, getMarkHistory, type NewEntrant } from '../data/resultsStore';
 import {
@@ -28,7 +31,9 @@ import {
   swimMeetSettings, swimEventsFor, phaseDiscipline, legLabels, mixedRelayError, COURSES, courseLabel,
   type Category, type RoundsPreset, type PlannedPhase, type Course,
 } from '../data/results';
-import { ageOf } from '../core/age';
+import { getEntriesDoc } from '../data/meetEntriesStore';
+import { tickedFor, slotKey, matchTeam, type MeetEntriesDoc } from '../data/results';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { WeightliftingEventSetup } from './WeightliftingEventSetup';
 import { ShootingEventSetup } from './ShootingEventSetup';
 import { ArcheryEventSetup } from './ArcheryEventSetup';
@@ -71,6 +76,9 @@ function TrackSwimEventSetup() {
   const tournamentId = params?.tournamentId;
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
+  // SD-130: age groups on the meet's cut-off day (31 Dec by default), not today
+  const ages = useMeetAges(tournament, params?.sport === 'swimming' ? 'swimming' : 'athletics', players);
   const sport = params?.sport ?? 'athletics';
   const swim = sport === 'swimming';
   const meet = meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined);
@@ -79,8 +87,9 @@ function TrackSwimEventSetup() {
   useEffect(() => { setCourse(sw.course); }, [sw.course]);
   const manual = swim ? sw.manual : meet.handTimed;
 
-  const [age, setAge] = useState<string>(swim ? 'U12' : 'U14');
-  const [gender, setGender] = useState<'M' | 'F' | 'X'>(swim ? 'F' : 'M');
+  // SD-128: opened from the entries matrix → that event, pre-filled from its ticks
+  const [age, setAge] = useState<string>(params?.age ?? (swim ? 'U12' : 'U14'));
+  const [gender, setGender] = useState<'M' | 'F' | 'X'>(params?.gender ?? (swim ? 'F' : 'M'));
   const cat: Category = swim ? { age, gender, course } : { age, gender };
   const events = useMemo(() => (swim
     ? swimEventsFor({ age, gender }, course).map((e) => ({ ...e, optional: false }))
@@ -88,7 +97,7 @@ function TrackSwimEventSetup() {
       ...trackEventsFor({ age, gender }).map((e) => ({ ...e, optional: false })),
       ...fieldEventsFor({ age, gender }).map((e) => ({ ...e, optional: !!e.optional })),
     ]), [age, gender, swim, course]);
-  const [discipline, setDiscipline] = useState(swim ? 'swim.50free' : 'ath.100m');
+  const [discipline, setDiscipline] = useState(params?.discipline ?? (swim ? 'swim.50free' : 'ath.100m'));
   // SD-94: the pool's lane count (a 6- or 10-lane pool) shapes heats and lanes
   const def = swim ? phaseDiscipline(disciplineOf(discipline)!, { lanes: sw.lanes }) : disciplineOf(discipline)!;
   const relay = !!def.teamSize;
@@ -157,7 +166,19 @@ function TrackSwimEventSetup() {
   const [query, setQuery] = useState('');
   const [eligibleOnly, setEligibleOnly] = useState(true);
   const [picks, setPicks] = useState<Pick[]>([]);
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ageOf(p) });
+  // SD-128: the meet's entries (matrix ticks, bibs, event-only athletes)
+  const [entriesDoc, setEntriesDoc] = useState<MeetEntriesDoc | null>(null);
+  useEffect(() => { void getEntriesDoc(tournamentId, sport).then(setEntriesDoc).catch(() => setEntriesDoc(null)); }, [tournamentId, sport]);
+  const entered = entriesDoc ? tickedFor(entriesDoc, slotKey(discipline, cat)) : [];
+  const useEntries = () => setPicks((ps) => [...ps, ...entered.filter((id) => !ps.some((x) => x.playerId === id) && playerById.has(id)).map((id) => ({ playerId: id, seed: '' }))]);
+  const [autoFilled, setAutoFilled] = useState(false);
+  useEffect(() => {
+    if (autoFilled || !params?.discipline || !entriesDoc || !players.length) return;
+    setAutoFilled(true);
+    if (!picks.length) useEntries();
+  }, [entriesDoc, players.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const guestTeam = (pid: string) => { const h = entriesDoc?.athletes?.[pid]?.house ?? playerById.get(pid)?.houseName; const t = matchTeam(h, sources); return t ? { id: t.teamId, name: t.name, colorHex: t.colorHex } : h ? { name: h } : undefined; };
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();
@@ -205,7 +226,7 @@ function TrackSwimEventSetup() {
 
   const entrants: NewEntrant[] = relay
     ? relays.map((r) => ({ name: r.label, team: { id: r.source.teamId, name: r.source.name, colorHex: r.source.colorHex }, members: r.members.map((id) => ({ playerId: id, name: playerById.get(id)?.fullName ?? 'Athlete' })) }))
-    : picks.map((p) => ({ playerId: p.playerId, name: playerById.get(p.playerId)?.fullName ?? 'Athlete', team: teamOf(p.playerId), seed: readSeed(p.seed) }));
+    : picks.map((p) => ({ playerId: p.playerId, name: playerById.get(p.playerId)?.fullName ?? 'Athlete', team: teamOf(p.playerId) ?? guestTeam(p.playerId), seed: readSeed(p.seed), bib: entriesDoc?.athletes?.[p.playerId]?.bib }));
   const n = entrants.length;
   const presets: RoundsPreset[] = useMemo(() => (n ? roundPresets(def, n) : []), [def, n]);
   const [presetKey, setPresetKey] = useState<RoundsPreset['key']>('wa');
@@ -214,6 +235,7 @@ function TrackSwimEventSetup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hurdles = hurdleHeight(def.key, cat);
+  const schedule = useSchedule(); // SD-129
 
   const create = async () => {
     setError(null);
@@ -234,8 +256,9 @@ function TrackSwimEventSetup() {
     setBusy(true);
     try {
       const ev = await createResultsEvent({
+        hostIds: officials,
         discipline: def.key, category: cat, tournamentId, entrants, plan, lanes: !swim && (def.lanes || field) ? lanes : 'seeded',
-        startsAt: new Date().toISOString(), handTimed: manual, reaction: swim ? sw.reaction : meet.reaction,
+        startsAt: schedule.startsAt, sched: schedule.value, handTimed: manual, reaction: swim ? sw.reaction : meet.reaction,
         ...(swim ? { venueLanes: sw.lanes, splits: sw.splits } : {}),
         ...(field ? {
           bar: vertical ? bar : undefined, implement: implement.trim() || undefined, board: def.key === 'ath.tj' ? board : undefined,
@@ -303,11 +326,12 @@ function TrackSwimEventSetup() {
             <>
               <Text style={textStyles.muted}>Add a team per house; tap it to pick its {swim ? 'swimmers in order' : 'runners in leg order'} (4, plus up to 2 reserves).{swim && gender === 'X' ? ' Mixed: 2 boys + 2 girls.' : ''}</Text>
               <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : 'Showing everyone'} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
+              <AgeBasisNote tournament={tournament} sport={swim ? 'swimming' : 'athletics'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
               <View style={st.wrap}>{sources.map((s) => <SelectChip key={s.key} label={`＋ ${s.name}`} dotColor={s.colorHex} active={false} onPress={() => addRelay(s)} />)}</View>
               {!sources.length && <Text style={textStyles.muted}>No teams or houses yet — add the houses as teams in the tournament first.</Text>}
               {relays.map((r) => {
                 const open = openRelay === r.key;
-                const cands = r.source.playerIds.map((id) => playerById.get(id)).filter((p): p is Player => !!p && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ageOf(p) })));
+                const cands = r.source.playerIds.map((id) => playerById.get(id)).filter((p): p is Player => !!p && (!eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) })));
                 return (
                   <View key={r.key} style={st.relay}>
                     <TouchableOpacity accessibilityRole="button" onPress={() => setOpenRelay(open ? null : r.key)} style={st.relayHead}>
@@ -332,12 +356,15 @@ function TrackSwimEventSetup() {
             </>
           ) : (
             <>
+              {/* SD-128: the athletes ticked for this event on the entries matrix */}
+              {entered.some((id) => !picks.some((x) => x.playerId === id)) ? <Button label={`📋 Add the meet entries (${entered.length})`} variant="ghost" onPress={useEntries} /> : null}
               <View style={st.wrap}>
                 <SelectChip label="All" active={filter == null} onPress={() => setFilter(null)} />
                 {sources.map((s) => <SelectChip key={s.key} label={s.name} dotColor={s.colorHex} active={filter === s.key} onPress={() => setFilter(s.key)} />)}
               </View>
               <TextInput style={st.input} value={query} onChangeText={setQuery} placeholder="Search any player by name" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search players" />
               <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : `Showing everyone`} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
+              <AgeBasisNote tournament={tournament} sport={swim ? 'swimming' : 'athletics'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
               <View style={st.wrap}>
                 {pool.map((p) => {
                   const on = picks.some((x) => x.playerId === p.id);
@@ -476,6 +503,8 @@ function TrackSwimEventSetup() {
 
         {!swim && meet.handTimed ? <Text style={textStyles.muted}>This meet is hand-timed (Athletics settings): times are read to the tenth and count for meet records.</Text> : null}
         {swim && sw.manual ? <Text style={textStyles.muted}>Manual timing (Swimming settings): times to 1/100 from the lane's watches (SW 11.3) count for meet records.</Text> : null}
+        {n > 0 ? <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={def.key} plan={preset?.plan} athleteIds={relay ? relays.flatMap((r) => r.members) : picks.map((p) => p.playerId)} /> : null}
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create event & start list'} onPress={() => void create()} disabled={busy || !n} />
       </ScrollView>

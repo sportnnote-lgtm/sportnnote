@@ -11,9 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import { askConfirm } from '../components/ConfirmSheet';
@@ -34,6 +36,7 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
   const settings = wlMeetSettings(tournament?.formats?.weightlifting as Record<string, unknown> | undefined);
   const [age, setAge] = useState<WlAge>('Senior');
   const [gender, setGender] = useState<'M' | 'F'>('M');
@@ -89,6 +92,7 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!picks.length) { setError('Add at least one lifter.'); return; }
@@ -112,9 +116,10 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
     setBusy(true);
     try {
       const ev = await createResultsEvent({
+        hostIds: officials,
         discipline: 'wl.total', category: cat, tournamentId, entrants, plan: [{ phase: 'final', heats: 1 }],
         // lot numbers are drawn (IWF): they set the order of weigh-in and of lifting at equal weights
-        lanes: 'draw', title: categoryLabel(cat), startsAt: new Date().toISOString(),
+        lanes: 'draw', title: categoryLabel(cat), startsAt: schedule.startsAt, sched: schedule.value,
       });
       nav.replace('ResultsEvent', { phaseId: ev.id });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -185,6 +190,8 @@ export function WeightliftingEventSetup({ tournamentId }: { tournamentId?: strin
           </Text>
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline="wl.total" athleteIds={picks.map((p) => p.playerId)} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create event & weigh-in list'} onPress={() => void create()} disabled={busy || !picks.length} />
       </ScrollView>

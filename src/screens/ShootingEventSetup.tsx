@@ -12,9 +12,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createResultsEvent, type NewEntrant } from '../data/resultsStore';
 import {
@@ -31,6 +33,7 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
   const [evKey, setEvKey] = useState(SHOOT_EVENTS[0].key);
   const ev = SHOOT_EVENTS.find((e) => e.key === evKey)!;
   const team = !!ev.teamSize;
@@ -95,6 +98,7 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (!entrants) { setError(team ? 'Add the shooters in pairs (a team is two).' : 'Add at least one shooter.'); return; }
@@ -112,9 +116,10 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
     setBusy(true);
     try {
       const evt = await createResultsEvent({
+        hostIds: officials,
         discipline: ev.key, category: cat, tournamentId, entrants: list, plan,
         // firing points are drawn (start list order)
-        lanes: 'draw', title: `${ev.label} ${categoryLabel(cat)}`, startsAt: new Date().toISOString(),
+        lanes: 'draw', title: `${ev.label} ${categoryLabel(cat)}`, startsAt: schedule.startsAt, sched: schedule.value,
         shootEntry: mode, ...(withFinal ? { shootFinal: true } : {}),
       });
       nav.replace('ResultsEvent', { phaseId: evt.id });
@@ -191,6 +196,8 @@ export function ShootingEventSetup({ tournamentId }: { tournamentId?: string }) 
           <Text style={textStyles.muted}>Ties (ISSF): {ev.scoring === 'integer' ? 'more inner tens, then ' : ''}{ev.positions ? 'standing, kneeling, prone totals, then ' : ''}the higher last {ev.scoring === 'hits' ? 'round' : '10-shot series'}, back series by series{ev.scoring !== 'hits' ? ', then shot by shot when shots are entered' : ''}.</Text>
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={ev.key} plan={!!ev.final && !team && finalOk ? [{ phase: 'qualification', heats: 1 }, { phase: 'final', heats: 1 }] : undefined} athleteIds={picks} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Button label={busy ? 'Creating…' : 'Create event & start list'} onPress={() => void create()} disabled={busy || !entrants} />
       </ScrollView>

@@ -27,8 +27,18 @@ import {
   roadLines, phaseTeams, teamAwards, roadRecordsAllowed, type RoadFormat,
   combinedStandings, combinedAwards, combinedLines, combinedEventLines, combinedRanked, combinedSeed, combinedBar, continuing, nextCombinedFormat,
   combinedKey, markKey, type CombinedKind, type CombinedTable, type CombinedPhaseInput,
+  plannedSlot, type PhaseSched,
 } from './results';
 import { removeFieldEntry } from './golf';
+import { applyRecordOps, recordOpsFor, bestRecords, type RecordOp } from './results/recordBook';
+import { updateFieldEventFormat } from './golf';
+import { finalAlert, combinedAlert, type ResultAlert } from './results/alerts';
+
+/** SD-131 — leave the podium on the row (format.alert) for the follower push.
+ *  Never blocks the lock: the push is a courtesy, the result is what matters. */
+async function saveResultAlert(id: string, alert: ResultAlert): Promise<void> {
+  try { await updateFieldEventFormat(id, { alert }); } catch { /* no alert — the push falls back to the stat lines */ }
+}
 import { isEventSport } from '../sports/eventSports';
 
 const live = () => isSupabaseConfigured && !!supabase;
@@ -84,12 +94,15 @@ export interface NewResultsEvent {
   cyc?: CycFormat;
   /** SD-92 road / race walk / cross-country: certified course, timing, team scoring, walk rules */
   road?: RoadFormat;
+  /** SD-129: the timetable slots for the event's rounds (round 1 = this phase) */
+  sched?: PhaseSched;
 }
 
 // SD-95: archery phases read "Ranking round" / "Match play"
 const phaseTitle = (eventTitle: string, f: Pick<PhaseFormat, 'phase' | 'discipline' | 'plan' | 'races'>) => `${eventTitle} — ${phaseNameOf(f)}`;
 
-async function insertPhase(base: Omit<FieldEvent, 'id' | 'status'>): Promise<FieldEvent> {
+async function insertPhase(input: Omit<FieldEvent, 'id' | 'status'>): Promise<FieldEvent> {
+  const base = withPlannedSlot(input);
   if (!live()) {
     const ev: FieldEvent = { ...base, id: genId('fev'), status: 'scheduled' };
     demo.fieldEvents.push(ev);
@@ -103,9 +116,17 @@ async function insertPhase(base: Omit<FieldEvent, 'id' | 'status'>): Promise<Fie
   return toEvent(data);
 }
 
-type Row = { playerId?: string; teamId?: string; heat: number; result: EntryResult };
+/** SD-129: a new phase takes its slot from the event's plan of times (when
+ *  the organiser scheduled this round), else keeps the given start. */
+function withPlannedSlot(base: Omit<FieldEvent, 'id' | 'status'>): Omit<FieldEvent, 'id' | 'status'> {
+  const slot = plannedSlot(phaseOf(base as FieldEvent), base.roundNo);
+  return slot ? { ...base, startsAt: slot.at } : base;
+}
 
-async function insertEntries(eventId: string, rows: Row[]): Promise<FieldEntry[]> {
+export type Row = { playerId?: string; teamId?: string; heat: number; result: EntryResult };
+
+/** SD-128: exported for late entries (meetEntriesStore). */
+export async function insertEntries(eventId: string, rows: Row[]): Promise<FieldEntry[]> {
   if (!live()) {
     const out: FieldEntry[] = rows.map((r) => ({ id: genId('fen'), eventId, playerId: r.playerId ?? '', teamId: r.teamId, groupNo: r.heat, result: r.result, status: 'playing' }));
     demo.fieldEntries.push(...out);
@@ -158,6 +179,7 @@ export async function createResultsEvent(input: NewResultsEvent): Promise<FieldE
     // SD-98: a stage race's first stage carries its type ('road' / 'itt')
     ...(input.cyc ? { cyc: { ...input.cyc, ...(input.cyc.stages?.length ? { stageType: input.cyc.stages[0] } : {}) } } : {}),
     ...(input.road ? { road: input.road } : {}),
+    ...(input.sched?.rounds.length ? { sched: input.sched } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: def.sport as SportId, title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -413,9 +435,179 @@ export async function getRecordBook(tournamentId: string | undefined, sport: str
   try { return typeof raw === 'string' ? (JSON.parse(raw) as RecordMark[]) : []; } catch { return []; }
 }
 
-async function saveRecordBook(tournamentId: string | undefined, sport: string, list: RecordMark[]): Promise<void> {
+/** SD-128: exported for "Delete event" (records rolled back). */
+export async function saveRecordBook(tournamentId: string | undefined, sport: string, list: RecordMark[]): Promise<void> {
   if (!live() || !tournamentId) { demo.resultRecords[tournamentId ?? ''] = list; return; }
   await patchTournamentFormat(tournamentId, sport, { records: JSON.stringify(list) });
+}
+
+/* ----------------------- SD-130 record-book integrity ----------------------- */
+
+const missingRpc = (e: { code?: string; message?: string } | null | undefined, fn: string) =>
+  !!e && (e.code === 'PGRST202' || e.code === '42883' || (new RegExp(fn).test(e.message ?? '') && /could not find|does not exist|schema cache/i.test(e.message ?? '')));
+
+/**
+ * Apply record-book operations (recordBook.ts) and return the book after.
+ * Live: merge_field_records() merges them on the server with the tournament
+ * row locked — two finals locked at once both keep their records, and an
+ * event host may write what their own event set. Before that migration: a
+ * fresh read, the same merge, then the old write (organisers only).
+ */
+export async function writeRecordOps(tournamentId: string | undefined, sport: string, ops: RecordOp[], phaseId?: string): Promise<RecordMark[]> {
+  if (!ops.length) return getRecordBook(tournamentId, sport);
+  if (!live() || !tournamentId) {
+    const next = applyRecordOps(demo.resultRecords[tournamentId ?? ''] ?? [], ops);
+    demo.resultRecords[tournamentId ?? ''] = next;
+    return [...next];
+  }
+  const { data, error } = await supabase!.rpc('merge_field_records', { p_tid: tournamentId, p_sport: sport, p_ops: ops, p_phase: phaseId ?? null });
+  if (!error) return Array.isArray(data) ? (data as RecordMark[]) : getRecordBook(tournamentId, sport);
+  if (!missingRpc(error, 'merge_field_records')) throw new Error(error.message);
+  const fresh = await getRecordBook(tournamentId, sport);
+  const next = applyRecordOps(fresh, ops);
+  await patchTournamentFormat(tournamentId, sport, { records: JSON.stringify(next) });
+  return next;
+}
+
+/** A final's new records → the book. Never blocks the lock: a failed write is
+ *  kept for "Retry" (and the book the final computed is returned). */
+async function commitRecords(phase: FieldEvent, sport: string, book: RecordMark[], next: RecordMark[]): Promise<RecordMark[]> {
+  const ops = recordOpsFor(book, next);
+  try {
+    const after = await writeRecordOps(phase.tournamentId, sport, ops, phase.id);
+    resolveSyncIssue(phase.id, 'records');
+    return after;
+  } catch (e) {
+    const msg = (e as Error).message || 'Network error';
+    noteSyncIssue(phase, { recordOps: ops, recordsError: /can.t change this tournament/i.test(msg) ? 'Only an organiser can save this record until the latest database update is run.' : msg });
+    return next;
+  }
+}
+
+/** SD-130 — historic records from the school's board (organisers). Each one
+ *  replaces whatever the book holds for its scope + event + category. */
+export async function addHistoricRecords(tournamentId: string | undefined, sport: string, recs: RecordMark[]): Promise<RecordMark[]> {
+  return writeRecordOps(tournamentId, sport, recs.map((rec) => ({ op: 'set' as const, rec })));
+}
+
+/** SD-130 — delete one record from the book (organisers). */
+export async function removeRecord(tournamentId: string | undefined, sport: string, rec: Pick<RecordMark, 'scope' | 'discipline' | 'category'>): Promise<RecordMark[]> {
+  return writeRecordOps(tournamentId, sport, [{ op: 'remove', scope: rec.scope, discipline: rec.discipline, category: rec.category }]);
+}
+
+/* ------------- SD-130 results that didn't reach profiles / the book ------------- */
+
+/** What a locked phase still has to save: its stat lines (profiles) and / or its records. */
+export interface ResultSyncIssue {
+  phaseId: string;
+  title: string;
+  lines?: StatLine[];
+  linesError?: string;
+  recordOps?: RecordOp[];
+  recordsError?: string;
+}
+
+const syncIssues = new Map<string, ResultSyncIssue & { phase: FieldEvent }>();
+const syncListeners = new Set<() => void>();
+const emitSync = () => { for (const l of syncListeners) l(); };
+
+function noteSyncIssue(phase: FieldEvent, patch: Partial<ResultSyncIssue>): void {
+  const cur = syncIssues.get(phase.id) ?? { phaseId: phase.id, title: phase.title, phase };
+  syncIssues.set(phase.id, { ...cur, ...patch, phase });
+  emitSync();
+}
+function resolveSyncIssue(phaseId: string, part: 'lines' | 'records'): void {
+  const cur = syncIssues.get(phaseId);
+  if (!cur) return;
+  const next = part === 'lines' ? { ...cur, lines: undefined, linesError: undefined } : { ...cur, recordOps: undefined, recordsError: undefined };
+  if (!next.lines && !next.recordOps) syncIssues.delete(phaseId); else syncIssues.set(phaseId, next);
+  emitSync();
+}
+function clearSyncIssue(phaseId: string): void {
+  if (syncIssues.delete(phaseId)) emitSync();
+}
+
+/** The unsaved part of a phase's results (or null). */
+export function getSyncIssue(phaseId: string): ResultSyncIssue | null {
+  const i = syncIssues.get(phaseId);
+  if (!i) return null;
+  const { phase: _p, ...rest } = i;
+  void _p;
+  return rest;
+}
+
+/** Listen for changes to the unsaved results (returns the unsubscribe). */
+export function onSyncIssues(fn: () => void): () => void {
+  syncListeners.add(fn);
+  return () => { syncListeners.delete(fn); };
+}
+
+/** "Retry saving results to profiles": the same lines and record changes again
+ *  (both idempotent). Throws the first error that's still there. */
+export async function retrySync(phaseId: string): Promise<void> {
+  const i = syncIssues.get(phaseId);
+  if (!i) return;
+  if (i.lines) {
+    try { await putLines(i.phase, i.lines); resolveSyncIssue(phaseId, 'lines'); } catch (e) { noteSyncIssue(i.phase, { linesError: (e as Error).message }); throw e; }
+  }
+  if (i.recordOps) {
+    try { await writeRecordOps(i.phase.tournamentId, i.phase.sport, i.recordOps, phaseId); resolveSyncIssue(phaseId, 'records'); } catch (e) { noteSyncIssue(i.phase, { recordsError: (e as Error).message }); throw e; }
+  }
+}
+
+/**
+ * Re-sync a locked final's stat lines from its saved results (organisers) —
+ * after an app restart lost the retry, or to repair profiles. Idempotent:
+ * the phase's lines are replaced. Throws if the save fails.
+ */
+export async function resyncFinalLines(phase: FieldEvent, entries: FieldEntry[], nameOf: (id: string) => string, points?: PointsSettings): Promise<number> {
+  const f = phaseOf(phase);
+  const def = f && disciplineOf(f.discipline);
+  if (!f || !def) throw new Error('Not a results event');
+  let lines: StatLine[] | null;
+  if (f.combined) {
+    const res = entries.map((e) => toResultEntry(e, nameOf));
+    const ranked = rankEntries(res, phaseDiscipline(def, f), { handLegal: looseLegal(f) });
+    const rows = combinedStandings(await combinedPhases(f, nameOf, { id: phase.id, entries }), { final: true });
+    lines = [...combinedEventLines(f, ranked), ...combinedLines(f, rows, combinedAwards(rows, points ?? {}))];
+  } else {
+    const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
+    lines = finalLinesFor(f, def, entries, nameOf, rows, points);
+  }
+  if (!lines) return 0;
+  if (!live()) { await writePhaseLines(phase, f, lines); return lines.length; }
+  await putLines(phase, lines);
+  resolveSyncIssue(phase.id, 'lines');
+  return lines.length;
+}
+
+/* -------------------------- SD-130 event officials -------------------------- */
+
+/** Set who runs an event (results entry, closing rounds, locking the final):
+ *  `host_ids` (PLAYER ids) on every phase of the event. Organisers only. */
+export async function setEventOfficials(eventKey: string, hostIds: string[]): Promise<void> {
+  const ids = [...new Set(hostIds.filter(Boolean))];
+  const phases = await getResultsPhases({ eventKey });
+  if (!phases.length) throw new Error('Event not found');
+  if (!live()) { for (const p of phases) { const d = demo.fieldEvents.find((e) => e.id === p.id); if (d) d.hostIds = ids; } return; }
+  const { data, error } = await supabase!.from('field_events').update({ host_ids: ids }).in('id', phases.map((p) => p.id)).select('id');
+  if (error) throw new Error(/organisers/i.test(error.message) ? 'Only the organisers can change who runs this event.' : error.message);
+  if (!data?.length) throw new Error('You can’t change this event.');
+}
+
+/* ----------------------------- SD-130 meet ages ----------------------------- */
+
+/** Ages on the meet's cut-off day (organisers; ids → age), from the private
+ *  DOB on the server. Empty before the migration (the app falls back to the
+ *  age it can see). */
+export async function getMeetAges(tournamentId: string, sport: string, ids: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const uniq = [...new Set(ids.filter(Boolean))];
+  if (!live() || !uniq.length) return out;
+  const { data, error } = await supabase!.rpc('meet_ages', { p_tid: tournamentId, p_sport: sport, p_ids: uniq.slice(0, 2000) });
+  if (error) return out;
+  for (const r of (data ?? []) as { id: string; age: number }[]) if (r.age != null) out.set(r.id, Number(r.age));
+  return out;
 }
 
 /** Finish a final: lock it and write any new meet / school record. Athletics
@@ -428,34 +620,9 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   if (f.combined) return completeCombined(phase, f, def, entries, nameOf, scopes, points);
   // A timed final (several heats) ranks across heats — the whole phase at once.
   const rows = rankEntries(entries.map((e) => toResultEntry(e, nameOf)), def, { handLegal: looseLegal(f) });
-  if (def.capture === 'lifts') {
-    // SD-97: weightlifting lines — best snatch / C&J / total, make rate, medals
-    await writePhaseLines(phase, f, liftLines(f, entries.map((e) => toResultEntry(e, nameOf)), points ?? {}));
-  } else if (def.sport === 'archery') {
-    // SD-95: match play (places, matches won / lost, set points) or a ranking round that decides the medals
-    const bracket = rows.some((r) => r.entry.result.mp != null);
-    await writePhaseLines(phase, f, archLines(f, rows, bracket ? 'bracket' : 'match', eventAwards(rows, points ?? {})));
-  } else if (def.sport === 'shooting') {
-    // SD-96: an elimination final (finals reached, place, final score) or a match with no final (the score)
-    const fin = rows.some((r) => Array.isArray(r.entry.result.fshots));
-    await writePhaseLines(phase, f, shootLines(f, rows, fin ? 'final' : 'match', eventAwards(rows, points ?? {})));
-  } else if (def.sport === 'cycling') {
-    // SD-98: places, medals, points; times under m_cyc_*; points-race points; sprint matches; stages
-    await writePhaseLines(phase, f, cycLines(f, rows, eventAwards(rows, points ?? {})));
-  } else if (def.tie === 'road') {
-    // SD-92: road / walk / XC — place, time (PB key, not XC), red cards, medals, points; the team score
-    const teams = phaseTeams(f, rows);
-    await writePhaseLines(phase, f, roadLines(f, rows, eventAwards(rows, points ?? {}), teams, f.road?.team?.points === false ? [] : teamAwards(teams, points ?? {})));
-  } else if (isCrewSport(def.sport)) {
-    // SD-99 / SD-100: every rower / paddler and the cox gets the crew's line
-    let awards = eventAwards(rows, points ?? {});
-    if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
-    await writePhaseLines(phase, f, crewLines(f, rows, awards));
-  } else if (isEventSport(def.sport)) {
-    let awards = eventAwards(rows, points ?? {});
-    if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
-    await writePhaseLines(phase, f, phaseLines(f, rows, awards));
-  }
+  // SD-130: the lines are computed apart, so a failed save can be re-synced later
+  const lines = finalLinesFor(f, def, entries, nameOf, rows, points);
+  if (lines) await writePhaseLines(phase, f, lines);
   const book = await getRecordBook(phase.tournamentId, def.sport);
   const cat = categoryKey(f.category);
   // SD-112: an out-of-range mark nobody confirmed never sets a record.
@@ -472,9 +639,48 @@ export async function completeFinal(phase: FieldEvent, entries: FieldEntry[], na
   }
   // SD-112: keep what the book said before, so "Reopen final" can put it back
   await patchPhaseFormat(phase.id, { recordsBefore: recordDefsFor(def).flatMap((d) => recordsFor(book, d.key, cat)) });
-  if (next !== book) await saveRecordBook(phase.tournamentId, def.sport, next);
+  // SD-130: only the records this final set are sent, merged on the server (no lost writes)
+  if (next !== book) next = await commitRecords(phase, def.sport, book, next);
+  // SD-131: the podium for the follower push (read by notify-followers once the status flips)
+  await saveResultAlert(phase.id, finalAlert(rows, f.eventTitle));
   await setPhaseStatus(phase.id, 'completed');
   return next;
+}
+
+type StatLine = { playerId: string; stats: Record<string, number>; won: boolean };
+
+/** SD-130 — the stat lines a locked (non-combined) final writes; null = none
+ *  (not an event sport). Shared by completeFinal and the re-sync. */
+function finalLinesFor(f: PhaseFormat, def: DisciplineDef, entries: FieldEntry[], nameOf: (id: string) => string, rows: RankedEntry[], points?: PointsSettings): StatLine[] | null {
+  if (def.capture === 'lifts') {
+    // SD-97: weightlifting lines — best snatch / C&J / total, make rate, medals
+    return liftLines(f, entries.map((e) => toResultEntry(e, nameOf)), points ?? {});
+  } else if (def.sport === 'archery') {
+    // SD-95: match play (places, matches won / lost, set points) or a ranking round that decides the medals
+    const bracket = rows.some((r) => r.entry.result.mp != null);
+    return archLines(f, rows, bracket ? 'bracket' : 'match', eventAwards(rows, points ?? {}));
+  } else if (def.sport === 'shooting') {
+    // SD-96: an elimination final (finals reached, place, final score) or a match with no final (the score)
+    const fin = rows.some((r) => Array.isArray(r.entry.result.fshots));
+    return shootLines(f, rows, fin ? 'final' : 'match', eventAwards(rows, points ?? {}));
+  } else if (def.sport === 'cycling') {
+    // SD-98: places, medals, points; times under m_cyc_*; points-race points; sprint matches; stages
+    return cycLines(f, rows, eventAwards(rows, points ?? {}));
+  } else if (def.tie === 'road') {
+    // SD-92: road / walk / XC — place, time (PB key, not XC), red cards, medals, points; the team score
+    const teams = phaseTeams(f, rows);
+    return roadLines(f, rows, eventAwards(rows, points ?? {}), teams, f.road?.team?.points === false ? [] : teamAwards(teams, points ?? {}));
+  } else if (isCrewSport(def.sport)) {
+    // SD-99 / SD-100: every rower / paddler and the cox gets the crew's line
+    let awards = eventAwards(rows, points ?? {});
+    if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
+    return crewLines(f, rows, awards);
+  } else if (isEventSport(def.sport)) {
+    let awards = eventAwards(rows, points ?? {});
+    if (def.teamSize && points?.relayFactor && points.relayFactor !== 1) awards = awards.map((a) => ({ ...a, points: Math.round(a.points * points.relayFactor! * 100) / 100 }));
+    return phaseLines(f, rows, awards);
+  }
+  return null;
 }
 
 /**
@@ -513,7 +719,11 @@ export async function reopenPhase(stale: FieldEvent): Promise<{ removedPhase?: s
     // SD-93: a combined event's record is its total
     const defs = f.combined ? [disciplineOf(f.combined.key)!] : recordDefsFor(def);
     for (const d of defs) next = rollbackRecords(next, d.key, cat, f.eventKey, f.recordsBefore);
-    if (next.length !== book.length || next.some((r, i) => r !== book[i])) await saveRecordBook(phase.tournamentId, def.sport, next);
+    // SD-130: sent as "restore" operations — a record another final set meanwhile is kept
+    if (next.length !== book.length || next.some((r, i) => r !== book[i])) {
+      next = await writeRecordOps(phase.tournamentId, def.sport, defs.map((d) => ({ op: 'restore' as const, discipline: d.key, category: cat, eventKey: f.eventKey, before: f.recordsBefore ?? [] })), phase.id);
+    }
+    clearSyncIssue(phase.id);
     out.records = next;
   }
   // the phase's stat lines are rewritten when it is closed / locked again
@@ -522,7 +732,8 @@ export async function reopenPhase(stale: FieldEvent): Promise<{ removedPhase?: s
   return out;
 }
 
-async function deletePhase(id: string): Promise<void> {
+/** SD-128: exported for "Delete event" (meetEntriesStore). */
+export async function deletePhase(id: string): Promise<void> {
   if (!live()) { demo.fieldEvents = demo.fieldEvents.filter((e) => e.id !== id); return; }
   const { error } = await supabase!.from('field_events').delete().eq('id', id);
   if (error) throw new Error(error.message);
@@ -580,15 +791,26 @@ async function writePhaseLines(phase: FieldEvent, f: PhaseFormat, lines: { playe
     for (const l of lines) demo.statLines.push({ id: genId('sl'), matchId: '', eventId: phase.id, playerId: l.playerId, sport: phase.sport, stats: l.stats, won: l.won, opponent: label, date: phase.startsAt });
     return;
   }
+  // SD-130: a failed save no longer vanishes — the results stay saved and locked,
+  // the lines wait in the sync list (banner + "Retry saving results to profiles").
   try {
-    await supabase!.from('stat_lines').delete().eq('event_id', phase.id);
-    if (lines.length) {
-      await supabase!.from('stat_lines').insert(lines.map((l) => ({
-        event_id: phase.id, match_id: null, player_id: l.playerId, sport: phase.sport, stats: l.stats, won: l.won, opponent: label, recorded_at: phase.startsAt,
-      })));
-    }
-  } catch { /* lines are a profile view; the results themselves are saved */ }
+    await putLines(phase, lines);
+    resolveSyncIssue(phase.id, 'lines');
+  } catch (e) {
+    noteSyncIssue(phase, { lines, linesError: (e as Error).message || 'Network error' });
+  }
   void f;
+}
+
+/** Replace a phase's stat lines (idempotent: delete, then insert). Throws on failure. */
+async function putLines(phase: FieldEvent, lines: StatLine[]): Promise<void> {
+  const del = await supabase!.from('stat_lines').delete().eq('event_id', phase.id);
+  if (del.error) throw new Error(del.error.message);
+  if (!lines.length) return;
+  const ins = await supabase!.from('stat_lines').insert(lines.map((l) => ({
+    event_id: phase.id, match_id: null, player_id: l.playerId, sport: phase.sport, stats: l.stats, won: l.won, opponent: phase.title, recorded_at: phase.startsAt,
+  })));
+  if (ins.error) throw new Error(ins.error.message);
 }
 
 /** Manual lane / heat override on a start list (managers only). */
@@ -626,26 +848,34 @@ export function meetResultsFor(events: MeetEvent[], points: PointsSettings): Fie
 /**
  * The school record book (SR) for an organisation: the best legal mark per
  * event + category at its OTHER meets (tournaments it hosts), derived from
- * their completed results — no separate storage. Historic records set before
- * the app are not included.
+ * their completed results, and (SD-130) the historic school records entered
+ * from its record board on any of its meets.
  */
 export async function getOrgRecordBook(orgId: string, exceptTournamentId: string | undefined, nameOf: (id: string) => string, sport: string = 'athletics'): Promise<RecordMark[]> {
-  let tids: string[];
-  if (!live()) tids = demo.tournaments.filter((t) => t.hostOrgId === orgId && t.id !== exceptTournamentId).map((t) => t.id);
+  // SD-130: + the historic school records (SR) organisers entered on any of its meets' boards
+  let all: { id: string; records: RecordMark[] }[];
+  if (!live()) all = demo.tournaments.filter((t) => t.hostOrgId === orgId).map((t) => ({ id: t.id, records: demo.resultRecords[t.id] ?? [] }));
   else {
-    const { data } = await supabase!.from('tournaments').select('id').eq('host_org_id', orgId);
-    tids = ((data ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== exceptTournamentId);
+    const { data } = await supabase!.from('tournaments').select('id, formats').eq('host_org_id', orgId);
+    all = ((data ?? []) as { id: string; formats?: Record<string, Record<string, unknown>> }[]).map((r) => {
+      const raw = r.formats?.[sport]?.records;
+      let records: RecordMark[] = [];
+      try { records = typeof raw === 'string' ? (JSON.parse(raw) as RecordMark[]) : []; } catch { records = []; }
+      return { id: r.id, records };
+    });
   }
-  if (!tids.length) return [];
+  const historic = all.flatMap((t) => t.records.filter((r) => r.scope === 'SR' && r.historic));
+  const tids = all.map((t) => t.id).filter((id) => id !== exceptTournamentId);
+  if (!tids.length) return bestRecords(historic);
   let phases: FieldEvent[];
   if (!live()) phases = demo.fieldEvents.filter((e) => e.sport === sport && e.status === 'completed' && !!e.tournamentId && tids.includes(e.tournamentId));
   else {
     const { data } = await supabase!.from('field_events').select('*').eq('sport', sport).eq('status', 'completed').in('tournament_id', tids);
     phases = ((data ?? []) as any[]).map(toEvent);
   }
-  if (!phases.length) return [];
+  if (!phases.length) return bestRecords(historic);
   const entries = await getFieldEntries(phases.map((p) => p.id));
-  return deriveRecordBook(groupMeet(meetPhases(phases, entries, nameOf)), 'SR');
+  return bestRecords(deriveRecordBook(groupMeet(meetPhases(phases, entries, nameOf)), 'SR'), historic);
 }
 
 /** What the athletics career needs about the phases an athlete's lines came from. */
@@ -698,6 +928,8 @@ export interface NewCombinedEvent {
   implements?: Record<string, string>;
   handTimed?: boolean;
   noWindGauge?: boolean;
+  /** SD-129: the timetable slots for its events (event 1 = this phase) */
+  sched?: PhaseSched;
 }
 
 /** Create a combined event: its first event's phase with the start list.
@@ -721,6 +953,7 @@ export async function createCombinedEvent(input: NewCombinedEvent): Promise<Fiel
     ...(combinedBar(first.key, input.category) ? { bar: combinedBar(first.key, input.category) } : {}),
     ...(input.implements?.[first.key] ? { implement: input.implements[first.key] } : {}),
     combined: { key, table: input.table, events: input.events, index: 0, ...(input.day2 != null && input.day2 > 0 && input.day2 < n ? { day2: input.day2 } : {}), ...(input.implements ? { implements: input.implements } : {}) },
+    ...(input.sched?.rounds.length ? { sched: input.sched } : {}),
   };
   const ev = await insertPhase({
     tournamentId: input.tournamentId, sport: 'athletics', title: phaseTitle(eventTitle, fmt), roundNo: 1,
@@ -787,9 +1020,10 @@ async function completeCombined(phase: FieldEvent, f: PhaseFormat, def: Discipli
   const cdef = disciplineOf(f.combined!.key)!;
   const cat = categoryKey(f.category);
   const book = await getRecordBook(phase.tournamentId, 'athletics');
-  const next = updateRecords(combinedRanked(rows, cdef.key), cdef, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
+  let next = updateRecords(combinedRanked(rows, cdef.key), cdef, cat, book, phase.startsAt.slice(0, 10), scopes, f.eventKey);
   await patchPhaseFormat(phase.id, { recordsBefore: recordsFor(book, cdef.key, cat) });
-  if (next !== book) await saveRecordBook(phase.tournamentId, 'athletics', next);
+  if (next !== book) next = await commitRecords(phase, 'athletics', book, next); // SD-130
+  await saveResultAlert(phase.id, combinedAlert(rows, f.eventTitle)); // SD-131
   await setPhaseStatus(phase.id, 'completed');
   return next;
 }

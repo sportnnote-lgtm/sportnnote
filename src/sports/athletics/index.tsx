@@ -52,5 +52,11 @@ export const athleticsPlugin: SportPlugin<AthleticsMatchState> = {
     },
     { key: 'handTimed', label: 'Hand-timed meet', type: 'toggle', default: false, onCreate: true, hint: 'stopwatches and no wind gauge: hand times count for PBs and meet records (shown "h")' },
     { key: 'reaction', label: 'Reaction times', type: 'toggle', default: false, advanced: true, hint: 'a start-information system reads reaction times' },
+    // SD-130: who is the individual champion when two athletes have the same points
+    {
+      key: 'champTie', label: 'Champion tie-break', type: 'choice', default: 'medals', advanced: true,
+      hint: 'the individual champion of each age group: most position points; if level…',
+      options: [{ value: 'medals', label: 'More golds, then silvers, bronzes' }, { value: 'share', label: 'Joint champions' }],
+    },
   ],
 };

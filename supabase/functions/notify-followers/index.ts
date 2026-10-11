@@ -48,6 +48,21 @@
  * "🏆 A beat B 3–1" push (ledger: lead_key 'tie_result' on rubber 1's id, so
  * it can never double-send). Before this deploy, every rubber pushed as a match.
  *
+ * EVENT RESULTS (SD-131): the `field_event_status_notify` trigger (migration
+ * 20261019124310_event_result_alerts.sql) posts `{ type: 'field_status', record:
+ * { id, sport, tournament_id, title, round_no, status } }` when a field event
+ * turns 'completed'. Only a FINAL (athletics, swimming, weightlifting, shooting,
+ * archery, rowing, canoe, cycling — the last planned round / the last event of a
+ * combined event) or a GOLF round pushes; a heat closing is skipped. The podium
+ * comes from `format.alert` (written by the app as it locks — every id is checked
+ * against the event's entries and names are read from players / teams), falling
+ * back to the stat lines (golds / won). Records: the tournament's record book rows
+ * whose eventKey is this event. "🥇 Asha Rao won U14 Girls 100 m in 13.42 — meet
+ * record" goes to followers of the athletes (relay / crew members included), of
+ * their teams / houses and of the tournament who want 'result'; ledger:
+ * reminder_sends (event_id, lead_key 'final' | 'round', kind 'follower'), so a
+ * final reopened and locked again never pushes twice.
+ *
  * ALERT CHOICES: a follower whose follows.prefs has `scores: false` gets no stat
  * pushes; `start: false` / `result: false` skip the status pushes. Before the
  * migration the prefs column is absent → the select falls back and everyone gets
@@ -60,6 +75,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeEqual } from '../_shared/guard.ts';
 import { webPushToProfiles } from '../_shared/webpush.ts';
+import { alertText, eventName, parseAlert, phaseKind, recordsSetBy, type AlertMedal, type RecordSet } from '../_shared/resultAlert.ts';
 
 const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET') ?? '';
 
@@ -282,6 +298,120 @@ async function handleMatchStatus(record: MatchRecord, oldStatus: string | null |
   return json({ key, recipients: toSend.length, ...out, ...(tieOut ? { tieOut } : {}) });
 }
 
+/* ------------------------- SD-131: event results ------------------------- */
+
+interface FieldStatusRecord { id: string; sport?: string; status?: string }
+interface FieldEntryRow { player_id: string | null; team_id?: string | null; result?: Record<string, unknown> | null }
+
+const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+async function handleFieldStatus(rec: FieldStatusRecord): Promise<Response> {
+  if (!isUuid(rec?.id)) return json({ skipped: 'no event' });
+  const { data: ev } = await supabase.from('field_events')
+    .select('id, sport, tournament_id, title, round_no, status, format').eq('id', rec.id).maybeSingle();
+  if (!ev || ev.status !== 'completed') return json({ skipped: 'not completed' });
+  const kind = phaseKind(ev.sport as string, ev.format);
+  if (!kind) return json({ skipped: 'not a final' });
+
+  // Who is in it: athletes (relay / crew members too) and the teams / houses they score for.
+  const q = (cols: string) => supabase.from('field_entries').select(cols).eq('event_id', ev.id);
+  let entryRes = await q('player_id, team_id, result');
+  if (entryRes.error) entryRes = await q('player_id, result'); // before 0051
+  const entries = (entryRes.data ?? []) as unknown as FieldEntryRow[];
+  const playerIds = new Set<string>();
+  const teamIds = new Set<string>();
+  for (const e of entries) {
+    if (isUuid(e.player_id)) playerIds.add(e.player_id);
+    if (isUuid(e.team_id)) teamIds.add(e.team_id);
+    const r = e.result ?? {};
+    const team = r.team as { id?: unknown } | undefined;
+    if (isUuid(team?.id)) teamIds.add(team!.id as string);
+    for (const m of Array.isArray(r.members) ? r.members : []) {
+      const pid = (m as { playerId?: unknown })?.playerId;
+      if (isUuid(pid)) playerIds.add(pid);
+    }
+  }
+
+  // The podium: the app's summary (ids checked against the entries), else the stat lines.
+  const stored = parseAlert((ev.format as Record<string, unknown> | null)?.alert);
+  let medals: AlertMedal[] = (stored?.medals ?? []).filter((m) =>
+    (m.playerId && playerIds.has(m.playerId)) || (m.teamId && teamIds.has(m.teamId)));
+  if (!medals.some((m) => m.medal === 'gold')) {
+    const { data: lines } = await supabase.from('stat_lines').select('player_id, stats, won').eq('event_id', ev.id);
+    medals = ((lines ?? []) as { player_id: string; stats?: Record<string, number>; won?: boolean }[])
+      .filter((l) => (kind === 'golf' ? l.won === true : Number(l.stats?.golds) > 0) && playerIds.has(l.player_id))
+      .map((l) => ({ medal: 'gold' as const, playerId: l.player_id, name: '' }));
+    // a relay / crew: its members' lines all carry the gold — name the team once
+    const relay = entries.find((e) => !e.player_id && Array.isArray(e.result?.members)
+      && medals.length > 0 && medals.every((m) => (e.result!.members as { playerId?: string }[]).some((x) => x.playerId === m.playerId)));
+    if (relay) {
+      const t = relay.result?.team as { id?: string; name?: string } | undefined;
+      medals = [{ medal: 'gold', ...(isUuid(relay.team_id) ? { teamId: relay.team_id } : isUuid(t?.id) ? { teamId: t!.id } : {}), name: typeof t?.name === 'string' ? t.name : '' }];
+    }
+  }
+  if (!medals.some((m) => m.medal === 'gold')) return json({ skipped: 'no winner' });
+
+  // Names from the database (the stored ones are the fallback for a team snapshot).
+  const pIds = [...new Set(medals.map((m) => m.playerId).filter((x): x is string => !!x))];
+  const tIds = [...new Set(medals.map((m) => m.teamId).filter((x): x is string => !!x))];
+  const [{ data: ps }, { data: ts }, { data: tourney }] = await Promise.all([
+    pIds.length ? supabase.from('players').select('id, full_name').in('id', pIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+    tIds.length ? supabase.from('teams').select('id, name').in('id', tIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ev.tournament_id ? supabase.from('tournaments').select('name, formats').eq('id', ev.tournament_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const pName = new Map((ps ?? []).map((p) => [p.id, p.full_name as string]));
+  const tName = new Map((ts ?? []).map((t) => [t.id, t.name as string]));
+  const sheetGolds = new Set(medals.filter((m) => m.medal === 'gold' && m.name).map((m) => m.name));
+  const named = medals.map((m) => ({
+    ...m,
+    name: (m.playerId && pName.get(m.playerId)) || (m.teamId && tName.get(m.teamId)) || m.name || (kind === 'golf' ? 'A golfer' : 'An athlete'),
+  }));
+
+  // Records this event set (the tournament's book) — a winner's own record rides on the title.
+  let records: RecordSet[] = [];
+  const t = tourney as { name?: string; formats?: Record<string, { records?: unknown }> } | null;
+  if (kind === 'final' && t?.formats) {
+    const key = ((ev.format as { results?: { eventKey?: unknown } } | null)?.results)?.eventKey;
+    records = recordsSetBy(t.formats[ev.sport as string]?.records, key)
+      .map((r) => (r.holder && sheetGolds.has(r.holder) ? { scope: r.scope } : r));
+  }
+
+  const text = alertText({
+    kind,
+    event: stored?.event ?? eventName(String(ev.title ?? ''), ev.format),
+    medals: named,
+    records,
+    tournament: t?.name ?? null,
+    inTournament: !!ev.tournament_id,
+  });
+  if (!text) return json({ skipped: 'no winner' });
+
+  const [playerF, teamF, tourF] = await Promise.all([
+    followersOf('player', [...playerIds]),
+    followersOf('team', [...teamIds]),
+    followersOf('tournament', ev.tournament_id ? [ev.tournament_id as string] : []),
+  ]);
+  const recipients = [...new Set([...playerF, ...teamF, ...tourF].filter((f) => wants(f.prefs, 'result')).map((f) => f.follower_id))];
+  if (!recipients.length) return json({ kind, sent: 0, recipients: 0 });
+
+  // Ledger: one push per (event, profile), ever — claim first so a re-lock or a
+  // concurrent call can't double-send.
+  const lead = kind === 'golf' ? 'round' : 'final';
+  const { data: claimed, error: claimErr } = await supabase
+    .from('reminder_sends')
+    .upsert(recipients.map((recipient_id) => ({ event_id: ev.id, lead_key: lead, recipient_id, kind: 'follower' })),
+      { onConflict: 'event_id,lead_key,recipient_id,kind', ignoreDuplicates: true })
+    .select('recipient_id');
+  // no event_id column yet → send nothing rather than risk repeats
+  if (claimErr) return json({ kind, error: 'ledger', message: claimErr.message }, 500);
+  const toSend = ((claimed ?? []) as { recipient_id: string }[]).map((r) => r.recipient_id);
+  if (!toSend.length) return json({ kind, sent: 0, recipients: 0, duplicate: true });
+
+  const url = kind === 'golf' ? `/g/${ev.id}` : `/r/${ev.id}`;
+  const out = await sendToProfiles(toSend, text.title, text.body, { url, eventId: ev.id });
+  return json({ kind, recipients: toSend.length, ...out });
+}
+
 interface StatLineRecord {
   player_id: string;
   sport: string;
@@ -299,6 +429,9 @@ Deno.serve(async (req) => {
   const payload = (await req.json()) as
     | { type: 'match_status'; record: MatchRecord; old_record?: { status?: string | null } | null }
     | { type?: string; record: StatLineRecord; old_record?: StatLineRecord | null };
+  if (payload.type === 'field_status') {
+    return handleFieldStatus((payload as unknown as { record: FieldStatusRecord }).record);
+  }
   if (payload.type === 'match_status') {
     const p = payload as { record: MatchRecord; old_record?: { status?: string | null } | null };
     return handleMatchStatus(p.record, p.old_record?.status);

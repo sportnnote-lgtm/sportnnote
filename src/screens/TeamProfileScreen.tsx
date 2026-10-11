@@ -27,6 +27,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { RemindInstall } from '../components/RemindInstall';
 import { teamPerGame, teamAverages, teamLeaders, teamRecords, teamMatchFilters, filterTeamMatches } from '../data/teamRecords';
 import { formatDay } from '../core/dates';
+import { getTeamEventResults, type TeamEventResults as TeamEventData } from '../data/teamEventResults';
+import { TeamEventResults } from '../components/TeamEventResults';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -111,6 +113,21 @@ export default function TeamProfileScreen() {
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team?.id, doneKey, squad.length]);
+
+  // SD-131 — event sports (athletics, swimming …) and golf stroke play: medals,
+  // points, finals, records and rounds (they have no matches to read).
+  const [eventData, setEventData] = useState<TeamEventData>({ sports: [], golf: null });
+  const squadKey = squad.map((p) => p.id).sort().join(',');
+  useEffect(() => {
+    if (!team) return;
+    let on = true;
+    getTeamEventResults({ id: team.id, name: team.name }, squad.map((p) => p.id))
+      .then((d) => { if (on) setEventData(d); })
+      .catch(() => {});
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team?.id, team?.name, squadKey]);
+  const hasEventResults = eventData.sports.length > 0 || !!eventData.golf;
 
   // Title the nav bar after the team, not a generic "Team" (breadcrumb).
   useEffect(() => {
@@ -206,7 +223,7 @@ export default function TeamProfileScreen() {
 
         {/* ── Stats ── */}
         <View onLayout={(e) => setStatsY(e.nativeEvent.layout.y)} style={{ gap: theme.spacing(3) }}>
-          <Text style={[textStyles.h3, st.section]}>Stats{sport && sportsPlayed.length === 1 ? ` · ${getSport(sport).icon} ${getSport(sport).name}` : ''}</Text>
+          {!(stats.played === 0 && hasEventResults) && <Text style={[textStyles.h3, st.section]}>Stats{sport && sportsPlayed.length === 1 ? ` · ${getSport(sport).icon} ${getSport(sport).name}` : ''}</Text>}
           {sportsPlayed.length > 1 && (
             <View style={st.tags}>
               {sportsPlayed.map((sp) => (
@@ -235,7 +252,7 @@ export default function TeamProfileScreen() {
             </ScrollView>
           )}
           {stats.played === 0 ? (
-            <EmptyState icon="📊" title="No results yet" hint="Stats appear here after this team’s first finished match." compact />
+            hasEventResults ? null : <EmptyState icon="📊" title="No results yet" hint="Stats appear here after this team’s first finished match or final." compact />
           ) : (
             <>
               <View style={st.statGrid}>
@@ -335,6 +352,14 @@ export default function TeamProfileScreen() {
             </>
           )}
         </View>
+
+        {/* SD-131 — event sports and golf stroke play */}
+        {hasEventResults && (
+          <>
+            <Text style={[textStyles.h3, st.section]}>Event results</Text>
+            <TeamEventResults sports={eventData.sports} golf={eventData.golf} onOpenResult={(phaseId) => nav.navigate('ResultsEvent', { phaseId })} />
+          </>
+        )}
 
         {records.length > 0 && (
           <>

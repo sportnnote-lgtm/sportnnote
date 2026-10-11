@@ -12,16 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../core/theme';
+import { ScheduleCard, useSchedule } from '../components/results/ScheduleCard';
 import { Button, Card, FormError, SelectChip, ScreenTitle, textStyles } from '../components/ui';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayers, useTournamentById } from '../data/hooks';
+import { EventOfficials } from '../components/results/EventOfficials';
+import { AgeBasisNote } from '../components/results/AgeBasisNote';
+import { useMeetAges } from '../data/useMeetAges';
 import { getTournamentTeams, getTeamRosters } from '../data/repos';
 import { createCombinedEvent, type NewEntrant } from '../data/resultsStore';
 import {
   AGE_GROUPS, categoryLabel, eligibleFor, meetSettings, COMBINED_PRESETS, SCORABLE, shortName, combinedKey, disciplineOf, implementSpec, hurdleHeight,
   type Category, type CombinedKind, type CombinedTable,
 } from '../data/results';
-import { ageOf } from '../core/age';
 import type { Player } from '../core/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -32,6 +35,9 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
   const nav = useNavigation<Nav>();
   const tournament = useTournamentById(tournamentId);
   const players = usePlayers();
+  const [officials, setOfficials] = useState<string[]>([]); // SD-130: event officials (host_ids)
+  // SD-130: age groups on the meet's cut-off day (31 Dec by default), not today
+  const ages = useMeetAges(tournament, 'athletics', players);
   const meet = meetSettings(tournament?.formats?.athletics as Record<string, unknown> | undefined);
   const [age, setAge] = useState<string>('U16');
   const [gender, setGender] = useState<CombinedTable>('F');
@@ -98,7 +104,7 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
   const [query, setQuery] = useState('');
   const [eligibleOnly, setEligibleOnly] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
-  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ageOf(p) });
+  const fits = (p: Player) => !eligibleOnly || eligibleFor(cat, { gender: p.gender, age: ages.ageFor(p) });
   const pool = useMemo(() => {
     const src = filter ? sources.find((s) => s.key === filter) : undefined;
     const q = query.trim().toLowerCase();
@@ -112,6 +118,7 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const schedule = useSchedule(); // SD-129
   const create = async () => {
     setError(null);
     if (events.length < 2) { setError('Pick at least two events.'); return; }
@@ -121,6 +128,8 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
     setBusy(true);
     try {
       const ev = await createCombinedEvent({
+        hostIds: officials,
+        startsAt: schedule.startsAt, sched: schedule.value,
         kind: custom ? 'x' : kind, table: gender, events, ...(day2 != null && day2 > 0 && day2 < events.length ? { day2 } : {}), category: cat,
         tournamentId, entrants: list, implements: implements_, handTimed, noWindGauge: noGauge, title: `${label} ${categoryLabel(cat)}`,
       });
@@ -198,6 +207,7 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
           </View>
           <TextInput style={st.input} value={query} onChangeText={setQuery} placeholder="Search any player by name" placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search players" />
           <SelectChip label={eligibleOnly ? `✓ ${categoryLabel(cat)} only` : 'Showing everyone'} active={eligibleOnly} onPress={() => setEligibleOnly(!eligibleOnly)} />
+          <AgeBasisNote tournament={tournament} sport={'athletics'} basis={ages.basis} cutoff={ages.cutoff} canEdit={!!tournament} onSaved={ages.setBasis} />
           <View style={st.wrap}>
             {pool.map((p) => {
               const on = picks.includes(p.id);
@@ -207,6 +217,8 @@ export function CombinedEventSetup({ tournamentId }: { tournamentId?: string }) 
           </View>
         </Card>
 
+        <ScheduleCard state={schedule} tournamentId={tournamentId} discipline={events[0] ?? 'ath.100m'} combined={events.length >= 2 ? { events, ...(day2 != null && day2 > 0 && day2 < events.length ? { day2 } : {}) } : undefined} athleteIds={picks} />
+        <EventOfficials tournament={tournament} value={officials} onChange={setOfficials} />
         <FormError message={error} />
         <Text style={textStyles.muted}>{events.length ? `${label} ${categoryLabel(cat)}: ${events.map(shortName).join(', ')}.` : ''} Each event is entered on the usual track / field screen; the running total and places update after every event.</Text>
         <Button label={busy ? 'Creating…' : `Create ${label.toLowerCase()} & first start list`} onPress={() => void create()} disabled={busy || !picks.length || events.length < 2} />

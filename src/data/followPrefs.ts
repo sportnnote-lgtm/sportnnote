@@ -21,7 +21,7 @@ export interface AlertOption {
 }
 
 const START: AlertOption = { key: 'start', label: 'Match starts', hint: 'When their match goes live' };
-const RESULT: AlertOption = { key: 'result', label: 'Result', hint: 'Who won, when the match ends' };
+const RESULT: AlertOption = { key: 'result', label: 'Result', hint: 'Who won — full time, a final locked, a golf round finished' };
 
 /** The switches shown per follow type. Only alerts something actually sends are
  *  listed — `award` stays out until #21's follower fan-out exists. */

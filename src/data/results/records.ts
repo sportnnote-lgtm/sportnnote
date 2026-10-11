@@ -30,6 +30,11 @@ export interface RecordMark {
   date?: string;
   /** the event (PhaseFormat.eventKey) that set it — its own sheet shows "MR", not "=MR" */
   eventKey?: string;
+  /** SD-130: entered by hand from the school's record board (set before the app) */
+  historic?: boolean;
+  /** SD-130: the year a historic record was set (when the exact date isn't known) */
+  year?: number;
+  venue?: string;
 }
 
 export interface RecordContext {

@@ -24,6 +24,7 @@ import { activeOrgsForPlayer, pastOrgsForPlayer, roleInOrg, memberEntry, members
 import { teamsByRecency, teamPeriod, type TeamAffiliation } from '../core/teams';
 import { getSport } from '../sports/registry';
 import { sportSummary, hasPartialCoverage, recordText } from '../data/stats';
+import { profileHeadline } from '../data/profileHeadline';
 import type { Player, SportId } from '../core/types';
 import { displayableImage } from '../core/imageUrl';
 import { notice } from '../core/confirm';
@@ -250,11 +251,16 @@ export function ProfileView({
       {emptyScope ? (
         <Card><Text style={textStyles.muted}>{emptyScope}</Text></Card>
       ) : (
-        <View style={st.statGrid}>
-          <Stat value={String(stats.matches)} label="Apps" />
-          <Stat value={`${stats.wins}-${stats.draws}-${stats.losses}`} label="W-D-L" />
-          <Stat value={`${Math.round(stats.winRate * 100)}%`} label="Win %" />
-        </View>
+        // SD-131: sport-aware — an athlete reads Events · Finals · Medals · PBs,
+        // a stroke-play golfer Rounds · Wins · Best round, everyone else Apps · W-D-L · Win %
+        (() => {
+          const tiles = profileHeadline(stats.recent);
+          return (
+            <View style={st.statGrid}>
+              {tiles.map((t) => <Stat key={t.label} value={t.value} label={t.label} narrow={tiles.length > 3} />)}
+            </View>
+          );
+        })()
       )}
 
       {onEditProfile && (player.phone || player.email) && (
@@ -421,9 +427,9 @@ export function ProfileView({
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Stat({ value, label, narrow }: { value: string; label: string; narrow?: boolean }) {
   return (
-    <Card style={st.statCard}>
+    <Card style={[st.statCard, narrow && st.statCardNarrow]}>
       <Text style={[st.statValue, value.length > 4 && st.statValueLong]} numberOfLines={1}>{value}</Text>
       <Text style={textStyles.muted}>{label}</Text>
     </Card>
@@ -629,6 +635,7 @@ const st = StyleSheet.create({
   remindersOff: { color: theme.colors.textMuted, fontSize: theme.font.small, fontStyle: 'italic' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) },
   statCard: { width: '30%', alignItems: 'center', gap: theme.spacing(1), flexGrow: 1 },
+  statCardNarrow: { width: '20%', paddingHorizontal: theme.spacing(1) },
   statValue: { color: theme.colors.primary, fontSize: theme.font.h1, fontWeight: '900' },
   /** a W-D-L record ("12-3-10") fits one line on a 375 px phone */
   statValueLong: { fontSize: theme.font.h3, lineHeight: theme.font.h1 + 6 },

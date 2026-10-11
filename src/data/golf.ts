@@ -14,6 +14,7 @@ import { roundStats, emptyCard, type GolfCard, type Hole, type Tee } from '../sp
 import { buildLeaderboard, roundContext, cardOf, entryStatusOf, withAdmin, golfFormatOf } from './golfLeaderboard';
 import type { EntryAdmin } from '../sports/golf/engine';
 import { roundDifferential } from '../sports/golf/handicap';
+import { golfAlert } from './results/alerts';
 
 // Pure leaderboard/format helpers live in golfLeaderboard.ts (testable in node);
 // re-exported so screens keep importing them from here.
@@ -349,6 +350,10 @@ export async function completeRound(ev: FieldEvent, entries: FieldEntry[], cours
     return { playerId: en.playerId, stats, won: winners.has(en.playerId) };
   });
   const label = course.name;
+  // SD-131 — the round's winner for the follower push (names come from the database)
+  const gf = golfFormatOf(ev);
+  const alert = golfAlert(rows, () => '', { scoring: gf.scoring, net: gf.net, event: ev.title });
+  try { await updateFieldEventFormat(ev.id, { alert }); } catch { /* the push falls back to the stat lines */ }
   // SD-122 — a finished round keeps the course it was played on, so a later
   // course edit doesn't change it (unless the organiser recomputes it).
   if (!hasCourseSnap(ev)) await updateFieldEventFormat(ev.id, { courseSnap: snapOf(course) });

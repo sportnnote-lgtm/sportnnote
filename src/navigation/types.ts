@@ -81,7 +81,15 @@ export type RootStackParamList = {
   /** Results engine (SD-28): one phase of a timed / measured event — entry + sheet. */
   ResultsEvent: { phaseId: string; tab?: 'enter' | 'sheet' };
   /** SD-90 / SD-91: add a track or field event (category, entrants, rounds, lanes / order, bar heights) to a meet. */
-  AthleticsEventSetup: { tournamentId?: string; sport?: 'athletics' | 'swimming' | 'weightlifting' | 'shooting' | 'archery' | 'rowing' | 'canoe' | 'cycling'; mode?: 'road' | 'combined' } | undefined;
+  AthleticsEventSetup: { tournamentId?: string; sport?: 'athletics' | 'swimming' | 'weightlifting' | 'shooting' | 'archery' | 'rowing' | 'canoe' | 'cycling'; mode?: 'road' | 'combined';
+    /** SD-128: set up this event of the entries matrix (pre-filled from its ticks) */
+    discipline?: string; age?: string; gender?: 'M' | 'F' | 'X' } | undefined;
+  /** SD-128: a meet's entries — athletes × events matrix per age group / gender, event caps, bulk add. */
+  MeetEntries: { tournamentId: string; sport?: string };
+  /** SD-129: a meet's timetable (day tabs, now / next, running late, clashes) and its printable sheets. */
+  MeetTimetable: { tournamentId: string; day?: string };
+  /** SD-130: a meet's record board — historic meet / school records entered or pasted, edited, removed. */
+  RecordBoard: { tournamentId: string; sport?: string };
   /** Hidden dev entry point for the results engine (URL /ResultsLab only). */
   ResultsLab: undefined;
   TryNewSport: { sports?: SportId[] } | undefined;

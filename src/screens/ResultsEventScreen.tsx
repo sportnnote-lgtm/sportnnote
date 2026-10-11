@@ -24,6 +24,8 @@ import { EndCard, BracketCard } from '../components/results/ArcheryPanel';
 import { FinishOrderCard, StageCard, PointsRaceCard, SprintBracketCard, cycHeader } from '../components/results/CyclingPanel';
 import { RoadFinishCard, TeamTable, roadHeader } from '../components/results/RoadPanel';
 import { CombinedStandingsCard, CombinedSheet } from '../components/results/CombinedPanel';
+import { EntriesPanel } from '../components/results/EntriesPanel';
+import { SyncBanner, ResyncButton, OfficialsCard } from '../components/results/RecordSync';
 import type { RootStackParamList } from '../navigation/types';
 import { useParamState } from '../navigation/useParamState';
 import { getPlayers, getMyPlayerId } from '../data/repos';
@@ -60,6 +62,7 @@ import { useTournamentById, useOrganizations } from '../data/hooks';
 import type { TextInput as TextInputT } from 'react-native';
 import { shareMessage } from '../core/share';
 import { resultsLink } from '../core/shareText';
+import { meetHeaderOf, printDoc, phaseSheet, hasCard, type SheetKind } from '../components/results/printPhase';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Change = (next: EntryResult) => void;
@@ -157,7 +160,8 @@ export default function ResultsEventScreen() {
     const nx = all.find((p) => p.roundNo === ev.roundNo + 1);
     setNextResults(nx ? { status: nx.status, results: (await getPhaseEntries([nx.id])).map((e) => (e.result ?? {}) as EntryResult) } : null);
     // SD-90: + the school record (SR) — the best at the host organisation's other meets.
-    setRecords(recs);
+    // SD-130: the meet book (MR); historic school records come with the SR book
+    setRecords(recs.filter((r) => r.scope === 'MR'));
     setLocal(new Map());
     // SD-97: weightlifting PBs per lift and for the total
     setHistory((await Promise.all(recordDefsFor(d).map((x) => getMarkHistory(x, ens.map((e) => e.playerId), ev.id, pf.category?.course, pf.category?.shots)))).flat());
@@ -374,7 +378,8 @@ export default function ResultsEventScreen() {
       const pts = isEventSport(def.sport) ? pointsFor(def.sport, tournament?.formats?.[def.sport] as Record<string, unknown> | undefined) : undefined;
       const book = await completeFinal(phase, merged, nameOf, ['MR'], pts);
       const keys = recordDefsFor(def).map((d) => d.key);
-      const mine = book.filter((r) => keys.includes(r.discipline) && r.category === categoryKey(f.category));
+      // SD-130: only the records this final set (a historic record still standing isn't news)
+      const mine = book.filter((r) => keys.includes(r.discipline) && r.category === categoryKey(f.category) && r.eventKey === f.eventKey);
       const what = (k: string) => (lifts ? `${k === LIFT_DISCIPLINE.snatch ? 'snatch' : k === LIFT_DISCIPLINE.cj ? 'C&J' : 'total'} ` : '');
       setInfo(mine.length ? `Records: ${mine.map((r) => `${r.scope} ${what(r.discipline)}${formatMark(r.value, def)}${lifts ? ' kg' : ''} (${r.holder})`).join(' · ')}` : null);
       await load();
@@ -470,7 +475,7 @@ export default function ResultsEventScreen() {
     if (undoLabel) offerUndo(entryId, resultOf(e), undoLabel);
     void save(e, n);
   };
-  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || (r.status ?? 'ok') !== 'ok' || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass) || !!r.fshots?.length || !!r.ends?.length || hasMatchData(r) || r.fin != null || !!Object.keys(r.spr ?? {}).length; });
+  const anyMark = merged.some((e) => { const r = (e.result ?? {}) as EntryResult; return r.mark != null || ((r.status ?? 'ok') !== 'ok' && !r.scratch) || !!r.attempts?.length || !!r.heights?.length || !!r.lifts?.snatch?.some((a) => a.good !== undefined || a.pass) || !!r.lifts?.cj?.some((a) => a.good !== undefined || a.pass) || !!r.fshots?.length || !!r.ends?.length || hasMatchData(r) || r.fin != null || !!Object.keys(r.spr ?? {}).length; });
   const curLift = lifts ? activeLift(resEntries) : null;
   const hurdles = hurdleHeight(def.key, f.category ?? {});
   // SD-91: the field event's set-up line (implement, board, wind gauge)
@@ -539,6 +544,14 @@ export default function ResultsEventScreen() {
     // SD-92: the team score follows the individual results
     void shareMessage(anyMark ? (teams.length ? `${resultsText(title, rows, phase.status === 'completed', undefined, icon)}\n${teamText(teams)}\n\nFull results: ${resultsLink(phase.id)}` : resultsText(title, rows, phase.status === 'completed', resultsLink(phase.id), icon)) : startListText(title, rows, resultsLink(phase.id), icon), 'results');
   };
+  // SD-129: print / PDF — the start list (heat sheet), a field card, or the results sheet
+  const printPhase = async (kind: SheetKind) => {
+    const slot = f.sched?.rounds.find((r) => r.phaseNo === f.phaseNo);
+    const info = { eventTitle: f.eventTitle ?? def.label, roundLabel: pName(f.phase), def, format: f, at: slot?.at, area: slot?.area, heatName: (h: number) => heatName(h) };
+    const sheet = phaseSheet(kind, info, resEntries, { heats: overall && anyMark ? new Map([[0, overall]]) : ranked, overall: !!overall && anyMark, official: phase.status === 'completed', notes });
+    const out = await printDoc(`${info.eventTitle} — ${info.roundLabel}`, meetHeaderOf(tournament, f.eventTitle ?? def.label), [sheet], { landscape: kind === 'card' });
+    if (out === 'failed') share(); // an app build without printing: the WhatsApp text, as before
+  };
   // Manual lane override (World Athletics lets the referee re-draw / move).
   const pickLane = async (entryId: string, heatNo: number, lane: number) => {
     const rows = merged.map((e) => ({ id: e.id, heat: e.groupNo, lane: ((e.result ?? {}) as EntryResult).lane }));
@@ -575,6 +588,8 @@ export default function ResultsEventScreen() {
           {canEdit && <SelectChip label="Enter results" active={view === 'enter'} onPress={() => setTab('enter')} />}
           <SelectChip label={anyMark ? 'Results sheet' : 'Start list'} active={view === 'sheet'} onPress={() => setTab('sheet')} />
           <SelectChip label="📤 Share" active={false} onPress={share} />
+          <SelectChip label={anyMark ? '🖨 Print results' : '🖨 Print start list'} active={false} onPress={() => void printPhase(anyMark ? 'results' : 'start')} />
+          {hasCard(def) && phase.status !== 'completed' ? <SelectChip label="📝 Field card" active={false} onPress={() => void printPhase('card')} /> : null}
         </View>
         {hurdles ? <Text style={textStyles.muted}>Hurdle height {hurdles} (World Athletics, {categoryLabel(f.category)}).</Text> : null}
         {swim ? <Text style={textStyles.muted}>{courseLabel(f.category?.course)} · {def.lanes} lanes{f.handTimed ? ' · manual timing (SW 11.3)' : ''}{timedFinal ? ` · timed final: ${f.heats} heats, places on time across heats` : ''}</Text> : null}
@@ -589,6 +604,8 @@ export default function ResultsEventScreen() {
         {lifts ? <Text style={textStyles.muted}>IWF: snatch then clean & jerk, 3 attempts each · equal totals → whoever lifted the total first · medals for {meet?.liftMedals ? 'snatch, C&J and total' : 'the total'}{curLift && phase.status !== 'completed' ? ` · now: ${curLift === 'snatch' ? 'snatch' : 'clean & jerk'}` : ''}</Text> : null}
         <FormError message={error} />
         {info ? <Text style={st.info}>{info}</Text> : null}
+        {/* SD-130: lines / records that didn't save at lock — retry */}
+        <SyncBanner phaseId={phase.id} onDone={() => setInfo('Saved to profiles.')} />
 
         {view === 'enter' && (
           <>
@@ -833,6 +850,13 @@ export default function ResultsEventScreen() {
           </>
         )}
 
+        {/* SD-128: late entry, scratch, delete event (organisers) */}
+        {canManage && <EntriesPanel phase={phase} f={f} def={def} entries={merged} nameOf={nameOf} onChanged={load} onDeleted={() => (nav.canGoBack() ? nav.goBack() : nav.navigate('Tabs' as never))} />}
+        {/* SD-130: who runs this event; rebuild a locked final's profile lines */}
+        {canManage && f.eventKey ? <OfficialsCard tournament={tournament} phase={phase} eventKey={f.eventKey} onSaved={() => { setInfo('Event officials saved.'); void load(); }} /> : null}
+        {canManage && phase.status === 'completed' && isFinal && isEventSport(def.sport) ? (
+          <ResyncButton phase={phase} entries={merged} nameOf={nameOf} points={pointsFor(def.sport, tournament?.formats?.[def.sport] as Record<string, unknown> | undefined)} onInfo={setInfo} onError={setError} />
+        ) : null}
         {canManage && reopen && (
           reopen.ok
             ? <Button label={busy ? 'Reopening…' : isFinal ? (arch ? `↺ Reopen ${pName(f.phase).toLowerCase()}` : '↺ Reopen final') : `↺ Reopen ${pName(f.phase).toLowerCase()}`} variant="ghost" onPress={() => void doReopen()} disabled={busy} />

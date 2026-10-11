@@ -65,6 +65,9 @@ const GolfCourseEditScreen = lazyScreen(() => import('../screens/GolfCourseEditS
 const ResultsEventScreen = lazyScreen(() => import('../screens/ResultsEventScreen'));
 const ResultsLabScreen = lazyScreen(() => import('../screens/ResultsLabScreen'));
 const AthleticsEventSetupScreen = lazyScreen(() => import('../screens/AthleticsEventSetupScreen'));
+const RecordBoardScreen = lazyScreen(() => import('../screens/RecordBoardScreen'));
+const MeetTimetableScreen = lazyScreen(() => import('../screens/MeetTimetableScreen'));
+const MeetEntriesScreen = lazyScreen(() => import('../screens/MeetEntriesScreen'));
 const StandingsScreen = lazyScreen(() => import('../screens/StandingsScreen'));
 const SportHubScreen = lazyScreen(() => import('../screens/SportHubScreen'));
 const TryNewSportScreen = lazyScreen(() => import('../screens/TryNewSportScreen'));
@@ -104,7 +107,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // the Join screen with the code prefilled.
 // Stack screens reachable by URL on web (/GolfRound?eventId=…). Keep in sync with
 // the <Stack.Screen> list below — a screen missing here just opens Home on refresh.
-const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
+const STACK_SCREENS = new Set<string>(['Americano', 'AssignScorers', 'AthleticsEventSetup', 'CorrectMatch', 'Bracket', 'Calendar', 'ClubHome', 'ClubSport', 'Clubs', 'Contingents', 'Conversation', 'CreateClub', 'CreateCommunity', 'CreateListing', 'CreateSeries', 'CreateTournament', 'CricketLineup', 'DeleteAccount', 'DiscoverOrgs', 'EditMatch', 'EditProfile', 'EditTeam', 'EditTournament', 'Feedback', 'Following', 'GenerateFixtures', 'GolfCourseEdit', 'GolfRound', 'GolfRoundSetup', 'GuardianLink', 'HeadToHead', 'ImportSchedule', 'JoinClub', 'JoinTeam', 'JoinTournament', 'Legal', 'LineupEditor', 'LiveScoring', 'MatchLink', 'MatchSquad', 'MeetEntries', 'MeetTimetable', 'MessageReports', 'Messages', 'NotificationPrefs', 'Notifications', 'Organization', 'OrganizerDashboard', 'PlayerProfile', 'RecordBoard', 'ResultsEvent', 'ResultsLab', 'ScanQR', 'ScheduleMatch', 'Series', 'Settings', 'SportHub', 'SportProfile', 'SportSettings', 'Squad', 'Standings', 'Support', 'Team', 'Teams', 'Tournament', 'TournamentTeams', 'TryNewSport', 'VerificationReview']);
 
 // Web deep links / refresh. React Navigation 7 only recognises screens listed in
 // `config`, and a URL that resolves to NO state makes it call resetRoot(undefined),
@@ -502,6 +505,21 @@ export default function RootNavigator() {
               name="AthleticsEventSetup"
               component={AthleticsEventSetupScreen}
               options={{ ...stackScreenOpts, title: 'New event' }}
+            />
+            <Stack.Screen
+              name="RecordBoard"
+              component={RecordBoardScreen}
+              options={{ ...stackScreenOpts, title: 'Record board' }}
+            />
+            <Stack.Screen
+              name="MeetEntries"
+              component={MeetEntriesScreen}
+              options={{ ...stackScreenOpts, title: 'Meet entries' }}
+            />
+            <Stack.Screen
+              name="MeetTimetable"
+              component={MeetTimetableScreen}
+              options={{ ...stackScreenOpts, title: 'Timetable' }}
             />
             <Stack.Screen
               name="GolfRoundSetup"
