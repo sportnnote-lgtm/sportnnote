@@ -2,6 +2,7 @@
  *  points come from the guided raid (SD-03); the raid / tackle counts are
  *  absolute statTotals from the raid replay (SD-33, ./totals.ts). */
 import type { Qualifier, SportStatSchema } from '../statSchema.ts';
+import { YELLOW_CARDS, RED_CARDS } from '../sharedStats.ts';
 
 /** SD-27 (KB-08) — minimum matches before a per-match figure ranks. */
 export const KABADDI_MIN_MATCHES: Qualifier = { games: 2, unit: { label: 'matches', one: 'match' } };
@@ -45,6 +46,12 @@ export const kabaddiStats: SportStatSchema<'kabaddi'> = {
     // tackle attempts per defender, which one scorer can't capture (audit §5).
     { key: 'raidStrikeRate', label: 'Raid strike rate', short: 'raid strike rate', source: 'derived', group: 'raiding', format: { unit: 'percent', dp: 0 }, agg: { kind: 'rate', num: 'successfulRaids', den: 'raids', scale: 100, dp: 0 } },
     { key: 'notOutRate', label: 'Not-out %', short: 'not out', source: 'derived', group: 'raiding', format: { unit: 'percent', dp: 0 }, agg: { kind: 'rate', num: ['raids', '-raidsOut'], den: 'raids', scale: 100, dp: 0 } },
+    // SD-59 / SD-72 — discipline (keyed: only matches that track cards /
+    // technical points carry the keys; older matches read "not tracked")
+    { key: 'greenCards', label: 'Green cards', short: 'green cards', one: 'green card', compact: 'green', group: 'discipline', weight: -1, abbr: 'GC', coverage: 'keyed' },
+    { ...YELLOW_CARDS, group: 'discipline', weight: -2, abbr: 'YC', coverage: 'keyed', suspension: { minutes: 2 } },
+    { ...RED_CARDS, group: 'discipline', weight: -5, abbr: 'RC', coverage: 'keyed', suspension: { permanent: true } },
+    { key: 'techPointsConceded', label: 'Technical pts conceded', short: 'technical pts conceded', group: 'discipline', format: { unit: 'count', better: 'lower' }, coverage: 'keyed' },
     // SD-23 / SD-41 — team-level (the PKL match centre comparison panel)
     { key: 'allOutPoints', label: 'All-out pts', short: 'all-out pts', source: 'team' },
     { key: 'extraPoints', label: 'Extra pts', short: 'extra pts', source: 'team' },
@@ -60,6 +67,9 @@ export const kabaddiStats: SportStatSchema<'kabaddi'> = {
     ] },
     { id: 'defending', title: 'Defending', rows: [
       { stat: 'tacklePoints' }, { stat: 'tacklePerMatch' }, { stat: 'tackles', label: 'Successful tackles' }, { stat: 'superTackles', hideZero: true }, { stat: 'high5s', hideZero: true },
+    ] },
+    { id: 'discipline', title: 'Discipline', rows: [
+      { stat: 'greenCards', hideZero: true }, { stat: 'yellowCards', hideZero: true }, { stat: 'redCards', hideZero: true }, { stat: 'techPointsConceded', hideZero: true },
     ] },
   ],
   careerView: 'sections',

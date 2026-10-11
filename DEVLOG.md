@@ -13,6 +13,17 @@ verified. **Maintained continuously — new work is appended here as it ships.**
 
 ---
 
+### 2026-10-11 — Kabaddi line-outs, technical points, cards, caught-raider touches (SD-59 / SD-72 / SD-83)
+- **Line-outs (in the raid form):** defenders who stepped out are out and give the raiding team 1 each (extra point; saves do-or-die, triggers revival, can complete an all-out); a raider line-out puts him out and gives the defence 1 (no tackle credit, touches void). Timeline "🚩 Line-out +n".
+- **Technical points:** TECH_POINT (cant late / not kept, coaching from outside, delay of game, two raiders, entering/leaving without leave, other) — 1 point, nobody out; hidden during a Golden Raid.
+- **Cards:** green (warning), yellow (2 minutes of match-clock time off the mat, team short; starts at revival if he was out), red (off for the match, no substitute; confirm sheet); optional technical point with the card (on for red). Suspended / sent-off players don't count on the mat (bonus line, super tackle, touch cap, all-out). "6/7 (1 suspended)" chips, live "Suspended: X (1:58 left)" banner via the shared on-field tracker; escalation hint.
+- **Caught raider's touches:** format "Touches don't score (AKFI / PKL)" (default) or "still score (house rule)"; v:2 raids only. Timeline "2 touches lost (caught)".
+- **Stats:** greenCards, yellowCards, redCards, techPointsConceded (keyed coverage, Discipline section); technical points and line-outs in Extra pts.
+- **Files:** kabaddi rules/engine/totals/stats/index. Legacy oracle + fingerprints unchanged. Guides: score-kabaddi, new kabaddi-line-outs-and-cards.
+- **Verified:** `tests/sd59-72-83-kabaddi-discipline.test.mts` (28); demo (8093 then a static export on 8099 after hot-reload loss) — caught raider, defender line-out, yellow with countdown, red with confirm, technical point, raider line-out.
+
+---
+
 ### 2026-10-11 — SD-53 / SD-54 racket conduct, timeouts, durations; squash Let
 - **Conduct (`src/sports/conduct.ts`, ☰ Quick options):** one CONDUCT action run through each sport's own reducer — warning/fault records, penalty point(s) to the opponent through the normal point path, game penalty (points until the game ends), default/disqualification with a red/green confirm that ends the match like End match → Default. Suggested escalation per sport: tennis warning → point → game (+ separate time-violation track: warning, then fault if serving / point if receiving); padel warning → point → game (+ DQ); table tennis yellow → yellow+red 1 pt → 2 pts → referee; badminton warning → fault → black card; squash warning / stroke / game / match; pickleball technical warning → technical foul (point) → forfeit.
 - **Timeouts:** TT 1 per match per side; pickleball 2 per game (3 to 21) + 1 medical; tennis medical timeout / toilet break markers; badminton note (none). Over-allowance timeouts are ignored.

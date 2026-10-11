@@ -8,7 +8,7 @@ order: 50
 updated: 2026-10-11
 ---
 
-One raid can score for both teams. You record each raid once, and the app works out the points, who is out, all outs and do-or-die.
+One raid can score for both teams. You record each raid once, and the app works out the points, who is out and all outs.
 
 ## Before you start
 - You must be a scorer or host of the match or its tournament. See [Scorers and officials](/guides/scorers-and-officials/) and [Only one phone scores at a time](/guides/one-scorer-at-a-time/).
@@ -21,11 +21,11 @@ One raid can score for both teams. You record each raid once, and the app works 
 3. Under **Raider (optional)**, tap the raider (tap again to clear). Players the app knows are out show "· out" and can't be picked.
 4. Under "Defenders touched (they go out)", tap 0 to 5. Each touch is a point, and each touched defender goes out. You can't pick more than are on the mat.
 5. If the raider crossed the bonus line, tap the chip so it reads **Bonus point: Yes**.
-6. If the raider was caught, tap the chip so it reads **Raider tackled: Yes**, then tap the defender under "Who made the tackle?". You can also pick how: **Ankle hold**, **Thigh hold**, **Waist hold**, **Dash**, **Block** or **Chain** (optional).
+6. If the raider was caught, tap the chip so it reads **Raider tackled: Yes**, then tap the tackler under "Who made the tackle?" and, if you like, how (**Ankle hold**, **Dash** and so on). A caught raider's touches don't score and the touched defenders stay in; a bonus still counts.
 7. Check the "Scores:" line, then tap **✓ Record raid** (or **Cancel**).
 
 ## Clock and timeouts
-- Tap **⏸ Pause clock** for an injury or a review, and **▶ Resume clock** when play restarts. The minute carries on from where it stopped.
+- Tap **⏸ Pause clock** for an injury or a review, and **▶ Resume clock** when play restarts.
 - Each team has two timeouts per half: tap "⏱️ Timeout — Red House (2 left)". The timeout goes on the timeline and the clock pauses for you.
 
 ## What each raid scores
@@ -42,7 +42,7 @@ One raid can score for both teams. You record each raid once, and the app works 
 With Pro rules on, a team's raid after two empty raids in a row is do-or-die ("⚠ DO-OR-DIE raid"). If it scores nothing, the raider is out and the defence gets 1 point even without a tackle ("Do-or-die stop +1").
 
 ## Reading the board and the match centre
-The scoreboard shows each team's total and a column per half. On the **Score** tab, the timeline lists every raid by minute, with super raids, super tackles, do-or-die raids, all outs and timeouts labelled. "Team stats" (also on **Summary**) is the match centre: the points split, raids and **Raid strike rate**, do-or-die success, tackles and **Tackle strike rate**, super tackles and all outs. Each team then has RAID, TKL and PTS per player; tap **1st half** or **2nd half** to filter.
+The scoreboard shows each team's total and a column per half. On the **Score** tab, the timeline lists every raid by minute, with each kind of point labelled. "Team stats" (also on **Summary**) is the match centre: the points split, raids and **Raid strike rate**, do-or-die success, tackles and **Tackle strike rate**, super tackles and all outs. Each team then has RAID, TKL and PTS per player; tap **1st half** or **2nd half** to filter.
 
 ## Career stats
 When the match ends, each player's line is rebuilt from the raids. Their profile shows **Raid strike rate**, **Not-out %**, super raids and tackles, and **Best match**.
@@ -54,6 +54,8 @@ When the match ends, each player's line is rebuilt from the raids. Their profile
 
 Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfill** and record it. A bar at the top shows the minute until you tap **Back to live**.
 
+Line-outs, technical points and green, yellow or red cards have their own guide: [Kabaddi line-outs, technical points and cards](/guides/kabaddi-line-outs-and-cards/).
+
 ## End the match
 - At half-time tap **End 1st Half →**, then **▶ Start 2nd half** when play resumes.
 - After the second half, tap **🏁 End Match**.
@@ -62,7 +64,7 @@ Missed a raid? Under "Backfill an earlier moment", type the minute, tap **Backfi
 - In a shootout, tap **Empty**, **+1**, **+2** or **+3** for each team's five raids. Shootout points don't count in the score or player stats.
 - With **Gaminee (all-out ends)** revival, the first all out ends the match.
 
-To stop early for rain or a team leaving, see [End a match early or record a walkover](/guides/end-a-match-early/).
+To stop early, see [End a match early or record a walkover](/guides/end-a-match-early/).
 
 ## Common questions
 

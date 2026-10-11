@@ -7,7 +7,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../core/theme';
 import { Button, SelectChip, TextField, textStyles } from '../../components/ui';
-import { confirmMatchAction } from '../../components/ConfirmSheet';
+import { askConfirm, confirmMatchAction } from '../../components/ConfirmSheet';
+import { FieldBanner } from '../FieldBanner';
 import { LiveTimeline } from '../LiveTimeline';
 import { MatchBoxScore } from '../../components/BoxScore';
 import { kabaddiBox } from '../boxSources';
@@ -19,12 +20,13 @@ import { LineScoreboard } from '../../components/LineScoreboard';
 import { courtFormation, makeCourt } from '../courts';
 import { BackfillBar, RowAction, confirmRemove } from '../TimelineControls';
 import { sum } from './rules';
-import { kabaddiTotals } from './totals.ts';
+import { kabaddiTotals, kabaddiSuspended } from './totals.ts';
 
 import {
   init, reducer, currentMinute, halfLabel, previewRaid, raidOfEvent, raidReversals, raidActions, isRaidHead, kabaddiWinner, halfPoints, defendersOnMat,
   expectedRaider, outPlayers, clockPaused, timeoutsUsed, TIMEOUTS_PER_HALF, TACKLE_TYPES,
-  type KabaddiState, type KabaddiEvent,
+  formOutcome, matNow, unavailable, cardsOf, suggestedCard, TECH_REASONS, CARD_ICON,
+  type KabaddiState, type KabaddiEvent, type CardColour,
 } from './engine.ts';
 
 export { halfLabel, currentMinute };
@@ -42,6 +44,31 @@ const Row = ({ label, roster, onPick, onTeam }: { label: string; roster: Player[
   </View>
 );
 
+/** On-mat status (SD-72: suspended / sent-off players aren't on the mat) and
+ *  the suspension banner — re-rendered every second while a yellow runs. */
+const MatStatus = ({ state, homeName, awayName }: { state: KabaddiState; homeName: string; awayName: string }) => {
+  const [, tick] = useState(0);
+  const suspended = kabaddiSuspended(state);
+  const running = suspended.length > 0 && !clockPaused(state) && !!state.startedAt;
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  const m = matNow(state);
+  const size = state.teamSize ?? 7;
+  const chip = (side: 'home' | 'away', nm: string) => {
+    const bits = [m.short[side] - m.sentOff[side] > 0 ? `${m.short[side] - m.sentOff[side]} suspended` : null, m.sentOff[side] ? `${m.sentOff[side]} sent off` : null].filter(Boolean).join(', ');
+    return <Text key={side} style={ctrl.matChip}>🟢 {nm} on mat: {m.onMat[side]}/{size}{bits ? ` (${bits})` : ''}</Text>;
+  };
+  return (
+    <View style={{ gap: theme.spacing(1) }}>
+      <View style={ctrl.matRow}>{chip('home', homeName)}{chip('away', awayName)}</View>
+      <FieldBanner suspended={suspended.map((x) => ({ ...x, name: `${x.name} (${x.side === 'home' ? homeName : awayName})` }))} />
+    </View>
+  );
+};
+
 const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, dispatch, homeName, awayName, homeRoster = [], awayRoster = [] }) => {
   const [sub, setSub] = useState<{ side: 'home' | 'away'; off?: Player } | null>(null);
   // Timeline correction: edit one past moment in place, or backfill a missed one.
@@ -54,7 +81,12 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   const [raidFlow, setRaidFlow] = useState<{
     side: 'home' | 'away'; raider?: Player; touches: number; bonus: boolean; tackled: boolean; tackler?: Player;
     editOf?: number; at?: { minute: number; half: number }; tackleType?: string;
+    /** SD-59: line-outs */
+    defOut?: number; lineOut?: boolean;
   } | null>(null);
+  // SD-59: a technical point (to `side`); SD-72: a card (to a player of `side`)
+  const [tech, setTech] = useState<{ side?: 'home' | 'away'; reason?: string; by?: Player } | null>(null);
+  const [card, setCard] = useState<{ side?: 'home' | 'away'; colour?: CardColour; who?: Player | 'official' | 'player'; tp: boolean; tpSet?: boolean } | null>(null);
 
   const hm = state.halfMinutes, et = state.extraTimeMinutes;
   const halfFromMin = (m: number): 1 | 2 | 3 | 4 => (m < hm ? 1 : m < 2 * hm ? 2 : m < 2 * hm + et ? 3 : 4);
@@ -64,10 +96,11 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
     raidFlow?.at ? raidFlow.at
     : edit ? { minute: edit.minute ?? 0, half: edit.half ?? state.half }
     : backfillMin != null ? { minute: backfillMin, half: halfFromMin(backfillMin) } : { minute: currentMinute(state), half: state.half };
-  const fire = (action: ScoreAction) => dispatch({ ...action, payload: { ...action.payload, ...stampFor() } });
+  // SD-72: a live step also carries the time (suspensions run on the clock);
+  // backfilled / edited steps keep their minute stamp only.
+  const live = !raidFlow?.at && !edit && backfillMin == null;
+  const fire = (action: ScoreAction) => dispatch({ ...action, payload: { ...action.payload, ...stampFor(), ...(live && state.startedAt ? { at: Date.now() } : null) } });
   // Pro-Kabaddi live figures, defensive against pre-upgrade state.
-  const kOut = state.out ?? { home: 0, away: 0 };
-  const kTeamSize = state.teamSize ?? 7;
   const kEmpty = state.emptyRaids ?? { home: 0, away: 0 };
 
   // ----- Correct the timeline: remove / edit one specific past moment -----
@@ -106,6 +139,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
         side: raid.side, touches: raid.touches, bonus: raid.bonus, tackled: raid.raiderOut,
         raider: byId(raid.raiderId, raid.raider), tackler: raid.raiderOut ? byId(raid.tacklerId, raid.tackler) : undefined,
         tackleType: raid.raiderOut ? raid.tt : undefined,
+        ...(raid.defOut ? { defOut: raid.defOut } : null), ...(raid.lineOut ? { lineOut: true } : null),
         editOf: raid.eid, at: { minute: raid.minute ?? 0, half: raid.half ?? state.half },
       });
       return;
@@ -131,6 +165,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
   // Players subbed off this match take no further part.
   const offNames = (side: 'home' | 'away') => state.subbedOff[side];
   const onField = (side: 'home' | 'away', roster: Player[]) => roster.filter((p) => !offNames(side).includes(p.fullName));
+  // SD-72: sent off (red) / serving a yellow — can't raid, tackle or be substituted
+  const unav = unavailable(state);
+  const unavName = (side: 'home' | 'away', nm: string) => unav[side].find((x) => x.name === nm);
   const rosterFor = (side: 'home' | 'away') => (side === 'home' ? homeRoster : awayRoster);
   const subsLeft = (side: 'home' | 'away') => state.maxSubs - state.subsUsed[side];
 
@@ -154,9 +191,9 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
 
   if (sub) {
     const sideName = sub.side === 'home' ? homeName : awayName;
-    const offOpts = onField(sub.side, rosterFor(sub.side));
+    const offOpts = onField(sub.side, rosterFor(sub.side)).filter((p) => !unavName(sub.side, p.fullName));
     // SD-117b (format: subReturn): a player substituted earlier may come back on.
-    const onOpts = rosterFor(sub.side).filter((p) => p.id !== sub.off?.id && (state.subReturn || !offNames(sub.side).includes(p.fullName)));
+    const onOpts = rosterFor(sub.side).filter((p) => p.id !== sub.off?.id && !unavName(sub.side, p.fullName) && (state.subReturn || !offNames(sub.side).includes(p.fullName)));
     return (
       <View style={{ gap: theme.spacing(3) }}>
       {backfillBar}
@@ -254,11 +291,8 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           <Text style={ctrl.grMeta}>Scores level {state.home}–{state.away}. The next point wins it — log the raid or tackle that decides the match.</Text>
         </View>
       )}
-      {/* On-mat status: players in = teamSize − out; do-or-die once 2 empty raids. */}
-      <View style={ctrl.matRow}>
-        <Text style={ctrl.matChip}>🟢 {homeName} on mat: {kTeamSize - kOut.home}/{kTeamSize}</Text>
-        <Text style={ctrl.matChip}>🟢 {awayName} on mat: {kTeamSize - kOut.away}/{kTeamSize}</Text>
-      </View>
+      {/* On-mat status: players in = teamSize − out − carded; suspensions count down. */}
+      <MatStatus state={state} homeName={homeName} awayName={awayName} />
 
       {/* SD-117b: pause the clock for a timeout / injury / review; team timeouts */}
       {!state.goldenRaid && (
@@ -318,9 +352,10 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
               <View style={ctrl.chips}>
                 {onField(raidFlow.side, raidFlow.side === 'home' ? homeRoster : awayRoster).map((p) => {
                   // SD-117b: tap again to clear; a player who's out can't raid (dimmed)
-                  const isOut = raidFlow.editOf == null && outNow[raidFlow.side].includes(p.fullName);
+                  const un = raidFlow.editOf == null ? unavName(raidFlow.side, p.fullName) : undefined;
+                  const isOut = raidFlow.editOf == null && (outNow[raidFlow.side].includes(p.fullName) || !!un);
                   const on = raidFlow.raider?.id === p.id;
-                  return <SelectChip key={p.id} label={isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
+                  return <SelectChip key={p.id} label={un ? `${p.fullName} · ${un.why === 'red' ? 'sent off' : 'suspended'}` : isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
                     onPress={() => setRaidFlow({ ...raidFlow, raider: on ? undefined : p })} />;
                 })}
               </View>
@@ -330,21 +365,38 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
             // SD-114: you can't touch more defenders than are on the mat (the
             // engine caps v2 raids the same way).
             const onMat = defendersOnMat(state, raidFlow.side, raidFlow.editOf);
+            // SD-83: a caught raider's touches don't score (AKFI / IKF / PKL) —
+            // SD-59: nor do a raider's who stepped out
+            const caughtVoid = state.caughtTouches === 'void' && raidFlow.tackled;
+            const noTouches = caughtVoid || !!raidFlow.lineOut;
             return (
               <>
                 <Text style={ctrl.meta}>Defenders touched (they go out) · {onMat} on the mat</Text>
+                {!noTouches && (
+                  <View style={ctrl.chips}>
+                    {[0, 1, 2, 3, 4, 5].map((n) => (
+                      <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} disabled={n > onMat} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
+                    ))}
+                  </View>
+                )}
+                {noTouches
+                  ? <Text style={ctrl.meta}>{raidFlow.lineOut ? 'Raider stepped out — his touches don’t count.' : 'Raider caught — touches don’t score and the touched defenders stay in (a bonus still counts).'}</Text>
+                  : raidFlow.touches > onMat && <Text style={ctrl.doOrDie}>Only {onMat} defender{onMat === 1 ? '' : 's'} on the mat — this raid counts {onMat} touch{onMat === 1 ? '' : 'es'}.</Text>}
+                <Text style={ctrl.meta}>Line-out: defenders who stepped out (no struggle) — out, +1 each to the raiders</Text>
                 <View style={ctrl.chips}>
-                  {[0, 1, 2, 3, 4, 5].map((n) => (
-                    <SelectChip key={n} label={String(n)} active={raidFlow.touches === n} disabled={n > onMat} onPress={() => setRaidFlow({ ...raidFlow, touches: n })} />
+                  {[0, 1, 2].map((n) => (
+                    <SelectChip key={n} label={n === 0 ? 'None' : `${n} stepped out`} active={(raidFlow.defOut ?? 0) === n} disabled={n > Math.max(0, onMat - (noTouches ? 0 : raidFlow.touches))}
+                      onPress={() => setRaidFlow({ ...raidFlow, defOut: n || undefined })} />
                   ))}
                 </View>
-                {raidFlow.touches > onMat && <Text style={ctrl.doOrDie}>Only {onMat} defender{onMat === 1 ? '' : 's'} on the mat — this raid counts {onMat} touch{onMat === 1 ? '' : 'es'}.</Text>}
               </>
             );
           })()}
           <View style={ctrl.chips}>
             <SelectChip label={`Bonus point: ${raidFlow.bonus ? 'Yes' : 'No'}`} active={raidFlow.bonus} onPress={() => setRaidFlow({ ...raidFlow, bonus: !raidFlow.bonus })} />
-            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, tackler: raidFlow.tackled ? undefined : raidFlow.tackler, tackleType: raidFlow.tackled ? undefined : raidFlow.tackleType })} />
+            <SelectChip label={`Raider tackled: ${raidFlow.tackled ? 'Yes' : 'No'}`} active={raidFlow.tackled} onPress={() => setRaidFlow({ ...raidFlow, tackled: !raidFlow.tackled, lineOut: raidFlow.tackled ? raidFlow.lineOut : undefined, tackler: raidFlow.tackled ? undefined : raidFlow.tackler, tackleType: raidFlow.tackled ? undefined : raidFlow.tackleType })} />
+            {/* SD-59: the raider stepped out of bounds — out, +1 to the defence, no tackle */}
+            <SelectChip label={`Raider stepped out: ${raidFlow.lineOut ? 'Yes' : 'No'}`} active={!!raidFlow.lineOut} onPress={() => setRaidFlow({ ...raidFlow, lineOut: !raidFlow.lineOut || undefined, ...(!raidFlow.lineOut ? { tackled: false, tackler: undefined, tackleType: undefined } : null) })} />
           </View>
           {/* Who made the tackle? Credits the defender their tackle (or super-tackle) point. */}
           {raidFlow.tackled && (() => {
@@ -355,9 +407,10 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
                 <Text style={ctrl.meta}>Who made the tackle? (optional — credits the defender)</Text>
                 <View style={ctrl.chips}>
                   {defenders.map((p) => {
-                    const isOut = raidFlow.editOf == null && outNow[defSide].includes(p.fullName);
+                    const un = raidFlow.editOf == null ? unavName(defSide, p.fullName) : undefined;
+                    const isOut = raidFlow.editOf == null && (outNow[defSide].includes(p.fullName) || !!un);
                     const on = raidFlow.tackler?.id === p.id;
-                    return <SelectChip key={p.id} label={isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
+                    return <SelectChip key={p.id} label={un ? `${p.fullName} · ${un.why === 'red' ? 'sent off' : 'suspended'}` : isOut ? `${p.fullName} · out` : p.fullName} active={on} disabled={isOut && !on}
                       onPress={() => setRaidFlow({ ...raidFlow, tackler: on ? undefined : p })} />;
                   })}
                 </View>
@@ -377,11 +430,13 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           )}
           {(() => {
             // What the engine will score for this raid — what the raider / tackler get.
-            const b = previewRaid(state, { side: raidFlow.side, touches: raidFlow.touches, bonus: raidFlow.bonus, raiderOut: raidFlow.tackled, v: 2 }, raidFlow.editOf);
+            const b = previewRaid(state, formOutcome(raidFlow), raidFlow.editOf);
             if (!b) return null;
+            const oppName = raidFlow.side === 'home' ? awayName : homeName;
             const bits = [
               `raid +${b.raidPts}${raidFlow.bonus && !b.bonusPts ? ' (bonus void: under 6 defenders)' : ''}`,
-              b.raiderOut ? `${b.superTackle ? 'super tackle' : b.doOrDieFail ? 'do-or-die stop' : 'tackle'} +${b.tacklePts} to ${raidFlow.side === 'home' ? awayName : homeName}` : null,
+              b.defOutPts ? `line-out +${b.defOutPts}` : null,
+              b.lineOut ? `line-out +1 to ${oppName}` : b.raiderOut ? `${b.superTackle ? 'super tackle' : b.doOrDieFail ? 'do-or-die stop' : 'tackle'} +${b.tacklePts} to ${oppName}` : null,
               b.allOuts.length ? `all out +2` : null,
             ].filter(Boolean).join(' · ');
             return <Text style={ctrl.meta}>Scores: {bits}</Text>;
@@ -389,6 +444,134 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           <Button label={raidFlow.editOf != null ? '✓ Save raid' : '✓ Record raid'} onPress={recordRaid} />
         </View>
       )}
+
+      {/* SD-59 technical point · SD-72 cards */}
+      {!state.goldenRaid && !raidFlow && !tech && !card && (
+        <View style={ctrl.row}>
+          <Button label="⚖️ Technical point" variant="ghost" style={ctrl.flex} onPress={() => setTech({})} />
+          <Button label="🟨 Card" variant="ghost" style={ctrl.flex} onPress={() => setCard({ tp: false })} />
+        </View>
+      )}
+      {tech && (() => {
+        const atFault = tech.side ? onField(tech.side === 'home' ? 'away' : 'home', rosterFor(tech.side === 'home' ? 'away' : 'home')) : [];
+        return (
+          <View style={ctrl.raidPanel}>
+            <View style={ctrl.subHead}>
+              <Text style={ctrl.label}>⚖️ Technical point</Text>
+              <Button label="Cancel" variant="ghost" onPress={() => setTech(null)} />
+            </View>
+            <Text style={ctrl.meta}>Point to (nobody goes out — line-outs are logged on the raid)</Text>
+            <View style={ctrl.chips}>
+              {(['home', 'away'] as const).map((sd) => (
+                <SelectChip key={sd} label={sd === 'home' ? homeName : awayName} active={tech.side === sd} onPress={() => setTech({ ...tech, side: sd, by: undefined })} />
+              ))}
+            </View>
+            <Text style={ctrl.meta}>Why?</Text>
+            <View style={ctrl.chips}>
+              {TECH_REASONS.map((r) => (
+                <SelectChip key={r.key} label={r.label} active={tech.reason === r.key} onPress={() => setTech({ ...tech, reason: tech.reason === r.key ? undefined : r.key })} />
+              ))}
+            </View>
+            {atFault.length > 0 && (
+              <>
+                <Text style={ctrl.meta}>Who was at fault? (optional)</Text>
+                <View style={ctrl.chips}>
+                  {atFault.map((p) => (
+                    <SelectChip key={p.id} label={p.fullName} active={tech.by?.id === p.id} onPress={() => setTech({ ...tech, by: tech.by?.id === p.id ? undefined : p })} />
+                  ))}
+                </View>
+              </>
+            )}
+            <Button label={tech.side ? `✓ +1 to ${tech.side === 'home' ? homeName : awayName}` : 'Pick who gets the point'} disabled={!tech.side}
+              onPress={() => {
+                if (!tech.side) return;
+                fire({ type: 'TECH_POINT', side: tech.side, payload: { ...(tech.reason ? { reason: tech.reason } : null), ...(tech.by ? { playerId: tech.by.id, playerName: tech.by.fullName } : null) } });
+                setTech(null);
+              }} />
+          </View>
+        );
+      })()}
+      {card && (() => {
+        const sd = card.side;
+        const nm = (x?: 'home' | 'away') => (x === 'home' ? homeName : awayName);
+        const opp = sd === 'home' ? 'away' : 'home';
+        const players = sd ? onField(sd, rosterFor(sd)).filter((p) => unavName(sd, p.fullName)?.why !== 'red') : [];
+        const who = card.who;
+        const person = typeof who === 'object' ? who : undefined;
+        const counts = sd && person ? cardsOf(state, sd, { id: person.id, name: person.fullName }) : null;
+        const hint = counts ? suggestedCard(counts) : null;
+        const wasOut = !!(sd && person && outNow[sd].includes(person.fullName));
+        const tpDefault = (c?: CardColour) => c === 'red';
+        const whoLabel = who === 'official' ? 'the team official' : person ? person.fullName : 'the player';
+        const ready = !!sd && !!card.colour && !!who;
+        const record = async () => {
+          if (!ready || !sd || !card.colour) return;
+          if (card.colour === 'red' && who !== 'official') {
+            const ok = await askConfirm({
+              title: `Red card for ${person ? person.fullName : 'this player'}?`,
+              message: `Sent off for the rest of the match — no substitute; ${nm(sd)} plays a player short${card.tp ? `, and ${nm(opp)} get a technical point` : ''}. Undo can bring it back.`,
+              yesLabel: 'Yes, red card', noLabel: 'No, go back', tone: 'danger',
+            });
+            if (!ok) return;
+          }
+          fire({
+            type: 'CARD', side: sd,
+            payload: {
+              card: card.colour,
+              ...(who === 'official' ? { official: true } : person ? { playerId: person.id, playerName: person.fullName } : { player: true }),
+              ...(wasOut ? { wasOut: true } : null),
+              ...(card.tp ? { tp: 1 } : null),
+            },
+          });
+          setCard(null);
+        };
+        return (
+          <View style={ctrl.raidPanel}>
+            <View style={ctrl.subHead}>
+              <Text style={ctrl.label}>{card.colour ? CARD_ICON[card.colour] : '🟨'} Card</Text>
+              <Button label="Cancel" variant="ghost" onPress={() => setCard(null)} />
+            </View>
+            <Text style={ctrl.meta}>Team</Text>
+            <View style={ctrl.chips}>
+              {(['home', 'away'] as const).map((x) => (
+                <SelectChip key={x} label={nm(x)} active={sd === x} onPress={() => setCard({ ...card, side: x, who: undefined })} />
+              ))}
+            </View>
+            <Text style={ctrl.meta}>Card</Text>
+            <View style={ctrl.chips}>
+              {([['green', 'Green — warning'], ['yellow', 'Yellow — 2 min off'], ['red', 'Red — sent off']] as const).map(([c, l]) => (
+                <SelectChip key={c} label={`${CARD_ICON[c]} ${l}`} active={card.colour === c} onPress={() => setCard({ ...card, colour: c, tp: card.tpSet ? card.tp : tpDefault(c) })} />
+              ))}
+            </View>
+            {sd && (
+              <>
+                <Text style={ctrl.meta}>Who?</Text>
+                <View style={ctrl.chips}>
+                  {players.map((p) => {
+                    const un = unavName(sd, p.fullName);
+                    return <SelectChip key={p.id} label={un ? `${p.fullName} · suspended` : outNow[sd].includes(p.fullName) ? `${p.fullName} · out` : p.fullName} active={person?.id === p.id} onPress={() => setCard({ ...card, who: person?.id === p.id ? undefined : p })} />;
+                  })}
+                  {players.length === 0 && <SelectChip label="A player (not named)" active={who === 'player'} onPress={() => setCard({ ...card, who: who === 'player' ? undefined : 'player' })} />}
+                  <SelectChip label="Coach / team official" active={who === 'official'} onPress={() => setCard({ ...card, who: who === 'official' ? undefined : 'official' })} />
+                </View>
+              </>
+            )}
+            {counts && (counts.green || counts.yellow) ? (
+              <Text style={ctrl.meta}>{person!.fullName} has {[counts.green ? `${counts.green} green` : null, counts.yellow ? `${counts.yellow} yellow` : null].filter(Boolean).join(', ')}{hint ? ` — the next card is ${hint} (two of a colour step up)` : ''}.</Text>
+            ) : null}
+            {card.colour === 'yellow' && who !== 'official' && (
+              <Text style={ctrl.meta}>{wasOut ? 'Out now — the 2 minutes start when he is revived; no one else is revived in his place.' : `Off the mat for 2 minutes of playing time — ${sd ? nm(sd) : 'the team'} plays a player short, then he comes back on.`}</Text>
+            )}
+            {card.colour === 'red' && who !== 'official' && <Text style={ctrl.doOrDie}>Off for the rest of the match — no substitute.</Text>}
+            {sd && card.colour && card.colour !== 'green' || card.tp ? (
+              <View style={ctrl.chips}>
+                <SelectChip label={`Technical point to ${sd ? nm(opp) : 'the opponent'}: ${card.tp ? 'Yes' : 'No'}`} active={card.tp} onPress={() => setCard({ ...card, tp: !card.tp, tpSet: true })} />
+              </View>
+            ) : null}
+            <Button label={ready ? `✓ ${card.colour === 'red' ? 'Red card' : card.colour === 'yellow' ? 'Yellow card' : 'Green card'} — ${whoLabel}` : 'Pick the team, card and who'} disabled={!ready} onPress={() => void record()} />
+          </View>
+        );
+      })()}
 
       {state.maxSubs > 0 && !state.goldenRaid && (
         <View style={{ gap: theme.spacing(2) }}>
@@ -431,7 +614,7 @@ const ScoringControls: SportPlugin<KabaddiState>['ScoringControls'] = ({ state, 
           </View>
           {showEdit && (
             <View style={{ gap: theme.spacing(1) }}>
-              <Text style={ctrl.meta}>Tap Edit on a raid to re-enter it — raider, touches, bonus, tackle — at the same minute (the score & tallies re-adjust), or ✕ to remove it along with its tackle / all-out points (asks first).</Text>
+              <Text style={ctrl.meta}>Tap Edit on a raid to re-enter it — raider, touches, bonus, tackle, line-outs — at the same minute (the score & tallies re-adjust), or ✕ to remove it along with its tackle / all-out points (asks first). Technical points and cards: ✕ to remove.</Text>
               {/* one row per moment: a guided raid's tackle / all-out lines go with it */}
               {[...state.events].filter((e) => e.group == null || isRaidHead(e)).sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0) || b.id - a.id).map((e) => (
                 <View key={e.id} style={ctrl.editRow}>
@@ -580,9 +763,9 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
     {
       key: 'preset', label: 'Rule set', type: 'preset', default: 'pro',
       options: [
-        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: true, subReturn: true } },
-        { value: 'circle', label: 'Circle style (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', proRules: false, subReturn: true } },
-        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: false, subReturn: true } },
+        { value: 'pro', label: 'Standard / Pro (7 · 2×20)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 20, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: true, subReturn: true, caughtTouches: 'void' } },
+        { value: 'circle', label: 'Circle style (7 · 2×15)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 15, extraTimeMinutes: 5, decider: 'golden_raid', style: 'sanjeevani', proRules: false, subReturn: true, caughtTouches: 'void' } },
+        { value: 'school', label: 'School (7 · 2×10)', set: { playersPerSide: 7, substitutes: 5, halfMinutes: 10, extraTimeMinutes: 5, decider: 'extra_time', style: 'sanjeevani', proRules: false, subReturn: true, caughtTouches: 'void' } },
         { value: 'custom', label: 'Custom' },
       ],
     },
@@ -604,6 +787,14 @@ export const kabaddiPlugin: SportPlugin<KabaddiState> = {
       ],
     },
     { key: 'proRules', label: 'Pro rules (do-or-die, super tackle, bonus)', type: 'toggle', default: true },
+    // SD-83 (D6): AKFI / IKF — and PKL — a raider caught before getting back loses his touches
+    {
+      key: 'caughtTouches', label: 'Raider caught after touching', type: 'choice', default: 'void', advanced: true,
+      options: [
+        { value: 'void', label: 'Touches don’t score (AKFI / PKL)' },
+        { value: 'count', label: 'Touches still score (house rule)' },
+      ],
+    },
     { key: 'substitutes', label: 'Substitutes per side', type: 'count', default: 5, min: 0, max: 11, advanced: true },
     // SD-117b: AKFI / PKL let a substituted player come back on (within the limit)
     { key: 'subReturn', label: 'Substituted players may return', type: 'toggle', default: true, advanced: true },

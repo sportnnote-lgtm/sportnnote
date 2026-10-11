@@ -19,7 +19,7 @@
  */
 import type { LiveEvent } from '../liveEvents';
 import type { ScoreAction } from '../types';
-import { replayRaids, decideRaidShootout, type RaidOutcome, type KabaddiStyle, type KabaddiCfg, type RaidBreakdown, type Side } from './rules.ts';
+import { replayRaids, decideRaidShootout, YELLOW_MINUTES, type RaidOutcome, type ExtraOutcome, type KabaddiDerived, type KabaddiStyle, type KabaddiCfg, type RaidBreakdown, type Side } from './rules.ts';
 
 /** A raid in `raids[]`: the engine input plus who / when, for the timeline. */
 export interface RaidEntry extends RaidOutcome {
@@ -42,6 +42,37 @@ export interface RaidEntry extends RaidOutcome {
   tt?: string;
 }
 
+/** SD-59 / SD-72 — a technical point or a card in `extras[]` (log order by
+ *  `eid`, like a raid). Replayed with the raids (rules.ts), so the score, the
+ *  players on the mat, revival and all-outs follow it. */
+export interface ExtraEntry extends ExtraOutcome {
+  eid: number;
+  minute?: number;
+  half?: number;
+  /** tech: TECH_REASONS key */
+  reason?: string;
+  /** the player at fault (tech) / carded (card) */
+  playerName?: string;
+  playerId?: string;
+  /** card: given to a coach / team official (no change on the mat) */
+  official?: boolean;
+}
+
+/** SD-59 — technical points (AKFI / IKF rules; a point to the opponent, nobody
+ *  goes out). Line-outs are logged on the raid itself. */
+export const TECH_REASONS: Array<{ key: string; label: string; short: string }> = [
+  { key: 'cant', label: 'Cant late / not kept', short: 'cant' },
+  { key: 'coaching', label: 'Coaching from outside', short: 'coaching' },
+  { key: 'delay', label: 'Delay of game', short: 'delay' },
+  { key: 'twoRaiders', label: 'Two raiders entered', short: 'two raiders' },
+  { key: 'entry', label: 'Entered / left the court without leave', short: 'unauthorised entry' },
+  { key: 'other', label: 'Other', short: 'other' },
+];
+export const techReasonLabel = (k?: string) => (k ? TECH_REASONS.find((r) => r.key === k)?.label ?? k : undefined);
+
+export type CardColour = 'green' | 'yellow' | 'red';
+export const CARD_ICON: Record<CardColour, string> = { green: '🟩', yellow: '🟨', red: '🟥' };
+
 /** SD-117b — how a raider was stopped (optional on a tackled raid). */
 export const TACKLE_TYPES: Array<{ key: string; label: string }> = [
   { key: 'ankle', label: 'Ankle hold' },
@@ -58,7 +89,7 @@ export const TIMEOUTS_PER_HALF = 2;
 
 /** A timeline line; `group` ties a guided raid's lines together. `ret` (SD-117b)
  *  = a substitution that brought a previously substituted player back on. */
-export type KabaddiEvent = LiveEvent & { group?: number; ret?: string };
+export type KabaddiEvent = LiveEvent & { group?: number; ret?: string; card?: CardColour };
 
 export interface KabaddiState {
   home: number;
@@ -95,6 +126,12 @@ export interface KabaddiState {
   teamSize: number;
   proRules: boolean;
   raids: RaidEntry[];
+  /** SD-59 / SD-72 — technical points and cards (absent until the first one) */
+  extras?: ExtraEntry[];
+  /** SD-83 (format caughtTouches): 'void' = a caught raider's touches don't
+   *  score (AKFI / IKF / PKL). Stamped only for formats that carry the key,
+   *  so older matches replay as they scored. */
+  caughtTouches?: 'void' | 'count';
   /** LEGACY replay only: raids an old (mis-ordinal) remove took out of play
    *  while their line stayed on the timeline. Display only. */
   orphanRaids?: RaidEntry[];
@@ -125,6 +162,8 @@ export const init = (config?: Record<string, unknown>): KabaddiState => ({
   events: [], seq: 0, ended: false,
   // SD-117b: only stamped when the format turns it on (old states keep their shape)
   ...(config?.subReturn === true ? { subReturn: true as const } : null),
+  // SD-83: only formats that carry the key (older states keep their shape)
+  ...(config?.caughtTouches === 'void' || config?.caughtTouches === 'count' ? { caughtTouches: config.caughtTouches as 'void' | 'count' } : null),
 });
 
 /** SD-117b — drop the pause mark (the clock stops / restarts). A state without
@@ -136,8 +175,15 @@ const unpause = (s: KabaddiState): KabaddiState => {
 };
 
 // Defensive against state persisted before the Pro-Kabaddi fields existed.
-export const kabaddiCfg = (s: KabaddiState): KabaddiCfg => ({ teamSize: s.teamSize ?? 7, style: s.style ?? 'sanjeevani', proRules: s.proRules ?? true });
+export const kabaddiCfg = (s: KabaddiState): KabaddiCfg => ({
+  teamSize: s.teamSize ?? 7, style: s.style ?? 'sanjeevani', proRules: s.proRules ?? true,
+  ...(s.caughtTouches === 'void' ? { caughtVoid: true } : null),
+});
 const raidsOf = (s: KabaddiState): RaidEntry[] => s.raids ?? [];
+export const extrasOf = (s: KabaddiState): ExtraEntry[] => s.extras ?? [];
+/** The full replay: raids + technical points / cards (SD-59 / SD-72). */
+export const replayOf = (s: KabaddiState, raids: RaidOutcome[] = raidsOf(s), extras: ExtraOutcome[] = extrasOf(s), now?: number): KabaddiDerived =>
+  replayRaids(raids, kabaddiCfg(s), extras, now);
 const other = (x: Side): Side => (x === 'home' ? 'away' : 'home');
 
 /** 1st/2nd half, then the two extra-time halves. */
@@ -154,6 +200,19 @@ export function currentMinute(s: KabaddiState): number {
   const now = s.pausedAt ?? Date.now();
   return Math.min(base + Math.floor(Math.max(0, now - s.startedAt) / 60000), cap);
 }
+
+/** SD-72 — the match clock in fractional minutes at time `at` (ms): what a
+ *  2-minute suspension runs on (it stops with the clock). */
+export function clockAt(s: KabaddiState, at: number): number {
+  const hm = s.halfMinutes, et = s.extraTimeMinutes;
+  const base = s.half === 1 ? 0 : s.half === 2 ? hm : s.half === 3 ? 2 * hm : 2 * hm + et;
+  if (!s.startedAt) return base;
+  const cap = base + (s.half <= 2 ? hm : et);
+  const now = Math.min(at, s.pausedAt ?? at);
+  return Math.min(base + Math.max(0, now - s.startedAt) / 60000, cap);
+}
+/** The match clock now (fractional minutes). */
+export const clockNow = (s: KabaddiState): number => clockAt(s, Date.now());
 
 /** A 5-raid shootout line (stamp 'SO') — not part of the regulation score. */
 export const isShootoutEvent = (e: LiveEvent) => e.stamp === 'SO';
@@ -188,21 +247,84 @@ export function outPlayers(s: KabaddiState): Record<Side, string[]> {
   const q: Record<Side, (string | null)[]> = { home: [], away: [] };
   if (cfg.style === 'amar') return { home: [], away: [] };
   const raids = raidsOf(s);
-  const per = replayRaids(raids, cfg).perRaid;
-  raids.forEach((r, i) => {
-    const b = per[i];
-    if (!b) return;
+  const extras = extrasOf(s);
+  const d = replayOf(s);
+  const per = d.perRaid;
+  // perRaid holds only the raids replayed (in merged order)
+  let ri = 0;
+  for (const [kind, idx] of d.order) {
+    if (kind === 'x') {
+      // SD-72: a player sent off while out leaves the revival queue
+      const e = extras[idx];
+      if (e?.x === 'card' && e.card === 'red' && e.player && e.wasOut) {
+        const at = e.playerName ? q[e.side].indexOf(e.playerName) : -1;
+        q[e.side].splice(at >= 0 ? at : q[e.side].indexOf(null), at >= 0 || q[e.side].includes(null) ? 1 : 0);
+      }
+      continue;
+    }
+    const r = raids[idx];
+    const b = per[ri++];
+    if (!b) break;
     const opp = other(r.side);
-    for (let k = 0; k < b.touchPts; k++) q[opp].push(null);
-    if (cfg.style === 'sanjeevani') q[r.side].splice(0, b.touchPts);
+    const sent = b.touchPts + (b.defOutPts ?? 0);
+    for (let k = 0; k < sent; k++) q[opp].push(null);
+    if (cfg.style === 'sanjeevani') q[r.side].splice(0, sent);
     if (b.raiderOut) {
       q[r.side].push(r.raider ?? null);
       if (cfg.style === 'sanjeevani') q[opp].splice(0, 1);
     }
     for (const side of ['home', 'away'] as const) if (q[side].length > cfg.teamSize) q[side] = q[side].slice(-cfg.teamSize);
     for (const t of b.allOuts) q[other(t)] = [];
-  });
+  }
   return { home: q.home.filter((n): n is string => !!n), away: q.away.filter((n): n is string => !!n) };
+}
+
+/** SD-72 — live on-mat figures (suspensions run on the clock `now`). */
+export function matNow(s: KabaddiState, now: number = clockNow(s)): { onMat: Record<Side, number>; out: Record<Side, number>; short: Record<Side, number>; sentOff: Record<Side, number> } {
+  const cfg = kabaddiCfg(s);
+  const d = replayOf(s, undefined, undefined, s.ended ? undefined : now);
+  const amar = cfg.style === 'amar';
+  const onMat = (x: Side) => Math.max(0, cfg.teamSize - (amar ? 0 : d.out[x]) - d.short[x]);
+  return { onMat: { home: onMat('home'), away: onMat('away') }, out: d.out, short: d.short, sentOff: d.sentOff };
+}
+
+/** SD-72 — a player's cards so far (by id or name). */
+export function cardsOf(s: KabaddiState, side: Side, who: { id?: string; name?: string }): Record<CardColour, number> {
+  const c = { green: 0, yellow: 0, red: 0 };
+  for (const e of extrasOf(s)) {
+    if (e.x !== 'card' || e.side !== side || !e.card || e.official) continue;
+    if ((who.id && e.playerId === who.id) || (who.name && e.playerName === who.name)) c[e.card] += 1;
+  }
+  return c;
+}
+
+/** SD-72 — card escalation (AKFI): two greens → the next card is yellow; two
+ *  yellows → the next is red. The scorer's hint, not enforced. */
+export function suggestedCard(c: Record<CardColour, number>): CardColour | null {
+  if (c.red) return null;
+  if (c.yellow >= 2) return 'red';
+  if (c.green >= 2) return 'yellow';
+  return null;
+}
+
+/** SD-72 — players who can't play now: sent off (red) or serving a yellow
+ *  (running, or waiting for their revival). Names, per side. */
+export function unavailable(s: KabaddiState, now: number = clockNow(s)): Record<Side, { name: string; why: 'red' | 'yellow'; until?: number }[]> {
+  const out: Record<Side, { name: string; why: 'red' | 'yellow'; until?: number }[]> = { home: [], away: [] };
+  const extras = extrasOf(s);
+  const per = replayOf(s).perExtra;
+  const reds = new Set(extras.filter((e) => e.x === 'card' && e.card === 'red' && e.player && e.playerName).map((e) => `${e.side}|${e.playerName}`));
+  extras.forEach((e, j) => {
+    if (e.x !== 'card' || !e.player || !e.playerName) return;
+    const key = `${e.side}|${e.playerName}`;
+    if (e.card === 'red') { if (!out[e.side].some((x) => x.name === e.playerName && x.why === 'red')) out[e.side].push({ name: e.playerName, why: 'red' }); return; }
+    if (e.card !== 'yellow' || reds.has(key) || s.ended) return;
+    const b = per[j];
+    if (!b) return;
+    if (b.suspFrom == null) out[e.side].push({ name: e.playerName, why: 'yellow' }); // waits for revival
+    else if (b.suspUntil != null && now < b.suspUntil) out[e.side].push({ name: e.playerName, why: 'yellow', until: b.suspUntil });
+  });
+  return out;
 }
 
 /** What a raid would score if logged now (or in place of raid `replaces`) — the
@@ -210,24 +332,54 @@ export function outPlayers(s: KabaddiState): Record<Side, string[]> {
 export function previewRaid(s: KabaddiState, outcome: RaidOutcome, replaces?: number): RaidBreakdown | undefined {
   const raids = raidsOf(s);
   const idx = replaces != null ? raids.findIndex((r) => r.eid === replaces) : -1;
-  const list = idx >= 0 ? raids.map((r, i) => (i === idx ? { ...r, ...outcome } : r)) : [...raids, outcome];
-  return replayRaids(list, kabaddiCfg(s)).perRaid[idx >= 0 ? idx : list.length - 1];
+  // a new raid goes last, at the clock now (SD-72: suspensions that ran out are back)
+  const fresh = idx < 0 && outcome.t == null && s.startedAt ? { ...outcome, t: clockNow(s) } : outcome;
+  const list = idx >= 0 ? raids.map((r, i) => (i === idx ? { ...r, defOut: undefined, lineOut: undefined, ...outcome } : r)) : [...raids, fresh];
+  const d = replayOf(s, list);
+  // perRaid follows the merged order — find this raid's slot
+  const want = idx >= 0 ? idx : list.length - 1;
+  let ri = 0;
+  for (const [kind, i] of d.order) {
+    if (kind !== 'r') continue;
+    if (i === want) return d.perRaid[ri];
+    ri++;
+  }
+  return undefined;
 }
 
 /** SD-114: defenders on the mat facing a raid by `side` — now, or (editing)
- *  just before raid `replaces`. The raid form disables touch chips above it. */
+ *  just before raid `replaces`. The raid form disables touch chips above it.
+ *  SD-72: players suspended / sent off aren't on the mat. */
 export function defendersOnMat(s: KabaddiState, side: Side, replaces?: number): number {
   const cfg = kabaddiCfg(s);
-  if (cfg.style === 'amar') return cfg.teamSize;
   const raids = raidsOf(s);
   const idx = replaces != null ? raids.findIndex((r) => r.eid === replaces) : -1;
-  const before = replayRaids(idx >= 0 ? raids.slice(0, idx) : raids, cfg);
-  return Math.max(0, cfg.teamSize - before.out[other(side)]);
+  const opp = other(side);
+  if (idx >= 0) {
+    const eid = raids[idx].eid ?? Infinity;
+    const before = replayOf(s, raids.slice(0, idx), extrasOf(s).filter((e) => e.eid < eid), raids[idx].t ?? raids[idx].minute);
+    return Math.max(0, cfg.teamSize - (cfg.style === 'amar' ? 0 : before.out[opp]) - before.short[opp]);
+  }
+  return matNow(s).onMat[opp];
 }
 
 type Who = { id: string; fullName: string };
 /** The guided-raid form's answers. `editOf` = the id of a past raid being re-entered. */
-export interface RaidForm { side: Side; touches: number; bonus: boolean; tackled: boolean; raider?: Who; tackler?: Who; editOf?: number; tackleType?: string }
+export interface RaidForm {
+  side: Side; touches: number; bonus: boolean; tackled: boolean; raider?: Who; tackler?: Who; editOf?: number; tackleType?: string;
+  /** SD-59: defenders who stepped out (line-out) / the raider stepped out */
+  defOut?: number; lineOut?: boolean;
+}
+
+/** The engine input for a raid form (v2). SD-59: a raider line-out is not a
+ *  tackle and his touches don't count. */
+export function formOutcome(f: Pick<RaidForm, 'side' | 'touches' | 'bonus' | 'tackled' | 'defOut' | 'lineOut'>): RaidOutcome {
+  return {
+    side: f.side, touches: f.lineOut ? 0 : f.touches, bonus: f.bonus, raiderOut: f.tackled && !f.lineOut, v: 2,
+    ...(f.defOut && f.defOut > 0 ? { defOut: Math.floor(f.defOut) } : null),
+    ...(f.lineOut ? { lineOut: true } : null),
+  };
+}
 
 /** Stat reversals for a guided raid (head or child line): the raider's raid
  *  points and the tackler's tackle points as the engine scores them now. */
@@ -251,14 +403,14 @@ export function raidReversals(s: KabaddiState, e: KabaddiEvent, idOf: (name?: st
 export function raidActions(s: KabaddiState, f: RaidForm, idOf?: (name?: string) => string | undefined): ScoreAction[] {
   const out: ScoreAction[] = [];
   // SD-114: the form logs v2 raids — touches capped at the defenders on the mat.
-  const outcome: RaidOutcome = { side: f.side, touches: f.touches, bonus: f.bonus, raiderOut: f.tackled, v: 2 };
+  const outcome = formOutcome(f);
   const b = previewRaid(s, outcome, f.editOf);
   if (f.editOf != null) {
     const head = s.events.find((x) => x.id === f.editOf);
     const rev = head ? raidReversals(s, head, idOf) : {};
     if (rev.attribution || rev.attribution2) out.push({ type: 'REMOVE_EVENT', side: f.side, payload: { id: -1, v: 2 }, ...rev });
   }
-  const tackler = f.tackled ? f.tackler : undefined;
+  const tackler = f.tackled && !f.lineOut ? f.tackler : undefined;
   const raidPts = b?.raidPts ?? 0;
   const tacklePts = b?.raiderOut ? b.tacklePts : 0;
   out.push({
@@ -270,7 +422,7 @@ export function raidActions(s: KabaddiState, f: RaidForm, idOf?: (name?: string)
       ...(f.raider ? { raiderId: f.raider.id, raiderName: f.raider.fullName } : null),
       ...(tackler ? { tacklerId: tackler.id, tacklerName: tackler.fullName } : null),
       // SD-117b: optional, only on a tackled raid
-      ...(f.tackled && f.tackleType ? { tackleType: f.tackleType } : null),
+      ...(f.tackled && !f.lineOut && f.tackleType ? { tackleType: f.tackleType } : null),
       ...(f.editOf != null ? { replaces: f.editOf } : null),
     },
   });
@@ -283,14 +435,25 @@ export function raidOfEvent(s: KabaddiState, e: KabaddiEvent): { raid: RaidEntry
   const raids = raidsOf(s);
   const i = raids.findIndex((r) => r.eid === e.group);
   if (i < 0) return null;
-  return { raid: raids[i], breakdown: replayRaids(raids, kabaddiCfg(s)).perRaid[i] };
+  return { raid: raids[i], breakdown: perRaidByIndex(replayOf(s))[i] };
 }
+
+/** perRaid indexed by the raid's index in `raids[]` (perRaid follows the
+ *  merged replay order, which with technical points / cards in the log is
+ *  still raid order — kept explicit for safety). */
+function perRaidByIndex(d: KabaddiDerived): RaidBreakdown[] {
+  const out: RaidBreakdown[] = [];
+  let ri = 0;
+  for (const [kind, i] of d.order) if (kind === 'r') { const b = d.perRaid[ri++]; if (b) out[i] = b; }
+  return out;
+}
+export { perRaidByIndex };
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : w.endsWith('h') ? 'es' : 's'}`;
 
 /** The timeline lines of every guided raid, derived from the replay. */
-export function raidEvents(raids: RaidEntry[], orphans: RaidEntry[], cfg: KabaddiCfg): KabaddiEvent[] {
-  const per = replayRaids(raids, cfg).perRaid;
+export function raidEvents(raids: RaidEntry[], orphans: RaidEntry[], cfg: KabaddiCfg, extras: ExtraEntry[] = []): KabaddiEvent[] {
+  const per = perRaidByIndex(replayRaids(raids, cfg, extras));
   const out: KabaddiEvent[] = [];
   raids.forEach((r, i) => {
     const b = per[i];
@@ -300,14 +463,24 @@ export function raidEvents(raids: RaidEntry[], orphans: RaidEntry[], cfg: Kabadd
     const base = { stamp, minute: r.minute, half: r.half, group: eid };
     const parts = [
       b.touchPts ? plural(b.touchPts, 'touch') : null,
+      b.touchesLost ? `${plural(b.touchesLost, 'touch')} lost (caught)` : null,
       b.bonusPts ? 'bonus' : r.bonus ? 'bonus (void — under 6 defenders)' : null,
-      b.raiderOut ? 'raider out' : null,
+      b.defOutPts ? `${plural(b.defOutPts, 'defender')} stepped out` : null,
+      b.lineOut ? 'raider stepped out' : b.raiderOut ? 'raider out' : null,
     ].filter(Boolean).join(' · ');
     const name = b.raidPts >= 3 ? 'Super raid' : b.raidPts === 0 && !b.raiderOut ? 'Empty raid' : 'Raid';
     const head = `${b.doOrDie ? 'Do-or-die · ' : ''}${name}${b.raidPts ? ` +${b.raidPts}` : ''}${parts ? ` — ${parts}` : ''}`;
     out.push({ ...base, id: eid, icon: r.gr ? '⚡' : '🤼', label: r.gr ? `Golden Raid — ${head}` : head, detail: r.raider, side: r.side, kind: 'raid', points: b.raidPts, playerName: r.raider });
     let k = 1;
-    if (b.raiderOut) {
+    // SD-59: line-outs — 1 point per player who stepped out, to the other side
+    if (b.defOutPts) {
+      out.push({ ...base, id: eid + k / 10, icon: '🚩', label: `Line-out +${b.defOutPts} — ${plural(b.defOutPts, 'defender')} out`, side: r.side, kind: 'lineout', points: b.defOutPts });
+      k += 1;
+    }
+    if (b.lineOut) {
+      out.push({ ...base, id: eid + k / 10, icon: '🚩', label: 'Line-out +1 — raider out', detail: r.raider, side: other(r.side), kind: 'lineout', points: 1 });
+      k += 1;
+    } else if (b.raiderOut) {
       const tl = b.superTackle ? 'Super tackle' : b.doOrDieFail ? 'Do-or-die stop' : 'Tackle';
       // SD-117b: "(ankle hold)" only on a raid logged with a tackle type
       const how = r.tt && r.raiderOut ? ` (${tackleTypeLabel(r.tt)!.toLowerCase()})` : '';
@@ -327,13 +500,68 @@ export function raidEvents(raids: RaidEntry[], orphans: RaidEntry[], cfg: Kabadd
   return out;
 }
 
+/** SD-59 / SD-72 — the timeline lines of technical points and cards. A
+ *  card's technical point is its own line (group = the card). */
+export function extraEvents(raids: RaidEntry[], extras: ExtraEntry[], cfg: KabaddiCfg): KabaddiEvent[] {
+  if (!extras.length) return [];
+  const per = replayRaids(raids, cfg, extras).perExtra;
+  const out: KabaddiEvent[] = [];
+  extras.forEach((e, j) => {
+    const b = per[j];
+    if (!b) return; // after a gaminee all-out ended the match
+    const base = { stamp: `${e.minute ?? 0}'`, minute: e.minute, half: e.half, group: e.eid };
+    const who = e.official ? 'Team official' : e.playerName;
+    if (e.x === 'tech') {
+      out.push({ ...base, id: e.eid, icon: '⚖️', label: `Technical point +${b.points}${e.reason ? ` — ${techReasonLabel(e.reason)!.toLowerCase()}` : ''}`, detail: who, side: e.side, kind: 'tech', points: b.points });
+      return;
+    }
+    const c = e.card ?? 'green';
+    const label = c === 'green' ? 'Green card — warning'
+      : c === 'yellow' ? (e.player && b.suspFrom == null ? `Yellow card — ${YELLOW_MINUTES} min from his revival` : `Yellow card — ${YELLOW_MINUTES} min suspension`)
+      : 'Red card — sent off';
+    out.push({ ...base, id: e.eid, icon: CARD_ICON[c], label, detail: who, side: e.side, kind: 'card', points: 0, card: c, ...(e.playerName && !e.official ? { playerName: e.playerName } : null), ...(e.playerId ? { playerId: e.playerId } : null) });
+    if (b.points) out.push({ ...base, id: e.eid + 0.1, icon: '⚖️', label: `Technical point +${b.points} (${c} card)`, side: other(e.side), kind: 'tech', points: b.points });
+  });
+  return out;
+}
+
 /** Rebuild the timeline: non-raid lines kept, every guided raid's lines re-derived. */
-function withRaids(s: KabaddiState, raids: RaidEntry[], orphans = s.orphanRaids ?? [], keep: KabaddiEvent[] = s.events): KabaddiState {
-  const events = [...keep.filter((e) => e.group == null), ...raidEvents(raids, orphans, kabaddiCfg(s))].sort((a, b) => a.id - b.id);
-  return { ...s, raids, ...(orphans.length || s.orphanRaids ? { orphanRaids: orphans } : null), events };
+function withRaids(s: KabaddiState, raids: RaidEntry[], orphans = s.orphanRaids ?? [], keep: KabaddiEvent[] = s.events, extras: ExtraEntry[] = extrasOf(s)): KabaddiState {
+  const cfg = kabaddiCfg(s);
+  const events = [...keep.filter((e) => e.group == null), ...raidEvents(raids, orphans, cfg, extras), ...extraEvents(raids, extras, cfg)].sort((a, b) => a.id - b.id);
+  return { ...s, raids, ...(orphans.length || s.orphanRaids ? { orphanRaids: orphans } : null), ...(extras.length || s.extras ? { extras } : null), events };
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+
+/** SD-72: the clock time of a LIVE step (the UI sends `at` only when live —
+ *  not while backfilling or editing). Undefined = use the minute stamp. */
+function liveT(s: KabaddiState, a: ScoreAction): number | undefined {
+  const at = Number(a.payload?.at);
+  if (!a.payload || a.payload.at == null || !Number.isFinite(at) || !s.startedAt) return undefined;
+  return Math.round(clockAt(s, at) * 1000) / 1000;
+}
+
+/** Log a technical point / card: replay, re-derive the timeline, score the
+ *  change (incrementally, like a raid). In a Golden Raid a point decides it. */
+function addExtra(s: KabaddiState, entry: ExtraEntry): KabaddiState {
+  const prev = extrasOf(s);
+  const extras = [...prev, entry];
+  const before = replayOf(s);
+  const after = replayOf(s, raidsOf(s), extras);
+  const scored = after.home !== before.home || after.away !== before.away;
+  const finish = after.allOutEnded || (s.goldenRaid && scored);
+  const next: KabaddiState = {
+    ...withRaids(s, raidsOf(s), s.orphanRaids ?? [], s.events, extras),
+    home: s.home + (after.home - before.home),
+    away: s.away + (after.away - before.away),
+    out: after.out, emptyRaids: after.emptyRaids,
+    ended: s.ended || finish,
+    startedAt: finish ? undefined : s.startedAt,
+    seq: s.seq + 1,
+  };
+  return finish ? unpause(next) : next;
+}
 
 export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
   if (s.ended && a.type !== 'END') return s;
@@ -400,8 +628,12 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
         // SD-114: a v2 raid's touches are capped at the defenders on the mat
         // (in the replay); an un-versioned one replays its raw touches.
         ...(Number(p.v) >= 2 ? { v: 2 as const } : null),
+        // SD-59 (new optional keys): line-outs
+        ...(Number(p.defOut) > 0 ? { defOut: Math.floor(Number(p.defOut)) } : null),
+        ...(p.lineOut === true ? { lineOut: true } : null),
       };
       const cfg = kabaddiCfg(s);
+      const ex = extrasOf(s);
       const prev = raidsOf(s);
       // Edit in place (new optional key): the corrected raid keeps its id & slot.
       const replaces = p.replaces != null ? prev.findIndex((r) => r.eid === Number(p.replaces)) : -1;
@@ -416,9 +648,12 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
         ...(str(p.tacklerId) ?? attr2?.playerId ? { tacklerId: str(p.tacklerId) ?? attr2?.playerId } : null),
         ...(outcome.raiderOut && str(p.tackleType) ? { tt: str(p.tackleType) } : null),
       };
-      const before = replayRaids(prev, cfg);
+      // SD-72: the clock time orders the raid against suspensions (live raids only)
+      const t = replaces >= 0 ? prev[replaces].t : liveT(s, a);
+      if (t != null) entry.t = t;
+      const before = replayRaids(prev, cfg, ex);
       const raids = replaces >= 0 ? prev.map((r, i) => (i === replaces ? entry : r)) : [...prev, entry];
-      const after = replayRaids(raids, cfg);
+      const after = replayRaids(raids, cfg, ex);
       if (replaces < 0) entry.lp = (after.home - before.home) || (after.away - before.away);
       const scored = after.home !== before.home || after.away !== before.away;
       const finish = after.allOutEnded || (gr && scored);
@@ -432,6 +667,46 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
         seq: s.seq + 1,
       };
       return finish ? unpause(next) : next;
+    }
+    case 'TECH_POINT': {
+      // SD-59 (new action): a technical point to `side` (AKFI / IKF) — the
+      // player at fault (optional) is on the other side. Nobody goes out.
+      if (a.side !== 'home' && a.side !== 'away') return s;
+      const p = a.payload ?? {};
+      const n = Math.max(1, Math.floor(Number(p.points ?? 1)) || 1);
+      const entry: ExtraEntry = {
+        x: 'tech', side: a.side, eid: s.seq + 1, minute, half: hf, ...(n !== 1 ? { n } : null),
+        ...(str(p.reason) ? { reason: str(p.reason) } : null),
+        ...(str(p.playerName) ? { playerName: str(p.playerName) } : null),
+        ...(str(p.playerId) ? { playerId: str(p.playerId) } : null),
+      };
+      const t = liveT(s, a);
+      if (t != null) entry.t = t;
+      return addExtra(s, entry);
+    }
+    case 'CARD': {
+      // SD-72 (new action): green = warning; yellow = 2-minute suspension (the
+      // side plays short; a player carded while out serves it from his
+      // revival); red = off for the match, no substitute. `tp` = technical
+      // point(s) to the opponent with the card.
+      if (a.side !== 'home' && a.side !== 'away') return s;
+      const p = a.payload ?? {};
+      const card = p.card === 'green' || p.card === 'yellow' || p.card === 'red' ? p.card : null;
+      if (!card) return s;
+      const official = p.official === true;
+      const name = official ? undefined : str(p.playerName);
+      const id = official ? undefined : str(p.playerId);
+      const tp = Math.max(0, Math.floor(Number(p.tp ?? 0)) || 0);
+      const entry: ExtraEntry = {
+        x: 'card', side: a.side, card, eid: s.seq + 1, minute, half: hf,
+        ...(official ? { official: true } : name || id ? { player: true, who: id ?? name } : p.player === true ? { player: true } : null),
+        ...(name ? { playerName: name } : null), ...(id ? { playerId: id } : null),
+        ...(!official && p.wasOut === true ? { wasOut: true } : null),
+        ...(tp ? { tp } : null),
+      };
+      const t = liveT(s, a);
+      if (t != null) entry.t = t;
+      return addExtra(s, entry);
     }
     case 'SUB': {
       if (!a.side || s.subsUsed[a.side] >= s.maxSubs) return s;
@@ -492,10 +767,9 @@ export const reducer = (s: KabaddiState, a: ScoreAction): KabaddiState => {
 
 /** Score change from replacing the raid list (the incremental rule the reducer
  *  has always used, so legacy score offsets are preserved). */
-function rescore(s: KabaddiState, raids: RaidEntry[]): Pick<KabaddiState, 'home' | 'away' | 'out' | 'emptyRaids'> {
-  const cfg = kabaddiCfg(s);
-  const before = replayRaids(raidsOf(s), cfg);
-  const after = replayRaids(raids, cfg);
+function rescore(s: KabaddiState, raids: RaidEntry[], extras: ExtraEntry[] = extrasOf(s)): Pick<KabaddiState, 'home' | 'away' | 'out' | 'emptyRaids'> {
+  const before = replayOf(s);
+  const after = replayOf(s, raids, extras);
   return { home: Math.max(0, s.home + (after.home - before.home)), away: Math.max(0, s.away + (after.away - before.away)), out: after.out, emptyRaids: after.emptyRaids };
 }
 
@@ -508,6 +782,11 @@ function removeV2(s: KabaddiState, id: number): KabaddiState {
   if (ev.group != null) {
     const orphans = s.orphanRaids ?? [];
     if (orphans.some((r) => r.eid === ev.group)) return withRaids(s, raidsOf(s), orphans.filter((r) => r.eid !== ev.group));
+    // SD-59 / SD-72: a technical point / card (and its technical-point line)
+    if (extrasOf(s).some((x) => x.eid === ev.group)) {
+      const extras = extrasOf(s).filter((x) => x.eid !== ev.group);
+      return { ...withRaids(s, raidsOf(s), orphans, s.events, extras), ...rescore(s, raidsOf(s), extras) };
+    }
     const raids = raidsOf(s).filter((r) => r.eid !== ev.group);
     return { ...withRaids(s, raids), ...rescore(s, raids) };
   }
@@ -581,7 +860,7 @@ export function kabaddiWinner(s: KabaddiState): 'home' | 'away' | 'draw' {
 /** Regulation points per half per side, from the timeline (shootout excluded). */
 export function halfPoints(s: KabaddiState, side: Side, half: number): number {
   return s.events
-    .filter((e) => e.side === side && e.half === half && !isShootoutEvent(e) && (e.kind === 'raid' || e.kind === 'tackle' || e.kind === 'allout'))
+    .filter((e) => e.side === side && e.half === half && !isShootoutEvent(e) && (e.kind === 'raid' || e.kind === 'tackle' || e.kind === 'allout' || e.kind === 'tech' || e.kind === 'lineout'))
     .reduce((x, e) => x + (e.points ?? 0), 0);
 }
 

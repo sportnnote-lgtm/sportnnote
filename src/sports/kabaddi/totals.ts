@@ -24,8 +24,9 @@
  * point keys from the totals, so their live lines are left as they are.
  */
 import type { StatTotalsContext, StatTotalsEntry } from '../types';
-import { replayRaids, type RaidBreakdown, type Side } from './rules.ts';
-import { kabaddiCfg, isShootoutEvent, type KabaddiState, type RaidEntry } from './engine.ts';
+import { YELLOW_MINUTES, type RaidBreakdown, type Side } from './rules.ts';
+import { isShootoutEvent, replayOf, perRaidByIndex, extrasOf, clockNow, type KabaddiState, type RaidEntry } from './engine.ts';
+import { trackField, timeLeft, suspensionEvent, FIELD_RULES, type FieldEvent, type FieldLog, type FieldResult } from '../onField.ts';
 
 /** Keys credited live (attribution): raider / tackler points. */
 export const KABADDI_LIVE_KEYS = ['raidPoints', 'tacklePoints'] as const;
@@ -34,6 +35,10 @@ export const KABADDI_COUNT_KEYS = [
   'raids', 'successfulRaids', 'emptyRaids', 'raidsOut', 'touchPoints', 'bonusPoints',
   'superRaids', 'doOrDieRaids', 'doOrDiePoints', 'tackles', 'superTackles',
 ] as const;
+/** SD-59 / SD-72 — discipline keys (keyed coverage: written only for a match
+ *  that tracks them — a format with the SD-83 key, or any card / technical
+ *  point logged). */
+export const KABADDI_DISCIPLINE_KEYS = ['greenCards', 'yellowCards', 'redCards', 'techPointsConceded'] as const;
 
 const other = (x: Side): Side => (x === 'home' ? 'away' : 'home');
 const raidsOf = (s: KabaddiState): RaidEntry[] => s.raids ?? [];
@@ -45,24 +50,29 @@ const plainLines = (s: KabaddiState) =>
 /** Each in-play raid with what the replay scored for it. */
 function replayed(s: KabaddiState): { raid: RaidEntry; b: RaidBreakdown }[] {
   const raids = raidsOf(s);
-  const per = replayRaids(raids, kabaddiCfg(s)).perRaid;
+  const per = perRaidByIndex(replayOf(s));
   return raids.flatMap((raid, i) => (per[i] ? [{ raid, b: per[i] }] : []));
 }
 
 /** Whether the match has only guided raids (the count keys are known). */
 export const kabaddiCountsTracked = (s: KabaddiState): boolean => plainLines(s).length === 0;
 
+/** SD-72: cards / technical points conceded are tracked on this match. */
+export const kabaddiDisciplineTracked = (s: KabaddiState): boolean => s.caughtTouches != null || extrasOf(s).length > 0;
+
 export function kabaddiTotals(s: KabaddiState, ctx?: StatTotalsContext): Record<string, StatTotalsEntry> {
   const byName = (side: Side, name?: string) =>
     name ? ctx?.players?.[side].find((p) => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase())?.id : undefined;
   const idOf = (side: Side, id?: string, name?: string) => id ?? byName(side, name);
   const counts = kabaddiCountsTracked(s);
+  const disc = kabaddiDisciplineTracked(s);
   const out: Record<string, StatTotalsEntry> = {};
   let unknown = false;
   const entry = (id: string, side: Side) => {
     if (!out[id]) {
       const stats: Record<string, number> = { raidPoints: 0, tacklePoints: 0 };
       if (counts) for (const k of KABADDI_COUNT_KEYS) stats[k] = 0;
+      if (disc) for (const k of KABADDI_DISCIPLINE_KEYS) stats[k] = 0;
       out[id] = { side, stats };
     }
     return out[id].stats;
@@ -85,7 +95,7 @@ export function kabaddiTotals(s: KabaddiState, ctx?: StatTotalsContext): Record<
       add(st, 'doOrDiePoints', b.doOrDie ? b.raidPts : 0);
     } else if (r.raider && b.raidPts) unknown = true;
     // the tackler: only a real tackle (a failed do-or-die credits no defender)
-    if (b.raiderOut && r.raiderOut && (r.tacklerId || r.tackler)) {
+    if (b.raiderOut && r.raiderOut && !b.lineOut && (r.tacklerId || r.tackler)) {
       const d = other(r.side);
       const tackler = idOf(d, r.tacklerId, r.tackler);
       if (tackler) {
@@ -95,6 +105,17 @@ export function kabaddiTotals(s: KabaddiState, ctx?: StatTotalsContext): Record<
         add(st, 'superTackles', b.superTackle ? 1 : 0);
       } else unknown = true;
     }
+  }
+  // SD-59 / SD-72: cards and technical points conceded (the player at fault
+  // is on the other side from the point)
+  for (const e of extrasOf(s)) {
+    if (e.official || (!e.playerId && !e.playerName)) continue;
+    const side = e.x === 'tech' ? other(e.side) : e.side;
+    const id = idOf(side, e.playerId, e.playerName);
+    if (!id) continue;
+    const st = entry(id, side);
+    if (e.x === 'card' && e.card) add(st, `${e.card}Cards`, 1);
+    else if (e.x === 'tech') add(st, 'techPointsConceded', Math.max(1, e.n ?? 1));
   }
   // Old one-tap points: the line's points to the player on it.
   for (const e of plainLines(s)) {
@@ -164,6 +185,8 @@ export function kabaddiMatchCentre(s: KabaddiState, scope: 'all' | number = 'all
     if (!e.side || !inScope(e.half) || isShootoutEvent(e)) continue;
     const p = e.points ?? 0;
     if (e.kind === 'raid') t[e.side].raidPoints += p;
+    // SD-59: technical points and line-outs are extras
+    else if (e.kind === 'tech' || e.kind === 'lineout') t[e.side].extraPoints += p;
     else if (e.kind === 'allout') t[e.side].allOutPoints += p;
     else if (e.kind === 'tackle') {
       const b = e.group != null ? byEid.get(e.group) : undefined;
@@ -180,7 +203,7 @@ export function kabaddiMatchCentre(s: KabaddiState, scope: 'all' | number = 'all
     if (b.raiderOut) a.raidsOut += 1;
     if (b.raidPts >= 3) a.superRaids += 1;
     if (b.doOrDie) { a.doOrDieRaids += 1; if (b.raidPts > 0) a.doOrDieWon += 1; }
-    if (b.raiderOut && !b.doOrDieFail) {
+    if (b.raiderOut && !b.doOrDieFail && !b.lineOut) {
       d.tackles += 1;
       d.tackleAttempts += 1;
       if (b.superTackle) d.superTackles += 1;
@@ -203,3 +226,41 @@ export function kabaddiMatchCentre(s: KabaddiState, scope: 'all' | number = 'all
   }
   return { ...t, countsTracked };
 }
+
+/* ------------------------- on the mat (SD-72 cards) ------------------------- */
+
+/**
+ * SD-72 — the on-field tracker's log for kabaddi cards (SD-29, onField.ts):
+ * a yellow = a 2-minute `suspend` from when it actually started (a player
+ * carded while out serves it from his revival — the raid replay decides
+ * when), a red = `off` for the rest of the match (no substitute). Kabaddi has
+ * no line-up stamp, so only the carded players appear; the live banner reads
+ * who is suspended and the time left on the match clock.
+ */
+export function kabaddiFieldLog(s: KabaddiState, now: number = clockNow(s)): FieldLog {
+  const events: FieldEvent[] = [];
+  const per = replayOf(s).perExtra;
+  extrasOf(s).forEach((e, j) => {
+    if (e.x !== 'card' || !e.player || e.official) return;
+    const who = { ...(e.playerId ? { id: e.playerId } : null), ...(e.playerName ? { name: e.playerName } : null) };
+    const at = (t: number) => ({ t, side: e.side, who });
+    if (e.card === 'red') {
+      const ev = suspensionEvent({ permanent: true }, at(e.t ?? e.minute ?? 0)); // FIELD_RULES.kabaddi.red: the rest of the match
+      if (ev) events.push(ev);
+    } else if (e.card === 'yellow' && per[j]?.suspFrom != null) {
+      const ev = suspensionEvent({ minutes: FIELD_RULES.kabaddi.yellow.minutes }, at(per[j].suspFrom!));
+      if (ev) events.push(ev);
+    }
+  });
+  return { starters: { home: [], away: [] }, events, end: now };
+}
+
+export const kabaddiField = (s: KabaddiState, now?: number): FieldResult => trackField(kabaddiFieldLog(s, now));
+
+/** For the live banner: who is serving a yellow and the time left. */
+export function kabaddiSuspended(s: KabaddiState, now: number = clockNow(s)): { side: Side; name: string; left: string }[] {
+  if (s.ended) return [];
+  return kabaddiField(s, now).suspended.map((x) => ({ side: x.side, name: x.name ?? 'Player', left: timeLeft(x.until, now) }));
+}
+
+export { YELLOW_MINUTES };
