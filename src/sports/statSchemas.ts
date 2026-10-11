@@ -33,6 +33,8 @@ import { cyclingStats } from './cycling/stats.ts';
 import { handballStats } from './handball/stats.ts';
 import { iceHockeyStats } from './ice_hockey/stats.ts';
 import { netballStats } from './netball/stats.ts';
+import { baseballStats } from './baseball/stats.ts';
+import { americanFootballStats } from './american_football/stats.ts';
 import { rugbyStats } from './rugby/stats.ts';
 
 export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
@@ -62,6 +64,8 @@ export const STAT_SCHEMAS: { [S in SportId]: SportStatSchema<S> } = {
   handball: handballStats,
   ice_hockey: iceHockeyStats,
   netball: netballStats,
+  baseball: baseballStats, // SD-144
+  american_football: americanFootballStats,
   rugby: rugbyStats,
 };
 

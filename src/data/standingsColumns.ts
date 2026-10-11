@@ -104,7 +104,7 @@ const gamesDiff = (t: TeamStanding) => (t.gamesFor === undefined ? DASH : signed
 
 /** Canonical left-to-right order (Pts last, except chess: score then its
  *  tie-break columns, as on a FIDE rank list). */
-const ORDER = ['played', 'won', 'otw', 'otl', 'drawn', 'lost', 'wdl', 'nr', 'for', 'against', 'sets', 'diff', 'rubbersPct', 'gamesDiff', 'pointsDiff',
+const ORDER = ['played', 'won', 'otw', 'otl', 'drawn', 'lost', 'pct', 'wdl', 'nr', 'for', 'against', 'sets', 'diff', 'rubbersPct', 'gamesDiff', 'pointsDiff',
   'nrr', 'setRatio', 'pointRatio', 'setsPct', 'gamesPct', 'fairPlay', 'triesFor', 'triesDiff', 'bonus'];
 
 /** A sport's standings columns for a config (its tie-break chain) and who the
@@ -159,6 +159,12 @@ export function tableColumns(
     if (unit === 'sets') add({ key: 'setsPct', label: 'S%', title: '% of sets won', wide: true, extra: true, value: (t) => pctText(t.setsFor ?? 0, t.setsAgainst ?? 0) });
     add({ key: 'gamesDiff', label: 'G±', title: 'games difference', extra: true, value: gamesDiff });
     if (unit !== 'sets') add({ key: 'pointsDiff', label: 'P±', title: sport === 'carrom' ? 'board points difference' : 'points difference', extra: true, value: rallyDiff });
+  } else if (sport === 'baseball') {
+    // SD-144: W-L, PCT (.750), runs scored / allowed and the run difference
+    add({ key: 'pct', label: 'PCT', title: 'winning percentage', wide: true, value: (t) => (t.played > 0 ? (t.won / t.played).toFixed(3).replace(/^0\./, '.') : DASH) });
+    add({ key: 'for', label: 'RS', title: 'runs scored', value: (t) => String(t.for) });
+    add({ key: 'against', label: 'RA', title: 'runs allowed', value: (t) => String(t.against) });
+    add({ key: 'diff', label: 'RD', title: 'run difference', value: (t) => signed(t.diff) });
   } else if (sport === 'cricket') {
     add({ key: 'nrr', label: 'NRR', title: 'net run rate', wide: true, value: (t) => (t.nrr === undefined ? DASH : `${t.nrr >= 0 ? '+' : ''}${t.nrr.toFixed(2)}`) });
   } else if (chess) {
@@ -224,6 +230,10 @@ export function tableColumns(
     }
   }
 
+  // SD-147 — American football tables rank by win % (ties count half): the PCT column
+  if (sport === 'american_football' && cfg.rankBy === 'winPct') {
+    add({ key: 'pct', label: 'PCT', title: 'win percentage (a tie counts half)', wide: true, value: (t) => (t.played ? ((t.won + t.drawn / 2) / t.played).toFixed(3).replace(/^0/, '') : DASH) });
+  }
   // SD-143 — rugby bonus-point tables: tries scored and the bonus points (inside Pts)
   if (cfg.tryBonus) {
     add({ key: 'triesFor', label: 'TF', title: 'tries scored', extra: true, value: (t) => String(t.triesFor ?? 0) });

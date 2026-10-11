@@ -24,6 +24,10 @@
  *   handball    10-0       IHF / EHF regulations (0:10) — verify
  *   ice_hockey  5-0        IIHF (a forfeited game is recorded 5-0) — verify
  *   netball     20-0       common league / competition practice — verify
+ *   american_football 1-0  NFHS / NCAA forfeit score (the NFL rule book says
+ *                          2-0) — verify
+ *   baseball    9-0        OBR 7.03(b) / WBSC baseball (a forfeited game is
+ *                          9-0); softball formats 7-0 (WBSC softball) — verify
  *   rugby       28-0       common competition practice (no World Rugby law;
  *                          e.g. club / union regulations) — verify; with a
  *                          bonus-point table the winner also takes the try bonus
@@ -36,6 +40,7 @@
  * score; absent = the federation default.
  */
 import type { MatchResult, SportId } from '../core/types';
+import { isSoftball } from '../sports/baseball/engine.ts';
 
 type Side = 'home' | 'away';
 type Pair = { home: number; away: number };
@@ -59,11 +64,13 @@ export const WALKOVER_SCORES: Partial<Record<SportId, WalkoverRule>> = {
   handball: { win: 10, loss: 0, source: 'IHF / EHF', verify: true },
   ice_hockey: { win: 5, loss: 0, source: 'IIHF', verify: true },
   netball: { win: 20, loss: 0, source: 'competition rules', verify: true },
+  american_football: { win: 1, loss: 0, source: 'NFHS / NCAA; the NFL uses 2-0', verify: true },
   rugby: { win: 28, loss: 0, source: 'competition rules', verify: true },
+  baseball: { win: 9, loss: 0, source: 'OBR 7.03 / WBSC', verify: true },
 };
 
 /** Sports whose table can carry a walkover score (match sports with a score). */
-export const WALKOVER_SCORE_SPORTS: SportId[] = ['football', 'basketball', 'volleyball', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball'];
+export const WALKOVER_SCORE_SPORTS: SportId[] = ['football', 'basketball', 'volleyball', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball', 'american_football', 'baseball'];
 
 export interface ActiveWalkoverRule extends WalkoverRule {
   /** true = the organiser's own score */
@@ -73,7 +80,8 @@ export interface ActiveWalkoverRule extends WalkoverRule {
 /** The rule in force for a sport in a tournament (`format` = formats[sport]). */
 export function walkoverRuleFor(sport: SportId | string, format?: Record<string, unknown> | null): ActiveWalkoverRule | null {
   const o = format?.walkoverScore;
-  const base = WALKOVER_SCORES[sport as SportId];
+  // SD-144: a softball format forfeits 7-0 (WBSC softball), baseball 9-0
+  const base = sport === 'baseball' && isSoftball(format) ? { win: 7, loss: 0, source: 'WBSC softball', verify: true } : WALKOVER_SCORES[sport as SportId];
   if (o === 'off') return null;
   if (typeof o === 'string') {
     const m = /^\s*(\d{1,3})\s*-\s*(\d{1,3})\s*$/.exec(o);

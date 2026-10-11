@@ -42,7 +42,11 @@ export type StatUnit =
   | 'points' // a judged / scored total (higher is better)
   | 'mass' // kilograms lifted (higher is better)
   | 'strokes' // golf strokes (lower is better)
-  | 'figure'; // a composite rendered figure, e.g. best bowling "3/12", highest "54*"
+  | 'figure' // a composite rendered figure, e.g. best bowling "3/12", highest "54*"
+  // SD-144 (baseball): outs shown as innings pitched "6.2" (6⅔), and a
+  // batting-style average without the leading zero (".333", "1.050")
+  | 'innings'
+  | 'avg';
 
 export interface StatFormat {
   unit: StatUnit;
@@ -118,7 +122,12 @@ export type StatAgg =
    *  `of` (win % over decided matches). Lines without a result (in play, a
    *  field event) don't count. `games` = lines with a result in `of` (else
    *  `count`) — the qualifier's "matches" */
-  | { kind: 'result'; count: LineResult[]; of?: LineResult[]; scale?: number; dp?: number; qualifier?: Qualifier };
+  | { kind: 'result'; count: LineResult[]; of?: LineResult[]; scale?: number; dp?: number; qualifier?: Qualifier }
+  /** SD-147 — a non-linear figure over summed keys (American football passer
+   *  rating): Σ of each key over the lines that track them all, then
+   *  `compute` (undefined = no figure). `den` names the key whose sum the
+   *  qualifier's `den` reads (pass attempts). */
+  | { kind: 'formula'; keys: string[]; compute: (t: Record<string, number>) => number | undefined; den?: string; dp?: number; over?: string; qualifier?: Qualifier };
 
 /** Labels. Only `label` is required; the rest fall back as documented. */
 export interface StatLabels {
@@ -370,11 +379,17 @@ const signed = (l: StatLine, keys: SignedKeys) =>
 export const rateText = (x: number, y: number, dp = 2): string => (y > 0 ? (x / y).toFixed(dp) : DASH);
 /** Balls → "o.b" overs (6-ball overs). */
 export const oversText = (balls: number): string => `${Math.floor(balls / 6)}.${balls % 6}`;
+/** SD-144 — outs → innings pitched "6.2" (6⅔ innings). */
+export const inningsText = (outs: number): string => `${Math.floor(outs / 3)}.${outs % 3}`;
+/** SD-144 — a baseball-style average: ".333" (no leading zero), "1.050". */
+const avgText = (t: string): string => t.replace(/^0\./, '.');
 
 /** A value in a stat's unit, as shown on a career / box cell. */
 export function formatValue(v: number, f?: StatFormat): string {
   switch (f?.unit) {
     case 'overs': return oversText(v);
+    case 'innings': return inningsText(v);
+    case 'avg': return avgText(v.toFixed(f.dp ?? 3));
     case 'percent': return `${v.toFixed(f.dp ?? 0)}%`;
     case 'decimal': case 'ratio': case 'time': case 'distance': case 'height': case 'mass': case 'points':
       return f.dp != null ? v.toFixed(f.dp) : String(v);
@@ -466,6 +481,7 @@ function inputsOf(def: StatDef): string[] {
     case 'best': return a.by.map((b) => b.key);
     case 'appearance': return [def.key];
     case 'result': return [];
+    case 'formula': return [...a.keys];
   }
 }
 
@@ -539,7 +555,7 @@ export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def
       const d = ls.reduce((a, l) => a + signed(l, agg.den), 0);
       const t = rateText(n, d, agg.dp ?? def.format?.dp ?? 2);
       if (t === DASH) return { ...none(ls.length), den: d };
-      return { value: n / d, text: def.format?.unit === 'percent' ? `${t}%` : t, tracked: true, games: ls.length, den: d };
+      return { value: n / d, text: def.format?.unit === 'percent' ? `${t}%` : def.format?.unit === 'avg' ? avgText(t) : t, tracked: true, games: ls.length, den: d };
     }
     case 'perGame': {
       const all = linesFor(schema, lines, agg.over);
@@ -578,6 +594,16 @@ export function aggregateValue<S extends string>(schema: SportStatSchema<S>, def
       const v = (n * (agg.scale ?? 1)) / d;
       const t = v.toFixed(agg.dp ?? def.format?.dp ?? 0);
       return { value: v, text: def.format?.unit === 'percent' ? `${t}%` : t, tracked: true, games: d, den: d };
+    }
+    case 'formula': {
+      const all = linesFor(schema, lines, agg.over);
+      const ls = covered(all);
+      if (all.length && !ls.length) return untracked;
+      const t = Object.fromEntries(agg.keys.map((k) => [k, ls.reduce((a, l) => a + num(l, k), 0)]));
+      const d = agg.den ? t[agg.den] ?? 0 : ls.length;
+      const v = ls.length ? agg.compute(t) : undefined;
+      if (v === undefined || !Number.isFinite(v)) return { ...none(ls.length), den: d };
+      return { value: v, text: formatValue(v, def.format ?? { unit: 'decimal', dp: agg.dp ?? 1 }), tracked: true, games: ls.length, den: d };
     }
     case 'countIf': {
       const ls = linesFor(schema, lines, agg.over);
@@ -634,7 +660,7 @@ export function careerFromSchema<S extends string>(schema: SportStatSchema<S>, l
 export function rankDirection(def: StatDef): Better {
   const k = (def.agg ?? { kind: 'sum' }).kind;
   if (k === 'min') return 'lower';
-  if (k === 'rate' || k === 'perGame' || k === 'perSet') return betterOf(def.format);
+  if (k === 'rate' || k === 'perGame' || k === 'perSet' || k === 'formula') return betterOf(def.format);
   if (k === 'result' && def.agg?.kind === 'result' && def.agg.of) return betterOf(def.format);
   return 'higher';
 }
@@ -642,7 +668,7 @@ export function rankDirection(def: StatDef): Better {
 /** The qualifier a stat declares (rates / per-game / per-set). */
 export const qualifierOf = (def: StatDef): Qualifier | undefined => {
   const a = def.agg;
-  return a && (a.kind === 'rate' || a.kind === 'perGame' || a.kind === 'perSet' || a.kind === 'result') ? a.qualifier : undefined;
+  return a && (a.kind === 'rate' || a.kind === 'perGame' || a.kind === 'perSet' || a.kind === 'result' || a.kind === 'formula') ? a.qualifier : undefined;
 };
 
 /** SD-27 — the minimum's size in the unit an organiser types it in (and the
@@ -676,7 +702,7 @@ export function qualifierText<S extends string>(schema: SportStatSchema<S>, def:
   if (q.games) parts.push(`${q.games} ${q.games === 1 ? 'game' : 'games'}`);
   if (q.den) {
     const a = def.agg;
-    const denKey = a?.kind === 'rate' ? bare(a.den)[0] : undefined;
+    const denKey = a?.kind === 'rate' ? bare(a.den)[0] : a?.kind === 'formula' ? a.den : undefined;
     const d = denKey ? statDefIn(schema, denKey) : undefined;
     const unit = a?.kind === 'perSet' ? (q.den === 1 ? 'set' : 'sets') : d ? (q.den === 1 ? oneOf(d) : shortOf(d)) : '';
     parts.push(`${q.den}${unit ? ` ${unit}` : ''}`);
@@ -794,6 +820,7 @@ export function validateSchema<S extends string>(schema: SportStatSchema<S>): st
     if ((a.kind === 'max' || a.kind === 'min') && a.key) need(a.key, w);
     if (a.kind === 'max' && a.keys) signedKeys(a.keys).forEach((k) => need(k, w));
     if (a.kind === 'best') a.by.forEach((b) => need(b.key, w));
+    if (a.kind === 'formula') { a.keys.forEach((k) => need(k, w)); if (a.den && !a.keys.includes(a.den)) errs.push(`${w}: formula den must be one of its keys`); }
   }
   for (const s of schema.stats) s.tieBreak?.forEach((t) => need(t.key, `stat ${s.key} tie-break`));
   for (const s of schema.stats) needFilter(s.coverOf, `stat ${s.key} coverOf`);

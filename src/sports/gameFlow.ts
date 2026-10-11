@@ -18,6 +18,8 @@
  */
 import { periodLabel, type BasketballState } from './basketball/engine.ts';
 import { pointsOf } from './basketball/events.ts';
+import { pointsOf as afPointsOf, eventWhen as afWhen, type AFState } from './american_football/engine.ts';
+import { halfShort as bbHalf, type BaseballState } from './baseball/engine.ts';
 import { pointsOf as rugbyPointsOf, minuteText as rugbyMinute, type RugbyState } from './rugby/engine.ts';
 
 type Side = 'home' | 'away';
@@ -118,7 +120,7 @@ function basketballPlays(s: BasketballState): FlowScore[] {
 interface MinuteEvent { type?: string; kind?: string; side?: Side; minute?: number; half?: number; period?: number; sec?: number; id?: number | string; points?: number; stamp?: string }
 
 /** Which sports have a game-flow block. */
-export const GAME_FLOW_SPORTS = ['basketball', 'football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball'] as const;
+export const GAME_FLOW_SPORTS = ['basketball', 'football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'rugby', 'netball', 'american_football', 'baseball'] as const;
 
 /** Game flow for a sport's stored state; null = not a running-score sport,
  *  or nothing scored yet (goals sports: fewer than 2 goals says nothing). */
@@ -163,12 +165,28 @@ export function gameFlowFor(sport: string, state: unknown, starters?: Starters):
         .filter((e) => e.side && e.stamp !== 'SO' && (e.kind === 'raid' || e.kind === 'tackle' || e.kind === 'allout' || e.kind === 'tech' || e.kind === 'lineout') && num(e.points) > 0)
         .map((e) => ({ side: e.side as Side, points: num(e.points), at: e.stamp ?? (e.minute != null ? `${e.minute}'` : undefined) }));
       break;
+    case 'baseball': {
+      // SD-144: every run that counted, in game order ("▲ 3rd")
+      unit = 'points';
+      const bs = state as BaseballState;
+      if (!bs.g?.runs) return null;
+      plays = bs.g.runs.map((r) => ({ side: r.side, points: 1, at: bbHalf(bs.g.ann[r.event]?.half ?? 0), playerName: r.runnerName, playerId: r.runnerId }));
+      break;
+    }
     case 'rugby': {
       // SD-143: every score (try 5, penalty try 7, kicks 3 / 2), in match order
       unit = 'points';
       const rs = state as RugbyState;
       plays = [...rs.events].filter((e) => rugbyPointsOf(e) > 0).sort((a, b) => a.period - b.period || a.psec - b.psec)
         .map((e) => ({ side: e.side, points: rugbyPointsOf(e), at: rugbyMinute(rs, e.period, e.psec) }));
+      break;
+    }
+    case 'american_football': {
+      // SD-147: every score (TD 6, try 1 / 2, FG 3, safety 2), in game order
+      unit = 'points';
+      const as = state as AFState;
+      plays = [...as.events].filter((e) => afPointsOf(e) > 0).sort((a, b) => a.period - b.period || a.psec - b.psec)
+        .map((e) => ({ side: e.side, points: afPointsOf(e), at: afWhen(as, e) }));
       break;
     }
     default:

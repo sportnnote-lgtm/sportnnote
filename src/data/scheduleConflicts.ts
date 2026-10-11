@@ -34,6 +34,8 @@ const DURATION_MIN: Partial<Record<SportId, number>> = {
   swimming: 240, // a session of swimming events
   handball: 90, // 2 × 30 + half-time + time-outs + turnaround
   ice_hockey: 150, // 3 × 20 stop time + two 15–18 min intermissions (ice resurface) + turnaround
+  american_football: 150, // tackle 4 × 15 stop clock ≈ 2.5–3 h (flag 2 × 20 ≈ 60 min — book shorter slots)
+  baseball: 180, // 9 innings ≈ 2.5–3 h (7-inning softball / youth ≈ 1.5–2 h) + turnaround
   netball: 75, // 4 × 15 + 3/5/3 min intervals + held time + turnaround
   rugby: 120, // 2 × 40 + time added + half-time + turnaround (sevens matches are far shorter)
   shooting: 150, // a qualification relay (60 shots) + the final

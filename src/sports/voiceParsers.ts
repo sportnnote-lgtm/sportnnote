@@ -469,3 +469,7 @@ export function kabaddiExtrasVoice(text: string, ctx: VoiceContext): ScoreAction
 export { rugbyVoice, rugbyVoiceEnds };
 /** SD-145 — ice hockey's grammar lives next to its engine (./ice_hockey/voice.ts). */
 export { iceHockeyVoice, iceHockeyVoiceEnds } from './ice_hockey/voice.ts';
+/** SD-144 — baseball / softball's grammar lives next to its engine (./baseball/voice.ts). */
+export { baseballVoice, baseballVoiceEnds } from './baseball/voice.ts';
+/** SD-147 — American football's grammar lives next to its engine (./american_football/voice.ts). */
+export { afVoice, afVoiceEnds } from './american_football/voice.ts';

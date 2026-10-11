@@ -29,6 +29,8 @@ import { HOCKEY_DISCIPLINE } from './hockey/discipline.ts';
 import { HANDBALL_DISCIPLINE } from './handball/discipline.ts';
 import { ICE_HOCKEY_DISCIPLINE } from './ice_hockey/discipline.ts';
 import { NETBALL_DISCIPLINE } from './netball/discipline.ts';
+import { BASEBALL_DISCIPLINE } from './baseball/discipline.ts';
+import { AF_DISCIPLINE } from './american_football/discipline.ts';
 import { RUGBY_DISCIPLINE } from './rugby/discipline.ts';
 import { BASKETBALL_DISCIPLINE } from './basketball/discipline.ts';
 import { KABADDI_DISCIPLINE } from './kabaddi/discipline.ts';
@@ -83,6 +85,8 @@ export const DISCIPLINE_SPECS: Partial<Record<SportId, SportDisciplineSpec>> = {
   handball: HANDBALL_DISCIPLINE,
   ice_hockey: ICE_HOCKEY_DISCIPLINE,
   netball: NETBALL_DISCIPLINE,
+  baseball: BASEBALL_DISCIPLINE,
+  american_football: AF_DISCIPLINE,
   rugby: RUGBY_DISCIPLINE,
   basketball: BASKETBALL_DISCIPLINE,
   kabaddi: KABADDI_DISCIPLINE,

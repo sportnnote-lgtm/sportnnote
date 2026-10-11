@@ -111,6 +111,25 @@ export const MATCH_RECORD_TYPES: Partial<Record<SportId, MatchRecordType[]>> = {
     { key: 'playerGoals', label: 'Most goals by a player', who: 'player' },
     { key: 'perfectShooting', label: 'Perfect shooting (10+ attempts)', who: 'player' },
   ],
+  // SD-147 — American football (american_football/records.ts)
+  american_football: [
+    { key: 'teamHigh', label: 'Highest team scores', who: 'team' },
+    { key: 'biggestWin', label: 'Biggest wins', who: 'team' },
+    { key: 'mostGoals', label: 'Most points in a game', who: 'match' },
+    { key: 'longestTD', label: 'Longest touchdowns', who: 'player' },
+    { key: 'playerTD', label: 'Most touchdowns by a player', who: 'player' },
+    { key: 'longestFG', label: 'Longest field goals', who: 'player' },
+  ],
+  // SD-144 — baseball / softball (baseball/records.ts)
+  baseball: [
+    { key: 'teamHigh', label: 'Most runs in a game', who: 'team' },
+    { key: 'biggestWin', label: 'Biggest wins', who: 'team' },
+    { key: 'noHitter', label: 'No-hitters', who: 'player' },
+    { key: 'perfectGame', label: 'Perfect games', who: 'player' },
+    { key: 'cycle', label: 'Hit for the cycle', who: 'player' },
+    { key: 'grandSlam', label: 'Grand slams', who: 'player' },
+    { key: 'mostKPitched', label: 'Most strikeouts in a game (pitching)', who: 'player' },
+  ],
   // SD-143
   rugby: [
     { key: 'teamHigh', label: 'Highest team scores', who: 'team' },

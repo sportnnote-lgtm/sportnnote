@@ -63,12 +63,33 @@ export const OFFICIAL_SLOTS: Partial<Record<SportId, OfficialSlot[]>> = {
     { key: 'scorekeeper', label: 'Scorekeeper', group: ['Scorekeeper', 'Scorekeepers'] },
     COMMENTATOR,
   ],
+  // WBSC / OBR: the plate umpire and base umpires, plus the official scorer
+  baseball: [
+    { key: 'plate', label: 'Plate umpire', group: UMPIRES },
+    { key: 'base1', label: 'Base umpire (1B)', group: UMPIRES },
+    { key: 'base3', label: 'Base umpire (3B)', group: UMPIRES },
+    { key: 'scorer', label: 'Official scorer', group: ['Scorer', 'Scorers'] },
+    COMMENTATOR,
+  ],
   // World Netball: two umpires, plus the scorers and timekeepers at the table
   netball: [
     { key: 'umpire1', label: 'Umpire 1', group: UMPIRES },
     { key: 'umpire2', label: 'Umpire 2', group: UMPIRES },
     { key: 'timekeeper', label: 'Timekeeper', group: ['Timekeeper', 'Timekeepers'] },
     { key: 'scorer', label: 'Scorer', group: ['Scorer', 'Scorers'] },
+    COMMENTATOR,
+  ],
+  // SD-147 — American football: the NFL / NCAA seven-official crew (high
+  // school 5, flag usually 2–3: use the first slots), plus the clock operator
+  american_football: [
+    { key: 'referee', label: 'Referee', group: ['Referee', 'Referees'] },
+    { key: 'umpire', label: 'Umpire', group: UMPIRES },
+    { key: 'downJudge', label: 'Down judge', group: ['Down judge', 'Down judges'] },
+    { key: 'lineJudge', label: 'Line judge', group: ['Line judge', 'Line judges'] },
+    { key: 'backJudge', label: 'Back judge', group: ['Back judge', 'Back judges'] },
+    { key: 'sideJudge', label: 'Side judge', group: ['Side judge', 'Side judges'] },
+    { key: 'fieldJudge', label: 'Field judge', group: ['Field judge', 'Field judges'] },
+    { key: 'clock', label: 'Clock operator', group: ['Clock operator', 'Clock operators'] },
     COMMENTATOR,
   ],
   // World Rugby: the referee, two assistant referees, the TMO (elite) and a timekeeper

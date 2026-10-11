@@ -123,6 +123,7 @@ export function inputsOf(c: BoxColumn): string[] {
     if (a.kind === 'sum' && a.key) return [a.key];
     if (a.kind === 'perGame' || a.kind === 'perSet') return bare(a.key);
     if (a.kind === 'pair') return [...bare(a.a), ...bare(a.b)];
+    if (a.kind === 'formula') return [...a.keys]; // SD-147
   }
   return [c.key];
 }

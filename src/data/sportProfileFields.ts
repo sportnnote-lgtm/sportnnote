@@ -65,6 +65,9 @@ export const SPORT_SIDE_FIELDS: Record<SportId, SideField[]> = {
   handball: [{ key: 'hand', label: 'Throwing hand', options: ['Right', 'Left'] }],
   // skaters shoot left / right; goalies catch with the left (regular) or right hand
   ice_hockey: [{ key: 'shoots', label: 'Shoots / catches', options: ['Left', 'Right'] }],
+  american_football: [{ key: 'side', label: 'Plays mostly', options: ['Offence', 'Defence', 'Both', 'Special teams'] }],
+  // bats / throws — what a scorecard and a manager want to know
+  baseball: [{ key: 'bats', label: 'Bats', options: ['Right', 'Left', 'Switch'] }, { key: 'throws', label: 'Throws', options: ['Right', 'Left'] }],
   netball: [{ key: 'area', label: 'Plays mostly', options: ['Shooting circle', 'Midcourt', 'Defence circle'] }],
   rugby: [{ key: 'foot', label: 'Kicking foot', options: ['Right', 'Left', 'Both'] }],
 };
@@ -95,7 +98,9 @@ export const POSITION_HINT: Record<SportId, string> = {
   cycling: 'e.g. Time trialist, Sprinter (track), Climber, Endurance (points / scratch)',
   handball: 'e.g. Goalkeeper, Left wing, Left back, Centre back, Right back, Right wing, Pivot',
   ice_hockey: 'e.g. Goalie, Defence, Centre, Left wing, Right wing',
+  baseball: 'e.g. Pitcher, Catcher, Shortstop, Centre field',
   netball: 'e.g. GS, GA, WA, C, WD, GD, GK',
+  american_football: 'e.g. QB, RB, WR, TE, OL, DL, LB, CB, S, K (flag: QB, C, WR, Rusher, DB)',
   rugby: 'e.g. Prop, Hooker, Lock, Flanker, Number 8, Scrum-half, Fly-half, Centre, Wing, Full-back',
 };
 

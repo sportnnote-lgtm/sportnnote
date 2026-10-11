@@ -39,9 +39,13 @@ import type { HockeyState } from './hockey/engine.ts';
 import { handballBox } from './handball/box.ts';
 import type { HandballState } from './handball/engine.ts';
 import { iceHockeyBox } from './ice_hockey/box.ts';
+import { baseballBox } from './baseball/box.ts';
+import type { BaseballState } from './baseball/engine.ts';
 import type { IceHockeyState } from './ice_hockey/engine.ts';
 import { netballBox } from './netball/box.ts';
 import type { NetballState } from './netball/engine.ts';
+import { afBox } from './american_football/box.ts';
+import type { AFState } from './american_football/engine.ts';
 import { rugbyBox } from './rugby/box.ts';
 import type { RugbyState } from './rugby/engine.ts';
 
@@ -578,7 +582,9 @@ export function matchBoxSource(sport: SportId, state: unknown, ctx: BoxContext =
     case 'hockey': return hockeyBox(state as HockeyState, ctx);
     case 'handball': return handballBox(state as HandballState, ctx);
     case 'ice_hockey': return iceHockeyBox(state as IceHockeyState, ctx);
+    case 'baseball': return (state as BaseballState).g ? baseballBox(state as BaseballState, ctx) : undefined;
     case 'netball': return netballBox(state as NetballState, ctx);
+    case 'american_football': return afBox(state as AFState, ctx);
     case 'rugby': return rugbyBox(state as RugbyState, ctx);
     default: return undefined;
   }

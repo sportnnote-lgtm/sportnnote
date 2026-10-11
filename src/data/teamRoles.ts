@@ -15,6 +15,8 @@ export const TEAM_ROLES: Partial<Record<SportId, string[]>> = {
   kabaddi: ['Raider', 'Defender', 'All-rounder'],
   handball: ['Goalkeeper', 'Wing', 'Back', 'Centre back', 'Pivot'],
   ice_hockey: ['Goalie', 'Defence', 'Centre', 'Winger'],
+  american_football: ['Quarterback', 'Running back', 'Receiver', 'Offensive line', 'Defensive line', 'Linebacker', 'Defensive back', 'Kicker / punter'],
+  baseball: ['Pitcher', 'Catcher', 'Infielder', 'Outfielder', 'Designated hitter'],
   netball: ['Goal shooter', 'Goal attack', 'Wing attack', 'Centre', 'Wing defence', 'Goal defence', 'Goal keeper'],
   rugby: ['Prop', 'Hooker', 'Lock', 'Back row', 'Scrum-half', 'Fly-half', 'Centre', 'Back three'],
 };

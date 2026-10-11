@@ -28,6 +28,7 @@ export const KO_DECIDER: Partial<Record<SportId, string>> = {
   handball: 'et2', // IHF 2:2: 2 × 5 min, again if level, then 7 m throws
   ice_hockey: 'playoff', // SD-145: play-off overtime (sudden death), then the preset's shoot-out / more OT
   netball: 'et', // World Netball: 2 × 7 min extra time, then play on to a 2-goal lead
+  american_football: 'standard', // SD-147: the rules' own overtime (flag conversions / Kansas / NFL playoff)
   kabaddi: 'extra_time', // extra time, then golden raid
   rugby: 'standard', // SD-143: 15s RWC-style ET 2×10 → sudden death → kicks; sevens / tens sudden-death periods
 };
@@ -48,6 +49,19 @@ export function stageAwareFormat(
     // FIBA: a level game always goes to overtime. A league may let a draw stand
     // (`allowDraw`); a knockout never does.
     if (elimination && f.allowDraw != null) f.allowDraw = false;
+    return f as MatchFormat;
+  }
+  if (sport === 'american_football') {
+    // SD-147 — league games keep the organiser's overtime (NFHS / college
+    // play Kansas OT in the regular season, NFL 10-min OT may end tied, or
+    // 'none' = the tie stands); a knockout game always resolves.
+    if (elimination && (f.decider == null || f.decider === '' || f.decider === 'none' || f.decider === 'nfl')) f.decider = 'standard';
+    return f as MatchFormat;
+  }
+  if (sport === 'baseball') {
+    // SD-144 — a game plays extra innings until there's a winner; a league may
+    // let a tied game stand (`allowTies`, time limits), a knockout never does.
+    if (elimination && f.allowTies != null) f.allowTies = false;
     return f as MatchFormat;
   }
   if (sport === 'ice_hockey') {

@@ -2491,7 +2491,9 @@ function formatLine(sport: SportId, fmt: Record<string, unknown>): string {
   if (sport === 'hockey' && fmt.periodMinutes != null) parts.push(`${fmt.periods ?? 4} × ${fmt.periodMinutes} min`);
   if (sport === 'handball' && fmt.periodMinutes != null) parts.push(`2 × ${fmt.periodMinutes} min`);
   if (sport === 'ice_hockey' && fmt.periodMinutes != null) parts.push(`3 × ${fmt.periodMinutes} min`);
+  if (sport === 'baseball' && fmt.innings != null) parts.push(`${fmt.innings} innings`);
   if (sport === 'netball' && fmt.periodMinutes != null) parts.push(`${fmt.periods ?? 4} × ${fmt.periodMinutes} min`);
+  if (sport === 'american_football' && fmt.periodMinutes != null) parts.push(`${fmt.variant === 'tackle' ? 'Tackle' : 'Flag'} · ${fmt.periods ?? (fmt.variant === 'tackle' ? 4 : 2)} × ${fmt.periodMinutes} min`);
   if (sport === 'rugby' && fmt.periodMinutes != null) parts.push(`${fmt.variant === '7s' ? 'Sevens · ' : fmt.variant === '10s' ? 'Tens · ' : ''}2 × ${fmt.periodMinutes} min`);
   return parts.length ? parts.join(' · ') : '—';
 }

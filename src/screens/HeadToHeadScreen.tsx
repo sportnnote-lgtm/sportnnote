@@ -225,7 +225,7 @@ function Tile({ value, label, accent }: { value: string; label: string; accent?:
 }
 
 /** Sports where a match can end level (a tile for draws / ties even at 0). */
-const CAN_DRAW = new Set<string>(['football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'chess', 'cricket', 'rugby', 'netball']);
+const CAN_DRAW = new Set<string>(['football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'chess', 'cricket', 'rugby', 'netball', 'american_football']);
 const short = (name: string) => name.split(' ')[0] || name;
 const COLOR: Record<LineResult, string> = { W: theme.colors.primary, D: theme.colors.textMuted, T: theme.colors.textMuted, NR: theme.colors.border, L: theme.colors.danger };
 

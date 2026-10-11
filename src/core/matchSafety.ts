@@ -86,6 +86,10 @@ export const FLOW_CONTROLS: Partial<Record<SportId, MatchAction[]>> = {
   handball: ['endPeriod', 'fullTime'],
   ice_hockey: ['endPeriod', 'fullTime'],
   netball: ['endPeriod', 'fullTime'],
+  // SD-144: outs / walk-offs / the run rule end a game by themselves — the flow's
+  // only hand-made end is a called game (time / weather)
+  baseball: ['fullTime'],
+  american_football: ['endPeriod', 'fullTime'],
   rugby: ['endPeriod', 'fullTime'],
 };
 

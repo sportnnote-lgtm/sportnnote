@@ -170,6 +170,20 @@ function formatFor(sport: SportId, cfg: Cfg, state: Cfg): SplitValue | undefined
       const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);
       return m ? v(`${n}x${m}`, `${n} × ${m} min`) : undefined;
     }
+    case 'american_football': {
+      // SD-147: flag 5v5 / tackle, and the rules (IFAF / NFL / college / high school)
+      const vr = strOf(cfg.variant) ?? strOf(state.variant);
+      const r = strOf(cfg.rules) ?? strOf(state.rules);
+      if (!vr) return undefined;
+      const RULES: Record<string, string> = { ifaf: 'IFAF', nfl: 'NFL', ncaa: 'College', nfhs: 'High school' };
+      return vr === 'flag' ? v('flag', 'Flag') : v(`tackle-${r ?? 'nfl'}`, `Tackle · ${RULES[r ?? 'nfl'] ?? 'NFL'}`);
+    }
+    case 'baseball': {
+      // SD-144: baseball / softball fast pitch / slow pitch / youth / school
+      const names: Record<string, string> = { baseball: 'Baseball', softball: 'Softball', slowpitch: 'Slow pitch', youth: 'Youth', school: 'School' };
+      const p = strOf(cfg.preset) ?? strOf((state.cfg as Cfg | undefined)?.preset);
+      return p && names[p] ? v(p, names[p]) : undefined;
+    }
     case 'ice_hockey': {
       // SD-145: 3 × 20 (IIHF / NHL) / 3 × 17 (US high school) / youth 3 × 15, 3 × 12
       const m = numOf(cfg.periodMinutes) ?? numOf(state.periodMinutes);

@@ -12,6 +12,7 @@ import { fideTieBreaks, type FideTieBreaks, type XRound } from './swissTiebreaks
 import { effectiveQualifier, withLineResults, type LeaderMins } from './leaderMinimums.ts';
 import { collapseTies, isTieMatch, TIE_POINTS, tournamentTieSpec, type TieMatch } from './teamTie.ts';
 import { swissOpsOf, swissExtraRounds, type SwissExtraRound } from './swissOps.ts';
+import { tqbAmong, battingAvgAmong, BASEBALL_TIE_BREAKERS } from '../sports/baseball/tqb.ts';
 
 export interface TeamStanding {
   teamId: string;
@@ -314,7 +315,7 @@ export type ScoreUnit = 'goals' | 'points' | 'runs' | 'sets' | 'games';
 export function scoreUnit(sport: SportId | string): ScoreUnit {
   switch (sport) {
     case 'football': case 'hockey': case 'handball': case 'ice_hockey': case 'netball': return 'goals';
-    case 'cricket': return 'runs';
+    case 'cricket': case 'baseball': return 'runs';
     case 'volleyball': case 'tennis': case 'padel': return 'sets';
     case 'badminton': case 'tabletennis': case 'squash': case 'pickleball': case 'carrom': return 'games';
     default: return 'points';
@@ -473,6 +474,29 @@ const BODY_PRESETS: Record<string, PointsPreset[]> = {
     preset('nhl', 'NHL 2-1-0 (OT loss = 1)', '2 a win, 1 an overtime / shoot-out loss; ties: regulation wins, regulation + OT wins, wins, head-to-head, goal difference, goals',
       { winPoints: 2, drawPoints: 1, lossPoints: 0, otWinPoints: 2, otLossPoints: 1, tieBreak: 'regWins,row,wins,h2h,diff,for,lots' }),
   ],
+  // SD-147 — American football: ranked by win % (a tie counts as half a win,
+  // NFL / NFHS standings). Flag pools: then head-to-head, the points
+  // difference among the tied, overall difference and points scored (IFAF
+  // tournament practice — verify per event). Tackle: head-to-head, point
+  // differential, points scored — a simplified NFL order (the NFL's full list
+  // runs division / common-game / conference records, strength of victory…:
+  // verify; add your own with a custom tie-breaker).
+  american_football: [
+    preset('flag', 'Flag pools (win %)', 'Ranked by win % (a tie counts half); ties: head-to-head, points difference among them, points difference, points scored',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, rankBy: 'winPct', tieBreak: 'h2h,h2hDiff,diff,for,lots' }),
+    preset('nfl', 'Win % (NFL-style)', 'Ranked by win % (a tie counts half); ties: head-to-head, point differential, points scored',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, rankBy: 'winPct', tieBreak: 'h2h,diff,for,lots' }),
+  ],
+  // SD-144 — baseball / softball (WBSC): ranked by win-loss percentage; ties:
+  // head-to-head among the tied, then TQB (runs per inning scored − allowed in
+  // those games), ER-TQB, batting average in those games, then lots (WBSC
+  // tournament regulations — verify per event). A runs-based option for leagues.
+  baseball: [
+    preset('wbsc', 'WBSC (win %, TQB)', 'Ranked by win %; ties: head-to-head, TQB, earned-run TQB, batting average among the tied, then lots',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, rankBy: 'winPct', tieBreak: 'h2h,tqb,erTqb,bavgTied,lots' }),
+    preset('runs', 'Win % · run difference', 'Ranked by win %; ties: head-to-head, run difference, runs scored, lots',
+      { winPoints: 2, drawPoints: 1, lossPoints: 0, rankBy: 'winPct', tieBreak: 'h2h,diff,for,lots' }),
+  ],
   handball: [
     preset('ihf', 'IHF 2-1-0', '2-1-0; ties: head-to-head points, goal difference, goals; then overall',
       { winPoints: 2, drawPoints: 1, lossPoints: 0, tieBreak: 'h2h,h2hDiff,h2hFor,diff,for,lots', tieRestart: 'h2h' }),
@@ -617,7 +641,9 @@ export function availableTieBreakers(sport: SportId, ties = false): TieBreaker[]
     const extra: TieBreaker[] = sport === 'chess' ? ['boardPoints'] : ['rubbersRatio', 'rubbersDiff', 'rubbersPct', 'h2hGames'];
     return [...extra, ...base.filter((t) => !extra.includes(t)), 'lots'];
   }
-  if (sport === 'chess') return ['sb', 'wins', 'h2h', ...customTB.keys(), 'lots'];
+  if (sport === 'chess') return ['sb', 'wins', 'h2h', ...[...customTB.keys()].filter((k) => !(BASEBALL_TIE_BREAKERS as readonly string[]).includes(k)), 'lots'];
+  // SD-144: WBSC's among-the-tied criteria (registered below)
+  if (sport === 'baseball') return ['h2h', ...BASEBALL_TIE_BREAKERS, 'diff', 'for', 'wins', 'h2hDiff', 'played', 'lots'];
   // (chess: the FIDE Buchholz family, progressive score and Black counts are
   // registered tie-breakers — SD-26)
   if (sport === 'cricket') return ['h2h', 'nrr', 'for', 'wins', 'played', 'lots'];
@@ -1200,6 +1226,11 @@ for (const [key, label, short, pick] of [
   });
 }
 
+// SD-144: WBSC baseball / softball — computed among the tied teams' games only.
+registerTieBreaker('tqb', { label: 'TQB (team quality balance)', amongTied: true, value: (t, { cluster, matches }) => tqbAmong(t.teamId, cluster.map((x) => x.teamId), matches) });
+registerTieBreaker('erTqb', { label: 'earned-run TQB', amongTied: true, value: (t, { cluster, matches }) => tqbAmong(t.teamId, cluster.map((x) => x.teamId), matches, true) });
+registerTieBreaker('bavgTied', { label: 'batting average (among tied)', amongTied: true, value: (t, { cluster, matches }) => battingAvgAmong(t.teamId, cluster.map((x) => x.teamId), matches) });
+
 /** FIDE's tie-break order for an individual Swiss (Handbook C.02 13.16.4,
  *  events where not all ratings are consistent — the school / club case):
  *  Buchholz Cut-1, Buchholz, Sonneborn-Berger, progressive score, direct
@@ -1241,7 +1272,8 @@ const winsOf = (t: TeamStanding) =>
   t.won + (t.forfeitWins ?? 0) + (t.games ?? []).filter((g) => g.kind === 'bye' && g.result === 'win').length;
 
 /** SD-132: share of games won (forfeit wins count as wins); 0 when none played. */
-const winPctOf = (t: TeamStanding) => (t.played > 0 ? winsOf(t) / t.played : 0);
+// SD-147: a tie counts as half a win (NFL / NFHS win %); no change for 3×3 basketball, which has no ties
+const winPctOf = (t: TeamStanding) => (t.played > 0 ? (winsOf(t) + t.drawn / 2) / t.played : 0);
 
 /** won ÷ (won + lost); 0 when nothing was played. */
 const pct = (won: number, lost: number) => (won + lost === 0 ? 0 : won / (won + lost));
@@ -1459,6 +1491,7 @@ export function overallStandings(
 export function tableLabels(sport: SportId | undefined): { draw: 'T' | 'D'; alwaysNr: boolean; showDiff: boolean } {
   if (sport === 'cricket') return { draw: 'T', alwaysNr: true, showDiff: false };
   if (sport === 'kabaddi') return { draw: 'T', alwaysNr: false, showDiff: true };
+  if (sport === 'american_football') return { draw: 'T', alwaysNr: false, showDiff: true }; // SD-147: W-L-T
   return { draw: 'D', alwaysNr: false, showDiff: true };
 }
 

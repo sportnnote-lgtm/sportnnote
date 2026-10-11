@@ -205,7 +205,7 @@ export interface TeamRecord {
 }
 
 const GOAL_SPORTS = new Set<string>(['football', 'hockey', 'handball', 'ice_hockey']);
-const DRAW_SPORTS = new Set<string>(['football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'chess', 'rugby', 'netball']);
+const DRAW_SPORTS = new Set<string>(['football', 'hockey', 'handball', 'ice_hockey', 'kabaddi', 'chess', 'rugby', 'netball', 'american_football']);
 
 /** The team's records in these matches (one sport). `lineOf` adds the set /
  *  game line from the team's side ("6-4, 6-3"); `dayOf` formats a date. */

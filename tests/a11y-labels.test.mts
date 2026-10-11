@@ -57,6 +57,8 @@ const AUDITED_SPORTS = [
   'football', 'golf', 'handball', 'hockey', 'ice_hockey', 'kabaddi', 'padel', 'pickleball', 'rowing', 'rugby', 'shooting',
   'squash', 'swimming', 'tabletennis', 'tennis', 'volleyball', 'weightlifting',
   'netball', // SD-146
+  'baseball', // SD-144
+  'american_football', // SD-147
 ];
 
 function coreFiles(): string[] {

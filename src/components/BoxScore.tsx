@@ -35,14 +35,17 @@ export interface MatchBoxScoreProps {
   awayColor?: string;
   /** which parts to draw — default both (comparison first, then the tables) */
   show?: 'both' | 'box' | 'compare';
+  /** SD-144 — a schema view to draw instead of the sport's own (baseball's
+   *  pitching table under the batting one) */
+  schema?: import('../sports/statSchema').SportStatSchema<SportId>;
   /** tap a player's name → their profile */
   onPlayer?: (playerId: string) => void;
 }
 
 export function MatchBoxScore({
-  sport, source, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, show = 'both', onPlayer,
+  sport, source, homeName, awayName, homeColor = theme.colors.home, awayColor = theme.colors.away, show = 'both', onPlayer, schema: schemaView,
 }: MatchBoxScoreProps) {
-  const schema = statSchema(sport);
+  const schema = schemaView ?? statSchema(sport);
   const [scope, setScope] = useState<BoxScope>('all');
   const [bench, setBench] = useState(false);
   const [, tick] = useState(0);
